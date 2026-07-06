@@ -183,6 +183,31 @@
     "C:/Program Files/qemu/share/edk2-x86_64-vars.fd",
     "C:/Program Files (x86)/QEMU/share/edk2-x86_64-vars.fd"
   ],
+  "linux_distros": [
+    "ubuntu", "debian", "fedora", "mint", "linuxmint", "arch", "manjaro",
+    "opensuse", "suse", "kali", "parrot", "tails", "centos", "rocky", "alma",
+    "pop", "elementary", "zorin", "rhel", "void", "gentoo", "slackware",
+    "deepin", "mx", "antiX", "antix"
+  ],
+  "generic_os_names": ["linux", "windows", "macos", "other", ""],
+  "update_allowed_fields": [
+    "memory_mb", "cpu_cores", "cpu_threads", "cpu_model", "cpu_features",
+    "display", "audio", "kvm", "iommu", "balloon", "hugepages",
+    "machine_type", "machine_arch", "rtc_clock", "hpet", "kvm_pv_features",
+    "manufacturer", "product_name", "serial_number", "bios_vendor", "bios_version",
+    "hostname", "os_type", "os_name", "hardened", "stealth", "tpm",
+    "extra_args", "vnc_port", "spice_port", "vnc_bind_local",
+    "battery", "board_product", "chassis_type", "description",
+    "uefi", "bios", "iso_path", "disk_bus", "network_mode", "bridge_iface",
+    "mac_address", "vnc_password", "cpu_pinning", "cpu_smt"
+  ],
+  "monitor_allowed_cmds": [
+    "info ", "system_powerdown", "system_reset", "system_wakeup",
+    "screendump ", "savevm ", "loadvm ", "delvm ",
+    "device_add ", "device_del ",
+    "balloon ", "migrate_cancel", "stop", "cont",
+    "qmp_capabilities", "change ", "eject "
+  ],
   "log_error_patterns": [
     ["qemu: could not load",        "Boot image or kernel file not found"],
     ["no bootable device",           "No bootable disk — check ISO/disk image path"],

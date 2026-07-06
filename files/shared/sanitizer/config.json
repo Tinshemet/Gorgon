@@ -41,6 +41,7 @@
   "arm_machine_types": ["raspi", "raspi3b", "raspi2b", "virt"],
   "arm_machine_archs": ["aarch64", "arm", "armhf"],
   "iso_search_dirs": ["images","iso","isos","vms"],
+  "iso_home_subdirs": ["Downloads", "iso", "ISOs", "images", "Images"],
   "iso_os_keywords": {
     "win":     ["win", "windows"],
     "ubuntu":  ["ubuntu"],

@@ -46,7 +46,7 @@ QEMU_VERSION: Tuple[int, int, int] = _parse_qemu_version()
 
 # Prints a Rich warning panel for any known issues with the detected QEMU version.
 # In: nothing → Out: nothing (console output)
-def _qemu_version_warn() -> None:
+def qemu_version_warn() -> None:
     """Print a Rich warning panel for known version-specific issues."""
     major, minor, patch = QEMU_VERSION
     ver_str = f"{major}.{minor}.{patch}" if QEMU_VERSION != (0, 0, 0) else "unknown"
@@ -99,7 +99,7 @@ def _port_free(port: int) -> bool:
 
 # Finds the first free port starting from start that is not in the used list.
 # In: int start, List[int] used → Out: int
-def _next_free_port(start: int, used: List[int]) -> int:
+def next_free_port(start: int, used: List[int]) -> int:
     for p in range(start, start + PORT_RANGE):
         if p not in used and _port_free(p):
             return p
@@ -114,7 +114,7 @@ _ISO_DESKTOP_SUBDIRS = set(_CFG["iso_desktop_subdirs"])
 _ISO_HOME_SUBDIRS    = _CFG["iso_home_subdirs"]
 
 
-def _build_iso_search_dirs() -> List[str]:
+def build_iso_search_dirs() -> List[str]:
     """Build ISO search dirs dynamically — handles capital/lowercase variants."""
     home = os.path.expanduser("~")
     dirs: List[str] = []
@@ -160,9 +160,6 @@ def _build_iso_search_dirs() -> List[str]:
     return dirs
 
 
-ISO_SEARCH_DIRS = _build_iso_search_dirs()
-
-
 # ── QEMU Argument Builder ──────────────────────────────────────────────────────
 
 class QemuArgBuilder:
@@ -204,7 +201,13 @@ class QemuArgBuilder:
             self._misc()       # virtio-rng not needed on ARM
         if self.cfg.tpm and not self.is_arm:
             self._tpm()
-        self.args += self.cfg.extra_args
+        # Drop any extra_arg that disables the seccomp sandbox when hardened.
+        # The sanitizer filters AI-supplied args, but the arg_builder is the
+        # last line of defense before the QEMU command is assembled.
+        extra = self.cfg.extra_args
+        if self.cfg.hardened and not self.is_arm:
+            extra = [a for a in extra if "-sandbox" not in a and "obsolete=allow" not in a]
+        self.args += extra
         return [a for a in self.args if a]
 
     # Adds -name and -enable-kvm (disabled for ARM).
@@ -261,10 +264,11 @@ class QemuArgBuilder:
         # Override ACPI OEM ID (defaults to "BOCHS  ") to match the declared
         # manufacturer — inxi and systemd-detect-virt can read ACPI table headers.
         if self.cfg.manufacturer and not self.is_arm:
-            oem_id = self.cfg.manufacturer[:6].ljust(6)
+            # Commas in -machine option values inject extra directives.
+            oem_id = self.cfg.manufacturer.replace(",", "")[:6].ljust(6)
             extras.append(f"x-oem-id={oem_id}")
             if self.cfg.product_name:
-                oem_table = (self.cfg.product_name.replace(" ", ""))[:8]
+                oem_table = (self.cfg.product_name.replace(",", "").replace(" ", ""))[:8]
                 extras.append(f"x-oem-table-id={oem_table}")
         if extras:
             machine_str += "," + ",".join(extras)
@@ -361,29 +365,38 @@ class QemuArgBuilder:
         blob = header + strings
 
         try:
-            vm_dir = os.path.expanduser(f"~/.qemu_vms/{self.cfg.name}")
-            os.makedirs(vm_dir, exist_ok=True)
-            path = os.path.join(vm_dir, 'smbios_chassis.bin')
+            os.makedirs(self.vm_dir, exist_ok=True)
+            path = os.path.join(self.vm_dir, 'smbios_chassis.bin')
             with open(path, 'wb') as f:
                 f.write(blob)
             return path
         except OSError:
             return ''
 
+    @staticmethod
+    def _smbios_escape(value: str) -> str:
+        """Remove commas from a string value used in a -smbios option.
+
+        In: "Dell, Inc." → Out: "Dell Inc."
+        A comma in a -smbios value terminates the current field and starts a
+        new key=value pair, allowing injection of arbitrary QEMU SMBIOS directives.
+        """
+        return value.replace(",", "")
+
     def _smbios(self):
         if self.is_arm:
             return
         if self.cfg.manufacturer or self.cfg.product_name:
             parts = ["type=1"]
-            if self.cfg.manufacturer:  parts.append(f"manufacturer={self.cfg.manufacturer}")
-            if self.cfg.product_name:  parts.append(f"product={self.cfg.product_name}")
-            if self.cfg.serial_number: parts.append(f"serial={self.cfg.serial_number}")
-            if self.cfg.hostname:      parts.append(f"family={self.cfg.hostname}")
+            if self.cfg.manufacturer:  parts.append(f"manufacturer={self._smbios_escape(self.cfg.manufacturer)}")
+            if self.cfg.product_name:  parts.append(f"product={self._smbios_escape(self.cfg.product_name)}")
+            if self.cfg.serial_number: parts.append(f"serial={self._smbios_escape(self.cfg.serial_number)}")
+            if self.cfg.hostname:      parts.append(f"family={self._smbios_escape(self.cfg.hostname)}")
             self.args += ["-smbios", ",".join(parts)]
         if self.cfg.bios_vendor or self.cfg.bios_version:
             parts = ["type=0"]
-            if self.cfg.bios_vendor:  parts.append(f"vendor={self.cfg.bios_vendor}")
-            if self.cfg.bios_version: parts.append(f"version={self.cfg.bios_version}")
+            if self.cfg.bios_vendor:  parts.append(f"vendor={self._smbios_escape(self.cfg.bios_vendor)}")
+            if self.cfg.bios_version: parts.append(f"version={self._smbios_escape(self.cfg.bios_version)}")
             self.args += ["-smbios", ",".join(parts)]
         # type=2 (baseboard): override board_vendor/board_name which default to
         # "QEMU" and "Standard PC (Q35+ICH9)" — inxi reads these via DMI and
@@ -392,8 +405,8 @@ class QemuArgBuilder:
         board_product = self.cfg.board_product or self.cfg.product_name
         if board_vendor or board_product:
             parts = ["type=2"]
-            if board_vendor:  parts.append(f"manufacturer={board_vendor}")
-            if board_product: parts.append(f"product={board_product}")
+            if board_vendor:  parts.append(f"manufacturer={self._smbios_escape(board_vendor)}")
+            if board_product: parts.append(f"product={self._smbios_escape(board_product)}")
             self.args += ["-smbios", ",".join(parts)]
         # type=3 (chassis): override chassis_vendor which defaults to "QEMU".
         # chassis_type byte is NOT settable via -smbios CLI in QEMU 8.x, so we

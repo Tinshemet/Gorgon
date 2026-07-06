@@ -12,6 +12,7 @@ setup_provider.sh connectivity checks and API_URL assertions continue to work.
 
 import json
 import os
+import time
 
 _CFG              = json.load(open(os.path.join(os.path.dirname(__file__), "connection_config.json")))
 API_URL           = os.environ.get("API_URL",   _CFG.get("url",   "local"))
@@ -53,11 +54,16 @@ def execute_tool(tool_name: str, args: dict, verbose: bool = False) -> dict:
         if vm_name not in _ALLOWED_VMS:
             return {"success": False, "error": f"VM '{vm_name}' not found."}
 
+    # Enforce profile allowlist
+    if tool_name in ("create_vm", "apply_profile", "check_profile_compatibility") and _ALLOWED_PROFILES:
+        profile = args.get("profile", "") or args.get("profile_name", "")
+        if profile and profile not in _ALLOWED_PROFILES:
+            return {"success": False, "error": f"Profile '{profile}' is not available."}
+
     # Filter list_vms to only show allowed VMs
-    import time as _time
-    _t0 = _time.monotonic()
+    _t0 = time.monotonic()
     result = _execute_tool(tool_name, args, verbose)
-    _log_event(tool_name, args, result, (_time.monotonic() - _t0) * 1000)
+    _log_event(tool_name, args, result, (time.monotonic() - _t0) * 1000)
 
     if tool_name == "list_vms" and _ALLOWED_VMS:
         if isinstance(result, list):

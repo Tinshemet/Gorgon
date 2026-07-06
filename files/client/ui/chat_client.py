@@ -402,10 +402,15 @@ def _post_chat(message: str, session_id: str,
     if not resp.ok:
         return {"error": f"Server error {resp.status_code}"}
 
-    return resp.json()
+    try:
+        return resp.json()
+    except Exception as e:
+        return {"error": f"Invalid JSON from server: {e}"}
 
 
-def _execute(tool_name: str, args: dict = {}) -> dict:
+def _execute(tool_name: str, args: dict | None = None) -> dict:
+    if args is None:
+        args = {}
     try:
         resp = requests.post(
             f"{SERVER_URL}/execute",

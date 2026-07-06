@@ -30,10 +30,10 @@ except ImportError:
 from .session      import AUTO_CLEAR_SESSION, clear_session, detect_drift, load_session, save_session, set_auto_clear, set_loop_max, get_loop_max
 from shared.display import (
     console,
-    _print_banner, _render_compat, _render_monitor, _render_profiles,
-    _render_snapshots, _render_status, _render_system, _render_vm_list, _render_vm_specs,
+    print_banner, render_compat, render_monitor, render_profiles,
+    render_snapshots, render_status, render_system, render_vm_list, render_vm_specs,
 )
-from shared.fingerprint import _tf_report
+from shared.fingerprint import tf_report
 from .ollama_client      import OLLAMA_MODEL, OLLAMA_URL, _call_ollama
 from .context_assistant  import check_context, extract_slots
 from shared.sanitizer.context_gate import _REQUIRED as _GATE_REQUIRED
@@ -526,7 +526,7 @@ def process_message(
 # In: bool verbose → Out: nothing (blocks until exit)
 def chat_loop(verbose: bool = False):
     global _LOOP_MAX
-    _print_banner(
+    print_banner(
         verbose=verbose,
         ollama_url=OLLAMA_URL,
         ollama_model=OLLAMA_MODEL,
@@ -953,7 +953,7 @@ def chat_loop(verbose: bool = False):
                             console.print(f"  [dim]auto-confirmed: {verb}: {proposed}[/dim]")
                         else:
                             if tool_name == "create_vm":
-                                _render_vm_specs(_build_vm_spec_rows(raw_args))
+                                render_vm_specs(_build_vm_spec_rows(raw_args))
                             hint = f"[bold]{proposed}[/bold]" if proposed else "[dim]unknown[/dim]"
                             console.print(f"\n[yellow]⚠  {verb}: {hint}[/yellow]")
                             try:
@@ -1101,8 +1101,8 @@ def chat_loop(verbose: bool = False):
                     and result.get("success")
                     and result.get("vnc_connect_cmd")
                 ):
-                    from shared.display import _render_vnc_connect
-                    _render_vnc_connect(console, result)
+                    from shared.display import render_vnc_connect
+                    render_vnc_connect(console, result)
                     result = {
                         "success": True, "name": result.get("name"), "display": "vnc",
                         "rendered": True,
@@ -1326,13 +1326,13 @@ def cli_direct(args: List[str], verbose: bool = False):
 
     if cmd == "list":
         vms = manager.list_vms()
-        _render_vm_list(vms)
+        render_vm_list(vms)
         if verbose:
             pp(vms)
 
     elif cmd == "status" and rest:
         r = manager.vm_status(rest[0])
-        _render_status(r)
+        render_status(r)
         if verbose:
             pp(r)
 
@@ -1340,10 +1340,10 @@ def cli_direct(args: List[str], verbose: bool = False):
         name = rest[0] if rest else "all"
         r    = manager.monitor_all() if name == "all" else manager.monitor_vm(name)
         if isinstance(r, dict) and "state" in r:
-            _render_monitor(r)
+            render_monitor(r)
         else:
             for v in r.values():
-                _render_monitor(v)
+                render_monitor(v)
         if verbose:
             pp(r)
 
@@ -1393,7 +1393,7 @@ def cli_direct(args: List[str], verbose: bool = False):
         sub = rest[0]
         if sub == "list" and len(rest) >= 2:
             r = manager.snapshot_list(rest[1])
-            _render_snapshots(r)
+            render_snapshots(r)
         elif sub == "create" and len(rest) >= 3:
             r = manager.snapshot_create(rest[1], rest[2])
             console.print(f"[success]{r.get('message', r.get('error'))}[/success]")
@@ -1432,15 +1432,15 @@ def cli_direct(args: List[str], verbose: bool = False):
             console.print(r["output"])
 
     elif cmd == "profiles":
-        _render_profiles(list_profiles())
+        render_profiles(list_profiles())
 
     elif cmd == "check-profile" and rest:
-        _render_compat(check_profile_compatibility(rest[0]))
+        render_compat(check_profile_compatibility(rest[0]))
 
     elif cmd == "system":
         caps = check_system_capabilities()
         caps["ovmf_paths"] = OVMF
-        _render_system(caps)
+        render_system(caps)
 
     elif cmd == "isos":
         isos = manager.scan_isos()
@@ -1623,7 +1623,7 @@ def cli_direct(args: List[str], verbose: bool = False):
         clear_session()
 
     elif cmd == "-tf" and rest:
-        _tf_report(rest[0])
+        tf_report(rest[0])
 
     else:
         console.print(Panel(

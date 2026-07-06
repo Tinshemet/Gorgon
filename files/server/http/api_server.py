@@ -100,12 +100,28 @@ class ChatRequest(BaseModel):
 
 
 # ── In-memory session store ───────────────────────────────────────────────────
-# Each session: {"messages": [...], "pending_tool": {"tool_name": str, "args": dict} | None}
+# Each session: {"messages": [...], "pending_tool": {"tool_name": str, "args": dict} | None,
+#                "last_active": float}
 _sessions: Dict[str, Dict[str, Any]] = {}
+_SESSION_TTL_SECONDS = _CFG.get("session_ttl_seconds", 3600)
+
+
+def _evict_expired_sessions() -> None:
+    """Remove sessions that have been inactive longer than _SESSION_TTL_SECONDS."""
+    import time as _time
+    cutoff = _time.time() - _SESSION_TTL_SECONDS
+    # Sessions without last_active are treated as live (float('inf') > cutoff always).
+    expired = [sid for sid, s in list(_sessions.items()) if s.get("last_active", float("inf")) < cutoff]
+    for sid in expired:
+        _sessions.pop(sid, None)
 
 
 def _get_session(sid: str) -> Dict[str, Any]:
-    return _sessions.get(sid, {"messages": [], "pending_tool": None, "critical_step2": False})
+    import time as _time
+    if sid not in _sessions:
+        return {"messages": [], "pending_tool": None, "critical_step2": False, "last_active": _time.time()}
+    _sessions[sid]["last_active"] = _time.time()
+    return _sessions[sid]
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -186,6 +202,7 @@ def chat(req: ChatRequest):
     from server.ai.cli import process_message
     from server.executor_client import execute_tool
 
+    _evict_expired_sessions()
     sid     = req.session_id or str(uuid.uuid4())
     session = _get_session(sid)
     messages      = list(session["messages"])
@@ -255,12 +272,11 @@ def chat(req: ChatRequest):
             mf = missing_fields[0]
             # Keep pending_tool so the user's answer goes through the normal AI path
             # with context about what was already confirmed.
-            import json as _json
             _sessions[sid] = {
                 "messages": messages + [
                     {"role": "assistant", "content": "",
                      "tool_calls": [{"function": {"name": tool_name, "arguments": args}}]},
-                    {"role": "tool", "content": _json.dumps(result_data, default=str)},
+                    {"role": "tool", "content": json.dumps(result_data, default=str)},
                 ],
                 "pending_tool": None,
                 "critical_step2": False,
@@ -283,11 +299,10 @@ def chat(req: ChatRequest):
         label   = tool_name.replace("_", " ")
         text    = f"Done — {label} completed." if ok_flag else result_data.get("error", "Failed.")
         # Store a proper tool-call sequence so Ollama doesn't repeat the action next turn.
-        import json as _json
         updated_messages = messages + [
             {"role": "assistant", "content": "",
              "tool_calls": [{"function": {"name": tool_name, "arguments": args}}]},
-            {"role": "tool",      "content": _json.dumps(result_data, default=str)},
+            {"role": "tool",      "content": json.dumps(result_data, default=str)},
             {"role": "assistant", "content": text},
         ]
         _sessions[sid] = {"messages": updated_messages, "pending_tool": None, "critical_step2": False}
@@ -359,9 +374,7 @@ def execute(req: ExecuteRequest):
         )
 
     # ── VM access control ─────────────────────────────────────────────────────
-    _VM_TOOLS = {"launch_vm", "stop_vm", "delete_vm", "clone_vm", "resize_disk",
-                 "vm_status", "create_snapshot", "restore_snapshot", "delete_snapshot",
-                 "list_snapshots", "show_qemu_cmd", "setup_done", "generate_guest_setup"}
+    from server.executor_client import _VM_TOOLS
     if req.tool_name in _VM_TOOLS:
         _check_vm_allowed(req.args.get("name", ""))
 

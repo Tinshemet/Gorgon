@@ -311,7 +311,6 @@ def _quiet():
 
 
 def _dispatch(cmd: str):
-    global _cmd_msg, _help_mode
     if not cmd:
         return
     import signal as _signal
@@ -319,22 +318,24 @@ def _dispatch(cmd: str):
     parts = cmd.split()
     verb  = parts[0].lower()
     name  = parts[1] if len(parts) > 1 else ""
+    new_msg      = ""
+    new_help_mode = False
     try:
         if verb in ("stop", "kill") and name:
             with _quiet():
                 r = manager.stop_vm(name, force=(verb == "kill"))
-            _cmd_msg = r.get("message") or r.get("error", "done")
+            new_msg = r.get("message") or r.get("error", "done")
 
         elif verb in ("start", "launch") and name:
             with _quiet():
                 r = manager.launch_vm(name)
-            _cmd_msg = r.get("message") or r.get("error", "done")
+            new_msg = r.get("message") or r.get("error", "done")
 
         elif verb == "list":
             with _quiet():
                 raw = manager.list_vms()
             vms  = raw if isinstance(raw, list) else raw.get("vms", [])
-            _cmd_msg = "  ".join(v.get("name", "") for v in vms) or "(none)"
+            new_msg = "  ".join(v.get("name", "") for v in vms) or "(none)"
 
         elif verb == "stopall":
             with _quiet():
@@ -347,58 +348,60 @@ def _dispatch(cmd: str):
                         r = manager.stop_vm(v["name"])
                     if not r.get("error"):
                         stopped.append(v["name"])
-            _cmd_msg = f"stopped: {', '.join(stopped)}" if stopped else "no running VMs"
+            new_msg = f"stopped: {', '.join(stopped)}" if stopped else "no running VMs"
 
         elif verb in ("start-server",):
             pid = _server_pid()
             if pid:
-                _cmd_msg = f"already running (pid {pid})"
+                new_msg = f"already running (pid {pid})"
             else:
                 files_dir = os.path.dirname(_here)
                 env = os.environ.copy()
                 env["PYTHONPATH"] = files_dir
                 try:
-                    token = open(os.path.expanduser("~/.qemu-api.token")).read().strip()
-                    env["API_TOKEN"] = token
+                    with open(os.path.expanduser("~/.qemu-api.token")) as _f:
+                        env["API_TOKEN"] = _f.read().strip()
                 except Exception:
                     pass
                 log_path = "/tmp/qemu-api-server.log"
-                proc = subprocess.Popen(
-                    [sys.executable, "-m", "uvicorn",
-                     "server.http.api_server:app",
-                     "--host", "0.0.0.0", "--port", "8080",
-                     "--log-level", "warning"],
-                    cwd=files_dir, env=env,
-                    start_new_session=True,
-                    stdout=open(log_path, "w"),
-                    stderr=subprocess.STDOUT,
-                )
+                with open(log_path, "w") as log_fh:
+                    proc = subprocess.Popen(
+                        [sys.executable, "-m", "uvicorn",
+                         "server.http.api_server:app",
+                         "--host", "0.0.0.0", "--port", "8080",
+                         "--log-level", "warning"],
+                        cwd=files_dir, env=env,
+                        start_new_session=True,
+                        stdout=log_fh,
+                        stderr=subprocess.STDOUT,
+                    )
                 time.sleep(0.5)
                 if _server_pid():
-                    _cmd_msg = f"server started (pid {proc.pid})  logs: {log_path}"
+                    new_msg = f"server started (pid {proc.pid})  logs: {log_path}"
                 else:
-                    _cmd_msg = f"may have failed — check {log_path}"
+                    new_msg = f"may have failed — check {log_path}"
 
         elif verb in ("shutdown", "shutdown-server"):
             pid = _server_pid()
             if pid:
                 os.kill(pid, _signal.SIGTERM)
-                _cmd_msg = f"SIGTERM → pid {pid}"
+                new_msg = f"SIGTERM → pid {pid}"
             else:
-                _cmd_msg = "server not found"
+                new_msg = "server not found"
 
         elif verb == "kill-server":
             pid = _server_pid()
             if pid:
                 os.kill(pid, _signal.SIGKILL)
-                _cmd_msg = f"SIGKILL → pid {pid}"
+                new_msg = f"SIGKILL → pid {pid}"
             else:
-                _cmd_msg = "server not found"
+                new_msg = "server not found"
 
         elif verb == "clearlog":
             from server.event_log import _LOG_FILE
-            open(_LOG_FILE, "w").close()
-            _cmd_msg = "event log cleared"
+            with open(_LOG_FILE, "w"):
+                pass
+            new_msg = "event log cleared"
 
         elif verb == "status":
             pid = _server_pid()
@@ -406,16 +409,21 @@ def _dispatch(cmd: str):
                 raw = manager.list_vms()
             vms = raw if isinstance(raw, list) else raw.get("vms", [])
             running = sum(1 for v in vms if v.get("status") == "running")
-            _cmd_msg = f"server pid={pid or '?'}  vms={len(vms)}  running={running}"
+            new_msg = f"server pid={pid or '?'}  vms={len(vms)}  running={running}"
 
         elif verb == "help":
-            _help_mode = True
+            new_help_mode = True
 
         else:
-            _cmd_msg = f"unknown: {cmd}  (type 'help')"
+            new_msg = f"unknown: {cmd}  (type 'help')"
 
     except Exception as e:
-        _cmd_msg = str(e)[:80]
+        new_msg = str(e)[:80]
+
+    global _cmd_msg, _help_mode
+    with _lock:
+        _cmd_msg   = new_msg
+        _help_mode = new_help_mode or _help_mode
 
 
 def _handle_input(stdscr):

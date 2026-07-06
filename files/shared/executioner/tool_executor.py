@@ -17,6 +17,7 @@ _VM_DEFS             = _CFG["create_vm_defaults"]
 _TOOL_DEFS           = _CFG["tool_defaults"]
 _VALID_MACHINE_TYPES = set(_CFG["valid_machine_types"])
 _ARM_CPU_PREFIXES    = tuple(_CFG["arm_cpu_prefixes"])
+_GENERIC_OS_NAMES    = set(_CFG["generic_os_names"])
 
 from shared.api.qemu_config import (
     MachineConfig, DiskConfig, NetworkConfig,
@@ -33,11 +34,11 @@ from shared.sanitizer.context_gate import gate_check
 from shared.preflight.validator import _preflight_check, _show_preflight_warning
 from shared.display import (
     console,
-    _render_compat, _render_monitor, _render_profiles,
-    _render_snapshots, _render_status, _render_system,
-    _render_vm_failure, _render_vm_list,
+    render_compat, render_monitor, render_profiles,
+    render_snapshots, render_status, render_system,
+    render_vm_failure, render_vm_list,
 )
-from shared.fingerprint import _tf_report
+from shared.fingerprint import tf_report
 from rich.panel import Panel
 
 manager = QemuManager()
@@ -124,7 +125,7 @@ def execute_tool(tool_name: str, args: Dict[str, Any], verbose: bool = False, sk
         caps = check_system_capabilities()
         caps["ovmf_paths"] = OVMF
         if not verbose:
-            _render_system(caps)
+            render_system(caps)
         return caps
 
     elif tool_name == "scan_isos":
@@ -133,19 +134,19 @@ def execute_tool(tool_name: str, args: Dict[str, Any], verbose: bool = False, sk
     elif tool_name == "list_vms":
         vms = manager.list_vms()
         if not verbose:
-            _render_vm_list(vms)
+            render_vm_list(vms)
         return vms
 
     elif tool_name == "list_profiles":
         profiles = list_profiles()
         if not verbose:
-            _render_profiles(profiles)
+            render_profiles(profiles)
         return profiles
 
     elif tool_name == "check_profile_compatibility":
         result = check_profile_compatibility(args["profile_name"])
         if not verbose:
-            _render_compat(result)
+            render_compat(result)
         return result
 
     elif tool_name == "create_profile":
@@ -358,7 +359,6 @@ def execute_tool(tool_name: str, args: Dict[str, Any], verbose: bool = False, sk
         # Auto-find ISO from distro name when no iso_path was given.
         # os_name is preferred; fall back to the raw os_type before alias conversion
         # (e.g. the AI passes os_type="mint" which sanitizer converts to "linux").
-        _GENERIC_OS_NAMES = {"linux", "windows", "macos", "other", ""}
         _distro_hint = (cfg.os_name or _raw_os_type or "").lower().strip()
         if _distro_hint and _distro_hint not in _GENERIC_OS_NAMES and not cfg.os_name:
             cfg.os_name = _distro_hint
@@ -430,7 +430,7 @@ def execute_tool(tool_name: str, args: Dict[str, Any], verbose: bool = False, sk
     elif tool_name == "vm_status":
         result = manager.vm_status(args["name"])
         if not verbose:
-            _render_status(result)
+            render_status(result)
         return result
 
     elif tool_name == "monitor_vm":
@@ -438,11 +438,11 @@ def execute_tool(tool_name: str, args: Dict[str, Any], verbose: bool = False, sk
             result = manager.monitor_all()
             if not verbose:
                 for r in result.values():
-                    _render_monitor(r)
+                    render_monitor(r)
             return result
         result = manager.monitor_vm(args["name"])
         if not verbose:
-            _render_monitor(result)
+            render_monitor(result)
         return result
 
     elif tool_name == "show_config":
@@ -482,7 +482,7 @@ def execute_tool(tool_name: str, args: Dict[str, Any], verbose: bool = False, sk
     elif tool_name == "snapshot_list":
         result = manager.snapshot_list(args["name"])
         if not verbose:
-            _render_snapshots(result)
+            render_snapshots(result)
         return result
 
     elif tool_name == "snapshot_restore":
@@ -532,7 +532,7 @@ def execute_tool(tool_name: str, args: Dict[str, Any], verbose: bool = False, sk
     elif tool_name == "get_vm_logs":
         result = manager.get_vm_logs(args["name"], lines=int(args.get("lines", _TOOL_DEFS["log_lines"])))
         if not verbose:
-            _render_vm_failure(result)
+            render_vm_failure(result)
         return result
 
     elif tool_name == "print_command":
@@ -543,7 +543,7 @@ def execute_tool(tool_name: str, args: Dict[str, Any], verbose: bool = False, sk
         return result
 
     elif tool_name == "fingerprint_vm":
-        return _tf_report(args["name"], summary=bool(args.get("summary", False)))
+        return tf_report(args["name"], summary=bool(args.get("summary", False)))
 
     elif tool_name == "send_monitor_cmd":
         return manager.send_monitor_cmd(args["name"], args.get("cmd", "info status"))

@@ -134,7 +134,7 @@ def _resolve_iso(iso_hint: str) -> Optional[str]:
             if os.path.isdir(full) and entry.lower() in _iso_dirs:
                 search_dirs.append(full)
         search_dirs.append(desktop)
-    for d in ["Downloads", "iso", "ISOs", "images", "Images"]:
+    for d in _CFG["iso_home_subdirs"]:
         p = os.path.join(REAL_HOME, d)
         if os.path.isdir(p):
             search_dirs.append(p)
@@ -306,16 +306,16 @@ def _sanitise_args(tool_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         except Exception:
             args["memory_mb"] = max(_BOUNDS["memory_min_mb"], args["memory_mb"])
 
-    # CPU cores: cap at host logical core count
-    if "cpu_cores" in args and args["cpu_cores"]:
+    # CPU cores: cap at host logical core count (explicit None check — 0 is an invalid value too)
+    if "cpu_cores" in args and args["cpu_cores"] is not None:
         try:
             import psutil
             args["cpu_cores"] = max(1, min(args["cpu_cores"], psutil.cpu_count(logical=True)))
         except Exception:
             args["cpu_cores"] = max(1, args["cpu_cores"])
 
-    # Disk size: bounded by config
-    if "disk_size_gb" in args and args["disk_size_gb"]:
+    # Disk size: bounded by config (explicit None check — 0 is invalid)
+    if "disk_size_gb" in args and args["disk_size_gb"] is not None:
         args["disk_size_gb"] = max(_BOUNDS["disk_min_gb"], min(int(args["disk_size_gb"]), _BOUNDS["disk_max_gb"]))
 
     # Port numbers: valid range

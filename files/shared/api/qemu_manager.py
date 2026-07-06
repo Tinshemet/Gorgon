@@ -17,13 +17,15 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
-_CFG                 = json.load(open(os.path.join(os.path.dirname(__file__), "config.json")))
-_TIMEOUTS            = _CFG["timeouts"]
-_BUFFERS             = _CFG["buffers"]
-_MACOS_OVMF          = _CFG["ovmf_macos_vars_paths"]
-_WIN_OVMF            = _CFG["ovmf_win_vars_paths"]
-_LOG_ERROR_PATTERNS  = [tuple(p) for p in _CFG["log_error_patterns"]]
-_VALID_MACHINE_TYPES = set(_CFG["valid_machine_types"])
+_CFG                  = json.load(open(os.path.join(os.path.dirname(__file__), "config.json")))
+_TIMEOUTS             = _CFG["timeouts"]
+_BUFFERS              = _CFG["buffers"]
+_MACOS_OVMF           = _CFG["ovmf_macos_vars_paths"]
+_WIN_OVMF             = _CFG["ovmf_win_vars_paths"]
+_LOG_ERROR_PATTERNS   = [tuple(p) for p in _CFG["log_error_patterns"]]
+_VALID_MACHINE_TYPES  = set(_CFG["valid_machine_types"])
+_UPDATE_ALLOWED_FIELDS = frozenset(_CFG["update_allowed_fields"])
+_MONITOR_ALLOWED_CMDS  = tuple(_CFG["monitor_allowed_cmds"])
 
 import psutil
 
@@ -31,7 +33,7 @@ from .qemu_config import (
     DiskConfig, MachineConfig, NetworkConfig, OVMF, apply_os_hints,
 )
 from .qemu_arg_builder import (
-    QemuArgBuilder, _build_iso_search_dirs, _next_free_port, _qemu_version_warn,
+    QemuArgBuilder, build_iso_search_dirs, next_free_port, qemu_version_warn,
     SPICE_PORT_START, VNC_PORT_START,
 )
 from .qmp_client      import QMPClient
@@ -40,12 +42,7 @@ from .vm_state        import VMState, _PsutilProcWrapper
 
 VM_BASE_DIR = os.path.expanduser(_CFG["dirs"]["vm_base"])
 
-_LINUX_DISTROS = [
-    "ubuntu", "debian", "fedora", "mint", "linuxmint", "arch", "manjaro",
-    "opensuse", "suse", "kali", "parrot", "tails", "centos", "rocky", "alma",
-    "pop", "elementary", "zorin", "rhel", "void", "gentoo", "slackware",
-    "deepin", "mx", "antiX", "antix",
-]
+_LINUX_DISTROS = _CFG["linux_distros"]
 
 
 def _infer_distro(iso_path: Optional[str], os_type: str) -> str:
@@ -120,7 +117,7 @@ class QemuManager:
         """Scan common directories for ISO files."""
         found = []
         seen  = set()
-        for d in _build_iso_search_dirs():
+        for d in build_iso_search_dirs():
             if not os.path.isdir(d):
                 continue
             for f in sorted(os.listdir(d)):
@@ -207,9 +204,9 @@ class QemuManager:
         used_vnc   = self._used_ports("vnc")
         used_spice = self._used_ports("spice")
         if config.display == "vnc" and not config.vnc_port:
-            config.vnc_port = _next_free_port(VNC_PORT_START, used_vnc)
+            config.vnc_port = next_free_port(VNC_PORT_START, used_vnc)
         if config.display == "spice" and not config.spice_port:
-            config.spice_port = _next_free_port(SPICE_PORT_START, used_spice)
+            config.spice_port = next_free_port(SPICE_PORT_START, used_spice)
 
         # Create disk images
         for disk in config.disks:
@@ -369,7 +366,7 @@ class QemuManager:
 
     def launch_vm(self, name: str, display: Optional[str] = None,
                   dry_run: bool = False) -> Dict[str, Any]:
-        _qemu_version_warn()
+        qemu_version_warn()
         try:
             config = MachineConfig.load(name)
         except FileNotFoundError as e:
@@ -397,7 +394,7 @@ class QemuManager:
         auto_detached_iso = self._maybe_auto_detach_iso(config)
 
         if config.display == "vnc" and not config.vnc_port:
-            config.vnc_port = _next_free_port(VNC_PORT_START, self._used_ports("vnc"))
+            config.vnc_port = next_free_port(VNC_PORT_START, self._used_ports("vnc"))
 
         cmd     = QemuArgBuilder(config).build()
         cmd_str = " ".join(cmd)
@@ -951,11 +948,12 @@ class QemuManager:
 
         changed = []
         for key, value in updates.items():
-            if hasattr(cfg, key):
-                setattr(cfg, key, value)
-                changed.append(key)
-            else:
+            if key not in _UPDATE_ALLOWED_FIELDS:
+                return {"success": False, "error": f"Field '{key}' cannot be updated via API."}
+            if not hasattr(cfg, key):
                 return {"success": False, "error": f"Unknown config field: '{key}'"}
+            setattr(cfg, key, value)
+            changed.append(key)
         cfg.save()
         return {"success": True, "message": f"Updated {changed} for '{name}'."}
 
@@ -967,18 +965,25 @@ class QemuManager:
         vm_dir = os.path.join(VM_BASE_DIR, name)
         if not os.path.exists(vm_dir):
             return {"success": False, "error": f"VM '{name}' not found."}
+        disk_errors = []
         if delete_disks:
             try:
                 cfg = MachineConfig.load(name)
                 for disk in cfg.disks:
                     p = os.path.expanduser(disk.path)
                     if os.path.exists(p):
-                        os.remove(p)
-            except Exception:
+                        try:
+                            os.remove(p)
+                        except OSError as e:
+                            disk_errors.append(f"{p}: {e}")
+            except FileNotFoundError:
                 pass
         shutil.rmtree(vm_dir)
         self._state.set_stopped(name)
-        return {"success": True, "message": f"VM '{name}' deleted."}
+        msg = f"VM '{name}' deleted."
+        if disk_errors:
+            msg += f" Warning: could not remove disk(s): {'; '.join(disk_errors)}"
+        return {"success": True, "message": msg}
 
     # Reads the launch log, pattern-matches 30+ known error strings, returns diagnosis and fix suggestions.
     # In: str name, int lines → Out: dict with errors, diagnosis, suggestions
@@ -1116,9 +1121,14 @@ class QemuManager:
 
         return result
 
-    # Sends a raw command string to the QEMU human monitor socket.
+    # Sends a command to the QEMU human monitor socket. Only commands matching
+    # an allowed prefix are permitted to prevent host-level abuse via HMP.
     # In: str name, str cmd → Out: dict with output
     def send_monitor_cmd(self, name: str, cmd: str) -> Dict[str, Any]:
+        cmd_stripped = cmd.strip()
+        if not any(cmd_stripped == allowed.rstrip() or cmd_stripped.startswith(allowed)
+                   for allowed in _MONITOR_ALLOWED_CMDS):
+            return {"success": False, "error": f"Command not permitted: '{cmd_stripped}'"}
         try:
             cfg       = MachineConfig.load(name)
             sock_path = cfg.get_monitor_socket()

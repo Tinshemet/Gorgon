@@ -38,13 +38,13 @@ from rich.table import Table
 
 from shared.display import (
     console,
-    _render_vm_list,
-    _render_status,
-    _render_monitor,
-    _render_profiles,
-    _render_compat,
-    _render_snapshots,
-    _render_system,
+    render_vm_list,
+    render_status,
+    render_monitor,
+    render_profiles,
+    render_compat,
+    render_snapshots,
+    render_system,
 )
 
 _CFG_PATH  = os.path.join(os.path.dirname(os.path.dirname(__file__)), "connection_config.json")
@@ -147,13 +147,13 @@ def run(args: List[str], verbose: bool = False):
     if cmd == "list":
         _require_manager()
         vms = manager.list_vms()
-        _render_vm_list(vms)
+        render_vm_list(vms)
         pp(vms)
 
     elif cmd == "status" and rest:
         _require_manager()
         r = manager.vm_status(rest[0])
-        _render_status(r)
+        render_status(r)
         pp(r)
 
     elif cmd == "monitor":
@@ -161,10 +161,10 @@ def run(args: List[str], verbose: bool = False):
         name = rest[0] if rest else "all"
         r    = manager.monitor_all() if name == "all" else manager.monitor_vm(name)
         if isinstance(r, dict) and "state" in r:
-            _render_monitor(r)
+            render_monitor(r)
         else:
             for v in (r.values() if isinstance(r, dict) else [r]):
-                _render_monitor(v)
+                render_monitor(v)
         pp(r)
 
     elif cmd == "launch" and rest:
@@ -282,7 +282,7 @@ def run(args: List[str], verbose: bool = False):
         sub = rest[0]
         if sub == "list" and len(rest) >= 2:
             r = manager.snapshot_list(rest[1])
-            _render_snapshots(r)
+            render_snapshots(r)
         elif sub == "create" and len(rest) >= 3:
             r = manager.snapshot_create(rest[1], rest[2])
             style = "success" if r.get("success") else "error"
@@ -325,15 +325,15 @@ def run(args: List[str], verbose: bool = False):
             console.print("[dim]Usage: network list|create|delete|add [name] [vm][/dim]")
 
     elif cmd == "profiles":
-        _render_profiles(list_profiles())
+        render_profiles(list_profiles())
 
     elif cmd == "check-profile" and rest:
-        _render_compat(check_profile_compatibility(rest[0]))
+        render_compat(check_profile_compatibility(rest[0]))
 
     elif cmd == "system":
         caps = check_system_capabilities()
         caps["ovmf_paths"] = OVMF
-        _render_system(caps)
+        render_system(caps)
 
     elif cmd == "isos":
         _require_manager()
@@ -478,7 +478,7 @@ def run(args: List[str], verbose: bool = False):
         import tarfile as _tar
         console.print(f"\n  Extracting to {dest_dir}...")
         with _tar.open(dest_file, "r:gz") as t:
-            t.extractall(dest_dir)
+            t.extractall(dest_dir, filter="data")
         os.remove(dest_file)
 
         # Fix absolute paths in config.json to match new location
