@@ -50,7 +50,7 @@ from shared.display import (
 _CFG_PATH  = os.path.join(os.path.dirname(os.path.dirname(__file__)), "connection_config.json")
 _API_CFG_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-    "shared", "api", "config.json",
+    "executor", "api", "config.json",
 )
 try:
     _CONN      = json.load(open(_CFG_PATH))
@@ -71,7 +71,7 @@ except Exception:
     _IO_CHUNK     = 4 * 1024 * 1024
 
 try:
-    from shared.api.qemu_config import (
+    from executor.api.qemu_config import (
         OVMF,
         check_profile_compatibility,
         check_system_capabilities,

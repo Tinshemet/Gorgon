@@ -6,8 +6,9 @@
 #  For a two-machine setup use setup_server.sh + setup_client.sh separately.
 #
 #  What this does:
-#    1. Runs setup_server.sh  — installs QEMU, Ollama, the HTTP API server
-#    2. Runs setup_client.sh  — installs the thin chat UI pointed at localhost
+#    1. Runs install_orchestrator.sh — installs Ollama + HTTP API
+#    2. Runs install_executor.sh     — installs QEMU + executor server
+#    3. Runs setup_client.sh         — installs the thin chat UI pointed at localhost
 #    The two scripts share a single auto-generated API token.
 #
 #  Run as your normal user (sudo is invoked internally where needed):
@@ -55,7 +56,7 @@ echo -e "${BOLD}${CYAN}║   qemu-api — single-machine installer        ║${R
 echo -e "${BOLD}${CYAN}║   QEMU + Ollama + AI chat on one box         ║${RESET}"
 echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════════╝${RESET}"
 echo ""
-echo "  This will run setup_server.sh then setup_client.sh"
+echo "  This will run install_orchestrator.sh, install_executor.sh, then setup_client.sh"
 echo "  with a shared token and SERVER_URL=http://localhost:8080"
 echo ""
 
@@ -75,10 +76,15 @@ else
     ok "Generated new token → $TOKEN_FILE"
 fi
 
-# ── run server setup ──────────────────────────────────────────────────────────
-header "Server Setup (QEMU + Ollama + HTTP API)"
+# ── run orchestrator setup ────────────────────────────────────────────────────
+header "Orchestrator Setup (Ollama + HTTP API)"
 
-API_TOKEN="$TOKEN" bash "$SCRIPT_DIR/setup_server.sh"
+API_TOKEN="$TOKEN" bash "$SCRIPT_DIR/install_orchestrator.sh"
+
+# ── run executor setup ────────────────────────────────────────────────────────
+header "Executor Setup (QEMU + executor server)"
+
+EXECUTOR_TOKEN="$TOKEN" bash "$SCRIPT_DIR/install_executor.sh"
 
 # ── run client setup ──────────────────────────────────────────────────────────
 header "Client Setup (AI Chat UI → localhost)"

@@ -1,23 +1,27 @@
 """
-executor_client.py — Executor Client (server-local)
+executor_client.py — Executor Client
 
-On the server machine, the AI layer and the QEMU engine are co-located, so
-tool execution is always a direct in-process call.  This module is a thin
-re-export of shared.executioner.tool_executor so that server/ai/cli.py has a
-single import point regardless of future remote-QEMU extensions.
+Single import point for tool execution used by server/ai/cli.py.
+Supports two modes controlled by connection_config.json (or API_URL env var):
 
-CLI configuration (server/connection_config.json) is still loaded here so that
-setup_provider.sh connectivity checks and API_URL assertions continue to work.
+  url = "local"          — direct in-process call (default, single-machine setup)
+  url = "http://host:8001" — HTTP call to a remote executor.server instance
+
+Remote mode enables running the AI orchestrator and the QEMU engine on
+separate machines. The executor server (executor/server.py) must be running
+on the target host.
 """
 
 import json
 import os
 import time
 
+import requests as _requests
+
 with open(os.path.join(os.path.dirname(__file__), "connection_config.json")) as _f:
     _CFG = json.load(_f)
 _SHARED_CFG_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)), "shared", "api", "config.json"
+    os.path.dirname(os.path.dirname(__file__)), "executor", "api", "config.json"
 )
 with open(_SHARED_CFG_PATH) as _sf:
     _SHARED_CFG = json.load(_sf)
@@ -38,8 +42,16 @@ _VM_TOOLS = {"launch_vm", "stop_vm", "delete_vm", "clone_vm", "resize_disk",
              "vm_status", "create_snapshot", "restore_snapshot", "delete_snapshot",
              "list_snapshots", "show_qemu_cmd", "setup_done", "generate_guest_setup"}
 
-from shared.executioner.tool_executor import execute_tool as _execute_tool  # noqa: E402
-from server.event_log import log_event as _log_event                        # noqa: E402
+from orchestrator.event_log import log_event as _log_event  # noqa: E402
+
+
+def __getattr__(name: str):
+    # Lazily resolved so mock.patch("shared.executioner.tool_executor.execute_tool")
+    # and module deletion/reimport by tests always return the current binding.
+    if name == "_execute_tool":
+        import shared.executioner.tool_executor as _te
+        return _te.execute_tool
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 
@@ -87,7 +99,22 @@ def execute_tool(tool_name: str, args: dict, verbose: bool = False) -> dict:
 
     # Filter list_vms to only show allowed VMs
     _t0 = time.monotonic()
-    result = _execute_tool(tool_name, args, verbose)
+    if API_URL and API_URL != "local":
+        try:
+            resp = _requests.post(
+                f"{API_URL}/execute",
+                json={"tool_name": tool_name, "args": args, "verbose": verbose},
+                headers={"Authorization": f"Bearer {_TOKEN}"},
+                timeout=_TIMEOUT,
+                verify=_VERIFY,
+            )
+            resp.raise_for_status()
+            result = resp.json()
+        except _requests.RequestException as exc:
+            result = {"success": False, "error": f"Executor unreachable: {exc}"}
+    else:
+        import shared.executioner.tool_executor as _te
+        result = _te.execute_tool(tool_name, args, verbose)
     _log_event(tool_name, args, result, (time.monotonic() - _t0) * 1000)
 
     if tool_name == "list_vms" and _ALLOWED_VMS:

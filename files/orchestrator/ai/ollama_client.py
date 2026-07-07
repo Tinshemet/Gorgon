@@ -14,13 +14,13 @@ from typing import Dict, List
 import requests
 
 try:
-    from shared.api.qemu_config import OVMF, list_profiles
+    from executor.api.qemu_config import OVMF, list_profiles
 except ImportError:
     OVMF = {"available": False, "code": "", "vars": ""}
     def list_profiles(): return []                                            # type: ignore[misc]
 from .tools        import TOOLS
 from shared.display import console
-import shared.preflight.validator as _validator
+import orchestrator.preflight.validator as _validator
 
 _CFG = json.load(open(os.path.join(os.path.dirname(__file__), "config.json")))
 _OLLAMA = _CFG["ollama"]

@@ -74,7 +74,7 @@ class _VmLifecycleMixin:
             or ``{"success": False, "error": str}`` on failure.
 
         Example::
-            >>> from shared.api.qemu_config import MachineConfig
+            >>> from executor.api.qemu_config import MachineConfig
             >>> cfg = MachineConfig(name="test", os_type="linux")
             >>> mgr.create_vm(cfg)
             {"success": True, "name": "test", "vm_dir": "~/.qemu_vms/test", ...}

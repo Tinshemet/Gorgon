@@ -31,5 +31,7 @@
     "macos",
     "other",
     ""
-  ]
+  ],
+  "arm_iso_keywords": ["arm64", "aarch64", "arm_"],
+  "x86_iso_keywords": ["amd64", "x86_64", "x64", "i386", "i686"]
 }

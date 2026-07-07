@@ -19,7 +19,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 try:
-    from shared.api.qemu_config import (  # noqa: E402
+    from executor.api.qemu_config import (  # noqa: E402
         _MC, OVMF, check_profile_compatibility,
         check_system_capabilities, get_all_profiles, list_profiles,
     )
@@ -39,18 +39,18 @@ from shared.display import (
     print_banner, render_compat, render_monitor, render_profiles,
     render_snapshots, render_status, render_system, render_vm_list, render_vm_specs,
 )
-from shared.fingerprint import tf_report
+from executor.fingerprint import tf_report
 from .ollama_client      import OLLAMA_MODEL, OLLAMA_URL, _call_ollama
 from .context_assistant  import check_context, extract_slots
-from shared.sanitizer.context_gate import _REQUIRED as _GATE_REQUIRED
-from shared.sanitizer.sanitizer import OS_TYPE_ALIASES
-from server.executor_client import execute_tool, API_URL, _VERIFY, _TOKEN, _TIMEOUT
+from orchestrator.sanitizer.context_gate import _REQUIRED as _GATE_REQUIRED
+from orchestrator.sanitizer.sanitizer import OS_TYPE_ALIASES
+from orchestrator.executor_client import execute_tool, API_URL, _VERIFY, _TOKEN, _TIMEOUT
 try:
     from shared.executioner.tool_executor import manager, _VM_DEFS
 except ImportError:
     manager = None                                                            # type: ignore[assignment]
     _VM_DEFS = {"disk_size_gb": 60, "network_mode": "nat", "disk_bus": "virtio"}
-from shared.preflight.validator import set_custom_mode, _preflight_check, _show_preflight_warning
+from orchestrator.preflight.validator import set_custom_mode, _preflight_check, _show_preflight_warning
 
 _CFG            = json.load(open(os.path.join(os.path.dirname(__file__), "config.json")))
 _EXIT_CMDS      = set(_CFG["exit_commands"])
@@ -64,7 +64,7 @@ _RENDERS_OUTPUT = set(_CFG.get("rendered_tools", []))
 
 _SHARED_API_CFG_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-    "shared", "api", "config.json",
+    "executor", "api", "config.json",
 )
 _SHARED_API_CFG  = json.load(open(_SHARED_API_CFG_PATH))
 _QEMU_HOST_IP    = _SHARED_API_CFG.get("qemu_user_net_gateway", "10.0.2.2")
@@ -1541,7 +1541,7 @@ def cli_direct(args: List[str], verbose: bool = False):
 
     elif cmd == "serve":
         import uvicorn
-        from server.executor_client import _EX
+        from orchestrator.executor_client import _EX
         # Parse: serve [host] [port] [--cert cert.pem --key key.pem]
         positional = [a for a in rest if not a.startswith("--")]
         flags      = rest  # full list for --flag parsing

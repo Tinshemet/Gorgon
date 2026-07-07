@@ -68,6 +68,13 @@ class _VmRuntimeMixin:
                     "command": " ".join(cmd),
                     "message": "Dry run — command not executed."}
 
+        if os.environ.get("QEMU_TEST_NO_LAUNCH"):
+            cmd = QemuArgBuilder(config).build()
+            return {"success": True, "pid": 0,
+                    "display": config.display or "none",
+                    "name": name,
+                    "message": f"VM '{name}' launch skipped (QEMU_TEST_NO_LAUNCH)."}
+
         if self._is_running(name):
             result: Dict[str, Any] = {
                 "success": False, "already_running": True,
@@ -190,11 +197,11 @@ class _VmRuntimeMixin:
                 f"if os.path.exists(flag):\n"
                 f"    os.unlink(flag)\n"
                 f"    time.sleep(2)\n"
-                f"    from shared.api.qemu_manager import QemuManager\n"
+                f"    from executor.api.qemu_manager import QemuManager\n"
                 f"    mgr = QemuManager()\n"
                 f"    mgr.launch_vm(name)\n"
                 f"    try:\n"
-                f"        from shared.api.qemu_config import MachineConfig\n"
+                f"        from executor.api.qemu_config import MachineConfig\n"
                 f"        cfg = MachineConfig.load(name)\n"
                 f"        if cfg.stealth:\n"
                 f"            stealth_done = os.path.join("

@@ -400,7 +400,7 @@ def _dispatch(cmd: str):
                 new_msg = "server not found"
 
         elif verb == "clearlog":
-            from server.event_log import _LOG_FILE
+            from orchestrator.event_log import _LOG_FILE
             with open(_LOG_FILE, "w"):
                 pass
             new_msg = "event log cleared"
@@ -459,7 +459,7 @@ def _handle_input(stdscr):
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def _run(stdscr):
-    from server.event_log import read_events
+    from orchestrator.event_log import read_events
     from shared.executioner.tool_executor import manager
 
     cfg       = _load_admin_cfg()

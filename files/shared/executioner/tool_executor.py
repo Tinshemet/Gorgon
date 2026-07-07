@@ -20,32 +20,27 @@ _VALID_MACHINE_TYPES = set(_CFG["valid_machine_types"])
 _ARM_CPU_PREFIXES    = tuple(_CFG["arm_cpu_prefixes"])
 _GENERIC_OS_NAMES    = set(_CFG["generic_os_names"])
 
-_PF_CFG_PATH         = os.path.join(os.path.dirname(__file__), "..", "preflight", "config.json")
-with open(_PF_CFG_PATH) as _pf:
-    _PF_CFG = json.load(_pf)
-_ISO_ARM_KEYWORDS    = tuple(_PF_CFG.get("arm_iso_keywords", ["arm64", "aarch64", "arm_"]))
-_ISO_X86_KEYWORDS    = tuple(_PF_CFG.get("x86_iso_keywords", ["amd64", "x86_64", "x64", "i386", "i686"]))
+_ISO_ARM_KEYWORDS    = tuple(_CFG.get("arm_iso_keywords", ["arm64", "aarch64", "arm_"]))
+_ISO_X86_KEYWORDS    = tuple(_CFG.get("x86_iso_keywords", ["amd64", "x86_64", "x64", "i386", "i686"]))
 
-from shared.api.qemu_config import (
+from executor.api.qemu_config import (
     MachineConfig, DiskConfig, NetworkConfig,
     OVMF, apply_profile, check_profile_compatibility,
     check_system_capabilities, delete_custom_profile,
     get_all_profiles, list_profiles, save_custom_profile,
 )
-from shared.api.qemu_manager import QemuManager
-from shared.sanitizer.sanitizer import (
-    PLACEHOLDER_VM_NAMES,
-    _resolve_iso, _resolve_vm_name, _sanitise_args,
-)
-from shared.sanitizer.context_gate import gate_check
-from shared.preflight.validator import _preflight_check, _show_preflight_warning
+from executor.api.qemu_manager import QemuManager
+
+# Orchestrator-side pipeline imports are lazy (inside execute_tool) so that
+# this module can be loaded on an executor-only machine without orchestrator/
+# installed. dispatch_tool() never touches these imports.
 from shared.display import (
     console,
     render_compat, render_monitor, render_profiles,
     render_snapshots, render_status, render_system,
     render_vm_failure, render_vm_list,
 )
-from shared.fingerprint import tf_report
+from executor.fingerprint import tf_report
 from rich.panel import Panel
 
 manager = QemuManager()
@@ -77,8 +72,33 @@ def _clear_revert() -> None:
     _last_revert_action = {}
 
 
+def dispatch_tool(tool_name: str, args: Dict[str, Any], verbose: bool = False) -> Any:
+    """Execute a pre-validated tool call — skips the orchestrator pipeline.
+
+    Entry point for the remote executor server. The orchestrator has already run
+    sanitizer, context gate, and preflight; args are clean and VM names are
+    resolved before this is called.
+
+    Args:
+        tool_name: Name of the tool (e.g. ``"create_vm"``).
+        args:      Pre-sanitised argument dict.
+        verbose:   When True, suppress Rich console output.
+
+    Returns:
+        Tool result dict, always containing ``"success": bool``.
+
+    Example::
+        >>> dispatch_tool("list_vms", {})
+        [{"name": "my-linux", "status": "stopped", ...}]
+    """
+    return execute_tool(tool_name, args, verbose=verbose, skip_gate=True)
+
+
 def execute_tool(tool_name: str, args: Dict[str, Any], verbose: bool = False, skip_gate: bool = False) -> Any:
     """Sanitise args, resolve VM names, dispatch to the manager, and trigger Rich rendering.
+
+    Full pipeline entry point used in local mode (single-machine deployment) and
+    by the orchestrator when calling the executor in-process.
 
     Args:
         tool_name: Name of the tool to execute (e.g. ``"create_vm"``).
@@ -94,6 +114,15 @@ def execute_tool(tool_name: str, args: Dict[str, Any], verbose: bool = False, sk
         >>> execute_tool("list_vms", {})
         [{"name": "my-linux", "status": "stopped", ...}]
     """
+    # Lazy imports — only loaded when running the full orchestrator pipeline.
+    # dispatch_tool() never reaches this code, so executor-only deployments
+    # that lack orchestrator/ can still import and call dispatch_tool().
+    from orchestrator.sanitizer.sanitizer import (
+        PLACEHOLDER_VM_NAMES, _resolve_iso, _resolve_vm_name, _sanitise_args,
+    )
+    from orchestrator.sanitizer.context_gate import gate_check
+    from orchestrator.preflight.validator import _preflight_check, _show_preflight_warning
+
     _raw_os_type = args.get("os_type", "")  # capture before alias conversion
     args = _sanitise_args(tool_name, args)
 
