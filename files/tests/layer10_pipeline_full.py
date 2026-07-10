@@ -479,6 +479,13 @@ def cleanup_full_artifacts():
     if os.path.isdir(vm_dir):
         for entry in os.listdir(vm_dir):
             if entry.startswith("probe10"):
+                # Stop first — a leftover/live launch leaves QEMU running, and
+                # delete_vm refuses to delete a running VM (its rmtree fallback
+                # then removes the dir but orphans the QEMU process + window).
+                try:
+                    _et("stop_vm", {"name": entry, "force": True}, verbose=False, skip_gate=True)
+                except Exception:
+                    pass
                 try:
                     _et("delete_vm", {"name": entry}, verbose=False, skip_gate=True)
                 except Exception:
