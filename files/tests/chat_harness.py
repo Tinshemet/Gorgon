@@ -25,6 +25,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from unittest.mock import patch
 
 import orchestrator.ai.cli as cli
+import orchestrator.ai.chat_turn as chat_turn
 import shared.display as _display
 
 
@@ -139,24 +140,34 @@ def run_chat(
     add = stack.enter_context
     # Environment: force local mode (no liveness thread, full preflight path) and
     # disable session auto-clear so the run is deterministic.
-    add(patch.object(cli, "API_URL", "local"))
+    # A boundary is patched in BOTH modules that import it: the gate pipeline
+    # now lives in chat_turn.py while the REPL shell stays in cli.py, and each
+    # binds these names into its own namespace at import time. patch.object
+    # rebinds per-namespace, so a seam reached from both sides must be patched
+    # on both. hasattr keeps it correct when a name lives in only one module.
+    def _seam(name, repl):
+        for _mod in (cli, chat_turn):
+            if hasattr(_mod, name):
+                add(patch.object(_mod, name, repl))
+
+    _seam("API_URL", "local")
     add(patch.object(cli, "AUTO_CLEAR_SESSION", False))
     add(patch.object(cli, "_LOOP_MAX", loop_max))
     # Seams.
-    add(patch.object(cli, "_call_ollama", _call_ollama))
-    add(patch.object(cli, "execute_tool", _execute_tool))
-    add(patch.object(cli, "_preflight_check", _preflight_check))
-    add(patch.object(cli, "check_context", _check_context))
-    add(patch.object(cli, "extract_slots", _extract_slots))
-    add(patch.object(cli, "load_session", lambda: []))
-    add(patch.object(cli, "save_session", _save))
-    add(patch.object(cli, "detect_drift", lambda _m: None))
-    add(patch.object(cli, "clear_session", lambda: None))
-    add(patch.object(cli, "print_banner", lambda **_k: None))
-    add(patch.object(cli, "_get_ovmf", lambda: {"available": False, "code": ""}))
-    add(patch.object(cli, "render_vm_specs", lambda *_a, **_k: None))
-    add(patch.object(cli, "_show_preflight_warning", lambda *_a, **_k: None))
-    add(patch.object(cli, "set_custom_mode", lambda *_a, **_k: None))
+    _seam("_call_ollama", _call_ollama)
+    _seam("execute_tool", _execute_tool)
+    _seam("_preflight_check", _preflight_check)
+    _seam("check_context", _check_context)
+    _seam("extract_slots", _extract_slots)
+    _seam("load_session", lambda: [])
+    _seam("save_session", _save)
+    _seam("detect_drift", lambda _m: None)
+    _seam("clear_session", lambda: None)
+    _seam("print_banner", lambda **_k: None)
+    _seam("_get_ovmf", lambda: {"available": False, "code": ""})
+    _seam("render_vm_specs", lambda *_a, **_k: None)
+    _seam("_show_preflight_warning", lambda *_a, **_k: None)
+    _seam("set_custom_mode", lambda *_a, **_k: None)
     add(patch.object(_display, "render_vnc_connect", lambda *_a, **_k: None))
     add(patch.object(cli.console, "input", _input))
     add(patch.object(cli.console, "print", _print))
