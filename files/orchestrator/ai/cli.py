@@ -14,6 +14,7 @@ import sys
 import threading
 from typing import List
 from dataclasses import dataclass, field
+from enum import Enum, auto
 
 from rich import box
 from rich.panel import Panel
@@ -597,6 +598,120 @@ class TurnState:
         self.clarify_field    = ""
 
 
+class GateOutcome(Enum):
+    """What a per-tool stage tells the chat tool-loop to do next.
+
+    Replaces the scattered break/continue/return in chat_loop's tool loop with an
+    explicit signal each stage returns, so stages can be extracted into functions
+    (which can't break/continue/return the caller's loops).
+    """
+    PROCEED   = auto()   # fall through to the next stage
+    SKIP_TOOL = auto()   # stop this tool call, keep processing the loop
+    REPLAN    = auto()   # re-prompt the AI (an _INTERNAL_ nudge was appended)
+    CANCELLED = auto()   # user declined; state.op_cancelled set — drop to the REPL
+    EXIT      = auto()   # user hit Ctrl-C / EOF mid-prompt — leave chat entirely
+
+
+def _safety_gate(tool_name: str, raw_args: dict, state: "TurnState",
+                 messages: List[dict]) -> GateOutcome:
+    """Interactive safety confirmation before a mutating tool runs.
+
+    delete_vm double-confirms (YES then the exact name); the reversible y/n tools
+    confirm once (and batch within a turn); the name-confirm tools require an
+    exact name match. Skipped when the value was already clarified/confirmed this
+    turn.
+
+    Returns EXIT (Ctrl-C/EOF), CANCELLED (declined — cancel messages appended and
+    state.op_cancelled set), or PROCEED (confirmed or not required).
+
+    Example::
+
+        _safety_gate("delete_vm", {"name": "box"}, state, messages)
+        # prompts YES + name; → GateOutcome.PROCEED once both match
+    """
+    conf_entry = _CONFIRM_YN.get(tool_name) or _CONFIRM_NAME.get(tool_name)
+    if not conf_entry:
+        return GateOutcome.PROCEED
+    field, verb = conf_entry
+    proposed = raw_args.get(field, "")
+    if (field, proposed) in state.clarified_values or (field, proposed) in state.confirmed_values:
+        return GateOutcome.PROCEED
+
+    def cancel() -> None:
+        messages.append({
+            "role":    "tool",
+            "content": json.dumps(
+                {"success": False, "error": "Operation cancelled by user."}, default=str),
+        })
+        messages.append({
+            "role":    "user",
+            "content": "_INTERNAL_ The user cancelled this operation. Ask what they would like to do instead.",
+        })
+        state.op_cancelled = True
+
+    if _is_critical(tool_name, raw_args):
+        # Double confirm: YES → VM name
+        console.print(f"\n[bold red]⚠  {verb}: [bold]{proposed}[/bold] — this will also delete its disk(s)[/bold red]")
+        console.print("[dim]Type YES to proceed, or press Enter to cancel.[/dim]")
+        try:
+            step1 = console.input("[bold red]Confirm (YES):[/bold red] ").strip()
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[dim]Cancelled.[/dim]")
+            return GateOutcome.EXIT
+        if step1.upper() != "YES":
+            cancel()
+            return GateOutcome.CANCELLED
+        console.print(f"[dim]Type the name [bold]{proposed}[/bold] to confirm.[/dim]")
+        try:
+            step2 = console.input("[bold red]Confirm name:[/bold red] ").strip()
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[dim]Cancelled.[/dim]")
+            return GateOutcome.EXIT
+        if step2 != proposed:
+            console.print("[dim]Name did not match. Cancelled.[/dim]")
+            cancel()
+            return GateOutcome.CANCELLED
+
+    elif tool_name in _CONFIRM_YN:
+        # y/n confirm for reversible modify and launch/stop. Batch-skip if this
+        # tool type was already confirmed earlier in the same turn.
+        if tool_name in state.confirmed_tool_types:
+            console.print(f"  [dim]auto-confirmed: {verb}: {proposed}[/dim]")
+        else:
+            if tool_name == "create_vm":
+                render_vm_specs(_build_vm_spec_rows(raw_args))
+            hint = f"[bold]{proposed}[/bold]" if proposed else "[dim]unknown[/dim]"
+            console.print(f"\n[yellow]⚠  {verb}: {hint}[/yellow]")
+            try:
+                answer = console.input("[bold cyan]Proceed? (y/n):[/bold cyan] ").strip().lower()
+            except (KeyboardInterrupt, EOFError):
+                console.print("\n[dim]Cancelled.[/dim]")
+                return GateOutcome.EXIT
+            if answer not in ("y", "yes", "1"):
+                cancel()
+                return GateOutcome.CANCELLED
+            state.confirmed_tool_types.add(tool_name)
+
+    else:
+        # Name confirm for destructive operations — exact match required
+        hint = f"[bold]{proposed}[/bold]" if proposed else "[dim]unknown[/dim]"
+        console.print(f"\n[yellow]⚠  {verb}: {hint}[/yellow]")
+        console.print(f"[dim]Type the name to confirm, or press Enter to cancel.[/dim]")
+        try:
+            confirmed = console.input("[bold cyan]Confirm:[/bold cyan] ").strip()
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[dim]Cancelled.[/dim]")
+            return GateOutcome.EXIT
+        if confirmed != proposed:
+            if confirmed:
+                console.print("[dim]Name did not match. Cancelled.[/dim]")
+            cancel()
+            return GateOutcome.CANCELLED
+
+    state.confirmed_values.add((field, proposed))   # this exact value confirmed
+    return GateOutcome.PROCEED
+
+
 def _maybe_enable_custom_mode(tool_name: str, user_input_lower: str,
                               messages: List[dict]) -> None:
     """Enable custom mode for create_profile when the user said 'custom'.
@@ -1037,95 +1152,11 @@ def chat_loop(verbose: bool = False):
                 # ──────────────────────────────────────────────────────────
 
                 # ── Safety confirmation gate ───────────────────────────────
-                # Skip if the key field was answered via the clarify gate this
-                # turn — the user just confirmed the value moments ago.
-                _conf_entry = (
-                    _CONFIRM_YN.get(tool_name) or _CONFIRM_NAME.get(tool_name)
-                )
-                if _conf_entry:
-                    field, verb = _conf_entry
-                    proposed = raw_args.get(field, "")
-                if _conf_entry and (field, proposed) not in state.clarified_values and (field, proposed) not in state.confirmed_values:
-
-                    def _cancel_op():
-                        messages.append({
-                            "role":    "tool",
-                            "content": json.dumps(
-                                {"success": False, "error": "Operation cancelled by user."},
-                                default=str,
-                            ),
-                        })
-                        messages.append({
-                            "role":    "user",
-                            "content": "_INTERNAL_ The user cancelled this operation. Ask what they would like to do instead.",
-                        })
-
-                    if _is_critical(tool_name, raw_args):
-                        # Double confirm: YES → VM name
-                        console.print(f"\n[bold red]⚠  {verb}: [bold]{proposed}[/bold] — this will also delete its disk(s)[/bold red]")
-                        console.print("[dim]Type YES to proceed, or press Enter to cancel.[/dim]")
-                        try:
-                            step1 = console.input("[bold red]Confirm (YES):[/bold red] ").strip()
-                        except (KeyboardInterrupt, EOFError):
-                            console.print("\n[dim]Cancelled.[/dim]")
-                            return
-                        if step1.upper() != "YES":
-                            _cancel_op()
-                            state.op_cancelled = True
-                            break
-                        console.print(f"[dim]Type the name [bold]{proposed}[/bold] to confirm.[/dim]")
-                        try:
-                            step2 = console.input("[bold red]Confirm name:[/bold red] ").strip()
-                        except (KeyboardInterrupt, EOFError):
-                            console.print("\n[dim]Cancelled.[/dim]")
-                            return
-                        if step2 != proposed:
-                            console.print("[dim]Name did not match. Cancelled.[/dim]")
-                            _cancel_op()
-                            state.op_cancelled = True
-                            break
-
-                    elif tool_name in _CONFIRM_YN:
-                        # y/n confirm for reversible modify and launch/stop.
-                        # If this tool type was already confirmed earlier in the
-                        # same turn (batch), skip re-prompting.
-                        if tool_name in state.confirmed_tool_types:
-                            console.print(f"  [dim]auto-confirmed: {verb}: {proposed}[/dim]")
-                        else:
-                            if tool_name == "create_vm":
-                                render_vm_specs(_build_vm_spec_rows(raw_args))
-                            hint = f"[bold]{proposed}[/bold]" if proposed else "[dim]unknown[/dim]"
-                            console.print(f"\n[yellow]⚠  {verb}: {hint}[/yellow]")
-                            try:
-                                answer = console.input("[bold cyan]Proceed? (y/n):[/bold cyan] ").strip().lower()
-                            except (KeyboardInterrupt, EOFError):
-                                console.print("\n[dim]Cancelled.[/dim]")
-                                return
-                            if answer not in ("y", "yes", "1"):
-                                _cancel_op()
-                                state.op_cancelled = True
-                                break
-                            state.confirmed_tool_types.add(tool_name)
-
-                    else:
-                        # Name confirm for destructive operations — exact match required
-                        hint = f"[bold]{proposed}[/bold]" if proposed else "[dim]unknown[/dim]"
-                        console.print(f"\n[yellow]⚠  {verb}: {hint}[/yellow]")
-                        console.print(f"[dim]Type the name to confirm, or press Enter to cancel.[/dim]")
-                        try:
-                            confirmed = console.input("[bold cyan]Confirm:[/bold cyan] ").strip()
-                        except (KeyboardInterrupt, EOFError):
-                            console.print("\n[dim]Cancelled.[/dim]")
-                            return
-                        if confirmed != proposed:
-                            if confirmed:
-                                console.print("[dim]Name did not match. Cancelled.[/dim]")
-                            _cancel_op()
-                            state.op_cancelled = True
-                            break
-
-                    state.confirmed_values.add((field, proposed))  # this exact value confirmed
-                # ──────────────────────────────────────────────────────────
+                _sg = _safety_gate(tool_name, raw_args, state, messages)
+                if _sg is GateOutcome.EXIT:
+                    return
+                if _sg is GateOutcome.CANCELLED:
+                    break
 
                 # ── Pre-execution gate ─────────────────────────────────────────
                 _pre_gate_result = _build_pre_gate_result(
