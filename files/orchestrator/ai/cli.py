@@ -850,6 +850,68 @@ def _context_assistant_gate(tool_name: str, raw_args: dict, user_input: str,
     return raw_args, GateOutcome.REPLAN
 
 
+def _manual_config_gate(tool_name: str, raw_args: dict, pre_gate_result,
+                        state: "TurnState"):
+    """Interactive per-VM config when create_vm was called with manual=True.
+
+    Prompts for os/cpu/mem/disk, applies them, marks os_type clarified, and
+    clears the pre-gate result (manual config owns the missing fields). Returns
+    (raw_args, pre_gate_result, outcome): EXIT (Ctrl-C) or PROCEED.
+
+    Example::
+
+        _manual_config_gate("create_vm", {"name": "v", "manual": True}, None, st)
+        # prompts for config → (raw_args_without_manual, None, GateOutcome.PROCEED)
+    """
+    if tool_name == "create_vm" and raw_args.get("manual"):
+        raw_args = dict(raw_args)
+        raw_args.pop("manual", None)
+        def_os   = raw_args.get("os_type", "linux")
+        def_cpu  = raw_args.get("cpu_cores", 2)
+        def_mem  = raw_args.get("memory_mb", 4096)
+        def_disk = raw_args.get("disk_size_gb", 20)
+        console.print(
+            f"\n  [cyan]Configuring [bold]{raw_args.get('name')}[/bold]"
+            f"  [{def_os} | {def_cpu} CPU | {def_mem} MB | {def_disk} GB][/cyan]"
+        )
+        console.print("  [dim]Press Enter for defaults, or specify: e.g. 'windows, 8GB, 4 CPU, 50GB'[/dim]")
+        try:
+            man_input = console.input("[bold cyan]  Config:[/bold cyan] ").strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[dim]Cancelled.[/dim]")
+            return raw_args, pre_gate_result, GateOutcome.EXIT
+        if man_input:
+            import re as _re
+            for kw in _OS_KEYWORDS:
+                if kw in man_input.split():
+                    raw_args["os_type"] = OS_TYPE_ALIASES.get(kw, kw)
+                    break
+            m = _re.search(r'(\d+)\s*gb(?!\s*disk)', man_input)
+            if m:
+                raw_args["memory_mb"] = int(m.group(1)) * 1024
+            m = _re.search(r'(\d+)\s*mb', man_input)
+            if m:
+                raw_args["memory_mb"] = int(m.group(1))
+            m = _re.search(r'(\d+)\s*(?:cpu|core)', man_input)
+            if m:
+                raw_args["cpu_cores"] = int(m.group(1))
+            m = _re.search(r'(\d+)\s*gb\s*disk', man_input)
+            if m:
+                raw_args["disk_size_gb"] = int(m.group(1))
+        # Manual config owns os_type — give it a value and mark it clarified so
+        # the pre-gate doesn't re-ask; then drop the pre-gate result entirely.
+        if not raw_args.get("os_type"):
+            raw_args["os_type"] = def_os
+        state.clarified_fields.add("os_type")
+        state.clarified_values.add(("os_type", raw_args["os_type"]))
+        pre_gate_result = None
+        state.confirmed_tool_types.discard("create_vm")   # each VM needs its own config
+    elif tool_name == "create_vm" and "manual" in raw_args:
+        raw_args = dict(raw_args)
+        raw_args.pop("manual", None)
+    return raw_args, pre_gate_result, GateOutcome.PROCEED
+
+
 def _maybe_enable_custom_mode(tool_name: str, user_input_lower: str,
                               messages: List[dict]) -> None:
     """Enable custom mode for create_profile when the user said 'custom'.
@@ -1195,59 +1257,10 @@ def chat_loop(verbose: bool = False):
                 )
 
                 # ── Manual per-VM config prompt ────────────────────────────────
-                if tool_name == "create_vm" and raw_args.get("manual"):
-                    raw_args = dict(raw_args)
-                    raw_args.pop("manual", None)
-                    _def_os   = raw_args.get("os_type", "linux")
-                    _def_cpu  = raw_args.get("cpu_cores", 2)
-                    _def_mem  = raw_args.get("memory_mb", 4096)
-                    _def_disk = raw_args.get("disk_size_gb", 20)
-                    console.print(
-                        f"\n  [cyan]Configuring [bold]{raw_args.get('name')}[/bold]"
-                        f"  [{_def_os} | {_def_cpu} CPU | {_def_mem} MB | {_def_disk} GB][/cyan]"
-                    )
-                    console.print("  [dim]Press Enter for defaults, or specify: e.g. 'windows, 8GB, 4 CPU, 50GB'[/dim]")
-                    try:
-                        _man_input = console.input("[bold cyan]  Config:[/bold cyan] ").strip().lower()
-                    except (KeyboardInterrupt, EOFError):
-                        console.print("\n[dim]Cancelled.[/dim]")
-                        return
-                    if _man_input:
-                        import re as _re
-                        # os_type
-                        for _kw in _OS_KEYWORDS:
-                            if _kw in _man_input.split():
-                                raw_args["os_type"] = OS_TYPE_ALIASES.get(_kw, _kw)
-                                break
-                        # memory: "8gb" / "8192mb" / "8192"
-                        _m = _re.search(r'(\d+)\s*gb(?!\s*disk)', _man_input)
-                        if _m:
-                            raw_args["memory_mb"] = int(_m.group(1)) * 1024
-                        _m = _re.search(r'(\d+)\s*mb', _man_input)
-                        if _m:
-                            raw_args["memory_mb"] = int(_m.group(1))
-                        # cpu cores: "4 cpu" / "4 cores" / "4 core"
-                        _m = _re.search(r'(\d+)\s*(?:cpu|core)', _man_input)
-                        if _m:
-                            raw_args["cpu_cores"] = int(_m.group(1))
-                        # disk: "50gb disk" / "50 gb disk"
-                        _m = _re.search(r'(\d+)\s*gb\s*disk', _man_input)
-                        if _m:
-                            raw_args["disk_size_gb"] = int(_m.group(1))
-                    # Ensure os_type has a value and mark it clarified so the
-                    # pre-gate doesn't re-ask — manual config owns this field.
-                    if not raw_args.get("os_type"):
-                        raw_args["os_type"] = _def_os
-                    state.clarified_fields.add("os_type")
-                    state.clarified_values.add(("os_type", raw_args["os_type"]))
-                    # Clear any pre-gate result — manual config handled missing fields.
-                    _pre_gate_result = None
-                    # Don't auto-confirm next VM — each needs its own config
-                    state.confirmed_tool_types.discard("create_vm")
-                elif tool_name == "create_vm" and "manual" in raw_args:
-                    raw_args = dict(raw_args)
-                    raw_args.pop("manual", None)
-                # ──────────────────────────────────────────────────────────────
+                raw_args, _pre_gate_result, _mc_out = _manual_config_gate(
+                    tool_name, raw_args, _pre_gate_result, state)
+                if _mc_out is GateOutcome.EXIT:
+                    return
 
                 if _pre_gate_result:
                     result = _pre_gate_result
