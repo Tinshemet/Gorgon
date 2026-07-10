@@ -54,7 +54,8 @@ except ImportError:
     from rich.console import Console
     console = Console()
 
-    def _render_json(data, *_a, **_kw) -> None:
+    def _render_json(data: object, *_a, **_kw) -> None:
+        """Fallback renderer — dump JSON when shared.display isn't importable."""
         console.print_json(data=data, default=str)
 
     render_vm_list   = _render_json
@@ -89,9 +90,11 @@ try:
     )
 except ImportError:
     OVMF = {"available": False}
-    def list_profiles(): return []                                # type: ignore[misc]
-    def check_profile_compatibility(*a, **kw): return {}         # type: ignore[misc]
-    def check_system_capabilities(): return {}                   # type: ignore[misc]
+    # Fallbacks when the executor package isn't in a client-only checkout —
+    # return empty data so the direct CLI still imports and runs (server path).
+    def list_profiles() -> list: return []                        # type: ignore[misc]
+    def check_profile_compatibility(*a, **kw) -> dict: return {}  # type: ignore[misc]
+    def check_system_capabilities() -> dict: return {}            # type: ignore[misc]
 
 try:
     from shared.executioner.tool_executor import manager
@@ -100,6 +103,7 @@ except ImportError:
 
 
 def _require_manager() -> None:
+    """Abort with an install hint when no local QEMU manager is available."""
     if manager is None:
         console.print(
             "[bold yellow]Direct commands require QEMU to be installed on this machine.[/bold yellow]\n"
@@ -202,9 +206,11 @@ def _show_stealth_popup(vm_name: str, setup_cmd: str) -> None:
 
     import http.server
     class _Handler(http.server.SimpleHTTPRequestHandler):
-        def log_message(self, *_) -> None: pass
+        def log_message(self, *_) -> None:
+            """Silence the default stderr request logging."""
 
     def _serve() -> None:
+        """Serve exactly one request, then shut the one-shot script server down."""
         srv = http.server.HTTPServer(("", port), _Handler)
         srv.handle_request()
         srv.server_close()
@@ -227,6 +233,18 @@ def _show_stealth_popup(vm_name: str, setup_cmd: str) -> None:
 
 
 def run(args: List[str], verbose: bool = False) -> None:
+    """Dispatch a direct ``qemu-api <cmd>`` sub-command.
+
+    Routes the first arg (list / launch / stop / status / snapshot / clone /
+    delete / resize / config / profiles / system / isos / show-cmd / setup-done)
+    to the local QEMU manager, or to the configured server when QEMU isn't
+    installed locally. ``verbose`` echoes the raw JSON result for each call.
+
+    Example::
+
+        run(["list"])                 # renders the VM table
+        run(["launch", "myvm", "vnc"])
+    """
     if not args:
         console.print("[dim]No command given. Try: list, launch, stop, status, profiles, system[/dim]")
         return
@@ -234,7 +252,8 @@ def run(args: List[str], verbose: bool = False) -> None:
     cmd  = args[0]
     rest = args[1:]
 
-    def pp(data) -> None:
+    def pp(data: object) -> None:
+        """Echo the raw JSON result when running in verbose mode."""
         if verbose:
             console.print_json(json.dumps(data, default=str))
 

@@ -407,15 +407,15 @@ def custom_mode(enabled: bool = Body(..., embed=True)) -> Dict[str, Any]:
     return {"ok": True, "custom_mode": enabled}
 
 
-def _manager_proxy():
+def _manager_proxy() -> object:
     """Return a real QemuManager in local mode, or a thin executor_client proxy in remote mode."""
     from orchestrator.executor_client import API_URL, execute_tool as _exec
     if not API_URL or API_URL == "local":
         from shared.executioner.tool_executor import manager
         return manager
     class _Proxy:
-        def scan_isos(self): return _exec("scan_isos", {})
-        def list_vms(self): return _exec("list_vms", {})
+        def scan_isos(self) -> dict: return _exec("scan_isos", {})
+        def list_vms(self) -> dict: return _exec("list_vms", {})
     return _Proxy()
 
 

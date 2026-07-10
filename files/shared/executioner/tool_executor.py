@@ -11,7 +11,7 @@ import json
 import os
 import re
 import sys
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 
 with open(os.path.join(os.path.dirname(__file__), "config.json")) as _f:
@@ -130,7 +130,7 @@ def dispatch_tool(tool_name: str, args: Dict[str, Any], verbose: bool = False) -
 
 
 def _execute_create_vm(args: Dict[str, Any], verbose: bool, raw_os_type: str,
-                       placeholder_vm_names, resolve_iso) -> Dict[str, Any]:
+                       placeholder_vm_names: set, resolve_iso: Callable) -> Dict[str, Any]:
     """Build a MachineConfig from create_vm args and create the VM.
 
     Handles name validation/overwrite, profile + stealth-persona application,

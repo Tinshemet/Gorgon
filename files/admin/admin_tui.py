@@ -158,13 +158,13 @@ def _init_colours(color_hex: str = "#aaaaaa") -> None:
         curses.init_pair(C_DIM, 8, -1)
 
 
-def _cp(n):
+def _cp(n: int) -> int:
     return curses.color_pair(n)
 
 
 # ── draw ──────────────────────────────────────────────────────────────────────
 
-def _hline(stdscr, row, w, label="") -> None:
+def _hline(stdscr: "curses.window", row: int, w: int, label: str="") -> None:
     if row < 0:
         return
     try:
@@ -180,7 +180,7 @@ def _hline(stdscr, row, w, label="") -> None:
         pass  # addstr past the screen edge — skip the section rule
 
 
-def _draw(stdscr, vms: list, events: list, uptime_s: float) -> None:
+def _draw(stdscr: "curses.window", vms: list, events: list, uptime_s: float) -> None:
     global _cmd_buf, _cmd_msg
     h, w = stdscr.getmaxyx()
     stdscr.erase()
@@ -291,7 +291,7 @@ def _draw(stdscr, vms: list, events: list, uptime_s: float) -> None:
     stdscr.refresh()
 
 
-def _draw_help(stdscr, h, w) -> None:
+def _draw_help(stdscr: "curses.window", h: int, w: int) -> None:
     SECTIONS = [
         ("VM Commands", [
             ("launch <vm>",  "Start a VM"),
@@ -450,7 +450,7 @@ def _dispatch(cmd: str) -> None:
 
 # ── keyboard ──────────────────────────────────────────────────────────────────
 
-def _handle_input(stdscr) -> None:
+def _handle_input(stdscr: "curses.window") -> None:
     global _cmd_buf, _cmd_msg, _help_mode
     while not _quit.is_set():
         try:
@@ -480,7 +480,7 @@ def _handle_input(stdscr) -> None:
 
 # ── main loop ─────────────────────────────────────────────────────────────────
 
-def _run(stdscr) -> None:
+def _run(stdscr: "curses.window") -> None:
     cfg       = _load_json(os.path.join(_here, "admin_config.json"))
     color_hex = cfg.get("text_color", "#aaaaaa")
     font_size = int(cfg.get("font_size", 13))

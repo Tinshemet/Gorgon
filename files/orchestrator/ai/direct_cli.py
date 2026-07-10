@@ -130,7 +130,7 @@ def cli_direct(args: List[str], verbose: bool = False) -> None:
         console.print("[bold yellow]Direct CLI requires the client package. In server-only mode use the AI chat — commands execute remotely via API_URL.[/bold yellow]")
         return
 
-    def pp(data) -> None:
+    def pp(data: object) -> None:
         if verbose:
             console.print_json(json.dumps(data, default=str))
 

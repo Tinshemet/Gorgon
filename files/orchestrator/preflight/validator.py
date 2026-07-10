@@ -241,7 +241,7 @@ def _triage(issues: List[Dict]) -> tuple:
     )
 
 
-def _preflight_create_vm(args: Dict[str, Any], manager, verbose: bool,
+def _preflight_create_vm(args: Dict[str, Any], manager: object, verbose: bool,
                          stateless_only: bool) -> Dict[str, Any]:
     """Pre-flight validation for create_vm (name/ISO/arch/memory/profile checks
     and the destructive-unattended confirmation gate). Extracted from
@@ -399,7 +399,7 @@ def _preflight_create_vm(args: Dict[str, Any], manager, verbose: bool,
 def _preflight_check(
     tool_name:     str,
     args:          Dict[str, Any],
-    manager,                       # QemuManager — passed in to avoid circular import
+    manager: object,                       # QemuManager — passed in to avoid circular import
     verbose:       bool = False,
     stateless_only: bool = False,  # True on the AI provider (remote mode): skip checks
                                    # that require real filesystem/binary/manager state.
@@ -536,7 +536,7 @@ def _preflight_check(
 
 # Renders a yellow warning panel and presents the pre-flight options to the user.
 # In: dict preflight, Console → Out: nothing (console output)
-def _show_preflight_warning(preflight: Dict, console):
+def _show_preflight_warning(preflight: Dict, console: object) -> None:
     """Display a pre-flight warning panel and present options to the user."""
     from rich.panel import Panel
     reason     = preflight.get("reason", "")

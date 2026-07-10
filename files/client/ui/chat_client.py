@@ -118,7 +118,7 @@ def _init_colours(color_hex: str = "#aaaaaa") -> None:
         curses.init_pair(C_DIM, 8, -1)  # bright-black (gray)
 
 
-def _cp(n):
+def _cp(n: int) -> int:
     return curses.color_pair(n)
 
 
@@ -163,7 +163,7 @@ def _add_sep() -> None:
 
 # ── Draw ──────────────────────────────────────────────────────────────────────
 
-def _draw(stdscr, input_buf: str) -> None:
+def _draw(stdscr: "curses.window", input_buf: str) -> None:
     h, w = stdscr.getmaxyx()
     stdscr.erase()
 
@@ -465,7 +465,7 @@ def _server_reachable() -> bool:
         return False
 
 
-def _autostart_server(stdscr) -> bool:
+def _autostart_server(stdscr: "curses.window") -> bool:
     """Launch the server if server files are present alongside the client. Returns True when ready."""
     _client_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     _files_dir  = os.path.dirname(_client_dir)
@@ -509,7 +509,7 @@ def _autostart_server(stdscr) -> bool:
 
 # ── Sync ──────────────────────────────────────────────────────────────────────
 
-def _sync_from_server():
+def _sync_from_server() -> bool:
     global _REMOTE_VMS, _REMOTE_PROFILES
     global _SC_LIST, _SC_SYSTEM, _SC_PROFILES, _SC_DRIFT, _SC_CLEAR
     try:
@@ -688,7 +688,7 @@ def _dispatch(cmd: str, verbose: bool) -> bool:
 
 # ── Main TUI loop ─────────────────────────────────────────────────────────────
 
-def _run(stdscr, verbose: bool = False, color_hex: str = "#aaaaaa", font_size: int = 13) -> None:
+def _run(stdscr: "curses.window", verbose: bool = False, color_hex: str = "#aaaaaa", font_size: int = 13) -> None:
     global _waiting, _session_id, _needs_confirm, _is_confirm, _pending_kill
 
     curses.curs_set(0)

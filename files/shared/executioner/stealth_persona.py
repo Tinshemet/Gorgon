@@ -52,7 +52,7 @@ def _plausible_bios_version(manufacturer: str) -> str:
     return f"1.{_STEALTH_RNG.randint(4, 28)}.{_STEALTH_RNG.randint(0, 9)}"
 
 
-def _apply_within_model_variance(cfg, profile_data: dict, args: dict) -> None:
+def _apply_within_model_variance(cfg: dict, profile_data: dict, args: dict) -> None:
     """Vary the fields that real units of a model actually differ on — BIOS
     version, installed RAM, CPU core count — within that model's real option
     set, so no two stealth VMs of the same model are byte-identical (beyond the

@@ -90,7 +90,7 @@ class _PsutilProcWrapper:
 
     # Returns None if the process is alive (like Popen.poll()), or 1 if it exited.
     # In: nothing → Out: int | None
-    def poll(self):
+    def poll(self) -> Optional[int]:
         try:
             return None if self._proc.is_running() else 0
         except psutil.NoSuchProcess:
@@ -114,7 +114,7 @@ class _PsutilProcWrapper:
 
     # Returns whether the wrapped process is still alive.
     # In: nothing → Out: bool
-    def is_running(self):
+    def is_running(self) -> bool:
         try:
             return self._proc.is_running() and self._proc.status() != "zombie"
         except psutil.NoSuchProcess:

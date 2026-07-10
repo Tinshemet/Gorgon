@@ -157,7 +157,7 @@ def set_auto_clear(enabled: bool) -> None:
 # Patches tool_loop_max_override in config.json and returns the new effective limit.
 # Pass None to clear the override and revert to the default.
 # In: int|None limit → Out: int effective limit
-def set_loop_max(limit):
+def set_loop_max(limit: Optional[int]) -> int:
     cfg_path = os.path.join(os.path.dirname(__file__), "config.json")
     with open(cfg_path) as f:
         cfg = json.load(f)
