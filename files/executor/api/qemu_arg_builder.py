@@ -20,6 +20,11 @@ from typing import List, Tuple
 from .qemu_config import (
     AUDIO_PRESETS, BIOS_OPTIONS, CPU_PRESETS, GPU_PRESETS, MachineConfig, NetworkConfig, OVMF,
 )
+from ._qemu_smbios import _QemuSmbiosMixin
+from .qemu_host_utils import (  # host/qemu utils (extracted from this file)
+    _parse_qemu_version, qemu_version_warn, _port_free,
+    next_free_port, build_iso_search_dirs,
+)
 
 with open(os.path.join(os.path.dirname(__file__), "config.json")) as _f:
     _CFG = json.load(_f)
@@ -28,68 +33,8 @@ _TIMEOUTS = _CFG["timeouts"]
 
 # ── QEMU Version Detection ─────────────────────────────────────────────────────
 
-def _parse_qemu_version(binary: str = "qemu-system-x86_64") -> Tuple[int, int, int]:
-    """Return the QEMU version as ``(major, minor, patch)``.
-
-    Args:
-        binary: QEMU binary to query (default ``qemu-system-x86_64``).
-
-    Returns:
-        Version tuple, or ``(0, 0, 0)`` if detection fails.
-
-    Example::
-
-        _parse_qemu_version()         # → (8, 2, 1)  on a typical Ubuntu 24.04
-        _parse_qemu_version("qemu-system-aarch64")  # → (8, 2, 1)
-        _parse_qemu_version("missing-binary")       # → (0, 0, 0)
-    """
-    try:
-        r = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=_TIMEOUTS["qemu_version"])
-        m = re.search(r"version (\d+)[.](\d+)[.](\d+)", r.stdout)
-        if m:
-            return int(m.group(1)), int(m.group(2)), int(m.group(3))
-    except Exception:
-        pass  # qemu --version unparseable/absent — caller falls back to a default below
-    return (0, 0, 0)
-
 
 QEMU_VERSION: Tuple[int, int, int] = _parse_qemu_version()
-
-
-def qemu_version_warn() -> None:
-    """Print a Rich warning panel for known version-specific issues."""
-    major, minor, patch = QEMU_VERSION
-    ver_str = f"{major}.{minor}.{patch}" if QEMU_VERSION != (0, 0, 0) else "unknown"
-    warnings = []
-
-    if QEMU_VERSION == (0, 0, 0):
-        warnings.append("QEMU version could not be detected — some features may not work")
-    if major >= 7:
-        warnings.append(
-            f"QEMU {ver_str}: 'vgamem_mb' property removed — "
-            "virtio-vga 'vgamem_mb' property removed — resolution set via xres/yres (handled automatically)"
-        )
-    if major >= 6:
-        warnings.append(
-            f"QEMU {ver_str}: '-accel kvm' conflicts with '-machine accel=kvm' "
-            "— using -enable-kvm only (handled automatically)"
-        )
-    if major >= 7:
-        warnings.append(
-            f"QEMU {ver_str}: PulseAudio backend may need pipewire-pulse — "
-            "falling back to 'none' if pa fails"
-        )
-
-    if warnings:
-        from rich.console import Console as _Con
-        from rich.panel   import Panel   as _Pan
-        _c = _Con()
-        body = "\n".join(f"  [yellow]warn[/yellow] {w}" for w in warnings)
-        _c.print(_Pan(
-            body,
-            title=f"[bold yellow]QEMU {ver_str} Compatibility Notes[/bold yellow]",
-            border_style="yellow",
-        ))
 
 
 # ── Port Pool (auto-assign VNC / SPICE ports) ─────────────────────────────────
@@ -97,49 +42,6 @@ def qemu_version_warn() -> None:
 VNC_PORT_START   = _PORTS["vnc_start"]
 SPICE_PORT_START = _PORTS["spice_start"]
 PORT_RANGE       = _PORTS["port_range"]
-
-
-def _port_free(port: int) -> bool:
-    """Check whether a localhost TCP port is available.
-
-    Args:
-        port: Port number to probe.
-
-    Returns:
-        ``True`` if nothing is listening on 127.0.0.1:port; ``False`` if
-        the port is bound.
-
-    Example::
-
-        _port_free(5900)  # → True if no VNC server is running
-        _port_free(22)    # → False on a typical Linux machine (sshd)
-    """
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.settimeout(0.3)
-        return s.connect_ex(("127.0.0.1", port)) != 0
-
-
-def next_free_port(start: int, used: List[int]) -> int:
-    """Return the first port ≥ start that is not in *used* and is not actively bound.
-
-    Args:
-        start: Lowest port number to try.
-        used:  Ports already assigned to existing VMs.
-
-    Returns:
-        A free port number.
-
-    Raises:
-        RuntimeError: If no free port is found in the search range.
-
-    Example::
-        >>> next_free_port(5900, [5900, 5901])
-        5902
-    """
-    for p in range(start, start + PORT_RANGE):
-        if p not in used and _port_free(p):
-            return p
-    raise RuntimeError(f"No free port found starting from {start}")
 
 
 # ── ISO Search Directory Scanner ───────────────────────────────────────────────
@@ -150,55 +52,9 @@ _ISO_DESKTOP_SUBDIRS = set(_CFG["iso_desktop_subdirs"])
 _ISO_HOME_SUBDIRS    = _CFG["iso_home_subdirs"]
 
 
-def build_iso_search_dirs() -> List[str]:
-    """Build ISO search dirs dynamically — handles capital/lowercase variants."""
-    home = os.path.expanduser("~")
-    dirs: List[str] = []
-
-    # Home subdirectories and one level deep inside them for named ISO folders
-    for sub in _ISO_HOME_SUBDIRS:
-        p = os.path.join(home, sub)
-        if not os.path.isdir(p):
-            continue
-        if p not in dirs:
-            dirs.append(p)
-        try:
-            for entry in os.listdir(p):
-                full = os.path.join(p, entry)
-                if os.path.isdir(full) and entry.lower() in _ISO_DESKTOP_SUBDIRS and full not in dirs:
-                    dirs.append(full)
-        except PermissionError:
-            pass  # ISO search dir not readable — skip it
-
-    # System-wide mount points: /media/<user>/<device>, /mnt/<device>, /run/media/<user>/<device>
-    for mount_root in _CFG.get("iso_mount_roots", []):
-        if not os.path.isdir(mount_root):
-            continue
-        try:
-            for top in sorted(os.listdir(mount_root)):
-                top_path = os.path.join(mount_root, top)
-                if not os.path.isdir(top_path):
-                    continue
-                # /media/<user>/<device> layout — descend one more level
-                try:
-                    children = [os.path.join(top_path, c) for c in os.listdir(top_path)
-                                if os.path.isdir(os.path.join(top_path, c))]
-                except PermissionError:
-                    children = []
-                targets = children if children else [top_path]
-                for t in targets:
-                    if t not in dirs:
-                        dirs.append(t)
-        except PermissionError:
-            pass  # ISO search dir not readable — skip it
-
-    dirs.append(tempfile.gettempdir())
-    return dirs
-
-
 # ── QEMU Argument Builder ──────────────────────────────────────────────────────
 
-class QemuArgBuilder:
+class QemuArgBuilder(_QemuSmbiosMixin):
     def __init__(self, config: MachineConfig) -> None:
         """Store the config and precompute ARM/raspi detection flags."""
         self.cfg      = config
@@ -372,101 +228,6 @@ class QemuArgBuilder:
             if vars_path and os.path.exists(vars_path):
                 self.args += ["-drive", f"if=pflash,format=raw,file={vars_path}"]
 
-    # Adds -smbios type=0 (BIOS), type=1 (system), type=3 (chassis); skipped on ARM.
-    # In: nothing → Out: appends to self.args
-    def _chassis_type_byte(self) -> int:
-        """Return the SMBIOS chassis-type byte for the config's smbios_type/machine_class."""
-        mapping = _CFG["smbios_chassis_type_map"]
-        guess = mapping.get((self.cfg.smbios_type or "").lower(), 0)
-        if not guess:
-            guess = mapping.get((self.cfg.machine_class or "").lower(), 3)
-        return guess
-
-    def _write_smbios_chassis_bin(self, chassis_type: int) -> str:
-        """Write a raw SMBIOS type=3 structure with the given chassis_type byte.
-
-        QEMU appends -smbios file= entries after its built-in structures.
-        Linux dmi_scan overwrites dmi_chassis_type for every type=3 hit, so
-        our appended entry overrides QEMU's default chassis_type=1 (Other).
-        Returns the file path, or '' on failure.
-        """
-        if self.is_arm or not chassis_type:
-            return ''
-        mfr = self.cfg.manufacturer or ''
-        mfr_idx = 1 if mfr else 0
-        # SMBIOS type=3 header: type, length, handle, then 9 field bytes
-        header = struct.pack('<BBHBBBBBBBBB',
-            3, 0x0D, 0x0301,          # type, length=13, handle (unique from built-in)
-            mfr_idx, chassis_type,    # manufacturer string-index, chassis_type byte
-            0, 0, 0,                  # version, serial, asset (no strings)
-            3, 3, 3, 3,               # boot-up, psu, thermal, security states = Safe
-        )
-        strings = (mfr.encode('ascii', errors='replace') + b'\x00') if mfr else b''
-        strings += b'\x00'  # end-of-strings marker
-        blob = header + strings
-
-        try:
-            os.makedirs(self.vm_dir, exist_ok=True)
-            path = os.path.join(self.vm_dir, 'smbios_chassis.bin')
-            with open(path, 'wb') as f:
-                f.write(blob)
-            return path
-        except OSError:
-            return ''
-
-    @staticmethod
-    def _smbios_escape(value: str) -> str:
-        """Remove commas from a string value used in a -smbios option.
-
-        In: "Dell, Inc." → Out: "Dell Inc."
-        A comma in a -smbios value terminates the current field and starts a
-        new key=value pair, allowing injection of arbitrary QEMU SMBIOS directives.
-        """
-        return value.replace(",", "")
-
-    def _smbios(self) -> None:
-        """Emit SMBIOS type-1 override args (manufacturer/product/serial/family)."""
-        if self.is_arm:
-            return
-        if self.cfg.manufacturer or self.cfg.product_name:
-            parts = ["type=1"]
-            if self.cfg.manufacturer:  parts.append(f"manufacturer={self._smbios_escape(self.cfg.manufacturer)}")
-            if self.cfg.product_name:  parts.append(f"product={self._smbios_escape(self.cfg.product_name)}")
-            if self.cfg.serial_number: parts.append(f"serial={self._smbios_escape(self.cfg.serial_number)}")
-            # DMI "family" is the product line (e.g. "Latitude"), NOT the hostname —
-            # using the hostname here leaks "localhost" into dmidecode/inxi. Derive
-            # it from the product name's leading token; omit rather than emit a tell.
-            family = self.cfg.product_name.split()[0] if self.cfg.product_name else ""
-            if family:                 parts.append(f"family={self._smbios_escape(family)}")
-            self.args += ["-smbios", ",".join(parts)]
-        if self.cfg.bios_vendor or self.cfg.bios_version:
-            parts = ["type=0"]
-            if self.cfg.bios_vendor:  parts.append(f"vendor={self._smbios_escape(self.cfg.bios_vendor)}")
-            if self.cfg.bios_version: parts.append(f"version={self._smbios_escape(self.cfg.bios_version)}")
-            self.args += ["-smbios", ",".join(parts)]
-        # type=2 (baseboard): override board_vendor/board_name which default to
-        # "QEMU" and "Standard PC (Q35+ICH9)" — inxi reads these via DMI and
-        # uses them to identify KVM even when CPUID is hidden.
-        board_vendor  = self.cfg.manufacturer
-        board_product = self.cfg.board_product or self.cfg.product_name
-        if board_vendor or board_product:
-            parts = ["type=2"]
-            if board_vendor:  parts.append(f"manufacturer={self._smbios_escape(board_vendor)}")
-            if board_product: parts.append(f"product={self._smbios_escape(board_product)}")
-            self.args += ["-smbios", ",".join(parts)]
-        # type=3 (chassis): override chassis_vendor which defaults to "QEMU".
-        # chassis_type byte is NOT settable via -smbios CLI in QEMU 8.x, so we
-        # inject a raw SMBIOS type=3 binary. QEMU appends -smbios file= entries
-        # AFTER its built-in structures; the Linux DMI scanner overwrites
-        # dmi_chassis_type on each type=3 hit, so the last entry (ours) wins.
-        chassis_type = self._chassis_type_byte()
-        chassis_bin  = self._write_smbios_chassis_bin(chassis_type)
-        if chassis_bin:
-            # Binary already includes manufacturer; QEMU rejects both file= and
-            # type=3 CLI for the same structure type simultaneously.
-            self.args += ["-smbios", f"file={chassis_bin}"]
-        elif self.cfg.manufacturer:
-            self.args += ["-smbios", f"type=3,manufacturer={self.cfg.manufacturer}"]
 
     def _disks(self) -> None:
         """Append disk drives (SD for raspi; virtio/NVMe/SCSI/IDE for x86) and the ISO cdrom."""
