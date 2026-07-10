@@ -35,7 +35,7 @@ def _load_cli_config() -> dict:
         return {}
 
 
-def main():
+def main() -> None:
     argv    = sys.argv[1:]
     verbose = "-v" in argv
     if verbose:

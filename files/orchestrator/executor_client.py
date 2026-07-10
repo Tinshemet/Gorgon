@@ -190,7 +190,7 @@ _VM_TOOLS = {"launch_vm", "stop_vm", "delete_vm", "clone_vm", "resize_disk",
 from orchestrator.event_log import log_event as _log_event  # noqa: E402
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> object:
     # Lazily resolved so mock.patch targets always return the current binding.
     if name == "_execute_tool":
         from orchestrator.pipeline import execute_tool

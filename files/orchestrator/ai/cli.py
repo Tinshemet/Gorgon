@@ -452,7 +452,7 @@ def _handle_command(ui: str, messages: List[dict], runtime_drift_count: int,
     return False
 
 
-def chat_loop(verbose: bool = False):
+def chat_loop(verbose: bool = False) -> None:
     global _LOOP_MAX
     print_banner(
         verbose=verbose,
@@ -486,7 +486,7 @@ def chat_loop(verbose: bool = False):
     if API_URL != "local":
         import threading, requests as _req
         _liveness_stop = threading.Event()
-        def _liveness_loop():
+        def _liveness_loop() -> None:
             import time as _t
             while not _liveness_stop.wait(30):
                 try:

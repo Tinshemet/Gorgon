@@ -22,7 +22,7 @@ from shared.executioner.tool_executor import manager, _run
 _NAME_SKIP = frozenset({"create_vm", "create_profile", "clone_vm", "create_network"})
 
 
-def execute_tool(tool_name: str, args: dict, verbose: bool = False, skip_gate: bool = False):
+def execute_tool(tool_name: str, args: dict, verbose: bool = False, skip_gate: bool = False) -> dict:
     """Sanitise args, resolve VM names, then dispatch to the executor layer.
 
     Args:

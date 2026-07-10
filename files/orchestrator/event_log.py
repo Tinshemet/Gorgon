@@ -51,7 +51,7 @@ def _summarise_result(result: Any) -> str:
     return "ok"
 
 
-def log_event(tool: str, args: Dict[str, Any], result: Any, duration_ms: float):
+def log_event(tool: str, args: Dict[str, Any], result: Any, duration_ms: float) -> None:
     """Append one event line to the log. Safe to call from any thread.
 
     Args:

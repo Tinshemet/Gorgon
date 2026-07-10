@@ -15,6 +15,7 @@ import textwrap
 import threading
 import time
 import uuid
+from typing import Optional
 
 import requests
 
@@ -240,7 +241,7 @@ def _vnc_host() -> str:
     return "localhost" if host in ("localhost", "127.0.0.1", "::1") else host
 
 
-def _try_open_vnc(port: int):
+def _try_open_vnc(port: int) -> Optional[str]:
     import subprocess as _sp
     host = _vnc_host()
     for viewer in ("vncviewer", "tigervncviewer", "xtigervncviewer", "gvncviewer", "vinagre"):

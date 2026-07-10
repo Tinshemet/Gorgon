@@ -176,7 +176,7 @@ class _VmRuntimeMixin:
                 # fires before the language screen, so it stopped too early and hung
                 # at "Select language". A truly host-independent version needs screen-
                 # state detection or an answer file that fully skips the language page.
-                def _spam_boot_keys():
+                def _spam_boot_keys() -> None:
                     conn = None
                     for _ in range(30):
                         try:
@@ -581,7 +581,7 @@ class _VmRuntimeMixin:
             def __init__(self, *a, **kw):
                 super().__init__(*a, directory=script_dir, **kw)
 
-            def log_message(self, *_):
+            def log_message(self, *_) -> None:
                 pass
 
         srv = http.server.HTTPServer(("0.0.0.0", port), _H)
