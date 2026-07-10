@@ -1013,6 +1013,129 @@ def _build_pre_gate_result(tool_name: str, raw_args: dict, user_input: str,
     }
 
 
+def _clarify_drain(result: dict, tool_name: str, state: "TurnState",
+                   messages: List[dict]) -> GateOutcome:
+    """Drain a clarify response: prompt for each missing field (or a verbatim
+    clarify answer / the overwrite shortcut), update state, inject the re-plan
+    message. Returns EXIT (Ctrl-C) or SKIP_TOOL (drained — caller breaks the tool
+    loop; the post-loop re-plans with the answers).
+
+    Example::
+
+        _clarify_drain({"clarify": True, "needs_clarification": "name",
+                        "question": "Name?"}, "create_vm", state, msgs)
+        # → GateOutcome.SKIP_TOOL after recording the answer
+    """
+    # Drain ALL missing fields in one pass — no Ollama round-trip per field.
+    filled: dict = {}
+    missing_fields = result.get("missing") or [{
+        "field":    result.get("needs_clarification", ""),
+        "question": result.get("question", "Please provide more detail."),
+        "options":  result.get("options", []),
+    }]
+    for mf in missing_fields:
+        q    = mf["question"]
+        opts = mf["options"]
+        f    = mf["field"]
+
+        # No field to fill. Two distinct cases:
+        #
+        # 1. tool_name == "clarify": the AI asked the user a question
+        #    (e.g. "Did you mean 'loq'?"). Pass the answer back verbatim
+        #    so the AI decides the next step — don't override intent.
+        #
+        # 2. tool_name != "clarify": executor returned a "Save anyway /
+        #    Cancel" prompt. Tell the AI to retry with force=true.
+        if not f:
+            if opts:
+                console.print(
+                    f"[yellow]?[/yellow] {q}  "
+                    + "  ".join(f"[{o}]" for o in opts)
+                )
+            else:
+                console.print(f"[yellow]?[/yellow] {q}")
+            try:
+                _conf = console.input("[bold cyan]You:[/bold cyan] ").strip()
+            except (KeyboardInterrupt, EOFError):
+                console.print("\n[dim]Goodbye.[/dim]")
+                return GateOutcome.EXIT
+            _cancelled = (
+                not _conf
+                or (opts and _conf.lower() == opts[-1].lower())
+                or _conf.lower() in ("no", "cancel", "n")
+            )
+            if tool_name == "clarify":
+                # AI-initiated question — return the answer verbatim
+                if _conf:
+                    filled[f] = _conf
+                    messages.append({"role": "user", "content": _conf})
+            elif _cancelled:
+                messages.append({"role": "user", "content": "_INTERNAL_ The user cancelled. Do not retry this operation."})
+                state.op_cancelled = True
+            else:
+                hint = result.get("hint", "")
+                messages.append({"role": "user", "content": _conf})
+                messages.append({"role": "user", "content": f"_INTERNAL_ The user confirmed. {hint} Keep ALL original arguments exactly as they were."})
+            state.clarify_happened = True
+            state.clarify_answer   = _conf
+            state.clarify_field    = ""
+            break
+
+        if opts:
+            console.print(
+                f"[yellow]?[/yellow] {q}  "
+                + "  ".join(f"[{o}]" for o in opts)
+            )
+        else:
+            console.print(f"[yellow]?[/yellow] {q}")
+        try:
+            clarified = console.input("[bold cyan]You:[/bold cyan] ").strip()
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[dim]Goodbye.[/dim]")
+            return GateOutcome.EXIT
+        if clarified:
+            # Overwrite shortcut: user said "overwrite" for a name conflict.
+            if f == "name" and "overwrite" in clarified.lower():
+                orig = result.get("original_name", "")
+                if orig:
+                    filled["name"]      = orig
+                    filled["overwrite"] = "true"
+                    messages.append({"role": "user", "content": clarified})
+                    messages.append({
+                        "role":    "user",
+                        "content": f"_INTERNAL_ The user chose to overwrite. Call create_vm again with name='{orig}' and overwrite=true, keeping ALL other original arguments exactly as they were.",
+                    })
+                    state.clarified_fields.update(filled.keys())
+                    state.clarified_values.update(filled.items())
+                    state.clarify_happened = True
+                    state.clarify_answer   = clarified
+                    state.clarify_field    = "overwrite"
+                    break
+            filled[f] = clarified
+            messages.append({"role": "user", "content": clarified})
+            # If the user named a specific distro, inject os_name so the
+            # executor can auto-find the matching ISO.
+            if f == "os_type" and clarified.lower().strip() in OS_TYPE_ALIASES:
+                filled["os_name"] = clarified.lower().strip()
+    state.clarified_fields.update(filled.keys())
+    state.clarified_values.update(filled.items())
+    if filled:
+        _field_summary = ", ".join(f"{k}='{v}'" for k, v in filled.items())
+        _iso_hint = (
+            " The user named a specific distro — you MUST call scan_isos first,"
+            f" then pass the matching ISO path as iso_path in create_vm."
+            if "os_name" in filled else ""
+        )
+        messages.append({
+            "role":    "user",
+            "content": f"_INTERNAL_ The user provided the missing values: {_field_summary}. Call the correct tool using these EXACT values — do not invent different ones.{_iso_hint}",
+        })
+    state.clarify_happened = True
+    state.clarify_answer   = str(filled)
+    state.clarify_field    = ", ".join(filled.keys())
+    return GateOutcome.SKIP_TOOL
+
+
 def chat_loop(verbose: bool = False):
     global _LOOP_MAX
     print_banner(
@@ -1301,114 +1424,9 @@ def chat_loop(verbose: bool = False):
                 })
 
                 if isinstance(result, dict) and result.get("clarify"):
-                    # Drain ALL missing fields in one pass — no Ollama round-trip per field.
-                    filled: dict = {}
-                    missing_fields = result.get("missing") or [{
-                        "field":    result.get("needs_clarification", ""),
-                        "question": result.get("question", "Please provide more detail."),
-                        "options":  result.get("options", []),
-                    }]
-                    for mf in missing_fields:
-                        q    = mf["question"]
-                        opts = mf["options"]
-                        f    = mf["field"]
-
-                        # No field to fill. Two distinct cases:
-                        #
-                        # 1. tool_name == "clarify": the AI asked the user a question
-                        #    (e.g. "Did you mean 'loq'?"). Pass the answer back verbatim
-                        #    so the AI decides the next step — don't override intent.
-                        #
-                        # 2. tool_name != "clarify": executor returned a "Save anyway /
-                        #    Cancel" prompt. Tell the AI to retry with force=true.
-                        if not f:
-                            if opts:
-                                console.print(
-                                    f"[yellow]?[/yellow] {q}  "
-                                    + "  ".join(f"[{o}]" for o in opts)
-                                )
-                            else:
-                                console.print(f"[yellow]?[/yellow] {q}")
-                            try:
-                                _conf = console.input("[bold cyan]You:[/bold cyan] ").strip()
-                            except (KeyboardInterrupt, EOFError):
-                                console.print("\n[dim]Goodbye.[/dim]")
-                                return
-                            _cancelled = (
-                                not _conf
-                                or (opts and _conf.lower() == opts[-1].lower())
-                                or _conf.lower() in ("no", "cancel", "n")
-                            )
-                            if tool_name == "clarify":
-                                # AI-initiated question — return the answer verbatim
-                                if _conf:
-                                    filled[f] = _conf
-                                    messages.append({"role": "user", "content": _conf})
-                            elif _cancelled:
-                                messages.append({"role": "user", "content": "_INTERNAL_ The user cancelled. Do not retry this operation."})
-                                state.op_cancelled = True
-                            else:
-                                hint = result.get("hint", "")
-                                messages.append({"role": "user", "content": _conf})
-                                messages.append({"role": "user", "content": f"_INTERNAL_ The user confirmed. {hint} Keep ALL original arguments exactly as they were."})
-                            state.clarify_happened = True
-                            state.clarify_answer   = _conf
-                            state.clarify_field    = ""
-                            break
-
-                        if opts:
-                            console.print(
-                                f"[yellow]?[/yellow] {q}  "
-                                + "  ".join(f"[{o}]" for o in opts)
-                            )
-                        else:
-                            console.print(f"[yellow]?[/yellow] {q}")
-                        try:
-                            clarified = console.input("[bold cyan]You:[/bold cyan] ").strip()
-                        except (KeyboardInterrupt, EOFError):
-                            console.print("\n[dim]Goodbye.[/dim]")
-                            return
-                        if clarified:
-                            # Overwrite shortcut: user said "overwrite" for a name conflict.
-                            if f == "name" and "overwrite" in clarified.lower():
-                                orig = result.get("original_name", "")
-                                if orig:
-                                    filled["name"]      = orig
-                                    filled["overwrite"] = "true"
-                                    messages.append({"role": "user", "content": clarified})
-                                    messages.append({
-                                        "role":    "user",
-                                        "content": f"_INTERNAL_ The user chose to overwrite. Call create_vm again with name='{orig}' and overwrite=true, keeping ALL other original arguments exactly as they were.",
-                                    })
-                                    state.clarified_fields.update(filled.keys())
-                                    state.clarified_values.update(filled.items())
-                                    state.clarify_happened = True
-                                    state.clarify_answer   = clarified
-                                    state.clarify_field    = "overwrite"
-                                    break
-                            filled[f] = clarified
-                            messages.append({"role": "user", "content": clarified})
-                            # If the user named a specific distro, inject os_name so the
-                            # executor can auto-find the matching ISO.
-                            if f == "os_type" and clarified.lower().strip() in OS_TYPE_ALIASES:
-                                filled["os_name"] = clarified.lower().strip()
-                    state.clarified_fields.update(filled.keys())
-                    state.clarified_values.update(filled.items())
-                    if filled:
-                        _field_summary = ", ".join(f"{k}='{v}'" for k, v in filled.items())
-                        _iso_hint = (
-                            " The user named a specific distro — you MUST call scan_isos first,"
-                            f" then pass the matching ISO path as iso_path in create_vm."
-                            if "os_name" in filled else ""
-                        )
-                        messages.append({
-                            "role":    "user",
-                            "content": f"_INTERNAL_ The user provided the missing values: {_field_summary}. Call the correct tool using these EXACT values — do not invent different ones.{_iso_hint}",
-                        })
-                    state.clarify_happened = True
-                    state.clarify_answer   = str(filled)
-                    state.clarify_field    = ", ".join(filled.keys())
-                    break  # Don't process further tool calls until AI re-plans with the answers
+                    if _clarify_drain(result, tool_name, state, messages) is GateOutcome.EXIT:
+                        return
+                    break
 
             if state.op_cancelled:
                 continue  # let AI ask what the user wants to do instead
