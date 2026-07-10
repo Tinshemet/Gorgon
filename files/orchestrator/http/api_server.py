@@ -17,6 +17,7 @@ import hashlib
 import json
 import os
 import pathlib
+import secrets
 import uuid
 
 from fastapi import FastAPI, HTTPException, Depends, Body, Request
@@ -94,7 +95,8 @@ def _require_token(
     token = _load_token() or _TOKEN
     if not token:
         raise HTTPException(status_code=401, detail="No API token configured on server.")
-    if creds is None or creds.credentials != token:
+    # Constant-time compare — a plain != leaks the token byte-by-byte via timing.
+    if creds is None or not secrets.compare_digest(creds.credentials, token):
         raise HTTPException(status_code=401, detail="Invalid API token.")
 
 
