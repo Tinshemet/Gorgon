@@ -327,11 +327,14 @@ Speed: ~50ms per test.
 HOW LAYER 11 WORKS
   The test file:
   1. Clears sys.modules cache for any old api_server imports
-  2. Imports server.http.api_server → creates the FastAPI app
+  2. Imports orchestrator.http.api_server → creates the FastAPI app
   3. Creates TestClient(app) — talks to the app in-process
   4. Mocks execute_tool and _preflight_check with patch()
-     (patching the canonical paths: "shared.executioner.tool_executor.execute_tool"
-      and "shared.preflight.validator._preflight_check")
+     (patching the canonical paths: "orchestrator.executor_client.execute_tool"
+      and "orchestrator.preflight.validator._preflight_check" — some older tests
+      in this file still patch the "server.ai.cli.process_message" compat-shim
+      path, which also works since files/server/ is kept as an intentional
+      backward-compat shim over the orchestrator package)
   5. Each test sends HTTP requests to the TestClient and asserts the response
 
 The 50 tests cover:
@@ -422,44 +425,55 @@ PART B: SECURITY REFERENCE
 Mechanism: HTTP Bearer token
   Every API request (except GET /health) must include:
     Authorization: Bearer <token>
-  The server extracts the token via FastAPI's HTTPBearer() dependency.
+  The orchestrator extracts the token via FastAPI's HTTPBearer() dependency.
   A request without this header gets 401 automatically (HTTPBearer raises it).
   A request with the wrong token gets 401 from _require_token().
 
-Token storage — client machine:
+Token storage — orchestrator machine (the one holding the authoritative token):
   Primary: API_TOKEN environment variable (highest priority)
   Fallback: ~/.gorgon.token file (chmod 0600 — owner-only read)
-  The server refuses to start if neither is set.
+  install_orchestrator.sh refuses to start the service if neither is set,
+  generating one automatically with secrets.token_urlsafe(32) if you don't
+  supply API_TOKEN yourself.
 
-Token storage — provider machine:
-  Primary: API_TOKEN environment variable
-  Written to ~/.zshrc by setup_provider.sh in a labelled block.
-  Also passed in HTTP requests as the Bearer token.
+Token storage — client machine (the one sending the token):
+  Primary: API_TOKEN environment variable, entered when setup_client.sh
+  prompts for it (or pre-set: API_TOKEN=... bash setup_client.sh).
+  Written into the client's shell rc in a labelled block, and into
+  client/connection_config.json.
+  Sent as the Bearer token on every /chat and /execute request.
 
 Token quality:
-  setup_client.sh generates with: secrets.token_urlsafe(32)
+  install_orchestrator.sh generates with: secrets.token_urlsafe(32)
   This produces 32 bytes of cryptographically secure random data, base64url-
   encoded. The result is approximately 43 characters of randomness.
   Token minimum for rotate-token: 16 characters.
 
+  Note: this is the CLIENT-facing token (API_TOKEN). A separate secret,
+  EXECUTOR_TOKEN, is used only when the executor is split onto its own
+  machine — it's what the orchestrator presents to the executor's own HTTP
+  API, and is never sent to or by the end-user client. See handbook part 1
+  (dictionary) for the full distinction.
+
 Token rotation:
   POST /rotate-token with current token in Authorization header.
   New token must be ≥ 16 characters.
-  Effect is immediate (in-memory + file update).
-  Provider must update API_TOKEN to match.
+  Effect is immediate (in-memory + file update on the orchestrator).
+  Every client must update its own API_TOKEN to match.
 
 GET /health is intentionally unauthenticated:
-  This is the liveness probe — if it required auth, the provider would
-  need to send credentials every 30 seconds just to check if the server
-  is alive, which creates unnecessary exposure. The health endpoint reveals
-  only that the server is running, not any VM data.
+  This is the liveness probe — if it required auth, the orchestrator's
+  interactive chat_loop (when polling a split executor) or any client would
+  need to send credentials every 30 seconds just to check liveness, which
+  creates unnecessary exposure. The health endpoint reveals only that the
+  process is running, not any VM data.
 
 ────────────────────────────────────────────────────────────────────────────────
 2. TOOL ALLOWLIST
 ────────────────────────────────────────────────────────────────────────────────
 
-The allowed_remote_tools list in shared/executioner/config.json is a whitelist.
-Any tool_name NOT in the list gets HTTP 403 before preflight runs.
+The allowed_remote_tools list in orchestrator/connection_config.json is a
+whitelist. Any tool_name NOT in the list gets HTTP 403 before preflight runs.
 
 This is a security boundary: even if an attacker has a valid API token,
 they cannot call tools that are not in the allowlist.
@@ -471,8 +485,11 @@ Default exclusions and why:
     If needed, add it explicitly and audit all monitor commands in use.
 
 Design principle:
-  The allowlist is on the SERVER (client machine), not the provider.
-  Even if the provider machine is compromised, it cannot call unapproved tools.
+  The allowlist is enforced on the ORCHESTRATOR (which owns the
+  client-facing HTTP boundary), not trusted to the client. Even if a
+  client's machine is compromised, it cannot call unapproved tools —
+  the orchestrator is the enforcement point, not a suggestion the client
+  could just skip past.
 
 ────────────────────────────────────────────────────────────────────────────────
 3. VNC SECURITY
@@ -533,16 +550,23 @@ Recommendation:
 5. PREFLIGHT AS SECURITY LAYER
 ────────────────────────────────────────────────────────────────────────────────
 
-The preflight validator runs on BOTH sides in remote mode:
-  Provider side (stateless_only=True): catches shape/logic errors before
-    sending the request — saves a round trip for obvious mistakes.
-  Client side (stateless_only=False): the authoritative check using real
-    state. The client ALWAYS runs this regardless of what the provider did.
+Preflight runs once, always on the orchestrator (chat_turn.py) — never on
+the client, which has no preflight code of its own at all. What varies is
+how strict that single check is, controlled by stateless_only:
+  stateless_only=True  (when the executor is split onto its own machine,
+    API_URL != "local"): shape/type/logic checks only — no filesystem, no
+    QemuManager, no subprocess — since the orchestrator can't inspect real
+    VM/disk state on a machine it isn't co-located with.
+  stateless_only=False (executor co-located, API_URL == "local"): the full
+    check, using real VM/disk/binary state via the in-process QemuManager.
 
-This means even if the provider-side preflight is bypassed (e.g. by a
-custom client), the server-side preflight will still catch violations.
+Either way, this is the orchestrator's own enforcement, not something a
+client could weaken by skipping a step — a thin/custom client calling
+/chat or /execute directly still goes through the exact same preflight
+the orchestrator always runs on itself.
 
-The server is the authority. The provider is a convenience layer.
+The orchestrator is the authority. The client is never trusted to have
+done any validation of its own.
 
 Key preflight security checks:
   - delete_vm: ALWAYS requires user confirmation (ask_user action)

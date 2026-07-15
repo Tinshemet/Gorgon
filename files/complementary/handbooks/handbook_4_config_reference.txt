@@ -5,77 +5,144 @@
 Every configuration file, every key, every environment variable, and every
 default value. Where env vars override config keys, that is documented too.
 
+Layout: orchestrator/ (AI + gating + client-facing HTTP API, port 8080),
+executor/ (owns QEMU/KVM, optional standalone HTTP service on port 8001),
+client/ (thin remote UI), shared/ (code used by more than one tier),
+admin/ (standalone curses admin dashboard).
+
 ────────────────────────────────────────────────────────────────────────────────
 1. ENVIRONMENT VARIABLES
 ────────────────────────────────────────────────────────────────────────────────
 
 All env vars are read at import time (module level). They override the
-corresponding config.json values.
+corresponding config.json values. Precedence is: env var → config.json key
+→ hardcoded fallback in the reading module (shown below as "Default").
 
 SERVER_URL
-  Default:  "http://localhost:8080"  (from client/connection_config.json)
+  Default:  "http://localhost:8080"  (from client/connection_config.json →
+            server_url, and from admin/connection_config.json → orchestrator_url)
   Values:   "http://host:port" | "https://host:port"
-  Effect:   URL of the gorgon server for the chat client to connect to.
-  Read by:  client/ui/chat_client.py
+  Effect:   URL of the gorgon orchestrator that the chat client / admin TUI
+            connects to.
+  Read by:  client/ui/chat_client.py, admin/admin_tui.py
+
+API_URL
+  Default:  "local"  (from orchestrator/connection_config.json → url)
+  Values:   "local" | "http://host:8001" | "https://host:8001"
+  Effect:   Read by the ORCHESTRATOR, NOT the client. "local" means the
+            orchestrator calls the executor in-process (co-located, single
+            machine). "http://host:8001" means the executor runs as its own
+            HTTP service (executor/server.py) on a separate machine — split
+            deployment.
+  Read by:  orchestrator/executor_client.py
 
 API_TOKEN
-  Default:  "" (from connection_config.json on each side)
+  Default:  "" (from orchestrator/connection_config.json → token)
   Values:   Any string (recommended: 32+ random chars)
-  Effect:   Shared secret for Bearer authentication.
-            Client chat_client: sent in Authorization header.
-            Server api_server: compared against incoming tokens.
-  Read by:  client/ui/chat_client.py, server/http/api_server.py
-  Also read from (server side): ~/.gorgon.token (file fallback)
+  Effect:   The CLIENT-FACING shared secret checked by the orchestrator's
+            HTTP API. Must match between the orchestrator and whatever calls
+            /chat or /execute — a client, curl, the admin TUI, etc.
+            This is a DIFFERENT secret from EXECUTOR_TOKEN below. Conflating
+            the two is a real footgun: orchestrator/executor_client.py has
+            a comment explicitly warning against reusing API_TOKEN as the
+            executor secret, because doing so would make the orchestrator
+            send its client-facing token to the executor, which almost never
+            matches the executor's independently configured secret.
+            The orchestrator refuses to start without a token: it checks
+            API_TOKEN first, then falls back to ~/.gorgon.token (file). If
+            neither is set, orchestrator/http/api_server.py exits with an
+            error at startup.
+  Read by:  client/ui/chat_client.py (sent in Authorization header),
+            admin/admin_tui.py (sent in Authorization header),
+            orchestrator/http/api_server.py (compared against incoming tokens)
+  Also read from: ~/.gorgon.token (file fallback, orchestrator side only)
+
+EXECUTOR_TOKEN
+  Default:  "" (from orchestrator/connection_config.json → token, when read
+            by the orchestrator; from executor/config.json → token, when
+            read by the executor itself)
+  Values:   Any string (recommended: 32+ random chars)
+  Effect:   A SEPARATE secret from API_TOKEN. Read by the ORCHESTRATOR and
+            used only when API_URL points at a remote executor (split mode)
+            — it's what the orchestrator presents to the EXECUTOR's own
+            HTTP API. Ignored entirely when API_URL is "local" (no HTTP hop
+            to authenticate).
+            On the executor side, executor/server.py loads its own copy of
+            this token with precedence: EXECUTOR_TOKEN env var →
+            ~/.gorgon-executor.token (file) → "token" key in
+            executor/config.json. If none of the three yield a token, the
+            executor prints a startup warning and refuses all remote
+            (non-localhost) connections.
+  Read by:  orchestrator/executor_client.py (orchestrator side),
+            executor/server.py (executor side, independently)
 
 API_TIMEOUT
-  Default:  120 (from connection_config.json)
+  Default:  120 (from connection_config.json → timeout, on whichever side
+            is reading it)
   Values:   Integer (seconds)
-  Effect:   HTTP request timeout for /chat and /execute calls.
-  Read by:  client/ui/chat_client.py, server/executor_client.py
+  Effect:   HTTP request timeout for /chat, /execute, and executor calls.
+  Read by:  client/ui/chat_client.py, orchestrator/executor_client.py
 
 API_CA_CERT
   Default:  None
   Values:   Absolute path to a PEM-format CA certificate file
-  Effect:   When set, the client uses this CA to verify the server's TLS cert.
-            Used for self-signed certificates.
-            When unset, system CA bundle is used (correct for Let's Encrypt).
-  Read by:  client/ui/chat_client.py
+  Effect:   When set, the reader uses this CA to verify the remote TLS
+            cert. Used for self-signed certificates. When unset, the system
+            CA bundle is used (correct for Let's Encrypt).
+  Read by:  client/ui/chat_client.py, orchestrator/executor_client.py
 
 API_VERIFY_SSL
   Default:  "1" (verify enabled)
   Values:   "1" (verify) | "0" (skip verification)
   Effect:   "0" disables TLS certificate verification entirely.
             NEVER use in production — only for local development.
-  Read by:  client/ui/chat_client.py
+  Read by:  client/ui/chat_client.py, orchestrator/executor_client.py
 
 OLLAMA_MODEL
-  Default:  "qwen2.5:7b" (from server/ai/config.json → ollama_model)
+  Default:  "qwen2.5:7b" (from orchestrator/ai/config.json → ollama.model)
   Values:   Any Ollama model name ("llama3.1:8b", "mistral", etc.)
   Effect:   Which model is used for all AI calls.
-  Read by:  server/ai/ollama_client.py
+  Read by:  orchestrator/ai/ollama_client.py
 
 OLLAMA_URL
-  Default:  "http://localhost:11434" (from server/ai/config.json → ollama_url)
+  Default:  "http://localhost:11434" (from orchestrator/ai/config.json →
+            ollama.url)
   Values:   Any URL where Ollama is reachable
-  Effect:   Where the Ollama API server is at (always server-local).
-  Read by:  server/ai/ollama_client.py
+  Effect:   Where the Ollama API server is. Always orchestrator-local —
+            Ollama is never split out to the executor machine.
+  Read by:  orchestrator/ai/ollama_client.py
 
 ────────────────────────────────────────────────────────────────────────────────
-2. server/connection_config.json  (read by server/executor_client.py and api_server.py)
+2. orchestrator/connection_config.json
+   (read by orchestrator/executor_client.py and orchestrator/http/api_server.py)
 ────────────────────────────────────────────────────────────────────────────────
 
 {
-  "url":   "local",
-    # Always "local" — server runs QEMU co-located.
+  "url": "local",
+    # "local" (default, executor co-located) or "http://host:8001" for a
+    # split deployment. Overridden by API_URL env var.
 
-  "token": "",
-    # API token. Match this to API_TOKEN env var or ~/.gorgon.token.
+  "token": "test",
+    # Placeholder in the shipped file — this is the EXECUTOR_TOKEN value
+    # this orchestrator presents when url is remote. Overridden by
+    # EXECUTOR_TOKEN env var. Ignored when url is "local". Replace before
+    # any real split deployment — "test" is not a secret.
+
+  "local_only_displays": ["sdl", "gtk"],
+    # Display modes that only make sense on the executor's own screen.
+    # Rejected (or rewritten) for remote clients since sdl/gtk render on
+    # the executor's local console, not over the network.
+
+  "min_token_length": 16,
+    # Minimum accepted length for API_TOKEN. Shorter tokens are rejected
+    # at orchestrator startup.
 
   "timeout": 120,
-    # HTTP request timeout (seconds).
+    # HTTP request timeout (seconds) for executor_client's calls to a
+    # remote executor. Overridden by API_TIMEOUT.
 
   "verify_ssl": true,
-    # TLS certificate verification.
+    # TLS certificate verification for calls to a remote executor.
 
   "ca_cert": "",
     # Path to custom CA cert (empty = use system bundle).
@@ -87,13 +154,23 @@ OLLAMA_URL
   "client_allowed_profiles": [],
     # Hardware profiles visible to clients. Empty = all profiles allowed.
 
-  "allowed_remote_tools": ["launch_vm", "stop_vm", ...]
-    # Tools the HTTP API accepts from remote clients. Any tool not in this list
-    # returns 403 Forbidden before preflight runs. Enforced at executor_client
-    # level so it covers both /execute calls and AI-initiated /chat calls.
-    # send_monitor_cmd is excluded by default (raw QEMU monitor = security risk).
-    # Empty list = all tools blocked. Use the full list from setup_server.sh
-    # as your starting point.
+  "allowed_remote_tools": [],
+    # Tools the HTTP API accepts from remote clients. Any tool not in this
+    # list returns 403 Forbidden before preflight runs. Enforced at
+    # executor_client level so it covers both /execute calls and
+    # AI-initiated /chat calls. Empty list here = every remote tool call is
+    # blocked — populate it before exposing the orchestrator remotely.
+    # send_monitor_cmd should stay excluded (raw QEMU monitor access from an
+    # unauthenticated remote connection is a security risk).
+
+  "session_ttl_seconds": 3600,
+    # How long an idle chat session is kept before eviction.
+
+  "max_sessions": 1000,
+    # Maximum concurrent chat sessions held in memory.
+
+  "max_message_length": 32768
+    # Maximum accepted length (characters) of a single /chat message body.
 }
 
 ACCESS CONTROL ENFORCEMENT:
@@ -103,414 +180,1202 @@ ACCESS CONTROL ENFORCEMENT:
      AND tools not in allowed_remote_tools, for both /execute and /chat paths.
 
 ────────────────────────────────────────────────────────────────────────────────
-3. client/CLI_config.json  (read by client/client_wrapper.py → chat_loop)
+3. orchestrator/ai/config.json
+   (read by orchestrator/ai/ollama_client.py, direct_cli.py, context_assistant.py)
 ────────────────────────────────────────────────────────────────────────────────
 
 {
-  "text_color": "#aaaaaa",
-    # Hex color for body/dim text in the chat TUI (VM list, system info, hints).
-    # Applied via curses.init_color() if the terminal supports color redefinition.
-    # Falls back to gray (slot 8) if curses.can_change_color() is False.
+  "ollama": {
+    "url": "http://localhost:11434",   # overridden by OLLAMA_URL
+    "model": "qwen2.5:7b",             # overridden by OLLAMA_MODEL
+    "temperature": 0.0,                # sampling temperature sent to Ollama
+    "num_ctx": 8192,                   # context window size sent to Ollama
+    "timeout": 120                     # HTTP timeout for the Ollama call
+  },
 
-  "font_size": 13
+  "session": {
+    "file": "~/.qemu_vms/.session.json",  # persisted chat session path
+    "max_history": 10,                    # max turns kept in session file
+    "auto_clear": true
+      # If true, the session history is auto-cleared when drift is detected
+      # (AI's remembered VMs don't match the actual VM list).
+  },
+
+  "chat": {
+    "tool_loop_max": 15,
+      # Maximum number of tool calls the AI can chain in one user prompt.
+    "tool_loop_max_override": 100,
+      # Hard ceiling a user can raise tool_loop_max to via the "loop limit"
+      # shortcut command; not a default value, a cap on the override.
+    "recent_context_window": 6
+      # Number of recent turns fed back into the prompt as context.
+  },
+
+  "exit_commands": [
+    "exit", "quit", "bye", "goodbye", "q", ":q", ":q!", "stop", "leave",
+    "close", "done", "end", "out", "exit()", "quit()",
+    "i want to exit", "i want to quit", "please exit", "please quit"
+  ],
+    # Any of these (exact match) in the chat loop exits the program.
+
+  "shortcut_commands": {
+    "list":            ["list", "vms", "list vms", "show vms", "ls", ...],
+    "system":          ["system", "system info", "check system", ...],
+    "profiles":        ["profiles", "list profiles", "show profiles"],
+    "templates":       ["templates", "list templates", "show templates"],
+    "clear_session":   ["clear session", "forget"],
+    "drift":           ["drift", "check drift", "drift status", ...],
+    "auto_clear_on":   ["auto clear on", "enable auto clear", ...],
+    "auto_clear_off":  ["auto clear off", "disable auto clear", ...],
+    "loop_limit":      ["loop limit", "set loop limit", "loop max", ...]
+    # Each key maps to a list of phrases that bypass Ollama entirely and
+    # trigger the named built-in behavior directly.
+  },
+
+  "rendered_tools": [
+    "list_vms", "list_profiles", "check_system", "vm_status", "monitor_vm",
+    "snapshot_list", "check_profile_compatibility"
+  ],
+    # Tools whose results get pretty-printed with a dedicated renderer
+    # instead of the generic JSON dump.
+
+  "action_words": [
+    "create", "make", "build", "launch", "start", "run", "stop", "kill",
+    "delete", "remove", "destroy", "clone", "resize", "snapshot",
+    "update", "list"
+  ],
+    # Words that suggest the user wants to perform an action, used to
+    # decide whether to call Ollama or just describe.
+
+  "state_query_words": [
+    "running", "stopped", "status", "state", "alive", "up", "which",
+    "show", "logs", "log", "monitor", "monitoring", "snapshot",
+    "snapshots", "profile", "profiles", "network", "networks", "info",
+    "details", "config", "configuration", "resources", "resource",
+    "exists", "existing", "current", "currently", "many", "count", "check"
+  ],
+
+  "confirm_yn": {
+    "update_config":       ["name", "update config for VM"],
+    "resize_disk":         ["name", "resize disk for VM"],
+    "set_resource_limits": ["name", "set resource limits for VM"],
+    "create_vm":           ["name", "create VM"],
+    "clone_vm":            ["new_name", "clone to new VM"],
+    "launch_vm":           ["name", "launch VM"],
+    "stop_vm":             ["name", "stop VM"]
+    # Tools that prompt "yes/no, are you sure?" before running, keyed to
+    # [slot_field_used_in_message, message_template].
+  },
+
+  "confirm_name": {
+    "delete_vm":         ["name",        "delete VM"],
+    "snapshot_restore":  ["name",        "restore snapshot for VM"],
+    "snapshot_delete":   ["name",        "delete snapshot of VM"],
+    "delete_network":    ["net_name",    "delete network"],
+    "delete_profile":    ["profile_name","delete profile"]
+    # Tools that require the user to retype the target name to confirm
+    # (stronger than yes/no — used for destructive operations).
+  },
+
+  "critical_tools": ["delete_vm"],
+    # Tools flagged as maximally destructive for extra UI emphasis.
+
+  "os_keywords_gate": [
+    "linux", "windows", "win", "ubuntu", "debian", "fedora", "arch",
+    "kali", "mint", "centos", "rhel", "macos", "mac", "osx", "android",
+    "freebsd", "openbsd", "other"
+  ],
+    # OS-related keywords used by the context gate to detect an os_type
+    # mention in free text.
+
+  "theme": {
+    "tool": "bold cyan", "success": "bold green", "error": "bold red",
+    "warn": "bold yellow", "info": "dim cyan", "ai": "bold white",
+    "user": "bold blue", "dim": "dim white", "header": "bold magenta"
+  },
+    # rich-style markup strings applied to each message category in the CLI.
+
+  "fingerprint": {
+    "vm_bios_vendors":    ["seabios", "ovmf", "tianocore", "edk ii", "bochs"],
+    "vm_manufacturers":   ["qemu", "bochs", "vmware", "virtualbox", "xen"],
+    "vm_nic_models":      ["virtio-net-pci", "virtio-net", "vmxnet3"],
+    "vm_chassis_types":   ["other", "unspecified", ""],
+    "qemu_oui_prefixes":  ["52:54:00", "00:1a:4a"],
+    "score_good": 80,
+    "score_warn": 50
+    # Values used by fingerprint_vm to detect give-away QEMU/VM signatures
+    # and score how "stealthy" a VM's presented hardware identity is.
+  },
+
+  "drift_thresholds": {
+    "min_user_turns":  4,
+    "critical_ratio":  0.65,
+    "warn_ratio":      0.40,
+    "critical_consec": 6,
+    "warn_consec":     3
+    # Thresholds for the "drift" check — how much the AI's remembered VM
+    # state has diverged from actual VM list before warning/critical fires.
+  },
+
+  "model": "qwen2.5:7b"
+    # Legacy top-level duplicate of ollama.model; direct_cli.py reads this
+    # key directly in some codepaths. Keep it in sync with ollama.model.
+}
+
+────────────────────────────────────────────────────────────────────────────────
+4. orchestrator/ai/context_assistant_config.json
+   (read by orchestrator/ai/context_assistant.py)
+────────────────────────────────────────────────────────────────────────────────
+
+Despite the name, this is NOT a set of message templates + conditions — it
+drives the context-assistant's tool-hint detection, slot extraction, and
+contradiction/hallucination checks run against each AI tool call before
+preflight.
+
+{
+  "tool_hints": {
+    "create_vm":  ["create", "make", "new vm", "spin up", ...],
+    "delete_vm":  ["delete vm", "remove vm", "destroy vm", ...],
+    ... one entry per tool name ...
+    # Phrases in the user's message that suggest a given tool is the right
+    # one. Used to flag "tool_mismatch" when the AI picks a different tool.
+  },
+
+  "slot_patterns": {
+    "name":        ["\\bcalled ([\\w][\\w\\-_\\.]*)", "\\bnamed (...)", ...],
+    "snap_name":    ["\\bsnapshot (...)", "\\bsnap (...)", ...],
+    "os_type":      ["linux", "windows", "macos", "ubuntu", ...],
+    "network_mode": ["nat", "bridge"],
+    "new_name":     ["\\bto (...)", "\\bas (...)", ...]
+    # Regexes (or literal lists) used to pull slot values out of free text,
+    # to check whether a value the AI supplied was actually said by the user.
+  },
+
+  "required_fields": {
+    "create_vm": ["name"], "delete_vm": ["name"], "launch_vm": ["name"],
+    "stop_vm": ["name"], "clone_vm": ["source_name", "new_name"],
+    "snapshot_create": ["name", "snap_name"], ...
+    # Fields each tool call must have populated (post-sanitizer) or the
+    # context assistant flags it as hallucinated/missing.
+  },
+
+  "high_stakes_optional": {
+    "delete_vm": ["delete_disks"],
+    "stop_vm":   ["force"]
+    # Optional fields that, if set, get a "high_stakes_field" warning unless
+    # the user's message clearly asked for that behavior.
+  },
+
+  "stopwords": ["the", "a", "an", "my", "your", "its", ...],
+    # Words ignored when matching slot values against user text.
+
+  "protected_names": ["called", "named", "create", "delete", ...],
+    # Words that are never treated as a candidate VM/snapshot/profile name
+    # even if a slot_pattern regex would otherwise capture them.
+
+  "opposing_pairs": [
+    ["create_vm", "delete_vm"], ["launch_vm", "stop_vm"],
+    ["snapshot_create", "snapshot_delete"],
+    ["create_network", "delete_network"],
+    ["create_profile", "delete_profile"]
+    # Tool pairs checked for contradictory intent within the same prompt.
+  ],
+
+  "contradiction_triggers": {
+    "create_vm": ["create", "make", "new vm", ...],
+    "delete_vm": ["delete", "remove", "destroy", ...], ...
+    # Phrase sets used to detect BOTH sides of an opposing_pairs entry
+    # appearing in the same message (contradictory_prompt warning).
+  },
+
+  "contradiction_window": 5,
+    # How many recent turns back the contradiction check looks.
+
+  "messages": {
+    "tool_mismatch":        "The prompt hints at {hints} but you called ...",
+    "hallucinated_field":   "You set {field}={value} but the user never ...",
+    "high_stakes_field":    "You set {field}={value} which is high-stakes ...",
+    "contradictory_prompt": "The prompt asks to both {tool_a} and {tool_b} ...",
+    "unknown_vm_reference": "You referenced VM '{name}' but no VM with ..."
+    # Templates injected back to the AI when a check trips.
+  },
+
+  "specificity_rules": [
+    ["snapshot_delete", "delete_vm"], ["snapshot_delete", "snapshot_create"],
+    ["snapshot_restore", "launch_vm"], ["snapshot_restore", "snapshot_create"],
+    ["snapshot_create", "create_vm"], ["snapshot_list", "list_vms"],
+    ["delete_profile", "delete_vm"], ["create_profile", "create_vm"],
+    ["delete_network", "delete_vm"], ["create_network", "create_vm"]
+    # [more_specific_tool, less_specific_tool] pairs — used to prefer the
+    # more specific tool when both hint sets match the same prompt.
+  ]
+}
+
+Note: server/ai/context_assistant_config.json (in the legacy server/ tree)
+still exists on disk from the pre-restructure layout but is dead — nothing
+under orchestrator/, executor/, client/, shared/, or admin/ imports from
+server/. Only orchestrator/ai/context_assistant_config.json above is live.
+
+────────────────────────────────────────────────────────────────────────────────
+5. orchestrator/sanitizer/config.json
+   (read by orchestrator/sanitizer/sanitizer.py)
+────────────────────────────────────────────────────────────────────────────────
+
+{
+  "placeholder_vm_names": [
+    "windows-vm", "linux-vm", "ubuntu-vm", "my-vm", "vm", "myvm", "new-vm",
+    "unnamed", "windows_vm", "linux_vm", "ubuntu_vm", "my_vm", "new_vm",
+    "virtual-machine", "virtual_machine", "test-vm", "default-vm",
+    "example-vm"
+  ],
+    # Any name in this list is cleared to "" by the sanitizer, forcing the
+    # context gate to ask the user for a real name.
+
+  "placeholder_iso_patterns": [
+    "/path/to/", "scan_isos()[0]", "<iso>", "<path>", "<file>",
+    "your_iso", "your-iso", "example.iso"
+  ],
+    # Substrings that mark an iso_path as an AI-hallucinated placeholder
+    # rather than a real path; cleared to None if matched.
+
+  "valid_machine_types":  ["q35", "pc", "pc-i440fx", "microvm", "virt", "raspi3b", "raspi2b", "raspi0"],
+  "valid_display_modes":  ["sdl", "gtk", "vnc", "spice", "none", "cocoa"],
+  "valid_gpu_types":      ["virtio", "qxl", "vga", "vmware", "none", "bochs"],
+  "valid_audio_types":    ["hda", "ich9", "ac97", "sb16", "none"],
+  "valid_network_modes":  ["nat", "bridge", "none", "user"],
+  "valid_disk_formats":   ["qcow2", "raw", "vmdk", "vdi"],
+  "valid_bios":           ["ovmf", "ovmf_ms", "seabios"],
+  "valid_machine_arch":   ["x86_64", "aarch64", "arm", "armhf", "i386"],
+  "valid_machine_class":  ["desktop", "laptop", "server", "custom", "embedded"],
+  "valid_os_types":       ["linux", "windows", "macos", "other"],
+  "valid_disk_bus":       ["sata", "nvme", "scsi", "ide", "virtio"],
+    # Enum whitelists. Any value outside these sets gets replaced by the
+    # matching enum_field_defaults entry (or dropped, for non-defaulted enums).
+
+  "os_type_aliases": {
+    "ubuntu": "linux", "debian": "linux", "fedora": "linux", "mint": "linux",
+    "arch": "linux", "kali": "linux", "centos": "linux", "rhel": "linux",
+    "suse": "linux", "win": "windows", "win7": "windows", "win10": "windows",
+    "win11": "windows", "win32": "windows", "win64": "windows",
+    "windows10": "windows", "windows11": "windows", "windows7": "windows",
+    "osx": "macos", "darwin": "macos", "mac": "macos", "macosx": "macos"
+  },
+
+  "qemu_oui_prefixes": ["52:54:00", "00:1a:4a"],
+    # MAC prefixes that give away a QEMU-generated NIC. Used to decide
+    # when a MAC needs replacing with a manufacturer-appropriate OUI.
+
+  "bad_bridge_ifaces": [
+    "bridge", "br", "network", "<bridge>", "your_bridge", "",
+    "eth0", "eth1", "ens33", "ens3", "enp", "wlan0", "wlan1", "wifi0"
+  ],
+  "bad_bridge_prefixes": ["eth", "ens", "enp", "wlan", "wlp"],
+  "default_bridge": "virbr0",
+    # Physical/placeholder NIC names normalized to default_bridge.
+
+  "arm_cpu_models": [
+    "cortex-a15", "cortex-a53", "cortex-a57", "cortex-a72", "cortex-a76",
+    "arm1176", "arm926", "cortex-m", "cortex-r"
+  ],
+  "arm_machine_types": ["raspi", "raspi3b", "raspi2b", "virt"],
+  "arm_machine_archs": ["aarch64", "arm", "armhf"],
+    # Used to detect an ARM CPU/machine being paired with an x86_64 host
+    # binary and correct it.
+
+  "iso_search_dirs":   ["images", "iso", "isos", "vms"],
+  "iso_home_subdirs":  ["Downloads", "iso", "ISOs", "images", "Images"],
+  "iso_os_keywords": {
+    "win":     ["win", "windows"],
+    "ubuntu":  ["ubuntu"],
+    "debian":  ["debian"],
+    "fedora":  ["fedora"],
+    "mint":    ["mint", "linuxmint"],
+    "arch":    ["arch"],
+    "kali":    ["kali"],
+    "raspios": ["raspios", "raspberry", "raspi"],
+    "macos":   ["macos", "osx", "darwin"]
+  },
+
+  "enum_field_defaults": {
+    "display": "sdl", "gpu": "virtio", "audio": "hda", "network_mode": "nat",
+    "disk_format": "qcow2", "bios": "ovmf", "machine_arch": "x86_64",
+    "machine_class": "desktop", "os_type": "linux"
+    # Fallback value substituted when a submitted enum value fails the
+    # valid_* whitelist above.
+  },
+
+  "optional_removable": [
+    "bridge_iface", "mac_address", "iso_path", "kernel_path", "initrd_path",
+    "bios_version", "bios_vendor", "serial_number", "product_name",
+    "manufacturer", "hostname"
+  ],
+    # Optional fields the sanitizer will strip entirely (rather than
+    # default) if empty/placeholder, letting downstream code fall back to
+    # its own defaults.
+
+  "int_fields": [
+    "cpu_cores", "cpu_threads", "memory_mb", "disk_size_gb", "new_size_gb",
+    "disk_index", "cpu_percent", "lines", "vnc_port", "spice_port"
+  ],
+  "bool_fields": [
+    "kvm", "uefi", "battery", "hugepages", "force", "delete_disks",
+    "dry_run", "balloon", "stealth", "hardened", "tpm", "unattended",
+    "unattended_autologon", "opengl", "tablet", "iommu", "nested_virt",
+    "hpet", "tsc_deadline", "kvm_pv_features", "vnc_bind_local"
+  ],
+  "path_fields":       ["iso_path", "kernel_path", "initrd_path"],
+  "port_fields":       ["vnc_port", "spice_port"],
+  "snap_name_fields":  ["snap_name", "snapshot_name"],
+  "text_fields":       ["os_name", "description", "hostname"],
+    # Type-coercion groups: the sanitizer coerces AI-submitted strings to
+    # the right Python type per group before validation.
+
+  "iso_stopwords": [
+    "iso", "the", "from", "file", "image", "images", "img", "folder",
+    "desktop", "home", "user", "and", "my", "v2", "v1", "x64", "x86",
+    "arm", "arm64", "amd64", "bit"
+  ],
+    # Words stripped when guessing an OS name from an ISO filename.
+
+  "bounds": {
+    "memory_min_mb":     512,
+    "memory_max_ratio":  0.95,
+    "disk_min_gb":       8,
+    "disk_max_gb":       2048,
+    "port_min":          1024,
+    "port_max":          65535,
+    "extra_arg_max_len": 500
+    # Hard numeric clamps applied to the corresponding fields.
+  }
+}
+
+────────────────────────────────────────────────────────────────────────────────
+6. orchestrator/sanitizer/context_gate_config.json
+   (read by orchestrator/sanitizer/context_gate.py)
+────────────────────────────────────────────────────────────────────────────────
+
+Defines, per tool, the ordered list of [field, question, options] triples
+the context gate asks about when a required field (per required_fields in
+context_assistant_config.json) is missing after sanitization.
+
+{
+  "create_vm": [
+    ["name",    "What would you like to name this VM?", ["my-linux-vm", "dev-machine", "test-ubuntu"]],
+    ["os_type", "What operating system type will this VM run?", ["linux", "windows", "macos", "other"]]
+  ],
+  "clone_vm": [
+    ["source_name", "Which existing VM would you like to clone?", []],
+    ["new_name",    "What should the cloned VM be named?",        []]
+  ],
+  "launch_vm":  [["name", "Which VM would you like to launch?", []]],
+  "stop_vm":    [["name", "Which VM would you like to stop? (or 'all' to stop every VM)", []]],
+  "delete_vm":  [["name", "Which VM would you like to delete?", []]],
+  "vm_status":       [["name", "Which VM's status would you like to check?", []]],
+  "monitor_vm":      [["name", "Which VM would you like to monitor? (or 'all' for all VMs)", []]],
+  "get_vm_logs":     [["name", "Which VM's logs would you like to read?", []]],
+  "show_config":     [["name", "Which VM's config would you like to see?", []]],
+  "update_config":   [["name", "Which VM's config would you like to update?", []]],
+  "print_command":   [["name", "Which VM's QEMU command would you like to print?", []]],
+  "resize_disk": [
+    ["name",        "Which VM's disk would you like to resize?", []],
+    ["new_size_gb", "What size (in GB) should the disk be resized to?", ["50", "100", "200", "500"]]
+  ],
+  "snapshot_create": [
+    ["name",      "Which VM would you like to snapshot?", []],
+    ["snap_name", "What should this snapshot be named?", ["snap1", "pre-update", "baseline"]]
+  ],
+  "snapshot_list":    [["name", "Which VM's snapshots would you like to list?", []]],
+  "snapshot_restore": [
+    ["name",      "Which VM would you like to restore a snapshot on?", []],
+    ["snap_name", "Which snapshot would you like to restore?", []]
+  ],
+  "snapshot_delete": [
+    ["name",      "Which VM's snapshot would you like to delete?", []],
+    ["snap_name", "Which snapshot would you like to delete?", []]
+  ],
+  "set_resource_limits": [["name", "Which VM would you like to set resource limits on?", []]],
+  "open_display": [["name", "Which VM's display would you like to open?", []]],
+  "open_shell":   [["name", "Which VM's serial console would you like to open?", []]],
+  "send_monitor_cmd": [
+    ["name", "Which VM would you like to send a monitor command to?", []],
+    ["cmd",  "What QEMU monitor command would you like to send?", ["info status", "info block", "info network", "info kvm"]]
+  ],
+  "check_profile_compatibility": [["profile_name", "Which hardware profile would you like to check compatibility for?", []]],
+  "create_profile": [
+    ["profile_name", "What would you like to name this hardware profile?", []],
+    ["description",  "Please provide a short description for this profile.", []]
+  ],
+  "delete_profile": [["profile_name", "Which hardware profile would you like to delete?", []]],
+  "create_network": [["net_name", "What would you like to name this isolated network?", []]],
+  "delete_network": [["net_name", "Which network would you like to delete?", []]],
+  "add_vm_to_network": [
+    ["net_name", "Which network would you like to add the VM to?", []],
+    ["vm_name",  "Which VM would you like to add to the network?", []]
+  ]
+}
+
+An empty options list ([]) means options are filled dynamically at runtime
+(e.g. from the current VM list). If a required field is still missing/empty
+after sanitization, gate_check() returns the question and options as a
+clarify response instead of dispatching the tool.
+
+────────────────────────────────────────────────────────────────────────────────
+7. orchestrator/preflight/config.json
+   (read by orchestrator/preflight/validator.py)
+────────────────────────────────────────────────────────────────────────────────
+
+{
+  "net_timeout": 4,
+    # Timeout (seconds) for the internet product-lookup validator
+    # (checks a laptop/desktop model name against a search engine).
+    # Skipped gracefully if it takes longer.
+
+  "qemu_timeout": 5,
+    # Timeout (seconds) for querying the local QEMU binary's version/capabilities.
+
+  "user_agent": "gorgon/1.0",
+    # User-Agent header sent by the internet product lookup.
+
+  "ms_windows_iso_page": "https://www.microsoft.com/software-download/windows11",
+    # Link surfaced to the user when a Windows ISO can't be found locally.
+
+  "arm_cpu_prefixes": [
+    "cortex-a", "cortex-m", "cortex-r", "arm1", "arm7", "arm9", "arm11",
+    "neoverse", "ampere", "apple m", "qualcomm", "snapdragon"
+  ],
+  "x86_cpu_names": [
+    "haswell", "broadwell", "skylake", "kabylake", "coffeelake",
+    "cannonlake", "icelake", "tigerlake", "alderlake", "raptorlake",
+    "sandybridge", "ivybridge", "westmere", "nehalem", "penryn",
+    "opteron", "epyc", "zen", "zen2", "zen3", "zen4",
+    "kvm64", "host", "qemu64", "qemu32"
+  ],
+    # Used to flag an ARM cpu_model paired with an x86_64 machine_arch
+    # (or vice versa) before the VM is created.
+
+  "thresholds": {
+    "max_laptop_memory_mb":     65536,
+    "min_disk_free_gb_error":   10,
+    "min_disk_free_gb_warn":    60,
+    "min_windows_disk_gb":      40,
+    "auto_windows_disk_gb":     64,
+    "profile_memory_ratio":     0.8,
+    "profile_cores_overcommit": 2
+  },
+
+  "laptop_product_keywords": ["g15", "thinkpad", "inspiron"],
+  "arm_iso_keywords":  ["arm64", "aarch64", "arm_"],
+  "x86_iso_keywords":  ["amd64", "x86_64", "x64", "i386", "i686"],
+  "arm_arch_values":   ["aarch64", "arm"],
+  "qemu_cpu_models": ["qemu64", "qemu32", "kvm64", "kvm32", "max", "base", "host-phys-bits-limit"],
+  "laptop_type_keywords": ["notebook", "laptop", "portable"],
+
+  "preflight_tools": [
+    "create_vm", "create_profile", "launch_vm", "delete_vm", "resize_disk",
+    "clone_vm", "snapshot_restore", "snapshot_delete",
+    "set_resource_limits", "send_monitor_cmd", "remove_template"
+  ],
+    # Only these tools go through preflight validation at all.
+
+  "preflight_hw_fields": [
+    "cpu_model", "machine_type", "memory_mb", "cpu_cores", "cpu_threads",
+    "machine_arch", "machine_class", "disk_size_gb", "display", "gpu",
+    "audio", "kvm", "uefi", "hugepages", "manufacturer", "product_name"
+  ],
+    # Fields checked for hardware-plausibility (ARM/x86 mismatch, memory
+    # overcommit, etc).
+
+  "destructive_monitor_cmds": ["quit", "system_reset", "powerdown", "eject", "device_del", "drive_del"],
+    # send_monitor_cmd calls containing these are flagged as high-risk.
+
+  "bad_iso_path_patterns": ["/home/user/", "/path/to/", "scan_isos", "<"],
+    # Same idea as sanitizer's placeholder_iso_patterns, checked again at
+    # preflight as a second line of defense.
+
+  "stealth_product_hints": [
+    ["latitude", "Dell Inc.", "Dell Inc.", "Notebook"],
+    ["thinkpad", "Lenovo", "Lenovo", "Notebook"],
+    ["elitebook", "HP", "HP", "Notebook"],
+    ["macbook", "Apple Inc.", "Apple Inc.", "Notebook"],
+    ...
+    # [product_name_substring, manufacturer, bios_vendor, chassis_type]
+    # Roughly 45 entries covering Dell/Lenovo/HP/Apple/Microsoft/ASUS/
+    # Acer/Samsung/Huawei/LG/Toshiba/Fujitsu/Sony/Razer/MSI/Gigabyte/
+    # Panasonic product lines. Used by stealth mode to auto-fill DMI/SMBIOS
+    # fields consistent with a product name the user mentioned.
+  ]
+}
+
+────────────────────────────────────────────────────────────────────────────────
+8. executor/config.json  (read by executor/server.py)
+────────────────────────────────────────────────────────────────────────────────
+
+{
+  "host": "0.0.0.0",
+    # Documentary only — executor/server.py is started via
+    # `uvicorn executor.server:app --host 0.0.0.0 --port 8001` (see
+    # complementary/install_executor.sh), so this key is NOT read by the
+    # code. Change the bind address by changing the uvicorn command/systemd
+    # unit, not this file.
+
+  "port": 8001,
+    # Same caveat as "host" — not read at runtime, informational only.
+
+  "token": ""
+    # Fallback executor secret. Precedence: EXECUTOR_TOKEN env var →
+    # ~/.gorgon-executor.token (file) → this key. If all three are empty,
+    # the executor prints a startup warning and refuses non-localhost
+    # requests (localhost callers are always allowed through, token or not).
+}
+
+────────────────────────────────────────────────────────────────────────────────
+9. executor/api/config.json
+   (read by executor/api/qemu_config.py, profiles.py, and other executor/api
+   modules — the largest config file in the project)
+────────────────────────────────────────────────────────────────────────────────
+
+{
+  "dirs": {
+    "vm_base":      "~/.qemu_vms",
+    "profiles":     "~/.qemu_vms/_profiles",
+    "templates":    "~/.qemu_vms/_templates",
+    "isolated_net": "_networks",
+    "state_file":   ".state.json"
+  },
+
+  "template_label": "template",
+    # Marker string used to tag a VM directory as a golden-image template.
+
+  "network": {
+    "mcast_addr": "230.0.0.1",   # multicast address for isolated networks
+    "start_port": 1234           # first UDP port allocated for isolated nets
+  },
+
+  "ports": {
+    "vnc_start":          5900,
+    "spice_start":        5930,
+    "port_range":         50,   # how many sequential ports to scan/allocate from each start
+    "qmp_port_start":     9000,
+    "monitor_port_start": 9100,
+    "serial_port_start":  9200
+  },
+
+  "timeouts": {
+    "qemu_version":          5,
+    "qmp_connect":           5,
+    "gl_check":              3,
+    "stop_graceful":         30,
+    "cpu_pinning_delay":     1,
+    "monitor_recv_sleep":    0.3,
+    "launch_liveness_check": 0.3,
+    "unattended_boot_keys":  25
+  },
+
+  "buffers": {
+    "qmp":           4096,
+    "monitor_recv":  8192,
+    "monitor_send":  4096
+  },
+
+  "iso_desktop_subdirs": ["images", "iso", "isos", "vms", "vm"],
+  "iso_home_subdirs": [
+    "Downloads", "downloads", "Desktop", "iso", "ISO", "ISOs", "isos",
+    "images", "Images", "vm", "VMs", "Documents"
+  ],
+  "iso_mount_roots": ["/media", "/mnt", "/run/media", "/Volumes"],
+    # Directories scan_isos() searches for install media.
+
+  "ovmf_search_paths":      [ /* 11 candidate OVMF_CODE.fd paths across Linux/macOS/Windows package layouts */ ],
+  "ovmf_vars_search_paths": [ /* matching OVMF_VARS.fd candidates */ ],
+  "ovmf_ms_code_paths":     [ /* Secure-Boot / Microsoft-signed OVMF_CODE variants */ ],
+  "ovmf_ms_vars_paths":     [ /* matching secure-boot OVMF_VARS variants */ ],
+  "ovmf_macos_vars_paths":  [ "/opt/homebrew/share/qemu/edk2-x86_64-vars.fd", "/usr/local/share/qemu/edk2-x86_64-vars.fd" ],
+  "ovmf_win_vars_paths":    [ "C:/Program Files/qemu/share/edk2-x86_64-vars.fd", "C:/Program Files (x86)/QEMU/share/edk2-x86_64-vars.fd" ],
+    # Search order for locating UEFI firmware images at VM-launch time.
+    # First existing path wins; falls back to seabios if none are found.
+
+  "machine_types": {
+    "pc":      "i440FX + PIIX (legacy BIOS)",
+    "q35":     "Q35 + ICH9 (modern, PCIe, recommended)",
+    "microvm": "Minimal microvm (containers/cloud)",
+    "virt":    "ARM virt platform (aarch64)"
+  },
+
+  "cpu_presets": {
+    "host": "-cpu host", "kvm64": "-cpu kvm64",
+    "Haswell": "-cpu Haswell,+avx2", "Broadwell": "-cpu Broadwell,+avx2",
+    "SandyBridge": "-cpu SandyBridge", "Skylake": "-cpu Skylake-Client,+avx512f",
+    "IceLake": "-cpu Icelake-Client,+avx512f", "EPYC": "-cpu EPYC",
+    "Opteron_G5": "-cpu Opteron_G5",
+    "cortex-a72": "-cpu cortex-a72", "cortex-a53": "-cpu cortex-a53"
+  },
+
+  "gpu_presets": {
+    "virtio": "virtio-vga-gl", "qxl": "qxl-vga", "vga": "VGA",
+    "vmware": "vmware-svga", "none": null, "gt1030": "vfio-pci"
+  },
+
+  "audio_presets": {
+    "none": null, "ac97": "ac97", "hda": "intel-hda",
+    "ich9": "ich9-intel-hda", "usb": "usb-audio"
+  },
+
+  "network_models": ["virtio-net-pci", "e1000", "e1000e", "rtl8139", "vmxnet3"],
+
+  "disk_config_defaults": {
+    "size_gb": 60, "format": "qcow2", "bus": "virtio",
+    "cache": "writeback", "discard": true, "ssd": false, "boot": false
+  },
+    # Defaults for the DiskConfig dataclass (one entry per attached disk).
+
+  "network_config_defaults": {
+    "mode": "nat", "model": "e1000e", "bridge": "virbr0"
+  },
+    # Defaults for the NetworkConfig dataclass (one entry per NIC).
+
+  "machine_config_defaults": {
+    "name": "vm-default", "hostname": "localhost", "machine_class": "desktop",
+    "machine_type": "q35", "bios": "ovmf", "uefi": true, "cpu_model": "host",
+    "cpu_cores": 4, "cpu_threads": 2, "cpu_sockets": 1, "kvm": true,
+    "memory_mb": 8192, "hugepages": false, "balloon": true, "gpu": "virtio",
+    "display": "sdl", "opengl": true, "resolution": "1920x1080",
+    "audio": "hda", "os_type": "linux", "boot_order": "cd",
+    "smbios_type": "", "product_name": "", "manufacturer": "",
+    "serial_number": "", "board_product": "", "bios_version": "",
+    "bios_vendor": "", "kernel_cmdline": "", "battery": false,
+    "tablet": true, "iommu": false, "nested_virt": false, "hpet": false,
+    "rtc_clock": "host", "rtc_base_fallback": "utc", "tsc_deadline": true,
+    "kvm_pv_features": true, "hugepages_path": "/dev/hugepages",
+    "qemu_binary": "qemu-system-x86_64", "machine_arch": "x86_64",
+    "hardened": false, "stealth": false, "tpm": false
+  },
+    # THE canonical defaults for the MachineConfig dataclass. See section 10.
+
+  "log_default_lines": 50,
+    # Default number of get_vm_logs lines when not specified.
+
+  "unattended_windows": {
+    "username": "user", "password": "Passw0rd!", "organization": "",
+    "locale": "en-US", "product_key": "W269N-WFGWX-YVC9B-4J6C9-T83GX",
+    "autologon": true
+  },
+    # Defaults baked into a generated autounattend.xml. The product_key
+    # shown is Microsoft's public "generic" Windows 11 Pro KMS key (not a
+    # real license), used so Setup proceeds without prompting.
+
+  "linux_distros": [
+    "ubuntu", "debian", "fedora", "mint", "linuxmint", "arch", "manjaro",
+    "opensuse", "suse", "kali", "parrot", "tails", "centos", "rocky",
+    "alma", "pop", "elementary", "zorin", "rhel", "void", "gentoo",
+    "slackware", "deepin", "mx", "antiX", "antix"
+  ],
+
+  "unattended_linux": {
+    "ubuntu": { "installer_family": "casper", "kernel_path": "/casper/vmlinuz", "initrd_path": "/casper/initrd", "cmdline": "boot=casper autoinstall ds=nocloud;" },
+    "mint":   { "installer_family": "ubiquity", "kernel_path": "/casper/vmlinuz", "initrd_path": "/casper/initrd.lz", "cmdline": "boot=casper automatic-ubiquity noprompt" },
+    "kali":   { "installer_family": "debian-installer", "kernel_path": "/install.amd/vmlinuz", "initrd_path": "/install.amd/initrd.gz", "cmdline": "auto=true priority=critical" }
+  },
+    # Per-distro unattended-install boot parameters (see handbook 5/golden
+    # image docs for the full unattended flow).
+
+  "generic_os_names": ["linux", "windows", "macos", "other", ""],
+
+  "update_allowed_fields": [
+    "memory_mb", "cpu_cores", "cpu_threads", "cpu_model", "cpu_features",
+    "display", "audio", "kvm", "iommu", "balloon", "hugepages",
+    "machine_type", "machine_arch", "rtc_clock", "hpet", "kvm_pv_features",
+    "manufacturer", "product_name", "serial_number", "bios_vendor",
+    "bios_version", "hostname", "os_type", "os_name", "hardened",
+    "stealth", "tpm", "extra_args", "vnc_port", "spice_port",
+    "vnc_bind_local", "battery", "board_product", "chassis_type",
+    "description", "uefi", "bios", "iso_path", "disk_bus", "network_mode",
+    "bridge_iface", "mac_address", "vnc_password", "cpu_pinning", "cpu_smt"
+  ],
+    # Fields update_config is allowed to touch on an existing VM. Anything
+    # else (e.g. "name") requires clone_vm or delete+recreate instead.
+
+  "monitor_allowed_cmds": [
+    "info ", "system_powerdown", "system_reset", "system_wakeup",
+    "screendump ", "savevm ", "loadvm ", "delvm ", "device_add ",
+    "device_del ", "balloon ", "migrate_cancel", "stop", "cont",
+    "qmp_capabilities", "change ", "eject "
+  ],
+    # Prefix/exact whitelist for send_monitor_cmd — anything not matching
+    # one of these prefixes is rejected before reaching the QEMU monitor
+    # socket, regardless of allowed_remote_tools.
+
+  "log_error_patterns": [
+    ["qemu: could not load", "Boot image or kernel file not found"],
+    ["no bootable device", "No bootable disk — check ISO/disk image path"],
+    ["kvm: permission denied", "KVM permission denied — run: sudo usermod -aG kvm $USER"],
+    ["hugepages", "Hugepages not allocated — run: sudo sysctl vm.nr_hugepages=2048"],
+    ... 29 pairs total ...
+    # [log_substring, human_readable_diagnosis] used by get_vm_logs to
+    # annotate launch.log failures with a plain-English cause.
+  ],
+
+  "compatibility_thresholds": {
+    "memory_ratio": 0.8,
+    "min_disk_free_gb": 20
+  },
+    # Used by check_profile_compatibility to warn when a profile would
+    # consume too much host RAM or the host is low on disk.
+
+  "local_only_displays": ["sdl", "gtk"],
+    # Same meaning/value as orchestrator/connection_config.json's key of
+    # the same name — duplicated here because executor/api code enforces
+    # it independently of the orchestrator (defense in depth for a
+    # standalone executor deployment).
+
+  "min_token_length": 16,
+    # Duplicated from orchestrator/connection_config.json for the same reason.
+
+  "qemu_user_net_gateway": "10.0.2.2",
+    # QEMU's default usermode-networking gateway address (informational,
+    # used in generated guest-network instructions).
+
+  "io_chunk_bytes": 4194304,
+    # 4 MiB. Chunk size for streaming a VM disk over /vms/{name}/disk.
+    # NOTE: executor/server.py reads this key from executor/config.json,
+    # not this file — since executor/config.json doesn't define it, the
+    # 4 MiB fallback in server.py always applies in practice. This copy in
+    # executor/api/config.json is used by executor/api code paths that
+    # stream files directly (e.g. bundle export).
+
+  "vnc_viewer_candidates": ["vncviewer", "tigervncviewer", "xtigervncviewer", "gvncviewer", "vinagre"],
+    # VNC client binaries probed (in order) when opening a display locally.
+
+  "smbios_chassis_type_map": {
+    "notebook": 9, "laptop": 9, "portable": 8, "desktop": 3,
+    "server": 17, "tower": 7, "tablet": 30
+  },
+    # machine_class / chassis-label → SMBIOS type-1 chassis type byte.
+
+  "cdrom_model": "HL-DT-ST DVDRAM GU90N",
+    # Fake CD-ROM drive model string presented via -device for stealth VMs.
+
+  "audio_socket_globs": {
+    "pulse_unix": "/run/user/*/pulse/native",
+    "pulse_tmp":  "pulse-*/native",
+    "pipewire":   "/run/user/*/pipewire-0"
+  },
+    # Host audio socket search globs for passing PulseAudio/PipeWire through.
+
+  "stealth": {
+    "webgl_renderer": "Intel(R) Iris(R) Xe Graphics",
+    "webgl_vendor": "Intel"
+  },
+    # Spoofed WebGL strings applied in stealth mode.
+
+  "os_cpu_features": {
+    "windows": ["hv_relaxed", "hv_spinlocks=0x1fff", "hv_vapic", "hv_time", "hv_vendor_id=GenuineIntel", "hv_synic", "hv_stimer", "hv_vpindex"],
+    "macos":   ["-hypervisor", "+invtsc", "vendor=GenuineIntel"]
+  },
+    # CPU flag additions applied automatically based on os_type.
+
+  "vendor_oui_map": {
+    "intel": [ /* 20 OUIs */ ], "hp": [ /* 10 OUIs */ ], "dell": [ /* 13 OUIs */ ],
+    "lenovo": [ /* 10 OUIs */ ], "asus": [ /* 9 OUIs */ ], ...
+    # ~28 vendor keys total (intel, hp, hewlett, dell, lenovo, thinkpad,
+    # asus, acer, toshiba, samsung, hpe, supermicro, apple, sony, vaio,
+    # msi, micro-star, gigabyte, giga-byte, fujitsu, panasonic, toughbook,
+    # lg, huawei, microsoft, surface, razer, nec, clevo, sager, realtek,
+    # broadcom, qualcomm, atheros, xiaomi, honor, medion, packard bell,
+    # gateway) — real registered MAC OUI prefixes per vendor, used to
+    # generate a manufacturer-plausible MAC address.
+  },
+
+  "iso_os_keywords": {
+    "windows": ["windows", "win11", "win10", "win"],
+    "linux":   ["linux", "ubuntu", "debian", "fedora", "mint", "arch", "opensuse", "manjaro", "pop", "elementary", "zorin", "kali", "parrot", "tails", "centos", "rocky", "alma"],
+    "macos":   ["macos", "mac", "osx", "darwin", "ventura", "sonoma", "monterey", "sequoia"]
+  },
+  "iso_arm_markers": ["arm64", "aarch64", "_arm_", "-arm-", "arm_v"],
+  "iso_x86_markers": ["amd64", "x86_64", "x64", "i386", "i686", "64bit", "64-bit"],
+    # Used by scan_isos to guess os_type/machine_arch from an ISO filename.
+
+  "hardware_profiles": {
+    # ~42 built-in profiles, keyed by name. See section 11 for the full list
+    # and per-field schema. Custom (user-created) profiles are still saved
+    # separately to ~/.qemu_vms/_profiles/*.json and merged in at runtime —
+    # only the built-ins live in this file.
+  },
+
+  "list_flags": [
+    {"attr": "stealth",              "label": "stealth"},
+    {"attr": "hardened",             "label": "hardened"},
+    {"attr": "tpm",                  "label": "tpm"},
+    {"attr": "gpu_passthrough_pci",  "label": "gpu-pt"},
+    {"attr": "networks.0.mode",      "label": "$value", "hide_values": ["nat", ""]},
+    {"attr": "vpn",                  "label": "vpn"}
+  ]
+    # Badges shown next to a VM name in list_vms output when the named
+    # attribute is truthy (or, for the dotted attr, when its value isn't
+    # in hide_values).
+}
+
+────────────────────────────────────────────────────────────────────────────────
+10. MachineConfig FIELDS AND DEFAULTS
+────────────────────────────────────────────────────────────────────────────────
+
+executor/api/qemu_config.py's MachineConfig dataclass. Fields whose default
+comes from machine_config_defaults (section 9) are marked "[cfg]"; fields
+with their own hardcoded default in the dataclass are marked "[hc]"; pure
+runtime/derived state is marked "[state]".
+
+  name             str    "vm-default" [cfg]  VM directory name, used everywhere
+  vm_id            str    random 8-hex [state] uuid4-derived unique id
+  hostname         str    "localhost"  [cfg]  guest hostname hint
+  description      str    ""           [hc]   human-readable note, not used in QEMU args
+  machine_class    str    "desktop"    [cfg]  drives smbios_chassis_type_map lookup
+  machine_type     str    "q35"        [cfg]  -machine type={machine_type}
+  bios             str    "ovmf"       [cfg]  "seabios"|"ovmf"|"ovmf_ms" → pflash drive
+  uefi             bool   True         [cfg]  enables OVMF firmware path (forced True if bios startswith ovmf and OVMF is available)
+  uefi_vars        str|None None       [hc]   path to this VM's persistent OVMF_VARS copy
+  cpu_model        str    "host"       [cfg]  -cpu {cpu_model}[,flags]
+  cpu_cores        int    4            [cfg]  -smp {cpu_cores},threads=,sockets=
+  cpu_threads      int    2            [cfg]
+  cpu_sockets      int    1            [cfg]
+  cpu_features     list   []           [hc]   extra -cpu flags (e.g. +avx2)
+  kvm              bool   True         [cfg]  -enable-kvm when True
+  cpu_pinning      list|None None      [hc]   host CPU indices for taskset/affinity
+  memory_mb        int    8192         [cfg]  -m {memory_mb}
+  hugepages        bool   False        [cfg]  -mem-path {hugepages_path}
+  balloon          bool   True         [cfg]  -device virtio-balloon when True
+  gpu              str    "virtio"     [cfg]  looked up in gpu_presets → -device
+  gpu_passthrough_pci str ""           [hc]   host PCI address for vfio-pci passthrough
+  display          str    "sdl"        [cfg]  -display {display} or -vga
+  vnc_port         int|None None       [hc]   fixed VNC port (else auto-allocated from ports.vnc_start)
+  vnc_bind_local   bool   False        [hc]   True → bind 127.0.0.1 + require one-time password (remote mode)
+  spice_port       int|None None       [hc]
+  opengl           bool   True         [cfg]  enables virgl/opengl on the display
+  resolution       str    "1920x1080" [cfg]
+  audio            str    "hda"        [cfg]  looked up in audio_presets → -audiodev/-device
+  disks            list   []           [hc]   list of DiskConfig
+  networks         list   []           [hc]   list of NetworkConfig
+  os_type          str    "linux"      [cfg]  affects disk bus defaults, UEFI auto-logic
+  os_name          str    ""           [hc]   distro name for ISO auto-detection
+  iso_path         str|None None       [hc]   -drive if=cdrom,file=
+  unattended       bool   False        [hc]   attach autounattend.xml CD (opt-in)
+  unattended_username/_password/_locale str "" [hc]
+  unattended_autologon bool True       [hc]
+  unattended_skip_user bool False      [hc]   automate everything except account creation
+  boot_order       str    "cd"         [cfg]
+  smbios_type/product_name/manufacturer/serial_number/board_product/
+    bios_version/bios_vendor  str  ""  [cfg]  -smbios type=0/1/2 fields
+  kernel_path/initrd_path str|None None [hc]  direct kernel boot (unattended Linux installs)
+  kernel_cmdline   str    ""           [cfg]
+  battery          bool   False        [cfg]  -device acpi-battery
+  tablet           bool   True         [cfg]  -device usb-tablet (absolute pointer)
+  iommu            bool   False        [cfg]
+  nested_virt      bool   False        [cfg]
+  hpet             bool   False        [cfg]
+  rtc_clock        str    "host"       [cfg]  -rtc base={rtc_clock} (falls back to rtc_base_fallback "utc" on ARM/non-x86)
+  tsc_deadline     bool   True         [cfg]
+  kvm_pv_features  bool   True         [cfg]  adds hv_* / os_cpu_features flags
+  hardened         bool   False        [cfg]  applies _harden() (hides KVM CPUID etc)
+  stealth          bool   False        [cfg]  applies stealth spoofing; forces hardened=True (__post_init__)
+  tpm              bool   False        [cfg]  starts swtpm, adds -tpmdev/-device
+  hugepages_path   str    "/dev/hugepages" [cfg]
+  extra_args       list   []           [hc]   appended verbatim to the QEMU command
+  labels           list   []           [hc]   user-defined tags (work_vm, test_vm, …)
+  template         str|None None       [hc]   golden-image name under ~/.qemu_vms/_templates/ to clone disks from
+  randomize_root_password/user_password bool False [hc] offline-edit cloned disk's password(s) (Linux templates only)
+  root_password/user_password str|None None [hc] recorded only when the corresponding randomize_* succeeds
+  randomized_username str|None None    [hc]   auto-detected account randomize_user_password applied to
+  new_username     str|None None       [hc]   rename cloned disk's primary user (Linux templates only)
+  randomize_hostname bool False        [hc]
+  new_hostname     str|None None       [hc]   auto-generated if not given
+  qemu_binary      str    "qemu-system-x86_64" [cfg] selects the QEMU executable
+  machine_arch     str    "x86_64"     [cfg]
+  pid              int|None None       [state] running QEMU process id
+  monitor_socket/qmp_socket str ""     [state] Unix socket paths (Linux/macOS)
+  qmp_tcp_port/monitor_tcp_port/serial_tcp_port int 0 [state] Windows-only TCP fallback ports
+
+__post_init__ additionally: coerces cpu_cores/cpu_threads/memory_mb to int
+(AI may send them as strings); if bios is ovmf/ovmf_ms and OVMF firmware
+isn't found on this host, silently falls back to bios="seabios", uefi=False.
+
+DiskConfig defaults (disk_config_defaults): size_gb 60, format "qcow2",
+bus "virtio", cache "writeback", discard true, ssd false, boot false.
+
+NetworkConfig defaults (network_config_defaults): mode "nat",
+model "e1000e", bridge "virbr0".
+
+────────────────────────────────────────────────────────────────────────────────
+11. HARDWARE PROFILES (built-in, executor/api/config.json → hardware_profiles)
+────────────────────────────────────────────────────────────────────────────────
+
+Built-in profiles are stored inline in executor/api/config.json (loaded by
+executor/api/profiles.py as HARDWARE_PROFILES). Custom (user-created)
+profiles are saved separately to ~/.qemu_vms/_profiles/*.json and merged in
+at runtime by get_all_profiles(); apply_profile() overlays a profile's
+fields onto a MachineConfig.
+
+Each profile is a partial MachineConfig field dict, optionally carrying:
+  bios_versions      list[str]        realistic BIOS version choices to rotate through
+  memory_options_mb  list[int]        alternate memory sizes considered "compatible"
+  cpu_variants       list[[cores,threads]]  alternate core/thread pairs considered "compatible"
+  _requires          dict             e.g. {"qemu_arm_installed": true}
+  _notes             str              free-text caveats
+
+42 built-in profiles as of this writing, grouped by machine_class:
+
+  laptop (25):  dell_g15_5520, dell_latitude_7430, dell_xps_15_9520,
+    dell_xps_13_9315, dell_latitude_5540, dell_inspiron_16,
+    hp_elitebook_840, hp_probook_450, hp_spectre_x360, hp_pavilion_15,
+    hp_zbook_firefly, lenovo_thinkpad_x1c, lenovo_thinkpad_t14,
+    lenovo_ideapad_5, lenovo_legion_5, asus_zenbook_14, asus_rog_zephyrus,
+    acer_aspire_5, acer_swift_go, msi_prestige_14, microsoft_surface_laptop5,
+    framework_13, samsung_galaxybook3, office_laptop
+
+  desktop (11): dell_optiplex_7010, dell_precision_3660, dell_xps_8960,
+    lenovo_thinkcentre_m70q, lenovo_thinkcentre_neo, hp_elitedesk_800,
+    hp_omen_45l, asus_rog_strix_gt15, intel_nuc_13, gaming_desktop, mac_mini
+
+  server (5):   hpe_proliant_dl380, hpe_proliant_dl360, dell_poweredge_r750,
+    lenovo_thinksystem_sr650, server
+
+  custom (3):   minimal, raspberry_pi_4, raspberry_pi_3b
+
+Representative entries (abbreviated — see the JSON for bios_versions /
+memory_options_mb / cpu_variants on each):
+
+dell_g15_5520
+  manufacturer: "Dell Inc."          product_name: "G15 5520"
+  cpu_cores: 6   cpu_threads: 12     memory_mb: 16384
+  machine_class: "laptop"  battery: true  audio: "hda"
+  bios_vendor: "Dell Inc."  bios_version: "1.14.0"
+
+gaming_desktop
+  manufacturer: "ASUS"  product_name: "System Product Name"
+  cpu_cores: 8   cpu_threads: 16     memory_mb: 32768
+  gpu: "virtio"  audio: "ich9"  machine_class: "desktop"
+
+office_laptop
+  manufacturer: "Lenovo"  product_name: "ThinkPad E14"
+  cpu_cores: 4   cpu_threads: 8      memory_mb: 8192
+  gpu: "qxl"  machine_class: "laptop"  battery: true
+
+server
+  manufacturer: "Supermicro"  product_name: "AS-1124US-TNRP"
+  cpu_model: "EPYC"  cpu_cores: 16  cpu_threads: 32  memory_mb: 65536
+  hugepages: true  iommu: true  display: "none"  machine_class: "server"
+
+mac_mini
+  manufacturer: "Apple Inc."  product_name: "Mac mini"
+  os_type: "macos"  cpu_cores: 4  cpu_threads: 8  memory_mb: 8192
+  gpu: "vmware"  machine_class: "desktop"
+
+minimal
+  machine_class: "custom"  cpu_model: "kvm64"  cpu_cores: 2  cpu_threads: 2
+  memory_mb: 2048  display: "none"  audio: "none"  gpu: "none"
+
+raspberry_pi_4
+  machine_class: "custom"  machine_type: "raspi3b"  machine_arch: "aarch64"
+  qemu_binary: "qemu-system-aarch64"  cpu_model: "cortex-a72"
+  cpu_cores: 4  memory_mb: 4096  bios: "seabios"  uefi: false
+  _requires: {"qemu_arm_installed": true}
+
+raspberry_pi_3b
+  machine_class: "custom"  machine_type: "raspi3b"  machine_arch: "aarch64"
+  qemu_binary: "qemu-system-aarch64"  cpu_model: "cortex-a53"
+  cpu_cores: 4  memory_mb: 1024  kvm: false  display: "none"
+  kernel_cmdline: "console=ttyAMA0 root=/dev/mmcblk0p2 rw rootfstype=ext4 fsck.repair=yes"
+  _notes: "raspi3b has NO display output in QEMU — serial console only."
+
+Server/desktop enterprise profiles (hpe_proliant_dl380/dl360,
+dell_poweredge_r750, lenovo_thinksystem_sr650) all follow the same shape:
+gpu "none", display "none", audio "none", hugepages true, iommu true,
+64GB-class memory_mb, high core/thread counts, machine_class "server".
+
+The remaining ~20 laptop/desktop profiles (dell_xps_*, dell_latitude_*,
+dell_inspiron_16, dell_precision_3660, dell_optiplex_7010, dell_xps_8960,
+lenovo_thinkpad_*, lenovo_ideapad_5, lenovo_legion_5, lenovo_thinkcentre_*,
+hp_elitebook_840, hp_probook_450, hp_spectre_x360, hp_pavilion_15,
+hp_zbook_firefly, hp_elitedesk_800, hp_omen_45l, asus_zenbook_14,
+asus_rog_zephyrus, asus_rog_strix_gt15, acer_aspire_5, acer_swift_go,
+msi_prestige_14, microsoft_surface_laptop5, framework_13,
+samsung_galaxybook3, intel_nuc_13) follow the common laptop/desktop shape:
+machine_type "q35", bios "ovmf", uefi true, cpu_model "host", gpu "virtio",
+audio "hda", opengl true, kvm_pv_features true, plus manufacturer/
+product_name/board_product/bios_vendor/bios_version DMI strings realistic
+for that specific model, and bios_versions/memory_options_mb/cpu_variants
+arrays used by check_profile_compatibility to accept a range of "close
+enough" hardware rather than an exact match.
+
+────────────────────────────────────────────────────────────────────────────────
+12. shared/executioner/config.json  (read by shared/executioner/tool_executor.py)
+────────────────────────────────────────────────────────────────────────────────
+
+{
+  "valid_machine_types": ["q35", "pc", "pc-i440fx", "microvm", "virt", "raspi3b", "raspi2b", "raspi0"],
+    # Same enum as orchestrator/sanitizer/config.json's valid_machine_types
+    # — duplicated here since tool_executor runs after the sanitizer/
+    # preflight pipeline and (in a split deployment) may run on a machine
+    # that never imported the orchestrator's config.
+
+  "arm_cpu_prefixes": ["cortex", "arm1", "arm9", "arm11"],
+    # A shorter list than the sanitizer/preflight copies — used only for a
+    # quick ARM-vs-x86 sanity check immediately before dispatch.
+
+  "create_vm_defaults": {
+    "disk_size_gb": 60,
+    "disk_format": "qcow2",
+    "network_mode": "nat",
+    "bridge": "virbr0",
+    "stealth_slirp_subnet": "192.168.1.0/24"
+      # Subnet presented to the guest's usermode NAT when stealth mode
+      # wants a "home router"-plausible private range instead of QEMU's
+      # default 10.0.2.0/24.
+  },
+
+  "tool_defaults": {
+    "snap_name": "snap1",
+    "log_lines": 50
+  },
+
+  "generic_os_names": ["linux", "windows", "macos", "other", ""],
+
+  "arm_iso_keywords": ["arm64", "aarch64", "arm_"],
+  "x86_iso_keywords": ["amd64", "x86_64", "x64", "i386", "i686"]
+}
+
+NOTE ON DRIFT FROM EARLIER VERSIONS: this file used to carry an "executor"
+sub-object with url/port/timeout/allowed_remote_tools keys plus its own
+copy of valid_machine_types/arm_cpu_prefixes at the top level. That shape
+is gone — remote-access control (url, allowed_remote_tools, etc.) now lives
+entirely in orchestrator/connection_config.json (section 2) and
+executor/config.json (section 8); this file is purely tool_executor's own
+defaults/validation data, nothing about transport or auth.
+
+────────────────────────────────────────────────────────────────────────────────
+13. client/CLI_config.json  (read by client/ui/chat_client.py)
+────────────────────────────────────────────────────────────────────────────────
+
+{
+  "text_color": "#7355a3",
+    # Hex color for body/dim text in the chat TUI (VM list, system info,
+    # hints). Applied via curses.init_color() if the terminal supports
+    # color redefinition; falls back to gray (slot 8) otherwise.
+
+  "font_size": 13,
     # Font size hint sent as an xterm escape sequence on TUI startup:
     #   \033]50;xft:Monospace:size=N\007
-    # Works in xterm and xterm-compatible terminals (gnome-terminal, xfce4-terminal).
-    # Silently ignored by terminals that don't support the sequence.
+    # Works in xterm-compatible terminals; silently ignored elsewhere.
+
+  "wrap_width": 120,
+    # Column width AI/tool output is wrapped to before rendering.
+
+  "terminal_rows": 44,
+  "terminal_cols": 200,
+    # Terminal size the TUI resizes itself to on startup (best-effort;
+    # depends on terminal emulator support for resize escape sequences).
+
+  "autostart_poll_count": 20,
+  "autostart_poll_interval_s": 0.5,
+    # When auto-launching a VM at chat startup, how many times (and how
+    # far apart) to poll for it to come up before giving up — 20 × 0.5s = 10s max.
+
+  "iso_distro_keywords": [
+    ["ubuntu", "Ubuntu"], ["debian", "Debian"], ["mint", "Linux Mint"],
+    ["fedora", "Fedora"], ["arch", "Arch Linux"], ["kali", "Kali Linux"],
+    ["raspios", "Raspberry Pi OS"], ["raspberry", "Raspberry Pi OS"],
+    ["win11", "Windows 11"], ["win10", "Windows 10"], ["windows", "Windows"],
+    ["macos", "macOS"], ["darwin", "macOS"]
+  ]
+    # [filename_substring, display_name] pairs used to prettify an ISO
+    # filename into a human-readable OS label in the client UI.
 }
 
 ────────────────────────────────────────────────────────────────────────────────
-3a. server/admin_config.json  (read by server/admin_tui.py → _run)
-────────────────────────────────────────────────────────────────────────────────
-
-{
-  "text_color": "#aaaaaa",
-    # Hex color for body/dim text in the admin TUI (same mechanism as CLI_config).
-
-  "font_size": 13
-    # Font size hint — same xterm escape as CLI_config. Admin TUI also resizes
-    # the terminal to 52×200 columns after applying the font size.
-}
-
-────────────────────────────────────────────────────────────────────────────────
-4. client/connection_config.json  (read by client/ui/chat_client.py)
+14. client/connection_config.json  (read by client/ui/chat_client.py)
 ────────────────────────────────────────────────────────────────────────────────
 
 {
   "server_url": "http://localhost:8080",
-    # URL of the gorgon server. Override with SERVER_URL env var.
+    # URL of the gorgon orchestrator. Overridden by SERVER_URL env var.
 
-  "token": "",
-    # API token. Leave empty and use API_TOKEN env var.
+  "token": "test",
+    # Placeholder shipped value for API_TOKEN. Overridden by API_TOKEN env
+    # var — leave empty and use the env var for anything beyond local testing.
 
   "ca_cert": null,
-    # Path to a CA cert PEM file for self-signed HTTPS servers.
+    # Path to a CA cert PEM file for self-signed HTTPS orchestrators.
     # null → use system CA bundle (correct for Let's Encrypt).
 
   "verify_ssl": true,
     # Set false only for development with self-signed certs without ca_cert.
 
-  "timeout": 120
-    # HTTP request timeout in seconds.
+  "timeout": 120,
+    # HTTP request timeout in seconds. Overridden by API_TIMEOUT.
+
+  "vnc_viewer_candidates": ["vncviewer", "tigervnc", "xtigervncviewer", "gvncviewer"],
+    # VNC client binaries probed (in order) when the client opens a VM's
+    # display over the network.
+
+  "io_chunk_bytes": 4194304
+    # 4 MiB. Chunk size used when the client streams a VM disk/bundle down
+    # from the executor's /vms/{name}/disk or /vms/{name}/bundle endpoint.
 }
 
 ────────────────────────────────────────────────────────────────────────────────
-5. shared/executioner/config.json  (read by shared/executioner/tool_executor.py)
+15. admin/connection_config.json  (read by admin/admin_tui.py)
 ────────────────────────────────────────────────────────────────────────────────
 
 {
-  "executor": {
-    "url": "local",
-      # Always "local" on the server — QEMU and AI are co-located.
+  "orchestrator_url": "http://localhost:8080",
+    # URL of the gorgon orchestrator to monitor. Overridden by SERVER_URL
+    # env var (same env var the client uses — admin and client are both
+    # "callers" of the orchestrator's HTTP API).
 
-    "port": 8080,
-      # Port the API server listens on. Used by setup scripts.
-
-    "timeout": 120,
-      # Timeout for tool execution operations.
-
-    "allowed_remote_tools": [
-      "create_vm", "launch_vm", "stop_vm", "list_vms", "vm_status",
-      "delete_vm", "clone_vm", "resize_disk",
-      "snapshot_create", "snapshot_list", "snapshot_restore", "snapshot_delete",
-      "check_system", "list_profiles", "check_profile_compatibility",
-      "fingerprint_vm", "check_disk", "revert",
-      "generate_guest_setup", "mark_stealth_done",
-      "create_cluster", "delete_cluster", "list_clusters"
-      # Tools NOT in this list are blocked at the HTTP layer (403 Forbidden).
-      # send_monitor_cmd is intentionally excluded — raw QEMU monitor access
-      # from an unauthenticated remote connection is a security risk.
-    ]
-  },
-
-  "create_vm_defaults": {
-    "disk_size_gb": 40,      # default disk size for new VMs
-    "disk_format": "qcow2",  # default disk format
-    "disk_bus": "virtio",    # default disk controller bus
-    "network_mode": "nat",   # default network mode
-    "bridge": "virbr0"       # default bridge interface
-  },
-
-  "tool_defaults": {
-    "snap_name": "snap1",    # default snapshot name when not specified
-    "log_lines": 50          # default number of log lines for get_vm_logs
-  },
-
-  "valid_machine_types": ["q35", "pc", "virt", "microvm", "raspi3b", "raspi4b"],
-    # Machine types that are accepted by the sanitizer and executor.
-    # Profile names are NOT in this list — they are stripped before reaching here.
-
-  "arm_cpu_prefixes": ["cortex-a", "cortex-r", "cortex-m", "neoverse", "a64fx"]
-    # CPU model name prefixes that indicate an ARM CPU. Used by the sanitizer
-    # to detect ARM CPUs being used on x86_64 VMs (and replace with "host").
+  "token": ""
+    # API_TOKEN value the admin TUI presents. Overridden by API_TOKEN env var.
 }
 
-────────────────────────────────────────────────────────────────────────────────
-3. server/ai/config.json
-────────────────────────────────────────────────────────────────────────────────
-
-Owned by the provider machine (AI side). Read by cli.py and ollama_client.py.
-
-{
-  "ollama_url": "http://localhost:11434",
-    # Ollama server URL. Override with OLLAMA_URL env var.
-
-  "ollama_model": "qwen2.5:7b",
-    # Default model. Override with OLLAMA_MODEL env var.
-
-  "tool_loop_max": 6,
-    # Maximum number of tool calls the AI can chain in one user prompt.
-    # Prevents infinite loops. After this limit, the loop breaks.
-
-  "tool_loop_max_override": null,
-    # Override for tool_loop_max. If set (not null), this value is used instead.
-
-  "auto_clear_session": true,
-    # If true, the session history is auto-cleared when drift is detected
-    # (AI's remembered VMs don't match actual VM list).
-
-  "exit_commands": ["exit", "quit", "bye", "q", ":q", "done"],
-    # Any of these in the chat loop exits the program.
-
-  "shortcut_commands": {
-    "list": "list_vms",
-    "profiles": "list_profiles",
-    "system": "check_system",
-    "clear session": "clear_session",
-    "exit": "exit"
-    # Bypass Ollama entirely for these common commands.
-  },
-
-  "action_words": ["create", "make", "launch", "start", "run", "stop", ...],
-    # Words that suggest the user wants to perform an action.
-    # Used to decide whether to call Ollama or just describe.
-
-  "os_keywords_gate": ["linux", "windows", "ubuntu", "mint", "windows", ...],
-    # OS-related keywords used by the context gate.
-
-  "confirm_yn": { ... },
-    # Patterns for detecting yes/no answers from the user.
-
-  "confirm_name": { ... }
-    # Patterns for detecting VM name inputs from the user.
-}
+Written by complementary/install_admin.sh during setup; can also be edited
+by hand to point the dashboard at a different orchestrator.
 
 ────────────────────────────────────────────────────────────────────────────────
-4. server/ai/context_assistant_config.json
-────────────────────────────────────────────────────────────────────────────────
-
-Message templates and rules for the context assistant.
-
-{
-  "checks": [
-    {
-      "id": "...",
-      "description": "...",
-      "condition": "...",
-      "message": "..."
-    },
-    ...
-  ]
-  # Each check has a condition (evaluated against tool call and context)
-  # and a message to inject when the condition is met.
-}
-
-────────────────────────────────────────────────────────────────────────────────
-5. shared/sanitizer/config.json
-────────────────────────────────────────────────────────────────────────────────
-
-Configuration for the sanitizer layer.
-
-{
-  "placeholder_vm_names": [
-    "windows-vm", "linux-vm", "ubuntu-vm", "my-vm", "new-vm", "test-vm",
-    "vm", "myvm", "testvm", "unnamed", "virtual-machine", "vm-1", "vm-2",
-    "my_vm", "linux_vm", "test_vm", "windows_vm", "new_vm", "ubuntu_vm",
-    "vm_1", "vm_2", "virtual_machine"
-    # ALL hyphen AND underscore variants are included. The sanitizer clears
-    # any name in this list to "" to force the user to provide a real name.
-  ],
-
-  "os_type_aliases": {
-    "ubuntu": "linux", "debian": "linux", "fedora": "linux",
-    "mint": "linux", "kali": "linux", "arch": "linux",
-    "win10": "windows", "win11": "windows", "win64": "windows",
-    "windows11": "windows", "windows10": "windows",
-    "osx": "macos", "darwin": "macos", "mac": "macos"
-  },
-
-  "enum_maps": {
-    "display": {"x11": "sdl", "X11": "sdl", "xorg": "sdl", ...},
-    "network_mode": {"wifi": "nat", "wireless": "nat", "host": "nat", ...},
-    "audio": {"alsa": "hda", "pulse": "hda", "pulseaudio": "hda", ...}
-  },
-
-  "bridge_nic_names": [
-    "eth0", "ens33", "enp3s0", "wlan0", "wlp2s0", "eno1", "ens0", "enp0s3"
-    # Physical NIC names that should be normalised to virbr0.
-  ]
-}
-
-────────────────────────────────────────────────────────────────────────────────
-6. shared/sanitizer/context_gate_config.json
-────────────────────────────────────────────────────────────────────────────────
-
-Defines required fields per tool for the context gate.
-
-{
-  "create_vm": {
-    "required": ["name"],
-    "question": "What would you like to name this VM?",
-    "options": ["my-windows-vm", "dev-machine", "test-ubuntu"]
-  },
-  "launch_vm": {
-    "required": ["name"],
-    "question": "Which VM would you like to launch?",
-    "options": []    # filled dynamically from current VM list
-  },
-  ...
-}
-
-If a required field is missing or empty after sanitization, gate_check()
-returns the question and options as a clarify response.
-
-────────────────────────────────────────────────────────────────────────────────
-7. shared/preflight/config.json
+16. admin/admin_config.json  (read by admin/admin_tui.py)
 ────────────────────────────────────────────────────────────────────────────────
 
 {
-  "timeout": 4,
-    # Timeout in seconds for the internet validator (DuckDuckGo product lookup).
-    # If the check takes longer, it is skipped gracefully.
+  "text_color": "#7355a3",
+    # Hex color for body/dim text in the admin TUI (same mechanism as
+    # client/CLI_config.json's text_color).
 
-  "caps": {
-    "max_memory_pct": 0.95,
-      # Maximum fraction of host RAM that can be allocated to a VM.
-    "min_memory_mb": 512,
-      # Minimum allowed memory_mb value.
-    "min_disk_gb": 8
-      # Minimum allowed disk_size_gb value.
-  }
+  "font_size": 20,
+    # Font size hint — same xterm escape mechanism as CLI_config. Larger
+    # than the client's default (13) since the admin dashboard is meant to
+    # be glanced at from a distance.
+
+  "refresh_rate_s": 1.0,
+    # How often (seconds) the dashboard polls the orchestrator for updated
+    # VM/session/event state.
+
+  "default_port": 8080,
+    # Used only as a display/label fallback; the actual connection target
+    # comes from orchestrator_url in admin/connection_config.json.
+
+  "log_path": "/tmp/gorgon-orchestrator.log",
+    # Path the admin TUI tails for the orchestrator's log panel.
+
+  "events_display_limit": 200
+    # Maximum number of recent events kept in the in-memory event log view.
 }
 
 ────────────────────────────────────────────────────────────────────────────────
-8. shared/api/config.json
+17. LEGACY / DEAD FILES ON DISK
 ────────────────────────────────────────────────────────────────────────────────
 
-{
-  "vm_base_dir": "~/.qemu_vms",
-    # Root directory for all VM data. Expand ~ at runtime.
-
-  "qemu_binary": "qemu-system-x86_64",
-    # Default QEMU binary. Overridden to qemu-system-aarch64 for ARM VMs.
-
-  "qemu_img_binary": "qemu-img",
-    # qemu-img binary for disk operations.
-
-  "qmp_timeout": 7.5,
-    # Seconds to wait for QMP socket to appear after QEMU starts.
-    # 15 retries × 0.5s = 7.5s max.
-
-  "qmp_retries": 15,
-    # Number of QMP connection attempts.
-
-  "qmp_retry_delay": 0.5,
-    # Delay between QMP retries in seconds.
-
-  "vnc_password_expire_seconds": 600,
-    # VNC one-time password validity in seconds (10 minutes).
-
-  "launch_log_lines": 100,
-    # Number of launch.log lines to keep (older lines are truncated).
-
-  "session_max_messages": 40
-    # Maximum messages to keep in .session.json.
-}
-
-────────────────────────────────────────────────────────────────────────────────
-9. MachineConfig FIELDS AND DEFAULTS
-────────────────────────────────────────────────────────────────────────────────
-
-This is every field in the MachineConfig dataclass, its type, default value,
-and what it controls in the QEMU command.
-
-  name             str   (required)       VM directory name, used everywhere
-  os_type          str   "linux"          Affects disk bus (sata for windows), UEFI auto
-  os_name          str   ""               Distro name for ISO auto-detection
-  description      str   ""               Human-readable note, not used in QEMU args
-  memory_mb        int   4096             -m {memory_mb}
-  cpu_cores        int   2                -smp {cpu_cores},threads={cpu_threads}
-  cpu_threads      int   1                -smp cores,threads=
-  cpu_model        str   "host"           -cpu {cpu_model}[,flags]
-  machine_type     str   "q35"            -machine type={machine_type}
-  machine_arch     str   "x86_64"         selects qemu binary
-  qemu_binary      str   "qemu-system-x86_64"  the QEMU executable
-  display          str   "sdl"            -display {display} or -vga
-  gpu              str   "virtio-vga"     -device {gpu}
-  audio            str   "hda"            -audiodev {audio} -device intel-hda
-  bios             str   "seabios"        "ovmf" or "ovmf_ms" → pflash drive
-  uefi             bool  False            enables OVMF firmware path
-  kvm              bool  True             -enable-kvm when True
-  tpm              bool  False            starts swtpm, adds -tpmdev/-device
-  stealth          bool  False            applies _apply_stealth(), implies hardened
-  hardened         bool  False            applies _harden() (hide KVM CPUID)
-  battery          bool  False            -device acpi-battery
-  hugepages        bool  False            -mem-path /dev/hugepages
-  balloon          bool  True             -device virtio-balloon when True
-  manufacturer     str   ""              -smbios type=1,manufacturer=
-  product_name     str   ""              -smbios type=1,product=
-  serial_number    str   ""              -smbios type=1,serial=
-  board_product    str   ""              -smbios type=2,product=
-  bios_vendor      str   ""              -smbios type=0,vendor=
-  bios_version     str   ""              -smbios type=0,version=
-  smbios_type      str   ""              human label → chassis_type_byte lookup
-  machine_class    str   ""              "laptop" → chassis_type_byte=9 etc.
-  networks         list  [NetworkConfig] one -netdev/-device pair per entry
-  disks            list  [DiskConfig]    one -drive per entry
-  iso_path         str   ""              -drive if=cdrom,file=
-  extra_args       list  []              appended verbatim to QEMU command
-  rtc_clock        str   "utc"           -rtc base={rtc_clock}
-  rtc_driftfix     str   "slew"          -rtc driftfix={rtc_driftfix}
-
-────────────────────────────────────────────────────────────────────────────────
-10. HARDWARE PROFILES (built-in defaults)
-────────────────────────────────────────────────────────────────────────────────
-
-Profiles are stored in shared/api/qemu_config.py (built-in) and
-~/.qemu_vms/_profiles/*.json (custom, on the server machine).
-
-dell_g15_5520
-  manufacturer:   "Dell Inc."
-  product_name:   "G15 5520"
-  memory_mb:      16384
-  cpu_cores:      8
-  machine_class:  "laptop"
-  battery:        True
-  audio:          "hda"
-  bios_vendor:    "Dell Inc."
-  description:    "Dell G15 Gaming Laptop 5520"
-
-gaming_desktop
-  memory_mb:      32768
-  cpu_cores:      16
-  gpu:            "virtio-vga-gl"
-  machine_class:  "desktop"
-  description:    "High-performance gaming desktop"
-
-office_laptop
-  manufacturer:   "Lenovo"
-  product_name:   "ThinkPad T14"
-  memory_mb:      8192
-  cpu_cores:      4
-  display:        "qxl"
-  machine_class:  "laptop"
-  battery:        True
-  description:    "Office/business laptop"
-
-server
-  memory_mb:      65536
-  cpu_cores:      32
-  cpu_model:      "EPYC"
-  hugepages:      True
-  display:        "none"
-  machine_class:  "server"
-  description:    "Headless server (EPYC)"
-
-mac_mini
-  manufacturer:   "Apple Inc."
-  product_name:   "Mac mini"
-  memory_mb:      8192
-  gpu:            "vmware-svga"
-  machine_class:  "desktop"
-  description:    "macOS-style compact desktop"
-
-minimal
-  memory_mb:      2048
-  cpu_cores:      2
-  display:        "none"
-  description:    "Minimal headless VM (CI/testing)"
-
-raspberry_pi_4
-  machine_type:   "virt"
-  machine_arch:   "aarch64"
-  qemu_binary:    "qemu-system-aarch64"
-  cpu_model:      "cortex-a72"
-  memory_mb:      4096
-  cpu_cores:      4
-  kvm:            False
-  display:        "none"
-  bios:           "seabios"
-  description:    "ARM64 Raspberry Pi 4 emulation"
-
-raspberry_pi_3b
-  machine_type:   "raspi3b"
-  machine_arch:   "aarch64"
-  qemu_binary:    "qemu-system-aarch64"
-  cpu_model:      "cortex-a53"
-  memory_mb:      1024
-  cpu_cores:      4
-  kvm:            False
-  display:        "none"  (serial console only — raspi3b has no display output)
-  description:    "ARM64 Raspberry Pi 3B emulation (serial console only)"
+A server/ directory still exists at the repo root (server/__init__.py,
+server/http/api_server.py, server/http/__init__.py,
+server/ai/context_assistant_config.json) left over from before the
+orchestrator/executor split. Nothing under orchestrator/, executor/,
+client/, shared/, or admin/ imports from it — the live HTTP API is
+orchestrator/http/api_server.py, and the live context-assistant config is
+orchestrator/ai/context_assistant_config.json (section 4). Do not edit
+files under server/ expecting them to take effect; they are not wired in.
 
 ================================================================================

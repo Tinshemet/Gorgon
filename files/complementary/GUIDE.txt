@@ -4,55 +4,93 @@
 
 FILES IN THIS PROJECT
 ─────────────────────
-  server/                      Server machine code (AI + QEMU)
+  Three machine roles, three top-level packages (renamed from the old
+  "server"/"shared.api" split for clarity — orchestrator talks AI + HTTP,
+  executor owns QEMU/libvirt, client is the thin remote UI):
+
+  orchestrator/                Orchestrator machine code (AI + HTTP API + gating)
     ai/
-      cli.py                   Chat loop, process_message(), direct sub-command CLI
+      cli.py                   Interactive chat loop entry point + REPL wiring
+      chat_turn.py             The five interactive gates + per-tool-call dispatch
+      chat_types.py            Per-turn base types and pure transforms (TurnState etc.)
+      http_chat.py             process_message() — one HTTP-mode chat turn, no REPL
+      direct_cli.py            Non-interactive `gorgon <cmd>` sub-commands (list, launch, …)
       ollama_client.py         Ollama HTTP client + system prompt builder
       session.py               Conversation history (load/save/clear)
       tools.py                 TOOLS list — the AI tool definitions
+      tools.json               Tool metadata and descriptions (arg docs, incl. golden-image/hostname args)
       context_assistant.py     Context gate for AI-aware preflight decisions
       config.json              AI-layer config (Ollama URL, model, loop limits)
       context_assistant_config.json  Context assistant message templates
-      tools.json               Tool metadata and descriptions
     http/
       api_server.py            FastAPI server — /chat, /execute, /health, /images, /events, /rotate-token
-    executor_client.py         Re-export of shared.executioner.execute_tool; enforces access control
-    event_log.py               JSON-lines event log (10 MB rotation → ~/.qemu_vms/events.log)
-    admin_tui.py               Curses fullscreen admin dashboard (gorgon-admin, server-only)
-    admin_config.json          Admin TUI appearance settings (text_color hex, font_size)
-    connection_config.json     Server-side connection settings (url, token, timeout)
-
-  client/                      User's laptop code (thin chat UI)
-    ui/
-      chat_client.py           Curses fullscreen chat TUI — POSTs to server /chat endpoint
-    cli/
-      commands.py              Direct local QEMU commands (no AI, for fetched VMs)
-    client_wrapper.py          Entry point — reads CLI_config.json, starts chat or direct CLI
-    CLI_config.json            Client TUI appearance settings (text_color hex, font_size)
-    connection_config.json     Client settings (server_url, token, ca_cert)
-
-  shared/                      Code used by both server and client
-    api/
-      qemu_config.py           Configuration dataclasses, hardware profiles, OVMF detection
-      qemu_manager.py          VM lifecycle engine: create, launch, monitor, QMP, networking
-      qemu_arg_builder.py      Builds the QEMU command-line argument list
-      qmp_client.py            QMP (QEMU Machine Protocol) socket client
-      network_manager.py       Isolated network (bridge) management
-      vm_state.py              State persistence (PID tracking, .state.json)
-      config.json              QEMU engine config (VM base dir, timeouts, buffers)
-    executioner/
-      tool_executor.py         execute_tool() — hard guards, dispatch to QemuManager
-      config.json              Executor config (timeouts, VM defaults)
-    display.py                 Rich console rendering (banners, tables, panels, VNC panel)
-    fingerprint.py             -tf fingerprint report (inxi simulation)
     preflight/
-      validator.py             _preflight_check(), internet validator, profile host-check
+      validator.py             _preflight_check() orchestration
+      host_probe.py            Host-capability + internet/product probing (the "reach the real world" half)
       config.json              Preflight config (timeout, caps)
     sanitizer/
       sanitizer.py             _sanitise_args() — all coercion, normalisation, cap logic
       context_gate.py          Gate check for context-aware tool calls
       config.json              Sanitizer config (placeholder names, enum maps)
       context_gate_config.json Context gate rules per tool
+    pipeline.py                Sanitise → gate → name resolution → dispatch, full execute_tool() pipeline
+    executor_client.py         Single import point for tool execution (calls into executor/ over HTTP or in-process)
+    event_log.py               JSON-lines event log (10 MB rotation → ~/.qemu_vms/events.log)
+    connection_config.json     Orchestrator-side connection settings (url, token, timeout)
+
+  executor/                    Executor machine code (owns QEMU/KVM directly)
+    server.py                  Lightweight FastAPI service receiving validated tool calls
+    command_catalog.py         Single source of truth for user-facing commands (drives both help surfaces)
+    fingerprint.py              -tf fingerprint report (inxi simulation)
+    config.json                 Executor-service config
+    api/
+      qemu_config.py           Configuration dataclasses (MachineConfig/DiskConfig/NetworkConfig), profiles
+      qemu_manager.py          QemuManager — composes the _Vm*Mixin classes below into one lifecycle engine
+      qemu_arg_builder.py      Builds the QEMU command-line argument list
+      qemu_host_utils.py       Host/QEMU probing helpers not tied to a specific arg builder
+      _qemu_smbios.py          SMBIOS/chassis identity arg building mixin (stealth persona → -smbios args)
+      qmp_client.py            QMP (QEMU Machine Protocol) socket client
+      network_manager.py       Isolated network (bridge) management
+      profiles.py              Hardware profile load/save/delete/merge/apply
+      label_registry.py        User-defined VM label registry (work_vm, test_vm, template, …)
+      vm_state.py              State persistence (PID tracking, .state.json)
+      _vm_constants.py         Shared constants for QemuManager and its mixins (loaded from config.json)
+      _vm_lifecycle.py         _VmLifecycleMixin — create_vm/clone_vm/delete_vm, template cloning, credential/
+                                hostname randomization wiring
+      _vm_runtime.py           _VmRuntimeMixin — launch/stop/TPM helpers, unattended-install completion detection
+      _vm_operations.py        _VmOperationsMixin — disk, snapshots, resources, config
+      _vm_monitoring.py        _VmMonitoringMixin — status/metrics/display/shell
+      _vm_diagnostics.py       _VmDiagnosticsMixin — disk inspection + log analysis
+      _vm_stealth.py           _VmStealthMixin — guest fingerprint hardening scripts
+      _vm_credentials.py       Offline per-clone Linux credential randomization (virt-customize/libguestfs)
+      _vm_hostname.py          Offline per-clone hostname randomization, Linux + Windows (virt-customize / guestfish+hivexregedit)
+      autoinstall/             Unattended-install answer-file generators — see "Unattended OS Install" below
+        __init__.py            How to add a new distro/answer file
+        windows.py             autounattend.xml generation (skip-user-creation opt-in included)
+        linux.py               casper/debian-installer kernel+initrd extraction, cidata/preseed ISO generation
+        templates/             Answer-file templates (autounattend.xml, casper user-data, kali/mint preseed)
+
+  admin/                       Admin dashboard (executor-machine only, optional)
+    admin_tui.py               Curses fullscreen admin dashboard (gorgon-admin)
+    admin_config.json          Admin TUI appearance settings (text_color hex, font_size)
+
+  client/                      User's laptop code (thin chat UI)
+    ui/
+      chat_client.py           Curses fullscreen chat TUI — POSTs to orchestrator /chat endpoint
+    cli/
+      commands.py              Direct local QEMU commands (no AI, for fetched VMs)
+      commands_helpers.py      Shared helpers extracted from commands.py
+    client_wrapper.py          Entry point — reads CLI_config.json, starts chat or direct CLI
+    CLI_config.json            Client TUI appearance settings (text_color hex, font_size)
+    connection_config.json     Client settings (server_url, token, ca_cert)
+
+  shared/                      Code used by more than one of the above roles
+    executioner/
+      tool_executor.py         execute_tool() — hard guards, dispatch to QemuManager
+      stealth_persona.py       Believable hardware-identity generators for stealth
+      config.json              Executor config (timeouts, VM defaults)
+    display.py                 Rich console rendering (banners, tables, panels, VNC panel)
+    command_help.py            Renders help output from command_catalog.py (both help surfaces share it)
 
   tests/
     shared.py                  Common imports and TestResult dataclass for all layers
@@ -67,15 +105,23 @@ FILES IN THIS PROJECT
     layer9_pipeline_gated.py   Layer 9 gated pipeline tests
     layer10_pipeline_full.py   Layer 10 full pipeline integration tests
     layer11_remote_split.py    Layer 11 server/client HTTP boundary tests
-    test_api.py                11-layer test suite entry point
+    layer12_chat_loop.py       Layer 12 characterization tests for the interactive chat_loop REPL
+    chat_harness.py            Deterministic driver used by layer12 to test chat_loop without a real TTY
+    test_api.py                12-layer test suite entry point
     renderer.py                Test result rendering (tables, benchmark output)
     probe_tools.py             Tool probe utilities
+    smoke_tools.py             Smoke test for all executor tools (local, no HTTP)
+    smoke_commands.py          Smoke test for all client HTTP commands (local or remote)
 
   complementary/
-    install.sh                 Full local setup (Ollama + QEMU + venv + alias)
-    setup_server.sh            Server setup (Ollama + QEMU + HTTP API) — Linux or WSL2
+    install.sh                 Full single-machine setup (everything on one box)
+    install_orchestrator.sh    Orchestrator machine setup (AI + HTTP API)
+    install_executor.sh        Executor machine setup (QEMU/KVM + libguestfs-tools + default
+                                templates/profiles scaffolding)
+    install_admin.sh           Admin TUI setup (gorgon-admin alias, executor machine only)
     setup_client.sh            Client setup (your laptop — thin UI, no QEMU)
     setup_wsl2.ps1             Windows-side WSL2 port forwarding setup (run as Admin)
+    default_profiles/          Hardware profiles bundled into a fresh install by install_executor.sh
     requirements.txt           Python dependencies (requests, psutil, rich, fastapi, httpx)
     GUIDE.txt                  This file
     handbooks/                 Deep-dive reference (dictionary, workflow, files, config, tests)
@@ -103,8 +149,9 @@ SECTION 1 — QUICK START
 
 1.2  MANUAL SETUP
 ──────────────────
-  # On the SERVER machine (AI + QEMU):
-  sudo apt install qemu-kvm qemu-utils ovmf socat python3-venv
+  # On the ORCHESTRATOR machine (AI + gating; QEMU engine is imported
+  # in-process here if it's also co-located, or reached over HTTP otherwise):
+  sudo apt install python3-venv
   PY_VER=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
   sudo apt install "python${PY_VER}-venv"
   python3 -m venv ~/qemu-env && source ~/qemu-env/bin/activate
@@ -112,9 +159,18 @@ SECTION 1 — QUICK START
   curl -fsSL https://ollama.com/install.sh | sh
   ollama serve & && ollama pull qwen2.5:7b
 
-  # Start the HTTP API (server machine):
-  API_TOKEN=mysecret PYTHONPATH=files uvicorn server.http.api_server:app --host 0.0.0.0 --port 8080
+  # On the EXECUTOR machine (owns QEMU/KVM directly — same machine as the
+  # orchestrator in the common single-box setup, or a separate one):
+  sudo apt install qemu-kvm qemu-utils ovmf socat libguestfs-tools libwin-hivex-perl
+  pip install requests psutil rich fastapi uvicorn httpx
+
+  # Start the orchestrator's HTTP API:
+  API_TOKEN=mysecret PYTHONPATH=files uvicorn orchestrator.http.api_server:app --host 0.0.0.0 --port 8080
   # Or use the alias:  gorgon-serve
+
+  # If the executor is on a separate machine, also start its own HTTP service there:
+  PYTHONPATH=files uvicorn executor.server:app --host 0.0.0.0 --port 8001
+  # Or use the alias:  gorgon-executor
 
   # On the CLIENT machine (your laptop — thin UI only):
   sudo apt install python3-venv
@@ -125,7 +181,7 @@ SECTION 1 — QUICK START
 
   Add to ~/.zshrc:
     source ~/qemu-env/bin/activate
-    export SERVER_URL=http://localhost:8080   # or server LAN IP
+    export SERVER_URL=http://localhost:8080   # or orchestrator's LAN IP
     export API_TOKEN=mysecret
     alias gorgon='PYTHONPATH=~/path/to/gorgon/files python3 ~/path/to/gorgon/files/client/client_wrapper.py'
 
@@ -147,16 +203,16 @@ Every request passes through five protection layers before QEMU sees it:
   User Input
       │
       ▼
-  qwen2.5:7b (Ollama)           server/ai/ollama_client.py
+  qwen2.5:7b (Ollama)           orchestrator/ai/ollama_client.py
   Selects tool, builds args
       │
       ▼
-  _sanitise_args()              shared/sanitizer/sanitizer.py
+  _sanitise_args()              orchestrator/sanitizer/sanitizer.py
   Type coercion, enum normalisation, path fixing,
   placeholder removal, resource caps, arch checks
       │
       ▼
-  _preflight_check()            shared/preflight/validator.py
+  _preflight_check()            orchestrator/preflight/validator.py
   + _validate_with_internet     Reality check: ok / auto_fix / ask_user / abort
   + _validate_profile_for_host  QEMU binary check, CPU arch check, product lookup,
                                 profile vs host capability check
@@ -167,151 +223,193 @@ Every request passes through five protection layers before QEMU sees it:
   Windows UEFI enforcement, clarify responses
       │
       ▼
-  QemuManager                   shared/api/qemu_manager.py
+  QemuManager                   executor/api/qemu_manager.py
   Actual QEMU/KVM operations
 
 Even if the AI hallucinates bad args, they are caught and either silently
 corrected or the user is asked before anything dangerous happens.
 
-The codebase is split into three canonical directories:
-  server/   AI + QEMU engine; exposes /chat and /execute over HTTP
-  client/   Thin chat UI (your laptop); optional local QEMU CLI for fetched VMs
-  shared/   Used by both: QEMU engine, executioner, sanitizer, preflight, display
+The codebase is split into four canonical directories:
+  orchestrator/   AI + gating (sanitizer, preflight, sanitiser); exposes /chat
+                  over HTTP; calls into the executor either in-process
+                  (co-located) or over HTTP via orchestrator/executor_client.py
+  executor/       Owns QEMU/KVM directly; exposes /execute + /profiles +
+                  /capabilities over HTTP when run standalone (executor/server.py)
+  client/         Thin chat UI (your laptop); optional local QEMU CLI for fetched VMs
+  shared/         Used by more than one of the above: executioner, display, command_help
 
-In local mode both server and client run on the same machine (server_url=localhost).
-In remote mode the server runs on a separate machine; the client connects over HTTPS.
+In the common single-box setup, orchestrator and executor run on the same
+machine and talk in-process (no HTTP hop) — set by connection_config.json's
+"url": "local". In a split setup they run on separate machines and talk over
+HTTP (port 8001 by default); the client always talks to the orchestrator over
+HTTP/HTTPS (port 8080 by default), whether or not the orchestrator and
+executor are co-located.
 
-Current test results (134 tests):
-  Layer 1  — Sanitiser:         passed all
-  Layer 2  — Executor:          passed all
-  Layer 11 — Remote Split:      passed all (50 HTTP boundary tests)
-  Overall:                      134/134  (100%)
+Run the full suite yourself for current pass/fail counts (some layers spin up
+real probe VMs and take several minutes; layer 3 needs Ollama running):
+  PYTHONPATH=files python3 tests/test_api.py
+
+12 layers today (tests/layer1_sanitizer.py .. tests/layer12_chat_loop.py),
+covering the sanitizer, executor+preflight, AI integration, random profiles +
+HTTP, property-based invariants, the context gate, the context assistant, the
+full pipeline (bare and gated), full pipeline integration, the orchestrator/
+executor HTTP boundary, and the interactive chat_loop REPL.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION 3 — LOCAL MODE vs REMOTE MODE
+SECTION 3 — SINGLE-MACHINE MODE vs SPLIT MODE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-3.1  THE SEAM — server/executor_client.py
+3.1  THE SEAM — orchestrator/executor_client.py
 ─────────────────────────────────────────────
-  On the server machine the AI and QEMU engine are co-located, so tool
-  execution is always a direct in-process call.  executor_client.py is a
-  wrapper around shared.executioner.execute_tool that also enforces
-  client access control (see 3.7).
+  When the orchestrator and executor are co-located, tool execution is a
+  direct in-process call (connection_config.json "url": "local"). When
+  they're split across machines, executor_client.py switches to an HTTP
+  call to the executor's own /execute endpoint (executor/server.py, port
+  8001 by default) instead. Either way it's a single import point that also
+  enforces client access control (see 3.7).
 
-  The server's HTTP /chat endpoint calls process_message() in cli.py, which
-  calls execute_tool() from server/executor_client.py, which calls
-  shared/executioner/tool_executor.py directly — no HTTP round-trip.
+  The orchestrator's HTTP /chat endpoint calls process_message() (http_chat.py),
+  which calls execute_tool() from orchestrator/executor_client.py, which either
+  calls orchestrator/pipeline.py directly (local) or POSTs to the executor's
+  /execute endpoint (split).
 
-  The remote split is now:
-    client/ui/chat_client.py  →  POST /chat  →  server/http/api_server.py
-  rather than:
-    server/ai/cli.py  →  POST /execute  →  client/server/api_server.py
+  The client-facing remote split is:
+    client/ui/chat_client.py  →  POST /chat  →  orchestrator/http/api_server.py
 
-3.2  LOCAL MODE (single machine)
-──────────────────────────────────
+3.2  SINGLE-MACHINE MODE (orchestrator + executor co-located)
+────────────────────────────────────────────────────────────────
   ┌─────────────────────────────────────────────────────────────┐
   │                      One machine                            │
   │                                                             │
   │  client/ui/chat_client.py  (chat_loop)                     │
   │    ↓ user types a prompt  →  POST /chat  (localhost)        │
-  │  server/http/api_server.py                                  │
+  │  orchestrator/http/api_server.py                            │
   │    ↓ calls process_message()                                │
-  │  server/ai/ollama_client.py                                 │
+  │  orchestrator/ai/ollama_client.py                            │
   │    ↓ Ollama returns a tool call                             │
-  │  shared/sanitizer/sanitizer.py  (_sanitise_args)           │
+  │  orchestrator/sanitizer/sanitizer.py  (_sanitise_args)      │
   │    ↓ args cleaned and normalised                            │
-  │  shared/preflight/validator.py  (_preflight_check)         │
+  │  orchestrator/preflight/validator.py  (_preflight_check)    │
   │    ↓ full state check (real VM existence, real disk)        │
   │  shared/executioner/tool_executor.py  (execute_tool)       │
   │    ↓ hard guards, then dispatch                             │
-  │  shared/api/qemu_manager.py  (QemuManager)                 │
-  │    → runs QEMU/KVM directly                                 │
+  │  executor/api/qemu_manager.py  (QemuManager)                │
+  │    → runs QEMU/KVM directly, in-process                     │
   └─────────────────────────────────────────────────────────────┘
 
-  The interactive loop (server/ai/cli.py → chat_loop) is also available
-  and bypasses HTTP entirely — useful for server-side debugging.
+  The interactive loop (orchestrator/ai/cli.py → chat_loop) is also available
+  and bypasses HTTP entirely — useful for orchestrator-side debugging.
 
-3.3  REMOTE MODE (server + thin client)
-────────────────────────────────────────
-  ┌──────────────────────────┐            ┌────────────────────────────────────────┐
-  │   User's laptop          │            │          Server machine                │
-  │   (client)               │            │       (AI + QEMU)                      │
-  │                          │            │                                        │
-  │  client/ui/chat_client   │            │  server/http/api_server.py             │
-  │    ↓ user types a prompt │   HTTPS    │  (FastAPI via uvicorn on port 8080)    │
-  │    POST /chat ───────────┼───────────►│                                        │
-  │    ← {text, tool_results}│            │   ├─ token check (Bearer header)       │
-  │       needs_input?       │            │   ├─ process_message()                 │
-  │    → user confirms       │            │   │    Ollama + tool loop              │
-  │    POST /chat (confirm)──┼───────────►│   │    sanitizer + preflight           │
-  │                          │            │   └─ shared/executioner/tool_executor  │
-  │  Rich panels rendered    │            │         → runs QEMU/KVM on server      │
-  │  from returned results   │            │                                        │
-  │                          │◄───────────┤  GET /health  POST /rotate-token       │
-  │                          │            │  GET /images/{vm}  (streaming)         │
-  └──────────────────────────┘            └────────────────────────────────────────┘
+3.3  SPLIT MODE (separate client / orchestrator / executor machines)
+──────────────────────────────────────────────────────────────────────
+  ┌──────────────────────────┐            ┌─────────────────────────────────────────┐            ┌───────────────────────┐
+  │   User's laptop          │            │        Orchestrator machine              │            │   Executor machine    │
+  │   (client)               │            │             (AI + gating)                │            │      (QEMU/KVM)       │
+  │                          │            │                                          │            │                       │
+  │  client/ui/chat_client   │            │  orchestrator/http/api_server.py         │            │  executor/server.py   │
+  │    ↓ user types a prompt │   HTTPS    │  (FastAPI via uvicorn on port 8080)       │   HTTP     │  (uvicorn, port 8001) │
+  │    POST /chat ───────────┼───────────►│                                          │            │                       │
+  │    ← {text, tool_results}│            │   ├─ token check (Bearer header)         │            │                       │
+  │       needs_input?       │            │   ├─ process_message()                  │            │                       │
+  │    → user confirms       │            │   │    Ollama + tool loop                │            │                       │
+  │    POST /chat (confirm)──┼───────────►│   │    sanitizer + preflight             │            │                       │
+  │                          │            │   └─ orchestrator/executor_client.py ────┼───────────►│  POST /execute        │
+  │  Rich panels rendered    │            │        POST /execute (if not co-located) │            │  → runs QEMU/KVM here │
+  │  from returned results   │            │                                          │            │                       │
+  │                          │◄───────────┤  GET /health  POST /rotate-token         │            │                       │
+  │                          │            │  GET /images/{vm}  (streaming)           │            │                       │
+  └──────────────────────────┘            └──────────────────────────────────────────┘            └───────────────────────┘
 
-  Session state (conversation history) lives on the server, keyed by
-  session_id. The client needs no Ollama installation.
+  Session state (conversation history) lives on the orchestrator, keyed by
+  session_id. The client needs no Ollama installation, and (in the fully
+  split three-machine case) the orchestrator machine needs no QEMU/KVM either
+  — it only needs the executor's HTTP endpoint reachable.
 
-  When an action requires confirmation (e.g. delete_vm), the server returns
-  needs_input with the question. The client shows it with Rich and re-sends
-  the user's reply with auto_confirm=True.
+  When an action requires confirmation (e.g. delete_vm), the orchestrator
+  returns needs_input with the question. The client shows it with Rich and
+  re-sends the user's reply with auto_confirm=True.
 
 3.4  SETUP SCRIPTS — WHICH ONE TO RUN
 ──────────────────────────────────────
-  install.sh          Full local setup. Run this if QEMU and the AI chat
-                      are both on the same machine. Does everything.
+  install.sh              Full single-machine setup. Run this if the AI
+                          orchestrator and the QEMU executor are both on
+                          the same machine. Does everything.
 
-  setup_server.sh     Server-only setup. Run this on the server machine.
-                      Installs Ollama + qwen2.5:7b, QEMU/KVM, Python venv,
-                      API token, systemd service (gorgon HTTP API), Ollama
-                      systemd service, SSH server, bridge networking.
-                      Works on native Linux and WSL2.
-                      Pre-set to skip prompts:
-                        API_TOKEN=mytoken bash setup_server.sh
+  install_orchestrator.sh Orchestrator-only setup. Run this on the AI
+                          machine when splitting orchestrator and executor
+                          across machines. Installs Ollama + qwen2.5:7b,
+                          Python venv, API token, systemd service (gorgon
+                          HTTP API on port 8080), Ollama systemd service.
+                          Works on native Linux and WSL2.
 
-  setup_client.sh     Client-only setup. Run this on the user's laptop.
-                      Installs Python venv + Rich + requests only (no QEMU).
-                      Prompts for SERVER_URL and API_TOKEN.
-                      Writes connection_config.json and adds gorgon alias.
-                      Pre-set to skip prompts:
-                        SERVER_URL=http://192.168.1.10:8080 API_TOKEN=x bash setup_client.sh
+  install_executor.sh     Executor-only setup. Run this on the machine that
+                          will actually own QEMU/KVM. Installs QEMU/KVM,
+                          libguestfs-tools + libwin-hivex-perl (golden-image
+                          template credential/hostname randomization),
+                          systemd service (executor HTTP API on port 8001),
+                          bridge networking, and scaffolds the default
+                          golden-image templates + bundled hardware profiles
+                          on first run.
 
-  setup_wsl2.ps1      Windows-only. Run as Admin after setup_server.sh when
-                      the server machine is WSL2 on Windows. Handles port
-                      forwarding and the reboot auto-refresh scheduled task.
+  install_admin.sh        Optional. Installs the gorgon-admin curses
+                          dashboard alias — run on the executor machine.
 
-  Typical remote scenario:
-    Server machine (Linux/WSL2):  bash setup_server.sh
-    Server machine (WSL2+Win):    .\setup_wsl2.ps1    (as Admin)
-    Your laptop:                  bash setup_client.sh
+  setup_client.sh          Client-only setup. Run this on the user's laptop.
+                          Installs Python venv + Rich + requests only (no
+                          QEMU). Prompts for SERVER_URL and API_TOKEN.
+                          Writes connection_config.json and adds the gorgon
+                          alias.
+                          Pre-set to skip prompts:
+                            SERVER_URL=http://192.168.1.10:8080 API_TOKEN=x bash setup_client.sh
 
-3.5  STARTING REMOTE MODE
+  setup_wsl2.ps1          Windows-only. Run as Admin after
+                          install_orchestrator.sh and/or install_executor.sh
+                          when that machine is WSL2 on Windows. Handles port
+                          forwarding and the reboot auto-refresh scheduled
+                          task.
+
+  Typical fully-split scenario (three machines):
+    Orchestrator machine:        bash install_orchestrator.sh
+    Executor machine:            bash install_executor.sh
+    Executor machine (WSL2+Win): .\setup_wsl2.ps1    (as Admin, if applicable)
+    Your laptop:                 bash setup_client.sh
+
+  The much more common two-machine split just runs install.sh on one box
+  (orchestrator + executor co-located) and setup_client.sh on the laptop.
+
+3.5  STARTING SPLIT MODE
 ──────────────────────────
-  On the SERVER machine — start the HTTP API:
+  On the ORCHESTRATOR machine — start the HTTP API:
 
     source ~/qemu-env/bin/activate
     cd ~/gorgon
 
     # HTTP (SSH tunnel recommended for remote access)
-    API_TOKEN=mysecrettoken PYTHONPATH=files uvicorn server.http.api_server:app \
+    API_TOKEN=mysecrettoken PYTHONPATH=files uvicorn orchestrator.http.api_server:app \
         --host 0.0.0.0 --port 8080
 
     # HTTPS / TLS (direct access without SSH tunnel)
-    API_TOKEN=mysecrettoken PYTHONPATH=files uvicorn server.http.api_server:app \
+    API_TOKEN=mysecrettoken PYTHONPATH=files uvicorn orchestrator.http.api_server:app \
         --host 0.0.0.0 --port 8443 \
         --ssl-certfile /path/to/cert.pem --ssl-keyfile /path/to/key.pem
 
-  Or use the alias created by setup_server.sh:
+  Or use the alias created by install_orchestrator.sh:
     gorgon-serve
+
+  If the executor is on a separate machine, start its HTTP API there too:
+
+    PYTHONPATH=files uvicorn executor.server:app --host 0.0.0.0 --port 8001
+    # Or use the alias created by install_executor.sh:  gorgon-executor
+
+  And point the orchestrator at it in orchestrator/connection_config.json
+  ("url": "http://executor-host:8001") or via the API_URL env var.
 
   On the CLIENT machine (your laptop):
 
     # Open SSH tunnel first (if connecting over the internet):
-    ssh -N -L 8080:127.0.0.1:8080 -L 5901:127.0.0.1:5901 user@server-ip
+    ssh -N -L 8080:127.0.0.1:8080 -L 5901:127.0.0.1:5901 user@orchestrator-ip
 
-    export SERVER_URL=http://localhost:8080   # or server's LAN IP without tunnel
+    export SERVER_URL=http://localhost:8080   # or orchestrator's LAN IP without tunnel
     export API_TOKEN=mysecrettoken
     gorgon                                  # opens the Rich chat UI
 
@@ -326,10 +424,11 @@ SECTION 3 — LOCAL MODE vs REMOTE MODE
 ──────────────────────────────
   Each side has its own connection_config.json:
 
-  files/server/connection_config.json  (read by server/executor_client.py):
+  files/orchestrator/connection_config.json  (read by orchestrator/executor_client.py):
     {
-      "url":                    "local",   ← always "local" — server runs QEMU co-located
-      "token":                  "",        ← API token for /execute endpoint
+      "url":                    "local",   ← "local" (executor co-located) or
+                                             "http://executor-host:8001" (split)
+      "token":                  "",        ← API token for the executor's /execute endpoint
       "timeout":                120,
       "verify_ssl":             true,
       "client_allowed_vms":      [],       ← VMs clients can see/use (empty = all)
@@ -338,7 +437,7 @@ SECTION 3 — LOCAL MODE vs REMOTE MODE
 
   files/client/connection_config.json  (read by client/ui/chat_client.py):
     {
-      "server_url": "http://localhost:8080",  ← gorgon server address
+      "server_url": "http://localhost:8080",  ← orchestrator's /chat address
       "token":      "",                       ← shared secret (prefer API_TOKEN env)
       "ca_cert":    null,                     ← path to CA cert for self-signed HTTPS
       "verify_ssl": true,
@@ -370,59 +469,75 @@ SECTION 3 — LOCAL MODE vs REMOTE MODE
 
 3.7  CLIENT ACCESS CONTROL
 ────────────────────────────
-  The server controls which VMs and hardware profiles are visible to clients.
-  This is enforced server-side at two layers so clients cannot bypass it:
+  The orchestrator controls which VMs and hardware profiles are visible to
+  clients. This is enforced orchestrator-side at two layers so clients cannot
+  bypass it:
 
   Layer 1 — /sync (startup inventory):
-    When the client connects it calls GET /sync. The server filters the VM
-    and profile lists through client_allowed_vms / client_allowed_profiles
+    When the client connects it calls GET /sync. The orchestrator filters
+    the VM and profile lists through client_allowed_vms / client_allowed_profiles
     before returning them. Hidden resources never appear in the Resources panel.
 
-  Layer 2 — executor_client.py (every tool call):
+  Layer 2 — orchestrator/executor_client.py (every tool call):
     All tool calls — whether from a direct /execute POST or from the AI via
     /chat — pass through executor_client.execute_tool(). If the tool targets
     a hidden VM, it returns {"success": false, "error": "VM '...' not found."}
     The "not found" wording is intentional: it avoids leaking that the VM
     exists but is restricted (opsec).
 
-  To restrict access, add names to connection_config.json on the server:
+  To restrict access, add names to orchestrator/connection_config.json:
     "client_allowed_vms":      ["test", "kali"]
     "client_allowed_profiles": ["desktop", "laptop"]
 
-  Restart the server after changing these values.
+  Restart the orchestrator's HTTP API after changing these values.
 
-3.8  API ENDPOINTS (server/http/api_server.py)
-──────────────────────────────────────────────────
+3.8  API ENDPOINTS (orchestrator/http/api_server.py — client-facing)
+──────────────────────────────────────────────────────────────────────
   All endpoints except /health require the Authorization: Bearer <token> header.
 
   GET  /health
     Returns {"status":"ok"} — no auth required.
     Used by the client for connectivity checks.
 
+  GET  /sync
+    Returns filtered profile/VM/capability inventory (see 3.7 Layer 1).
+
+  GET  /info
+    Returns orchestrator build/version info.
+
   POST /chat                                              ← PRIMARY ENDPOINT
     Body: {"message": str, "session_id": str|null,
            "auto_confirm": bool, "verbose": bool}
     1. Verifies Bearer token.
     2. Loads conversation history from in-memory session store (keyed by session_id).
-    3. Calls process_message() — runs full agentic AI loop server-side.
+    3. Calls process_message() (orchestrator/ai/http_chat.py) — runs the full
+       agentic AI loop orchestrator-side.
     4. Saves updated conversation history back to session store.
     5. Returns {"session_id": str, "text": str, "tool_results": list,
                 "needs_input": {type, question, options, field, proposed}|null}
     When needs_input is non-null, the client shows the prompt and re-sends
     the user's reply (with auto_confirm=True for destructive confirmations).
 
+  GET  /sessions
+    Lists active session IDs.
+
   DELETE /sessions/{session_id}
     Clears the conversation history for the given session.
     Auth required.
+
+  POST /custom-mode
+    Toggles custom-machine mode (skip product verification) for a session.
 
   POST /execute                                           ← DIRECT TOOL CALL
     Body: {"tool_name": str, "args": dict, "verbose": bool}
     1. Verifies Bearer token.
     2. Checks tool_name is in allowed_remote_tools.
     3. Overrides display: sdl/gtk → vnc + vnc_bind_local=True (remote mode).
-    4. Runs shared/preflight/validator.py (full, stateless_only=False).
+    4. Runs orchestrator/preflight/validator.py (full, stateless_only=False).
     5. If preflight returns auto_fix, applies the correction.
-    6. Calls shared/executioner/tool_executor.execute_tool().
+    6. Calls orchestrator/executor_client.py's execute_tool() — in-process if
+       the executor is co-located, or a further HTTP hop to the executor's
+       own /execute endpoint (executor/server.py, port 8001) if split.
     7. Returns {"result": ..., "preflight": bool, ...}
 
   GET  /images/{vm_name}
@@ -437,6 +552,9 @@ SECTION 3 — LOCAL MODE vs REMOTE MODE
     is already up to date before downloading.
     Auth required.
 
+  GET  /vms/{vm_name}/bundle
+    Streams a bundle of the VM's config + disk(s) for full VM export/transfer.
+
   POST /rotate-token
     Body: {"new_token": str}   (must be ≥ 16 characters)
     Replaces the in-memory token and persists to ~/.gorgon.token.
@@ -448,11 +566,30 @@ SECTION 3 — LOCAL MODE vs REMOTE MODE
     Each entry: {ts, tool, args, outcome, duration_ms}
     The same data the admin TUI displays in its Recent Events panel.
 
+3.8b  EXECUTOR HTTP API (executor/server.py — split-mode only, port 8001)
+──────────────────────────────────────────────────────────────────────────
+  Only relevant when the executor runs on a separate machine from the
+  orchestrator. All endpoints except /health require the Bearer token header.
+  The orchestrator is the only intended caller (never the client directly).
+
+  POST /execute                Runs a tool call directly against QemuManager
+                                (no sanitizer/preflight — the orchestrator
+                                already ran those before forwarding here).
+  GET  /profiles                Hardware profile list + OVMF info (used by
+                                orchestrator/executor_client.py's sync()).
+  GET  /capabilities             Host capability probe (KVM, CPU features, etc).
+  GET  /tools / GET /commands   Introspection endpoints for available tools.
+  GET  /status                  Executor health/status summary.
+  GET  /vms/{vm}/disk            Streams a VM's primary disk image.
+  GET  /vms/{vm}/disk/sha256    Checksum of a VM's primary disk.
+  GET  /vms/{vm}/bundle          VM config + disk bundle export.
+  GET  /health                  No auth required.
+
 3.9  TOOL ALLOWLIST
 ─────────────────────
   The allowed_remote_tools list in config.json controls which tools can be
-  called via the HTTP API. If a tool is not in the list, the server returns
-  403 Forbidden before running preflight.
+  called via the HTTP API. If a tool is not in the list, the orchestrator
+  returns 403 Forbidden before running preflight.
 
   Default allowed tools:
     create_vm, launch_vm, stop_vm, list_vms, vm_status,
@@ -637,7 +774,7 @@ SECTION 4 — FLAGS  (-cu  and  -tf)
   - KVM flags          → set kvm=False (loses performance)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION 5 — shared/api/qemu_config.py
+SECTION 5 — executor/api/qemu_config.py
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 5.1  OVMF AUTO-DETECTION
@@ -668,7 +805,7 @@ SECTION 5 — shared/api/qemu_config.py
   Every custom profile is validated against your host on first use.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION 6 — shared/api/qemu_manager.py
+SECTION 6 — executor/api/qemu_manager.py
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 6.1  KEY BEHAVIOURS
@@ -914,9 +1051,10 @@ SECTION 8 — test_api.py + tests/  (v6)
       Junk extra fields ignored; foreign args from other schema ignored
       display=sdl + explicit vnc_bind_local=False → both overridden
 
-    E. executor_client re-export:
-      server.executor_client.execute_tool is the same object as
-      shared.executioner.tool_executor.execute_tool
+    E. executor_client wrapper:
+      orchestrator.executor_client.execute_tool wraps
+      orchestrator.pipeline.execute_tool (in-process) or POSTs to the
+      executor's /execute endpoint (split mode)
 
     F. /sync endpoint:
       Missing/wrong auth → 401/403
@@ -1374,14 +1512,15 @@ SECTION 13 — STEALTH MODE & HARDWARE SPOOFING
 ================================================================================
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION 14 — REAL-WORLD EXAMPLE: FRIEND'S MACHINE AS THE QEMU SERVER
+SECTION 14 — REAL-WORLD EXAMPLE: FRIEND'S MACHINE AS THE GORGON HOST
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   Scenario:
     - Your friend has a powerful desktop at their house running Linux.
-      This will be the QEMU machine — it runs the VMs.
-    - You are on your laptop anywhere (home, coffee shop, etc.) with Ollama.
-      This is the AI provider — it runs the chat loop and talks to the server.
+      This runs BOTH the orchestrator (Ollama + AI chat loop) and the
+      executor (QEMU/KVM + the VMs) — the single-machine install.sh setup.
+    - You are on your laptop anywhere (home, coffee shop, etc.) running only
+      the thin client — no Ollama, no QEMU needed on your side at all.
 
   Two connection approaches are covered below:
     A. SSH tunnel (recommended — no open ports, no certs needed)
@@ -1392,15 +1531,14 @@ SECTION 14 — REAL-WORLD EXAMPLE: FRIEND'S MACHINE AS THE QEMU SERVER
   CROSS-PLATFORM SUPPORT
   ──────────────────────────────────────────────────────────────────────────────
 
-  The two sides of the split have different OS requirements:
+  The two sides of the split have very different OS requirements:
 
-    Provider side (your laptop — runs Ollama and the chat loop):
+    Client side (your laptop — runs only the thin Rich chat UI):
       Linux    FULL support
-      macOS    FULL support  (Python and Ollama both run natively on macOS)
-      Windows  FULL support  (Python and Ollama both run on Windows;
-                              run from Command Prompt or PowerShell)
+      macOS    FULL support  (Python runs natively; no Ollama/QEMU needed here)
+      Windows  FULL support  (Python runs natively; no Ollama/QEMU needed here)
 
-    Client side (friend's machine — runs QEMU and the VMs):
+    Host side (friend's machine — runs Ollama, the orchestrator, and QEMU):
       Linux    FULL support  (KVM acceleration, all networking features)
       macOS    PARTIAL       (QEMU runs via Homebrew with HVF acceleration
                               instead of KVM; networking and some SMBIOS
@@ -1411,8 +1549,9 @@ SECTION 14 — REAL-WORLD EXAMPLE: FRIEND'S MACHINE AS THE QEMU SERVER
                               impractical for OS-level VMs)
 
   The most common cross-platform scenario is:
-    You on Linux/macOS/Windows (provider)  →  friend on Linux (client)
-  This works in all three provider-OS combinations.
+    You on Linux/macOS/Windows (client)  →  friend on Linux (host)
+  This works in all three client-OS combinations, since the client side has
+  no QEMU/Ollama requirement at all.
 
   If your friend's machine is Windows:
     Option 1 — WSL2 (easiest to try):
@@ -1420,7 +1559,7 @@ SECTION 14 — REAL-WORLD EXAMPLE: FRIEND'S MACHINE AS THE QEMU SERVER
       builds, KVM passthrough is available inside WSL2.
       Inside WSL2 on the friend's machine:
         check:  ls /dev/kvm    <- exists = KVM available in WSL2
-        install and run the server exactly as in the Linux instructions
+        install and run install.sh exactly as in the Linux instructions
       Caveat: WSL2 networking is NAT'd by Windows. SSH into WSL2 requires
       extra port forwarding from Windows to the WSL2 IP. Use:
         netsh interface portproxy add v4tov4 \
@@ -1430,28 +1569,26 @@ SECTION 14 — REAL-WORLD EXAMPLE: FRIEND'S MACHINE AS THE QEMU SERVER
 
     Option 2 — Dual boot (most reliable):
       Install Ubuntu or Linux Mint alongside Windows on the friend's machine.
-      Boot into Linux when they want to run the QEMU server.
+      Boot into Linux when they want to run the gorgon host.
       All features work fully.
 
     Option 3 — Linux VM under Hyper-V (nested virtualisation):
       Enable Hyper-V on Windows, create a Linux VM, enable nested
       virtualisation for that VM:
         Set-VMProcessor -VMName "LinuxServer" -ExposeVirtualizationExtensions $true
-      Run the QEMU API server inside the Linux VM.
+      Run install.sh inside the Linux VM.
       Nested virtualisation adds a performance penalty but VMs will still
       run significantly faster than pure QEMU software emulation.
 
   Bottom line:
     If you are on Linux Mint and your friend's machine is Windows,
     the cleanest path is WSL2 (if their hardware supports KVM passthrough)
-    or dual-booting Linux on their machine. The server code itself is
-    Linux-only — it is not a software limitation that can be patched around,
-    it is a hardware virtualisation layer that only exists in the Linux kernel.
+    or dual-booting Linux on their machine. The orchestrator+executor code
+    is Linux-only — it is not a software limitation that can be patched
+    around, it is a hardware virtualisation layer that only exists in the
+    Linux kernel.
 
   ── WSL2 SETUP (friend on Windows, you on Linux/Mac/Windows) ────────────────
-
-  Both scripts handle this end-to-end. The manual steps are here for
-  reference if something needs to be fixed or customised.
 
   Step 1 — Inside WSL2 (friend runs this):
     Check KVM is available:
@@ -1459,9 +1596,12 @@ SECTION 14 — REAL-WORLD EXAMPLE: FRIEND'S MACHINE AS THE QEMU SERVER
     If missing: wsl --update in PowerShell as Admin, then restart WSL2.
 
     Clone/copy the project, then:
-      bash complementary/setup_client.sh
-    The script installs everything, sets up SSH, saves the token, and
-    starts the server. It prints the exact commands to paste on your laptop.
+      bash complementary/install.sh
+    This installs Ollama + the orchestrator + the executor (QEMU/KVM) all
+    on the friend's machine, sets up openssh-server, saves the API token to
+    ~/.gorgon.token, and starts the orchestrator's HTTP API as a systemd
+    user service (or via nohup on WSL2). At the end it prints the API_TOKEN
+    and the machine's local IP — you'll need both for Step 3.
 
   Step 2 — In PowerShell as Admin on Windows (friend runs this):
     .\complementary\setup_wsl2.ps1
@@ -1470,20 +1610,24 @@ SECTION 14 — REAL-WORLD EXAMPLE: FRIEND'S MACHINE AS THE QEMU SERVER
     At the end it prints the ready-to-paste ssh command for your laptop.
 
   Step 3 — On your laptop:
-    Copy the ssh and export commands printed by setup_wsl2.ps1 and run them.
-    Example (your friend's output will have their real IP and token):
+    Copy the ssh command printed by setup_wsl2.ps1, and combine it with the
+    API_TOKEN your friend got from install.sh in Step 1:
       ssh -N \
           -L 8080:127.0.0.1:8080 \
           -L 5901:127.0.0.1:5901 \
           -L 5902:127.0.0.1:5902 \
           -p 2222 \
           friendwsluser@203.0.113.42
-      export API_URL=http://localhost:8080
-      export API_TOKEN=<token from setup_client.sh output>
+      export SERVER_URL=http://localhost:8080
+      export API_TOKEN=<token your friend got from install.sh>
       gorgon
 
     friendwsluser is the Linux username inside WSL2 — may differ from
     the Windows username. setup_wsl2.ps1 prints it automatically.
+
+    Alternatively, run complementary/setup_client.sh on your laptop first —
+    it installs the thin client and its dependencies, prompts for
+    SERVER_URL/API_TOKEN, and writes the gorgon alias + env vars for you.
 
   WSL2 caveats:
     - WSL2 closes if no processes are running inside it. The API server
@@ -1503,8 +1647,8 @@ SECTION 14 — REAL-WORLD EXAMPLE: FRIEND'S MACHINE AS THE QEMU SERVER
 ──────────────────────────────────────────────
 
   How it works:
-    The API server listens on localhost only (no open internet port).
-    You create an SSH tunnel from your laptop to your friend's machine.
+    The orchestrator's HTTP API listens on localhost only (no open internet
+    port). You create an SSH tunnel from your laptop to your friend's machine.
     The tunnel makes the remote port appear as a local port on your laptop.
     All traffic — API calls and VNC — travels inside the encrypted SSH connection.
 
@@ -1512,30 +1656,34 @@ SECTION 14 — REAL-WORLD EXAMPLE: FRIEND'S MACHINE AS THE QEMU SERVER
 
     Your laptop                       Friend's machine
     ───────────                       ────────────────
-    gorgon chat     ─ SSH tunnel ─► API server :8080 (127.0.0.1 only)
-    localhost:8080                    tool_executor → QEMU
+    gorgon chat     ─ SSH tunnel ─► orchestrator API :8080 (127.0.0.1 only)
+    localhost:8080                    executor_client → QEMU (co-located)
     localhost:5901    ─ SSH tunnel ─► VNC :5901 (127.0.0.1 only)
     vncviewer                         (bound by vnc_bind_local=True)
 
   ── Step 1: Friend's machine setup ──────────────────────────────────────────
 
   Clone or copy the project files to the friend's machine, then run:
-    bash complementary/setup_client.sh
+    bash complementary/install.sh
 
-  This single script handles everything automatically:
-    - Detects native Linux vs WSL2
-    - Checks /dev/kvm (exits early if KVM unavailable in WSL2)
-    - Installs all apt packages (qemu-kvm, ovmf, python3-venv, openssh-server, etc.)
+  This single script handles everything automatically (it's install.sh —
+  install_orchestrator.sh + install_executor.sh + setup_client.sh chained
+  together for the single-machine case):
+    - Installs Ollama + qwen2.5:7b
+    - Installs all apt packages (qemu-kvm, ovmf, python3-venv, openssh-server,
+      libguestfs-tools, libwin-hivex-perl, etc.)
     - Adds user to kvm group
     - Creates the Python venv and installs pip packages
-    - Prompts for an API token (or generates one securely)
+    - Generates an API token (or uses API_TOKEN from the environment)
     - Saves the token to ~/.gorgon.token (chmod 600)
-    - Creates ~/start-gorgon.sh
-    - On native Linux: creates and enables a systemd user service with
-      loginctl linger (server auto-starts even without login)
-    - On WSL2: adds server auto-start to ~/.bashrc
-    - Starts the server and health-checks it
-    - Prints the exact ssh and export commands to paste on your laptop
+    - Creates ~/start-gorgon-orchestrator.sh and ~/start-gorgon-executor.sh
+    - On native Linux: creates and enables systemd user services
+      (gorgon-orchestrator, gorgon-executor) with loginctl linger so they
+      auto-start even without login
+    - On WSL2: adds auto-start to ~/.bashrc instead
+    - Starts both services and health-checks the orchestrator's /health
+    - Prints the API_TOKEN and the machine's local IP — write these down,
+      you'll need them for Step 2
 
   If the friend's machine is Windows / WSL2, they also run (in PowerShell as Admin):
     .\complementary\setup_wsl2.ps1
@@ -1546,7 +1694,7 @@ SECTION 14 — REAL-WORLD EXAMPLE: FRIEND'S MACHINE AS THE QEMU SERVER
     - Adds Windows Firewall rule for port 2222
     - Creates a scheduled task (runs as SYSTEM at startup) that refreshes
       the port proxy after every reboot when the WSL2 IP changes
-    - Prints the ready-to-paste ssh + export commands for your laptop
+    - Prints the ready-to-paste ssh command for your laptop
 
   To uninstall the Windows-side setup:
     .\complementary\setup_wsl2.ps1 -Uninstall
@@ -1558,10 +1706,10 @@ SECTION 14 — REAL-WORLD EXAMPLE: FRIEND'S MACHINE AS THE QEMU SERVER
 
   The script asks two questions:
     1. SERVER_URL?    → http://localhost:8080
-                         (the SSH tunnel makes the remote server appear as
-                          localhost on your laptop)
-    2. API_TOKEN?     → paste the token printed by setup_server.sh
-                         (it is also saved at ~/.gorgon.token on the server)
+                         (the SSH tunnel makes the remote orchestrator appear
+                          as localhost on your laptop)
+    2. API_TOKEN?     → paste the token your friend got from install.sh
+                         (it is also saved at ~/.gorgon.token on their machine)
 
   To skip the prompts entirely, pre-set the values as env vars:
     SERVER_URL=http://localhost:8080 API_TOKEN=mytoken bash setup_client.sh
@@ -1573,7 +1721,7 @@ SECTION 14 — REAL-WORLD EXAMPLE: FRIEND'S MACHINE AS THE QEMU SERVER
         export SERVER_URL="http://localhost:8080"
         export API_TOKEN="..."
         alias gorgon='python3 .../client/client_wrapper.py'
-    - Pings the server's /health endpoint to verify connectivity
+    - Pings the orchestrator's /health endpoint to verify connectivity
       (warns if the SSH tunnel is not open yet — that is fine at this step)
 
   After it finishes:
@@ -1718,7 +1866,7 @@ SECTION 14 — REAL-WORLD EXAMPLE: FRIEND'S MACHINE AS THE QEMU SERVER
     cd ~/gorgon
     source ~/qemu-env/bin/activate
     API_TOKEN=choose-a-long-secret-here PYTHONPATH=files uvicorn \
-        client.server.api_server:app \
+        orchestrator.http.api_server:app \
         --host 0.0.0.0 --port 8443 \
         --ssl-certfile server.crt \
         --ssl-keyfile  server.key
@@ -1835,12 +1983,12 @@ SECTION 14 — REAL-WORLD EXAMPLE: FRIEND'S MACHINE AS THE QEMU SERVER
       ssh -N -L 8080:127.0.0.1:8080 friendusername@friend.duckdns.org
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION 15 — SERVER MONITORING & ADMIN TUI
+SECTION 15 — ORCHESTRATOR MONITORING & ADMIN TUI
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-15.1  EVENT LOG  (server/event_log.py)
+15.1  EVENT LOG  (orchestrator/event_log.py)
 ───────────────────────────────────────
-  Every tool call executed on the server is appended to:
+  Every tool call executed via the orchestrator is appended to:
     ~/.qemu_vms/events.log
 
   Format: one JSON object per line:
@@ -1855,7 +2003,7 @@ SECTION 15 — SERVER MONITORING & ADMIN TUI
     not_found            — VM targeted but not in allowed list (opsec)
 
   The log rotates at 10 MB (old file renamed to events.log.1).
-  Server-local only — clients cannot write to it.
+  Orchestrator-local only — clients cannot write to it.
 
   Queryable via API:
     GET /events?limit=100                       ← last 100 events
@@ -1882,10 +2030,10 @@ SECTION 15 — SERVER MONITORING & ADMIN TUI
     q / quit / bye   Exit
 
   Auto-start (localhost only):
-    On startup, the client checks if the server is reachable. If not, and if
-    the server files exist alongside the client (single-machine setup), it
-    launches uvicorn automatically as a background process and polls /health
-    until ready. Server logs go to /tmp/gorgon-server.log.
+    On startup, the client checks if the orchestrator is reachable. If not,
+    and if the orchestrator files exist alongside the client (single-machine
+    setup), it launches uvicorn automatically as a background process and
+    polls /health until ready. Orchestrator logs go to /tmp/gorgon-orchestrator.log.
 
   Appearance (client/CLI_config.json):
     text_color   Hex color for body text, e.g. "#7355a3"
@@ -1895,16 +2043,18 @@ SECTION 15 — SERVER MONITORING & ADMIN TUI
     After create_vm, if the attached ISO filename implies a different distro
     than the declared os_name, a ⚠ warning is shown with a fix suggestion.
 
-15.3  ADMIN TUI  (server/admin_tui.py)
+15.3  ADMIN TUI  (admin/admin_tui.py)
 ───────────────────────────────────────
-  A curses-based fullscreen admin dashboard. Server-only — not in the
-  client sparse checkout, no alias added by setup_client.sh.
+  A curses-based fullscreen admin dashboard, in its own top-level admin/
+  package. Not in the client sparse checkout, no alias added by setup_client.sh
+  — install with install_admin.sh instead (typically on the executor/
+  orchestrator machine).
 
   Launch:
     gorgon-admin
 
   The terminal auto-resizes to 52×200. Dashboard layout:
-    Header bar     — uptime, VM count, event count, server PID (or "server=stopped")
+    Header bar     — uptime, VM count, event count, orchestrator PID (or "server=stopped")
     VM table       — name, status (●=running / ○=stopped), CPU, RAM, OS
     Event feed     — timestamp, tool, target VM, outcome, duration (ms)
     Command line   — type and press Enter
@@ -1915,24 +2065,31 @@ SECTION 15 — SERVER MONITORING & ADMIN TUI
     kill <vm>         Force-kill (SIGKILL)
     stopall           Stop all running VMs
     list              Print VM names in status line
-    start-server      Launch the API server (uvicorn, background, logs → /tmp/gorgon-server.log)
-    status            Show server PID, VM count, running count
+    start-server      Launch the orchestrator (uvicorn orchestrator.http.api_server:app,
+                      background, logs → admin_config.json's log_path, default
+                      /tmp/gorgon-orchestrator.log)
+    status            Show orchestrator PID, VM count, running count
     clearlog          Wipe the event log
-    shutdown          Send SIGTERM to the api_server process
-    kill-server       Send SIGKILL to the api_server process
+    shutdown          Send SIGTERM to the orchestrator process
+    kill-server       Send SIGKILL to the orchestrator process
     help              Show full help overlay (any key dismisses)
     q / Esc / Ctrl-C  Quit
 
-  All manager.* calls are wrapped in a stdout suppressor (_quiet()) so Rich
-  output from the tool layer never corrupts the curses screen.
+  Unlike earlier versions, the TUI's VM/tool commands (_exec()) now go
+  through the orchestrator's real HTTP /execute and /events endpoints —
+  using ~/.gorgon.token (or API_TOKEN/connection_config.json) the same way
+  any other client would, not a direct in-process call. Only start-server/
+  shutdown/kill-server/status are local-process operations that bypass HTTP
+  entirely (they manage the orchestrator process itself, so there's nothing
+  to call yet before start-server, or nothing left to call after shutdown).
 
-  The TUI calls the tool executor and event log directly (no HTTP, no token).
-  This is the server operator console and the groundwork for the IaaS fleet
-  management console planned for 1.1+.
+  This is the orchestrator operator console and the groundwork for the IaaS
+  fleet management console planned for 1.1+.
 
-  Appearance (server/admin_config.json):
+  Appearance (admin/admin_config.json):
     text_color   Hex color for body text, e.g. "#aaaaaa"
     font_size    Terminal font size hint, applied via xterm escape on startup
+    log_path     Path for start-server's uvicorn output (default /tmp/gorgon-orchestrator.log)
 
 ================================================================================
 SECTION 16 — UNATTENDED OS INSTALL & GOLDEN-IMAGE TEMPLATES
@@ -2024,8 +2181,15 @@ SECTION 16 — UNATTENDED OS INSTALL & GOLDEN-IMAGE TEMPLATES
     6. list_templates() — mirrors list_profiles(); "templates" shortcut too.
 
   PER-CLONE CREDENTIALS (executor/api/_vm_credentials.py, Linux only —
-  Windows credentials live in the SAM registry hive, not /etc/shadow, and
-  need a different tool [chntpw] not yet built):
+  Windows credentials live in the SAM registry hive, not /etc/shadow. Not
+  built: every Windows template is created BEFORE account creation on
+  purpose [unattended_skip_user], so the operator sets a fresh unique
+  account at first boot — nothing to offline-randomize. chntpw (targeting
+  the built-in Administrator) was investigated and dropped: it can only
+  blank a password, never set an arbitrary one, and Administrator already
+  ships disabled with a blank password identically on every clone — so
+  blanking it is a no-op, and enabling it would trade a non-issue for a
+  real one):
 
     randomize_root_password=true   Offline-sets a fresh random root password
                                     via virt-customize (libguestfs — mounts
@@ -2053,6 +2217,42 @@ SECTION 16 — UNATTENDED OS INSTALL & GOLDEN-IMAGE TEMPLATES
   NEEDS: libguestfs-tools (virt-customize, virt-cat) — in
   complementary/install_executor.sh. Offline edits require the VM to be
   STOPPED (libguestfs needs exclusive access to the disk file).
+
+  PER-CLONE HOSTNAME (executor/api/_vm_hostname.py — unlike credentials,
+  works for BOTH Linux and Windows templates):
+
+    randomize_hostname=true   Linux: virt-customize --hostname <generated>
+                               (updates /etc/hostname and the /etc/hosts
+                               127.0.1.1 line together). Keeps the
+                               template's distro-flavored prefix, replaces
+                               a trailing "-vm"/"-template" with a random
+                               suffix (kali-vm -> kali-9f2ab71).
+                               Windows: no CLI tool sets this directly, so
+                               it shells out to guestfish + hivexregedit —
+                               extracts the SYSTEM hive via an explicit
+                               mount-ro (virt-copy-out's auto-inspection
+                               fails against an unbooted disk), patches
+                               ComputerName and Tcpip\Parameters'
+                               Hostname/"NV Hostname" via a generated .reg
+                               file + hivexregedit --merge, writes the hive
+                               back with copy-in. Generates a
+                               DESKTOP-XXXXXXX name matching Windows' own
+                               convention.
+                               GOTCHA: a freshly-shutdown Windows disk can
+                               be "unclean" (dirty NTFS journal) and/or
+                               hibernated (Fast Startup) — ntfs-3g refuses
+                               read-write in either state.
+                               "remove_hiberfile,rw" alone only clears the
+                               hibernation case. Fix: run ntfsfix on the
+                               partition first (best-effort, exit code
+                               ignored — it fails its own hibernation check
+                               but still resets the journal), then mount
+                               with remove_hiberfile,rw. Verified via a full
+                               round trip against real template-windows
+                               clones.
+
+  NEEDS: libguestfs-tools + libwin-hivex-perl (hivexregedit) — in
+  complementary/install_executor.sh. Requires the VM to be STOPPED.
 
   Proven end-to-end for Kali, Ubuntu, and Windows: each marked as a template,
   then a real create_vm(template=X) clone booted straight to the correct

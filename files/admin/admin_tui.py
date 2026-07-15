@@ -33,7 +33,7 @@ _ADMIN_CFG = _load_json(os.path.join(_here, "admin_config.json"))
 _ORCH_URL     = os.environ.get("SERVER_URL",  _CONN_CFG.get("orchestrator_url", "http://localhost:8080"))
 _REFRESH      = _ADMIN_CFG.get("refresh_rate_s",       1.0)
 _DEFAULT_PORT = _ADMIN_CFG.get("default_port",         8080)
-_LOG_PATH     = _ADMIN_CFG.get("log_path",             "/tmp/gorgon-server.log")
+_LOG_PATH     = _ADMIN_CFG.get("log_path",             "/tmp/gorgon-orchestrator.log")
 _EVENTS_LIMIT = _ADMIN_CFG.get("events_display_limit", 200)
 
 

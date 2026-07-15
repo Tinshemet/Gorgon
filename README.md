@@ -592,6 +592,7 @@ gorgon fetch <vm> [--out /dir]
 | `template` | string | Clone disk(s) from a golden image instead of creating blank ones ([details](#golden-image-templates)) |
 | `randomize_root_password` / `randomize_user_password` | bool | Offline-randomize the clone's root/primary-user password (Linux templates only) |
 | `new_username` | string | Offline-rename the clone's primary user account (Linux templates only) |
+| `randomize_hostname` | bool | Offline-randomize the clone's OS-level hostname/computer name (Linux and Windows templates) |
 
 ### Sanitizer auto-corrections
 
@@ -709,7 +710,21 @@ Every clone inherits the template disk's `/etc/shadow` byte-for-byte — same ro
 "create a vm called clone2 from template-kali, rename the user to alice"
 ```
 
-**Linux only.** Windows credentials live in the SAM registry hive, not `/etc/shadow` — needs a different tool (`chntpw`), not yet built.
+**Linux only.** Windows credentials live in the SAM registry hive, not `/etc/shadow`, and every Windows template is deliberately created *before* account creation (`unattended_skip_user`) — the operator sets a fresh, unique account themselves at first boot, so there's nothing to offline-randomize there. (The built-in `Administrator` account is disabled with a blank password out of the box on every clone identically; there's no tool to give it an arbitrary password, and enabling it would trade a non-issue for a real one, so this project doesn't touch it.)
+
+### Per-clone hostname randomization
+
+Every clone also inherits the template disk's OS-level hostname/computer name byte-for-byte — a separate fingerprint from the credentials above. Unlike the credential args, this works for **both Linux and Windows templates**:
+
+| Arg | Effect |
+|---|---|
+| `randomize_hostname` | Sets a fresh, randomized hostname on the clone. Linux: `virt-customize --hostname` (updates `/etc/hostname` and the `/etc/hosts` `127.0.1.1` line), keeping the template's distro-flavored prefix (e.g. `kali-9f2ab71`). Windows: patches the `ComputerName`/`Tcpip\Parameters\Hostname` registry values directly in the offline `SYSTEM` hive (`guestfish` + `hivexregedit`, needs `libwin-hivex-perl` installed) — generates a `DESKTOP-XXXXXXX`-style name matching Windows' own convention. Returned in the result message/`hostname` field, also saved into the clone's `config.json`. |
+
+```
+"create a vm called clone1 from template-windows, randomize the hostname"
+```
+
+Note: a freshly-installed Windows disk is typically left in a hibernated state (Fast Startup's hybrid shutdown) — the hostname tool works around this automatically (`remove_hiberfile` mount option) rather than requiring a real boot first.
 
 ### Notes
 
@@ -1070,14 +1085,15 @@ New token persists to `~/.gorgon.token` and takes effect immediately without res
 ### Friend's House — SSH Tunnel Quickstart
 
 ```bash
-# Step 1: Friend's machine (Linux/WSL2)
-bash files/complementary/setup_client.sh
+# Step 1: Friend's machine (Linux/WSL2) — runs Ollama + orchestrator + executor
+bash files/complementary/install.sh
+# Prints an API_TOKEN and local IP — you'll need both in Step 2.
 # If WSL2 on Windows, also (as Admin in PowerShell):
 .\files\complementary\setup_wsl2.ps1
 
-# Step 2: Your laptop
-bash files/complementary/setup_server.sh
-# Choose remote mode (2), enter http://localhost:8080 as API_URL
+# Step 2: Your laptop — thin client only, no QEMU/Ollama needed here
+SERVER_URL=http://localhost:8080 API_TOKEN=<token from Step 1> \
+    bash files/complementary/setup_client.sh
 
 # Step 3: Open SSH tunnel (leave running in a terminal tab)
 ssh -N \
@@ -1447,8 +1463,8 @@ Results saved to `test_report.json` after every run.
 │       └── diskN.qcow2          Flattened disk copy (qemu-img convert, not a backing link)
 └── <vm-name>/
     ├── config.json              Full MachineConfig serialised — includes root_password/
-    │                            user_password/randomized_username when set via
-    │                            randomize_root_password/randomize_user_password
+    │                            user_password/randomized_username/new_hostname when set via
+    │                            randomize_root_password/randomize_user_password/randomize_hostname
     ├── disk0.qcow2              Primary disk image
     ├── OVMF_VARS.fd             Per-VM UEFI variable store (writable copy)
     ├── vm.pid                   PID of running QEMU process

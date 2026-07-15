@@ -185,7 +185,9 @@ def check_profile_compatibility(profile_name: str) -> dict:
 
 _VM_TOOLS = {"launch_vm", "stop_vm", "delete_vm", "clone_vm", "resize_disk",
              "vm_status", "create_snapshot", "restore_snapshot", "delete_snapshot",
-             "list_snapshots", "show_qemu_cmd", "setup_done", "generate_guest_setup"}
+             "list_snapshots", "show_qemu_cmd", "setup_done", "generate_guest_setup",
+             "run_guest_command", "guest_ping", "generate_guest_agent_setup",
+             "provision_guest_agent_offline"}
 
 from orchestrator.event_log import log_event as _log_event  # noqa: E402
 

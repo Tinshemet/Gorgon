@@ -14,7 +14,7 @@ from rich import box
 from rich.panel import Panel
 from rich.table import Table
 
-_CFG_PATH = os.path.join(os.path.dirname(__file__), "..", "server", "ai", "config.json")
+_CFG_PATH = os.path.join(os.path.dirname(__file__), "..", "orchestrator", "ai", "config.json")
 try:
     _CFG = json.load(open(_CFG_PATH))
     _FP  = _CFG.get("fingerprint", {})

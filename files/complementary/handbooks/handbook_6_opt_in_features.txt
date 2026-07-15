@@ -263,8 +263,14 @@ WORKFLOW:
   6. list_templates() — mirrors list_profiles(); `templates` shortcut too.
 
 PER-CLONE CREDENTIALS (executor/api/_vm_credentials.py, Linux only — Windows
-credentials live in the SAM registry hive, not /etc/shadow, needs a different
-tool [chntpw], not yet built):
+credentials live in the SAM registry hive, not /etc/shadow. NOT built:
+Windows templates are created BEFORE account creation on purpose
+[unattended_skip_user] so the operator sets a fresh unique account at first
+boot — nothing to offline-randomize there. Investigated chntpw for the
+built-in Administrator account instead; dropped it — chntpw can only blank
+a password (no arbitrary-set), and Administrator already ships disabled with
+a blank password identically on every clone, so "blanking" it is a no-op,
+and enabling it would trade a non-issue for a real one):
   randomize_root_password=true    offline-sets a fresh random root password
                                    via `virt-customize --root-password
                                    password:<generated>` (libguestfs — mounts
@@ -298,6 +304,52 @@ tool [chntpw], not yet built):
 NEEDS: libguestfs-tools (virt-customize, virt-cat) — in
 complementary/install_executor.sh. Requires the VM to be STOPPED (libguestfs
 needs exclusive access to the disk file).
+
+PER-CLONE HOSTNAME (executor/api/_vm_hostname.py — unlike credentials, works
+for BOTH Linux and Windows templates, since it's not tied to /etc/shadow):
+  randomize_hostname=true   Linux: `virt-customize --hostname <generated>`
+                             (updates /etc/hostname AND the /etc/hosts
+                             127.0.1.1 line in one call — confirmed via a
+                             throwaway disk copy). Keeps the template's
+                             distro-flavored prefix, replaces a trailing
+                             "-vm"/"-template" with a random suffix (e.g.
+                             kali-vm -> kali-9f2ab71).
+                             Windows: no equivalent CLI tool exists, so this
+                             shells out to guestfish + hivexregedit directly
+                             — extracts SYSTEM via `mount-ro` (NOT
+                             virt-copy-out, which fails "no operating system
+                             found" against an unbooted disk — same
+                             auto-inspection gap hit during the chntpw
+                             investigation), patches ComputerName
+                             (ControlSet001\Control\ComputerName\ComputerName
+                             + \ActiveComputerName) and
+                             ControlSet001\Services\Tcpip\Parameters'
+                             Hostname/"NV Hostname" via a generated .reg
+                             file + `hivexregedit --merge`, then writes the
+                             hive back with `copy-in`. Generates a
+                             DESKTOP-XXXXXXX name matching Windows' own
+                             auto-generated-name convention.
+                             GOTCHA (two distinct dirty states, both hit on
+                             the real template disk): a freshly-shutdown
+                             Windows disk is normally left "unclean" (dirty
+                             NTFS journal) AND/OR hibernated (Fast Startup's
+                             hybrid shutdown) — ntfs-3g refuses a read-write
+                             mount in either state ("Windows is hibernated,
+                             refused to mount" / "The disk contains an
+                             unclean file system"). `remove_hiberfile,rw`
+                             alone clears the hibernation case but not the
+                             unclean case. Fix: run `ntfsfix` on the
+                             partition FIRST as a best-effort step (its own
+                             exit code is ignored — it errors out on its own
+                             separate hibernation check, but still resets
+                             the NTFS journal as a side effect), THEN mount
+                             with `remove_hiberfile,rw` — confirmed via a
+                             full extract/patch/ntfsfix/write-back/
+                             re-extract round trip against real clones of
+                             the template-windows disk before this was
+                             considered done.
+NEEDS: libguestfs-tools + libwin-hivex-perl (hivexregedit) — in
+complementary/install_executor.sh. Requires the VM to be STOPPED.
 
 PROVEN end-to-end for Kali, Ubuntu, and Windows: each marked as a template,
 then a real create_vm(template=X) clone booted straight to the correct login
@@ -356,7 +408,9 @@ degrades gracefully offline — fine for an air-gapped lab).
     stop_vm (no force) first; create_vm(template=X) skips the auto-ISO-match
     that would otherwise risk booting the installer menu instead of the clone.
     randomize_root_password/randomize_user_password/new_username are Linux-only
-    (libguestfs) and need the VM stopped.
+    (libguestfs) and need the VM stopped. randomize_hostname works for BOTH
+    Linux and Windows templates (guestfish+hivexregedit for Windows); also
+    needs the VM stopped.
   - passthrough_pci auto-adds the .1 audio function for a lone GPU .0.
   - manual SMBIOS fields (serial/bios_vendor/chassis_type) suppress profile match.
   - Windows 11: TPM (swtpm) + UEFI + q35 are auto-set; unattended bypasses the

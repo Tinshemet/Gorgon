@@ -27,14 +27,14 @@ KVM
   extensions (Intel VT-x or AMD-V). KVM is what makes VMs fast. It is not
   available on Windows (only Linux has it) and is limited or absent in some
   WSL2 configurations. Check with: ls /dev/kvm
-  Source: shared/api/qemu_manager.py, shared/executioner/config.json
+  Source: executor/api/qemu_manager.py, shared/executioner/config.json
 
 KVM acceleration
   When kvm=True in MachineConfig, QEMU is launched with -enable-kvm and
   -cpu host. This lets the guest CPU run at near the speed of the physical CPU.
   When kvm=False (e.g. ARM emulation on x86, or no /dev/kvm), QEMU fully
   emulates all CPU instructions in software.
-  Source: shared/api/qemu_arg_builder.py
+  Source: executor/api/qemu_arg_builder.py
 
 Hypervisor
   A piece of software that creates and manages virtual machines. QEMU is a
@@ -46,7 +46,7 @@ Hypervisor bit / -hypervisor CPUID flag
   Programs inside the VM can read this flag to detect they are virtualised.
   When hardened=True, gorgon passes kvm=off and -vmx to QEMU which hides
   this flag from the guest, making the VM harder to detect.
-  Source: shared/api/qemu_arg_builder.py → _harden()
+  Source: executor/api/qemu_arg_builder.py → _harden()
 
 CPUID
   A CPU instruction that returns information about the processor — model,
@@ -79,7 +79,7 @@ qcow2
   - Encryption
   Stored as a single file: ~/.qemu_vms/<name>/disk0.qcow2
   Alternative: raw (faster random IO, no thin provisioning, no snapshots).
-  Source: shared/api/qemu_config.py → DiskConfig
+  Source: executor/api/qemu_config.py → DiskConfig
 
 raw (disk format)
   A flat binary disk image. No metadata, no compression, no snapshots. Faster
@@ -93,14 +93,14 @@ OVMF
     ovmf      → OVMF_CODE_4M.fd       standard UEFI, no Secure Boot
     ovmf_ms   → OVMF_CODE_4M.ms.fd   Secure Boot with Microsoft keys
   The _4M suffix indicates a 4 MB flash chip (modern systems).
-  Source: shared/api/qemu_config.py → OVMF dict, detect_ovmf()
+  Source: executor/api/qemu_config.py → OVMF dict, detect_ovmf()
 
 OVMF_VARS.fd
   Per-VM writable UEFI variable store. Copied from the system template on VM
   creation and stored in ~/.qemu_vms/<name>/OVMF_VARS.fd. Stores boot order,
   Secure Boot keys, and other UEFI settings independently per VM. If this file
   is missing, the VM will crash immediately at launch.
-  Source: shared/api/qemu_manager.py → create_vm()
+  Source: executor/api/qemu_manager.py → create_vm()
 
 UEFI
   Unified Extensible Firmware Interface. Modern replacement for BIOS. Required
@@ -130,7 +130,7 @@ TPM / TPM 2.0
   certificates, and measurements. Required for Windows 11 BitLocker and
   attestation. In QEMU, emulated by swtpm (software TPM).
   Enable with tpm=True in MachineConfig.
-  Source: shared/api/qemu_manager.py → _start_tpm()
+  Source: executor/api/qemu_manager.py → _start_tpm()
 
 swtpm
   Software TPM. A Linux daemon that emulates a TPM 2.0 chip over a Unix socket.
@@ -145,7 +145,7 @@ q35 machine type
   - IOMMU support
   Used when hardened=True or when Windows is detected. The other common type
   is pc (i440FX), which is older but more compatible.
-  Source: shared/api/qemu_config.py → MachineConfig
+  Source: executor/api/qemu_config.py → MachineConfig
 
 virt machine type
   A generic virtual machine type for ARM (AArch64). Used automatically when
@@ -163,7 +163,7 @@ RTC / RTC clock
   off. QEMU emulates an RTC. Setting rtc_clock='utc' with driftfix='slew'
   in MachineConfig prevents an "invalid datetime format" crash that occurs
   with the default 'localtime' setting on some host configurations.
-  Source: shared/api/qemu_manager.py → launch_vm()
+  Source: executor/api/qemu_manager.py → launch_vm()
 
 ACPI
   Advanced Configuration and Power Interface. A specification for hardware
@@ -171,7 +171,7 @@ ACPI
   describe the virtual hardware to the guest OS. The ACPI OEM ID field normally
   reads "BOCHS" or "BXPC" in QEMU — stealth mode changes this to the
   manufacturer name (e.g. "Dell I") to reduce fingerprinting.
-  Source: shared/api/qemu_arg_builder.py → _apply_stealth()
+  Source: executor/api/qemu_arg_builder.py → _apply_stealth()
 
 SMBIOS
   System Management BIOS. A standard for how firmware (BIOS/UEFI) describes
@@ -179,7 +179,7 @@ SMBIOS
   inxi, dmidecode, and Windows System Information. QEMU exposes a full set of
   SMBIOS tables. This project sets SMBIOS fields (manufacturer, product_name,
   serial_number, bios_vendor, etc.) to make the VM appear as real hardware.
-  Source: shared/api/qemu_arg_builder.py → _build_smbios()
+  Source: executor/api/qemu_arg_builder.py → _build_smbios()
 
 SMBIOS type 0
   BIOS information: vendor, version, release date.
@@ -211,7 +211,7 @@ smbios_chassis.bin
   passed to QEMU via -smbios file=. Because Linux reads the last type-3 entry
   it finds in memory, this file's entry overrides the default one that QEMU
   generates. This is the only way to set the chassis type byte from QEMU's CLI.
-  Source: shared/api/qemu_manager.py → _write_smbios_chassis_bin()
+  Source: executor/api/qemu_manager.py → _write_smbios_chassis_bin()
 
 inxi
   A system information tool. Used inside the guest to verify that the SMBIOS
@@ -251,7 +251,7 @@ shared
   Source files: files/shared/
 
 the seam
-  Informal name for server/executor_client.py. Re-exports execute_tool from
+  Informal name for orchestrator/executor_client.py. Re-exports execute_tool from
   shared/executioner/tool_executor. On the server the call is always local —
   QEMU and AI are co-located. The variable API_URL exists for backward compat.
 
@@ -323,7 +323,7 @@ vnc_bind_local
   Boolean. When True, QEMU is launched with -vnc 127.0.0.1:{display}
   instead of -vnc :{display}. This means the VNC port only accepts connections
   from localhost — not from the network. An SSH tunnel is required to connect.
-  Source: shared/api/qemu_arg_builder.py
+  Source: executor/api/qemu_arg_builder.py
 
 SSH tunnel
   A method of forwarding a local port through an encrypted SSH connection.
@@ -368,9 +368,9 @@ self-signed certificate
 
 Let's Encrypt
   A free, automated CA that issues publicly trusted TLS certificates for domain
-  names. Used when the client machine has a domain name pointing at its public IP.
-  Certs don't need to be copied to the client machine — they are trusted by
-  default because Let's Encrypt is in all major CA bundles.
+  names. Used when the orchestrator machine has a domain name pointing at its
+  public IP. Certs don't need to be copied to the client machine — they are
+  trusted by default because Let's Encrypt is in all major CA bundles.
 
 dynamic DNS
   A service (no-ip.com, duckdns.org) that maps a hostname to a dynamic IP
@@ -386,12 +386,12 @@ tool call
   returns after reading a user prompt. The AI selects which tool to call and
   what arguments to pass. Example:
     {"tool_name": "create_vm", "args": {"name": "dev-box", "memory_mb": 4096}}
-  Source: server/ai/ollama_client.py
+  Source: orchestrator/ai/ollama_client.py
 
 TOOLS list
   A list of tool definitions (name, description, parameter schema) passed to
   Ollama in each API call. Tells the model what actions are available and what
-  arguments each action expects. Defined in server/ai/tools.py.
+  arguments each action expects. Defined in orchestrator/ai/tools.py.
 
 tool definition
   One entry in the TOOLS list. Includes: name, description, parameters
@@ -458,7 +458,7 @@ context assistant
   the conversation context (what the user said, what VMs exist, what was
   recently done). Separate from preflight — focuses on semantic consistency
   rather than state validity.
-  Source: server/ai/context_assistant.py
+  Source: orchestrator/ai/context_assistant.py
 
 revert action / _last_revert_action
   After each reversible tool call, execute_tool saves a "revert recipe" —
@@ -507,7 +507,7 @@ MachineConfig
   machine_type, machine_arch, stealth, hardened, tpm, kvm, battery, hugepages,
   networks, disks, manufacturer, product_name, serial_number, bios_vendor,
   bios_version, smbios_type, extra_args, etc. Serialised to JSON in config.json.
-  Source: shared/api/qemu_config.py
+  Source: executor/api/qemu_config.py
 
 DiskConfig
   Dataclass for a VM disk: path (qcow2 file location), size_gb, format
@@ -523,19 +523,33 @@ hardware profile
   dell_g15_5520, gaming_desktop, office_laptop, server, mac_mini, minimal,
   raspberry_pi_4, raspberry_pi_3b. Custom profiles stored in
   ~/.qemu_vms/_profiles/. Applied to a MachineConfig via apply_profile().
-  Source: shared/api/qemu_config.py
+  Source: executor/api/qemu_config.py
 
 API_URL
-  Environment variable. The URL of the client machine's API server.
-  "local" means direct function call (default).
-  "http://host:port" or "https://host:port" means remote mode.
-  Source: server/executor_client.py
+  Environment variable read by the ORCHESTRATOR (not the end-user client) —
+  it's the URL of the EXECUTOR's HTTP API, used when the two are split
+  across machines.
+  "local" means direct in-process function call (default, executor co-located).
+  "http://host:8001" or "https://host:8001" means the executor is remote.
+  Source: orchestrator/executor_client.py
 
 API_TOKEN
-  Environment variable. The shared secret for API authentication. Must match
-  on both the server machine and the client machine. Also readable
-  from ~/.gorgon.token file (the file is a fallback; env var takes precedence).
-  Source: server/executor_client.py, server/http/api_server.py
+  Environment variable. The client-facing shared secret checked by the
+  orchestrator's HTTP API (must match between the orchestrator and whatever
+  is calling /chat or /execute — a client, curl, etc). This is a DIFFERENT
+  secret from EXECUTOR_TOKEN below — conflating the two would make the
+  orchestrator send its client-facing token to the executor, which almost
+  never matches the executor's independently configured secret. Also
+  readable from ~/.gorgon.token file (the file is a fallback; env var takes
+  precedence).
+  Source: orchestrator/executor_client.py, orchestrator/http/api_server.py
+
+EXECUTOR_TOKEN
+  Environment variable read by the ORCHESTRATOR — the secret it presents to
+  the EXECUTOR's own HTTP API when the two are split across machines
+  (deliberately separate from API_TOKEN above). Ignored entirely when
+  API_URL is "local" (no HTTP hop to authenticate).
+  Source: orchestrator/executor_client.py
 
 API_TIMEOUT
   Environment variable. HTTP request timeout in seconds. Default: 120.
@@ -563,12 +577,14 @@ allowed_remote_tools
   send_monitor_cmd (raw QEMU monitor access).
 
 token file (~/.gorgon.token)
-  A file on the client machine containing the API token. Readable by the
-  API server on startup. chmod 0600 so only the owner can read it. The
-  server also writes here when POST /rotate-token is called.
+  A file on the orchestrator machine containing the client-facing API token.
+  Readable by the orchestrator's HTTP API on startup. chmod 0600 so only the
+  owner can read it. The orchestrator also writes here when POST
+  /rotate-token is called.
 
 ~/.qemu_vms/
-  The root directory where all VM data is stored on the client machine.
+  The root directory where all VM data is stored, on the executor machine
+  (or the single combined machine in a co-located setup).
     ~/.qemu_vms/.state.json    — running PID tracking
     ~/.qemu_vms/.session.json  — AI conversation history
     ~/.qemu_vms/_profiles/     — custom hardware profiles
@@ -645,7 +661,7 @@ QMP (QEMU Machine Protocol)
   A JSON-based protocol for communicating with a running QEMU process over a
   Unix socket. Used to: set VNC passwords, expire passwords, send signals,
   query status, take snapshots. Accessed via qmp.sock.
-  Source: shared/api/qmp_client.py
+  Source: executor/api/qmp_client.py
 
 QMP socket (qmp.sock)
   Unix socket created by QEMU at ~/.qemu_vms/<name>/qmp.sock. The project
@@ -717,7 +733,7 @@ OUI prefix (MAC address)
   identify the manufacturer. QEMU's default MAC range starts with 52:54:00
   (QEMU/KVM OUI). This is a well-known VM fingerprint. Setting a real OUI
   (e.g. F0:1F:AF for Dell, A4:C3:F0 for Apple) reduces detectability.
-  Source: shared/api/qemu_config.py → NetworkConfig
+  Source: executor/api/qemu_config.py → NetworkConfig
 
 e1000e
   Intel 82574L Gigabit NIC emulation. A common, real-world NIC. Much less
@@ -733,7 +749,7 @@ fingerprint_vm (-tf flag)
   A read-only analysis tool that simulates what inxi would report from inside
   the guest and rates each field as clean/detectable/VM tell. Shows a score
   and recommendations. Never modifies the VM config.
-  Source: server/ai/fingerprint.py → _tf_report()
+  Source: executor/fingerprint.py → _tf_report()
 
 VM tell
   A configuration value that immediately identifies the machine as a virtual
@@ -760,13 +776,16 @@ H. API AND HTTP TERMS
 ────────────────────────────────────────────────────────────────────────────────
 
 FastAPI
-  A Python web framework for building APIs. Used for the client machine's HTTP
-  server (server/http/api_server.py). Known for automatic OpenAPI docs,
-  Pydantic validation, and high performance via async.
+  A Python web framework for building APIs. Used for the orchestrator's HTTP
+  server (orchestrator/http/api_server.py) and, separately, the executor's own
+  HTTP server (executor/server.py) when it runs on its own machine. Known for
+  automatic OpenAPI docs, Pydantic validation, and high performance via async.
 
 uvicorn
-  An ASGI web server that runs FastAPI applications. Started by the serve
-  command: uvicorn client.server.api_server:app --host ... --port ...
+  An ASGI web server that runs FastAPI applications. Started by the gorgon-serve
+  alias / install scripts:
+    uvicorn orchestrator.http.api_server:app --host ... --port ...   (orchestrator)
+    uvicorn executor.server:app --host ... --port ...                (executor)
 
 HTTPBearer
   A FastAPI security dependency that extracts a Bearer token from the
@@ -782,19 +801,21 @@ HTTP Range (Range header)
   sends "Range: bytes=<start>-<end>" and the server returns just that segment
   with status 206 Partial Content. Used by the fetch command to resume
   interrupted disk image downloads.
-  Source: server/http/api_server.py → image_download()
+  Source: orchestrator/http/api_server.py → image_download()
 
 X-SHA256 header
   A custom HTTP response header that carries the SHA-256 checksum of the
   streamed disk image. The client reads this after download to verify
   file integrity without a separate API call.
-  Source: server/http/api_server.py → image_download()
+  Source: orchestrator/http/api_server.py → image_download()
 
 liveness monitor
-  A background daemon thread in the chat loop that pings GET /health every
-  30 seconds when API_URL != "local". Alerts the user with a yellow warning
-  if the client machine stops responding.
-  Source: server/ai/cli.py → chat_loop()
+  A background daemon thread started by the orchestrator's own interactive
+  chat_loop (orchestrator/ai/cli.py) that pings GET /health every 30 seconds
+  against API_URL when it isn't "local" — i.e. it monitors the EXECUTOR's
+  reachability when the executor is split onto its own machine. Alerts with
+  a red warning if unreachable.
+  Source: orchestrator/ai/cli.py → chat_loop()
 
 rotate-token
   POST /rotate-token endpoint. Replaces the in-memory API token and writes
@@ -803,9 +824,9 @@ rotate-token
 
 fetch command
   A CLI/chat command that downloads the primary disk of a named VM from the
-  remote server machine to the local machine. Checks SHA-256 first to skip
-  redundant downloads, uses HTTP Range to resume interrupted ones.
-  Source: server/ai/cli.py → fetch subcommand
+  remote orchestrator machine to the local machine. Checks SHA-256 first to
+  skip redundant downloads, uses HTTP Range to resume interrupted ones.
+  Source: orchestrator/ai/direct_cli.py → fetch subcommand
 
 TestClient (FastAPI)
   A synchronous HTTP client that talks to a FastAPI app in-process (no real
@@ -820,7 +841,7 @@ Ollama
   A local LLM server. Runs models (like qwen2.5:7b) on your machine. Exposes
   a REST API at http://localhost:11434. This project calls POST /api/chat
   with the TOOLS list and conversation history.
-  Source: server/ai/ollama_client.py → _call_ollama()
+  Source: orchestrator/ai/ollama_client.py → _call_ollama()
 
 qwen2.5:7b
   The recommended Ollama model for this project. 7 billion parameter model
@@ -839,28 +860,28 @@ system prompt
   - Available tools and their descriptions
   - Whether custom mode (-cu) is active
   - The TOOLS JSON schema
-  Source: server/ai/ollama_client.py → _build_system_prompt()
+  Source: orchestrator/ai/ollama_client.py → _build_system_prompt()
 
 chat_loop
   The main interactive loop. Reads user input, sends to Ollama, receives tool
   calls, sanitises, preflights, executes, displays results, repeats.
   Built-in shortcuts bypass Ollama entirely (list, profiles, system, exit).
-  Source: server/ai/cli.py → chat_loop()
+  Source: orchestrator/ai/cli.py → chat_loop()
 
 cli_direct
   The non-interactive CLI mode. Handles subcommands like gorgon list,
   gorgon launch <name>, etc. No AI involved.
-  Source: server/ai/cli.py → cli_direct()
+  Source: orchestrator/ai/cli.py → cli_direct()
 
 session
   The AI conversation history. Loaded from ~/.qemu_vms/.session.json at
   startup and saved after each exchange. Limited to the last 40 messages to
   keep the context manageable. Auto-cleared if drift is detected (the VMs
   the AI thinks exist no longer match reality).
-  Source: server/ai/session.py
+  Source: orchestrator/ai/session.py
 
 auto_clear_session
-  Setting in server/ai/config.json. When True, the session is automatically
+  Setting in orchestrator/ai/config.json. When True, the session is automatically
   cleared when drift is detected between the AI's remembered VM list and
   the actual VM list.
 
@@ -868,12 +889,12 @@ drift detection
   Comparing the VMs the AI remembers (from session history) against the actual
   VM list from manager.list_vms(). If they differ significantly, the session
   may be auto-cleared to prevent the AI from acting on stale state.
-  Source: server/ai/session.py → detect_drift()
+  Source: orchestrator/ai/session.py → detect_drift()
 
 _LOOP_MAX
   Maximum number of AI tool call iterations per user prompt. Prevents infinite
   loops if the AI keeps calling tools in a chain. Configurable in
-  server/ai/config.json (tool_loop_max or tool_loop_max_override).
+  orchestrator/ai/config.json (tool_loop_max or tool_loop_max_override).
 
 ────────────────────────────────────────────────────────────────────────────────
 J. TEST SUITE TERMS
@@ -941,10 +962,11 @@ setup_client.sh
   client/connection_config.json and adds the gorgon alias.
 
 setup_wsl2.ps1
-  Windows PowerShell script. Run as Admin after setup_client.sh when the
-  client machine is WSL2 on Windows. Sets up netsh portproxy (2222→22),
-  Windows Firewall rule, and a SYSTEM-level scheduled task that refreshes the
-  portproxy on every reboot.
+  Windows PowerShell script. Run as Admin after install.sh (or
+  install_orchestrator.sh/install_executor.sh) when the gorgon host machine
+  is WSL2 on Windows — NOT the thin client's laptop. Sets up netsh portproxy
+  (2222→22), Windows Firewall rule, and a SYSTEM-level scheduled task that
+  refreshes the portproxy on every reboot.
 
 -Uninstall (setup_wsl2.ps1 flag)
   Removes all Windows-side configuration: portproxy rule, firewall rule,
