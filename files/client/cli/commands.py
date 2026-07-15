@@ -24,6 +24,7 @@ Usage (via client_wrapper.py):
     gorgon setup-done <vm>
 """
 
+import getpass
 import json
 import os
 import socket
@@ -31,6 +32,16 @@ import threading
 from typing import List, Optional
 
 import requests
+
+try:
+    # Same defensive-import reasoning as the `manager` import below — this
+    # module runs on client-only checkouts too, where orchestrator/ may be
+    # absent. See _operator_gate_ok(): unavailable means "degrade open",
+    # matching manager's own None-and-skip fallback below.
+    from orchestrator.auth import store as _auth_store, sessions as _auth_sessions
+except ImportError:
+    _auth_store    = None                                          # type: ignore[assignment]
+    _auth_sessions = None                                          # type: ignore[assignment]
 
 from rich import box
 from rich.panel import Panel
@@ -124,6 +135,29 @@ def _allowed_tools() -> Optional[set]:
         return None
 
 
+# login/logout bypass the gate itself; everything else — including
+# "operator" management — is held to it. Mirrors orchestrator/ai/direct_cli.py's
+# _operator_gate_ok exactly: this file is the OTHER in-process, unauthenticated-
+# by-default path to `manager` (client_wrapper.py's `gorgon <cmd>` uses THIS
+# module, not orchestrator/ai/direct_cli.py — both needed the same gate).
+_AUTH_EXEMPT_COMMANDS = {"login", "logout"}
+
+
+def _operator_gate_ok(cmd: str) -> bool:
+    """True if cmd may dispatch: the auth package isn't available (pure
+    client-only checkout — degrade open, same philosophy as `manager`'s own
+    None-and-skip fallback above), no operator accounts exist yet
+    (pre-bootstrap, identical to legacy behavior), or this box holds a
+    valid, unexpired login."""
+    if _auth_store is None:
+        return True
+    if cmd in _AUTH_EXEMPT_COMMANDS:
+        return True
+    if not _auth_store.operators_exist():
+        return True
+    return _auth_sessions.current_username() is not None
+
+
 def run(args: List[str], verbose: bool = False) -> None:
     """Dispatch a direct ``gorgon <cmd>`` sub-command.
 
@@ -143,6 +177,10 @@ def run(args: List[str], verbose: bool = False) -> None:
 
     cmd  = args[0]
     rest = args[1:]
+
+    if not _operator_gate_ok(cmd):
+        console.print("[bold red]Login required.[/bold red] Run [cyan]gorgon login[/cyan] first.")
+        return
 
     def pp(data: object) -> None:
         """Echo the raw JSON result when running in verbose mode."""
@@ -506,6 +544,65 @@ def run(args: List[str], verbose: bool = False) -> None:
                 f.write(cfg_str)
 
         console.print(f"[bold green]✓ {vm_name} bundle extracted to {dest_dir}/{vm_name}[/bold green]")
+
+    elif cmd == "login":
+        if _auth_store is None:
+            console.print("[bold red]Auth package unavailable on this checkout.[/bold red]")
+            return
+        username = rest[0] if rest else None
+        if not _auth_store.operators_exist():
+            console.print("[bold cyan]No operator account exists yet — creating the first one.[/bold cyan]")
+            username = username or console.input("Username: ").strip()
+            while True:
+                pw1 = getpass.getpass("Password: ")
+                pw2 = getpass.getpass("Confirm password: ")
+                if pw1 != pw2:
+                    console.print("[red]Passwords didn't match — try again.[/red]")
+                    continue
+                if len(pw1) < 8:
+                    console.print("[red]Password must be at least 8 characters.[/red]")
+                    continue
+                break
+            r = _auth_store.create_operator(username, pw1)
+            if not r.get("success"):
+                console.print(f"[bold red]{r.get('error')}[/bold red]")
+                return
+            password = pw1
+        else:
+            username = username or console.input("Username: ").strip()
+            password = getpass.getpass("Password: ")
+        if not _auth_store.verify_password(username, password):
+            console.print("[bold red]Invalid username or password.[/bold red]")
+            return
+        token = _auth_sessions.create_session(username)
+        _auth_sessions.write_current_session(token)
+        console.print(f"[bold green]Logged in as '{username}'.[/bold green]")
+
+    elif cmd == "logout":
+        if _auth_sessions is not None:
+            _auth_sessions.invalidate_session(_auth_sessions.read_current_session())
+            _auth_sessions.clear_current_session()
+        console.print("[dim]Logged out.[/dim]")
+
+    elif cmd == "operator" and rest:
+        if _auth_store is None:
+            console.print("[bold red]Auth package unavailable on this checkout.[/bold red]")
+            return
+        sub = rest[0]
+        if sub == "add" and len(rest) >= 2:
+            pw = getpass.getpass("Password: ")
+            r  = _auth_store.create_operator(rest[1], pw)
+            console.print(f"[green]Operator '{rest[1]}' created.[/green]" if r.get("success")
+                          else f"[bold red]{r.get('error')}[/bold red]")
+        elif sub == "list":
+            for u in _auth_store.list_operators():
+                console.print(f"  {u}")
+        elif sub == "remove" and len(rest) >= 2:
+            r = _auth_store.delete_operator(rest[1])
+            console.print(f"[green]Operator '{rest[1]}' removed.[/green]" if r.get("success")
+                          else f"[bold red]{r.get('error')}[/bold red]")
+        else:
+            console.print("[yellow]Usage: gorgon operator add|list|remove <username>[/yellow]")
 
     elif cmd in ("help", "--help", "-h"):
         from shared.command_help import load_local_catalog, render_terminal_panel

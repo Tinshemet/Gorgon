@@ -33,6 +33,7 @@ except ImportError:
     manager = None                                                            # type: ignore[assignment]
     _VM_DEFS = {"disk_size_gb": 60, "network_mode": "nat", "disk_bus": "virtio"}
 from orchestrator.preflight.validator import set_custom_mode, _preflight_check
+from orchestrator.auth import store as _auth_store, sessions as _auth_sessions
 from .chat_turn import (  # per-turn processing (extracted from this file)
     TurnState, GateOutcome, _process_tool_call, _is_critical,
     _build_vm_spec_rows,   # re-exported: create_vm spec-preview (used by tests)
@@ -174,6 +175,15 @@ def _handle_command(ui: str, messages: List[dict], runtime_drift_count: int,
 def chat_loop(verbose: bool = False) -> None:
     """Run the interactive AI chat REPL until the user exits."""
     global _LOOP_MAX
+
+    # Same gate as direct_cli.py's cli_direct() — both are local, in-process
+    # entry points to `manager`, so both need it independently (neither goes
+    # through orchestrator/http/api_server.py's _require_auth). Pre-bootstrap
+    # (no operator accounts yet) this is a no-op, matching legacy behavior.
+    if _auth_store.operators_exist() and _auth_sessions.current_username() is None:
+        console.print("[bold red]Login required.[/bold red] Run [cyan]gorgon login[/cyan] first.")
+        return
+
     print_banner(
         verbose=verbose,
         ollama_url=OLLAMA_URL,
@@ -207,15 +217,15 @@ def chat_loop(verbose: bool = False) -> None:
         import threading, requests as _req
         _liveness_stop = threading.Event()
         def _liveness_loop() -> None:
-            """Background thread — ping the server every 30s and warn if it stops responding."""
+            """Background thread — ping the executor every 30s and warn if it stops responding."""
             import time as _t
             while not _liveness_stop.wait(30):
                 try:
                     r = _req.get(f"{API_URL}/health", timeout=5, verify=_VERIFY)
                     if not r.ok:
-                        console.print(f"\n[bold yellow]⚠ Client machine health check failed ({r.status_code}) — it may have restarted.[/bold yellow]")
+                        console.print(f"\n[bold yellow]⚠ Executor health check failed ({r.status_code}) — it may have restarted.[/bold yellow]")
                 except Exception:
-                    console.print(f"\n[bold red]✖ Client machine at {API_URL} is not responding. Check that 'gorgon serve' is still running.[/bold red]")
+                    console.print(f"\n[bold red]✖ Executor at {API_URL} is not responding. Check that it's still running.[/bold red]")
         _liveness_thread = threading.Thread(target=_liveness_loop, daemon=True)
         _liveness_thread.start()
 

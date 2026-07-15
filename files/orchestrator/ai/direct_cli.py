@@ -10,6 +10,7 @@ This module imports every dependency from its own source module, so it never
 imports from cli — the edge is one-directional (cli -> direct_cli), no cycle.
 """
 
+import getpass
 import http.server
 import json
 import os
@@ -27,6 +28,7 @@ from orchestrator.executor_client import (
     get_ovmf as _get_ovmf, get_profiles as list_profiles,
     get_capabilities as check_system_capabilities, check_profile_compatibility,
 )
+from orchestrator.auth import store as _auth_store, sessions as _auth_sessions
 from .session import clear_session
 from shared.display import (
     console, render_compat, render_monitor, render_profiles, render_templates,
@@ -125,6 +127,22 @@ def _show_stealth_popup(vm_name: str, setup_cmd: str) -> None:
         pass  # no GUI toolkit available — the popup is optional, so give up silently
 
 
+# login/logout bypass the gate itself (nothing to check a session against
+# yet); everything else — including "operator" management — is held to it.
+_AUTH_EXEMPT_COMMANDS = {"login", "logout"}
+
+
+def _operator_gate_ok(cmd: str) -> bool:
+    """True if cmd may dispatch: no operator accounts exist yet (pre-bootstrap,
+    identical to legacy behavior — nothing breaks until someone opts in via
+    `gorgon login`), or this box holds a valid, unexpired login."""
+    if cmd in _AUTH_EXEMPT_COMMANDS:
+        return True
+    if not _auth_store.operators_exist():
+        return True
+    return _auth_sessions.current_username() is not None
+
+
 # Dispatches direct sub-commands (list, launch, stop, snapshot, network, etc.) to the manager and renders output.
 # In: List[str] args, bool verbose → Out: nothing
 def cli_direct(args: List[str], verbose: bool = False) -> None:
@@ -140,6 +158,10 @@ def cli_direct(args: List[str], verbose: bool = False) -> None:
 
     cmd  = args[0]
     rest = args[1:]
+
+    if not _operator_gate_ok(cmd):
+        console.print("[bold red]Login required.[/bold red] Run [cyan]gorgon login[/cyan] first.")
+        return
 
     if cmd == "list":
         vms = manager.list_vms()
@@ -327,14 +349,92 @@ def cli_direct(args: List[str], verbose: bool = False) -> None:
             srv.shutdown()
             console.print("[dim]Server stopped.[/dim]")
 
+    elif cmd == "guest-agent-setup" and rest:
+        vm_name = rest[0]
+        r = manager.generate_guest_agent_setup(vm_name)
+        if not r.get("success"):
+            console.print(f"[error]{r['error']}[/error]")
+            return
+
+        script_path = r["path"]
+        script_dir  = os.path.dirname(script_path)
+        script_file = os.path.basename(script_path)
+
+        # Find a free port and serve the script via HTTP so the VM can pull it
+        with socket.socket() as s:
+            s.bind(('', 0))
+            port = s.getsockname()[1]
+
+        class _Handler(http.server.SimpleHTTPRequestHandler):
+            def __init__(self, *a, **kw):
+                super().__init__(*a, directory=script_dir, **kw)
+            def log_message(self, *_) -> None:
+                """Silence the default HTTP request logging."""
+                pass  # silence access log
+
+        srv = http.server.HTTPServer(('0.0.0.0', port), _Handler)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+
+        url = r["cmd_template"].format(port=port)
+
+        console.print(Panel(
+            f"[bold]Script:[/bold] {script_path}\n\n"
+            f"[bold]Inside the VM, run:[/bold]\n"
+            f"[cyan]{url}[/cyan]\n\n"
+            f"[dim]Server will exit when you press Ctrl+C.[/dim]",
+            title=f"Guest Agent Setup — {vm_name}",
+            border_style="green",
+        ))
+        try:
+            srv.serve_forever()
+        except KeyboardInterrupt:
+            srv.shutdown()
+            console.print("[dim]Server stopped.[/dim]")
+
+    elif cmd == "guest-ping" and rest:
+        r = manager.guest_ping(rest[0])
+        if not r.get("success"):
+            console.print(f"[error]{r.get('error', 'unknown error')}[/error]")
+        else:
+            style = "success" if r.get("alive") else "warn"
+            state = "alive" if r.get("alive") else "not responding"
+            console.print(f"[{style}]{rest[0]}: guest agent {state}[/{style}]")
+
+    elif cmd == "guest-agent-offline" and rest:
+        r = manager.provision_guest_agent_offline(rest[0])
+        if not r.get("success"):
+            console.print(f"[error]{r.get('error', 'unknown error')}[/error]")
+        else:
+            console.print(f"[success]Stealth serial-agent provisioned offline on '{rest[0]}'.[/success]")
+
+    elif cmd == "execute" and len(rest) >= 2:
+        r = manager.run_guest_command(rest[0], " ".join(rest[1:]))
+        if not r.get("success"):
+            console.print(f"[error]{r.get('error', 'unknown error')}[/error]")
+            return
+        if r.get("stdout"):
+            console.print(r["stdout"], end="" if r["stdout"].endswith("\n") else "\n")
+        if r.get("stderr"):
+            console.print(f"[error]{r['stderr']}[/error]", end="")
+        console.print(f"[dim]exit code: {r.get('exit_code')}[/dim]")
+
+    elif cmd == "guest-agent-enable" and rest:
+        r = manager.update_config(rest[0], {"guest_agent": True})
+        style = "success" if r.get("success") else "error"
+        console.print(f"[{style}]{r.get('message', r.get('error', ''))}[/{style}]")
+
+    elif cmd == "guest-agent-disable" and rest:
+        r = manager.update_config(rest[0], {"guest_agent": False})
+        style = "success" if r.get("success") else "error"
+        console.print(f"[{style}]{r.get('message', r.get('error', ''))}[/{style}]")
+
     elif cmd == "serve":
         import uvicorn
-        from orchestrator.executor_client import _EX
         # Parse: serve [host] [port] [--cert cert.pem --key key.pem]
         positional = [a for a in rest if not a.startswith("--")]
         flags      = rest  # full list for --flag parsing
         host = positional[0] if positional else "0.0.0.0"
-        port = int(positional[1]) if len(positional) > 1 else _EX.get("port", 8080)
+        port = int(positional[1]) if len(positional) > 1 else 8080
         cert = flags[flags.index("--cert") + 1] if "--cert" in flags else None
         key  = flags[flags.index("--key")  + 1] if "--key"  in flags else None
         tls_line = (
@@ -343,11 +443,11 @@ def cli_direct(args: List[str], verbose: bool = False) -> None:
             "[yellow]TLS OFF[/yellow] — use --cert / --key for HTTPS (required over untrusted networks)"
         )
         console.print(Panel(
-            f"[bold cyan]gorgon executor service[/bold cyan]\n"
+            f"[bold cyan]gorgon orchestrator service[/bold cyan]\n"
             f"Listening on [bold]{host}:{port}[/bold]\n"
             f"{tls_line}\n"
-            f"[dim]Set API_TOKEN on this machine and on the AI provider before connecting.[/dim]",
-            border_style="cyan", title="Client Machine",
+            f"[dim]Set API_TOKEN on this machine and on every client before connecting.[/dim]",
+            border_style="cyan", title="Orchestrator Machine",
         ))
         uvicorn_kwargs: dict = {"host": host, "port": port, "log_level": "warning"}
         if cert and key:
@@ -356,7 +456,7 @@ def cli_direct(args: List[str], verbose: bool = False) -> None:
         elif cert or key:
             console.print("[bold red]--cert and --key must both be provided for TLS.[/bold red]")
             sys.exit(1)
-        uvicorn.run("client.server.api_server:app", **uvicorn_kwargs)
+        uvicorn.run("orchestrator.http.api_server:app", **uvicorn_kwargs)
 
     elif cmd == "fetch":
         # fetch <vm_name> [--out /dest/dir] — download VM disk from client machine
@@ -445,6 +545,58 @@ def cli_direct(args: List[str], verbose: bool = False) -> None:
     elif cmd == "-tf" and rest:
         tf_report(rest[0])
 
+    elif cmd == "login":
+        username = rest[0] if rest else None
+        if not _auth_store.operators_exist():
+            console.print("[bold cyan]No operator account exists yet — creating the first one.[/bold cyan]")
+            username = username or console.input("Username: ").strip()
+            while True:
+                pw1 = getpass.getpass("Password: ")
+                pw2 = getpass.getpass("Confirm password: ")
+                if pw1 != pw2:
+                    console.print("[red]Passwords didn't match — try again.[/red]")
+                    continue
+                if len(pw1) < 8:
+                    console.print("[red]Password must be at least 8 characters.[/red]")
+                    continue
+                break
+            r = _auth_store.create_operator(username, pw1)
+            if not r.get("success"):
+                console.print(f"[bold red]{r.get('error')}[/bold red]")
+                return
+            password = pw1
+        else:
+            username = username or console.input("Username: ").strip()
+            password = getpass.getpass("Password: ")
+        if not _auth_store.verify_password(username, password):
+            console.print("[bold red]Invalid username or password.[/bold red]")
+            return
+        token = _auth_sessions.create_session(username)
+        _auth_sessions.write_current_session(token)
+        console.print(f"[bold green]Logged in as '{username}'.[/bold green]")
+
+    elif cmd == "logout":
+        _auth_sessions.invalidate_session(_auth_sessions.read_current_session())
+        _auth_sessions.clear_current_session()
+        console.print("[dim]Logged out.[/dim]")
+
+    elif cmd == "operator" and rest:
+        sub = rest[0]
+        if sub == "add" and len(rest) >= 2:
+            pw = getpass.getpass("Password: ")
+            r  = _auth_store.create_operator(rest[1], pw)
+            console.print(f"[green]Operator '{rest[1]}' created.[/green]" if r.get("success")
+                          else f"[bold red]{r.get('error')}[/bold red]")
+        elif sub == "list":
+            for u in _auth_store.list_operators():
+                console.print(f"  {u}")
+        elif sub == "remove" and len(rest) >= 2:
+            r = _auth_store.delete_operator(rest[1])
+            console.print(f"[green]Operator '{rest[1]}' removed.[/green]" if r.get("success")
+                          else f"[bold red]{r.get('error')}[/bold red]")
+        else:
+            console.print("[yellow]Usage: gorgon operator add|list|remove <username>[/yellow]")
+
     else:
         from shared.command_help import load_local_catalog, render_terminal_panel
         try:
@@ -461,7 +613,10 @@ def cli_direct(args: List[str], verbose: bool = False) -> None:
             "  cmd <vm> \"<monitor cmd>\"        Send a raw QEMU monitor command\n"
             "  serve \\[host] \\[port]           Run this node as the executor API\n"
             "  clear-session                  Wipe the saved AI session\n"
-            "  -tf <vm>                       Show a fingerprint report for a VM\n\n"
+            "  -tf <vm>                       Show a fingerprint report for a VM\n"
+            "  login \\[username]               Log in (creates the first operator if none exist)\n"
+            "  logout                         End this box's login session\n"
+            "  operator add|list|remove       Manage operator accounts (requires login)\n\n"
             "[bold cyan]Flags[/bold cyan]\n"
             "  -v   verbose / raw output      -cu  custom mode      -cs  clear session first"
         )

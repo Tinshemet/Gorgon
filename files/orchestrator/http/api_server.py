@@ -20,7 +20,7 @@ import pathlib
 import secrets
 import uuid
 
-from fastapi import FastAPI, HTTPException, Depends, Body, Request
+from fastapi import FastAPI, HTTPException, Depends, Body, Request, Response, Cookie
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
@@ -74,6 +74,7 @@ app   = FastAPI(title="gorgon executor", version="1.0")
 _auth = HTTPBearer(auto_error=False)
 
 _LOCALHOST = {"127.0.0.1", "::1", "localhost"}
+_SESSION_COOKIE_NAME = "gorgon_session"
 
 
 @app.on_event("startup")
@@ -83,21 +84,93 @@ async def _startup() -> None:
     _sync()
 
 
-def _require_token(
+def _require_auth(
     request: Request,
     creds: Optional[HTTPAuthorizationCredentials] = Depends(_auth),
+    session_cookie: Optional[str] = Cookie(default=None, alias=_SESSION_COOKIE_NAME),
 ) -> None:
-    """FastAPI dependency: allow localhost freely; require valid Bearer token otherwise."""
-    if request.client and request.client.host in _LOCALHOST:
-        return  # localhost always trusted
-    # Re-read the token fresh so that env-var changes (token rotation, test setup)
-    # take effect without a server restart.
+    """FastAPI dependency: require a valid API_TOKEN bearer OR a valid operator
+    session (bearer token or cookie — one /login response serves both the CLI
+    and a future browser client from the same session store).
+
+    Localhost is trusted freely ONLY while no operator account exists yet —
+    identical to the old behavior, so nothing breaks until an operator opts
+    into the login system via `gorgon login`. The moment one exists, localhost
+    is held to the same bar as anyone else — this is what actually closes the
+    gap for the CLI's normal (localhost) traffic.
+    """
+    from orchestrator.auth import sessions as _op_sessions
+    from orchestrator.auth import store as _op_store
+
+    bootstrap_open = not _op_store.operators_exist()
+    is_localhost   = bool(request.client and request.client.host in _LOCALHOST)
+    if bootstrap_open and is_localhost:
+        return
+
+    # Operator session — Bearer token or cookie, either way.
+    session_token = (creds.credentials if creds else None) or session_cookie
+    if session_token and _op_sessions.validate_session(session_token):
+        return
+
+    # API_TOKEN bearer — unchanged machine-to-machine / AI-provider path.
+    # Re-read fresh so env-var changes (token rotation, test setup) take
+    # effect without a server restart.
     token = _load_token() or _TOKEN
-    if not token:
+    if token and creds is not None and secrets.compare_digest(creds.credentials, token):
+        return
+
+    if bootstrap_open and not is_localhost and not token:
         raise HTTPException(status_code=401, detail="No API token configured on server.")
-    # Constant-time compare — a plain != leaks the token byte-by-byte via timing.
-    if creds is None or not secrets.compare_digest(creds.credentials, token):
-        raise HTTPException(status_code=401, detail="Invalid API token.")
+    raise HTTPException(status_code=401, detail="Login required (run `gorgon login`) or provide a valid API token.")
+
+
+def _require_operator_auth(
+    request: Request,
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(_auth),
+    session_cookie: Optional[str] = Cookie(default=None, alias=_SESSION_COOKIE_NAME),
+) -> None:
+    """Stricter than _require_auth — applied only to /chat and /execute, the
+    primary human-interactive surfaces.
+
+    The plain API_TOKEN is shipped as the same default value
+    (connection_config.json's "token") in both the server's and the client's
+    config, so any interactive client (e.g. client/ui/chat_client.py) carries
+    working "credentials" out of the box regardless of whether anyone has
+    ever logged in — making operator login optional in practice, not
+    mandatory, for exactly the surfaces this feature was built to gate.
+
+    Once an operator account exists, ONLY a valid operator session (bearer or
+    cookie) is accepted here — the shared token no longer suffices. Every
+    other _require_auth-gated endpoint (rotate-token, sync, events, ...)
+    keeps accepting the plain token unchanged; this is deliberately scoped to
+    /chat and /execute only. Pre-bootstrap (no operators yet) behaves
+    identically to _require_auth, including the plain-token fallback for
+    non-localhost callers.
+    """
+    from orchestrator.auth import sessions as _op_sessions
+    from orchestrator.auth import store as _op_store
+
+    bootstrap_open = not _op_store.operators_exist()
+    is_localhost   = bool(request.client and request.client.host in _LOCALHOST)
+    if bootstrap_open:
+        if is_localhost:
+            return
+        token = _load_token() or _TOKEN
+        if token and creds is not None and secrets.compare_digest(creds.credentials, token):
+            return
+        raise HTTPException(
+            status_code=401,
+            detail="No API token configured on server." if not token else "Invalid API token.",
+        )
+
+    session_token = (creds.credentials if creds else None) or session_cookie
+    if session_token and _op_sessions.validate_session(session_token):
+        return
+    raise HTTPException(
+        status_code=401,
+        detail="Login required (run `gorgon login`) — the shared API token alone no "
+               "longer authorizes this endpoint once an operator account exists.",
+    )
 
 
 class ExecuteRequest(BaseModel):
@@ -153,7 +226,7 @@ def health() -> Dict[str, Any]:
     return {"status": "ok"}
 
 
-@app.get("/info", dependencies=[Depends(_require_token)])
+@app.get("/info", dependencies=[Depends(_require_auth)])
 def info() -> Dict[str, Any]:
     """Return server-side runtime info for the client banner."""
     from orchestrator.ai.ollama_client import OLLAMA_URL, OLLAMA_MODEL
@@ -170,14 +243,14 @@ def info() -> Dict[str, Any]:
     }
 
 
-@app.get("/events", dependencies=[Depends(_require_token)])
+@app.get("/events", dependencies=[Depends(_require_auth)])
 def get_events(limit: int = 100, since: str = "") -> Dict[str, Any]:
     """Return recent server events (tool calls, outcomes, durations)."""
     from orchestrator.event_log import read_events
     return {"events": read_events(limit=limit, since=since)}
 
 
-@app.get("/sync", dependencies=[Depends(_require_token)])
+@app.get("/sync", dependencies=[Depends(_require_auth)])
 def sync() -> Dict[str, Any]:
     """Return server-authoritative config the client should apply at startup."""
     ai_cfg_path = pathlib.Path(__file__).parent.parent / "ai" / "config.json"
@@ -220,7 +293,7 @@ def sync() -> Dict[str, Any]:
     }
 
 
-@app.post("/chat", dependencies=[Depends(_require_token)])
+@app.post("/chat", dependencies=[Depends(_require_operator_auth)])
 def chat(req: ChatRequest) -> Dict[str, Any]:
     """
     Process one AI chat turn server-side and return the response.
@@ -368,20 +441,20 @@ def chat(req: ChatRequest) -> Dict[str, Any]:
     }
 
 
-@app.get("/sessions", dependencies=[Depends(_require_token)])
+@app.get("/sessions", dependencies=[Depends(_require_auth)])
 def list_sessions() -> Dict[str, Any]:
     """List active session IDs (debug/admin)."""
     return {"sessions": list(_sessions.keys())}
 
 
-@app.delete("/sessions/{session_id}", dependencies=[Depends(_require_token)])
+@app.delete("/sessions/{session_id}", dependencies=[Depends(_require_auth)])
 def clear_session(session_id: str) -> Dict[str, Any]:
     """Delete a session's conversation history."""
     _sessions.pop(session_id, None)
     return {"ok": True, "session_id": session_id}
 
 
-@app.post("/rotate-token", dependencies=[Depends(_require_token)])
+@app.post("/rotate-token", dependencies=[Depends(_require_auth)])
 def rotate_token(new_token: str = Body(..., embed=True)) -> Dict[str, Any]:
     """Replace the in-memory token and persist it to ~/.gorgon.token."""
     global _TOKEN
@@ -403,7 +476,83 @@ def rotate_token(new_token: str = Body(..., embed=True)) -> Dict[str, Any]:
     return {"ok": True, "message": "Token rotated. Update API_TOKEN on the AI provider too."}
 
 
-@app.post("/custom-mode", dependencies=[Depends(_require_token)])
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class CreateOperatorRequest(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/login")
+def login(body: LoginRequest, response: Response) -> Dict[str, Any]:
+    """Authenticate an operator; return a session token and set it as a cookie.
+
+    No auth dependency — this IS the entry point auth hangs off of. Rate
+    limiting/lockout is out of scope for 1.1 (single-operator, localhost-first
+    threat model); revisit alongside the 1.2 multi-tenant work.
+    """
+    from orchestrator.auth import sessions as _op_sessions
+    from orchestrator.auth import store as _op_store
+
+    if not _op_store.verify_password(body.username, body.password):
+        raise HTTPException(status_code=401, detail="Invalid username or password.")
+    token = _op_sessions.create_session(body.username)
+    response.set_cookie(key=_SESSION_COOKIE_NAME, value=token, httponly=True, samesite="lax")
+    return {"success": True, "session_token": token, "username": body.username}
+
+
+@app.post("/logout", dependencies=[Depends(_require_auth)])
+def logout(
+    response: Response,
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(_auth),
+    session_cookie: Optional[str] = Cookie(default=None, alias=_SESSION_COOKIE_NAME),
+) -> Dict[str, Any]:
+    """Invalidate the caller's operator session (bearer token or cookie)."""
+    from orchestrator.auth import sessions as _op_sessions
+    token = (creds.credentials if creds else None) or session_cookie
+    _op_sessions.invalidate_session(token)
+    response.delete_cookie(_SESSION_COOKIE_NAME)
+    return {"success": True}
+
+
+@app.post("/operators", dependencies=[Depends(_require_auth)])
+def create_operator_endpoint(body: CreateOperatorRequest) -> Dict[str, Any]:
+    """Create a new operator account.
+
+    Reachable pre-bootstrap from localhost with no credentials at all — the
+    same "localhost trusted until an operator exists" rule _require_auth
+    applies everywhere else covers creating that first account too.
+    """
+    from orchestrator.auth import store as _op_store
+    if len(body.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+    result = _op_store.create_operator(body.username, body.password)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error"))
+    return result
+
+
+@app.get("/operators", dependencies=[Depends(_require_auth)])
+def list_operators_endpoint() -> Dict[str, Any]:
+    """List all operator usernames."""
+    from orchestrator.auth import store as _op_store
+    return {"operators": _op_store.list_operators()}
+
+
+@app.delete("/operators/{username}", dependencies=[Depends(_require_auth)])
+def delete_operator_endpoint(username: str) -> Dict[str, Any]:
+    """Delete an operator account by username."""
+    from orchestrator.auth import store as _op_store
+    result = _op_store.delete_operator(username)
+    if not result.get("success"):
+        raise HTTPException(status_code=404, detail=result.get("error"))
+    return result
+
+
+@app.post("/custom-mode", dependencies=[Depends(_require_auth)])
 def custom_mode(enabled: bool = Body(..., embed=True)) -> Dict[str, Any]:
     """Toggle custom-machine mode (skip product verification) for -cu.
 
@@ -447,7 +596,7 @@ def _manager_proxy() -> object:
     return _Proxy()
 
 
-@app.post("/execute", dependencies=[Depends(_require_token)])
+@app.post("/execute", dependencies=[Depends(_require_operator_auth)])
 def execute(req: ExecuteRequest) -> Any:
     """Dispatch a tool call via executor_client and return its result (or raise HTTP 4xx on access/preflight failure)."""
     from orchestrator.executor_client import execute_tool
@@ -551,7 +700,7 @@ def _disk_path(vm_name: str) -> pathlib.Path:
     return candidates[0]
 
 
-@app.get("/images/{vm_name}/sha256", dependencies=[Depends(_require_token)])
+@app.get("/images/{vm_name}/sha256", dependencies=[Depends(_require_auth)])
 def image_sha256(vm_name: str) -> Dict[str, Any]:
     """Return the SHA-256 checksum of the VM's primary disk."""
     exec_url = _executor_url()
@@ -572,7 +721,7 @@ def image_sha256(vm_name: str) -> Dict[str, Any]:
             "size_bytes": path.stat().st_size}
 
 
-@app.get("/images/{vm_name}", dependencies=[Depends(_require_token)])
+@app.get("/images/{vm_name}", dependencies=[Depends(_require_auth)])
 def image_download(vm_name: str, request: Request) -> StreamingResponse:
     """Stream the VM's primary qcow2 disk — proxied from executor in remote mode."""
     import requests as _req
@@ -642,7 +791,7 @@ def image_download(vm_name: str, request: Request) -> StreamingResponse:
     )
 
 
-@app.get("/vms/{vm_name}/bundle", dependencies=[Depends(_require_token)])
+@app.get("/vms/{vm_name}/bundle", dependencies=[Depends(_require_auth)])
 def vm_bundle(vm_name: str) -> StreamingResponse:
     """Stream the entire VM folder as a tar.gz — proxied from executor in remote mode."""
     import requests as _req, subprocess as _sp

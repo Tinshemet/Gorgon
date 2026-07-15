@@ -19,6 +19,14 @@ from typing import Optional
 
 import requests
 
+try:
+    # Same defensive-import reasoning as client/cli/commands.py — this module
+    # runs on client-only checkouts too, where orchestrator/ may be absent.
+    from orchestrator.auth import store as _auth_store, sessions as _auth_sessions
+except ImportError:
+    _auth_store    = None                                          # type: ignore[assignment]
+    _auth_sessions = None                                          # type: ignore[assignment]
+
 # ── Connection config ─────────────────────────────────────────────────────────
 
 _CFG_PATH  = os.path.join(os.path.dirname(os.path.dirname(__file__)), "connection_config.json")
@@ -41,7 +49,14 @@ _VERIFY    = (
     False if os.environ.get("API_VERIFY_SSL", "1") == "0"
     else (_CA_CERT or _CFG.get("verify_ssl", True))
 )
-_HEADERS   = {"Authorization": f"Bearer {_TOKEN}"} if _TOKEN else {}
+# Prefer this box's logged-in operator session over the static API_TOKEN —
+# /chat now requires a session specifically once an operator account exists
+# (see orchestrator/http/api_server.py's _require_operator_auth), so the
+# static token alone would otherwise get every message rejected even for a
+# legitimately logged-in operator.
+_SESSION_TOKEN = _auth_sessions.read_current_session() if _auth_sessions else None
+_EFFECTIVE_TOKEN = _SESSION_TOKEN or _TOKEN
+_HEADERS   = {"Authorization": f"Bearer {_EFFECTIVE_TOKEN}"} if _EFFECTIVE_TOKEN else {}
 
 # ── Session persistence ───────────────────────────────────────────────────────
 
@@ -502,12 +517,12 @@ def _server_reachable() -> bool:
 
 
 def _autostart_server(stdscr: "curses.window") -> bool:
-    """Launch the server if server files are present alongside the client. Returns True when ready."""
+    """Launch the orchestrator if its files are present alongside the client. Returns True when ready."""
     _client_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     _files_dir  = os.path.dirname(_client_dir)
-    _server_mod = os.path.join(_files_dir, "server", "http", "api_server.py")
+    _orch_mod   = os.path.join(_files_dir, "orchestrator", "http", "api_server.py")
 
-    if not os.path.exists(_server_mod):
+    if not os.path.exists(_orch_mod):
         return False
 
     from urllib.parse import urlparse
@@ -519,13 +534,13 @@ def _autostart_server(stdscr: "curses.window") -> bool:
         token = open(os.path.expanduser("~/.gorgon.token")).read().strip()
         env["API_TOKEN"] = token
     except Exception:
-        pass  # no token file — run without an API token (server may allow it)
+        pass  # no token file — run without an API token (orchestrator may allow it)
 
-    _log_path = _UI_CFG.get("log_path", "/tmp/gorgon-server.log")
+    _log_path = _UI_CFG.get("log_path", "/tmp/gorgon-orchestrator.log")
     import subprocess as _sp
     _sp.Popen(
         [sys.executable, "-m", "uvicorn",
-         "server.http.api_server:app",
+         "orchestrator.http.api_server:app",
          "--host", "0.0.0.0", f"--port", str(port),
          "--log-level", "warning"],
         cwd=_files_dir, env=env,
@@ -771,7 +786,7 @@ def _run(stdscr: "curses.window", verbose: bool = False, color_hex: str = "#aaaa
         if started:
             _add("  Server ready.", _cp(C_GREEN))
         else:
-            _add("  Could not start server. Check /tmp/gorgon-server.log", _cp(C_RED))
+            _add("  Could not start server. Check /tmp/gorgon-orchestrator.log", _cp(C_RED))
         _draw(stdscr, "")
 
     ok = _sync_from_server()
@@ -872,7 +887,17 @@ def _run(stdscr: "curses.window", verbose: bool = False, color_hex: str = "#aaaa
 # ── Public entry point ────────────────────────────────────────────────────────
 
 def chat_loop(verbose: bool = False, color_hex: str = "#aaaaaa", font_size: int = 13) -> None:
-    """Entry point — run the curses chat client until the user exits."""
+    """Entry point — run the curses chat client until the user exits.
+
+    Same gate as client/cli/commands.py's _operator_gate_ok and
+    orchestrator/ai/cli.py's chat_loop — bare `gorgon` (no args) routes here
+    via client_wrapper.py, a THIRD entry point that needed this independently
+    (none of the others cover it; see the dual-CLI-dispatch memory note).
+    """
+    if (_auth_store is not None and _auth_store.operators_exist()
+            and _auth_sessions.current_username() is None):
+        print("Login required. Run `gorgon login` first.")
+        return
     try:
         curses.wrapper(lambda s: _run(s, verbose, color_hex, font_size))
     except KeyboardInterrupt:

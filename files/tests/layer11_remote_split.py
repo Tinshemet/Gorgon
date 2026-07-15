@@ -60,7 +60,7 @@ without needing a real Ollama instance or real QEMU process.
     - extra junk fields in body → ignored, 200
 """
 
-import os, sys, time, traceback, uuid
+import contextlib, os, sys, tempfile, time, traceback, uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 from unittest.mock import MagicMock, patch, call
@@ -93,16 +93,80 @@ def _run(fn: Callable[[], List[str]]) -> List[str]:
         return [f"Unexpected exception:\n{traceback.format_exc()}"]
 
 
+_auth_isolation_active = False  # set by _isolated_auth_paths() while its context is open
+
+
 def _make_test_client():
-    """Return (TestClient, token). Sets API_TOKEN env var and re-imports api_server."""
+    """Return (TestClient, token). Sets API_TOKEN env var and re-imports api_server.
+
+    Also isolates the operator/session store to a fresh temp dir — unless an
+    outer _isolated_auth_paths() context is already active (checked via
+    _auth_isolation_active), in which case this leaves that isolation alone
+    rather than layering a second, different temp dir on top of it (which
+    would orphan anything the test already wrote — e.g. an operator account
+    created before calling this — in the outer context's directory while the
+    client ends up pointed at yet another empty one).
+
+    Every test in this file goes through here, and orchestrator/http/api_server.py's
+    auth now consults orchestrator.auth.store.operators_exist() on every
+    request; if a real operator account exists on whatever machine runs this
+    suite (genuine local usage, not test state), every /chat and /execute test
+    that assumes "no operators yet -> plain token works" would otherwise fail
+    depending on what's actually on that box. Patches (when applied here) are
+    started, never stopped — matches the pattern already established for the
+    API_TOKEN env var above: the whole test_api.py run is a single one-shot
+    process, not a long-lived session, so there's nothing to restore after.
+    """
     token = f"test-secret-{_uid()}"
     os.environ["API_TOKEN"] = token
     sys.path.insert(0, _FILES_DIR)
     if "server.http.api_server" in sys.modules:
         del sys.modules["server.http.api_server"]
+    if not _auth_isolation_active:
+        from orchestrator.auth import sessions as _op_sessions
+        from orchestrator.auth import store as _op_store
+        import pathlib
+        d = pathlib.Path(tempfile.mkdtemp(prefix="rs_auth_"))
+        patch.object(_op_store,    "OPERATORS_FILE",       d / "operators.json").start()
+        patch.object(_op_sessions, "SESSIONS_FILE",        d / "operator_sessions.json").start()
+        patch.object(_op_sessions, "CURRENT_SESSION_FILE", d / "current_session").start()
     from orchestrator.http.api_server import app
     from fastapi.testclient import TestClient
     return TestClient(app, raise_server_exceptions=False), token
+
+
+@contextlib.contextmanager
+def _isolated_auth_paths():
+    """Point the operator/session store at a scratch temp dir for the duration.
+
+    orchestrator/auth/store.py + sessions.py read/write real files under
+    ~/.gorgon — genuine host state, not per-test-isolated. Once a real
+    operator account exists on a box (real usage, not just this test suite),
+    every test that assumes "no operators yet -> localhost bypass" would
+    otherwise start failing. Patching the module-level path constants keeps
+    every operator/session test fully isolated from whatever's actually on
+    the machine running the suite.
+
+    Sets _auth_isolation_active while open so a _make_test_client() call
+    inside this context (common when a test needs to create_operator() before
+    building its client) reuses this same directory instead of patching to a
+    second, different one — which would silently orphan whatever the test
+    already wrote here.
+    """
+    global _auth_isolation_active
+    from orchestrator.auth import sessions as _op_sessions
+    from orchestrator.auth import store as _op_store
+    with tempfile.TemporaryDirectory() as d:
+        import pathlib
+        d = pathlib.Path(d)
+        with patch.object(_op_store,    "OPERATORS_FILE",        d / "operators.json"), \
+             patch.object(_op_sessions, "SESSIONS_FILE",         d / "operator_sessions.json"), \
+             patch.object(_op_sessions, "CURRENT_SESSION_FILE",  d / "current_session"):
+            _auth_isolation_active = True
+            try:
+                yield
+            finally:
+                _auth_isolation_active = False
 
 
 def _fake_process_message(text="OK", tool_results=None, needs_input=None):
@@ -1200,6 +1264,269 @@ def _t_rotate_junk_body_fields() -> List[str]:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
+# I. Operator login/session layer
+# ════════════════════════════════════════════════════════════════════════════════
+
+def _t_operator_localhost_bypass_pre_bootstrap() -> List[str]:
+    """The key regression this whole feature is about: localhost is trusted
+    with no creds at all UNTIL an operator account exists, then it isn't.
+
+    _make_test_client()'s TestClient reports as host "testclient" by default
+    (Starlette's own default, not "127.0.0.1") — none of the existing tests
+    needed to override that since they all present explicit creds. This is
+    the one test that needs a TestClient Starlette actually treats as
+    localhost, so it builds its own rather than touching the shared helper
+    every other auth-rejection test depends on behaving as non-local.
+    """
+    issues = []
+    with _isolated_auth_paths():
+        os.environ["API_TOKEN"] = f"test-secret-{_uid()}"
+        sys.path.insert(0, _FILES_DIR)
+        from fastapi.testclient import TestClient
+        from orchestrator.http.api_server import app
+        client = TestClient(app, raise_server_exceptions=False, client=("127.0.0.1", 12345))
+        with patch("shared.executioner.tool_executor.manager") as mock_mgr, \
+             patch("executor.api.qemu_config.list_profiles", return_value=[]):
+            mock_mgr.list_vms.return_value = []
+            resp = client.get("/sync")
+        if resp.status_code != 200:
+            issues.append(f"Expected localhost pre-bootstrap access to succeed, got {resp.status_code}: {resp.text}")
+
+        from orchestrator.auth import store as op_store
+        op_store.create_operator("admin", "correct-horse-battery")
+
+        resp = client.get("/sync")
+        if resp.status_code != 401:
+            issues.append(f"Expected localhost to be REJECTED once an operator exists, got {resp.status_code}")
+    return issues
+
+
+def _t_operator_login_wrong_password() -> List[str]:
+    with _isolated_auth_paths():
+        from orchestrator.auth import store as op_store
+        op_store.create_operator("admin", "correct-horse-battery")
+        client, _ = _make_test_client()
+        resp = client.post("/login", json={"username": "admin", "password": "wrong"})
+        if resp.status_code != 401:
+            return [f"Expected 401 for wrong password, got {resp.status_code}: {resp.text}"]
+    return []
+
+
+def _t_operator_login_unknown_user() -> List[str]:
+    with _isolated_auth_paths():
+        client, _ = _make_test_client()
+        resp = client.post("/login", json={"username": "ghost", "password": "whatever123"})
+        if resp.status_code != 401:
+            return [f"Expected 401 for unknown user, got {resp.status_code}: {resp.text}"]
+    return []
+
+
+def _t_operator_login_success_session_works() -> List[str]:
+    issues = []
+    with _isolated_auth_paths():
+        from orchestrator.auth import store as op_store
+        op_store.create_operator("admin", "correct-horse-battery")
+        client, _ = _make_test_client()
+        login = client.post("/login", json={"username": "admin", "password": "correct-horse-battery"})
+        if login.status_code != 200:
+            return [f"Expected 200 from /login, got {login.status_code}: {login.text}"]
+        token = login.json().get("session_token")
+        if not token:
+            issues.append(f"Expected a session_token in /login response, got {login.json()!r}")
+            return issues
+
+        with patch("shared.executioner.tool_executor.manager") as mock_mgr, \
+             patch("executor.api.qemu_config.list_profiles", return_value=[]):
+            mock_mgr.list_vms.return_value = []
+            resp = client.get("/sync", headers={"Authorization": f"Bearer {token}"})
+        if resp.status_code != 200:
+            issues.append(f"Expected session bearer token to authorize /sync, got {resp.status_code}: {resp.text}")
+    return issues
+
+
+def _t_operator_session_cookie_works() -> List[str]:
+    """The same session also works as a cookie — one /login serves the CLI
+    (bearer) and a future browser client (cookie) from one store."""
+    issues = []
+    with _isolated_auth_paths():
+        from orchestrator.auth import store as op_store
+        op_store.create_operator("admin", "correct-horse-battery")
+        client, _ = _make_test_client()
+        login = client.post("/login", json={"username": "admin", "password": "correct-horse-battery"})
+        if "gorgon_session" not in login.cookies:
+            issues.append("Expected /login to set a gorgon_session cookie")
+            return issues
+        with patch("shared.executioner.tool_executor.manager") as mock_mgr, \
+             patch("executor.api.qemu_config.list_profiles", return_value=[]):
+            mock_mgr.list_vms.return_value = []
+            resp = client.get("/sync")  # TestClient carries the cookie automatically
+        if resp.status_code != 200:
+            issues.append(f"Expected the session cookie alone to authorize /sync, got {resp.status_code}")
+    return issues
+
+
+def _t_operator_api_token_unaffected() -> List[str]:
+    """The existing API_TOKEN machine-to-machine path is untouched by any of
+    this — it must keep working even after operator accounts exist."""
+    issues = []
+    with _isolated_auth_paths():
+        from orchestrator.auth import store as op_store
+        op_store.create_operator("admin", "correct-horse-battery")
+        client, token = _make_test_client()
+        with patch("shared.executioner.tool_executor.manager") as mock_mgr, \
+             patch("executor.api.qemu_config.list_profiles", return_value=[]):
+            mock_mgr.list_vms.return_value = []
+            resp = client.get("/sync", headers={"Authorization": f"Bearer {token}"})
+        if resp.status_code != 200:
+            issues.append(f"Expected the plain API_TOKEN to still work, got {resp.status_code}: {resp.text}")
+    return issues
+
+
+def _t_operator_logout_invalidates() -> List[str]:
+    issues = []
+    with _isolated_auth_paths():
+        from orchestrator.auth import store as op_store
+        op_store.create_operator("admin", "correct-horse-battery")
+        client, _ = _make_test_client()
+        token = client.post("/login", json={"username": "admin", "password": "correct-horse-battery"}).json()["session_token"]
+        out = client.post("/logout", headers={"Authorization": f"Bearer {token}"})
+        if out.status_code != 200:
+            issues.append(f"Expected 200 from /logout, got {out.status_code}: {out.text}")
+        resp = client.get("/sync", headers={"Authorization": f"Bearer {token}"})
+        if resp.status_code != 401:
+            issues.append(f"Expected 401 using a session token after logout, got {resp.status_code}")
+    return issues
+
+
+def _t_operator_crud_roundtrip() -> List[str]:
+    issues = []
+    with _isolated_auth_paths():
+        from orchestrator.auth import store as op_store
+        op_store.create_operator("admin", "correct-horse-battery")
+        client, _ = _make_test_client()
+        token = client.post("/login", json={"username": "admin", "password": "correct-horse-battery"}).json()["session_token"]
+        hdrs = {"Authorization": f"Bearer {token}"}
+
+        created = client.post("/operators", json={"username": "second", "password": "another-pw-123"}, headers=hdrs)
+        if created.status_code != 200:
+            issues.append(f"Expected 200 creating a second operator, got {created.status_code}: {created.text}")
+
+        listed = client.get("/operators", headers=hdrs)
+        names = listed.json().get("operators", [])
+        if "admin" not in names or "second" not in names:
+            issues.append(f"Expected both operators listed, got {names!r}")
+
+        deleted = client.delete("/operators/second", headers=hdrs)
+        if deleted.status_code != 200:
+            issues.append(f"Expected 200 deleting operator, got {deleted.status_code}: {deleted.text}")
+
+        dup = client.post("/operators", json={"username": "admin", "password": "another-pw-123"}, headers=hdrs)
+        if dup.status_code != 400:
+            issues.append(f"Expected 400 creating a duplicate username, got {dup.status_code}")
+    return issues
+
+
+def _t_operator_create_short_password_rejected() -> List[str]:
+    issues = []
+    with _isolated_auth_paths():
+        from orchestrator.auth import store as op_store
+        op_store.create_operator("admin", "correct-horse-battery")
+        client, _ = _make_test_client()
+        token = client.post("/login", json={"username": "admin", "password": "correct-horse-battery"}).json()["session_token"]
+        resp = client.post("/operators", json={"username": "weak", "password": "short"},
+                            headers={"Authorization": f"Bearer {token}"})
+        if resp.status_code != 400:
+            issues.append(f"Expected 400 for a password under 8 chars, got {resp.status_code}")
+    return issues
+
+
+def _t_operator_token_insufficient_on_chat_and_execute() -> List[str]:
+    """Once an operator exists, the plain API_TOKEN alone must no longer
+    authorize /chat or /execute — only an operator session does. This is the
+    actual regression this stricter dependency exists to close: the shipped
+    default token (connection_config.json's "token") is what every
+    interactive client carries by default, so without this, operator login
+    is optional in practice, not mandatory, for these two surfaces."""
+    issues = []
+    with _isolated_auth_paths():
+        from orchestrator.auth import store as op_store
+        op_store.create_operator("admin", "correct-horse-battery")
+        client, token = _make_test_client()
+
+        resp = client.post("/execute", json={"tool_name": "list_vms", "args": {}},
+                            headers={"Authorization": f"Bearer {token}"})
+        if resp.status_code != 401:
+            issues.append(f"Expected 401 using the plain API_TOKEN on /execute post-bootstrap, got {resp.status_code}")
+
+        resp = client.post("/chat", json={"message": "hi"},
+                            headers={"Authorization": f"Bearer {token}"})
+        if resp.status_code != 401:
+            issues.append(f"Expected 401 using the plain API_TOKEN on /chat post-bootstrap, got {resp.status_code}")
+
+        # Sanity check: the SAME token still works on an unrelated endpoint
+        # that wasn't tightened (_require_auth, not _require_operator_auth).
+        with patch("shared.executioner.tool_executor.manager") as mock_mgr, \
+             patch("executor.api.qemu_config.list_profiles", return_value=[]):
+            mock_mgr.list_vms.return_value = []
+            resp = client.get("/sync", headers={"Authorization": f"Bearer {token}"})
+        if resp.status_code != 200:
+            issues.append(f"Expected the plain token to still work on /sync (untouched), got {resp.status_code}")
+    return issues
+
+
+def _t_operator_session_works_on_execute() -> List[str]:
+    """A valid operator session (not the plain token) authorizes /execute."""
+    issues = []
+    with _isolated_auth_paths():
+        from orchestrator.auth import store as op_store
+        op_store.create_operator("admin", "correct-horse-battery")
+        client, _ = _make_test_client()
+        login = client.post("/login", json={"username": "admin", "password": "correct-horse-battery"})
+        session_token = login.json()["session_token"]
+
+        with patch("orchestrator.executor_client.execute_tool",
+                   return_value={"success": True, "vms": []}):
+            resp = client.post(
+                "/execute", json={"tool_name": "list_vms", "args": {}},
+                headers={"Authorization": f"Bearer {session_token}"},
+            )
+        if resp.status_code != 200:
+            issues.append(f"Expected 200 using an operator session on /execute, got {resp.status_code}: {resp.text}")
+    return issues
+
+
+def _t_direct_cli_gate() -> List[str]:
+    """orchestrator/ai/direct_cli.py's cli_direct() gate — the in-process
+    path that never touches HTTP at all, and therefore never touches
+    _require_auth. Exercised directly, no TestClient involved."""
+    issues = []
+    with _isolated_auth_paths():
+        from orchestrator.ai.direct_cli import _operator_gate_ok
+        from orchestrator.auth import sessions as op_sessions
+        from orchestrator.auth import store as op_store
+
+        if not _operator_gate_ok("list"):
+            issues.append("Expected the gate to allow dispatch pre-bootstrap (no operators yet)")
+
+        op_store.create_operator("admin", "correct-horse-battery")
+        if _operator_gate_ok("list"):
+            issues.append("Expected the gate to BLOCK dispatch once an operator exists with no active session")
+        if not _operator_gate_ok("login"):
+            issues.append("Expected 'login' itself to always be exempt from the gate")
+
+        token = op_sessions.create_session("admin")
+        op_sessions.write_current_session(token)
+        if not _operator_gate_ok("list"):
+            issues.append("Expected the gate to allow dispatch once logged in")
+
+        op_sessions.invalidate_session(op_sessions.read_current_session())
+        op_sessions.clear_current_session()
+        if _operator_gate_ok("list"):
+            issues.append("Expected the gate to BLOCK dispatch again after logout")
+    return issues
+
+
+# ════════════════════════════════════════════════════════════════════════════════
 # E. executor_client is a re-export
 # ════════════════════════════════════════════════════════════════════════════════
 
@@ -1539,6 +1866,79 @@ REMOTE_SPLIT_TESTS: List[RemoteSplitTest] = [
         tags=["remote_split", "executor_client"],
         description="orchestrator.executor_client.execute_tool is orchestrator.pipeline.execute_tool",
         fn=_t_executor_client_is_re_export,
+    ),
+    # I. Operator login/session layer
+    RemoteSplitTest(
+        id="rs_operator_localhost_bypass_pre_bootstrap",
+        tags=["remote_split", "auth", "operator"],
+        description="Localhost trusted with no creds until an operator exists, then it isn't",
+        fn=_t_operator_localhost_bypass_pre_bootstrap,
+    ),
+    RemoteSplitTest(
+        id="rs_operator_login_wrong_password",
+        tags=["remote_split", "auth", "operator"],
+        description="POST /login with wrong password -> 401",
+        fn=_t_operator_login_wrong_password,
+    ),
+    RemoteSplitTest(
+        id="rs_operator_login_unknown_user",
+        tags=["remote_split", "auth", "operator"],
+        description="POST /login for a username that doesn't exist -> 401",
+        fn=_t_operator_login_unknown_user,
+    ),
+    RemoteSplitTest(
+        id="rs_operator_login_success_session_works",
+        tags=["remote_split", "auth", "operator"],
+        description="POST /login success returns a session_token that authorizes a gated endpoint",
+        fn=_t_operator_login_success_session_works,
+    ),
+    RemoteSplitTest(
+        id="rs_operator_session_cookie_works",
+        tags=["remote_split", "auth", "operator"],
+        description="The session cookie set by /login authorizes a gated endpoint on its own",
+        fn=_t_operator_session_cookie_works,
+    ),
+    RemoteSplitTest(
+        id="rs_operator_api_token_unaffected",
+        tags=["remote_split", "auth", "operator"],
+        description="The existing API_TOKEN bearer path still works once operator accounts exist",
+        fn=_t_operator_api_token_unaffected,
+    ),
+    RemoteSplitTest(
+        id="rs_operator_logout_invalidates",
+        tags=["remote_split", "auth", "operator"],
+        description="POST /logout invalidates the session; it's rejected on the next request",
+        fn=_t_operator_logout_invalidates,
+    ),
+    RemoteSplitTest(
+        id="rs_operator_crud_roundtrip",
+        tags=["remote_split", "auth", "operator"],
+        description="POST/GET/DELETE /operators — create, list, delete, duplicate rejected",
+        fn=_t_operator_crud_roundtrip,
+    ),
+    RemoteSplitTest(
+        id="rs_operator_create_short_password_rejected",
+        tags=["remote_split", "auth", "operator"],
+        description="POST /operators with a password under 8 chars -> 400",
+        fn=_t_operator_create_short_password_rejected,
+    ),
+    RemoteSplitTest(
+        id="rs_operator_token_insufficient_on_chat_and_execute",
+        tags=["remote_split", "auth", "operator"],
+        description="Plain API_TOKEN no longer authorizes /chat or /execute once an operator exists (other endpoints unaffected)",
+        fn=_t_operator_token_insufficient_on_chat_and_execute,
+    ),
+    RemoteSplitTest(
+        id="rs_operator_session_works_on_execute",
+        tags=["remote_split", "auth", "operator"],
+        description="A valid operator session (not the plain token) authorizes /execute",
+        fn=_t_operator_session_works_on_execute,
+    ),
+    RemoteSplitTest(
+        id="rs_direct_cli_gate",
+        tags=["remote_split", "auth", "operator", "direct_cli"],
+        description="direct_cli.py's in-process gate blocks/allows dispatch independently of HTTP",
+        fn=_t_direct_cli_gate,
     ),
 ]
 
