@@ -60,7 +60,9 @@ def t_delete_double_confirm_ok() -> None:
         inputs=["delete vm box", "YES", "box", "exit"],
         ollama=[{"tools": [("delete_vm", {"name": "box"})]}, "deleted"],
     )
-    assert rec.tools == ["delete_vm"], rec.tools
+    # delete_vm is a _VM_TOOLS member, so the context-assistant gate's grounding
+    # check probes list_vms (known_names) once before the real call goes through.
+    assert rec.tools == ["list_vms", "delete_vm"], rec.tools
 
 
 def t_delete_double_confirm_wrong_name() -> None:
@@ -91,7 +93,9 @@ def t_preflight_ask_user_needs_both_confirms() -> None:
         ollama=[{"tools": [("launch_vm", {"name": "box"})]}, "launched"],
         preflight=pf,
     )
-    assert rec.tools == ["launch_vm"], rec.tools
+    # launch_vm is a _VM_TOOLS member, so the context-assistant gate's grounding
+    # check probes list_vms (known_names) once before the real call goes through.
+    assert rec.tools == ["list_vms", "launch_vm"], rec.tools
 
 
 def t_preflight_ask_user_cancel() -> None:

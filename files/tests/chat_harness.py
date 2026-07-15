@@ -112,12 +112,16 @@ def run_chat(
     def _call_ollama(_messages):
         return pending_ollama.pop(0) if pending_ollama else None
 
-    def _execute_tool(name, args, verbose=False):
+    def _execute_tool(name, args, verbose=False, log=True):
         rec.executed.append((name, dict(args)))
         if callable(exec_results):
             return exec_results(name, args)
         if isinstance(exec_results, dict) and name in exec_results:
             return exec_results[name]
+        if name == "list_vms":
+            # Real list_vms returns a list of VM dicts (see _context_assistant_gate's
+            # known_names lookup) — not the generic single-dict fallback below.
+            return []
         return {"success": True, "name": args.get("name", ""), "vm_dir": "/x"}
 
     def _preflight_check(name, args, _mgr, _verbose, stateless_only=False):
@@ -125,7 +129,7 @@ def run_chat(
             return preflight(name, args)
         return preflight if isinstance(preflight, dict) else {"action": "ok"}
 
-    def _check_context(user_input, tool, args, recent_context=""):
+    def _check_context(user_input, tool, args, recent_context="", known_names=None):
         return context(user_input, tool, args) if callable(context) else context
 
     def _extract_slots(user_input):
