@@ -99,6 +99,8 @@ def process_message(
     # Proactive pre-pass: deterministic guidance injected on the first round only,
     # transiently (not persisted) — cuts the first wrong step. Mirrors chat_turn.
     _guidance = proactive_prep(user_input)
+    # round-0 tool-narrowing was tried and reverted — it degrades llama3.1's
+    # referential reasoning (see cli.py note / context_assistant.narrow_tools).
     for _loop_iter in range(_LOOP_MAX):
         _call_msgs = messages
         if _loop_iter == 0 and _guidance:

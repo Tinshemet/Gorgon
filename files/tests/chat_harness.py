@@ -109,7 +109,7 @@ def run_chat(
         raise EOFError
 
     pending_ollama = [_ollama_message(s) for s in ollama]
-    def _call_ollama(_messages):
+    def _call_ollama(_messages, _tools=None):   # _tools: round-0 narrowing (ignored by the stub)
         return pending_ollama.pop(0) if pending_ollama else None
 
     def _execute_tool(name, args, verbose=False, log=True):

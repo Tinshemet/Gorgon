@@ -268,6 +268,11 @@ def chat_loop(verbose: bool = False) -> None:
         # injected ONLY on the first round — the initial step where a wrong pick
         # costs a whole churn round — and transiently (never persisted to history).
         _guidance = "" if _is_synthetic else proactive_prep(user_input)
+        # NB: round-0 tool-narrowing was tried here and REVERTED — verified it
+        # degrades llama3.1's referential reasoning (offering 4 tools instead of 46
+        # made "same OS as test1" hallucinate os_type 4/4 runs). The fuller tool
+        # context anchors the weak model; the soft guidance above is the win, not
+        # restricting the tool set. See context_assistant.narrow_tools.
 
         # Agentic tool loop — up to _LOOP_MAX rounds per user turn
         for _loop_iter in range(_LOOP_MAX):

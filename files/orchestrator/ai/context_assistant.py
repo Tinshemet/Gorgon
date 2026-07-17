@@ -190,6 +190,36 @@ def extract_slots(prompt: str) -> Dict[str, Optional[str]]:
 
 # ── Proactive pre-pass (upstream, deterministic) ────────────────────────────────
 
+# Always-offered safety net so tool-narrowing can NEVER trap the model: whatever
+# the narrowed sub-goal set, it can always ask (clarify), ground (list_vms), or
+# check capabilities (check_system).
+_NARROW_CORE_TOOLS = frozenset({"clarify", "list_vms", "check_system"})
+
+
+def narrow_tools(user_input: str, all_tools: List[dict]) -> List[dict]:
+    """Deterministically narrow the offered tools to the sub-goal (hinted ∪ core).
+
+    NOT USED in the main chat loop: VERIFIED to DEGRADE llama3.1 (2026-07-17) —
+    offering 4 tools instead of 46 made "create X same OS as test1" hallucinate the
+    os_type 4/4 runs, where the full tool set resolved it correctly 4/4. The fuller
+    tool context anchors the weak model's reasoning; restricting it backfires. Kept
+    for possible per-node experiments in the Score engine (where a node is a single
+    narrow sub-goal, a different regime than a full-turn prompt).
+
+    Returns the (hinted ∪ core) schemas when intent is clear, or ALL of them when the
+    prompt is ambiguous (no confident hint) — never narrows on uncertainty.
+    """
+    try:
+        hints = set(scan_tool_hints(user_input))
+    except Exception:
+        return all_tools
+    if not hints:
+        return all_tools
+    keep = hints | _NARROW_CORE_TOOLS
+    narrowed = [t for t in all_tools if t.get("function", {}).get("name") in keep]
+    return narrowed or all_tools
+
+
 def proactive_prep(user_input: str) -> str:
     """Deterministic guidance computed BEFORE the model acts, to cut the first
     wrong step (churn matters more once the Score runs many small steps).

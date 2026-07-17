@@ -124,12 +124,16 @@ ARM/Pi  → kvm=false + qemu_binary=qemu-system-aarch64 + machine_type=virt
 
 # POSTs the full chat payload (with tools) to the Ollama API and returns the parsed JSON response.
 # In: List[dict] messages → Out: dict response
-def _call_ollama(messages: List[Dict]) -> Dict:
-    """Send the conversation to Ollama's chat API; return the parsed response."""
+def _call_ollama(messages: List[Dict], tools: List[Dict] = None) -> Dict:
+    """Send the conversation to Ollama's chat API; return the parsed response.
+
+    `tools` overrides the offered tool set (used for round-0 tool-narrowing);
+    None = the full TOOLS list.
+    """
     payload = {
         "model":    OLLAMA_MODEL,
         "messages": [{"role": "system", "content": _build_system_prompt()}] + messages,
-        "tools":    TOOLS,
+        "tools":    TOOLS if tools is None else tools,
         "stream":   False,
         "options":  {"temperature": _OLLAMA["temperature"], "num_ctx": _OLLAMA["num_ctx"]},
     }
