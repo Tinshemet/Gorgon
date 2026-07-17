@@ -23,7 +23,8 @@ _CFG_PATH = pathlib.Path(__file__).parents[1] / "orchestrator" / "ai" / "context
 with _CFG_PATH.open() as _f:
     _CA_CFG = json.load(_f)
 
-_TOOL_HINTS:      Dict[str, List[str]] = _CA_CFG["tool_hints"]
+# tool_hints moved to the canonical tool registry (single source); read it there.
+from executor.command_catalog import TOOL_TRIGGERS as _TOOL_HINTS
 _REQUIRED_FIELDS: Dict[str, List[str]] = _CA_CFG["required_fields"]
 _HIGH_STAKES:     Dict[str, List[str]] = _CA_CFG["high_stakes_optional"]
 

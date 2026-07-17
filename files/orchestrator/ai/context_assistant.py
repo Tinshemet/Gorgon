@@ -24,7 +24,14 @@ _here = os.path.dirname(__file__)
 with open(os.path.join(_here, "context_assistant_config.json")) as _f:
     _CFG = json.load(_f)
 
-_TOOL_HINTS:        Dict[str, List[str]] = _CFG["tool_hints"]
+# Derived from the canonical tool data (executor/command_catalog.py) — trigger
+# words live WITH the tool, not in a separate config copy that drifts (this map
+# used to miss fleet / run_guest_command / label tools). Guarded for
+# orchestrator-only checkouts where executor/ is absent.
+try:
+    from executor.command_catalog import TOOL_TRIGGERS as _TOOL_HINTS
+except ImportError:
+    _TOOL_HINTS: Dict[str, List[str]] = _CFG.get("tool_hints", {})
 _SLOT_PATTERNS:     Dict[str, List[str]] = _CFG["slot_patterns"]
 # NOTE (single-source audit, 2026-07-17): this is a DIFFERENT concept from the
 # tool registry's required-fields, so it is NOT derived from it. The registry's
@@ -201,6 +208,18 @@ def proactive_prep(user_input: str) -> str:
         slots = {k: v for k, v in extract_slots(user_input).items() if v}
     except Exception:
         return ""
+    # The extractor can match one token to several slots (name / new_name /
+    # snap_name for "called dev"); keep only the highest-priority slot per distinct
+    # value so the guidance isn't noisy/misleading.
+    _priority = ("name", "os_type", "network_mode", "new_name", "snap_name")
+    _seen: set = set()
+    _curated: Dict[str, str] = {}
+    for k in _priority + tuple(k for k in slots if k not in _priority):
+        v = slots.get(k)
+        if v and v not in _seen:
+            _curated[k] = v
+            _seen.add(v)
+    slots = _curated
     parts: List[str] = []
     if hints:
         parts.append("likely tool(s): " + ", ".join(sorted(hints)))

@@ -250,3 +250,46 @@ def tool_trigger_words() -> Dict[str, list]:
                 if w not in out[t]:
                     out[t].append(w)
     return out
+
+
+# ── Per-tool intent-detection triggers (context-assistant scan_tool_hints) ──
+# Moved here from context_assistant_config.json so trigger words live with the
+# rest of the tool data (one source). Keys are validated against TOOL_SPECS below.
+TOOL_TRIGGERS: Dict[str, List[str]] = {
+    'add_vm_to_network': ['add to network', 'connect to network', 'join network', 'attach to network', 'link to network', 'put vm on network'],
+    'check_profile_compatibility': ['check profile', 'profile compatible', 'is profile compatible', 'can i use profile', 'profile compatibility', 'will profile work'],
+    'check_system': ['check system', 'system check', 'system info', 'system capabilities', 'what can my machine', 'hardware check', 'can my system', 'check hardware', 'kvm support', 'what does my machine support'],
+    'clone_vm': ['clone', 'copy vm', 'duplicate vm', 'mirror vm', 'replicate'],
+    'create_network': ['create network', 'new network', 'add network', 'make network', 'isolated network', 'private network', 'set up network'],
+    'create_profile': ['create profile', 'new profile', 'add profile', 'make profile', 'build profile', 'custom profile', 'define profile'],
+    'create_vm': ['create', 'make', 'new vm', 'new virtual', 'set up', 'setup', 'spin up', 'build', 'add vm', 'provision', 'deploy', 'bring up', 'initialize', 'initialise', 'instantiate', 'i need a vm', 'i want a vm'],
+    'delete_network': ['delete network', 'remove network', 'destroy network', 'drop network'],
+    'delete_profile': ['delete profile', 'remove profile', 'destroy profile', 'drop profile'],
+    'delete_vm': ['delete vm', 'remove vm', 'destroy vm', 'wipe vm', 'erase vm', 'get rid of vm', 'tear down vm', 'drop vm', 'trash vm', 'kill vm', 'delete the vm', 'remove the vm'],
+    'fleet': ['fleet', 'the fleet', 'whole fleet', 'entire fleet', 'broadcast', 'on all', 'on every', 'across all', 'across every'],
+    'get_vm_logs': ['logs', 'log', 'why did it fail', 'why did it crash', 'what happened', 'diagnose', 'debug', 'error output', 'crashed', 'failed to start', 'wont start', 'not starting', 'show logs', 'check logs', 'read logs'],
+    'guest_ping': ['guest ping', 'ping the guest', 'guest alive', 'guest agent alive', 'guest responsive'],
+    'launch_vm': ['launch', 'start', 'run', 'boot', 'fire up', 'power on', 'turn on', 'bring online', 'start up', 'kick off'],
+    'list_networks': ['list networks', 'show networks', 'what networks', 'all networks', 'available networks'],
+    'list_profiles': ['list profiles', 'show profiles', 'what profiles', 'all profiles', 'available profiles', 'hardware profiles', 'my profiles'],
+    'list_vms': ['list vms', 'list vm', 'show vms', 'what vms', 'all vms', 'show all vms', 'my vms', 'existing vms', 'available vms'],
+    'monitor_vm': ['monitor', 'watch', 'activity report', 'deep check', 'detailed report', 'what is it doing', 'observe'],
+    'open_display': ['open display', 'show display', 'view vm', 'screen', 'open gui', 'connect display', 'vnc', 'open window', 'see the screen', 'display vm'],
+    'open_shell': ['open shell', 'shell', 'console', 'serial console', 'open terminal', 'open console', 'connect shell', 'ssh into', 'access terminal'],
+    'print_command': ['print command', 'show command', 'what command', 'qemu command', 'dry run', 'show qemu', 'what does it run', 'print qemu'],
+    'resize_disk': ['resize', 'resize disk', 'expand disk', 'grow disk', 'enlarge disk', 'increase disk', 'bigger disk', 'more disk space', 'extend disk', 'make disk bigger', 'increase storage'],
+    'run_guest_command': ['execute', 'exec', 'run command', 'run the command', 'run inside', 'guest command', 'shell command'],
+    'scan_isos': ['scan isos', 'find isos', 'find iso', 'what isos', 'list isos', 'available isos', 'iso files', 'find install', 'scan for iso'],
+    'send_monitor_cmd': ['monitor command', 'qemu monitor', 'send command to', 'raw command', 'send monitor', 'qmp command', 'hmp command'],
+    'set_resource_limits': ['limit', 'cap cpu', 'cap memory', 'throttle', 'restrict cpu', 'restrict memory', 'set cpu limit', 'set memory limit', 'resource limit', 'limit resources', 'limit cpu', 'limit memory', 'limit ram'],
+    'show_config': ['show config', 'view config', 'see config', 'what config', 'display config', 'configuration of', 'settings of', 'what are the settings', 'show settings'],
+    'snapshot_create': ['take snapshot', 'create snapshot', 'make snapshot', 'new snapshot', 'save state', 'checkpoint', 'back up vm', 'preserve state', 'freeze state'],
+    'snapshot_delete': ['delete snapshot', 'remove snapshot', 'drop snapshot', 'erase snapshot', 'destroy snapshot', 'wipe snapshot', 'delete snap', 'remove snap'],
+    'snapshot_list': ['list snapshots', 'show snapshots', 'what snapshots', 'snapshots of', 'all snapshots'],
+    'snapshot_restore': ['restore snapshot', 'restore snap', 'revert snapshot', 'revert to', 'rollback', 'roll back', 'go back to snapshot', 'undo to snapshot', 'load snapshot'],
+    'stop_vm': ['stop', 'shut down', 'shutdown', 'halt', 'pause', 'power off', 'turn off', 'suspend', 'kill', 'kill the vm', 'stop the vm', 'shut the vm'],
+    'update_config': ['update config', 'change config', 'modify config', 'edit config', 'change setting', 'update setting', 'set config', 'configure vm', 'reconfigure', 'adjust config', 'tweak config'],
+    'vm_status': ['status', 'is it running', 'is the vm running', 'what is it doing', 'check status', 'vm state', 'running status', 'is vm up', 'is vm alive', 'what state'],
+}
+_bad_trig = [t for t in TOOL_TRIGGERS if t not in TOOL_SPECS]
+assert not _bad_trig, f"TOOL_TRIGGERS references non-registry tools: {_bad_trig}"
