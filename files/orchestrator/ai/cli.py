@@ -51,8 +51,6 @@ _ACTION_WORDS   = set(_CFG["action_words"])
 # instead of answering — and hallucinating — from memory.
 _STATE_QUERY_WORDS = set(_CFG.get("state_query_words", []))
 _OS_KEYWORDS    = set(_CFG["os_keywords_gate"])
-_CONFIRM_YN     = {k: tuple(v) for k, v in _CFG["confirm_yn"].items()}
-_CONFIRM_NAME   = {k: tuple(v) for k, v in _CFG["confirm_name"].items()}
 _RENDERS_OUTPUT = set(_CFG.get("rendered_tools", []))
 
 

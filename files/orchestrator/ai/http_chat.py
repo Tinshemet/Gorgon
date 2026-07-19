@@ -22,6 +22,7 @@ from .active_library import LIBRARY
 from .context_assistant import check_context, extract_slots, proactive_prep
 from .session import get_loop_max
 from .chat_turn import _is_critical
+from .contract import resolve_tier, confirm_meta, FLEET_CONFIRM_ACTIONS
 try:
     from shared.executioner.tool_executor import manager
 except ImportError:
@@ -34,9 +35,13 @@ _ACTION_WORDS = set(_CFG["action_words"])
 # questions get grounded in a tool call instead of answered from memory.
 _STATE_QUERY_WORDS = set(_CFG.get("state_query_words", []))
 _OS_KEYWORDS  = set(_CFG["os_keywords_gate"])
-_CONFIRM_YN   = {k: tuple(v) for k, v in _CFG["confirm_yn"].items()}
-_CONFIRM_NAME = {k: tuple(v) for k, v in _CFG["confirm_name"].items()}
-_FLEET_CONFIRM_ACTIONS = set(_CFG.get("fleet_confirm_actions", ["exec", "stop"]))  # fleet actions needing y/n
+# Fleet actions needing a y/n, derived from the Doorman contract (single source —
+# the fleet test asserts this matches chat_turn's copy).
+_FLEET_CONFIRM_ACTIONS = set(FLEET_CONFIRM_ACTIONS)
+
+# Contract tier -> the web protocol's confirm-type string the client understands.
+_TIER_TO_CONF_TYPE = {"normal": "confirm_yn", "name": "confirm_name", "double": "confirm_critical",
+                      "acknowledge": "confirm_yn"}
 
 
 def process_message(
@@ -233,8 +238,8 @@ def process_message(
                 raw_args["force"] = True
 
             # ── Fleet broadcast confirm (action-conditional: exec + stop) ──
-            # fleet isn't in _CONFIRM_YN (that map is per-tool, not per-action),
-            # so it's gated here explicitly — mirrors _fleet_confirm in chat_turn.
+            # fleet gates per-action, not per-tool, so it's handled explicitly
+            # here (mirrors _fleet_confirm in chat_turn) before the tier gate.
             if tool_name == "fleet":
                 _fa   = (raw_args.get("action") or "").strip().lower()
                 _fkey = ("fleet", _fa, raw_args.get("label", ""), raw_args.get("command", ""))
@@ -264,39 +269,40 @@ def process_message(
                     _confirmed_values.add(_fkey)
 
             # ── Safety confirmation gate ───────────────────────────────────
-            _conf_entry = _CONFIRM_YN.get(tool_name) or _CONFIRM_NAME.get(tool_name)
-            if _conf_entry:
-                field, verb = _conf_entry
+            # The Doorman contract decides the tier (fleet handled above); non-
+            # fleet tiers map to the web protocol's confirm-type strings.
+            _tier = resolve_tier(tool_name, raw_args) if tool_name != "fleet" else "none"
+            _meta = confirm_meta(tool_name)
+            if _tier != "none" and _meta:
+                field, verb = _meta
                 proposed    = raw_args.get(field, "")
 
-            if _conf_entry and (field, proposed) not in _just_clarified_values and (field, proposed) not in _confirmed_values:
-                if not auto_confirm:
-                    if _is_critical(tool_name, raw_args):
-                        conf_type = "confirm_critical"
-                        question  = f"{verb}: {proposed} — this will also delete its disk(s). Type YES then the VM name to confirm."
-                    elif tool_name in _CONFIRM_YN:
-                        conf_type = "confirm_yn"
-                        question  = f"{verb}: {proposed}"
-                    else:
-                        conf_type = "confirm_name"
-                        question  = f"{verb}: {proposed}. Type the exact name to confirm."
-                    messages.pop()
-                    return {
-                        "text": "",
-                        "messages": messages,
-                        "tool_results": _tool_results,
-                        "needs_input": {
-                            "type":      conf_type,
-                            "question":  question,
-                            "options":   ["Yes", "Cancel"] if tool_name in _CONFIRM_YN else [],
-                            "field":     field,
-                            "tool_name": tool_name,
-                            "proposed":  proposed,
-                        },
-                        "pending_tool": {"tool_name": tool_name, "args": raw_args,
-                                         "critical": _is_critical(tool_name, raw_args)},
-                    }
-                _confirmed_values.add((field, proposed))
+                if (field, proposed) not in _just_clarified_values and (field, proposed) not in _confirmed_values:
+                    if not auto_confirm:
+                        if _tier == "double":
+                            question = f"{verb}: {proposed} — this will also delete its disk(s). Type YES then the VM name to confirm."
+                        elif _tier == "name":
+                            question = f"{verb}: {proposed}. Type the exact name to confirm."
+                        else:  # normal / acknowledge
+                            question = f"{verb}: {proposed}"
+                        conf_type = _TIER_TO_CONF_TYPE[_tier]
+                        messages.pop()
+                        return {
+                            "text": "",
+                            "messages": messages,
+                            "tool_results": _tool_results,
+                            "needs_input": {
+                                "type":      conf_type,
+                                "question":  question,
+                                "options":   ["Yes", "Cancel"] if conf_type == "confirm_yn" else [],
+                                "field":     field,
+                                "tool_name": tool_name,
+                                "proposed":  proposed,
+                            },
+                            "pending_tool": {"tool_name": tool_name, "args": raw_args,
+                                             "critical": _is_critical(tool_name, raw_args)},
+                        }
+                    _confirmed_values.add((field, proposed))
 
             # ── Pre-execution gate ─────────────────────────────────────────
             _gate_required  = _GATE_REQUIRED.get(tool_name, [])

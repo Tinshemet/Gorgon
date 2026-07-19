@@ -289,7 +289,7 @@ def main():
     check("script references the serial-agent systemd unit", "sysdiag-agent" in script)
     cleanup_vm(name)
 
-    print(f"\n{'='*48}\n  {_PASS} passed, {_FAIL} failed\n{'='*48}")
+    print(f"\n{'='*48}\n  {_PASS}/{_PASS + _FAIL} passed\n{'='*48}")
     sys.exit(1 if _FAIL else 0)
 
 

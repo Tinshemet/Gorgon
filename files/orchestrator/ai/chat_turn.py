@@ -31,13 +31,15 @@ from .chat_types import (  # base types + pure transforms (extracted from this f
     TurnState, GateOutcome, _is_critical, _build_vm_spec_rows,
     _maybe_enable_custom_mode, _resolve_os_type, _build_pre_gate_result,
 )
+from .contract import (   # the active agent's contract — single source for confirmation
+    gate_action, confirm_meta, confirms_by_name, FLEET_CONFIRM_ACTIONS,
+)
 _CFG            = json.load(open(os.path.join(os.path.dirname(__file__), "config.json")))
 _OS_KEYWORDS    = set(_CFG["os_keywords_gate"])
-_CONFIRM_YN     = {k: tuple(v) for k, v in _CFG["confirm_yn"].items()}
-_CONFIRM_NAME   = {k: tuple(v) for k, v in _CFG["confirm_name"].items()}
 _RENDERS_OUTPUT = set(_CFG.get("rendered_tools", []))
-_CRITICAL_TOOLS = set(_CFG.get("critical_tools", ["delete_vm"]))   # irreversible → double-confirm
-_FLEET_CONFIRM_ACTIONS = set(_CFG.get("fleet_confirm_actions", ["exec", "stop"]))  # fleet actions needing y/n
+# The fleet actions needing a y/n, derived from the contract (single source — the
+# fleet test asserts the CLI and HTTP paths agree, which deriving guarantees).
+_FLEET_CONFIRM_ACTIONS = set(FLEET_CONFIRM_ACTIONS)
 _RECENT_CONTEXT_WINDOW = _CFG["chat"].get("recent_context_window", 6)  # msgs kept for multi-turn context
 
 
@@ -107,23 +109,39 @@ def _safety_gate(tool_name: str, raw_args: dict, state: "TurnState",
         })
         state.op_cancelled = True
 
-    # Fleet broadcast is action-conditional: exec (runs a command across the whole
-    # group) and stop (halts the whole group) get a y/n confirm; ping/status/launch
-    # pass through. A plain _CONFIRM_YN entry is per-tool, not per-action, so it
-    # can't express this — handle it explicitly.
+    # fleet is action-conditional (exec/stop confirm; ping/status pass through);
+    # its confirm UX builds the prompt from args, so it keeps its own helper.
     if tool_name == "fleet":
         return _fleet_confirm(raw_args, state, cancel)
 
-    conf_entry = _CONFIRM_YN.get(tool_name) or _CONFIRM_NAME.get(tool_name)
-    if not conf_entry:
+    # The active agent's contract decides how to HANDLE this call: the risk tier
+    # mapped through the agent's disposition. For the Doorman (human-confirm) the
+    # actions are the human prompts below; a Conductor (autonomous) resolves tiers
+    # without a human (log/checkpoint/halt) in its own harness, not here.
+    action = gate_action(tool_name, raw_args)
+    if action == "proceed":
         return GateOutcome.PROCEED
-    field, verb = conf_entry
+
+    meta = confirm_meta(tool_name)
+    field, verb = meta if meta else ("name", tool_name)
     proposed = raw_args.get(field, "")
     if (field, proposed) in state.clarified_values or (field, proposed) in state.confirmed_values:
         return GateOutcome.PROCEED
 
-    if _is_critical(tool_name, raw_args):
-        # Double confirm: YES → VM name
+    if action == "halt":
+        # Autonomous red line reaching a human harness → block + surface it.
+        console.print(f"\n[bold red]■ HALT: {verb}: {proposed} — blocked (autonomous red line).[/bold red]")
+        cancel()
+        return GateOutcome.CANCELLED
+
+    if action in ("log", "checkpoint"):
+        # Autonomous low/mid-risk handling has no human ceremony; the Conductor
+        # harness does the logging/checkpointing. In a human harness, just proceed.
+        console.print(f"  [dim]↪ {action}: {verb}: {proposed}[/dim]")
+        return GateOutcome.PROCEED
+
+    if action == "ask_double":
+        # YES → then the exact name (irreversible + destructive).
         console.print(f"\n[bold red]⚠  {verb}: [bold]{proposed}[/bold] — this will also delete its disk(s)[/bold red]")
         console.print("[dim]Type YES to proceed, or press Enter to cancel.[/dim]")
         try:
@@ -145,7 +163,12 @@ def _safety_gate(tool_name: str, raw_args: dict, state: "TurnState",
             cancel()
             return GateOutcome.CANCELLED
 
-    elif tool_name in _CONFIRM_YN:
+    elif action == "notify":
+        # Run it, but surface a catchable heads-up — non-blocking by design.
+        hint = f"[bold]{proposed}[/bold]" if proposed else ""
+        console.print(f"  [dim]↪ {verb}: {hint}[/dim]")
+
+    elif action == "ask_yn":
         # y/n confirm for reversible modify and launch/stop. Batch-skip if this
         # tool type was already confirmed earlier in the same turn.
         if tool_name in state.confirmed_tool_types:
@@ -165,8 +188,8 @@ def _safety_gate(tool_name: str, raw_args: dict, state: "TurnState",
                 return GateOutcome.CANCELLED
             state.confirmed_tool_types.add(tool_name)
 
-    else:
-        # Name confirm for destructive operations — exact match required
+    else:  # action == "ask_name"
+        # Type the exact name to confirm — proof of intent for a destructive op.
         hint = f"[bold]{proposed}[/bold]" if proposed else "[dim]unknown[/dim]"
         console.print(f"\n[yellow]⚠  {verb}: {hint}[/yellow]")
         console.print(f"[dim]Type the name to confirm, or press Enter to cancel.[/dim]")
@@ -226,7 +249,7 @@ def _preflight_gate(tool_name: str, raw_args: dict, state: "TurnState",
         if not verbose:
             console.print(f"  [yellow]⚙  Pre-flight auto-fixed: {pf['correction']}[/yellow]")
 
-    elif action == "ask_user" and tool_name not in _CONFIRM_NAME:
+    elif action == "ask_user" and not confirms_by_name(tool_name, raw_args):
         _show_preflight_warning(pf, console)
         fix_field = pf.get("fix_field")
         opts      = pf.get("options", [])

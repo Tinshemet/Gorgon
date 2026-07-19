@@ -1,0 +1,148 @@
+{
+  "_type": "gorgon.agent/v1",
+  "_forged": true,
+  "_doc": "Forged campaign contract: basic vm lab.",
+  "persona": {
+    "name": "lab",
+    "role": "lab-builder",
+    "disposition": "autonomous",
+    "layers": [
+      "innate",
+      "campaign"
+    ]
+  },
+  "prompts": {
+    "system": [
+      "You are lab — lab-builder, operating under a signed campaign contract.",
+      "CAMPAIGN GOAL: create 5 vms, add them all to a network, and a fleet, and make sure they all ping each other.",
+      "DONE WHEN: all 5 vms exist and can all ping each other.",
+      "SCRUTINY: strict — use only goal-related tools; do not explore beyond the goal.",
+      "ETHICS: authorized lab only.  LEGALITY: authorized.",
+      "Work toward the goal within the contract; never cross a red line.",
+      "{state_section}"
+    ]
+  },
+  "contract": {
+    "tiers": [
+      "none",
+      "acknowledge",
+      "normal",
+      "name",
+      "double"
+    ],
+    "formula": {
+      "weights": {
+        "destructiveness": 0.4,
+        "irreversibility": 0.25,
+        "blast": 0.15,
+        "commitment": 0.2
+      },
+      "blast_scale": {
+        "none": 0.0,
+        "entity": 0.4,
+        "fleet": 0.8,
+        "range": 1.0
+      },
+      "thresholds": {
+        "acknowledge": 0.15,
+        "normal": 0.3,
+        "name": 0.55,
+        "double": 0.75
+      },
+      "reward_cost": {
+        "theta": 0.0,
+        "lambda": 0.5,
+        "H": 0.05,
+        "kappa": 0.2,
+        "w_resource": 1.0,
+        "w_time": 0.3,
+        "time": 1.0,
+        "p_world": 0.9,
+        "R": 1.0,
+        "beta": 1.0,
+        "gamma": 1.0,
+        "rho_min": 0.5
+      }
+    },
+    "fleet_actions": {
+      "exec": "normal",
+      "stop": "normal"
+    },
+    "tools": {
+      "create_vm": {
+        "risk": {
+          "reversible": true,
+          "destructiveness": 0.15,
+          "blast": "entity",
+          "commitment": 1.0
+        },
+        "verb": "create VM",
+        "verify": "present"
+      },
+      "launch_vm": {
+        "risk": {
+          "reversible": true,
+          "destructiveness": 0.1,
+          "blast": "entity",
+          "commitment": 1.0
+        },
+        "verb": "launch VM",
+        "verify": "running"
+      }
+    },
+    "forbidden": [
+      "delete_vm",
+      "delete_network"
+    ],
+    "campaign": {
+      "title": "basic vm lab",
+      "description": null,
+      "goal": "create 5 vms, add them all to a network, and a fleet, and make sure they all ping each other",
+      "sub_goals": [],
+      "scrutiny": "strict",
+      "tool_mode": "whitelist",
+      "toolkit": [
+        "create_vm",
+        "launch_vm",
+        "create_network",
+        "add_vm_to_network",
+        "fleet",
+        "guest_ping"
+      ],
+      "ethics": "authorized lab only",
+      "legality": "authorized",
+      "caveats": [],
+      "rules": [],
+      "success_criteria": "all 5 vms exist and can all ping each other",
+      "success_predicate": [
+        {
+          "criterion": "present",
+          "target": "vm1"
+        },
+        {
+          "criterion": "present",
+          "target": "vm2"
+        },
+        {
+          "criterion": "present",
+          "target": "vm3"
+        },
+        {
+          "criterion": "present",
+          "target": "vm4"
+        },
+        {
+          "criterion": "present",
+          "target": "vm5"
+        },
+        {
+          "criterion": "mesh",
+          "target": "lab"
+        }
+      ],
+      "reward": 30.0,
+      "safeword": "orchestra",
+      "signed": true
+    }
+  }
+}

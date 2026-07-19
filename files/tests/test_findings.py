@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+"""
+test_findings.py — the Findings ledger (step 1 of the reward-cost engine).
+
+Covers the ledger itself and its two live behaviors in the planner: a yielding tool
+RECORDS what it learned, and a call whose finding is already known is SKIPPED
+(anti-rediscovery) instead of re-run.
+
+Run:  PYTHONPATH=files python3 files/tests/test_findings.py
+"""
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from orchestrator.ai.findings import Findings, yield_fact, extract_value
+from orchestrator.ai.score import run_score
+
+_PASS = 0
+_FAIL = 0
+
+
+def check(label, cond):
+    global _PASS, _FAIL
+    if cond:
+        _PASS += 1
+        print(f"  ok   {label}")
+    else:
+        _FAIL += 1
+        print(f"  FAIL {label}")
+
+
+_SCHEMA = {"get_vm_ip": {"fact": "ip({name})", "value": "ip"}}
+_TOOLS = [{"type": "function", "function": {"name": "get_vm_ip", "parameters": {}}}]
+
+
+def scripted(tool, args):
+    def _call(messages, tools):
+        return {"message": {"tool_calls": [{"function": {"name": tool, "arguments": args}}]}}
+    return _call
+
+
+def main():
+    print("ledger basics")
+    f = Findings()
+    check("empty has nothing", not f.has("ip(web)") and f.render() == "")
+    f.record("ip(web)", "10.0.0.5", source="get_vm_ip")
+    check("record + has + get", f.has("ip(web)") and f.get("ip(web)") == "10.0.0.5")
+    check("render lists known facts", "ip(web)=10.0.0.5" in f.render())
+
+    print("\nyield-schema")
+    check("yield_fact instantiates the template", yield_fact("get_vm_ip", {"name": "web"}, _SCHEMA) == "ip(web)")
+    check("no schema entry -> None", yield_fact("list_vms", {}, _SCHEMA) is None)
+    check("extract_value pulls the result field", extract_value({"success": True, "ip": "1.2.3.4"}, _SCHEMA["get_vm_ip"]) == "1.2.3.4")
+
+    print("\nin the planner: a yielding tool RECORDS its finding")
+    f = Findings()
+    calls = []
+    def ex(t, a):
+        calls.append((t, a))
+        return {"success": True, "ip": "10.0.0.9"}
+    r = run_score("find the ip of web", call_model=scripted("get_vm_ip", {"name": "web"}),
+                  execute=ex, tools=_TOOLS, findings=f, findings_schema=_SCHEMA)
+    check("leaf executed once", len(calls) == 1 and r["root"]["status"] == "done")
+    check("finding recorded", f.get("ip(web)") == "10.0.0.9")
+
+    print("\nanti-rediscovery: a KNOWN finding is skipped, not re-run")
+    calls2 = []
+    def ex2(t, a):
+        calls2.append((t, a))
+        return {"success": True, "ip": "SHOULD-NOT-RUN"}
+    r2 = run_score("find the ip of web again", call_model=scripted("get_vm_ip", {"name": "web"}),
+                   execute=ex2, tools=_TOOLS, findings=f, findings_schema=_SCHEMA)
+    check("known finding -> tool NOT executed", calls2 == [])
+    check("node still done, marked cached", r2["root"]["status"] == "done" and r2["root"].get("cached_finding") == "ip(web)")
+
+    print("\nno findings config -> old behavior (tool runs normally)")
+    calls3 = []
+    r3 = run_score("find the ip of db", call_model=scripted("get_vm_ip", {"name": "db"}),
+                   execute=lambda t, a: (calls3.append(t) or {"success": True, "ip": "x"}),
+                   tools=_TOOLS)   # no findings/schema
+    check("without a ledger the tool just runs", calls3 == ["get_vm_ip"] and r3["root"]["status"] == "done")
+
+    print("\ninvalidation: a stale fact can be dropped")
+    f = Findings(); f.record("ip(web)", "1.1.1.1"); f.record("status(web)", "up"); f.record("ip(db)", "2.2.2.2")
+    dropped = f.invalidate_about("web")
+    check("invalidate_about drops every fact mentioning the entity", dropped == 2 and not f.has("ip(web)") and not f.has("status(web)"))
+    check("unrelated facts survive", f.has("ip(db)"))
+
+    print("\nstaleness fix: a mutation invalidates findings, so the read runs again")
+    f = Findings()
+    T = _TOOLS + [{"type": "function", "function": {"name": "stop_vm", "parameters": {}}}]
+    run_score("find ip of web", call_model=scripted("get_vm_ip", {"name": "web"}),
+              execute=lambda t, a: {"success": True, "ip": "10.0.0.1"}, tools=T, findings=f, findings_schema=_SCHEMA)
+    check("finding recorded", f.get("ip(web)") == "10.0.0.1")
+    run_score("stop web", call_model=scripted("stop_vm", {"name": "web"}),
+              execute=lambda t, a: {"success": True}, tools=T, findings=f, findings_schema=_SCHEMA)
+    check("the mutation invalidated the now-stale finding", not f.has("ip(web)"))
+    calls2 = []
+    run_score("find ip of web again", call_model=scripted("get_vm_ip", {"name": "web"}),
+              execute=lambda t, a: (calls2.append(t) or {"success": True, "ip": "10.0.0.2"}),
+              tools=T, findings=f, findings_schema=_SCHEMA)
+    check("re-read RUNS again (not skipped as stale) and re-learns", calls2 == ["get_vm_ip"] and f.get("ip(web)") == "10.0.0.2")
+
+    print(f"\n{_PASS}/{_PASS + _FAIL} passed")
+    sys.exit(1 if _FAIL else 0)
+
+
+if __name__ == "__main__":
+    main()

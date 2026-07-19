@@ -21,6 +21,7 @@ from orchestrator.sanitizer.context_gate import _REQUIRED as _GATE_REQUIRED
 from orchestrator.executor_client import get_all_profiles
 from orchestrator.preflight.validator import set_custom_mode
 from .context_assistant import extract_slots
+from .contract import is_critical as contract_is_critical
 
 _MC = {"os_type": "linux", "cpu_cores": 2, "memory_mb": 2048, "machine_type": "q35", "uefi": False}
 try:
@@ -29,7 +30,6 @@ except ImportError:
     _VM_DEFS = {"disk_size_gb": 60, "network_mode": "nat", "disk_bus": "virtio"}
 
 _CFG = json.load(open(os.path.join(os.path.dirname(__file__), "config.json")))
-_CRITICAL_TOOLS = set(_CFG.get("critical_tools", ["delete_vm"]))
 _OS_KEYWORDS = set(_CFG["os_keywords_gate"])
 _RECENT_CONTEXT_WINDOW = _CFG["chat"].get("recent_context_window", 6)
 
@@ -37,13 +37,9 @@ _RECENT_CONTEXT_WINDOW = _CFG["chat"].get("recent_context_window", 6)
 def _is_critical(tool_name: str, args: dict) -> bool:
     """Return True when the operation requires double confirmation.
 
-    Args:
-        tool_name: Name of the tool being called.
-        args:      Tool arguments (reserved for future per-arg checks).
-
-    Returns:
-        ``True`` only for irreversible, data-destroying operations
-        (the set is config-driven — ``critical_tools`` in config.json).
+    Thin wrapper kept for callers (chat_turn, http_chat, cli); the decision now
+    lives in the Doorman contract — ``double`` tier == critical. See
+    ``contract.is_critical``.
 
     Example::
 
@@ -51,7 +47,7 @@ def _is_critical(tool_name: str, args: dict) -> bool:
         _is_critical("launch_vm",  {"name": "myvm"})  # → False
         _is_critical("stop_vm",    {"name": "myvm"})  # → False
     """
-    return tool_name in _CRITICAL_TOOLS
+    return contract_is_critical(tool_name, args)
 
 
 # Builds (label, value) rows describing the specs create_vm is about to use,

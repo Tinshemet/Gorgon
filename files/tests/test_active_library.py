@@ -120,7 +120,7 @@ def main():
 
     for n in NAMES + ["alib-d"]:
         _rm(n)
-    print(f"\n{'='*48}\n  {_PASS} passed, {_FAIL} failed\n{'='*48}")
+    print(f"\n{'='*48}\n  {_PASS}/{_PASS + _FAIL} passed\n{'='*48}")
     sys.exit(1 if _FAIL else 0)
 
 

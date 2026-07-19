@@ -643,6 +643,30 @@ def cli_direct(args: List[str], verbose: bool = False) -> None:
         else:
             console.print("[yellow]Usage: gorgon operator add|list|remove <username>[/yellow]")
 
+    elif cmd == "contract":
+        # gorgon contract forge | show <file> | sign <file> <safeword>
+        import os, json as _json
+        from orchestrator.ai import forge as _forge
+        _agent_dir = os.path.dirname(os.path.abspath(_forge.__file__))
+        sub = rest[0] if rest else ""
+        if sub == "forge":
+            _forge.forge_interactive(
+                ask=lambda p: console.input(f"[bold cyan]{p}:[/bold cyan] ").strip(),
+                out=console.print, write_dir=_agent_dir)
+        elif sub == "show" and len(rest) >= 2:
+            path = rest[1] if os.path.isabs(rest[1]) else os.path.join(_agent_dir, rest[1])
+            console.print(_forge.render(_json.load(open(path))))
+        elif sub == "sign" and len(rest) >= 3:
+            path = rest[1] if os.path.isabs(rest[1]) else os.path.join(_agent_dir, rest[1])
+            g = _json.load(open(path))
+            try:
+                _forge.sign(g, rest[2]); _forge.write_grgn(g, path)
+                console.print(f"[success]Signed → {path}[/success]")
+            except ValueError as e:
+                console.print(f"[error]{e}[/error]")
+        else:
+            console.print("[yellow]Usage: gorgon contract forge | show <file> | sign <file> <safeword>[/yellow]")
+
     else:
         from shared.command_help import load_local_catalog, render_terminal_panel
         try:

@@ -41,7 +41,7 @@ def main():
     print("registry ↔ dispatch (the drift guard)")
     check("every dispatched tool is in the registry", not (dispatched - set(KNOWN_TOOLS)))
     check("every registry tool is actually dispatched", not (set(KNOWN_TOOLS) - dispatched))
-    check("46 tools", len(KNOWN_TOOLS) == 46)
+    check("48 tools", len(KNOWN_TOOLS) == 48)
 
     print("\nconsumers DERIVE from the registry (same object, not a copy)")
     import executor.server as srv
@@ -78,12 +78,13 @@ def main():
 
     print("\nspec shape")
     well_formed = all(
-        set(s) == {"req", "vm", "effect", "rev", "confirm"}
+        set(s) == {"req", "vm", "effect", "rev"}
         and isinstance(s["req"], list) and isinstance(s["vm"], bool) and isinstance(s["rev"], bool)
+        and (s["effect"] is None or isinstance(s["effect"], tuple))
         for s in TOOL_SPECS.values())
     check("all specs well-formed", well_formed)
 
-    print(f"\n{'='*48}\n  {_PASS} passed, {_FAIL} failed\n{'='*48}")
+    print(f"\n{'='*48}\n  {_PASS}/{_PASS + _FAIL} passed\n{'='*48}")
     sys.exit(1 if _FAIL else 0)
 
 

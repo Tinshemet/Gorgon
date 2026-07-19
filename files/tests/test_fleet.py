@@ -128,7 +128,7 @@ def main():
     check("chat_turn confirms exec+stop only", _CT == {"exec", "stop"})
     check("http_chat matches chat_turn (no dual-path drift)", _HC == _CT)
 
-    print(f"\n{'='*48}\n  {_PASS} passed, {_FAIL} failed\n{'='*48}")
+    print(f"\n{'='*48}\n  {_PASS}/{_PASS + _FAIL} passed\n{'='*48}")
     sys.exit(1 if _FAIL else 0)
 
 

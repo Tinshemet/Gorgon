@@ -155,65 +155,6 @@
         "count",
         "check"
     ],
-    "fleet_confirm_actions": [
-        "exec",
-        "stop"
-    ],
-    "confirm_yn": {
-        "update_config": [
-            "name",
-            "update config for VM"
-        ],
-        "resize_disk": [
-            "name",
-            "resize disk for VM"
-        ],
-        "set_resource_limits": [
-            "name",
-            "set resource limits for VM"
-        ],
-        "create_vm": [
-            "name",
-            "create VM"
-        ],
-        "clone_vm": [
-            "new_name",
-            "clone to new VM"
-        ],
-        "launch_vm": [
-            "name",
-            "launch VM"
-        ],
-        "stop_vm": [
-            "name",
-            "stop VM"
-        ]
-    },
-    "confirm_name": {
-        "delete_vm": [
-            "name",
-            "delete VM"
-        ],
-        "snapshot_restore": [
-            "name",
-            "restore snapshot for VM"
-        ],
-        "snapshot_delete": [
-            "name",
-            "delete snapshot of VM"
-        ],
-        "delete_network": [
-            "net_name",
-            "delete network"
-        ],
-        "delete_profile": [
-            "profile_name",
-            "delete profile"
-        ]
-    },
-    "critical_tools": [
-        "delete_vm"
-    ],
     "os_keywords_gate": [
         "linux",
         "windows",

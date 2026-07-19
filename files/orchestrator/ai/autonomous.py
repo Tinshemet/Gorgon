@@ -1,0 +1,302 @@
+"""
+autonomous.py — the autonomous execution loop: run an agent to a goal, no human.
+
+This is the driver that actually RUNS the Score tree for an autonomous agent (a
+Conductor). Everything the tree needs was built already — this wires it together and
+turns it loose: the model proposes, the tree decomposes to primitives, the CONTRACT
+gates each leaf (halt a red line / checkpoint a destructive one), a leaf is DONE only
+if VERIFIED against reality, a soft-failed branch BACKTRACKS with a different approach,
+and a checkpointed dead branch ROLLS BACK first. No human backstop — the agent's
+disposition (from its .grgn) drives handling.
+
+Dependency-injected like run_score, so the whole loop is testable with stubs:
+  run_autonomous(goal, call_model=…, execute=…, tools=…, vms_getter=…)
+and a live convenience that wires the real Ollama + executor + Active Library:
+  run_autonomous_live(goal)
+
+The Library-backed `verify` here is what ACTIVATES verified-completion: it evaluates
+the contract's per-tool success criterion (present / absent / running / stopped /
+restored) against the live VM registry, catching a tool that reports success but didn't
+actually change the world.
+"""
+from typing import Any, Callable, Dict, List, Optional
+
+from .score import run_score, _first_tool_call, _NODE_SYSTEM, DECOMPOSE_TOOL
+from . import contract as _contract
+from .method_cache import seeded as _seeded_cache
+from .findings import Findings, DEFAULT_SCHEMA
+from .reward_cost import (economics as _economics, p_self_estimate as _p_self, dials as _dials,
+                          cfg_with as _cfg_with, leaf_cost as _leaf_cost, ce as _ce)
+from .watchdog import Watchdog
+from .engine import Engine
+from .killswitch import KillSwitch
+
+
+def _is_running(rec: Optional[Dict[str, Any]]) -> bool:
+    return bool(rec) and "run" in str(rec.get("status", "")).lower()
+
+
+def _criterion_holds(criterion: str, name: Optional[str], vms: Dict[str, Dict[str, Any]]) -> bool:
+    """Does a success criterion hold for `name` against the live VM registry?
+
+    The shared vocabulary (present / absent / running / stopped / restored) used by
+    BOTH the per-leaf verifier (verified-completion) and the goal verifier (the
+    contract root predicate). Unknown criteria pass — never block on the uncheckable.
+    """
+    if criterion == "present":  return name in vms
+    if criterion == "absent":   return name not in vms
+    if criterion == "running":  return _is_running(vms.get(name))
+    if criterion == "stopped":  return name in vms and not _is_running(vms.get(name))
+    if criterion == "restored": return name in vms
+    return True
+
+
+def make_library_verifier(vms_getter: Callable[[], Dict[str, Dict[str, Any]]]):
+    """A verify(criterion, tool, args, result) that checks the contract's success
+    criterion against the live VM registry (`vms_getter() -> {name: {status,…}}`).
+
+    Unknown criteria pass (don't block on something we can't check). This is the
+    "how" that pairs with the contract's "what" (contract.success_criterion).
+    """
+    def verify(criterion: str, tool: str, args: Dict[str, Any], result: Any) -> bool:
+        name = args.get("name") or args.get("new_name") or args.get("net_name")
+        return _criterion_holds(criterion, name, vms_getter() or {})
+    return verify
+
+
+def make_goal_verifier(vms_getter: Callable[[], Dict[str, Dict[str, Any]]], findings=None):
+    """A verify_goal(goal, children, ledger) — the CONTRACT ROOT PREDICATE.
+
+    Checks the active contract's structured goal predicate (contract.goal_predicate(),
+    a list of {criterion, target} clauses). Two kinds of clause:
+      • STATE clauses (present/absent/running/stopped/restored) → checked against the
+        live VM registry (what IS).
+      • EPISTEMIC clauses (`mesh` → the fact mesh(target); `reachable` → reachable(target))
+        → checked against the FINDINGS ledger (what was LEARNED). This is how a
+        connectivity goal ("all ping each other") is accepted: the ping's recorded
+        result must be truthy — NOT the tool merely returning success.
+
+    The root goal is accepted only if EVERY clause holds — so a plan that ran cleanly
+    but did not actually achieve the goal (a broken mesh) books no reward. Returns None
+    when the contract declares no structured predicate (no clauses, no gate).
+    """
+    def _finding_true(fact: str) -> bool:
+        return findings is not None and findings.has(fact) and bool(findings.get(fact))
+
+    def verify_goal(goal: str, children: list, ledger: list) -> Optional[bool]:
+        clauses = _contract.goal_predicate()
+        if not clauses:
+            return None
+        vms = vms_getter() or {}
+        for c in clauses:
+            crit, target = c.get("criterion"), c.get("target")
+            if crit == "mesh":
+                if not _finding_true(f"mesh({target})"):
+                    return False
+            elif crit == "reachable":
+                if not _finding_true(f"reachable({target})"):
+                    return False
+            elif not _criterion_holds(crit, target, vms):
+                return False
+        return True
+    return verify_goal
+
+
+def make_ce_estimator(call_model, tools, cost_of, cfg=None, reward=None, p_of=None):
+    """A per-alternative CE estimator for OR ordering/pruning (gauntlet C).
+
+    For an alternative sub-goal, PEEK at which primitive the model would use (a model
+    call with NO execution) and price THAT tool deterministically: CE = μ − (λ/2)σ²
+    with μ = p·R − cost, cost = leaf_cost(cost_of(tool)). The model proposes the tool;
+    the HARNESS prices the value — no p_self self-rating (the design's firewall). An
+    alternative the model would DECOMPOSE (compound) can't be cheaply priced → None
+    (kept, never pruned). Reward is the goal-closing payoff, common to all alternatives,
+    so ranking prefers the cheaper / more-reliable route to the SAME goal.
+    """
+    c = _cfg_with(cfg)
+    R = c.get("R", 1.0) if reward is None else reward
+
+    def estimate(alt_goal: str, depth: int) -> Optional[float]:
+        msgs = [{"role": "system", "content": _NODE_SYSTEM},
+                {"role": "user", "content": f"Goal: {alt_goal}"}]
+        name, _ = _first_tool_call(call_model(msgs, list(tools) + [DECOMPOSE_TOOL]))  # PEEK, no execute
+        if not name or name in ("decompose", "alternatives"):
+            return None                                   # compound / no-op → don't price, don't prune
+        cost = _leaf_cost(cost_of(name), c)
+        p = p_of(name) if p_of else c["p_world"]
+        mu = p * R - cost
+        var = p * (1 - p) * R * R
+        return _ce(mu, var, c)
+    return estimate
+
+
+def render_state(vms: Dict[str, Dict[str, Any]]) -> str:
+    """Compact current-state grounding from the VM registry — so the model plans
+    against reality (won't act on VMs that don't exist) and, on a retry, SEES why the
+    last approach failed. The live loop grounds against LIBRARY.ai_digest the same way.
+    """
+    if not vms:
+        return "CURRENT STATE: no VMs exist yet — do not act on VMs that don't exist."
+    items = ", ".join(f"{n}({r.get('status', '?')})" for n, r in sorted(vms.items()))
+    return ("CURRENT STATE (resolve references against this; never act on a VM not "
+            f"listed here):\n  known VMs: {items}")
+
+
+def _summarize(result: Dict[str, Any]) -> Dict[str, Any]:
+    """Walk the tree for the headline counts an operator wants after a run."""
+    halted = unverified = rolled = forbidden = aborted = 0
+
+    def walk(n: Dict[str, Any]) -> None:
+        nonlocal halted, unverified, rolled, forbidden, aborted
+        if n.get("status") == "blocked" and n.get("reason") in ("contract_halt", "consent_denied"):
+            halted += 1
+        if n.get("status") == "forbidden":
+            forbidden += 1
+        if n.get("status") == "aborted":
+            aborted += 1
+        if n.get("status") == "unverified":
+            unverified += 1
+        rolled += int(n.get("rolled_back", 0))
+        for c in n.get("children", []):
+            walk(c)
+
+    walk(result["root"])
+    return {"status": result["root"].get("status"), "ok": result.get("ok"),
+            "executed": len(result.get("ledger", [])),
+            "halted": halted, "forbidden": forbidden, "aborted": aborted,
+            "unverified": unverified, "rolled_back": rolled}
+
+
+def run_autonomous(
+    goal: str,
+    *,
+    call_model:  Callable[[List[Dict], List[Dict]], Dict],
+    execute:     Callable[[str, Dict], Any],
+    tools:       List[Dict],
+    vms_getter:  Optional[Callable[[], Dict[str, Dict[str, Any]]]] = None,
+    gate:        Optional[Callable[[str, Dict], str]] = None,
+    build_context: Optional[Callable[[str, List[str]], str]] = None,
+    select_tools:  Optional[Callable[[str, List[Dict]], List[Dict]]] = None,
+    on_event:    Optional[Callable[[Dict[str, Any]], None]] = None,
+    decompose_first: bool = True,
+    method_cache=None,
+    findings=None,
+    findings_schema=None,
+    reward=None,
+    referendum=None,
+    watchdog=None,
+    killswitch=None,
+    prior=None,
+    max_retries: int = 2,
+    max_depth:   int = 3,
+) -> Dict[str, Any]:
+    """Run `goal` autonomously with the active agent's contract. No human in the loop.
+
+    Wires run_score with the contract's gate + success criteria (defaults), a Library-
+    backed verifier (when `vms_getter` is given → verified-completion is live), and NO
+    confirm backstop. Returns run_score's {root, ledger, ok} plus `events` (one per
+    executed tool call), `disposition`, and a `summary` (executed / halted / unverified
+    / rolled_back). `gate` defaults to the active agent's contract.gate_action, so an
+    autonomous .grgn halts red lines and checkpoints destructive leaves for real.
+    """
+    events: List[Dict[str, Any]] = []
+
+    def _exec(tool: str, args: Dict[str, Any]) -> Any:
+        r = execute(tool, args)
+        ev = {"tool": tool, "args": args,
+              "ok": not (isinstance(r, dict) and (r.get("success") is False or r.get("error")))}
+        events.append(ev)
+        if on_event:
+            on_event(ev)
+        return r
+
+    verify = make_library_verifier(vms_getter) if vms_getter else None
+    # Ground planning in current state (the Active Library's job): inject the live VM
+    # registry into every planning call so the model won't plan/retry on VMs that
+    # don't exist. The live loop uses LIBRARY.ai_digest the same way.
+    if findings is None:
+        findings = Findings()
+    if findings_schema is None:
+        findings_schema = DEFAULT_SCHEMA
+    # Built AFTER findings exists: the root predicate reads epistemic clauses (mesh /
+    # reachable) from the findings ledger, not just VM state.
+    verify_goal = make_goal_verifier(vms_getter, findings) if vms_getter else None
+    # Ground planning in BOTH state (what is) and findings (what's known) — the two
+    # externalized memories that stop the weak model acting on the nonexistent or
+    # re-discovering what it already learned.
+    if build_context is None and vms_getter:
+        def build_context(goal, path):
+            return "\n\n".join(s for s in (render_state(vms_getter()), findings.render()) if s)
+    if method_cache is None:
+        method_cache = _seeded_cache()
+    if watchdog is None:
+        watchdog = Watchdog()
+    if killswitch is None:                        # arm the safeword kill-switch from the contract
+        killswitch = KillSwitch(safeword=_contract.safeword())
+    # Reward-cost constants come from the active contract (.grgn). A PRIOR run's
+    # reliability feeds FORWARD (the global p_self control): a shakier last run →
+    # higher θ/λ this run + a shallower depth budget D_max.
+    rc_cfg = _contract.reward_cost_cfg()
+    if reward is None:                       # the signed contract payoff for closing the goal
+        reward = _contract.campaign_reward()
+    if prior:
+        rc_cfg = {**rc_cfg, "theta": prior.get("theta", rc_cfg.get("theta", 0.0)),
+                  "lambda": prior.get("lambda", rc_cfg.get("lambda", 0.5))}
+        if prior.get("D_max"):
+            max_depth = min(max_depth, prior["D_max"])
+    # OR worth-it: rank alternatives by CE and prune the ones below θ. The estimator
+    # prices the tool each alternative would use (contract risk = cost); θ from rc_cfg.
+    estimate = make_ce_estimator(call_model, tools, _contract.tool_risk,
+                                 cfg=rc_cfg or None, reward=reward)
+    engine = Engine(
+        gate=gate, verify=verify, verify_goal=verify_goal, referendum=referendum,
+        watchdog=watchdog, killswitch=killswitch, findings=findings,
+        findings_schema=findings_schema, method_cache=method_cache,
+        decompose_first=decompose_first, estimate=estimate,
+        ce_floor=(rc_cfg or {}).get("theta", 0.0),
+        retry_penalty=(rc_cfg or {}).get("H", 0.0),   # each wasted retry raises the abandon bar
+    )   # criterion_of/legal_filter default to the active contract inside run_score
+    result = run_score(
+        goal,
+        call_model=call_model, execute=_exec, tools=tools, engine=engine,
+        build_context=build_context, select_tools=select_tools,
+        max_retries=max_retries, max_depth=max_depth,
+    )
+    result["events"] = events
+    result["disposition"] = _contract.disposition()
+    result["findings"] = {f: findings.get(f) for f in findings.facts()}
+    # Reward-cost economics: price the run (μ, σ², CE, cost, reward) using the
+    # contract's per-tool risk as the cost source. Makes the tree reward-cost-aware.
+    result["economics"] = _economics(result["root"], cost_of=_contract.tool_risk,
+                                      reward=reward, cfg=rc_cfg or None)
+    result["watchdog"] = watchdog.status()
+    result["aborted"] = killswitch.tripped
+    if killswitch.tripped:
+        result["kill_reason"] = killswitch.reason
+    # Reliability: measure p_self from this run's ledger → the dials it implies (θ, λ,
+    # depth budget). Pass this as `prior=` to the NEXT run to feed it forward.
+    result["reliability"] = _dials(_p_self(result.get("ledger", [])), rc_cfg or None)
+    result["summary"] = _summarize(result)
+    return result
+
+
+def run_autonomous_live(goal: str, **kw) -> Dict[str, Any]:
+    """Convenience: wire the REAL Ollama model + executor + Active Library and run.
+
+    Imports are local so this module stays importable (and unit-testable) without the
+    runtime. Requires a running Ollama and executor; the active agent is whatever
+    GORGON_AGENT points at (a Conductor .grgn for a real autonomous run).
+    """
+    from .ollama_client import _call_ollama
+    from .tools import TOOLS
+    from .active_library import LIBRARY
+    from orchestrator.executor_client import execute_tool
+
+    return run_autonomous(
+        goal,
+        call_model=_call_ollama,                       # prepends the active agent's system prompt
+        execute=lambda t, a: execute_tool(t, a),
+        tools=TOOLS,
+        vms_getter=LIBRARY.vms,
+        **kw,
+    )

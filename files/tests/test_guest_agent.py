@@ -260,7 +260,7 @@ def main():
     check("writes script + cmd_template", r.get("success") and os.path.exists(r["path"]) and "{port}" in r["cmd_template"])
     cleanup_vm(name)
 
-    print(f"\n{'='*48}\n  {_PASS} passed, {_FAIL} failed\n{'='*48}")
+    print(f"\n{'='*48}\n  {_PASS}/{_PASS + _FAIL} passed\n{'='*48}")
     sys.exit(1 if _FAIL else 0)
 
 

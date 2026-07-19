@@ -55,6 +55,10 @@ from .stealth_persona import (  # stealth generators (extracted from this file)
 # None means nothing to revert (either no tool ran yet or last tool was irreversible).
 _last_revert_action: Dict[str, Any] = {}
 
+# Reserved snapshot-tag prefix for checkpoint savepoints. rollback discovers a
+# checkpoint's member VMs by this tag, so no separate manifest has to be persisted.
+_CKPT_TAG_PREFIX = "ckpt__"
+
 # Tools that manage _last_revert_action themselves (set it on success, or
 # explicitly clear it) — excluded from the blanket clear below so a failed
 # attempt doesn't wipe out a still-valid revert from an earlier success.
@@ -856,6 +860,52 @@ def _run(
     elif tool_name == "snapshot_delete":
         _clear_revert()
         return manager.snapshot_delete(args["name"], args["snap_name"])
+
+    # ── checkpoint / rollback (SQL-savepoint-style, base toolset) ──────────────
+    # A checkpoint is a NAMED savepoint over VM state: it snapshots the target VM,
+    # or the whole fleet, under a reserved tag. rollback restores that tag on each
+    # member. Members are DISCOVERED from the tag itself (no separate manifest to
+    # persist or drift). Available to every agent — the Doorman for a manual "save
+    # point before I do something risky", the autonomous gate-action `checkpoint`
+    # for making a destructive-but-authorized step revertible.
+    elif tool_name == "checkpoint":
+        label   = args["label"]
+        snap    = f"{_CKPT_TAG_PREFIX}{label}"
+        targets = [args["name"]] if args.get("name") else [
+            v["name"] for v in manager.list_vms() if v.get("name")]
+        done, errors = [], []
+        for vm in targets:
+            (done if manager.snapshot_create(vm, snap).get("success") else errors).append(vm)
+        _clear_revert()
+        return {
+            "success": bool(done) or not targets,
+            "checkpoint": label, "snapshot": snap, "vms": done, "errors": errors,
+            "message": (f"Checkpoint '{label}' saved on {len(done)} VM(s)"
+                        + (f"; {len(errors)} failed ({', '.join(errors)})" if errors else "") + "."),
+        }
+
+    elif tool_name == "rollback":
+        label = args["label"]
+        snap  = f"{_CKPT_TAG_PREFIX}{label}"
+        if args.get("name"):
+            targets = [args["name"]]
+        else:                                  # discover members by the checkpoint tag
+            targets = []
+            for v in manager.list_vms():
+                sl = manager.snapshot_list(v.get("name"))
+                if sl.get("success") and any(s.get("tag") == snap for s in sl.get("snapshots", [])):
+                    targets.append(v["name"])
+        if not targets:
+            return {"success": False, "error": f"No checkpoint '{label}' found."}
+        done, errors = [], []
+        for vm in targets:
+            (done if manager.snapshot_restore(vm, snap).get("success") else errors).append(vm)
+        _clear_revert()
+        return {
+            "success": bool(done), "rolled_back_to": label, "vms": done, "errors": errors,
+            "message": (f"Rolled back {len(done)} VM(s) to '{label}'"
+                        + (f"; {len(errors)} failed ({', '.join(errors)})" if errors else "") + "."),
+        }
 
     elif tool_name == "set_resource_limits":
         return manager.set_resource_limits(

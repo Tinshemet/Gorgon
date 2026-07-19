@@ -1,662 +1,1177 @@
 [
-    {
-        "type": "function",
-        "function": {
-            "name": "revert",
-            "description": "Undo the last reversible tool call. Works for: create_vm, clone_vm, launch_vm, stop_vm, update_config, create_profile, snapshot_create, create_network. Does not work after delete_vm, delete_profile, delete_network, snapshot_delete, snapshot_restore, or resize_disk (those are irreversible). Call this when the user says 'undo', 'revert', or 'undo that'.",
-            "parameters": {"type": "object", "properties": {}, "required": []}
-        }
+ {
+  "type": "function",
+  "function": {
+   "name": "revert",
+   "description": "Undo the last reversible tool call. Works for: create_vm, clone_vm, launch_vm, stop_vm, update_config, create_profile, snapshot_create, create_network. Does not work after delete_vm, delete_profile, delete_network, snapshot_delete, snapshot_restore, or resize_disk (those are irreversible). Call this when the user says 'undo', 'revert', or 'undo that'.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": []
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "clarify",
+   "description": "Ask the user for a specific missing required piece of information. Only use for truly required fields that cannot be defaulted. Ask ONE thing at a time.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "question": {
+      "type": "string"
+     },
+     "options": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "clarify",
-            "description": "Ask the user for a specific missing required piece of information. Only use for truly required fields that cannot be defaulted. Ask ONE thing at a time.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "question": {"type": "string"},
-                    "options":  {"type": "array", "items": {"type": "string"}}
-                },
-                "required": ["question"]
-            }
-        }
+    "required": [
+     "question"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "check_system",
+   "description": "Check host system capabilities: KVM, OVMF, QEMU, CPU, RAM, disk space.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": []
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "scan_isos",
+   "description": "Scan common directories for ISO files the user might want to use.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": []
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "list_vms",
+   "description": "List all VMs with status. Optional 'label' filters to VMs carrying that flag or user label (e.g. 'work_vm', 'stealth').",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "label": {
+      "type": "string",
+      "description": "Only list VMs with this flag or user label."
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "check_system",
-            "description": "Check host system capabilities: KVM, OVMF, QEMU, CPU, RAM, disk space.",
-            "parameters": {"type": "object", "properties": {}, "required": []}
-        }
+    "required": []
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "add_label",
+   "description": "Add a user-defined label/tag (e.g. 'work_vm', 'test_vm') to a VM. The label is registered machine-wide so it can be reused across VMs. Works whether the VM is running or stopped.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string",
+      "description": "VM name."
+     },
+     "label": {
+      "type": "string",
+      "description": "Label to add (e.g. 'work_vm')."
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "scan_isos",
-            "description": "Scan common directories for ISO files the user might want to use.",
-            "parameters": {"type": "object", "properties": {}, "required": []}
-        }
+    "required": [
+     "name",
+     "label"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "remove_label",
+   "description": "Remove a user-defined label/tag from a VM. The label stays in the machine-wide registry for other VMs.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string",
+      "description": "VM name."
+     },
+     "label": {
+      "type": "string",
+      "description": "Label to remove."
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_vms",
-            "description": "List all VMs with status. Optional 'label' filters to VMs carrying that flag or user label (e.g. 'work_vm', 'stealth').",
-            "parameters": {
-                "type": "object",
-                "properties": {"label": {"type": "string", "description": "Only list VMs with this flag or user label."}},
-                "required": []
-            }
-        }
+    "required": [
+     "name",
+     "label"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "list_labels",
+   "description": "List every user-defined label registered on the machine and which VMs carry each.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": []
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "list_profiles",
+   "description": "List all hardware profiles including custom ones.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": []
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "check_profile_compatibility",
+   "description": "Check if a hardware profile is compatible with this system.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "profile_name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "add_label",
-            "description": "Add a user-defined label/tag (e.g. 'work_vm', 'test_vm') to a VM. The label is registered machine-wide so it can be reused across VMs. Works whether the VM is running or stopped.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name":  {"type": "string", "description": "VM name."},
-                    "label": {"type": "string", "description": "Label to add (e.g. 'work_vm')."}
-                },
-                "required": ["name", "label"]
-            }
-        }
+    "required": [
+     "profile_name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "create_profile",
+   "description": "Create or overwrite a hardware profile template (a reusable blueprint stored under a profile name). Use this ONLY for managing profile templates — never for changing a specific VM's settings. To change a VM's memory, CPU, or other config fields, use update_config instead.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "profile_name": {
+      "type": "string"
+     },
+     "description": {
+      "type": "string"
+     },
+     "machine_class": {
+      "type": "string"
+     },
+     "machine_type": {
+      "type": "string"
+     },
+     "machine_arch": {
+      "type": "string"
+     },
+     "qemu_binary": {
+      "type": "string"
+     },
+     "cpu_model": {
+      "type": "string"
+     },
+     "cpu_cores": {
+      "type": "integer"
+     },
+     "cpu_threads": {
+      "type": "integer"
+     },
+     "memory_mb": {
+      "type": "integer"
+     },
+     "gpu": {
+      "type": "string"
+     },
+     "audio": {
+      "type": "string"
+     },
+     "display": {
+      "type": "string"
+     },
+     "battery": {
+      "type": "boolean"
+     },
+     "uefi": {
+      "type": "boolean"
+     },
+     "bios": {
+      "type": "string"
+     },
+     "manufacturer": {
+      "type": "string"
+     },
+     "product_name": {
+      "type": "string"
+     },
+     "bios_vendor": {
+      "type": "string"
+     },
+     "bios_version": {
+      "type": "string"
+     },
+     "notes": {
+      "type": "string"
+     },
+     "force": {
+      "type": "boolean",
+      "description": "Skip pre-flight checks and save the profile as-is. Only set this if the user explicitly confirmed they want to proceed despite warnings."
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "remove_label",
-            "description": "Remove a user-defined label/tag from a VM. The label stays in the machine-wide registry for other VMs.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name":  {"type": "string", "description": "VM name."},
-                    "label": {"type": "string", "description": "Label to remove."}
-                },
-                "required": ["name", "label"]
-            }
-        }
+    "required": [
+     "profile_name",
+     "description"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "delete_profile",
+   "description": "Delete a custom hardware profile.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "profile_name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_labels",
-            "description": "List every user-defined label registered on the machine and which VMs carry each.",
-            "parameters": {"type": "object", "properties": {}, "required": []}
-        }
+    "required": [
+     "profile_name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "create_vm",
+   "description": "Create a new VM. Use clarify if name is missing. All other fields have defaults.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "os_type": {
+      "type": "string",
+      "description": "OS family: 'linux', 'windows', 'macos', or 'other'. If user names a distro (mint, ubuntu, kali…) set to 'linux'. Only clarify if completely unknown."
+     },
+     "os_name": {
+      "type": "string",
+      "description": "Specific distro or OS name the user mentioned (e.g. 'mint', 'ubuntu', 'kali', 'fedora'). Always set this when the user names a distro — the system uses it to auto-find the matching ISO."
+     },
+     "profile": {
+      "type": "string"
+     },
+     "cpu_cores": {
+      "type": "integer"
+     },
+     "cpu_threads": {
+      "type": "integer"
+     },
+     "memory_mb": {
+      "type": "integer"
+     },
+     "disk_size_gb": {
+      "type": "integer"
+     },
+     "disk_format": {
+      "type": "string"
+     },
+     "disk_model": {
+      "type": "string",
+      "description": "Disk model string exposed to the guest OS via inxi -D. E.g. 'Samsung SSD 870 EVO', 'WDC WD10EZEX-08WN4A0', 'ST1000LM049-2GH172', 'Samsung SSD 980 PRO', 'Crucial CT500MX500SSD1', 'INTEL SSDPEKNU512GZ'. Supported on sata, nvme, scsi, and ide buses. Not available on virtio."
+     },
+     "iso_path": {
+      "type": "string"
+     },
+     "display": {
+      "type": "string"
+     },
+     "gpu": {
+      "type": "string"
+     },
+     "audio": {
+      "type": "string"
+     },
+     "network_mode": {
+      "type": "string"
+     },
+     "bridge_iface": {
+      "type": "string"
+     },
+     "mac_address": {
+      "type": "string"
+     },
+     "cpu_model": {
+      "type": "string"
+     },
+     "machine_type": {
+      "type": "string"
+     },
+     "manufacturer": {
+      "type": "string"
+     },
+     "product_name": {
+      "type": "string"
+     },
+     "serial_number": {
+      "type": "string"
+     },
+     "bios_vendor": {
+      "type": "string"
+     },
+     "bios_version": {
+      "type": "string"
+     },
+     "chassis_type": {
+      "type": "string",
+      "description": "SMBIOS chassis type string, e.g. 'Notebook', 'Desktop', 'Tower'. Maps to -smbios type=3."
+     },
+     "uefi": {
+      "type": "boolean"
+     },
+     "kvm": {
+      "type": "boolean"
+     },
+     "battery": {
+      "type": "boolean"
+     },
+     "hugepages": {
+      "type": "boolean"
+     },
+     "description": {
+      "type": "string"
+     },
+     "hardened": {
+      "type": "boolean",
+      "description": "Enable hardened mode: hides hypervisor CPUID, QEMU seccomp sandbox, forces NAT, disables balloon. Use for security isolation of untrusted guests."
+     },
+     "stealth": {
+      "type": "boolean",
+      "description": "Enable stealth mode (implies hardened). Applies full hardware fingerprint masking so the VM passes inxi -F as bare-metal hardware: SMBIOS chassis/board/BIOS overrides, PCI vendor spoofing (cirrus-vga, nec-usb-xhci), ACPI OEM ID, CPU flag hiding. Also auto-generates and serves a guest setup script on first launch (Firefox WebGL spoof + qemu_fw_cfg blacklist). Use when the VM must appear as real hardware to the OS and browser fingerprinting."
+     },
+     "guest_agent": {
+      "type": "boolean",
+      "description": "Enable in-VM command execution (run_guest_command) and liveness checks (guest_ping). Off by default. Non-stealth VMs use the standard qemu-guest-agent over virtio-serial; stealth VMs transparently use a separate PSK-authenticated serial channel instead (no virtio device, so no hardware-fingerprint tell) — same tools, same behavior either way. Only set when the user asks to enable the guest agent / in-VM command execution."
+     },
+     "overwrite": {
+      "type": "boolean",
+      "description": "If true and a VM with this name already exists, delete it and recreate. Only set this when the user explicitly said to overwrite or replace the existing VM."
+     },
+     "extra_args": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "manual": {
+      "type": "boolean",
+      "description": "Set to true when the user said 'manual' and wants to configure each VM individually during batch creation. The CLI will prompt for os_type, memory_mb, cpu_cores, and disk_size_gb before creating each VM."
+     },
+     "labels": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "User-defined labels/tags to assign at creation (e.g. ['work_vm', 'test_vm']). Registered machine-wide so they can be reused across VMs and used to filter list_vms."
+     },
+     "template": {
+      "type": "string",
+      "description": "Name of a golden-image template (created via mark_as_template) to clone this VM's disk(s) from, instead of creating blank disks. Use when the user says something like 'give it the X template disk' or 'create it from the X template'. Call list_templates to see what's available."
+     },
+     "randomize_root_password": {
+      "type": "boolean",
+      "description": "When cloning from a Linux template, offline-edit the new disk's root password to a fresh random value (via virt-customize) instead of inheriting the template's exact password. Only applies with 'template' set on a Linux template; ignored for Windows. Only set when the user asks for a unique/randomized/different password per clone."
+     },
+     "randomize_user_password": {
+      "type": "boolean",
+      "description": "Same as randomize_root_password, but for the disk's primary (non-root) user account instead — the username is auto-detected from the disk (first account with UID >= 1000). Only applies with 'template' set on a Linux template; ignored for Windows. Only set when the user asks for a unique/randomized user-account password per clone."
+     },
+     "new_username": {
+      "type": "string",
+      "description": "Rename the cloned disk's primary (non-root) user account to this — the old username is auto-detected from the disk. Only applies with 'template' set on a Linux template; ignored for Windows. Only set when the user explicitly asks for a unique/different/renamed username per clone. Must be a valid lowercase Linux username."
+     },
+     "randomize_hostname": {
+      "type": "boolean",
+      "description": "When cloning from a template (Linux or Windows), offline-edit the new disk's OS-level hostname/computer name to a fresh randomized value instead of inheriting the template's exact one — every clone otherwise shares the identical hostname, a cross-clone fingerprint. Only applies with 'template' set. Only set when the user asks for a unique/randomized/different hostname per clone."
+     },
+     "unattended": {
+      "type": "boolean",
+      "description": "Fully automate OS installation instead of showing the interactive installer (Windows and Linux both supported). WIPES the target disk. Only set when the user explicitly asks for unattended/automated/hands-off install."
+     },
+     "unattended_username": {
+      "type": "string",
+      "description": "Account username for the unattended install. Ignored if unattended_skip_user is true."
+     },
+     "unattended_password": {
+      "type": "string",
+      "description": "Account password for the unattended install. Ignored if unattended_skip_user is true."
+     },
+     "unattended_locale": {
+      "type": "string",
+      "description": "Locale for the unattended install, e.g. 'en-US'."
+     },
+     "unattended_autologon": {
+      "type": "boolean",
+      "description": "Windows only: auto-login as the created account on first boot. Ignored if unattended_skip_user is true."
+     },
+     "unattended_skip_user": {
+      "type": "boolean",
+      "description": "Automate everything (disk, locale, network/hardware-check bypass) EXCEPT the account — the installer stops at its normal 'create your account' screen for the user to fill in themselves. Use when the user says something like 'automate everything except creating the user' or 'let me create my own account'."
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_profiles",
-            "description": "List all hardware profiles including custom ones.",
-            "parameters": {"type": "object", "properties": {}, "required": []}
-        }
+    "required": [
+     "name",
+     "os_type"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "clone_vm",
+   "description": "Clone an existing VM into a new VM with copy-on-write disks.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "source_name": {
+      "type": "string"
+     },
+     "new_name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "check_profile_compatibility",
-            "description": "Check if a hardware profile is compatible with this system.",
-            "parameters": {
-                "type": "object",
-                "properties": {"profile_name": {"type": "string"}},
-                "required": ["profile_name"]
-            }
-        }
+    "required": [
+     "source_name",
+     "new_name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "mark_as_template",
+   "description": "Turn a stopped VM into a reusable golden-image template. Flattens its current disk state into a protected copy under ~/.qemu_vms/_templates/ and tags the VM with the protected 'template' label. Use when the user says 'mark X as a template' or similar. The VM must be stopped first.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string",
+      "description": "VM to snapshot as a template."
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "create_profile",
-            "description": "Create or overwrite a hardware profile template (a reusable blueprint stored under a profile name). Use this ONLY for managing profile templates — never for changing a specific VM's settings. To change a VM's memory, CPU, or other config fields, use update_config instead.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "profile_name":  {"type": "string"},
-                    "description":   {"type": "string"},
-                    "machine_class": {"type": "string"},
-                    "machine_type":  {"type": "string"},
-                    "machine_arch":  {"type": "string"},
-                    "qemu_binary":   {"type": "string"},
-                    "cpu_model":     {"type": "string"},
-                    "cpu_cores":     {"type": "integer"},
-                    "cpu_threads":   {"type": "integer"},
-                    "memory_mb":     {"type": "integer"},
-                    "gpu":           {"type": "string"},
-                    "audio":         {"type": "string"},
-                    "display":       {"type": "string"},
-                    "battery":       {"type": "boolean"},
-                    "uefi":          {"type": "boolean"},
-                    "bios":          {"type": "string"},
-                    "manufacturer":  {"type": "string"},
-                    "product_name":  {"type": "string"},
-                    "bios_vendor":   {"type": "string"},
-                    "bios_version":  {"type": "string"},
-                    "notes":         {"type": "string"},
-                    "force":         {"type": "boolean", "description": "Skip pre-flight checks and save the profile as-is. Only set this if the user explicitly confirmed they want to proceed despite warnings."}
-                },
-                "required": ["profile_name", "description"]
-            }
-        }
+    "required": [
+     "name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "remove_template",
+   "description": "Permanently delete a golden-image template's disk copy and remove the 'template' label from the source VM if it still exists. This is destructive and always asks the user to confirm first — never skip the confirmation.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string",
+      "description": "Template name (same as the VM it was created from)."
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "delete_profile",
-            "description": "Delete a custom hardware profile.",
-            "parameters": {
-                "type": "object",
-                "properties": {"profile_name": {"type": "string"}},
-                "required": ["profile_name"]
-            }
-        }
+    "required": [
+     "name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "list_templates",
+   "description": "List every golden-image template registered on the machine.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": []
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "launch_vm",
+   "description": "Start an already-existing VM. Use this when the user says start, launch, run, or boot a VM that has already been created. Do NOT use create_vm — that creates a new VM from scratch.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "display": {
+      "type": "string"
+     },
+     "dry_run": {
+      "type": "boolean",
+      "description": "Print command without running"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "create_vm",
-            "description": "Create a new VM. Use clarify if name is missing. All other fields have defaults.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name":         {"type": "string"},
-                    "os_type":      {"type": "string", "description": "OS family: 'linux', 'windows', 'macos', or 'other'. If user names a distro (mint, ubuntu, kali…) set to 'linux'. Only clarify if completely unknown."},
-                    "os_name":      {"type": "string", "description": "Specific distro or OS name the user mentioned (e.g. 'mint', 'ubuntu', 'kali', 'fedora'). Always set this when the user names a distro — the system uses it to auto-find the matching ISO."},
-                    "profile":      {"type": "string"},
-                    "cpu_cores":    {"type": "integer"},
-                    "cpu_threads":  {"type": "integer"},
-                    "memory_mb":    {"type": "integer"},
-                    "disk_size_gb": {"type": "integer"},
-                    "disk_format":  {"type": "string"},
-                    "disk_model":   {"type": "string", "description": "Disk model string exposed to the guest OS via inxi -D. E.g. 'Samsung SSD 870 EVO', 'WDC WD10EZEX-08WN4A0', 'ST1000LM049-2GH172', 'Samsung SSD 980 PRO', 'Crucial CT500MX500SSD1', 'INTEL SSDPEKNU512GZ'. Supported on sata, nvme, scsi, and ide buses. Not available on virtio."},
-                    "iso_path":     {"type": "string"},
-                    "display":      {"type": "string"},
-                    "gpu":          {"type": "string"},
-                    "audio":        {"type": "string"},
-                    "network_mode": {"type": "string"},
-                    "bridge_iface": {"type": "string"},
-                    "mac_address":  {"type": "string"},
-                    "cpu_model":    {"type": "string"},
-                    "machine_type": {"type": "string"},
-                    "manufacturer":  {"type": "string"},
-                    "product_name":  {"type": "string"},
-                    "serial_number": {"type": "string"},
-                    "bios_vendor":   {"type": "string"},
-                    "bios_version":  {"type": "string"},
-                    "chassis_type":  {"type": "string", "description": "SMBIOS chassis type string, e.g. 'Notebook', 'Desktop', 'Tower'. Maps to -smbios type=3."},
-                    "uefi":          {"type": "boolean"},
-                    "kvm":          {"type": "boolean"},
-                    "battery":      {"type": "boolean"},
-                    "hugepages":    {"type": "boolean"},
-                    "description":  {"type": "string"},
-                    "hardened":     {"type": "boolean", "description": "Enable hardened mode: hides hypervisor CPUID, QEMU seccomp sandbox, forces NAT, disables balloon. Use for security isolation of untrusted guests."},
-                    "stealth":      {"type": "boolean", "description": "Enable stealth mode (implies hardened). Applies full hardware fingerprint masking so the VM passes inxi -F as bare-metal hardware: SMBIOS chassis/board/BIOS overrides, PCI vendor spoofing (cirrus-vga, nec-usb-xhci), ACPI OEM ID, CPU flag hiding. Also auto-generates and serves a guest setup script on first launch (Firefox WebGL spoof + qemu_fw_cfg blacklist). Use when the VM must appear as real hardware to the OS and browser fingerprinting."},
-                    "guest_agent":  {"type": "boolean", "description": "Enable in-VM command execution (run_guest_command) and liveness checks (guest_ping). Off by default. Non-stealth VMs use the standard qemu-guest-agent over virtio-serial; stealth VMs transparently use a separate PSK-authenticated serial channel instead (no virtio device, so no hardware-fingerprint tell) — same tools, same behavior either way. Only set when the user asks to enable the guest agent / in-VM command execution."},
-                    "overwrite":    {"type": "boolean", "description": "If true and a VM with this name already exists, delete it and recreate. Only set this when the user explicitly said to overwrite or replace the existing VM."},
-                    "extra_args":   {"type": "array", "items": {"type": "string"}},
-                    "manual":       {"type": "boolean", "description": "Set to true when the user said 'manual' and wants to configure each VM individually during batch creation. The CLI will prompt for os_type, memory_mb, cpu_cores, and disk_size_gb before creating each VM."},
-                    "labels":       {"type": "array", "items": {"type": "string"}, "description": "User-defined labels/tags to assign at creation (e.g. ['work_vm', 'test_vm']). Registered machine-wide so they can be reused across VMs and used to filter list_vms."},
-                    "template":     {"type": "string", "description": "Name of a golden-image template (created via mark_as_template) to clone this VM's disk(s) from, instead of creating blank disks. Use when the user says something like 'give it the X template disk' or 'create it from the X template'. Call list_templates to see what's available."},
-                    "randomize_root_password": {"type": "boolean", "description": "When cloning from a Linux template, offline-edit the new disk's root password to a fresh random value (via virt-customize) instead of inheriting the template's exact password. Only applies with 'template' set on a Linux template; ignored for Windows. Only set when the user asks for a unique/randomized/different password per clone."},
-                    "randomize_user_password": {"type": "boolean", "description": "Same as randomize_root_password, but for the disk's primary (non-root) user account instead — the username is auto-detected from the disk (first account with UID >= 1000). Only applies with 'template' set on a Linux template; ignored for Windows. Only set when the user asks for a unique/randomized user-account password per clone."},
-                    "new_username":  {"type": "string", "description": "Rename the cloned disk's primary (non-root) user account to this — the old username is auto-detected from the disk. Only applies with 'template' set on a Linux template; ignored for Windows. Only set when the user explicitly asks for a unique/different/renamed username per clone. Must be a valid lowercase Linux username."},
-                    "randomize_hostname": {"type": "boolean", "description": "When cloning from a template (Linux or Windows), offline-edit the new disk's OS-level hostname/computer name to a fresh randomized value instead of inheriting the template's exact one — every clone otherwise shares the identical hostname, a cross-clone fingerprint. Only applies with 'template' set. Only set when the user asks for a unique/randomized/different hostname per clone."},
-                    "unattended":            {"type": "boolean", "description": "Fully automate OS installation instead of showing the interactive installer (Windows and Linux both supported). WIPES the target disk. Only set when the user explicitly asks for unattended/automated/hands-off install."},
-                    "unattended_username":   {"type": "string", "description": "Account username for the unattended install. Ignored if unattended_skip_user is true."},
-                    "unattended_password":   {"type": "string", "description": "Account password for the unattended install. Ignored if unattended_skip_user is true."},
-                    "unattended_locale":     {"type": "string", "description": "Locale for the unattended install, e.g. 'en-US'."},
-                    "unattended_autologon":  {"type": "boolean", "description": "Windows only: auto-login as the created account on first boot. Ignored if unattended_skip_user is true."},
-                    "unattended_skip_user":  {"type": "boolean", "description": "Automate everything (disk, locale, network/hardware-check bypass) EXCEPT the account — the installer stops at its normal 'create your account' screen for the user to fill in themselves. Use when the user says something like 'automate everything except creating the user' or 'let me create my own account'."}
-                },
-                "required": ["name", "os_type"]
-            }
-        }
+    "required": [
+     "name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "stop_vm",
+   "description": "Stop or shut down a running VM. Use name='all' to stop all VMs. Call this when the user says stop, shut down, halt, kill, or force-stop a VM. Set force=true when the user says 'kill', 'force stop', 'hard stop', or 'SIGKILL'. This does not delete anything — the VM can be relaunched afterwards.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "force": {
+      "type": "boolean"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "clone_vm",
-            "description": "Clone an existing VM into a new VM with copy-on-write disks.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "source_name": {"type": "string"},
-                    "new_name":    {"type": "string"}
-                },
-                "required": ["source_name", "new_name"]
-            }
-        }
+    "required": [
+     "name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "vm_status",
+   "description": "Get status of a VM.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "mark_as_template",
-            "description": "Turn a stopped VM into a reusable golden-image template. Flattens its current disk state into a protected copy under ~/.qemu_vms/_templates/ and tags the VM with the protected 'template' label. Use when the user says 'mark X as a template' or similar. The VM must be stopped first.",
-            "parameters": {
-                "type": "object",
-                "properties": {"name": {"type": "string", "description": "VM to snapshot as a template."}},
-                "required": ["name"]
-            }
-        }
+    "required": [
+     "name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "monitor_vm",
+   "description": "Deep activity report. Use name='all' for all VMs.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "remove_template",
-            "description": "Permanently delete a golden-image template's disk copy and remove the 'template' label from the source VM if it still exists. This is destructive and always asks the user to confirm first — never skip the confirmation.",
-            "parameters": {
-                "type": "object",
-                "properties": {"name": {"type": "string", "description": "Template name (same as the VM it was created from)."}},
-                "required": ["name"]
-            }
-        }
+    "required": [
+     "name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "run_guest_command",
+   "description": "Run a command inside a VM via its guest agent and return stdout/stderr/exit_code. Requires the VM to be running with guest_agent enabled (see create_vm's guest_agent flag). Works for stealth VMs too, via a separate serial channel — same call either way.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string",
+      "description": "VM name."
+     },
+     "command": {
+      "type": "string",
+      "description": "Shell line to run (executed via /bin/sh -c), e.g. 'uptime' or 'df -h'."
+     },
+     "timeout": {
+      "type": "integer",
+      "description": "Seconds to wait for the command to finish before giving up (default from config, currently 30s)."
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_templates",
-            "description": "List every golden-image template registered on the machine.",
-            "parameters": {"type": "object", "properties": {}, "required": []}
-        }
+    "required": [
+     "name",
+     "command"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "guest_ping",
+   "description": "Check whether a VM's guest agent answers — confirms the guest OS itself is alive and responsive, not just that the QEMU process is running. Use for liveness checks distinct from vm_status.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "launch_vm",
-            "description": "Start an already-existing VM. Use this when the user says start, launch, run, or boot a VM that has already been created. Do NOT use create_vm — that creates a new VM from scratch.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name":    {"type": "string"},
-                    "display": {"type": "string"},
-                    "dry_run": {"type": "boolean", "description": "Print command without running"}
-                },
-                "required": ["name"]
-            }
-        }
+    "required": [
+     "name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "fleet",
+   "description": "Broadcast ONE action to every VM carrying a label (a 'fleet') and return per-VM results. The label matches either an auto-flag (stealth/hardened/bridge/vpn) or a user label (e.g. 'redteam'). Use this instead of calling per-VM tools in a loop when the user wants to act on a whole group at once ('run X on all my redteam VMs', 'stop the stealth fleet', 'ping every work_vm'). action='exec' runs a guest command on each member (needs 'command'; each member must be running with guest_agent enabled); 'ping'/'status' observe; 'stop'/'launch' control lifecycle. To just see which VMs are in a fleet, use list_vms with the label filter instead.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "label": {
+      "type": "string",
+      "description": "Flag or user label selecting the fleet members (e.g. 'redteam', 'stealth')."
+     },
+     "action": {
+      "type": "string",
+      "enum": [
+       "exec",
+       "ping",
+       "status",
+       "stop",
+       "launch"
+      ],
+      "description": "The single action to apply to every member."
+     },
+     "command": {
+      "type": "string",
+      "description": "Shell line to run on each member when action='exec' (executed via /bin/sh -c)."
+     },
+     "timeout": {
+      "type": "integer",
+      "description": "Per-command timeout in seconds for action='exec' (default from config)."
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "stop_vm",
-            "description": "Stop or shut down a running VM. Use name='all' to stop all VMs. Call this when the user says stop, shut down, halt, kill, or force-stop a VM. Set force=true when the user says 'kill', 'force stop', 'hard stop', or 'SIGKILL'. This does not delete anything — the VM can be relaunched afterwards.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name":  {"type": "string"},
-                    "force": {"type": "boolean"}
-                },
-                "required": ["name"]
-            }
-        }
+    "required": [
+     "label",
+     "action"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "generate_guest_agent_setup",
+   "description": "Write a guest-side script that installs and enables qemu-guest-agent inside a Linux VM. Call this when the user wants to enable guest-agent command execution on a VM that doesn't have it running yet. Not available for Windows guests (manual MSI install required).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "vm_status",
-            "description": "Get status of a VM.",
-            "parameters": {
-                "type": "object",
-                "properties": {"name": {"type": "string"}},
-                "required": ["name"]
-            }
-        }
+    "required": [
+     "name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "provision_guest_agent_offline",
+   "description": "Install the stealth serial-agent (daemon + PSK + systemd unit) directly onto a stopped stealth VM's disk — no boot required, unlike generate_guest_agent_setup which needs a human to run a script inside a live session. Only applies to stealth VMs (non-stealth VMs use generate_guest_agent_setup's qemu-guest-agent path instead). The VM must be stopped first.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "monitor_vm",
-            "description": "Deep activity report. Use name='all' for all VMs.",
-            "parameters": {
-                "type": "object",
-                "properties": {"name": {"type": "string"}},
-                "required": ["name"]
-            }
-        }
+    "required": [
+     "name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "show_config",
+   "description": "Show full VM configuration.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "run_guest_command",
-            "description": "Run a command inside a VM via its guest agent and return stdout/stderr/exit_code. Requires the VM to be running with guest_agent enabled (see create_vm's guest_agent flag). Works for stealth VMs too, via a separate serial channel — same call either way.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name":    {"type": "string", "description": "VM name."},
-                    "command": {"type": "string", "description": "Shell line to run (executed via /bin/sh -c), e.g. 'uptime' or 'df -h'."},
-                    "timeout": {"type": "integer", "description": "Seconds to wait for the command to finish before giving up (default from config, currently 30s)."}
-                },
-                "required": ["name", "command"]
-            }
-        }
+    "required": [
+     "name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "update_config",
+   "description": "Update one or more config fields of a specific VM (memory_mb, cpu_cores, cpu_model, disk_size_gb, iso_path, network_mode, uefi, etc.). Use this whenever the user wants to change a VM's settings — e.g. 'give it more RAM', 'halve the memory', 'change the CPU'. The VM must be stopped first.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "updates": {
+      "type": "object"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "guest_ping",
-            "description": "Check whether a VM's guest agent answers — confirms the guest OS itself is alive and responsive, not just that the QEMU process is running. Use for liveness checks distinct from vm_status.",
-            "parameters": {
-                "type": "object",
-                "properties": {"name": {"type": "string"}},
-                "required": ["name"]
-            }
-        }
+    "required": [
+     "name",
+     "updates"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "resize_disk",
+   "description": "Resize a VM disk (VM must be stopped).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "disk_index": {
+      "type": "integer"
+     },
+     "new_size_gb": {
+      "type": "integer"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "fleet",
-            "description": "Broadcast ONE action to every VM carrying a label (a 'fleet') and return per-VM results. The label matches either an auto-flag (stealth/hardened/bridge/vpn) or a user label (e.g. 'redteam'). Use this instead of calling per-VM tools in a loop when the user wants to act on a whole group at once ('run X on all my redteam VMs', 'stop the stealth fleet', 'ping every work_vm'). action='exec' runs a guest command on each member (needs 'command'; each member must be running with guest_agent enabled); 'ping'/'status' observe; 'stop'/'launch' control lifecycle. To just see which VMs are in a fleet, use list_vms with the label filter instead.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "label":   {"type": "string", "description": "Flag or user label selecting the fleet members (e.g. 'redteam', 'stealth')."},
-                    "action":  {"type": "string", "enum": ["exec", "ping", "status", "stop", "launch"], "description": "The single action to apply to every member."},
-                    "command": {"type": "string", "description": "Shell line to run on each member when action='exec' (executed via /bin/sh -c)."},
-                    "timeout": {"type": "integer", "description": "Per-command timeout in seconds for action='exec' (default from config)."}
-                },
-                "required": ["label", "action"]
-            }
-        }
+    "required": [
+     "name",
+     "new_size_gb"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "snapshot_create",
+   "description": "Create a snapshot of a running VM.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "snap_name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "generate_guest_agent_setup",
-            "description": "Write a guest-side script that installs and enables qemu-guest-agent inside a Linux VM. Call this when the user wants to enable guest-agent command execution on a VM that doesn't have it running yet. Not available for Windows guests (manual MSI install required).",
-            "parameters": {
-                "type": "object",
-                "properties": {"name": {"type": "string"}},
-                "required": ["name"]
-            }
-        }
+    "required": [
+     "name",
+     "snap_name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "snapshot_list",
+   "description": "List all snapshots for a VM.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "provision_guest_agent_offline",
-            "description": "Install the stealth serial-agent (daemon + PSK + systemd unit) directly onto a stopped stealth VM's disk — no boot required, unlike generate_guest_agent_setup which needs a human to run a script inside a live session. Only applies to stealth VMs (non-stealth VMs use generate_guest_agent_setup's qemu-guest-agent path instead). The VM must be stopped first.",
-            "parameters": {
-                "type": "object",
-                "properties": {"name": {"type": "string"}},
-                "required": ["name"]
-            }
-        }
+    "required": [
+     "name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "snapshot_restore",
+   "description": "Restore a VM snapshot by name.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "snap_name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "show_config",
-            "description": "Show full VM configuration.",
-            "parameters": {
-                "type": "object",
-                "properties": {"name": {"type": "string"}},
-                "required": ["name"]
-            }
-        }
+    "required": [
+     "name",
+     "snap_name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "snapshot_delete",
+   "description": "Delete a named snapshot from a VM. Use this when the user wants to remove or discard a specific snapshot by name. Do NOT use delete_vm — that removes the entire VM, not just a snapshot.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "snap_name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "update_config",
-            "description": "Update one or more config fields of a specific VM (memory_mb, cpu_cores, cpu_model, disk_size_gb, iso_path, network_mode, uefi, etc.). Use this whenever the user wants to change a VM's settings — e.g. 'give it more RAM', 'halve the memory', 'change the CPU'. The VM must be stopped first.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name":    {"type": "string"},
-                    "updates": {"type": "object"}
-                },
-                "required": ["name", "updates"]
-            }
-        }
+    "required": [
+     "name",
+     "snap_name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "set_resource_limits",
+   "description": "Limit CPU% or memory of a running VM.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "cpu_percent": {
+      "type": "integer",
+      "description": "0-100"
+     },
+     "memory_mb": {
+      "type": "integer"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "resize_disk",
-            "description": "Resize a VM disk (VM must be stopped).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name":        {"type": "string"},
-                    "disk_index":  {"type": "integer"},
-                    "new_size_gb": {"type": "integer"}
-                },
-                "required": ["name", "new_size_gb"]
-            }
-        }
+    "required": [
+     "name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "create_network",
+   "description": "Create a private isolated network between VMs (no internet access).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "net_name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "snapshot_create",
-            "description": "Create a snapshot of a running VM.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name":      {"type": "string"},
-                    "snap_name": {"type": "string"}
-                },
-                "required": ["name", "snap_name"]
-            }
-        }
+    "required": [
+     "net_name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "delete_network",
+   "description": "Delete an isolated network.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "net_name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "snapshot_list",
-            "description": "List all snapshots for a VM.",
-            "parameters": {
-                "type": "object",
-                "properties": {"name": {"type": "string"}},
-                "required": ["name"]
-            }
-        }
+    "required": [
+     "net_name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "list_networks",
+   "description": "List all isolated VM networks.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": []
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "add_vm_to_network",
+   "description": "Add a VM to an isolated network.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "net_name": {
+      "type": "string"
+     },
+     "vm_name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "snapshot_restore",
-            "description": "Restore a VM snapshot by name.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name":      {"type": "string"},
-                    "snap_name": {"type": "string"}
-                },
-                "required": ["name", "snap_name"]
-            }
-        }
+    "required": [
+     "net_name",
+     "vm_name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "open_display",
+   "description": "Open the display viewer for a running VM.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "snapshot_delete",
-            "description": "Delete a named snapshot from a VM. Use this when the user wants to remove or discard a specific snapshot by name. Do NOT use delete_vm — that removes the entire VM, not just a snapshot.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name":      {"type": "string"},
-                    "snap_name": {"type": "string"}
-                },
-                "required": ["name", "snap_name"]
-            }
-        }
+    "required": [
+     "name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "open_shell",
+   "description": "Open a serial console in a terminal.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "set_resource_limits",
-            "description": "Limit CPU% or memory of a running VM.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name":        {"type": "string"},
-                    "cpu_percent": {"type": "integer", "description": "0-100"},
-                    "memory_mb":   {"type": "integer"}
-                },
-                "required": ["name"]
-            }
-        }
+    "required": [
+     "name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "delete_vm",
+   "description": "Permanently delete a VM configuration and its disk files. Use ONLY when the user says delete, remove, destroy, or wipe a VM. Do NOT call this for 'kill' — kill means stop_vm(force=True). Do NOT use this to delete a snapshot — use snapshot_delete for that.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "create_network",
-            "description": "Create a private isolated network between VMs (no internet access).",
-            "parameters": {
-                "type": "object",
-                "properties": {"net_name": {"type": "string"}},
-                "required": ["net_name"]
-            }
-        }
+    "required": [
+     "name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "check_disk",
+   "description": "Check whether a VM's disk images are blank (no OS installed). Call this when a VM boots but shows a PXE network boot screen, 'no bootable device', or TianoCore UEFI with no OS found — those symptoms mean the disk is empty, not a QEMU crash. Returns has_blank_disk, per-disk size info, and a suggested_iso auto-matched from available ISOs using the VM's os_type and os_name fields, filtered for arch compatibility. When has_blank_disk is true: use suggested_iso directly if present (do not ask the user), call update_config with that iso_path, then call launch_vm. Only ask the user if suggested_iso is null.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string",
+      "description": "VM name"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "delete_network",
-            "description": "Delete an isolated network.",
-            "parameters": {
-                "type": "object",
-                "properties": {"net_name": {"type": "string"}},
-                "required": ["net_name"]
-            }
-        }
+    "required": [
+     "name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "get_vm_logs",
+   "description": "Read a VM launch log and diagnose why it failed. ALWAYS call this when a VM is stopped unexpectedly, fails to launch, crashes immediately, or the user asks why a VM failed. Returns parsed errors, root cause diagnosis, and fix suggestions.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string",
+      "description": "VM name"
+     },
+     "lines": {
+      "type": "integer",
+      "description": "Log lines to read (default 50)"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_networks",
-            "description": "List all isolated VM networks.",
-            "parameters": {"type": "object", "properties": {}, "required": []}
-        }
+    "required": [
+     "name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "print_command",
+   "description": "Print the full QEMU launch command without running it.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "add_vm_to_network",
-            "description": "Add a VM to an isolated network.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "net_name": {"type": "string"},
-                    "vm_name":  {"type": "string"}
-                },
-                "required": ["net_name", "vm_name"]
-            }
-        }
+    "required": [
+     "name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "fingerprint_vm",
+   "description": "Analyse a VM's config and report what a fingerprinting tool (inxi -M -N -C -D -A -G) would see from inside the guest. Scores SMBIOS fields, MAC OUI, CPU model, disk interface, audio, and GPU for VM detectability. Call this when the user asks about VM fingerprinting, detectability, or how realistic a VM looks. Use summary=true when fingerprinting multiple VMs to skip the full report and only return the score — required when computing an average across VMs.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string",
+      "description": "VM name to analyse"
+     },
+     "summary": {
+      "type": "boolean",
+      "description": "Return score only, skip full report rendering. Use when fingerprinting multiple VMs or computing averages."
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "open_display",
-            "description": "Open the display viewer for a running VM.",
-            "parameters": {
-                "type": "object",
-                "properties": {"name": {"type": "string"}},
-                "required": ["name"]
-            }
-        }
+    "required": [
+     "name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "send_monitor_cmd",
+   "description": "Send a raw QEMU monitor protocol command to a running VM (e.g. 'info status', 'info block', 'info kvm', 'quit'). Use this for low-level QEMU introspection or control. Do NOT use vm_status — that only returns high-level running/stopped state.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "cmd": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "open_shell",
-            "description": "Open a serial console in a terminal.",
-            "parameters": {
-                "type": "object",
-                "properties": {"name": {"type": "string"}},
-                "required": ["name"]
-            }
-        }
+    "required": [
+     "name",
+     "cmd"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "checkpoint",
+   "description": "Save a named restore point (SQL SAVEPOINT style): snapshot the given VM, or the whole fleet if no name, under a checkpoint label.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "label": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "delete_vm",
-            "description": "Permanently delete a VM configuration and its disk files. Use ONLY when the user says delete, remove, destroy, or wipe a VM. Do NOT call this for 'kill' — kill means stop_vm(force=True). Do NOT use this to delete a snapshot — use snapshot_delete for that.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"}
-                },
-                "required": ["name"]
-            }
-        }
+    "required": [
+     "label"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "rollback",
+   "description": "Roll back to a named checkpoint (SQL ROLLBACK TO style): restore that checkpoint on each VM that has it, or on the given VM.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "label": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "check_disk",
-            "description": "Check whether a VM's disk images are blank (no OS installed). Call this when a VM boots but shows a PXE network boot screen, 'no bootable device', or TianoCore UEFI with no OS found — those symptoms mean the disk is empty, not a QEMU crash. Returns has_blank_disk, per-disk size info, and a suggested_iso auto-matched from available ISOs using the VM's os_type and os_name fields, filtered for arch compatibility. When has_blank_disk is true: use suggested_iso directly if present (do not ask the user), call update_config with that iso_path, then call launch_vm. Only ask the user if suggested_iso is null.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string", "description": "VM name"}
-                },
-                "required": ["name"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_vm_logs",
-            "description": "Read a VM launch log and diagnose why it failed. ALWAYS call this when a VM is stopped unexpectedly, fails to launch, crashes immediately, or the user asks why a VM failed. Returns parsed errors, root cause diagnosis, and fix suggestions.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name":  {"type": "string", "description": "VM name"},
-                    "lines": {"type": "integer", "description": "Log lines to read (default 50)"}
-                },
-                "required": ["name"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "print_command",
-            "description": "Print the full QEMU launch command without running it.",
-            "parameters": {
-                "type": "object",
-                "properties": {"name": {"type": "string"}},
-                "required": ["name"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "fingerprint_vm",
-            "description": "Analyse a VM's config and report what a fingerprinting tool (inxi -M -N -C -D -A -G) would see from inside the guest. Scores SMBIOS fields, MAC OUI, CPU model, disk interface, audio, and GPU for VM detectability. Call this when the user asks about VM fingerprinting, detectability, or how realistic a VM looks. Use summary=true when fingerprinting multiple VMs to skip the full report and only return the score — required when computing an average across VMs.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name":    {"type": "string",  "description": "VM name to analyse"},
-                    "summary": {"type": "boolean", "description": "Return score only, skip full report rendering. Use when fingerprinting multiple VMs or computing averages."}
-                },
-                "required": ["name"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "send_monitor_cmd",
-            "description": "Send a raw QEMU monitor protocol command to a running VM (e.g. 'info status', 'info block', 'info kvm', 'quit'). Use this for low-level QEMU introspection or control. Do NOT use vm_status — that only returns high-level running/stopped state.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "cmd":  {"type": "string"}
-                },
-                "required": ["name", "cmd"]
-            }
-        }
-    }
+    "required": [
+     "label"
+    ]
+   }
+  }
+ }
 ]
