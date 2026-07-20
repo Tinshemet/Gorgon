@@ -474,8 +474,8 @@
     {
       "command": "contract",
       "tools": [],
-      "args": "forge [--full] | show <file> | sign <file> <safeword>",
-      "desc": "Forge, review, or sign a .grgn campaign contract. Operator password required.",
+      "args": "forge [--full] | show <file> | sign <file> <safeword> | edit <file>",
+      "desc": "Forge, review, sign, or edit a .grgn campaign contract. Operator password required.",
       "related": ["contract", "forge contract", "sign contract"],
       "category": "Operator & agents"
     },

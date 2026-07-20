@@ -721,9 +721,48 @@ def run(args: List[str], verbose: bool = False) -> None:
                     console.print(f"[green]Signed → {path}[/green]")
                 except ValueError as e:
                     console.print(f"[bold red]{e}[/bold red]")
+        elif sub == "edit" and len(rest) >= 2:
+            # Encrypted .grgn can't be hand-edited, so decrypt to a temp file,
+            # open $EDITOR, re-review, and re-encrypt on save (ansible-vault style).
+            if not _require_operator_password("edit a contract"):
+                return
+            import subprocess, tempfile
+            from shared.grgn_sign import read as _read_grgn
+            path = rest[1] if os.path.isabs(rest[1]) else os.path.join(_agent_dir, rest[1])
+            g, st = _read_grgn(path)
+            if g is None:
+                console.print(f"[bold red]Cannot read {rest[1]} ({st}).[/bold red]")
+            else:
+                editor = os.environ.get("EDITOR") or os.environ.get("VISUAL") or "nano"
+                fd, tmp = tempfile.mkstemp(suffix=".grgn.json")
+                os.close(fd); os.chmod(tmp, 0o600)      # decrypted plaintext — keep it private
+                try:
+                    with open(tmp, "w") as f:
+                        json.dump(g, f, indent=2, ensure_ascii=False)
+                    subprocess.call([editor, tmp])
+                    with open(tmp) as f:
+                        try:
+                            edited = json.load(f)
+                        except Exception as e:
+                            console.print(f"[bold red]Invalid JSON — not saved: {e}[/bold red]")
+                            edited = None
+                    if edited is not None:
+                        issues = _forge.review(edited)
+                        if issues:
+                            console.print("[bold red]Refusing to save — contract is incoherent:[/bold red]")
+                            for i in issues:
+                                console.print(f"  - {i}")
+                        else:
+                            _forge.write_grgn(edited, path)   # re-encrypts under the install key
+                            console.print(f"[green]✔ Saved and re-encrypted → {path}[/green]")
+                finally:
+                    try:
+                        os.remove(tmp)                  # never leave decrypted content around
+                    except OSError:
+                        pass
         else:
             console.print("[yellow]Usage: gorgon contract forge [--full] | "
-                          "show <file> | sign <file> <safeword>[/yellow]")
+                          "show <file> | sign <file> <safeword> | edit <file>[/yellow]")
 
     elif cmd == "agent":
         # gorgon agent | agent <file> | agent load <file> | agent reset
