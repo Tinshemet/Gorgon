@@ -84,7 +84,8 @@ def make_probe(execute: Callable[[str, Dict], Any]):
     return probe
 
 
-def make_goal_verifier(vms_getter: Callable[[], Dict[str, Dict[str, Any]]], findings=None, probe=None):
+def make_goal_verifier(vms_getter: Callable[[], Dict[str, Dict[str, Any]]], findings=None, probe=None,
+                       predicate=None):
     """A verify_goal(goal, children, ledger) — the CONTRACT ROOT PREDICATE.
 
     Checks the active contract's structured goal predicate (contract.goal_predicate(),
@@ -106,7 +107,10 @@ def make_goal_verifier(vms_getter: Callable[[], Dict[str, Dict[str, Any]]], find
         return findings is not None and findings.usable(fact)
 
     def verify_goal(goal: str, children: list, ledger: list) -> Optional[bool]:
-        clauses = _contract.goal_predicate()
+        # Acceptance clauses come from the MISSION (what you tasked) when one is given;
+        # otherwise fall back to the contract's legacy goal_predicate (pre-split). No
+        # clauses → None, so acceptance falls to the Library (state) + findings grounding.
+        clauses = predicate if predicate is not None else _contract.goal_predicate()
         if not clauses:
             return None
         vms = vms_getter() or {}
@@ -224,6 +228,7 @@ def run_autonomous(
     max_depth:   int = 3,
     persist_claims: bool = False,
     agent_key: Optional[str] = None,
+    mission=None,
 ) -> Dict[str, Any]:
     """Run `goal` autonomously with the active agent's contract. No human in the loop.
 
@@ -235,6 +240,12 @@ def run_autonomous(
     autonomous .grgn halts red lines and checkpoints destructive leaves for real.
     """
     events: List[Dict[str, Any]] = []
+
+    # A MISSION narrows the agent to this tasking: restrict the toolkit to the
+    # mission's whitelist minus its (agent∪mission) blacklist before the model ever
+    # sees them. The agent's own red lines still apply as a hard backstop in the gate.
+    if mission is not None:
+        tools = mission.filter_tools(tools)
 
     def _exec(tool: str, args: Dict[str, Any]) -> Any:
         r = execute(tool, args)
@@ -267,7 +278,10 @@ def run_autonomous(
             pass
     # Built AFTER findings exists: the root predicate reads epistemic clauses (mesh /
     # reachable) from the findings ledger, not just VM state.
-    verify_goal = make_goal_verifier(vms_getter, findings, probe=make_probe(execute)) if vms_getter else None
+    verify_goal = make_goal_verifier(
+        vms_getter, findings, probe=make_probe(execute),
+        predicate=(mission.predicate() if mission is not None else None),
+    ) if vms_getter else None
     # Ground planning in BOTH state (what is) and findings (what's known) — the two
     # externalized memories that stop the weak model acting on the nonexistent or
     # re-discovering what it already learned.
@@ -284,8 +298,10 @@ def run_autonomous(
     # reliability feeds FORWARD (the global p_self control): a shakier last run →
     # higher θ/λ this run + a shallower depth budget D_max.
     rc_cfg = _contract.reward_cost_cfg()
-    if reward is None:                       # the signed contract payoff for closing the goal
-        reward = _contract.campaign_reward()
+    if reward is None:                       # payoff for closing the goal
+        # A mission's resolved reward (its own, importance-scaled, or the agent default)
+        # when tasked via a mission; otherwise the agent's default payoff.
+        reward = mission.reward() if mission is not None else _contract.campaign_reward()
     if prior:
         rc_cfg = {**rc_cfg, "theta": prior.get("theta", rc_cfg.get("theta", 0.0)),
                   "lambda": prior.get("lambda", rc_cfg.get("lambda", 0.5))}

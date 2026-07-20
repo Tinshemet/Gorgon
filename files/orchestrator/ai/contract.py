@@ -294,10 +294,57 @@ def goal_predicate() -> Optional[list]:
     return (_CONTRACT.get("campaign") or {}).get("success_predicate") or None
 
 
+def _defaults() -> Dict[str, Any]:
+    """The agent's DEFAULT mission parameters — what a mission inherits for any field
+    it doesn't set. Sourced from an explicit ``defaults`` block, falling back to the
+    legacy ``campaign`` values so existing .grgn files keep working during the split
+    (contract=identity → mission=tasking)."""
+    d = dict(_CONTRACT.get("defaults") or {})
+    camp = _CONTRACT.get("campaign") or {}
+    d.setdefault("reward", camp.get("reward", 1.0))
+    d.setdefault("scrutiny", camp.get("scrutiny"))
+    return d
+
+
+def default_reward() -> float:
+    """The agent's default payoff R for closing a goal — a mission's `reward` overrides
+    it; missions that don't set one inherit this. 1.0 when unspecified."""
+    return float(_defaults().get("reward", 1.0))
+
+
+def default_importance() -> float:
+    """The agent's default mission importance (a reward multiplier); 1.0 unspecified."""
+    return float(_defaults().get("importance", 1.0))
+
+
+def default_weight() -> float:
+    """The agent's default mission weight (planning/scoring weight); 1.0 unspecified."""
+    return float(_defaults().get("weight", 1.0))
+
+
+def default_scrutiny():
+    """The agent's default scrutiny level (a mission may raise/lower it)."""
+    return _defaults().get("scrutiny")
+
+
+def default_toolkit() -> list:
+    """The agent's default tool WHITELIST — the toolkit it may use unless a mission
+    narrows it. Empty means 'no explicit whitelist' (all registered tools allowed,
+    subject to the blacklist)."""
+    camp = _CONTRACT.get("campaign") or {}
+    return list(_CONTRACT.get("toolkit") or camp.get("toolkit") or [])
+
+
+def default_blacklist() -> list:
+    """The agent's default tool BLACKLIST (red lines) — a mission may add to it but
+    never remove from it (the agent's hard limits bound every mission)."""
+    return list(_CONTRACT.get("forbidden") or [])
+
+
 def campaign_reward() -> float:
-    """The signed payoff R_g for closing the campaign's whole goal (the contract's 'get
-    Y'). Drives the reward-cost economics; 1.0 when the agent has no campaign."""
-    return float((_CONTRACT.get("campaign") or {}).get("reward", 1.0))
+    """Back-compat alias for :func:`default_reward` (the agent's default payoff R).
+    Kept so callers written against the pre-split name keep working."""
+    return default_reward()
 
 
 def reward_cost_cfg() -> Dict[str, Any]:
