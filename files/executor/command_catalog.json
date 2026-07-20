@@ -486,6 +486,14 @@
       "desc": "Show or switch the active .grgn agent. Operator password required; blacklistable.",
       "related": ["agent", "load agent", "switch agent"],
       "category": "Operator & agents"
+    },
+    {
+      "command": "run",
+      "tools": [],
+      "args": "<goal>",
+      "desc": "Run the autonomous reward-cost loop on a goal (live model, grounded verification). Needs Ollama + executor.",
+      "related": ["run", "autonomous", "run goal"],
+      "category": "Operator & agents"
     }
   ],
   "category_order": [

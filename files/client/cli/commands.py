@@ -678,6 +678,37 @@ def run(args: List[str], verbose: bool = False) -> None:
         else:
             console.print("[yellow]Usage: gorgon operator add|list|remove <username>[/yellow]")
 
+    elif cmd == "run" and rest:
+        # Fire the autonomous reward-cost loop on a goal — exercise grounding on the
+        # live model (probe path, finding-validation, epistemic acceptance) instead
+        # of stubs. Runs in-process; needs a live Ollama + executor. The active agent
+        # is whatever GORGON_AGENT / the saved selection points at.
+        goal = " ".join(rest)
+        try:
+            from orchestrator.ai.autonomous import run_autonomous_live
+        except ImportError:
+            console.print("[bold red]Autonomous runner unavailable (orchestrator package not present).[/bold red]")
+            return
+        console.print(f"[bold cyan]▶ Running goal:[/bold cyan] {goal}")
+        try:
+            result = run_autonomous_live(goal)
+        except Exception as e:
+            console.print(f"[bold red]Run failed: {e}[/bold red]  "
+                          "[dim](is Ollama + the executor running?)[/dim]")
+            return
+        s = result.get("summary", {}) or {}
+        mark = "[green]✔[/green]" if result.get("ok") else "[yellow]✖[/yellow]"
+        console.print(f"\n{mark} status={s.get('status')}  executed={s.get('executed')}  "
+                      f"unverified={s.get('unverified')}  halted={s.get('halted')}  aborted={s.get('aborted')}")
+        econ = result.get("economics")
+        if econ:
+            console.print(f"[dim]economics: {econ}[/dim]")
+        pp(result)   # full JSON in verbose mode
+
+    elif cmd == "run":
+        console.print("[yellow]Usage: gorgon run <goal>[/yellow]  "
+                      "[dim](autonomous reward-cost loop; needs Ollama + executor)[/dim]")
+
     elif cmd == "contract":
         # gorgon contract forge [--full] | show <file> | sign <file> <safeword>
         # Forging is a deliberate, coherence-gated CLI act. The plain `forge`
