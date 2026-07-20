@@ -616,8 +616,12 @@ def _process_response(result: dict, verbose: bool = False) -> None:
     text = result.get("text", "").strip()
     if text:
         _add(f" AI:", _cp(C_CYAN) | curses.A_BOLD)
-        for line in textwrap.wrap(text, _WRAP_WIDTH) or [""]:
-            _add(f"    {line}", _cp(C_CYAN))
+        # Preserve the server's line breaks — wrap each line on its own so a
+        # multi-line reply (issue lists, the rendered contract box) keeps its
+        # structure instead of collapsing into one re-wrapped paragraph.
+        for para in text.split("\n"):
+            for line in textwrap.wrap(para, _WRAP_WIDTH) or [""]:
+                _add(f"    {line}", _cp(C_CYAN))
 
     ni = result.get("needs_input")
     if ni:
