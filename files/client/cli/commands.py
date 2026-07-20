@@ -821,15 +821,17 @@ def run(args: List[str], verbose: bool = False) -> None:
             files = sorted(_glob.glob(os.path.join(_agent_dir, "*.grgn")))
             if not files:
                 console.print("[dim]No contracts found.[/dim]")
+            from orchestrator.ai import revocation as _rev
             for p in files:
                 name = os.path.basename(p)
                 g, st = _read_grgn(p)
-                camp = (g or {}).get("contract", {}).get("campaign", {}) or {}
-                signed = "signed" if camp.get("signed") else "unsigned"
-                goal = (camp.get("goal") or "—")[:44]
+                con = (g or {}).get("contract", {}) or {}
+                signed = "signed" if con.get("signed") else "unsigned"
+                role = ((g or {}).get("persona", {}).get("role") or "—")[:40]
                 mark = "[green]→[/green]" if name == active else " "
+                void = "  [red]VOID[/red]" if _rev.is_voided(os.path.splitext(name)[0]) else ""
                 console.print(f" {mark} {name:<24} {st:<9} {signed:<8} "
-                              f"exp:{camp.get('expiry') or 'never':<10} {goal}")
+                              f"exp:{con.get('expiry') or 'never':<10} {role}{void}")
         elif sub == "audit":
             for line in _audit.tail(30) or ["(no audit entries yet)"]:
                 console.print(f"  {line}")
@@ -888,10 +890,34 @@ def run(args: List[str], verbose: bool = False) -> None:
                         os.remove(tmp)                  # never leave decrypted content around
                     except OSError:
                         pass
+        elif sub == "void" and len(rest) >= 2:
+            # Voiding an agent revokes its existence — it AND all its missions are
+            # disabled (the void cascade). High-impact → operator-gated.
+            if not _require_operator_password("void an agent"):
+                return
+            from orchestrator.ai import revocation as _rev
+            key = os.path.splitext(os.path.basename(rest[1]))[0]
+            if _rev.void(key):
+                _audit.record("contract.void", key, _op)
+                console.print(f"[green]Voided agent [bold]{key}[/bold] — it and all its missions are disabled.[/green]")
+                console.print(f"[dim]  Restore with: gorgon contract restore {key}[/dim]")
+            else:
+                console.print(f"[yellow]Could not void '{key}' — already voided, or protected "
+                              f"(doorman is the fallback and can't be voided).[/yellow]")
+        elif sub == "restore" and len(rest) >= 2:
+            if not _require_operator_password("restore an agent"):
+                return
+            from orchestrator.ai import revocation as _rev
+            key = os.path.splitext(os.path.basename(rest[1]))[0]
+            if _rev.restore(key):
+                _audit.record("contract.restore", key, _op)
+                console.print(f"[green]Restored agent [bold]{key}[/bold] — it and its missions are enabled again.[/green]")
+            else:
+                console.print(f"[yellow]'{key}' was not voided.[/yellow]")
         else:
             console.print("[yellow]Usage: gorgon contract "
                           "forge [--full] | show [file] | list | sign <file> <safeword> "
-                          "| edit <file> | audit[/yellow]")
+                          "| edit <file> | void <agent> | restore <agent> | audit[/yellow]")
 
     elif cmd == "agent":
         # gorgon agent | agent <file> | agent load <file> | agent reset

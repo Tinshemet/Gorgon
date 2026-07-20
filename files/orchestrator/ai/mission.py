@@ -179,6 +179,12 @@ def load(name: str, agent: Optional[str] = None) -> Tuple[Optional["Mission"], s
     verdict from grgn_sign (encrypted|signed|unsigned|tampered|missing); a tampered
     or missing mission returns (None, status) — fail-closed, like a bad .grgn."""
     agent = agent or _contract.active_agent_key()
+    try:
+        from . import revocation as _revocation
+        if _revocation.is_voided(agent):
+            return None, "voided"          # the owning agent is disabled → so is this mission
+    except Exception:
+        pass
     path = mission_path(name, agent)
     if not os.path.isfile(path):
         return None, "missing"
@@ -199,6 +205,12 @@ def load(name: str, agent: Optional[str] = None) -> Tuple[Optional["Mission"], s
 def list_missions(agent: Optional[str] = None) -> List[Dict[str, Any]]:
     """The agent's sealed missions as [{name, title, goal, status}], sorted by name."""
     agent = agent or _contract.active_agent_key()
+    try:
+        from . import revocation as _revocation
+        if _revocation.is_voided(agent):
+            return []                      # voided agent → its missions are disabled
+    except Exception:
+        pass
     d = missions_dir(agent)
     out: List[Dict[str, Any]] = []
     if not os.path.isdir(d):

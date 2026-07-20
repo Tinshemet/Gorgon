@@ -52,6 +52,17 @@ if not os.path.isfile(_AGENT_PATH):
     # A stale selection (deleted file) must not brick startup — fall back safely.
     _AGENT_PATH = _DOORMAN_PATH
 
+# A VOIDED agent is disabled (its contract was revoked): refuse it and run doorman
+# instead. Because an agent's missions are only reachable while it's the active agent,
+# voiding the agent disables every mission it owns — the void cascade.
+try:
+    from . import revocation as _revocation
+    _VOIDED_SELECTION = _revocation.is_voided(os.path.splitext(os.path.basename(_AGENT_PATH))[0])
+except Exception:
+    _VOIDED_SELECTION = False
+if _VOIDED_SELECTION and os.path.abspath(_AGENT_PATH) != os.path.abspath(_DOORMAN_PATH):
+    _AGENT_PATH = _DOORMAN_PATH
+
 # Integrity gate: a TAMPERED agent file (bad Fernet token or bad sidecar) is
 # refused (fail-closed) and we fall back to doorman — a hand-edited/forged-under-a-
 # foreign-key contract must not run. Forged files are encrypted; the built-in
@@ -82,6 +93,8 @@ if _refuse and os.path.abspath(_AGENT_PATH) != os.path.abspath(_DOORMAN_PATH):
     _AGENT_PATH = _DOORMAN_PATH                    # refuse; run the default agent
     _C_LOADED, _ = _read_grgn(_AGENT_PATH)
     _AGENT_STATUS = _bad_status                    # remember why the selected file was refused
+if _VOIDED_SELECTION:
+    _AGENT_STATUS = "voided"                        # the selected agent was revoked → doorman runs
 _C: Dict[str, Any] = _C_LOADED if _C_LOADED is not None else json.load(open(_DOORMAN_PATH))
 
 
