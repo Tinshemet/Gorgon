@@ -153,6 +153,32 @@ def _local_pid() -> int | None:
         return None
 
 
+def _spawn_server() -> int | None:
+    """Spawn the orchestrator server detached (the start-server body, shared with
+    the restart verb). Returns the new PID, or None if it didn't come up."""
+    files_dir = os.path.dirname(_here)
+    env = os.environ.copy()
+    env["PYTHONPATH"] = files_dir
+    try:
+        with open(os.path.expanduser("~/.gorgon.token")) as f:
+            env["API_TOKEN"] = f.read().strip()
+    except Exception:
+        pass  # no token file — run without an API token (localhost only)
+    with open(_LOG_PATH, "w") as log_fh:
+        subprocess.Popen(
+            [sys.executable, "-m", "uvicorn", "orchestrator.http.api_server:app",
+             "--host", "0.0.0.0", "--port", str(_DEFAULT_PORT), "--log-level", "warning"],
+            cwd=files_dir, env=env, start_new_session=True,
+            stdout=log_fh, stderr=subprocess.STDOUT,
+        )
+    for _ in range(20):                          # wait up to ~6s for it to come up
+        time.sleep(0.3)
+        pid = _local_pid()
+        if pid:
+            return pid
+    return None
+
+
 # ── curses state ──────────────────────────────────────────────────────────────
 
 _cmd_buf   = ""
@@ -335,7 +361,7 @@ def _draw(stdscr: "curses.window", vms: list, events: list, uptime_s: float) -> 
     except curses.error:
         pass  # addstr past the screen edge — skip the prompt line
     try:
-        _hint = "  stop/kill/launch/list/stopall <vm>   start-server  shutdown  status  help  q=quit"
+        _hint = "  stop/kill/launch/list/stopall <vm>   start-server  restart  shutdown  status  help  q=quit"
         stdscr.addstr(h - 1, 0, _hint[:w-1], _cp(C_DIM))
     except curses.error:
         pass  # addstr past the screen edge — skip the hint line
@@ -400,6 +426,7 @@ def _draw_help(stdscr: "curses.window", h: int, w: int) -> None:
         ]),
         ("Server Commands (local only)", [
             ("start-server", "Start the orchestrator on this machine", None),
+            ("restart",      "Restart the orchestrator (stop + start)", None),
             ("shutdown",     "SIGTERM the orchestrator on this machine", None),
             ("kill-server",  "SIGKILL the orchestrator on this machine", None),
             ("status",       "Show orchestrator reachability + VM counts", None),
@@ -492,30 +519,24 @@ def _dispatch(cmd: str) -> None:
             if pid:
                 new_msg = f"already running locally (pid {pid})"
             else:
-                files_dir = os.path.dirname(_here)
-                env = os.environ.copy()
-                env["PYTHONPATH"] = files_dir
-                try:
-                    with open(os.path.expanduser("~/.gorgon.token")) as f:
-                        env["API_TOKEN"] = f.read().strip()
-                except Exception:
-                    pass  # no token file — run the admin server without an API token
-                with open(_LOG_PATH, "w") as log_fh:
-                    proc = subprocess.Popen(
-                        [sys.executable, "-m", "uvicorn",
-                         "orchestrator.http.api_server:app",
-                         "--host", "0.0.0.0", "--port", str(_DEFAULT_PORT),
-                         "--log-level", "warning"],
-                        cwd=files_dir, env=env,
-                        start_new_session=True,
-                        stdout=log_fh,
-                        stderr=subprocess.STDOUT,
-                    )
-                time.sleep(0.5)
-                if _local_pid():
-                    new_msg = f"server started (pid {proc.pid})  logs: {_LOG_PATH}"
-                else:
-                    new_msg = f"may have failed — check {_LOG_PATH}"
+                p = _spawn_server()
+                new_msg = (f"server started (pid {p})  logs: {_LOG_PATH}" if p
+                           else f"may have failed — check {_LOG_PATH}")
+
+        elif verb in ("restart", "restart-server"):
+            pid = _local_pid()
+            if pid:
+                os.kill(pid, _signal.SIGTERM)          # stop the running one first
+                deadline = time.time() + 5
+                while _local_pid() and time.time() < deadline:
+                    time.sleep(0.2)
+                leftover = _local_pid()
+                if leftover:                           # didn't exit → force it
+                    os.kill(leftover, _signal.SIGKILL)
+                    time.sleep(0.3)
+            p = _spawn_server()
+            new_msg = (f"restarted (pid {p})  logs: {_LOG_PATH}" if p
+                       else f"restart failed — check {_LOG_PATH}")
 
         elif verb in ("shutdown", "shutdown-server"):
             pid = _local_pid()
