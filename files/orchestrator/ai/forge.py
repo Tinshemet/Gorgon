@@ -235,68 +235,126 @@ def _predicate(s: str):
     return out
 
 
-def _parse_str(raw, field):
-    v = (raw or "").strip()
-    if v:
-        return v
-    d = field.get("default")
-    return d if d is not None else ""
+class FieldType:
+    """Strategy for a forge field's TYPE — how to parse an answer into a spec
+    value, and how to render that value back for display.
 
-
-def _parse_float(raw, field):
-    v = (raw or "").strip()
-    return float(v) if v else float(field.get("default", 1))
-
-
-def _parse_importance(raw, field):
-    """Map an importance WORD to its reward value — so the operator answers
-    'how much does this goal matter?' instead of guessing a unitless number.
-
-    The word→number map lives in the field's ``levels`` (data-driven). Blank →
-    the field default. A raw number is still accepted (power users / --full),
-    so nothing that used to type a number breaks. An unknown word → default.
+    A new field type is a new SUBCLASS registered in ``_FIELD_TYPES``; field
+    INSTANCES stay data-driven in forge_fields.json (each entry names its
+    ``parse`` type). This is the seam that lets new field behaviour arrive by
+    inheritance instead of editing elicit_spec()/render() — e.g. a future
+    ToolkitField could validate names against the executor registry here.
     """
-    levels = {k.lower(): v for k, v in (field.get("levels") or {}).items()}
-    key = (raw or "").strip().lower() or str(field.get("default", "")).lower()
-    if key in levels:
-        return float(levels[key])
-    try:
-        return float(raw)                       # an explicit number is fine too
-    except (TypeError, ValueError):
-        return float(levels.get(str(field.get("default", "")).lower(), 1.0))
+
+    def parse(self, raw, field):
+        raise NotImplementedError
+
+    def validate(self, value, field):
+        """Field-specific checks on a parsed value → list of issue strings (empty
+        = OK). The base type accepts anything; subclasses tighten. Run per field
+        during elicitation (immediate feedback) — see validate_answer()."""
+        return []
+
+    def format(self, value, field):
+        """Human-readable rendering of a stored value (for `contract show`)."""
+        return "" if value in ("", None) else str(value)
 
 
-# Parser registry — the JSON schema references these by name so field types stay
-# data-driven (add a parser here, reference it from forge_fields.json).
-_PARSERS = {
-    "str":        _parse_str,
-    "csv":        lambda raw, field: _csv(raw),
-    "predicate":  lambda raw, field: _predicate(raw),
-    "float":      _parse_float,
-    "importance": _parse_importance,
+class StrField(FieldType):
+    def parse(self, raw, field):
+        v = (raw or "").strip()
+        if v:
+            return v
+        d = field.get("default")
+        return d if d is not None else ""
+
+
+class CsvField(FieldType):
+    def parse(self, raw, field):
+        return _csv(raw)
+
+
+class ToolkitField(CsvField):
+    """A CSV of tool NAMES, validated against the executor registry. This field
+    type owns the tools-SSOT check: a name absent from KNOWN_TOOLS is drift. The
+    executor is still the real gate (an unknown call is rejected there), so this
+    is early, friendly feedback — not the enforcement point. Degrades to no-op if
+    the executor package (and thus the registry) isn't importable."""
+
+    def validate(self, value, field):
+        try:
+            from executor.command_catalog import KNOWN_TOOLS
+        except ImportError:
+            return []
+        if not KNOWN_TOOLS:
+            return []
+        return [f"unknown tool '{t}' — not in the executor registry"
+                for t in value if t not in KNOWN_TOOLS]
+
+
+class PredicateField(FieldType):
+    def parse(self, raw, field):
+        return _predicate(raw)
+
+
+class FloatField(FieldType):
+    def parse(self, raw, field):
+        v = (raw or "").strip()
+        return float(v) if v else float(field.get("default", 1))
+
+
+class ImportanceField(FieldType):
+    """Reward-as-importance: an importance WORD maps to a reward number, so the
+    operator answers 'how much does this goal matter?' instead of guessing a
+    unitless number. The word→number map is the field's ``levels`` (data-driven).
+    Blank → default; a raw number is still accepted; an unknown word → default."""
+
+    def parse(self, raw, field):
+        levels = {k.lower(): v for k, v in (field.get("levels") or {}).items()}
+        key = (raw or "").strip().lower() or str(field.get("default", "")).lower()
+        if key in levels:
+            return float(levels[key])
+        try:
+            return float(raw)                       # an explicit number is fine too
+        except (TypeError, ValueError):
+            return float(levels.get(str(field.get("default", "")).lower(), 1.0))
+
+    def format(self, value, field):
+        if value in ("", None):
+            return ""
+        for word, num in (field.get("levels") or {}).items():
+            try:
+                if float(num) == float(value):
+                    return f"{word} ({value})"      # e.g. "important (10)"
+            except (TypeError, ValueError):
+                pass
+        return str(value)
+
+
+# Field-type registry — forge_fields.json names a type per field; add a type by
+# subclassing FieldType and registering it here (instances stay in the JSON).
+_FIELD_TYPES = {
+    "str":        StrField(),
+    "csv":        CsvField(),
+    "toolkit":    ToolkitField(),
+    "predicate":  PredicateField(),
+    "float":      FloatField(),
+    "importance": ImportanceField(),
 }
 
 
-def _importance_word(value) -> str:
-    """Reverse-map a reward number to its importance tier for display (e.g. 10.0
-    → 'important'), or None if it doesn't match a defined level (a custom number)."""
-    try:
-        for f in _load_fields()["fields"]:
-            if f.get("key") == "reward":
-                for word, num in (f.get("levels") or {}).items():
-                    if float(num) == float(value):
-                        return word
-    except Exception:
-        pass
-    return None
+def _field_type(field: Dict[str, Any]) -> FieldType:
+    return _FIELD_TYPES[field["parse"]]
 
 
 def _reward_render(value) -> str:
-    """Display a reward as 'tier (n)' when it matches an importance level, else n."""
+    """Render a reward via its field type (ImportanceField shows 'tier (n)')."""
     if value == "" or value is None:
         return ""
-    word = _importance_word(value)
-    return f"{word} ({value})" if word else str(value)
+    for f in _load_fields()["fields"]:
+        if f.get("key") == "reward":
+            return _field_type(f).format(value, f)
+    return str(value)
 
 
 def _load_fields() -> Dict[str, Any]:
@@ -323,18 +381,24 @@ def asked_fields(schema: Dict[str, Any], essential_only: bool = False) -> List[D
 
 def default_value(field: Dict[str, Any]) -> Any:
     """The value for a field that ISN'T being asked — a constant (ask=false) or
-    an unprompted default (parse the empty answer through the field's parser)."""
+    an unprompted default (parse the empty answer through the field's type)."""
     if field.get("ask", True) is False:
         return field.get("value", field.get("default"))
-    return _PARSERS[field["parse"]]("", field)
+    return _field_type(field).parse("", field)
 
 
 def parse_answer(field: Dict[str, Any], raw: str) -> Any:
-    """Parse a raw answer for a field through its declared parser."""
-    return _PARSERS[field["parse"]](raw, field)
+    """Parse a raw answer for a field through its declared field type."""
+    return _field_type(field).parse(raw, field)
 
 
-def elicit_spec(ask, *, essential_only: bool = False, schema: Dict[str, Any] = None) -> Dict[str, Any]:
+def validate_answer(field: Dict[str, Any], value: Any) -> List[str]:
+    """Field-type validation for a parsed value (empty list = OK)."""
+    return _field_type(field).validate(value, field)
+
+
+def elicit_spec(ask, *, essential_only: bool = False, schema: Dict[str, Any] = None,
+                out=None) -> Dict[str, Any]:
     """Build a contract spec by walking the declarative field schema.
 
     `ask(prompt) -> str` supplies each answer (console.input in the CLI, one chat
@@ -343,15 +407,28 @@ def elicit_spec(ask, *, essential_only: bool = False, schema: Dict[str, Any] = N
     terminal forge) non-essential fields take their default without being asked;
     ``ask=false`` fields (e.g. tool_mode) are constants and never prompt. The
     resulting spec is fed to forge(); safeword/signing happen separately.
+
+    If ``out`` is given, each answer is validated through its field type and
+    re-asked (with the issues printed) until it passes — immediate per-field
+    feedback (e.g. an unknown tool name). Without ``out`` validation is skipped
+    here and left to review(), preserving the old parse-only behavior for
+    callers that can't re-prompt.
     """
     schema = schema or _load_fields()
     asked = {f["key"] for f in asked_fields(schema, essential_only)}
     spec: Dict[str, Any] = {}
     for field in schema["fields"]:
-        if field["key"] in asked:
-            value = parse_answer(field, ask(field["prompt"]))
-        else:
-            value = default_value(field)
+        if field["key"] not in asked:
+            _set_dotted(spec, field["key"], default_value(field))
+            continue
+        value = parse_answer(field, ask(field["prompt"]))
+        if out is not None:
+            issues = validate_answer(field, value)
+            while issues:
+                for i in issues:
+                    out(f"  ✗ {i}")
+                value = parse_answer(field, ask(field["prompt"]))
+                issues = validate_answer(field, value)
         _set_dotted(spec, field["key"], value)
     return spec
 
@@ -394,7 +471,7 @@ def forge_interactive(ask, out, write_dir: str = ".", overwrite: bool = True,
     """
     schema = _load_fields()
     out(schema.get("header", "═ Forge a campaign contract ═"))
-    spec = elicit_spec(ask, essential_only=essential_only, schema=schema)
+    spec = elicit_spec(ask, essential_only=essential_only, schema=schema, out=out)
     g = forge(spec)
     issues = review(g)
     if issues:

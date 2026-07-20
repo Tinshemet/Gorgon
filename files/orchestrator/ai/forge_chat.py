@@ -21,27 +21,51 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from . import forge
 
-_MAX_PW_ATTEMPTS = 3
-_CANCEL_WORDS    = {"cancel", "abort", "quit", "/cancel", "stop"}
+def _wizard_cfg():
+    """Wizard behaviour knobs from forge_fields.json's `wizard` block (attempts,
+    cancel words, password prompt) — config, not hardcoded. Sensible fallbacks if
+    the block is absent."""
+    w = forge._load_fields().get("wizard", {}) or {}
+    return {
+        "max_attempts": int(w.get("max_password_attempts", 3)),
+        "cancel_words": {s.lower() for s in (w.get("cancel_words")
+                         or ["cancel", "abort", "quit", "/cancel", "stop"])},
+        "pw_prompt":    w.get("password_prompt", "Operator password:"),
+    }
 
-# Creation verbs — the wizard triggers on the intent to MAKE a contract, not on
-# show/sign (those act on an existing file and stay CLI operations).
-_FORGE_VERBS = {"forge", "make", "create", "new", "draft", "build", "negotiate", "start", "write"}
-# A VM noun means "contract" is the target of a VM action ("a vm to test smart
-# contracts"), not a request to forge one — leave it to the AI.
-_VM_NOUNS    = {"vm", "vms", "machine", "guest", "box", "instance"}
 
-_PW_INPUT = {"type": "password", "question": "Operator password:"}
+def _pw_input(cfg=None):
+    """The password needs_input envelope. `type` is a fixed wire-protocol constant
+    (the client masks on it); only the prompt text is configurable."""
+    cfg = cfg or _wizard_cfg()
+    return {"type": "password", "question": cfg["pw_prompt"]}
+
+
+def _intent_words():
+    """(forge_verbs, vm_nouns) from forge_fields.json's `intent` block — the
+    trigger words are config, not hardcoded. Falls back to sensible defaults if
+    the block is absent."""
+    intent = forge._load_fields().get("intent", {}) or {}
+    verbs = set(intent.get("forge_verbs") or
+                ["forge", "make", "create", "new", "draft", "build", "negotiate", "start", "write"])
+    nouns = set(intent.get("vm_nouns") or ["vm", "vms", "machine", "guest", "box", "instance"])
+    return verbs, nouns
 
 
 def looks_like_forge_intent(message: str) -> bool:
-    """True when a chat message is asking to forge a contract (deterministic)."""
+    """True when a chat message is asking to forge a contract (deterministic).
+
+    Triggers on a create-verb + "contract", but not when a VM noun is present
+    (so "a vm to test smart contracts" is left to the AI). Words come from the
+    `intent` block in forge_fields.json.
+    """
+    forge_verbs, vm_nouns = _intent_words()
     words = {w.strip(".,!?;:'\"") for w in (message or "").lower().split()}
     if not (words & {"contract", "contracts"}):
         return False
-    if words & _VM_NOUNS:
+    if words & vm_nouns:
         return False
-    return bool(words & _FORGE_VERBS)
+    return bool(words & forge_verbs)
 
 
 def start(*, needs_auth: bool = True, essential_only: bool = False,
@@ -70,7 +94,7 @@ def current_prompt(state: Dict[str, Any], schema: Dict[str, Any] = None) -> Tupl
     phase = state["phase"]
     if phase == "auth":
         return ("Forging a contract is operator-gated. Enter your operator password to continue:",
-                dict(_PW_INPUT))
+                _pw_input())
     if phase == "elicit":
         asked = forge.asked_fields(schema, state["essential_only"])
         field = asked[state["step"]]
@@ -91,11 +115,12 @@ def advance(state: Dict[str, Any], answer: str, *,
     means degrade-open (no operators exist).
     """
     schema = schema or forge._load_fields()
+    cfg = _wizard_cfg()
     ans = (answer or "").strip()
 
     # Cancel at any point, including the password prompt — bailing out of a forge
     # is always allowed (an explicit "cancel" beats treating it as a bad password).
-    if ans.lower() in _CANCEL_WORDS:
+    if ans.lower() in cfg["cancel_words"]:
         return None, "Forge cancelled — nothing signed.", None, None
 
     if state["phase"] == "auth":
@@ -104,16 +129,22 @@ def advance(state: Dict[str, Any], answer: str, *,
             reply, ni = current_prompt(state, schema)
             return state, "✓ Authenticated. Let's forge a contract.\n" + reply, ni, None
         state["attempts"] += 1
-        if state["attempts"] >= _MAX_PW_ATTEMPTS:
+        if state["attempts"] >= cfg["max_attempts"]:
             return None, "Too many failed attempts — forge aborted.", None, None
         return (state,
-                f"Incorrect password ({state['attempts']}/{_MAX_PW_ATTEMPTS}). Try again:",
-                dict(_PW_INPUT), None)
+                f"Incorrect password ({state['attempts']}/{cfg['max_attempts']}). Try again:",
+                _pw_input(cfg), None)
 
     if state["phase"] == "elicit":
         asked = forge.asked_fields(schema, state["essential_only"])
         field = asked[state["step"]]
-        forge._set_dotted(state["spec"], field["key"], forge.parse_answer(field, answer))
+        value = forge.parse_answer(field, answer)
+        problems = forge.validate_answer(field, value)
+        if problems:
+            # Stay on this field; report the issues and re-ask (immediate feedback).
+            reply, ni = current_prompt(state, schema)
+            return state, "✗ " + "; ".join(problems) + "\n" + reply, ni, None
+        forge._set_dotted(state["spec"], field["key"], value)
         state["step"] += 1
         if state["step"] < len(asked):
             reply, ni = current_prompt(state, schema)

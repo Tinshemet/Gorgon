@@ -1,7 +1,18 @@
 {
-  "_doc": "Declarative field schema for contract forging. forge.py loads this and both the terminal CLI and the chat wizard iterate it — the questions live here, not hardcoded in Python. Field order IS the elicitation order. parse: str | csv | predicate | float (resolved to a parser in forge._PARSERS). essential: asked in the simpler terminal forge (`gorgon contract forge`); non-essential fields are asked only in the full flow and otherwise take their default. ask=false sets a constant without prompting (never consumes an answer).",
+  "_doc": "Declarative field schema for contract forging. forge.py loads this and both the terminal CLI and the chat wizard iterate it — the questions live here, not hardcoded in Python. Field order IS the elicitation order. `parse` names a FieldType strategy class resolved via forge._FIELD_TYPES (str | csv | predicate | float | importance); add a new type by subclassing forge.FieldType and registering it, then reference it here — instances stay data-driven. essential: asked in the simpler terminal forge (`gorgon contract forge`); non-essential fields are asked only in the full flow and otherwise take their default. ask=false sets a constant without prompting (never consumes an answer).",
   "header": "═ Forge a campaign contract ═",
   "safeword_prompt": "Contract is coherent. Sign with a SAFEWORD to seal it (blank to cancel)",
+  "intent": {
+    "_doc": "Deterministic detection of 'the operator wants to forge a contract'. A message triggers the forge wizard when it names a contract AND a create-verb, but NOT a VM noun (so 'a vm to test smart contracts' is left to the AI). Data-driven so the trigger words live here, not hardcoded in forge_chat.py.",
+    "forge_verbs": ["forge", "make", "create", "new", "draft", "build", "negotiate", "start", "write"],
+    "vm_nouns": ["vm", "vms", "machine", "guest", "box", "instance"]
+  },
+  "wizard": {
+    "_doc": "Behaviour knobs for the chat forge wizard (forge_chat.py). Note: the password needs_input `type` stays 'password' in code — it's a wire-protocol constant the client keys on to mask input, not a tunable — only the prompt text is config here.",
+    "max_password_attempts": 3,
+    "cancel_words": ["cancel", "abort", "quit", "/cancel", "stop"],
+    "password_prompt": "Operator password:"
+  },
   "fields": [
     {"key": "persona.name", "prompt": "Agent name", "parse": "str", "essential": true},
     {"key": "persona.role", "prompt": "Role", "parse": "str"},
@@ -11,9 +22,9 @@
     {"key": "goal", "prompt": "Goal", "parse": "str", "essential": true},
     {"key": "sub_goals", "prompt": "Sub-goals (comma-separated, optional)", "parse": "csv"},
     {"key": "scrutiny", "prompt": "Scrutiny [strict|medium|loose]", "parse": "str", "default": "strict"},
-    {"key": "tools.list", "prompt": "Toolkit — whitelist tools (comma-separated)", "parse": "csv", "essential": true},
+    {"key": "tools.list", "prompt": "Toolkit — whitelist tools (comma-separated)", "parse": "toolkit", "essential": true},
     {"key": "tools.mode", "ask": false, "value": "whitelist"},
-    {"key": "forbidden", "prompt": "Red lines — forbidden tools (comma-separated)", "parse": "csv"},
+    {"key": "forbidden", "prompt": "Red lines — forbidden tools (comma-separated)", "parse": "toolkit"},
     {"key": "ethics", "prompt": "Ethics", "parse": "str"},
     {"key": "legality", "prompt": "Legality", "parse": "str"},
     {"key": "success_criteria", "prompt": "Success criteria — what is 'done'?", "parse": "str", "essential": true},
