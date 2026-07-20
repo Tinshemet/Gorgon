@@ -14,6 +14,7 @@
 
     "reachable":    {"value_type": "string", "assertion": "host_reachable", "operand": true},
     "connection":   {"value_type": "string", "assertion": "connection_to"},
+    "cron":         {"value_type": "string", "assertion": "cron_has"},
 
     "phone_number": {"value_type": "string"},
     "email":        {"value_type": "string"},

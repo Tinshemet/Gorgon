@@ -680,7 +680,10 @@
        "is_setuid",
        "file_contains",
        "file_matches",
-       "user_in_group"
+       "user_in_group",
+       "host_reachable",
+       "connection_to",
+       "cron_has"
       ]
      },
      "target": {
@@ -688,7 +691,7 @@
      },
      "value": {
       "type": "string",
-      "description": "Second operand for file_contains / file_matches / user_in_group."
+      "description": "Second operand: file_contains/file_matches (string/regex), user_in_group (group), host_reachable (port)."
      }
     },
     "required": [

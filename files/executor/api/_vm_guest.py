@@ -164,7 +164,7 @@ class _VmGuestMixin:
         "path_exists", "path_is_dir", "port_listening", "process_running",
         "user_exists", "service_active", "command_available", "file_contains",
         "is_writable", "is_executable", "is_setuid", "file_matches", "user_in_group",
-        "host_reachable", "connection_to",
+        "host_reachable", "connection_to", "cron_has",
     })
 
     def guest_probe(self, name: str, assertion: str, target: str,
@@ -214,6 +214,11 @@ class _VmGuestMixin:
             exe, argv = "timeout", ["2", "bash", "-c", 'exec 3<>/dev/tcp/"$1"/"$2"', "_", t, str(value)]
         elif assertion == "connection_to":    # target = host: an ESTABLISHED connection to it
             exe, argv = "sh", ["-c", 'ss -tnH state established 2>/dev/null | grep -qF -- "$1"', "_", t]
+        elif assertion == "cron_has":         # target = pattern in any crontab (persistence recon)
+            exe, argv = "sh", ["-c",
+                               'crontab -l 2>/dev/null | grep -qF -- "$1" || '
+                               'grep -rqsF -- "$1" /etc/crontab /etc/cron.d /etc/cron.daily '
+                               '/etc/cron.hourly /var/spool/cron 2>/dev/null', "_", t]
         else:
             return {"success": False,
                     "error": f"unknown assertion '{assertion}' — probe supports "
