@@ -66,6 +66,33 @@ def main():
                   "success_predicate": [{"criterion": "found", "target": "ip(web01)"}]})
     check("predicate returned", m5.predicate() == [{"criterion": "found", "target": "ip(web01)"}])
 
+    print("\nprune: blank optional fields drop out so they inherit")
+    from orchestrator.ai.mission import prune
+    p = prune({"title": "t", "goal": "g", "reward": None, "sub_goals": [], "importance": 2.0})
+    check("blanks pruned, set values + required kept", p == {"title": "t", "goal": "g", "importance": 2.0})
+
+    print("\nwizard + storage: author → seal (encrypted) → load → run-by-name")
+    import tempfile
+    from orchestrator.ai import mission as Mstore
+    from orchestrator.ai import mission_forge as MF
+    Mstore._DIR = tempfile.mkdtemp()               # isolate from ~/.gorgon
+    # answers in schema order + seal confirm
+    answers = iter(["Recon web01", "map ports", "scan, fingerprint", "found:ip(web01)",
+                    "", "2", "", "", "delete_vm", "", "yes"])
+    path = MF.forge_mission_interactive(ask=lambda p: next(answers), out=lambda *_: None, agent="doorman")
+    check("sealed a .mission file", str(path).endswith(".mission"))
+    check("file is ENCRYPTED (not cleartext)", open(path, "rb").read(6) == b"gAAAAA")
+    m, status = Mstore.load("recon-web01", "doorman")
+    check("loads back, integrity ok", m is not None and status in ("encrypted", "signed"))
+    check("reward inherits importance ×2", m.reward() == 2.0)
+    check("mission red line sealed in", "delete_vm" in m.blacklist())
+    check("own predicate sealed in", m.predicate() == [{"criterion": "found", "target": "ip(web01)"}])
+    check("listed for its agent", [x["name"] for x in Mstore.list_missions("doorman")] == ["recon-web01"])
+    check("scoped per-agent (barenboim sees none)", Mstore.list_missions("barenboim") == [])
+    open(path, "w").write("tampered")
+    m2, st2 = Mstore.load("recon-web01", "doorman")
+    check("a tampered mission is refused (fail-closed)", m2 is None and st2 == "tampered")
+
     print(f"\n{_PASS}/{_PASS + _FAIL} passed")
     sys.exit(1 if _FAIL else 0)
 

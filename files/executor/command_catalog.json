@@ -496,11 +496,11 @@
       "category": "Operator & agents"
     },
     {
-      "command": "run",
+      "command": "mission",
       "tools": [],
-      "args": "<goal>",
-      "desc": "Run the autonomous reward-cost loop on a goal (live model, grounded verification). Needs Ollama + executor.",
-      "related": ["run", "autonomous", "run goal"],
+      "args": "new | list | show <name> | run <name> | \"<goal>\"",
+      "desc": "Task the active agent. 'new' authors+seals a mission (wizard); 'run <name>' runs a sealed one; a bare goal runs a quick ad-hoc task. Autonomous, grounded; needs Ollama + executor.",
+      "related": ["mission", "run", "autonomous", "task agent", "run goal"],
       "category": "Operator & agents"
     }
   ],

@@ -337,6 +337,24 @@ class FloatField(FieldType):
         return float(v) if v else float(field.get("default", 1))
 
 
+class OptionalFloatField(FieldType):
+    """A float that stays UNSET when blank (→ None), rather than falling to a
+    default. Used for mission fields that INHERIT the agent's default when omitted
+    (reward/importance/weight): a blank answer must mean 'inherit', not '1.0'."""
+
+    def parse(self, raw, field):
+        v = (raw or "").strip()
+        if not v:
+            return None
+        try:
+            return float(v)
+        except ValueError:
+            return None
+
+    def format(self, value, field):
+        return "" if value in ("", None) else str(value)
+
+
 class ImportanceField(FieldType):
     """Reward-as-importance: an importance WORD maps to a reward number, so the
     operator answers 'how much does this goal matter?' instead of guessing a
@@ -410,6 +428,7 @@ _FIELD_TYPES = {
     "toolkit":    ToolkitField(),
     "predicate":  PredicateField(),
     "float":      FloatField(),
+    "optfloat":   OptionalFloatField(),
     "importance": ImportanceField(),
     "expiry":     ExpiryField(),
 }

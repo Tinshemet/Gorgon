@@ -15,9 +15,13 @@ sets only the goal and inherits everything else. Either way, the reward-cost eng
 and the goal verifier read the RESOLVED values here, so they never need to know
 whether a value came from the mission or the agent.
 """
-from typing import Any, Dict, List, Optional
+import os
+import re
+from typing import Any, Dict, List, Optional, Tuple
 
 from . import contract as _contract
+
+_DIR = os.path.expanduser("~/.gorgon/missions")
 
 # The mission fields, and which are required. Data-driven so the wizard, the
 # validator, and this model agree on one list (mirrors the forge field schema).
@@ -122,3 +126,111 @@ def validate(spec: Dict[str, Any]) -> List[str]:
         if not (spec or {}).get(f):
             issues.append(f"missing required field: {f}")
     return issues
+
+
+def prune(spec: Dict[str, Any]) -> Dict[str, Any]:
+    """Drop blank/empty optional fields so they INHERIT the agent's default (an
+    empty answer must mean 'inherit', not 'set to empty'). Required fields stay."""
+    return {k: v for k, v in (spec or {}).items()
+            if k in REQUIRED_FIELDS or v not in (None, "", [], {})}
+
+
+# ── persistence: a signed .mission scoped to its agent ────────────────────────
+# Missions are a product of an agent's existence, so they live UNDER the agent
+# (~/.gorgon/missions/<agent>/<slug>.mission) and are disabled when it's voided.
+# Encrypted like a .grgn, so goals/rewards never sit in cleartext.
+
+def _safe(name: Optional[str]) -> str:
+    return re.sub(r"[^a-zA-Z0-9_.-]", "_", name or "default") or "default"
+
+
+def slug(title: str) -> str:
+    return _safe((title or "mission").strip().lower().replace(" ", "-"))
+
+
+def missions_dir(agent: Optional[str] = None) -> str:
+    return os.path.join(_DIR, _safe(agent or _contract.active_agent_key()))
+
+
+def mission_path(name: str, agent: Optional[str] = None) -> str:
+    return os.path.join(missions_dir(agent), f"{_safe(name)}.mission")
+
+
+def save(spec: Dict[str, Any], agent: Optional[str] = None) -> str:
+    """Seal a mission: encrypt its spec to ~/.gorgon/missions/<agent>/<slug>.mission.
+    Returns the path. Falls back to plaintext only if the crypto layer is absent."""
+    agent = agent or _contract.active_agent_key()
+    spec = dict(spec)
+    spec["agent"] = agent
+    os.makedirs(missions_dir(agent), exist_ok=True)
+    path = mission_path(slug(spec.get("title", "mission")), agent)
+    try:
+        from shared.grgn_sign import write_encrypted
+        return write_encrypted(spec, path)
+    except Exception:
+        import json
+        with open(path, "w") as f:
+            json.dump(spec, f, indent=2, ensure_ascii=False)
+        return path
+
+
+def load(name: str, agent: Optional[str] = None) -> Tuple[Optional["Mission"], str]:
+    """Load a sealed mission by name → (Mission, status). status is the integrity
+    verdict from grgn_sign (encrypted|signed|unsigned|tampered|missing); a tampered
+    or missing mission returns (None, status) — fail-closed, like a bad .grgn."""
+    agent = agent or _contract.active_agent_key()
+    path = mission_path(name, agent)
+    if not os.path.isfile(path):
+        return None, "missing"
+    try:
+        from shared.grgn_sign import read as _read
+        spec, status = _read(path)
+    except Exception:
+        import json
+        try:
+            spec, status = json.load(open(path)), "unsigned"
+        except Exception:
+            return None, "tampered"
+    if spec is None or status in ("tampered", "missing"):
+        return None, status
+    return Mission(spec, agent=agent), status
+
+
+def list_missions(agent: Optional[str] = None) -> List[Dict[str, Any]]:
+    """The agent's sealed missions as [{name, title, goal, status}], sorted by name."""
+    agent = agent or _contract.active_agent_key()
+    d = missions_dir(agent)
+    out: List[Dict[str, Any]] = []
+    if not os.path.isdir(d):
+        return out
+    for fn in sorted(os.listdir(d)):
+        if not fn.endswith(".mission"):
+            continue
+        name = fn[:-len(".mission")]
+        m, status = load(name, agent)
+        out.append({
+            "name": name,
+            "title": m.title if m else "(unreadable)",
+            "goal": m.goal if m else "",
+            "status": status,
+        })
+    return out
+
+
+def render(m: "Mission") -> str:
+    """A human-readable summary of a mission (for `gorgon mission show`)."""
+    L = [f"  MISSION — {m.title}",
+         f"    agent:   {m.agent}",
+         f"    goal:    {m.goal}"]
+    if m.sub_goals:
+        L.append(f"    steps:   {', '.join(m.sub_goals)}")
+    L.append(f"    reward:  {m.reward()}   (importance ×{m.importance()}, weight {m.weight()})")
+    wl, bl = m.whitelist(), m.blacklist()
+    L.append(f"    tools:   {', '.join(wl) if wl else '(agent toolkit)'}")
+    if bl:
+        L.append(f"    redline: {', '.join(bl)}")
+    pred = m.predicate()
+    if pred:
+        clauses = ", ".join(f"{c.get('criterion')}:{c.get('target')}" for c in pred)
+        L.append(f"    done-when: {clauses}")
+    return "\n".join(L)
