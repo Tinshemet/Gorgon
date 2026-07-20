@@ -152,6 +152,7 @@ _waiting        = False           # True while HTTP call is in flight
 _needs_confirm  = False           # True when server returned needs_input
 _is_confirm     = False           # whether pending confirm is auto_confirm
 _is_password    = False           # True when the server asked for a masked password (forge wizard)
+_allow_empty    = False           # True when the server's prompt accepts an empty answer (skip optional field)
 _pending_kill   = ""              # VM name waiting for force-kill confirmation
 _session_id     = ""
 
@@ -594,7 +595,7 @@ def _sync_from_server() -> bool:
 
 def _process_response(result: dict, verbose: bool = False) -> None:
     """Apply a /chat response — render text/tools and update confirm state."""
-    global _session_id, _needs_confirm, _is_confirm, _is_password
+    global _session_id, _needs_confirm, _is_confirm, _is_password, _allow_empty
 
     if result.get("error"):
         _add(f"  ✖ {result['error']}", _cp(C_RED))
@@ -627,16 +628,21 @@ def _process_response(result: dict, verbose: bool = False) -> None:
         proposed = ni.get("proposed", "")
         _is_confirm = ni_type in ("confirm_yn", "confirm_name", "confirm_critical", "preflight")
         _is_password = ni_type == "password"
-        color    = _cp(C_RED) if ni_type == "confirm_critical" else _cp(C_YELLOW)
-        _add(f"  ▶ {question}", color | curses.A_BOLD)
-        if proposed:
-            _add(f"    Type exactly: {proposed}", _cp(C_RED))
-        if opts:
-            _add(f"    Options: {' / '.join(opts)}", _cp(C_DIM))
+        # 'prompt' is a free-text wizard answer — the question is already in the AI
+        # text, so don't re-render a ▶ line; allow_empty lets a blank Enter through.
+        _allow_empty = ni_type == "prompt" and bool(ni.get("allow_empty"))
+        if ni_type != "prompt":
+            color = _cp(C_RED) if ni_type == "confirm_critical" else _cp(C_YELLOW)
+            _add(f"  ▶ {question}", color | curses.A_BOLD)
+            if proposed:
+                _add(f"    Type exactly: {proposed}", _cp(C_RED))
+            if opts:
+                _add(f"    Options: {' / '.join(opts)}", _cp(C_DIM))
     else:
         _needs_confirm = False
         _is_confirm    = False
         _is_password   = False
+        _allow_empty   = False
 
 
 # ── Help ──────────────────────────────────────────────────────────────────────
@@ -766,7 +772,7 @@ def _dispatch(cmd: str, verbose: bool) -> bool:
 
 def _run(stdscr: "curses.window", verbose: bool = False, color_hex: str = "#aaaaaa", font_size: int = 13) -> None:
     """curses main loop — draw, read keys, and dispatch commands until quit."""
-    global _waiting, _session_id, _needs_confirm, _is_confirm, _pending_kill, _is_password
+    global _waiting, _session_id, _needs_confirm, _is_confirm, _pending_kill, _is_password, _allow_empty
 
     curses.curs_set(0)
     stdscr.timeout(100)
@@ -847,7 +853,7 @@ def _run(stdscr: "curses.window", verbose: bool = False, color_hex: str = "#aaaa
         if ch in ("\n", "\r", curses.KEY_ENTER):
             cmd = input_buf.strip()
             input_buf = ""
-            if not cmd:
+            if not cmd and not _allow_empty:      # empty Enter is a real answer when a wizard field allows blank
                 continue
 
             # Pending kill confirmation
@@ -877,6 +883,7 @@ def _run(stdscr: "curses.window", verbose: bool = False, color_hex: str = "#aaaa
             _needs_confirm = False
             _is_confirm    = False
             _is_password   = False
+            _allow_empty   = False
             _waiting = True
             threading.Thread(
                 target=_http_worker,

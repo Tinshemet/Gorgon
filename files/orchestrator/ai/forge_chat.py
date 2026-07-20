@@ -129,12 +129,16 @@ def current_prompt(state: Dict[str, Any], schema: Dict[str, Any] = None) -> Tupl
     if phase == "elicit":
         asked = forge.asked_fields(schema, state["essential_only"])
         field = asked[state["step"]]
-        # Optional fields can be skipped — but the client swallows an empty line,
-        # so offer an explicit skip token.
-        hint = "" if field.get("essential") else "   (type - to skip)"
-        return (f"({state['step'] + 1}/{len(asked)}) {field['prompt']}{hint}", None)
+        optional = not field.get("essential")
+        hint = "   (blank or - to skip)" if optional else ""
+        # needs_input type 'prompt' tells the client this is a free-text answer; the
+        # 'allow_empty' flag lets it submit an empty line (optional fields only),
+        # since the client otherwise swallows a blank Enter.
+        return (f"({state['step'] + 1}/{len(asked)}) {field['prompt']}{hint}",
+                {"type": "prompt", "allow_empty": optional})
     if phase == "safeword":
-        return (schema.get("safeword_prompt", "Sign with a safeword (blank to cancel):"), None)
+        return (schema.get("safeword_prompt", "Sign with a safeword (blank to cancel):"),
+                {"type": "prompt", "allow_empty": True})
     return ("", None)
 
 

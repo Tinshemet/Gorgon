@@ -171,7 +171,8 @@ def render(grgn: Dict[str, Any], width: int = 68) -> str:
     def wrap(label, text):
         return f"  {label:<11}{text}"
 
-    L = ["╔" + "═" * width + "╗",
+    L = ["",                                      # leading blank line so the box starts fresh
+         "╔" + "═" * width + "╗",
          f"  CAMPAIGN CONTRACT — {camp.get('title') or '(innate)'}"
          + ("     ✔ SIGNED" if camp.get("signed") else "     … unsigned · negotiable"),
          "╠" + "═" * width + "╣",
@@ -198,7 +199,7 @@ def render(grgn: Dict[str, Any], width: int = 68) -> str:
     L += [bar,
           wrap("Toolkit", ", ".join(camp.get("toolkit") or sorted(c.get("tools", {})) or ["(none)"])
                + (f"   [{camp.get('tool_mode')}]" if camp.get("tool_mode") else "")),
-          wrap("Red lines", (", ".join(c.get("forbidden", [])) or "(none)") + "   [weight 0 · inviolable]")]
+          wrap("Blacklist", (", ".join(c.get("forbidden", [])) or "(none)") + "   [weight 0 · inviolable]")]
 
     rules = camp.get("rules", [])
     if rules or camp.get("caveats"):
