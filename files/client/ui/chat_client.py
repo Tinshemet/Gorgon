@@ -799,6 +799,16 @@ def _handle_mission(arg: str, verbose: bool) -> None:
             _add(f"    {m['name']:<22} {m['title']}  ({m['status']})", _cp(C_DIM))
     elif sub == "new":
         _add("  The mission wizard needs a full terminal prompt — run: gorgon mission new", _cp(C_YELLOW))
+    elif sub == "show" and len(parts) >= 2:
+        m, status = M.load(parts[1])
+        if not m:
+            _add(f"  ✖ no mission '{parts[1]}' ({status})", _cp(C_RED))
+        else:
+            for line in M.render(m).split("\n"):
+                _add(line, _cp(C_DIM))
+            _add(f"  integrity: {status}", _cp(C_DIM))
+    elif sub in ("run", "show") and len(parts) < 2:
+        _add(f"  Usage: mission {sub} <name>", _cp(C_DIM))
     elif sub == "run" and len(parts) >= 2:
         _add(f"  ▶ running mission {parts[1]}…", _cp(C_CYAN))
         _waiting = True

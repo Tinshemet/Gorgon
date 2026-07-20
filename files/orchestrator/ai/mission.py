@@ -202,6 +202,16 @@ def load(name: str, agent: Optional[str] = None) -> Tuple[Optional["Mission"], s
     return Mission(spec, agent=agent), status
 
 
+def delete(name: str, agent: Optional[str] = None) -> bool:
+    """Delete a sealed mission by name. Returns False if it doesn't exist."""
+    agent = agent or _contract.active_agent_key()
+    path = mission_path(name, agent)
+    if not os.path.isfile(path):
+        return False
+    os.remove(path)
+    return True
+
+
 def list_missions(agent: Optional[str] = None) -> List[Dict[str, Any]]:
     """The agent's sealed missions as [{name, title, goal, status}], sorted by name."""
     agent = agent or _contract.active_agent_key()

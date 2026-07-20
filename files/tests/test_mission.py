@@ -93,6 +93,11 @@ def main():
     m2, st2 = Mstore.load("recon-web01", "doorman")
     check("a tampered mission is refused (fail-closed)", m2 is None and st2 == "tampered")
 
+    print("\ndelete: remove a sealed mission")
+    check("delete an existing mission", Mstore.delete("recon-web01", "doorman") is True)
+    check("it's gone from the listing", Mstore.list_missions("doorman") == [])
+    check("deleting a missing mission is False", Mstore.delete("recon-web01", "doorman") is False)
+
     print(f"\n{_PASS}/{_PASS + _FAIL} passed")
     sys.exit(1 if _FAIL else 0)
 

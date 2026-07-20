@@ -89,6 +89,10 @@ def _active_agent_warnings() -> List[str]:
                             "(tampered) — running doorman.grgn instead")
         elif status == "expired":
             warnings.append("active agent contract has EXPIRED — running doorman.grgn instead")
+        elif status == "voided":
+            warnings.append("active agent was VOIDED (its contract is revoked) — running "
+                            "doorman.grgn instead; its missions are disabled. Restore with "
+                            "`gorgon contract restore <agent>`")
         elif status == "unsigned":
             warnings.append("active agent file was unsigned — signed on this boot "
                             "(trust-on-first-use)")
