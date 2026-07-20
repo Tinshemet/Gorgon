@@ -31,7 +31,8 @@ try:
     from orchestrator.ai.context_assistant import _NARROW_CORE_TOOLS
     from orchestrator.ai.contract import gate_action as _default_gate
     from orchestrator.ai.contract import success_criterion as _default_criterion
-    from orchestrator.ai.findings import yield_fact as _yield_fact, extract_value as _extract_value
+    from orchestrator.ai.findings import (yield_fact as _yield_fact, extract_value as _extract_value,
+                                           finding_probe_spec as _finding_probe_spec)
     from orchestrator.ai.contract import is_forbidden as _default_legal, consent_verb as _consent_verb
     from orchestrator.ai.contract import tool_risk as _tool_risk
 except ImportError:
@@ -41,6 +42,7 @@ except ImportError:
     _default_criterion = None
     _yield_fact = lambda *a, **k: None
     _extract_value = lambda r, s: r
+    _finding_probe_spec = lambda *a, **k: None
     _default_legal = None
     _consent_verb = lambda t: t
     _tool_risk = lambda t: None
@@ -581,7 +583,22 @@ def run_score(
         # result), so acceptance can read it and the loop won't re-discover it.
         new_finding = bool(fact) and (findings is not None) and not findings.has(fact)
         if ok and fact:
-            findings.record(fact, _extract_value(result, findings_schema[name]), source=name)
+            # Deterministic finding-validation: if the schema declares a `verify`
+            # probe for this finding, an independent read-only guest_probe must
+            # CONFIRM it before it's recorded. A value read from (possibly free-text)
+            # output that a probe can't back up doesn't count — closes the "trust the
+            # extracted value" hole. No `verify` → records as before.
+            _confirmed = True
+            _vspec = _finding_probe_spec(name, args, findings_schema)
+            if _vspec:
+                _p = _vspec.split(":", 2)
+                _pr = (execute("guest_probe", {"name": _p[0], "assertion": _p[1], "target": _p[2]})
+                       if len(_p) == 3 else None)
+                _confirmed = isinstance(_pr, dict) and _pr.get("success") and bool(_pr.get("holds"))
+            if _confirmed:
+                findings.record(fact, _extract_value(result, findings_schema[name]), source=name)
+            else:
+                new_finding = False   # unconfirmed → not learned; don't credit anti-rediscovery
         # Staleness fix: a state-mutating call (a tool the contract assessed as risky)
         # invalidates findings ABOUT the entities it touched, so anti-rediscovery can't
         # hand back a stale fact after the world changed under it.

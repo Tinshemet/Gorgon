@@ -184,6 +184,24 @@ def main():
                   criterion_of=lambda t: "present", verify=lambda c, t, a, res: True)
     check("with a declared+passing post-condition → done", r["root"]["status"] == "done")
 
+    print("\ndeterministic finding-validation: a finding counts only if a probe confirms it")
+    from orchestrator.ai.findings import Findings
+    _fs = {"scan_port": {"fact": "open({name}:{port})", "value": "state",
+                         "verify": "{name}:port_listening:{port}"}}
+    _ptools = [{"type": "function", "function": {"name": "scan_port", "parameters": {}}}]
+    def _exec_probe(holds):
+        def ex(t, a):
+            return {"success": True, "holds": holds} if t == "guest_probe" else {"success": True, "state": "open"}
+        return ex
+    for holds, want in [(True, True), (False, False)]:
+        f = Findings()
+        run_score("scan it",
+                  call_model=scripted_model({"scan it": ("scan_port", {"name": "web01", "port": "443"})})[0],
+                  execute=_exec_probe(holds), tools=_ptools, findings=f, findings_schema=_fs,
+                  criterion_of=lambda t: None)
+        check(f"probe {'confirms' if holds else 'denies'} → recorded={want}",
+              f.has("open(web01:443)") is want)
+
     print("\nbacktrack: soft-fail → retry a DIFFERENT approach (failed-branch memory)")
     prompts = []
     step = {"n": 0}

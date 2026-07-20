@@ -98,8 +98,28 @@ def yield_fact(tool: str, args: Dict[str, Any], schema: Dict[str, Dict[str, Any]
 
 def extract_value(result: Any, spec: Dict[str, str]) -> Any:
     """Pull the yielded VALUE out of a tool result per the schema (falls back to the
-    whole result). A harness could add deterministic validation here before it counts."""
+    whole result). Deterministic validation is layered ON TOP via finding_probe_spec —
+    a finding a tool would record can be required to pass an independent probe first."""
     key = spec.get("value")
     if isinstance(result, dict) and key in result:
         return result[key]
     return result
+
+
+def finding_probe_spec(tool: str, args: Dict[str, Any],
+                       schema: Dict[str, Dict[str, Any]]) -> Optional[str]:
+    """The independent-probe spec a tool's finding must pass BEFORE it's recorded —
+    "vm:assertion:target" (e.g. "web01:port_listening:443"), formatted from the call
+    args via the schema's optional ``verify`` template. None means the tool declares
+    no verification, so its finding records as before (backward-compatible).
+
+    This is deterministic finding-validation: a value read from a tool's (possibly
+    free-text) output counts only if a read-only guest_probe independently confirms
+    it — closing the "trust the extracted value" hole."""
+    spec = (schema or {}).get(tool)
+    if not spec or not spec.get("verify"):
+        return None
+    try:
+        return spec["verify"].format(**args)
+    except Exception:
+        return None
