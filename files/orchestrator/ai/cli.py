@@ -299,6 +299,13 @@ def chat_loop(verbose: bool = False) -> None:
         if _maybe_forge_contract(_ui):
             continue
 
+        # sign/edit/show/list a contract → point at the CLI (they act on a file)
+        from orchestrator.ai import forge_chat as _fc
+        _contract_redirect = _fc.contract_cli_redirect(_ui)
+        if _contract_redirect:
+            console.print(f"[yellow]{_contract_redirect}[/yellow]")
+            continue
+
         if not _is_synthetic:
             messages.append({"role": "user", "content": user_input})
 

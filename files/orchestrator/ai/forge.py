@@ -100,6 +100,7 @@ def forge(spec: Dict[str, Any]) -> Dict[str, Any]:
                 "success_criteria": spec.get("success_criteria"),   # human prose
                 "success_predicate": spec.get("success_predicate") or None,  # checkable {criterion,target} clauses = the ROOT gate
                 "reward": spec.get("reward", 1.0),
+                "expiry": spec.get("expiry"),         # ISO date | None (never); enforced at load
                 "safeword": None,     # set at signing
                 "signed": False,      # two-phase: negotiable until signed
             },
@@ -191,7 +192,8 @@ def render(grgn: Dict[str, Any], width: int = 68) -> str:
               wrap("Scrutiny", camp.get("scrutiny", "")),
               wrap("Ethics", camp.get("ethics", "")),
               wrap("Legality", camp.get("legality", "")),
-              wrap("Reward", _reward_render(camp.get("reward", "")))]
+              wrap("Reward", _reward_render(camp.get("reward", ""))),
+              wrap("Expires", camp.get("expiry") or "never")]
 
     L += [bar,
           wrap("Toolkit", ", ".join(camp.get("toolkit") or sorted(c.get("tools", {})) or ["(none)"])
@@ -337,6 +339,43 @@ class ImportanceField(FieldType):
         return str(value)
 
 
+class ExpiryField(FieldType):
+    """Optional contract expiry — the twin of ToolkitField, showing the same
+    'new field type = one subclass' seam. Accepts an ISO date (2026-12-31) or a
+    duration (30d / 6w / 3m / 1y), normalized to an absolute ISO date; blank →
+    None (never expires). validate() rejects a garbled or already-past date;
+    contract.py enforces it at load (an expired contract is refused, fail-closed)."""
+
+    def parse(self, raw, field):
+        import re
+        from datetime import date, timedelta
+        s = (raw or "").strip().lower()
+        if not s:
+            return None
+        m = re.fullmatch(r"(\d+)\s*([dwmy])", s)
+        if m:
+            n, unit = int(m.group(1)), m.group(2)
+            days = {"d": 1, "w": 7, "m": 30, "y": 365}[unit] * n
+            return (date.today() + timedelta(days=days)).isoformat()
+        try:
+            return date.fromisoformat(s).isoformat()
+        except ValueError:
+            return s                                # keep raw so validate() can flag it
+
+    def validate(self, value, field):
+        if not value:
+            return []
+        from datetime import date
+        try:
+            d = date.fromisoformat(value)
+        except ValueError:
+            return [f"unparseable expiry {value!r} — use YYYY-MM-DD or a duration like 30d"]
+        return [f"expiry {value} is already in the past"] if d < date.today() else []
+
+    def format(self, value, field):
+        return "never" if not value else str(value)
+
+
 # Field-type registry — forge_fields.json names a type per field; add a type by
 # subclassing FieldType and registering it here (instances stay in the JSON).
 _FIELD_TYPES = {
@@ -346,6 +385,7 @@ _FIELD_TYPES = {
     "predicate":  PredicateField(),
     "float":      FloatField(),
     "importance": ImportanceField(),
+    "expiry":     ExpiryField(),
 }
 
 

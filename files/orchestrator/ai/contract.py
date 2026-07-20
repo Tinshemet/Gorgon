@@ -61,18 +61,32 @@ try:
     from shared.grgn_sign import read as _read_grgn
 except Exception:
     _read_grgn = lambda p: (json.load(open(p)), "unsigned")                   # type: ignore[assignment]
+def _is_expired(contract: Dict[str, Any]) -> bool:
+    """True if the contract carries an expiry date that is already past."""
+    exp = ((contract or {}).get("contract", {}).get("campaign", {}) or {}).get("expiry")
+    if not exp:
+        return False
+    try:
+        from datetime import date
+        return date.fromisoformat(str(exp)) < date.today()
+    except Exception:
+        return False                               # unparseable → don't brick startup
+
+
 _C_LOADED, _AGENT_STATUS = _read_grgn(_AGENT_PATH)
-if (_AGENT_STATUS in ("tampered", "missing") or _C_LOADED is None) \
-        and os.path.abspath(_AGENT_PATH) != os.path.abspath(_DOORMAN_PATH):
+_refuse = (_AGENT_STATUS in ("tampered", "missing") or _C_LOADED is None
+           or _is_expired(_C_LOADED))
+if _refuse and os.path.abspath(_AGENT_PATH) != os.path.abspath(_DOORMAN_PATH):
+    _bad_status = "expired" if (_C_LOADED is not None and _is_expired(_C_LOADED)) else "tampered"
     _AGENT_PATH = _DOORMAN_PATH                    # refuse; run the default agent
-    _C_LOADED, _AGENT_STATUS2 = _read_grgn(_AGENT_PATH)
-    _AGENT_STATUS = "tampered"                     # remember the selected file was bad
+    _C_LOADED, _ = _read_grgn(_AGENT_PATH)
+    _AGENT_STATUS = _bad_status                    # remember why the selected file was refused
 _C: Dict[str, Any] = _C_LOADED if _C_LOADED is not None else json.load(open(_DOORMAN_PATH))
 
 
 def agent_signature_status() -> str:
-    """Integrity/format status of the SELECTED agent file: encrypted | signed |
-    unsigned | tampered | missing. 'tampered' means it was refused and doorman is
+    """Status of the SELECTED agent file: encrypted | signed | unsigned | tampered
+    | expired | missing. 'tampered'/'expired' mean it was refused and doorman is
     running instead."""
     return _AGENT_STATUS
 

@@ -87,6 +87,8 @@ def _active_agent_warnings() -> List[str]:
         if status == "tampered":
             warnings.append("SECURITY: active agent file failed its integrity check "
                             "(tampered) — running doorman.grgn instead")
+        elif status == "expired":
+            warnings.append("active agent contract has EXPIRED — running doorman.grgn instead")
         elif status == "unsigned":
             warnings.append("active agent file was unsigned — signed on this boot "
                             "(trust-on-first-use)")
@@ -389,6 +391,13 @@ def chat(req: ChatRequest, operator: Optional[str] = Depends(_current_operator))
                           "pending_tool": None, "critical_step2": False}
         return {"session_id": sid, "text": reply,
                 "tool_results": [], "needs_input": needs_input}
+
+    # ── Contract CLI redirect: sign/edit/show/list are CLI-only ───────────────
+    if forge_wizard is None and not (req.auto_confirm and pending_tool):
+        _redirect = forge_chat.contract_cli_redirect(req.message)
+        if _redirect:
+            return {"session_id": sid, "text": _redirect,
+                    "tool_results": [], "needs_input": None}
 
     # ── Fast-path: confirmed action — skip Ollama ─────────────────────────────
     if req.auto_confirm and pending_tool:

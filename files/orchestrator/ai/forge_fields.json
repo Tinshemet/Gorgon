@@ -29,6 +29,7 @@
     {"key": "legality", "prompt": "Legality", "parse": "str"},
     {"key": "success_criteria", "prompt": "Success criteria — what is 'done'?", "parse": "str", "essential": true},
     {"key": "success_predicate", "prompt": "Root gate — checkable end-state as 'criterion:target' (e.g. present:honeypot, absent:web01; optional)", "parse": "predicate"},
-    {"key": "reward", "prompt": "Importance — how much does closing this goal matter? [routine|important|critical]", "parse": "importance", "default": "important", "levels": {"routine": 3, "important": 10, "critical": 30}}
+    {"key": "reward", "prompt": "Importance — how much does closing this goal matter? [routine|important|critical]", "parse": "importance", "default": "important", "levels": {"routine": 3, "important": 10, "critical": 30}},
+    {"key": "expiry", "prompt": "Expiry — when does this contract expire? (YYYY-MM-DD, a duration like 30d, or blank for never)", "parse": "expiry"}
   ]
 }

@@ -52,6 +52,32 @@ def _intent_words():
     return verbs, nouns
 
 
+# Contract lifecycle actions that are CLI-only (they act on a file, need an editor,
+# or a positional arg) — the chat recognizes the intent and points at the command.
+_CLI_ACTIONS = [
+    ("edit",  "gorgon contract edit <file>"),
+    ("amend", "gorgon contract edit <file>"),
+    ("sign",  "gorgon contract sign <file> <safeword>"),
+    ("list",  "gorgon contract list"),
+    ("show",  "gorgon contract show <file>"),
+    ("view",  "gorgon contract show <file>"),
+]
+
+
+def contract_cli_redirect(message: str) -> Optional[str]:
+    """If a chat message asks to sign/edit/show/list a contract (CLI-only actions,
+    unlike forge which runs in-chat), return the command to run; else None. Same
+    deterministic style as looks_like_forge_intent — never reaches the model."""
+    _, vm_nouns = _intent_words()
+    words = {w.strip(".,!?;:'\"") for w in (message or "").lower().split()}
+    if not (words & {"contract", "contracts"}) or (words & vm_nouns):
+        return None
+    for verb, cmd in _CLI_ACTIONS:
+        if verb in words:
+            return f"That's a CLI action (it works on a contract file directly). Run:\n  {cmd}"
+    return None
+
+
 def looks_like_forge_intent(message: str) -> bool:
     """True when a chat message is asking to forge a contract (deterministic).
 

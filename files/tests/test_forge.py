@@ -88,7 +88,8 @@ def main():
     from orchestrator.ai.forge import forge_interactive
     answers = iter(["Shani", "red-team", "autonomous", "breach-test", "ctx", "compromise vm1",
                     "recon vm1", "loose", "list_vms,run_guest_command", "delete_network",
-                    "surface to operator", "authorized only", "vm1 foothold", "running:vm1", "10", "banana"])
+                    "surface to operator", "authorized only", "vm1 foothold", "running:vm1", "10",
+                    "2099-12-31", "banana"])   # expiry (far future), then safeword
     d = tempfile.mkdtemp()
     path = forge_interactive(ask=lambda p: next(answers), out=lambda s: None, write_dir=d)
     import json as _json
@@ -112,7 +113,7 @@ def main():
     os.remove(path)
     os.rmdir(d)
     # a blank safeword cancels (nothing written)
-    ans2 = iter(["X", "r", "autonomous", "t", "", "g", "", "strict", "list_vms", "", "e", "l", "done", "1", ""])
+    ans2 = iter(["X", "r", "autonomous", "t", "", "g", "", "strict", "list_vms", "", "e", "l", "done", "1", "", ""])
     d2 = tempfile.mkdtemp()
     check("blank safeword cancels (no file)", forge_interactive(ask=lambda p: next(ans2), out=lambda s: None, write_dir=d2) is None)
     os.rmdir(d2)

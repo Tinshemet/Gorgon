@@ -690,23 +690,50 @@ def run(args: List[str], verbose: bool = False) -> None:
                           "(orchestrator package not present).[/bold red]")
             return
         _agent_dir = os.path.dirname(os.path.abspath(_forge.__file__))
+        from shared import audit as _audit
+        _op = _auth_sessions.current_username() if _auth_sessions else None
         sub = rest[0] if rest else ""
         if sub == "forge":
             if not _require_operator_password("forge a contract"):
                 return
             _full = "--full" in rest
-            _forge.forge_interactive(
+            _p = _forge.forge_interactive(
                 ask=lambda p: console.input(f"[bold cyan]{p}:[/bold cyan] ").strip(),
                 out=console.print, write_dir=_agent_dir, essential_only=not _full)
-        elif sub == "show" and len(rest) >= 2:
+            if _p:
+                _audit.record("contract.forge", os.path.basename(_p), _op)
+        elif sub == "show":
             from shared.grgn_sign import read as _read_grgn
-            path = rest[1] if os.path.isabs(rest[1]) else os.path.join(_agent_dir, rest[1])
+            from shared import agent_select as _sel
+            target = rest[1] if len(rest) >= 2 else (          # no arg → the active agent
+                os.environ.get("GORGON_AGENT") or _sel.get_selection() or "doorman.grgn")
+            path = target if os.path.isabs(target) else os.path.join(_agent_dir, target)
             g, st = _read_grgn(path)
             if g is None:
-                console.print(f"[bold red]Cannot read {rest[1]} ({st}).[/bold red]")
+                console.print(f"[bold red]Cannot read {os.path.basename(target)} ({st}).[/bold red]")
             else:
                 console.print(_forge.render(g))
-                console.print(f"[dim]integrity: {st}[/dim]")
+                console.print(f"[dim]{os.path.basename(path)} · integrity: {st}[/dim]")
+        elif sub == "list":
+            import glob as _glob
+            from shared.grgn_sign import read as _read_grgn
+            from shared import agent_select as _sel
+            active = os.path.basename(os.environ.get("GORGON_AGENT") or _sel.get_selection() or "doorman.grgn")
+            files = sorted(_glob.glob(os.path.join(_agent_dir, "*.grgn")))
+            if not files:
+                console.print("[dim]No contracts found.[/dim]")
+            for p in files:
+                name = os.path.basename(p)
+                g, st = _read_grgn(p)
+                camp = (g or {}).get("contract", {}).get("campaign", {}) or {}
+                signed = "signed" if camp.get("signed") else "unsigned"
+                goal = (camp.get("goal") or "—")[:44]
+                mark = "[green]→[/green]" if name == active else " "
+                console.print(f" {mark} {name:<24} {st:<9} {signed:<8} "
+                              f"exp:{camp.get('expiry') or 'never':<10} {goal}")
+        elif sub == "audit":
+            for line in _audit.tail(30) or ["(no audit entries yet)"]:
+                console.print(f"  {line}")
         elif sub == "sign" and len(rest) >= 3:
             if not _require_operator_password("sign a contract"):
                 return
@@ -719,6 +746,7 @@ def run(args: List[str], verbose: bool = False) -> None:
                 try:
                     _forge.sign(g, rest[2]); _forge.write_grgn(g, path)
                     console.print(f"[green]Signed → {path}[/green]")
+                    _audit.record("contract.sign", os.path.basename(path), _op)
                 except ValueError as e:
                     console.print(f"[bold red]{e}[/bold red]")
         elif sub == "edit" and len(rest) >= 2:
@@ -755,14 +783,16 @@ def run(args: List[str], verbose: bool = False) -> None:
                         else:
                             _forge.write_grgn(edited, path)   # re-encrypts under the install key
                             console.print(f"[green]✔ Saved and re-encrypted → {path}[/green]")
+                            _audit.record("contract.edit", os.path.basename(path), _op)
                 finally:
                     try:
                         os.remove(tmp)                  # never leave decrypted content around
                     except OSError:
                         pass
         else:
-            console.print("[yellow]Usage: gorgon contract forge [--full] | "
-                          "show <file> | sign <file> <safeword> | edit <file>[/yellow]")
+            console.print("[yellow]Usage: gorgon contract "
+                          "forge [--full] | show [file] | list | sign <file> <safeword> "
+                          "| edit <file> | audit[/yellow]")
 
     elif cmd == "agent":
         # gorgon agent | agent <file> | agent load <file> | agent reset
@@ -773,9 +803,11 @@ def run(args: List[str], verbose: bool = False) -> None:
         # restarts the server; a change takes effect when the operator reboots it.
         import glob as _glob
         from shared import agent_select as _sel
+        from shared import audit as _audit
         from orchestrator.ai import forge as _forge
         _agent_dir = os.path.dirname(os.path.abspath(_forge.__file__))
         _resolve  = lambda f: f if os.path.isabs(f) else os.path.join(_agent_dir, f)
+        _op       = _auth_sessions.current_username() if _auth_sessions else None
 
         def _validate(f: str):
             p = _resolve(f)
@@ -829,6 +861,7 @@ def run(args: List[str], verbose: bool = False) -> None:
             if not _change_allowed():
                 return
             _sel.clear_selection()
+            _audit.record("agent.reset", "doorman.grgn", _op)
             console.print("[green]Agent reset — doorman.grgn on next server boot.[/green]")
             console.print("[yellow]Restart the orchestrator server to apply.[/yellow]")
         elif sub == "load":
@@ -843,11 +876,14 @@ def run(args: List[str], verbose: bool = False) -> None:
             if not _change_allowed():
                 return
             _persist(f)
+            _audit.record("agent.load", os.path.basename(_resolve(f)), _op)
             # Operator access is required to reach here, so the client is allowed
             # to bounce the server — the respawn re-imports the contract and picks
             # up the new selection.
             try:
-                _persona = (json.load(open(_resolve(f))).get("persona") or {}).get("name")
+                from shared.grgn_sign import read as _read_grgn
+                _g_agent, _ = _read_grgn(_resolve(f))       # encrypted or plaintext
+                _persona = ((_g_agent or {}).get("persona") or {}).get("name")
             except Exception:
                 _persona = None
             _label = _persona or os.path.basename(_resolve(f))
@@ -879,6 +915,7 @@ def run(args: List[str], verbose: bool = False) -> None:
             if not _change_allowed():
                 return
             _persist(f)
+            _audit.record("agent.select", os.path.basename(_resolve(f)), _op)
             console.print(f"[green]Agent set to {f} — active on next server boot.[/green] "
                           f"Run [cyan]gorgon agent load {f}[/cyan] for the apply-now steps.")
         else:
