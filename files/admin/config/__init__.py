@@ -105,6 +105,15 @@ DIM_FALLBACK_SLOT  = _c("dim_fallback_slot")
 CUSTOM_COLOR_SLOT  = _c("custom_color_slot")
 COLOR_FALLBACK_RGB = tuple(_c("color_fallback_rgb"))
 
+# curses colour-pair slot ids (unique handles for init_pair / color_pair)
+C_NORMAL = _c("color_pair_normal")
+C_HEADER = _c("color_pair_header")
+C_CYAN   = _c("color_pair_cyan")
+C_GREEN  = _c("color_pair_green")
+C_RED    = _c("color_pair_red")
+C_DIM    = _c("color_pair_dim")
+C_YELLOW = _c("color_pair_yellow")
+
 # ── UI strings ─────────────────────────────────────────────────────────────────
 APP_TITLE      = _c("app_title")
 GLYPH_RUNNING  = _c("glyph_running")

@@ -13,15 +13,16 @@ import curses
 
 from admin import api_client, config, state
 
-# Colour-pair identifiers — symbolic slots, not tunables (their numbers are just
-# unique ids handed to curses.init_pair / color_pair).
-C_NORMAL = 0
-C_HEADER = 1
-C_CYAN   = 2
-C_GREEN  = 3
-C_RED    = 4
-C_DIM    = 5
-C_YELLOW = 6
+# Colour-pair identifiers — the unique slot ids handed to curses.init_pair /
+# color_pair. Sourced from admin_config.*.json (config.C_*); aliased to local
+# names so the draw routines below stay readable.
+C_NORMAL = config.C_NORMAL
+C_HEADER = config.C_HEADER
+C_CYAN   = config.C_CYAN
+C_GREEN  = config.C_GREEN
+C_RED    = config.C_RED
+C_DIM    = config.C_DIM
+C_YELLOW = config.C_YELLOW
 
 
 def _curses_color(name: str) -> int:

@@ -46,6 +46,14 @@
   "custom_color_slot":       16,
   "color_fallback_rgb":      [667, 667, 667],
 
+  "color_pair_normal":       0,
+  "color_pair_header":       1,
+  "color_pair_cyan":         2,
+  "color_pair_green":        3,
+  "color_pair_red":          4,
+  "color_pair_dim":          5,
+  "color_pair_yellow":       6,
+
   "app_title":               "gorgon admin",
   "glyph_running":           "● ",
   "glyph_stopped":           "○ ",
