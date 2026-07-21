@@ -280,3 +280,23 @@ def execute_tool(tool_name: str, args: dict, verbose: bool = False, log: bool = 
         elif isinstance(result, dict) and "vms" in result:
             result["vms"] = [v for v in result["vms"] if v.get("name") in _ALLOWED_VMS]
     return result
+
+
+def live_vm_names() -> set:
+    """Best-effort set of current VM names via a live ``list_vms`` — used by the
+    context-assistant gate to ground VM references when the Active Library snapshot
+    isn't built (remote/unavailable at chat start).
+
+    Tolerant of every shape ``execute_tool`` can return: a bare list (normal), a
+    ``{"vms": [...]}`` envelope, OR an error dict when the executor is unreachable
+    (``{"success": False, "error": ...}``). That last case is exactly the
+    ``LIBRARY.built is False`` scenario this fallback fires in — iterating the error
+    dict's string keys previously raised ``TypeError`` in the gate. Return an empty
+    set instead so the gate degrades gracefully rather than crashing the turn.
+    """
+    res = execute_tool("list_vms", {}, verbose=True, log=False)
+    if isinstance(res, dict):
+        res = res.get("vms", [])
+    if not isinstance(res, list):
+        return set()
+    return {v["name"] for v in res if isinstance(v, dict) and "name" in v}

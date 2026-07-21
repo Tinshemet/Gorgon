@@ -156,9 +156,12 @@ def advance(state: Dict[str, Any], answer: str, *,
     cfg = _wizard_cfg()
     ans = (answer or "").strip()
 
-    # Cancel at any point, including the password prompt — bailing out of a forge
-    # is always allowed (an explicit "cancel" beats treating it as a bad password).
-    if ans.lower() in cfg["cancel_words"]:
+    # Cancel at any point — bailing out of a forge is always allowed. But in the
+    # AUTH phase a cancel word ("stop", "quit", ...) might genuinely BE the
+    # operator's password, so try it as one first and only cancel if it fails to
+    # authenticate. Outside auth the intent is unambiguous.
+    is_cancel = ans.lower() in cfg["cancel_words"]
+    if is_cancel and state["phase"] != "auth":
         return None, "Forge cancelled — nothing signed.", None, None
 
     if state["phase"] == "auth":
@@ -166,6 +169,8 @@ def advance(state: Dict[str, Any], answer: str, *,
             state["phase"] = "elicit"
             reply, ni = current_prompt(state, schema)
             return state, "✓ Authenticated. Let's forge a contract.\n" + reply, ni, None
+        if is_cancel:   # not the password → honour the explicit cancel
+            return None, "Forge cancelled — nothing signed.", None, None
         state["attempts"] += 1
         if state["attempts"] >= cfg["max_attempts"]:
             return None, "Too many failed attempts — forge aborted.", None, None

@@ -334,8 +334,14 @@ def cli_direct(args: List[str], verbose: bool = False) -> None:
                 """Silence the default HTTP request logging."""
                 pass  # silence access log
 
-        srv = http.server.HTTPServer(('0.0.0.0', port), _Handler)
-        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        # Don't expose the script directory on every interface. In user-mode
+        # networking the guest reaches the host's loopback via the SLIRP gateway
+        # (10.0.2.2 → 127.0.0.1), so binding loopback is both reachable AND
+        # unexposed to the LAN; in bridged mode bind the gateway IP the host owns.
+        # (Also: a single foreground accept loop — the old code ran serve_forever
+        # in a daemon thread AND again in the foreground on the same socket.)
+        _bind_host = "127.0.0.1" if _QEMU_HOST_IP == "10.0.2.2" else _QEMU_HOST_IP
+        srv = http.server.HTTPServer((_bind_host, port), _Handler)
 
         url     = f"http://{_QEMU_HOST_IP}:{port}/{script_file}"
 
@@ -376,8 +382,10 @@ def cli_direct(args: List[str], verbose: bool = False) -> None:
                 """Silence the default HTTP request logging."""
                 pass  # silence access log
 
-        srv = http.server.HTTPServer(('0.0.0.0', port), _Handler)
-        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        # See guest-setup above: single foreground accept loop, bound to loopback
+        # (user-mode SLIRP) or the gateway IP — not every interface.
+        _bind_host = "127.0.0.1" if _QEMU_HOST_IP == "10.0.2.2" else _QEMU_HOST_IP
+        srv = http.server.HTTPServer((_bind_host, port), _Handler)
 
         url = r["cmd_template"].format(port=port)
 

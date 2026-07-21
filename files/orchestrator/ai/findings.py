@@ -22,6 +22,7 @@ tool declares its fact in one place.
 """
 import json
 import os as _os
+import re
 from typing import Any, Dict, Optional
 
 
@@ -146,10 +147,19 @@ class Findings:
     def invalidate_about(self, entity: str) -> int:
         """Drop every fact MENTIONING `entity` — the staleness fix: after a mutation
         changes an entity, facts learned about it (ip(web), status(web)) are stale, so
-        anti-rediscovery won't hand back a wrong answer. Returns how many were dropped."""
+        anti-rediscovery won't hand back a wrong answer. Returns how many were dropped.
+
+        Matches `entity` against a fact's parenthesised operands EXACTLY, not as a
+        raw substring — otherwise invalidating `web` would also nuke `ip(web2)` and
+        `reachable(webserver)` (and a one-char entity would wipe the whole ledger)."""
         if not entity:
             return 0
-        stale = [k for k in self._f if entity in k]
+        def _mentions(key: str) -> bool:
+            m = re.search(r"\(([^)]*)\)", key)
+            if not m:
+                return False
+            return entity in [o.strip() for o in m.group(1).split(",")]
+        stale = [k for k in self._f if _mentions(k)]
         for k in stale:
             del self._f[k]
         return len(stale)

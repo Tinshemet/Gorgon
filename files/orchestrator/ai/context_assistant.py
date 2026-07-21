@@ -388,7 +388,11 @@ def check_context(
     # checked against the registry.
     if known_names is not None and tool_name in _VM_TOOLS:
         ref_name = args.get("name")
-        if ref_name and ref_name != "all" and ref_name not in known_names:
+        # Compare case-insensitively — the pipeline resolves VM names that way
+        # (active_library.resolve), so `Test1` against a registry `test1` is a
+        # valid reference, not a hallucination worth a re-plan nudge.
+        if (ref_name and ref_name != "all"
+                and ref_name.lower() not in {k.lower() for k in known_names}):
             issues.append(_MSG["unknown_vm_reference"].format(
                 name=ref_name, known=sorted(known_names),
             ))

@@ -14,7 +14,7 @@ import os
 from typing import List, Optional, Tuple
 
 from shared.display import console, render_vm_specs
-from orchestrator.executor_client import execute_tool, API_URL, _VM_TOOLS
+from orchestrator.executor_client import execute_tool, live_vm_names, API_URL, _VM_TOOLS
 from orchestrator.sanitizer.sanitizer import OS_TYPE_ALIASES
 from orchestrator.preflight.validator import _preflight_check, _show_preflight_warning
 from .active_library import LIBRARY
@@ -355,8 +355,7 @@ def _context_assistant_gate(tool_name: str, raw_args: dict, user_input: str,
     if tool_name in _VM_TOOLS:
         # Ground truth from the Active Library (no live list_vms round-trip);
         # fall back to a live query only if the Library hasn't been built.
-        known_names = (LIBRARY.known_names() if LIBRARY.built
-                       else {v["name"] for v in execute_tool("list_vms", {}, verbose=True, log=False)})
+        known_names = LIBRARY.known_names() if LIBRARY.built else live_vm_names()
     hint = check_context(user_input, tool_name, raw_args, recent_context=recent_context,
                           known_names=known_names)
     if not hint:

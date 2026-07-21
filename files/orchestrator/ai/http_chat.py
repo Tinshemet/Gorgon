@@ -15,7 +15,7 @@ import os
 
 from orchestrator.sanitizer.sanitizer import OS_TYPE_ALIASES
 from orchestrator.sanitizer.context_gate import _REQUIRED as _GATE_REQUIRED
-from orchestrator.executor_client import execute_tool, _VM_TOOLS
+from orchestrator.executor_client import execute_tool, live_vm_names, _VM_TOOLS
 from orchestrator.preflight.validator import _preflight_check
 from .ollama_client import _call_ollama
 from .active_library import LIBRARY
@@ -160,8 +160,7 @@ def process_message(
             if not _context_assistant_fired:
                 _known_names = None
                 if tool_name in _VM_TOOLS:
-                    _known_names = (LIBRARY.known_names() if LIBRARY.built
-                                    else {v["name"] for v in execute_tool("list_vms", {}, verbose=True, log=False)})
+                    _known_names = LIBRARY.known_names() if LIBRARY.built else live_vm_names()
                 _ca_hint = check_context(user_input, tool_name, raw_args, recent_context=_recent_context,
                                           known_names=_known_names)
                 if _ca_hint:
