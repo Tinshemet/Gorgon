@@ -11,12 +11,21 @@ Resolution order the runtime honors:
 import os
 from typing import Optional
 
-_SELECTION_FILE = os.path.expanduser("~/.gorgon.agent")
+from shared.config import AGENT_SELECTION_FILE, DEFAULT_AGENT, AGENT_ENV_VAR
+
+_SELECTION_FILE = AGENT_SELECTION_FILE
 
 
 def selection_path() -> str:
     """Absolute path of the persisted-selection file."""
     return _SELECTION_FILE
+
+
+def resolve() -> str:
+    """The agent file the runtime should load, honoring the full resolution order:
+    ``GORGON_AGENT`` env var  >  the persisted selection  >  the doorman default.
+    This is the single authority for that order (contract.py defers to it)."""
+    return os.environ.get(AGENT_ENV_VAR) or get_selection() or DEFAULT_AGENT
 
 
 def get_selection() -> Optional[str]:

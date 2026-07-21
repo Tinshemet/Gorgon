@@ -176,17 +176,6 @@
     "openbsd",
     "other"
   ],
-  "theme": {
-    "tool": "bold cyan",
-    "success": "bold green",
-    "error": "bold red",
-    "warn": "bold yellow",
-    "info": "dim cyan",
-    "ai": "bold white",
-    "user": "bold blue",
-    "dim": "dim white",
-    "header": "bold magenta"
-  },
   "fingerprint": {
     "vm_bios_vendors": [
       "seabios",

@@ -38,13 +38,14 @@ except ImportError:                                                    # pragma:
     _TOOL_SPECS: Dict[str, Any] = {}
     _TOOL_NAME_ARG: Dict[str, str] = {}
 
-# The active agent file, resolved at import: GORGON_AGENT env var (explicit
-# override) > the persisted `gorgon agent` selection > doorman.grgn (default).
+# The active agent file, resolved at import. agent_select owns the resolution
+# order (GORGON_AGENT env var > persisted `gorgon agent` selection > doorman
+# default), so this reader never re-encodes it.
 try:
-    from shared.agent_select import get_selection as _agent_selection
+    from shared.agent_select import resolve as _resolve_agent
 except Exception:
-    _agent_selection = lambda: None                                           # type: ignore[assignment]
-_AGENT_FILE = os.environ.get("GORGON_AGENT") or _agent_selection() or "doorman.grgn"
+    _resolve_agent = lambda: "doorman.grgn"                                    # type: ignore[assignment]
+_AGENT_FILE = _resolve_agent()
 _AGENT_PATH = (_AGENT_FILE if os.path.isabs(_AGENT_FILE)
                else os.path.join(os.path.dirname(__file__), _AGENT_FILE))
 _DOORMAN_PATH = os.path.join(os.path.dirname(__file__), "doorman.grgn")

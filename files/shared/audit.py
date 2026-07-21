@@ -9,7 +9,9 @@ import os
 from datetime import datetime
 from typing import List, Optional
 
-_PATH = os.path.expanduser("~/.gorgon.audit.log")
+from shared.config import AUDIT_LOG_FILE
+
+_PATH = AUDIT_LOG_FILE
 
 
 def path() -> str:

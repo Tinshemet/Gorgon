@@ -27,7 +27,9 @@ from typing import Any, Dict, Optional, Tuple
 
 from cryptography.fernet import Fernet, InvalidToken
 
-_KEY_PATH   = os.path.expanduser("~/.gorgon.key")
+from shared.config import SIGNING_KEY_FILE
+
+_KEY_PATH   = SIGNING_KEY_FILE
 _FERNET_PFX = b"gAAAAA"          # every Fernet token starts with this (base64 of v0x80 + ts)
 
 

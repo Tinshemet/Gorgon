@@ -6,8 +6,6 @@ helper that turns a manager result dict into a formatted terminal panel
 or table.
 """
 
-import json
-import os
 from typing import Any, Dict, List
 
 from rich import box
@@ -20,12 +18,11 @@ from rich.table   import Table
 from rich.text    import Text
 from rich.theme   import Theme
 
-_CFG_PATH = os.path.join(os.path.dirname(__file__), "..", "orchestrator", "ai", "config.json")
-try:
-    _CFG  = json.load(open(_CFG_PATH))
-    THEME = Theme(_CFG["theme"])
-except (FileNotFoundError, KeyError):
-    THEME = Theme({})
+from shared.config import THEME as _THEME_MAP
+
+# The theme (a presentation concern) is owned by shared/config, not read out of
+# the orchestrator's config.json — display is its only consumer.
+THEME = Theme(_THEME_MAP)
 console = Console(theme=THEME)
 
 

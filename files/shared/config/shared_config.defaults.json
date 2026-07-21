@@ -1,0 +1,34 @@
+{
+  "agent_selection_file": "~/.gorgon.agent",
+  "default_agent": "doorman.grgn",
+  "agent_env_var": "GORGON_AGENT",
+
+  "audit_log_file": "~/.gorgon.audit.log",
+  "signing_key_file": "~/.gorgon.key",
+  "token_file": "~/.gorgon.token",
+
+  "server_host": "0.0.0.0",
+  "server_port": 8080,
+  "server_port_env_var": "GORGON_PORT",
+  "uvicorn_app": "orchestrator.http.api_server:app",
+  "server_log_level": "warning",
+  "server_log_path": "/tmp/gorgon-orchestrator.log",
+  "server_log_env_var": "GORGON_SERVER_LOG",
+  "pgrep_pattern": "api_server",
+  "startup_wait_s": 8.0,
+  "startup_poll_interval_s": 0.3,
+  "stop_timeout_s": 5.0,
+  "stop_poll_interval_s": 0.2,
+
+  "theme": {
+    "tool": "bold cyan",
+    "success": "bold green",
+    "error": "bold red",
+    "warn": "bold yellow",
+    "info": "dim cyan",
+    "ai": "bold white",
+    "user": "bold blue",
+    "dim": "dim white",
+    "header": "bold magenta"
+  }
+}
