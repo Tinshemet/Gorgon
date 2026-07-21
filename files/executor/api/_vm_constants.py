@@ -66,3 +66,42 @@ def infer_os_name(iso_path: "str | None", os_type: str) -> str:
                 return f"macos {kw}"
         return "macos"
     return os_type
+
+
+def infer_iso_os_type(iso_path: "str | None") -> str:
+    """Best-effort OS TYPE ('linux'/'windows'/'macos') implied by an ISO filename.
+
+    Unlike infer_os_name (which only scans keywords WITHIN a given os_type), this
+    scans every keyword set, so it can tell what an ISO looks like regardless of
+    what was declared. Same keyword data (config.json) — the single source of
+    truth for ISO classification. Returns '' when nothing matches.
+
+    Order matters: linux distros and macOS terms are checked before the Windows
+    set, whose short "win" keyword would otherwise match e.g. "darwin".
+    """
+    if not iso_path:
+        return ""
+    needle = os.path.basename(iso_path).lower()
+    if any(distro in needle for distro in _LINUX_DISTROS):
+        return "linux"
+    if any(kw in needle for kw in _MACOS_ISO_NAMES):
+        return "macos"
+    if any(kw in needle for kw in _WIN_ISO_NAMES):
+        return "windows"
+    return ""
+
+
+def iso_os_warning(iso_path: "str | None", os_type: str) -> str:
+    """Warn when an ISO's filename implies a different OS TYPE than declared.
+
+    Catches the cross-type mismatch infer_os_name can't (e.g. an Ubuntu ISO
+    attached to a VM declared ``windows``). Advisory only. Returns a message, or
+    '' when the ISO looks consistent with os_type (or can't be classified).
+    """
+    implied = infer_iso_os_type(iso_path)
+    if implied and os_type and implied != os_type:
+        pretty = infer_os_name(iso_path, implied)
+        return (f"ISO ({os.path.basename(iso_path)}) looks like {pretty} "
+                f"but OS declared as '{os_type}' — may be wrong. "
+                f"To fix: delete the VM and recreate, specifying the correct OS type.")
+    return ""

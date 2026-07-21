@@ -12,7 +12,7 @@ import uuid as _uuid
 from typing import Any, Dict, List
 
 from ._vm_constants import (
-    _MACOS_OVMF, _WIN_OVMF, VM_BASE_DIR, TEMPLATES_DIR, TEMPLATE_LABEL, infer_os_name,
+    _MACOS_OVMF, _WIN_OVMF, VM_BASE_DIR, TEMPLATES_DIR, TEMPLATE_LABEL, infer_os_name, iso_os_warning,
 )
 from .qemu_config import DiskConfig, MachineConfig, NetworkConfig, OVMF, apply_os_hints
 from .qemu_arg_builder import SPICE_PORT_START, VNC_PORT_START, next_free_port, build_iso_search_dirs
@@ -323,6 +323,12 @@ class _VmLifecycleMixin:
             "os_name":  config.os_name,
             "message":  _message,
         }
+        # Advisory: does the ISO filename imply a different OS type than declared?
+        # Detected here (where the ISO/OS keyword data lives) so the client stays
+        # pure presentation — it just renders this field.
+        _iso_warning = iso_os_warning(config.iso_path, config.os_type)
+        if _iso_warning:
+            result["iso_os_warning"] = _iso_warning
         if renamed_username:
             result["renamed_username"] = renamed_username
         if new_root_password:
