@@ -126,7 +126,7 @@ class ExecuteRequest(BaseModel):
     verbose:   bool           = False
 
 
-from shared.executioner.tool_executor import dispatch_tool as _dispatch_tool  # noqa: E402
+from executor.tool_dispatch.tool_executor import dispatch_tool as _dispatch_tool  # noqa: E402
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────

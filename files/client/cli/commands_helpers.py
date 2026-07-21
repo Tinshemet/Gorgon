@@ -20,7 +20,7 @@ except ImportError:
     from rich.console import Console
     console = Console()
 try:
-    from shared.executioner.tool_executor import manager
+    from executor.tool_dispatch.tool_executor import manager
 except ImportError:
     manager = None                                                            # type: ignore[assignment]
 

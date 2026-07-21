@@ -667,7 +667,7 @@ def _manager_proxy() -> object:
     """
     from orchestrator.executor_client import API_URL, execute_tool as _exec
     if not API_URL or API_URL == "local":
-        from shared.executioner.tool_executor import manager as _real_manager
+        from executor.tool_dispatch.tool_executor import manager as _real_manager
         class _LocalProxy:
             def list_vms(self, *a, **k) -> list:
                 """Filter the real manager's list_vms() by _ALLOWED_VMS."""

@@ -193,12 +193,12 @@ STEP 7 — PIPELINE (local mode only)  [orchestrator/pipeline.py → execute_too
     create_vm/create_profile/clone_vm/create_network): manager.list_vms() is
     fetched and _resolve_vm_name() fuzzy-matches (exact / 1-based index /
     substring) the raw name to a real one
-  - Dispatches to shared/executioner/tool_executor.py's _run(), passing in
+  - Dispatches to executor/tool_dispatch/tool_executor.py's _run(), passing in
     the real preflight_check/resolve_iso/placeholder_vm_names implementations
     (this is the same _run() the executor's standalone dispatch_tool() calls
     with no-op stubs instead — see SPLIT MODE)
 
-STEP 8 — TOOL DISPATCH  [shared/executioner/tool_executor.py → _run()]
+STEP 8 — TOOL DISPATCH  [executor/tool_dispatch/tool_executor.py → _run()]
   The dispatch switch handles every tool name:
   - create_vm → _execute_create_vm() builds a MachineConfig (profile
     matching/application, stealth persona assignment, SMBIOS/disk/network
@@ -285,7 +285,7 @@ On the executor machine, executor/server.py receives it:
      "token" field, in that precedence order)
   2. Validates tool_name against _KNOWN_TOOLS (a fixed set mirroring
      tool_executor.py's dispatch table)
-  3. Calls shared/executioner/tool_executor.py's dispatch_tool(), which calls
+  3. Calls executor/tool_dispatch/tool_executor.py's dispatch_tool(), which calls
      the SAME _run() dispatch function as the local-mode pipeline path, but
      wired with no-op stubs instead of real ones:
        preflight_check    → always returns {"action": "ok"} (a no-op)
@@ -337,7 +337,7 @@ reach the user differs (terminal prompt vs. HTTP needs_input round-trip).
 
 When "gorgon <cmd> [args]" is run with a non-empty argv, client_wrapper.py
 calls client/cli/commands/'s run() instead of the chat TUI. This dispatches
-straight to shared.executioner.tool_executor.manager (a QemuManager instance)
+straight to executor.tool_dispatch.tool_executor.manager (a QemuManager instance)
 for commands like list/status/launch/stop/config/resize/clone/snapshot/
 delete/network/profiles/templates/system/isos/show-cmd/setup-done/fetch/
 bundle — no Ollama, no sanitizer, no preflight, no HTTP call to the
@@ -484,7 +484,7 @@ executor, e.g. http://executor-host:8001.
 ────────────────────────────────────────────────────────────────────────────────
 
 After any reversible operation (create_vm, launch_vm, stop_vm, snapshot_create,
-etc.), shared/executioner/tool_executor.py's _run() stores the inverse action
+etc.), executor/tool_dispatch/tool_executor.py's _run() stores the inverse action
 in the module-level _last_revert_action:
   {"tool": "delete_vm", "args": {"name":"gaming-rig"}, "description":"undo create_vm 'gaming-rig'"}
 

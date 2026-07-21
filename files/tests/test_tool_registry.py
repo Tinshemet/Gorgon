@@ -34,9 +34,10 @@ def check(label, cond):
 
 def main():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    dispatched = set(re.findall(
-        r'tool_name == "([^"]+)"',
-        open(os.path.join(root, "shared/executioner/tool_executor.py")).read()))
+    # The dispatch table is the auto-registered tool handlers (one per file under
+    # executor/tool_dispatch/tools/); its keys are the tools that actually dispatch.
+    from executor.tool_dispatch.tools import _REGISTRY as _TOOL_REGISTRY
+    dispatched = set(_TOOL_REGISTRY.keys())
 
     print("registry ↔ dispatch (the drift guard)")
     check("every dispatched tool is in the registry", not (dispatched - set(KNOWN_TOOLS)))
@@ -46,7 +47,7 @@ def main():
     print("\nconsumers DERIVE from the registry (same object, not a copy)")
     import executor.server as srv
     import orchestrator.executor_client as ec
-    import shared.executioner.tool_executor as te
+    import executor.tool_dispatch.tool_executor as te
     import orchestrator.ai.active_library as al
     check("server _KNOWN_TOOLS is the registry set", srv._KNOWN_TOOLS is KNOWN_TOOLS)
     check("executor_client _VM_TOOLS is the registry set", ec._VM_TOOLS is VM_SCOPED_TOOLS)

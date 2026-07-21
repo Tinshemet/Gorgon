@@ -20,7 +20,7 @@ from rich.console import Console
 from rich.table import Table
 from rich import box
 
-from shared.executioner.tool_executor import dispatch_tool
+from executor.tool_dispatch.tool_executor import dispatch_tool
 
 console = Console()
 

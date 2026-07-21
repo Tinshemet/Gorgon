@@ -2,7 +2,7 @@
 commands — the direct QEMU CLI (client-local), one class per sub-command.
 
 Dispatches `gorgon <cmd>` directly to the local QEMU engine (via
-shared.executioner.tool_executor) or to the configured server when QEMU isn't
+executor.tool_dispatch.tool_executor) or to the configured server when QEMU isn't
 installed locally. No AI involved.
 
 Each command is a Command subclass in its own module here, auto-registered via

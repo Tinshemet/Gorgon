@@ -24,7 +24,7 @@ from .session import get_loop_max
 from .chat_turn import _is_critical
 from .contract import resolve_tier, confirm_meta, FLEET_CONFIRM_ACTIONS
 try:
-    from shared.executioner.tool_executor import manager
+    from executor.tool_dispatch.tool_executor import manager
 except ImportError:
     manager = None                                                            # type: ignore[assignment]
 

@@ -502,7 +502,7 @@ PURPOSE
   executor in-process, or make an HTTP call to a remote executor.server
   instance. Everything above it is orchestrator/AI code; everything below it
   is executor code. The AI layer and the CLI import execute_tool only from
-  here — never from shared.executioner.tool_executor or orchestrator.pipeline
+  here — never from executor.tool_dispatch.tool_executor or orchestrator.pipeline
   directly.
 
 MODULE-LEVEL STATE (initialised at import time from connection_config.json)
@@ -574,7 +574,7 @@ PURPOSE
   The full-pipeline execute_tool() entry point: sanitise -> gate -> VM-name
   resolution -> dispatch. Used in local mode (single-machine) and, via
   executor_client, by the AI/CLI layer in every mode. The actual tool
-  dispatch runs in shared.executioner.tool_executor._run() — this module
+  dispatch runs in executor.tool_dispatch.tool_executor._run() — this module
   owns only the orchestrator-side concerns that precede it.
 
 FUNCTION: execute_tool(tool_name, args, verbose=False, skip_gate=False) -> dict
@@ -587,7 +587,7 @@ FUNCTION: execute_tool(tool_name, args, verbose=False, skip_gate=False) -> dict
   sanitizer._resolve_vm_name() for every tool except _NAME_SKIP
   ({"create_vm","create_profile","clone_vm","create_network"} — tools that
   create a NEW name rather than reference an existing one). Then calls
-  shared.executioner.tool_executor._run() with the sanitiser/preflight
+  executor.tool_dispatch.tool_executor._run() with the sanitiser/preflight
   callables and PLACEHOLDER_VM_NAMES injected as keyword arguments.
 
 ────────────────────────────────────────────────────────────────────────────────
@@ -914,7 +914,7 @@ PURPOSE
   The executor's own standalone FastAPI HTTP service. Receives already-
   validated tool calls from the orchestrator over HTTP and executes them
   against the local QEMU engine directly via
-  shared.executioner.tool_executor.dispatch_tool() — no AI, no NLU, no
+  executor.tool_dispatch.tool_executor.dispatch_tool() — no AI, no NLU, no
   sanitiser/gate/preflight (the orchestrator already ran those before the
   call reached here). This is what makes the executor able to run as its
   own separate machine/process from the orchestrator.
@@ -1035,7 +1035,7 @@ PURPOSE
   The public QemuManager class. Inherits all VM logic from six mixin
   classes. Owns ~/.qemu_vms/, the process/state dictionaries, and the
   isolated-network manager. Every tool call in
-  shared.executioner.tool_executor._run() ultimately calls a method on the
+  executor.tool_dispatch.tool_executor._run() ultimately calls a method on the
   single process-wide `manager = QemuManager()` instance.
 
 STRUCTURE
@@ -2040,7 +2040,7 @@ client/cli/commands/  (package)
 ────────────────────────────────────────────────────────────────────────────────
 PURPOSE
   Direct local QEMU commands — no AI, no chat loop. Dispatches sub-commands
-  straight to the local QemuManager (shared.executioner.tool_executor.manager)
+  straight to the local QemuManager (executor.tool_dispatch.tool_executor.manager)
   when QEMU is installed on this machine; falls back to a friendly "install
   QEMU or use AI chat" message (via commands_helpers._require_manager())
   otherwise. Some commands (launch, when a VM exists both locally and on a
@@ -2198,7 +2198,7 @@ FUNCTION: render_terminal_panel(catalog, allowed_tools=None, order=None) -> str
   characters escaped so args like "[vm|all]" render literally.
 
 ────────────────────────────────────────────────────────────────────────────────
-shared/executioner/tool_executor.py
+executor/tool_dispatch/tool_executor.py
 ────────────────────────────────────────────────────────────────────────────────
 PURPOSE
   The executor-side tool dispatch layer. Owns the process-wide QemuManager
@@ -2212,7 +2212,7 @@ PURPOSE
 MODULE-LEVEL STATE
   _CFG/_VM_DEFS/_TOOL_DEFS/_VALID_MACHINE_TYPES/_ARM_CPU_PREFIXES/
   _GENERIC_OS_NAMES/_ISO_ARM_KEYWORDS/_ISO_X86_KEYWORDS — from
-  shared/executioner/config.json
+  executor/tool_dispatch/config.json
   manager — the single QemuManager() instance, constructed at import time
   _last_revert_action — {"tool","args","description"} of the last reversible
     op, or {}
@@ -2289,13 +2289,13 @@ FUNCTION: _set_revert(tool, args, description) / _clear_revert()
   on success/irreversibility respectively.
 
 KEY HELPERS
-  See shared/executioner/stealth_persona.py for the extracted stealth
+  See executor/tool_dispatch/stealth_persona.py for the extracted stealth
   fingerprint-data generators this module imports (_plausible_bios_version,
   _apply_within_model_variance, _generate_disk_model, _pick_stealth_persona,
   _generate_stealth_serial).
 
 ────────────────────────────────────────────────────────────────────────────────
-shared/executioner/stealth_persona.py
+executor/tool_dispatch/stealth_persona.py
 ────────────────────────────────────────────────────────────────────────────────
 PURPOSE
   Pure helpers that manufacture believable hardware-identity values for a

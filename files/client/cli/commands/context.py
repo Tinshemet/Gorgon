@@ -88,7 +88,7 @@ except ImportError:
         return {}
 
 try:
-    from shared.executioner.tool_executor import manager
+    from executor.tool_dispatch.tool_executor import manager
 except ImportError:
     manager = None
 

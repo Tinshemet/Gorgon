@@ -1,5 +1,5 @@
 """
-executioner/config — the executor tool layer's config (loader + config.json).
+tool_dispatch/config — the executor tool layer's config (loader + config.json).
 
 Parses config.json once and exposes each value as a named constant, so the
 tool handlers refer to config.VM_DEFS / config.VM_BASE rather than re-parsing or

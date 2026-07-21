@@ -218,7 +218,7 @@ Every request passes through five protection layers before QEMU sees it:
                                 profile vs host capability check
       │
       ▼
-  execute_tool()                shared/executioner/tool_executor.py
+  execute_tool()                executor/tool_dispatch/tool_executor.py
   Hard guards: arch mismatch, name validation,
   Windows UEFI enforcement, clarify responses
       │
@@ -291,7 +291,7 @@ SECTION 3 — SINGLE-MACHINE MODE vs SPLIT MODE
   │    ↓ args cleaned and normalised                            │
   │  orchestrator/preflight/validator.py  (_preflight_check)    │
   │    ↓ full state check (real VM existence, real disk)        │
-  │  shared/executioner/tool_executor.py  (execute_tool)       │
+  │  executor/tool_dispatch/tool_executor.py  (execute_tool)       │
   │    ↓ hard guards, then dispatch                             │
   │  executor/api/qemu_manager.py  (QemuManager)                │
   │    → runs QEMU/KVM directly, in-process                     │

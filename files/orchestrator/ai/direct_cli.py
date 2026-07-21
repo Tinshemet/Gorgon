@@ -36,7 +36,7 @@ from shared.display import (
     render_system, render_vm_list,
 )
 try:
-    from shared.executioner.tool_executor import manager
+    from executor.tool_dispatch.tool_executor import manager
 except ImportError:
     manager = None                                                            # type: ignore[assignment]
 

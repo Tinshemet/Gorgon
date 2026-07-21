@@ -17,7 +17,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from executor.api.qemu_config import MachineConfig
-from shared.executioner.tool_executor import manager
+from executor.tool_dispatch.tool_executor import manager
 from orchestrator.ai.active_library import ActiveLibrary
 
 _PASS = 0

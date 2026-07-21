@@ -27,7 +27,7 @@ KVM
   extensions (Intel VT-x or AMD-V). KVM is what makes VMs fast. It is not
   available on Windows (only Linux has it) and is limited or absent in some
   WSL2 configurations. Check with: ls /dev/kvm
-  Source: executor/api/qemu_manager.py, shared/executioner/config.json
+  Source: executor/api/qemu_manager.py, executor/tool_dispatch/config.json
 
 KVM acceleration
   When kvm=True in MachineConfig, QEMU is launched with -enable-kvm and
@@ -252,7 +252,7 @@ shared
 
 the seam
   Informal name for orchestrator/executor_client.py. Re-exports execute_tool from
-  shared/executioner/tool_executor. On the server the call is always local —
+  executor/tool_dispatch/tool_executor. On the server the call is always local —
   QEMU and AI are co-located. The variable API_URL exists for backward compat.
 
 local mode
@@ -444,7 +444,7 @@ execute_tool(tool_name, args, verbose, skip_gate)
   The main dispatch function in tool_executor.py. Sanitises args, runs the
   context gate, resolves VM names, and dispatches to QemuManager or the
   config layer. Also manages _last_revert_action.
-  Source: shared/executioner/tool_executor.py
+  Source: executor/tool_dispatch/tool_executor.py
 
 gate_check(tool_name, args)
   Checks whether required context arguments are present for the given tool.
@@ -466,13 +466,13 @@ revert action / _last_revert_action
   says "undo" or "revert", the AI calls the revert tool which executes this
   recipe. Only one level of undo is supported. Cleared by any unrelated
   tool call.
-  Source: shared/executioner/tool_executor.py → _set_revert(), _clear_revert()
+  Source: executor/tool_dispatch/tool_executor.py → _set_revert(), _clear_revert()
 
 _REVERT_AWARE_TOOLS
   The set of tools that manage _last_revert_action themselves (setting it on
   success or clearing it explicitly). These are excluded from the blanket
   clear that happens before unrelated tool calls.
-  Source: shared/executioner/tool_executor.py
+  Source: executor/tool_dispatch/tool_executor.py
 
 dry_run
   When dry_run=True is passed to launch_vm, the QEMU command is built and
@@ -571,7 +571,7 @@ OLLAMA_URL
   "http://localhost:11434". Only change if Ollama is running on another machine.
 
 allowed_remote_tools
-  A list in shared/executioner/config.json. Controls which tool names the
+  A list in executor/tool_dispatch/config.json. Controls which tool names the
   HTTP API accepts. If a tool_name is not in this list, the server returns
   HTTP 403 before running preflight. Example of what is excluded by default:
   send_monitor_cmd (raw QEMU monitor access).

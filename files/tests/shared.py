@@ -18,7 +18,7 @@ from rich.progress import track
 # Add files/ to sys.path so layer-module imports resolve correctly
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from shared.executioner.tool_executor import manager
+from executor.tool_dispatch.tool_executor import manager
 from orchestrator.pipeline import execute_tool
 from orchestrator.sanitizer.sanitizer import _sanitise_args, _resolve_iso
 from orchestrator.preflight.validator import (

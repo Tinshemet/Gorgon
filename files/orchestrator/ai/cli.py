@@ -30,7 +30,7 @@ from orchestrator.sanitizer.context_gate import _REQUIRED as _GATE_REQUIRED
 from orchestrator.sanitizer.sanitizer import OS_TYPE_ALIASES
 from orchestrator.executor_client import execute_tool, API_URL, _VERIFY
 try:
-    from shared.executioner.tool_executor import manager, _VM_DEFS
+    from executor.tool_dispatch.tool_executor import manager, _VM_DEFS
 except ImportError:
     manager = None                                                            # type: ignore[assignment]
     _VM_DEFS = {"disk_size_gb": 60, "network_mode": "nat", "disk_bus": "virtio"}

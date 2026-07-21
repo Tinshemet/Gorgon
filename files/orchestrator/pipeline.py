@@ -4,7 +4,7 @@ pipeline.py — Orchestrator execution pipeline.
 Sanitise → gate → name resolution → dispatch. This is the full-pipeline
 entry point used in local mode (single-machine) and by the AI/CLI layer
 in all modes. The actual tool dispatch runs in
-shared.executioner.tool_executor._run; this module owns only the
+executor.tool_dispatch.tool_executor._run; this module owns only the
 orchestrator-side concerns that precede it.
 """
 
@@ -16,7 +16,7 @@ from orchestrator.sanitizer.sanitizer import (
 )
 from orchestrator.sanitizer.context_gate import gate_check
 from orchestrator.preflight.validator import _preflight_check, _show_preflight_warning
-from shared.executioner.tool_executor import manager, _run
+from executor.tool_dispatch.tool_executor import manager, _run
 
 
 _NAME_SKIP = frozenset({"create_vm", "create_profile", "clone_vm", "create_network"})

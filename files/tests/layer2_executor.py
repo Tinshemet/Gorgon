@@ -5,7 +5,7 @@ tests/layer2_executor.py — Layer 2: Executor / preflight unit tests (no AI nee
 import io, os, contextlib, traceback, time, uuid, random
 from typing import List, Optional
 
-from shared.executioner.tool_executor import _clear_revert
+from executor.tool_dispatch.tool_executor import _clear_revert
 
 from .shared import (
     ExecutorTest, TestResult,

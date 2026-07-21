@@ -1,9 +1,9 @@
 """
-executioner/create_vm.py — the create_vm tool's build logic.
+tool_dispatch/create_vm.py — the create_vm tool's build logic.
 
 The one genuinely complex tool: name validation/overwrite, profile + stealth-
 persona application, SMBIOS/passthrough/unattended options, disk + network
-assembly, arch/ISO resolution, then manager.create_vm. Extracted from the tool
+assembly, arch/ISO resolution, then context.manager.create_vm. Extracted from the tool
 dispatch so that dispatch stays a thin routing table.
 """
 
@@ -11,13 +11,14 @@ import os
 import re
 from typing import Any, Callable, Dict
 
-from shared.executioner.context import (
-    manager, console, _set_revert,
+from executor.tool_dispatch import context
+from executor.tool_dispatch.context import (
+    console, _set_revert,
     MachineConfig, DiskConfig, NetworkConfig, apply_profile, get_all_profiles, register_label,
     _VM_BASE, _VM_DEFS, _VALID_MACHINE_TYPES, _ARM_CPU_PREFIXES, _GENERIC_OS_NAMES,
     _ISO_ARM_KEYWORDS, _ISO_X86_KEYWORDS, _IDENTITY_STOPWORDS,
 )
-from shared.executioner.stealth_persona import (
+from executor.tool_dispatch.stealth_persona import (
     _plausible_bios_version, _apply_within_model_variance,
     _generate_disk_model, _pick_stealth_persona, _generate_stealth_serial,
 )
@@ -29,7 +30,7 @@ def execute_create_vm(args: Dict[str, Any], verbose: bool, raw_os_type: str,
 
     Handles name validation/overwrite, profile + stealth-persona application,
     SMBIOS/passthrough/unattended options, disk + network assembly, arch/ISO
-    resolution, then calls manager.create_vm.
+    resolution, then calls context.manager.create_vm.
 
     Example::
         execute_create_vm({"name": "dev", "os_type": "linux"}, False, "",
@@ -53,7 +54,7 @@ def execute_create_vm(args: Dict[str, Any], verbose: bool, raw_os_type: str,
     if args.get("overwrite"):
         vm_dir = os.path.expanduser(f"{_VM_BASE}/{name}")
         if os.path.exists(vm_dir):
-            result = manager.delete_vm(name, delete_disks=True)
+            result = context.manager.delete_vm(name, delete_disks=True)
             if not result.get("success"):
                 return {"success": False, "error": f"Could not overwrite '{name}': {result.get('error')}"}
 
@@ -336,7 +337,7 @@ def execute_create_vm(args: Dict[str, Any], verbose: bool, raw_os_type: str,
             cfg.bios = "ovmf"
         cfg.uefi = True
 
-    result = manager.create_vm(cfg)
+    result = context.manager.create_vm(cfg)
     if not verbose:
         if result.get("success"):
             console.print(f"[green]✓ VM '{result['name']}' created at {result['vm_dir']}[/green]")
@@ -355,7 +356,7 @@ def execute_create_vm(args: Dict[str, Any], verbose: bool, raw_os_type: str,
             if result.get("hostname"):
                 console.print(f"[dim]  New hostname: {result['hostname']}[/dim]")
             if cfg.stealth:
-                manager.generate_guest_setup(name)
+                context.manager.generate_guest_setup(name)
                 console.print(
                     "[dim]  Stealth guest setup script ready"
                     " — will prompt automatically on first launch.[/dim]"

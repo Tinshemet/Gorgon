@@ -1,5 +1,5 @@
 """
-executioner/context.py — shared foundation for the executor tool layer.
+tool_dispatch/context.py — shared foundation for the executor tool layer.
 
 Owns the QemuManager singleton, the parsed config constants, the revert-tracking
 state, and the executor/display imports every tool handler needs. The tool
@@ -13,9 +13,9 @@ executor.server, the tests) read unchanged.
 
 from typing import Any, Dict
 
-from shared.executioner import config as _config
+from executor.tool_dispatch import config as _config
 
-# ── config constants (from executioner/config) ─────────────────────────────────
+# ── config constants (from tool_dispatch/config) ─────────────────────────────────
 _VM_BASE             = _config.VM_BASE
 _VM_DEFS             = _config.VM_DEFS
 _TOOL_DEFS           = _config.TOOL_DEFS

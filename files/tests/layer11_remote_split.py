@@ -815,7 +815,7 @@ def _t_execute_hidden_vm_indistinguishable_from_missing() -> List[str]:
     ]
 
     def _call(vm_name: str):
-        with patch("shared.executioner.tool_executor.manager") as mock_mgr, \
+        with patch("executor.tool_dispatch.context.manager") as mock_mgr, \
              patch("orchestrator.http.api_server._ALLOWED_VMS", ["allowed-vm"]), \
              patch("orchestrator.executor_client._ALLOWED_VMS", ["allowed-vm"]):
             mock_mgr.list_vms.return_value = fake_vms
@@ -962,7 +962,7 @@ def _t_sync_auth_wrong_token() -> List[str]:
 def _t_sync_valid_structure() -> List[str]:
     client, token = _make_test_client()
 
-    with patch("shared.executioner.tool_executor.manager") as mock_mgr, \
+    with patch("executor.tool_dispatch.context.manager") as mock_mgr, \
          patch("executor.api.qemu_config.list_profiles", return_value=[]):
         mock_mgr.list_vms.return_value = []
         resp = client.get("/sync", headers={"Authorization": f"Bearer {token}"})
@@ -992,7 +992,7 @@ def _t_sync_allowed_vms_filter() -> List[str]:
         {"name": "hidden-vm",  "status": "stopped"},
     ]
 
-    with patch("shared.executioner.tool_executor.manager") as mock_mgr, \
+    with patch("executor.tool_dispatch.context.manager") as mock_mgr, \
          patch("executor.api.qemu_config.list_profiles", return_value=[]), \
          patch("orchestrator.http.api_server._ALLOWED_VMS", ["allowed-vm"]):
         mock_mgr.list_vms.return_value = fake_vms
@@ -1018,7 +1018,7 @@ def _t_sync_empty_allowlist_returns_all() -> List[str]:
         {"name": "vm-b", "status": "stopped"},
     ]
 
-    with patch("shared.executioner.tool_executor.manager") as mock_mgr, \
+    with patch("executor.tool_dispatch.context.manager") as mock_mgr, \
          patch("executor.api.qemu_config.list_profiles", return_value=[]), \
          patch("orchestrator.http.api_server._ALLOWED_VMS", []):
         mock_mgr.list_vms.return_value = fake_vms
@@ -1238,7 +1238,7 @@ def _t_rotate_new_token_works() -> List[str]:
     if rot.status_code != 200:
         return [f"Rotation failed with {rot.status_code}, cannot test new-token access"]
     # New token must now be accepted
-    with patch("shared.executioner.tool_executor.manager") as mock_mgr, \
+    with patch("executor.tool_dispatch.context.manager") as mock_mgr, \
          patch("executor.api.qemu_config.list_profiles", return_value=[]):
         mock_mgr.list_vms.return_value = []
         resp = client.get("/sync", headers={"Authorization": f"Bearer {new_token}"})
@@ -1283,7 +1283,7 @@ def _t_operator_localhost_bypass_pre_bootstrap() -> List[str]:
         from fastapi.testclient import TestClient
         from orchestrator.http.api_server import app
         client = TestClient(app, raise_server_exceptions=False, client=("127.0.0.1", 12345))
-        with patch("shared.executioner.tool_executor.manager") as mock_mgr, \
+        with patch("executor.tool_dispatch.context.manager") as mock_mgr, \
              patch("executor.api.qemu_config.list_profiles", return_value=[]):
             mock_mgr.list_vms.return_value = []
             resp = client.get("/sync")
@@ -1333,7 +1333,7 @@ def _t_operator_login_success_session_works() -> List[str]:
             issues.append(f"Expected a session_token in /login response, got {login.json()!r}")
             return issues
 
-        with patch("shared.executioner.tool_executor.manager") as mock_mgr, \
+        with patch("executor.tool_dispatch.context.manager") as mock_mgr, \
              patch("executor.api.qemu_config.list_profiles", return_value=[]):
             mock_mgr.list_vms.return_value = []
             resp = client.get("/sync", headers={"Authorization": f"Bearer {token}"})
@@ -1354,7 +1354,7 @@ def _t_operator_session_cookie_works() -> List[str]:
         if "gorgon_session" not in login.cookies:
             issues.append("Expected /login to set a gorgon_session cookie")
             return issues
-        with patch("shared.executioner.tool_executor.manager") as mock_mgr, \
+        with patch("executor.tool_dispatch.context.manager") as mock_mgr, \
              patch("executor.api.qemu_config.list_profiles", return_value=[]):
             mock_mgr.list_vms.return_value = []
             resp = client.get("/sync")  # TestClient carries the cookie automatically
@@ -1371,7 +1371,7 @@ def _t_operator_api_token_unaffected() -> List[str]:
         from orchestrator.auth import store as op_store
         op_store.create_operator("admin", "correct-horse-battery")
         client, token = _make_test_client()
-        with patch("shared.executioner.tool_executor.manager") as mock_mgr, \
+        with patch("executor.tool_dispatch.context.manager") as mock_mgr, \
              patch("executor.api.qemu_config.list_profiles", return_value=[]):
             mock_mgr.list_vms.return_value = []
             resp = client.get("/sync", headers={"Authorization": f"Bearer {token}"})
@@ -1463,7 +1463,7 @@ def _t_operator_token_insufficient_on_chat_and_execute() -> List[str]:
 
         # Sanity check: the SAME token still works on an unrelated endpoint
         # that wasn't tightened (_require_auth, not _require_operator_auth).
-        with patch("shared.executioner.tool_executor.manager") as mock_mgr, \
+        with patch("executor.tool_dispatch.context.manager") as mock_mgr, \
              patch("executor.api.qemu_config.list_profiles", return_value=[]):
             mock_mgr.list_vms.return_value = []
             resp = client.get("/sync", headers={"Authorization": f"Bearer {token}"})

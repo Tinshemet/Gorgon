@@ -372,7 +372,7 @@ The 50 tests cover:
     display=sdl + vnc_bind_local=False → both overridden by server
 
   E. executor_client re-export (1 test)
-    orchestrator.executor_client.execute_tool is shared.executioner.tool_executor.execute_tool
+    orchestrator.executor_client.execute_tool is executor.tool_dispatch.tool_executor.execute_tool
 
   F. /sync endpoint (5 tests)
     Missing auth → 401/403

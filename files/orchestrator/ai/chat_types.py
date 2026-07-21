@@ -25,7 +25,7 @@ from .contract import is_critical as contract_is_critical
 
 _MC = {"os_type": "linux", "cpu_cores": 2, "memory_mb": 2048, "machine_type": "q35", "uefi": False}
 try:
-    from shared.executioner.tool_executor import _VM_DEFS
+    from executor.tool_dispatch.tool_executor import _VM_DEFS
 except ImportError:
     _VM_DEFS = {"disk_size_gb": 60, "network_mode": "nat", "disk_bus": "virtio"}
 

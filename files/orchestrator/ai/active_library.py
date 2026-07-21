@@ -33,7 +33,7 @@ from typing import Any, Dict, List, Optional, Set
 def _local_manager():
     """The in-process QEMU manager (local mode). None if unavailable."""
     try:
-        from shared.executioner.tool_executor import manager
+        from executor.tool_dispatch.tool_executor import manager
         return manager
     except Exception:
         return None

@@ -1203,7 +1203,7 @@ arrays used by check_profile_compatibility to accept a range of "close
 enough" hardware rather than an exact match.
 
 ────────────────────────────────────────────────────────────────────────────────
-12. shared/executioner/config.json  (read by shared/executioner/tool_executor.py)
+12. executor/tool_dispatch/config.json  (read by executor/tool_dispatch/tool_executor.py)
 ────────────────────────────────────────────────────────────────────────────────
 
 {
