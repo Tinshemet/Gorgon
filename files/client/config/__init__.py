@@ -46,8 +46,12 @@ TIMEOUT = int(os.environ.get("API_TIMEOUT", _CONN["timeout"]))
 CA_CERT = os.environ.get("API_CA_CERT", _CONN.get("ca_cert") or None)
 VERIFY  = False if os.environ.get("API_VERIFY_SSL", "1") == "0" else (CA_CERT or _CONN["verify_ssl"])
 HEADERS = {"Authorization": f"Bearer {TOKEN}"} if TOKEN else {}
-VNC_VIEWERS = _CONN["vnc_viewer_candidates"]
-IO_CHUNK    = _CONN["io_chunk_bytes"]
+HEALTH_TIMEOUT_S     = _CONN["health_timeout_s"]
+REQUEST_TIMEOUT_S    = _CONN["request_timeout_s"]
+IMAGE_META_TIMEOUT_S = _CONN["image_meta_timeout_s"]
+DEFAULT_PORT = _CONN["default_port"]
+VNC_VIEWERS  = _CONN["vnc_viewer_candidates"]
+IO_CHUNK     = _CONN["io_chunk_bytes"]
 
 # ── appearance / behaviour ──────────────────────────────────────────────────────
 TEXT_COLOR                = _UI["text_color"]
@@ -60,6 +64,10 @@ STARTUP_DELAY_S           = _UI["startup_delay_s"]
 AUTOSTART_POLL_COUNT      = _UI["autostart_poll_count"]
 AUTOSTART_POLL_INTERVAL_S = _UI["autostart_poll_interval_s"]
 LOG_PATH                  = _UI["log_path"]
+TOKEN_FILE                = _UI["token_file"]
+SESSION_FILE              = _UI["session_file"]
+VM_BASE_DIR               = _UI["vm_base_dir"]
+DEFAULT_VNC_PORT          = _UI["default_vnc_port"]
 
 # ── server autostart ────────────────────────────────────────────────────────────
 SPAWN_HOST      = _UI["spawn_host"]

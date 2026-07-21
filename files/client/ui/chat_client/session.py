@@ -2,7 +2,9 @@
 
 import os
 
-_SESSION_FILE = os.path.expanduser("~/.qemu_vms/.chat_session_id")
+from client import config as _cfg
+
+_SESSION_FILE = os.path.expanduser(_cfg.SESSION_FILE)
 
 
 def load_session_id() -> str:

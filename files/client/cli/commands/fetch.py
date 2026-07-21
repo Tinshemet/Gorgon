@@ -4,6 +4,7 @@ import os
 
 import requests
 
+from client import config as _cfg
 from client.cli.commands.base import Command
 from client.cli.commands.context import _HEADERS, _IO_CHUNK, _SERVER, _TIMEOUT, _VERIFY, console
 
@@ -20,7 +21,7 @@ class FetchCommand(Command):
         try:
             meta = requests.get(
                 f"{_SERVER}/images/{vm_name}/sha256",
-                headers=_HEADERS, timeout=60, verify=_VERIFY,
+                headers=_HEADERS, timeout=_cfg.IMAGE_META_TIMEOUT_S, verify=_VERIFY,
             )
             if not meta.ok:
                 console.print(f"[bold red]Server error {meta.status_code}:[/bold red] {meta.text}")

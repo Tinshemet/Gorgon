@@ -2,6 +2,7 @@
 
 import requests
 
+from client import config as _cfg
 from client.cli.commands.base import Command
 from client.cli.commands.context import (
     _HEADERS, _require_manager, _SERVER, _show_stealth_popup, _TIMEOUT, _TOKEN,
@@ -25,7 +26,7 @@ class LaunchCommand(Command):
             try:
                 resp = requests.post(f"{_SERVER}/execute", headers=_HEADERS,
                                      json={"tool_name": "list_vms", "args": {}},
-                                     timeout=10, verify=_VERIFY)
+                                     timeout=_cfg.REQUEST_TIMEOUT_S, verify=_VERIFY)
                 if resp.ok:
                     remote_result = resp.json().get("result", [])
                     remote_vms = remote_result if isinstance(remote_result, list) else remote_result.get("vms", [])
@@ -56,10 +57,9 @@ class LaunchCommand(Command):
         style = "success" if r.get("success") else "error"
         console.print(f"[{style}]{r.get('message', r.get('error', ''))}[/{style}]")
         if r.get("display") == "vnc" and (r.get("success") or r.get("already_running")):
-            port = r.get("vnc_port", 5900)
+            port = r.get("vnc_port", _cfg.DEFAULT_VNC_PORT)
             opened = None
-            _fallback = ("vncviewer", "tigervncviewer", "xtigervncviewer", "gvncviewer", "vinagre")
-            for _viewer in (_VNC_VIEWERS or _fallback):
+            for _viewer in _VNC_VIEWERS:
                 try:
                     import subprocess as _sp
                     _sp.Popen([_viewer, f"localhost:{port}"], stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)

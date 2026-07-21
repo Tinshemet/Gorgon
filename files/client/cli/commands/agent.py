@@ -4,6 +4,7 @@ import os
 
 import requests
 
+from client import config as _cfg
 from client.cli.commands.base import Command
 from client.cli.commands.context import (
     _auth_sessions, _HEADERS, _require_operator_password, _SERVER, _VERIFY, console,
@@ -115,7 +116,7 @@ class AgentCommand(Command):
                 # Surface any load-time drift for the freshly-loaded agent.
                 try:
                     _info = requests.get(f"{_SERVER}/info", headers=_HEADERS,
-                                         timeout=10, verify=_VERIFY).json()
+                                         timeout=_cfg.REQUEST_TIMEOUT_S, verify=_VERIFY).json()
                     for _w in _info.get("agent_warnings", []):
                         console.print(f"[yellow]  ⚠ {_w}[/yellow]")
                 except Exception:
@@ -123,7 +124,7 @@ class AgentCommand(Command):
                 console.print("[dim]Reopen the CLI in a few seconds to reconnect.[/dim]")
             else:
                 console.print("[bold red]✖ Server did not come back up — check "
-                              f"{os.environ.get('GORGON_SERVER_LOG', '/tmp/gorgon-orchestrator.log')}.[/bold red]")
+                              f"{os.environ.get('GORGON_SERVER_LOG', _cfg.LOG_PATH)}.[/bold red]")
                 console.print("[dim]The selection is saved; start the server manually to apply it.[/dim]")
         elif sub not in ("load", "reset"):
             f = sub

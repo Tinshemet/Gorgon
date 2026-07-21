@@ -106,7 +106,7 @@ def render_tool_result(tool: str, result: dict) -> None:
 
     elif tool == "launch_vm":
         if result.get("success") or result.get("already_running"):
-            port   = result.get("vnc_port", 5900)
+            port   = result.get("vnc_port", _cfg.DEFAULT_VNC_PORT)
             host   = _vnc_host()
             viewer = _try_open_vnc(port)
             msg    = f"  ✓ VNC: {host}:{port}"

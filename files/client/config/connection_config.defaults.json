@@ -4,6 +4,10 @@
   "ca_cert":               null,
   "verify_ssl":            true,
   "timeout":               120,
-  "vnc_viewer_candidates": ["vncviewer", "tigervnc", "xtigervncviewer", "gvncviewer"],
+  "health_timeout_s":      2,
+  "request_timeout_s":     10,
+  "image_meta_timeout_s":  60,
+  "default_port":          8080,
+  "vnc_viewer_candidates": ["vncviewer", "tigervnc", "tigervncviewer", "xtigervncviewer", "gvncviewer", "vinagre"],
   "io_chunk_bytes":        4194304
 }

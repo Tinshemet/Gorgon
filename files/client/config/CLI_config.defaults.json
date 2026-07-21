@@ -9,6 +9,10 @@
   "autostart_poll_count":    20,
   "autostart_poll_interval_s": 0.5,
   "log_path":                "/tmp/gorgon-orchestrator.log",
+  "token_file":              "~/.gorgon.token",
+  "session_file":            "~/.qemu_vms/.chat_session_id",
+  "vm_base_dir":             "~/.qemu_vms",
+  "default_vnc_port":        5900,
 
   "spawn_host":              "0.0.0.0",
   "spawn_log_level":         "warning",

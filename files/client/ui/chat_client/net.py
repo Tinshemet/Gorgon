@@ -2,6 +2,7 @@
 
 import requests
 
+from client import config as _cfg
 from client.ui.chat_client import state
 from client.ui.chat_client.conn import SERVER_URL, _HEADERS, _TIMEOUT, _VERIFY
 
@@ -71,7 +72,7 @@ def is_localhost() -> bool:
 def server_reachable() -> bool:
     """Return True if the server's /health endpoint answers."""
     try:
-        r = requests.get(f"{SERVER_URL}/health", timeout=2, verify=_VERIFY)
+        r = requests.get(f"{SERVER_URL}/health", timeout=_cfg.HEALTH_TIMEOUT_S, verify=_VERIFY)
         return r.ok
     except Exception:
         return False
@@ -81,7 +82,7 @@ def sync_from_server() -> bool:
     """Refresh the cached remote VM/profile lists from the server; return success."""
     try:
         resp = requests.get(f"{SERVER_URL}/sync",
-                            headers=_HEADERS, timeout=10, verify=_VERIFY)
+                            headers=_HEADERS, timeout=_cfg.REQUEST_TIMEOUT_S, verify=_VERIFY)
         if not resp.ok:
             return False
         data = resp.json()

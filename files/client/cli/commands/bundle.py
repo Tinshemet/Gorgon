@@ -4,6 +4,7 @@ import os
 
 import requests
 
+from client import config as _cfg
 from client.cli.commands.base import Command
 from client.cli.commands.context import _HEADERS, _IO_CHUNK, _SERVER, _TIMEOUT, _VERIFY, console
 
@@ -14,7 +15,7 @@ class BundleCommand(Command):
 
     def run(self, cmd, rest, verbose):
         vm_name = rest[0]
-        dest_dir = os.path.expanduser(rest[1]) if len(rest) > 1 else os.path.expanduser("~/.qemu_vms")
+        dest_dir = os.path.expanduser(rest[1]) if len(rest) > 1 else os.path.expanduser(_cfg.VM_BASE_DIR)
         dest_file = os.path.join(dest_dir, f"{vm_name}.tar.gz")
 
         console.print(f"  Fetching VM bundle [bold]{vm_name}[/bold] → [dim]{dest_file}[/dim]")

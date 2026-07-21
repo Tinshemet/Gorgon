@@ -5,6 +5,7 @@ import uuid
 import curses
 import requests
 
+from client import config as _cfg
 from client.ui.chat_client import state
 from client.ui.chat_client.colors import cp as _cp, C_DIM, C_GREEN, C_YELLOW
 from client.ui.chat_client.conn import SERVER_URL, _HEADERS, _VERIFY
@@ -27,7 +28,7 @@ def dispatch(cmd: str, verbose: bool) -> bool:
     if low in state.sc_clear:
         try:
             requests.delete(f"{SERVER_URL}/sessions/{state.session_id}",
-                            headers=_HEADERS, timeout=10, verify=_VERIFY)
+                            headers=_HEADERS, timeout=_cfg.REQUEST_TIMEOUT_S, verify=_VERIFY)
         except Exception:
             pass  # best-effort server-side session clear — ignore network errors
         state.session_id = str(uuid.uuid4())

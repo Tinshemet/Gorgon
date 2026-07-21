@@ -2,6 +2,7 @@
 
 from typing import Optional
 
+from client import config as _cfg
 from client.ui.chat_client.conn import SERVER_URL
 
 
@@ -17,7 +18,7 @@ def try_open_vnc(port: int) -> Optional[str]:
     """Try each configured VNC viewer; return the one that launched, or None."""
     import subprocess as _sp
     host = vnc_host()
-    for viewer in ("vncviewer", "tigervncviewer", "xtigervncviewer", "gvncviewer", "vinagre"):
+    for viewer in _cfg.VNC_VIEWERS:
         try:
             _sp.Popen([viewer, f"{host}:{port}"],
                       stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)

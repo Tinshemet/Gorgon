@@ -19,12 +19,12 @@ def autostart_server(stdscr: "curses.window") -> bool:
         return False
 
     from urllib.parse import urlparse
-    port = urlparse(SERVER_URL).port or 8080
+    port = urlparse(SERVER_URL).port or _cfg.DEFAULT_PORT
 
     env = os.environ.copy()
     env["PYTHONPATH"] = _files_dir
     try:
-        token = open(os.path.expanduser("~/.gorgon.token")).read().strip()
+        token = open(os.path.expanduser(_cfg.TOKEN_FILE)).read().strip()
         env["API_TOKEN"] = token
     except Exception:
         pass  # no token file — run without an API token (orchestrator may allow it)

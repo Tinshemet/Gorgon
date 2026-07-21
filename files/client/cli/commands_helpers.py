@@ -106,7 +106,7 @@ def fingerprint_report(vm_name: str) -> None:
 def clear_session_flag() -> None:
     """-cs — clear the saved chat session before starting (local file; server
     session is naturally abandoned since a fresh session_id will be generated)."""
-    session_file = os.path.expanduser("~/.qemu_vms/.chat_session_id")
+    session_file = os.path.expanduser(_cfg.SESSION_FILE)
     if os.path.exists(session_file):
         os.remove(session_file)
     console.print("[dim]Session cleared.[/dim]")
