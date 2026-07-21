@@ -1,10 +1,32 @@
 {
   "text_color":              "#aaaaaa",
   "font_size":               13,
+  "font_family":             "Monospace",
   "wrap_width":              120,
   "terminal_rows":           44,
   "terminal_cols":           200,
+  "startup_delay_s":         0.12,
   "autostart_poll_count":    20,
   "autostart_poll_interval_s": 0.5,
-  "log_path":                "/tmp/gorgon-orchestrator.log"
+  "log_path":                "/tmp/gorgon-orchestrator.log",
+
+  "spawn_host":              "0.0.0.0",
+  "spawn_log_level":         "warning",
+  "uvicorn_app":             "orchestrator.http.api_server:app",
+
+  "color_header_fg":         "WHITE",
+  "color_header_bg":         "BLUE",
+  "color_cyan":              "CYAN",
+  "color_green":             "GREEN",
+  "color_red":               "RED",
+  "color_yellow":            "YELLOW",
+  "color_bold":              "WHITE",
+  "custom_color_slot":       16,
+  "dim_fallback_slot":       8,
+  "color_fallback_rgb":      [667, 667, 667],
+
+  "glyph_running":           "● ",
+  "glyph_stopped":           "○ ",
+  "spinner_frames":          "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏",
+  "hint_line":               "  list  system  profiles  templates  drift  /clear  help  q=quit"
 }

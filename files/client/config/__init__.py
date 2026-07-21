@@ -52,9 +52,34 @@ IO_CHUNK    = _CONN["io_chunk_bytes"]
 # ── appearance / behaviour ──────────────────────────────────────────────────────
 TEXT_COLOR                = _UI["text_color"]
 FONT_SIZE                 = int(_UI["font_size"])
+FONT_FAMILY               = _UI["font_family"]
 WRAP_WIDTH                = _UI["wrap_width"]
 TERM_ROWS                 = _UI["terminal_rows"]
 TERM_COLS                 = _UI["terminal_cols"]
+STARTUP_DELAY_S           = _UI["startup_delay_s"]
 AUTOSTART_POLL_COUNT      = _UI["autostart_poll_count"]
 AUTOSTART_POLL_INTERVAL_S = _UI["autostart_poll_interval_s"]
 LOG_PATH                  = _UI["log_path"]
+
+# ── server autostart ────────────────────────────────────────────────────────────
+SPAWN_HOST      = _UI["spawn_host"]
+SPAWN_LOG_LEVEL = _UI["spawn_log_level"]
+UVICORN_APP     = _UI["uvicorn_app"]
+
+# ── colours ─────────────────────────────────────────────────────────────────────
+COLOR_HEADER_FG    = _UI["color_header_fg"]
+COLOR_HEADER_BG    = _UI["color_header_bg"]
+COLOR_CYAN         = _UI["color_cyan"]
+COLOR_GREEN        = _UI["color_green"]
+COLOR_RED          = _UI["color_red"]
+COLOR_YELLOW       = _UI["color_yellow"]
+COLOR_BOLD         = _UI["color_bold"]
+CUSTOM_COLOR_SLOT  = _UI["custom_color_slot"]
+DIM_FALLBACK_SLOT  = _UI["dim_fallback_slot"]
+COLOR_FALLBACK_RGB = tuple(_UI["color_fallback_rgb"])
+
+# ── UI strings ──────────────────────────────────────────────────────────────────
+GLYPH_RUNNING  = _UI["glyph_running"]
+GLYPH_STOPPED  = _UI["glyph_stopped"]
+SPINNER_FRAMES = _UI["spinner_frames"]
+HINT_LINE      = _UI["hint_line"]

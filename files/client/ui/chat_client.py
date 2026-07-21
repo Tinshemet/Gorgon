@@ -82,7 +82,7 @@ C_YELLOW = 6
 C_BOLD   = 7
 
 
-_CUSTOM_COLOR_SLOT = 16   # first free slot above the standard 8+8
+_CUSTOM_COLOR_SLOT = _cfg.CUSTOM_COLOR_SLOT   # first free slot above the standard 8+8
 
 
 def _hex_to_curses(hex_color: str) -> tuple:
@@ -103,23 +103,26 @@ def _hex_to_curses(hex_color: str) -> tuple:
     """
     h = hex_color.lstrip("#")
     if len(h) != 6:
-        return (667, 667, 667)   # fallback ~gray
+        return _cfg.COLOR_FALLBACK_RGB   # fallback ~gray
     r = int(h[0:2], 16)
     g = int(h[2:4], 16)
     b = int(h[4:6], 16)
     return (r * 1000 // 255, g * 1000 // 255, b * 1000 // 255)
 
 
-def _init_colours(color_hex: str = "#aaaaaa") -> None:
-    """Initialise curses colour pairs from the configured accent hex."""
+def _init_colours(color_hex: str = None) -> None:
+    """Initialise curses colour pairs from the configured palette + accent hex."""
+    def _cc(name):
+        return getattr(curses, f"COLOR_{name}")
+    color_hex = color_hex or _cfg.TEXT_COLOR
     curses.start_color()
     curses.use_default_colors()
-    curses.init_pair(C_HEADER, curses.COLOR_WHITE,  curses.COLOR_BLUE)
-    curses.init_pair(C_CYAN,   curses.COLOR_CYAN,   -1)
-    curses.init_pair(C_GREEN,  curses.COLOR_GREEN,  -1)
-    curses.init_pair(C_RED,    curses.COLOR_RED,    -1)
-    curses.init_pair(C_YELLOW, curses.COLOR_YELLOW, -1)
-    curses.init_pair(C_BOLD,   curses.COLOR_WHITE,  -1)
+    curses.init_pair(C_HEADER, _cc(_cfg.COLOR_HEADER_FG), _cc(_cfg.COLOR_HEADER_BG))
+    curses.init_pair(C_CYAN,   _cc(_cfg.COLOR_CYAN),   -1)
+    curses.init_pair(C_GREEN,  _cc(_cfg.COLOR_GREEN),  -1)
+    curses.init_pair(C_RED,    _cc(_cfg.COLOR_RED),    -1)
+    curses.init_pair(C_YELLOW, _cc(_cfg.COLOR_YELLOW), -1)
+    curses.init_pair(C_BOLD,   _cc(_cfg.COLOR_BOLD),   -1)
 
     if curses.can_change_color():
         r, g, b = _hex_to_curses(color_hex)
@@ -127,7 +130,7 @@ def _init_colours(color_hex: str = "#aaaaaa") -> None:
         curses.init_pair(C_DIM, _CUSTOM_COLOR_SLOT, -1)
     else:
         # Terminal can't redefine colors — fall back to nearest standard
-        curses.init_pair(C_DIM, 8, -1)  # bright-black (gray)
+        curses.init_pair(C_DIM, _cfg.DIM_FALLBACK_SLOT, -1)  # bright-black (gray)
 
 
 def _cp(n: int) -> int:
@@ -190,11 +193,11 @@ def _draw(stdscr: "curses.window", input_buf: str) -> None:
     stdscr.erase()
 
     # Header
-    spin_chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    spin_chars = _cfg.SPINNER_FRAMES
     spin  = f" {spin_chars[int(time.time() * 5) % len(spin_chars)]}" if _waiting else "  "
     with _lock:
         vm_parts = [
-            ("● " if v.get("status") == "running" else "○ ") + v.get("name", "")
+            (_cfg.GLYPH_RUNNING if v.get("status") == "running" else _cfg.GLYPH_STOPPED) + v.get("name", "")
             for v in _REMOTE_VMS[:6]
         ]
     vm_str = "   ".join(vm_parts)
@@ -245,9 +248,7 @@ def _draw(stdscr: "curses.window", input_buf: str) -> None:
 
     # Hint line
     try:
-        stdscr.addstr(h - 2, 0,
-                      "  list  system  profiles  templates  drift  /clear  help  q=quit"[:w - 1],
-                      _cp(C_DIM))
+        stdscr.addstr(h - 2, 0, _cfg.HINT_LINE[:w - 1], _cp(C_DIM))
     except curses.error:
         pass  # addstr fails past the screen edge — skip the hint line
 
@@ -290,7 +291,7 @@ def _render_tool_result(tool: str, result: dict) -> None:
             return
         for v in vms:
             status = v.get("status", "?")
-            dot    = "● " if status == "running" else "○ "
+            dot    = _cfg.GLYPH_RUNNING if status == "running" else _cfg.GLYPH_STOPPED
             color  = _cp(C_GREEN) if status == "running" else _cp(C_DIM)
             ram    = f"{v.get('memory_mb', 0) // 1024}GB"
             cpu    = v.get("cpu_cores", "")
@@ -510,9 +511,9 @@ def _autostart_server(stdscr: "curses.window") -> bool:
     import subprocess as _sp
     _sp.Popen(
         [sys.executable, "-m", "uvicorn",
-         "orchestrator.http.api_server:app",
-         "--host", "0.0.0.0", f"--port", str(port),
-         "--log-level", "warning"],
+         _cfg.UVICORN_APP,
+         "--host", _cfg.SPAWN_HOST, f"--port", str(port),
+         "--log-level", _cfg.SPAWN_LOG_LEVEL],
         cwd=_files_dir, env=env,
         start_new_session=True,
         stdout=open(_log_path, "w"),
@@ -882,11 +883,13 @@ def _run(stdscr: "curses.window", verbose: bool = False, color_hex: str = "#aaaa
     stdscr.timeout(100)
     _init_colours(color_hex)
 
-    # Resize terminal and set font size (best-effort; xterm-compatible terminals)
-    sys.stdout.write(f"\033]50;xft:Monospace:size={font_size}\007")
-    sys.stdout.write("\033[8;44;200t")
+    # Resize terminal and set font size (best-effort; xterm-compatible terminals).
+    # Geometry comes from config (terminal_rows/cols) — previously hardcoded 44;200,
+    # which silently ignored those settings.
+    sys.stdout.write(f"\033]50;xft:{_cfg.FONT_FAMILY}:size={font_size}\007")
+    sys.stdout.write(f"\033[8;{_cfg.TERM_ROWS};{_cfg.TERM_COLS}t")
     sys.stdout.flush()
-    time.sleep(0.12)
+    time.sleep(_cfg.STARTUP_DELAY_S)
 
     _session_id = _load_session_id() or str(uuid.uuid4())
     _save_session_id(_session_id)
@@ -914,7 +917,7 @@ def _run(stdscr: "curses.window", verbose: bool = False, color_hex: str = "#aaaa
         _add(f"  ⚠ Could not reach server. Check connection.", _cp(C_YELLOW))
     elif _REMOTE_VMS:
         vm_summary = "  ".join(
-            ("● " if v.get("status") == "running" else "○ ") + v.get("name", "")
+            (_cfg.GLYPH_RUNNING if v.get("status") == "running" else _cfg.GLYPH_STOPPED) + v.get("name", "")
             for v in _REMOTE_VMS
         )
         _add(f"  VMs:  {vm_summary}", _cp(C_DIM))
