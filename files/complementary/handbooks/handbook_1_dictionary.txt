@@ -238,7 +238,7 @@ server
   The machine that runs everything: Ollama (AI), QEMU, the API server, the tool
   executor, sanitizer, and preflight. The user never needs to log into this
   machine — it exposes a single /chat HTTP endpoint.
-  Source files: files/server/  +  files/shared/
+  Source files: files/orchestrator/  +  files/shared/
 
 client
   The thin UI on the user's laptop. Sends messages to the server's /chat endpoint
@@ -979,9 +979,10 @@ loginctl enable-linger
 
 PYTHONPATH
   Environment variable that adds directories to Python's module search path.
-  Required when running scripts from files/server/ because Python adds the
-  script's directory (files/server/) to sys.path, not its parent (files/).
-  Setting PYTHONPATH=files/ makes "from server.ai.cli import ..." work.
+  Required when running scripts under files/ because Python adds the script's
+  own directory to sys.path, not the files/ root. Setting PYTHONPATH=files/
+  makes "from orchestrator.ai.cli import ..." (and the other top-level
+  packages) resolve.
   Source: ~/.zshrc alias, setup scripts
 
 venv (virtual environment)

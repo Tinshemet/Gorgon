@@ -6,7 +6,7 @@ Exposes /chat (AI loop), /execute (direct tool call), /health, /images,
 and /rotate-token. Every request except /health requires a Bearer token.
 
 Start with:
-    uvicorn server.http.api_server:app --host 0.0.0.0 --port 8080
+    uvicorn orchestrator.http.api_server:app --host 0.0.0.0 --port 8080
 
 Environment variables:
     API_TOKEN   shared secret — server refuses to start if not set

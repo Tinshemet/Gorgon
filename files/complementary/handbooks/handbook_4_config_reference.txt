@@ -411,10 +411,8 @@ preflight.
   ]
 }
 
-Note: server/ai/context_assistant_config.json (in the legacy server/ tree)
-still exists on disk from the pre-restructure layout but is dead — nothing
-under orchestrator/, executor/, client/, shared/, or admin/ imports from
-server/. Only orchestrator/ai/context_assistant_config.json above is live.
+Note: the legacy files/server/ tree has been removed (see section 17). Only
+orchestrator/ai/context_assistant_config.json above is live.
 
 ────────────────────────────────────────────────────────────────────────────────
 5. orchestrator/sanitizer/config.json
@@ -1386,16 +1384,15 @@ named constants. The commonly-overridden keys:
 }
 
 ────────────────────────────────────────────────────────────────────────────────
-17. LEGACY / DEAD FILES ON DISK
+17. LEGACY server/ TREE — REMOVED
 ────────────────────────────────────────────────────────────────────────────────
 
-A server/ directory still exists at the repo root (server/__init__.py,
-server/http/api_server.py, server/http/__init__.py,
-server/ai/context_assistant_config.json) left over from before the
-orchestrator/executor split. Nothing under orchestrator/, executor/,
-client/, shared/, or admin/ imports from it — the live HTTP API is
+The legacy files/server/ directory (a leftover from before the
+orchestrator/executor split) has been DELETED. It survived only as a
+sys.modules compatibility shim so old test mock.patch("server.http.api_server.*")
+/ "server.ai.cli.*" targets kept working; those tests now patch the real
+orchestrator.* modules directly. The live HTTP API is
 orchestrator/http/api_server.py, and the live context-assistant config is
-orchestrator/ai/context_assistant_config.json (section 4). Do not edit
-files under server/ expecting them to take effect; they are not wired in.
+orchestrator/ai/context_assistant_config.json (section 4).
 
 ================================================================================

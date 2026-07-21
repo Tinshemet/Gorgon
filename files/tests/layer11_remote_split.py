@@ -34,7 +34,7 @@ without needing a real Ollama instance or real QEMU process.
     - Preflight ask_user → {clarify: True}
 
   E. executor_client:
-    - server.executor_client.execute_tool is a re-export of
+    - orchestrator.executor_client.execute_tool is a re-export of
       orchestrator.pipeline.execute_tool (same object)
 
   F. /sync endpoint:
@@ -120,8 +120,6 @@ def _make_test_client():
     token = f"test-secret-{_uid()}"
     os.environ["API_TOKEN"] = token
     sys.path.insert(0, _FILES_DIR)
-    if "server.http.api_server" in sys.modules:
-        del sys.modules["server.http.api_server"]
     if not _auth_isolation_active:
         from orchestrator.auth import sessions as _op_sessions
         from orchestrator.auth import store as _op_store
@@ -364,7 +362,7 @@ def _t_chat_auth_wrong_token() -> List[str]:
 
 def _t_chat_happy_path() -> List[str]:
     client, token = _make_test_client()
-    with patch("server.ai.cli.process_message",
+    with patch("orchestrator.ai.cli.process_message",
                side_effect=_fake_process_message(text="You have 2 VMs.")):
         resp = client.post(
             "/chat",
@@ -406,7 +404,7 @@ def _t_chat_session_persistence() -> List[str]:
         }
 
     headers = {"Authorization": f"Bearer {token}"}
-    with patch("server.ai.cli.process_message", side_effect=tracking_pm):
+    with patch("orchestrator.ai.cli.process_message", side_effect=tracking_pm):
         r1 = client.post("/chat", json={"message": "first message"}, headers=headers)
         sid = r1.json().get("session_id")
         r2 = client.post("/chat", json={"message": "second message", "session_id": sid},
@@ -436,7 +434,7 @@ def _t_chat_returns_needs_input() -> List[str]:
         "tool_name": "stop_vm",
         "proposed":  "myvm",
     }
-    with patch("server.ai.cli.process_message",
+    with patch("orchestrator.ai.cli.process_message",
                side_effect=_fake_process_message(text="", needs_input=needs)):
         resp = client.post(
             "/chat",
@@ -465,7 +463,7 @@ def _t_chat_auto_confirm_passed_through() -> List[str]:
         received["auto_confirm"] = auto_confirm
         return {"text": "done", "messages": messages, "tool_results": [], "needs_input": None}
 
-    with patch("server.ai.cli.process_message", side_effect=capturing_pm):
+    with patch("orchestrator.ai.cli.process_message", side_effect=capturing_pm):
         resp = client.post(
             "/chat",
             json={"message": "yes", "auto_confirm": True},
@@ -484,7 +482,7 @@ def _t_chat_delete_session() -> List[str]:
     client, token = _make_test_client()
     headers = {"Authorization": f"Bearer {token}"}
 
-    with patch("server.ai.cli.process_message",
+    with patch("orchestrator.ai.cli.process_message",
                side_effect=_fake_process_message(text="hi")):
         r1 = client.post("/chat", json={"message": "hello"}, headers=headers)
 
@@ -514,7 +512,7 @@ def _t_chat_missing_message_field() -> List[str]:
 def _t_chat_junk_extra_fields() -> List[str]:
     """junk — unknown extra fields in JSON body → ignored, request succeeds."""
     client, token = _make_test_client()
-    with patch("server.ai.cli.process_message",
+    with patch("orchestrator.ai.cli.process_message",
                side_effect=_fake_process_message(text="ok")):
         resp = client.post(
             "/chat",
@@ -534,7 +532,7 @@ def _t_chat_junk_extra_fields() -> List[str]:
 def _t_chat_foreign_session_id() -> List[str]:
     """foreign — session_id for a nonexistent session → treated as new session, no crash."""
     client, token = _make_test_client()
-    with patch("server.ai.cli.process_message",
+    with patch("orchestrator.ai.cli.process_message",
                side_effect=_fake_process_message(text="fresh start")):
         resp = client.post(
             "/chat",
@@ -552,7 +550,7 @@ def _t_chat_foreign_session_id() -> List[str]:
 def _t_chat_conflict_auto_confirm_no_prior_input() -> List[str]:
     """conflict — auto_confirm=True with no prior needs_input in session → no crash."""
     client, token = _make_test_client()
-    with patch("server.ai.cli.process_message",
+    with patch("orchestrator.ai.cli.process_message",
                side_effect=_fake_process_message(text="all good")):
         resp = client.post(
             "/chat",
@@ -964,7 +962,7 @@ def _t_sync_auth_wrong_token() -> List[str]:
 def _t_sync_valid_structure() -> List[str]:
     client, token = _make_test_client()
 
-    with patch("server.http.api_server._mgr" if False else "shared.executioner.tool_executor.manager") as mock_mgr, \
+    with patch("shared.executioner.tool_executor.manager") as mock_mgr, \
          patch("executor.api.qemu_config.list_profiles", return_value=[]):
         mock_mgr.list_vms.return_value = []
         resp = client.get("/sync", headers={"Authorization": f"Bearer {token}"})
@@ -996,7 +994,7 @@ def _t_sync_allowed_vms_filter() -> List[str]:
 
     with patch("shared.executioner.tool_executor.manager") as mock_mgr, \
          patch("executor.api.qemu_config.list_profiles", return_value=[]), \
-         patch("server.http.api_server._ALLOWED_VMS", ["allowed-vm"]):
+         patch("orchestrator.http.api_server._ALLOWED_VMS", ["allowed-vm"]):
         mock_mgr.list_vms.return_value = fake_vms
         resp = client.get("/sync", headers={"Authorization": f"Bearer {token}"})
 
@@ -1022,7 +1020,7 @@ def _t_sync_empty_allowlist_returns_all() -> List[str]:
 
     with patch("shared.executioner.tool_executor.manager") as mock_mgr, \
          patch("executor.api.qemu_config.list_profiles", return_value=[]), \
-         patch("server.http.api_server._ALLOWED_VMS", []):
+         patch("orchestrator.http.api_server._ALLOWED_VMS", []):
         mock_mgr.list_vms.return_value = fake_vms
         resp = client.get("/sync", headers={"Authorization": f"Bearer {token}"})
 
@@ -1055,7 +1053,7 @@ def _t_events_valid_structure() -> List[str]:
         {"ts": "2026-06-25T10:00:00+00:00", "tool": "list_vms",
          "args": {}, "outcome": "ok", "duration_ms": 3.2},
     ]
-    with patch("server.event_log.read_events", return_value=fake_events):
+    with patch("orchestrator.event_log.read_events", return_value=fake_events):
         resp = client.get("/events", headers={"Authorization": f"Bearer {token}"})
 
     if resp.status_code != 200:
@@ -1089,7 +1087,7 @@ def _t_events_limit_param() -> List[str]:
         captured_limit["limit"] = limit
         return many_events[:limit]
 
-    with patch("server.event_log.read_events", side_effect=fake_read_events):
+    with patch("orchestrator.event_log.read_events", side_effect=fake_read_events):
         resp = client.get("/events?limit=2", headers={"Authorization": f"Bearer {token}"})
 
     if resp.status_code != 200:
@@ -1114,7 +1112,7 @@ def _t_events_since_future() -> List[str]:
         captured["since"] = since
         return []  # nothing after a future timestamp
 
-    with patch("server.event_log.read_events", side_effect=fake_read_events):
+    with patch("orchestrator.event_log.read_events", side_effect=fake_read_events):
         resp = client.get(
             f"/events?since={future_ts_encoded}",
             headers={"Authorization": f"Bearer {token}"},
@@ -1145,17 +1143,17 @@ def _t_events_tool_call_logged() -> List[str]:
         logged.append({"ts": "2026-01-01T00:00:00+00:00", "tool": tool,
                         "args": {}, "outcome": "ok", "duration_ms": duration_ms})
 
-    with patch("server.executor_client._execute_tool", side_effect=fake_underlying), \
-         patch("server.executor_client._log_event", side_effect=fake_log):
+    with patch("orchestrator.executor_client._execute_tool", side_effect=fake_underlying), \
+         patch("orchestrator.executor_client._log_event", side_effect=fake_log):
         import orchestrator.executor_client as ec
-        if "server.executor_client" in sys.modules:
-            del sys.modules["server.executor_client"]
+        if "orchestrator.executor_client" in sys.modules:
+            del sys.modules["orchestrator.executor_client"]
         import orchestrator.executor_client as ec
         with patch.object(ec, "_execute_tool", side_effect=fake_underlying), \
              patch.object(ec, "_log_event", side_effect=fake_log):
             ec.execute_tool("list_vms", {})
 
-    with patch("server.event_log.read_events", return_value=logged):
+    with patch("orchestrator.event_log.read_events", return_value=logged):
         resp = client.get("/events", headers={"Authorization": f"Bearer {token}"})
 
     if resp.status_code != 200:
@@ -1537,7 +1535,7 @@ def _t_executor_client_is_re_export() -> List[str]:
     delegation is intact — ec._execute_tool must be the same object as
     pipeline.execute_tool."""
     sys.path.insert(0, _FILES_DIR)
-    for mod in ("server.executor_client", "orchestrator.pipeline"):
+    for mod in ("orchestrator.executor_client", "orchestrator.pipeline"):
         if mod in sys.modules:
             del sys.modules[mod]
     import orchestrator.executor_client as ec

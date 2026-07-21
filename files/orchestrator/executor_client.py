@@ -1,7 +1,7 @@
 """
 executor_client.py — Executor Client
 
-Single import point for tool execution used by server/ai/cli.py.
+Single import point for tool execution used by orchestrator/ai/cli.py.
 Supports two modes controlled by connection_config.json (or API_URL env var):
 
   url = "local"          — direct in-process call (default, single-machine setup)

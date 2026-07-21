@@ -330,11 +330,10 @@ HOW LAYER 11 WORKS
   2. Imports orchestrator.http.api_server → creates the FastAPI app
   3. Creates TestClient(app) — talks to the app in-process
   4. Mocks execute_tool and _preflight_check with patch()
-     (patching the canonical paths: "orchestrator.executor_client.execute_tool"
-      and "orchestrator.preflight.validator._preflight_check" — some older tests
-      in this file still patch the "server.ai.cli.process_message" compat-shim
-      path, which also works since files/server/ is kept as an intentional
-      backward-compat shim over the orchestrator package)
+     (patching the canonical paths: "orchestrator.executor_client.execute_tool",
+      "orchestrator.preflight.validator._preflight_check",
+      "orchestrator.ai.cli.process_message", etc. — the legacy files/server/
+      compat-shim has been removed, so all patches now target orchestrator.*)
   5. Each test sends HTTP requests to the TestClient and asserts the response
 
 The 50 tests cover:
@@ -373,7 +372,7 @@ The 50 tests cover:
     display=sdl + vnc_bind_local=False → both overridden by server
 
   E. executor_client re-export (1 test)
-    server.executor_client.execute_tool is shared.executioner.tool_executor.execute_tool
+    orchestrator.executor_client.execute_tool is shared.executioner.tool_executor.execute_tool
 
   F. /sync endpoint (5 tests)
     Missing auth → 401/403
