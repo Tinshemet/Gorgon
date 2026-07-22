@@ -24,6 +24,12 @@ VM_BASE_DIR            = os.path.expanduser(_CFG["dirs"]["vm_base"])
 TEMPLATES_DIR          = os.path.expanduser(_CFG["dirs"]["templates"])
 TEMPLATE_LABEL         = _CFG.get("template_label", "template")
 
+
+def _template_dir(name: str) -> str:
+    """Return the golden-image directory for a template name."""
+    return os.path.join(TEMPLATES_DIR, name)
+
+
 _ISO_OS_KEYWORDS: dict = _CFG.get("iso_os_keywords", {})
 _WIN_ISO_NAMES:   list = _ISO_OS_KEYWORDS.get("windows", [])
 _MACOS_ISO_NAMES: list = _ISO_OS_KEYWORDS.get("macos", [])
