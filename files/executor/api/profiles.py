@@ -26,7 +26,7 @@ PROFILES_DIR = os.path.expanduser(_DIRS["profiles"])
 HARDWARE_PROFILES: Dict[str, Dict[str, Any]] = _CFG["hardware_profiles"]
 
 
-# Reads all .json files from ~/.qemu_vms/_profiles/ into a dict.
+# Reads all .json files from ~/.gorgon/_profiles/ into a dict.
 # In: nothing → Out: dict
 def _load_custom_profiles() -> Dict[str, Dict[str, Any]]:
     """Load all user-saved hardware profiles from disk."""

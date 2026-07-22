@@ -35,7 +35,7 @@ def _safe(agent: Optional[str]) -> str:
 
 
 def store_path(agent: Optional[str]) -> str:
-    """The agent's claim store inside its bundle (~/.qemu_vms/_agents/<agent>/findings.json)."""
+    """The agent's claim store inside its bundle (~/.gorgon/_agents/<agent>/findings.json)."""
     return Bundle(_safe(agent)).findings_path
 
 

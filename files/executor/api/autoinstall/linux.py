@@ -73,8 +73,8 @@ def extract_kernel_initrd(iso_path: str, vm_dir: str, os_name: str) -> "tuple[st
         ValueError: os_name has no unattended_linux config entry.
 
     Example::
-        extract_kernel_initrd("/isos/ubuntu.iso", "/home/u/.qemu_vms/dev", "ubuntu")
-        # -> ("/home/u/.qemu_vms/dev/linux-kernel", "/home/u/.qemu_vms/dev/linux-initrd")
+        extract_kernel_initrd("/isos/ubuntu.iso", "/home/u/.gorgon/dev", "ubuntu")
+        # -> ("/home/u/.gorgon/dev/linux-kernel", "/home/u/.gorgon/dev/linux-initrd")
     """
     meta = linux_autoinstall_config(os_name)
     if not meta:
@@ -108,8 +108,8 @@ def generate_cidata_iso(vm_dir: str, *, locale: str = "en_US.UTF-8",
         RuntimeError: no xorriso/genisoimage/mkisofs available.
 
     Example::
-        generate_cidata_iso("/home/u/.qemu_vms/dev")
-        # -> "/home/u/.qemu_vms/dev/cidata.iso"
+        generate_cidata_iso("/home/u/.gorgon/dev")
+        # -> "/home/u/.gorgon/dev/cidata.iso"
     """
     tool = iso_tool_available()
     if not tool:
@@ -160,9 +160,9 @@ def inject_preseed_into_initrd(base_initrd_path: str, vm_dir: str, template_name
     Returns the path to the combined initrd.
 
     Example::
-        inject_preseed_into_initrd("/home/u/.qemu_vms/dev/linux-initrd", "/home/u/.qemu_vms/dev",
+        inject_preseed_into_initrd("/home/u/.gorgon/dev/linux-initrd", "/home/u/.gorgon/dev",
                                     "kali-preseed-extra.cfg.template")
-        # -> "/home/u/.qemu_vms/dev/linux-initrd-preseeded"
+        # -> "/home/u/.gorgon/dev/linux-initrd-preseeded"
     """
     preseed = _fill_template(template_name, locale=locale, keyboard=keyboard)
     with tempfile.TemporaryDirectory() as td:

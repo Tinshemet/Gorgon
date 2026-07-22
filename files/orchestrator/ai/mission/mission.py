@@ -165,7 +165,7 @@ def slug(title: str) -> str:
 
 
 def missions_dir(agent: Optional[str] = None) -> str:
-    """The agent's missions folder inside its bundle (~/.qemu_vms/_agents/<agent>/missions)."""
+    """The agent's missions folder inside its bundle (~/.gorgon/_agents/<agent>/missions)."""
     return Bundle(_safe(agent or _contract.active_agent_key())).missions_dir
 
 

@@ -54,9 +54,10 @@ class BundleCommand(Command):
             with open(cfg_path) as f:
                 cfg = _json.load(f)
             cfg_str = _json.dumps(cfg)
-            # Replace old home path with current home
+            # Replace old home path with current home (accepts both the current
+            # ~/.gorgon base and legacy ~/.qemu_vms bundles from older machines)
             import re as _re
-            cfg_str = _re.sub(r"/home/[^/]+/\.qemu_vms", dest_dir.rstrip("/"), cfg_str)
+            cfg_str = _re.sub(r"/home/[^/]+/\.(gorgon|qemu_vms)", dest_dir.rstrip("/"), cfg_str)
             with open(cfg_path, "w") as f:
                 f.write(cfg_str)
 

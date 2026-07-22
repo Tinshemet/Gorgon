@@ -1,7 +1,7 @@
 """
 event_log.py — Structured event logger for gorgon server
 
-Writes one JSON line per event to ~/.qemu_vms/events.log.
+Writes one JSON line per event to <VM base dir>/events.log.
 Each entry records the tool called, key args, outcome, and duration.
 """
 
@@ -13,8 +13,9 @@ from pathlib import Path
 from typing import Any, Dict
 
 from shared.config import EVENT_LOG_ROTATE_BYTES
+from executor.api._vm_constants import VM_BASE_DIR
 
-_LOG_DIR  = Path.home() / ".qemu_vms"
+_LOG_DIR  = Path(VM_BASE_DIR)
 _LOG_FILE = _LOG_DIR / "events.log"
 _MAX_BYTES = EVENT_LOG_ROTATE_BYTES     # rotation threshold (default 10 MB, in shared config)
 

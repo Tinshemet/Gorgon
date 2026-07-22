@@ -257,7 +257,7 @@ def execute(req: ExecuteRequest) -> Any:
 
         POST /execute
         {"tool_name": "create_vm", "args": {"name": "win11", "os_type": "windows"}}
-        → {"success": true, "name": "win11", "vm_dir": "~/.qemu_vms/win11"}
+        → {"success": true, "name": "win11", "vm_dir": "~/.gorgon/win11"}
 
         POST /execute
         {"tool_name": "unknown_tool", "args": {}}

@@ -1,8 +1,8 @@
 {
   "dirs": {
-    "vm_base": "~/.qemu_vms",
-    "profiles": "~/.qemu_vms/_profiles",
-    "templates": "~/.qemu_vms/_templates",
+    "vm_base": "~/.gorgon",
+    "profiles": "~/.gorgon/_profiles",
+    "templates": "~/.gorgon/_templates",
     "isolated_net": "_networks",
     "state_file": ".state.json"
   },

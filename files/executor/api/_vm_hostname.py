@@ -68,7 +68,7 @@ def generate_linux_hostname(disk_path: str) -> str:
     replaces any generic "-vm"/"-template" suffix with a random one.
 
     Example::
-        generate_linux_hostname("/home/u/.qemu_vms/test/disk0.qcow2")
+        generate_linux_hostname("/home/u/.gorgon/test/disk0.qcow2")
         # -> "kali-9f2ab71"
     """
     base = _current_linux_hostname(disk_path) or "linux-vm"
@@ -102,7 +102,7 @@ def randomize_linux_hostname(disk_path: str, hostname: "str | None" = None) -> s
         RuntimeError: virt-customize isn't installed, or the operation failed.
 
     Example::
-        randomize_linux_hostname("/home/u/.qemu_vms/test/disk0.qcow2")
+        randomize_linux_hostname("/home/u/.gorgon/test/disk0.qcow2")
         # -> "kali-9f2ab71"
     """
     if not virt_customize_available():
@@ -142,7 +142,7 @@ def randomize_windows_hostname(disk_path: str, hostname: "str | None" = None) ->
             of the extract/patch/write-back sequence fails.
 
     Example::
-        randomize_windows_hostname("/home/u/.qemu_vms/test/disk0.qcow2")
+        randomize_windows_hostname("/home/u/.gorgon/test/disk0.qcow2")
         # -> "DESKTOP-7QP4K1X"
     """
     if not windows_hostname_tools_available():

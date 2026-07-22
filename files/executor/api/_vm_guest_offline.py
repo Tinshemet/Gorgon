@@ -62,7 +62,7 @@ def provision_guest_agent_offline(disk_path: str, psk: str) -> None:
         RuntimeError: virt-customize isn't installed, or the operation failed.
 
     Example::
-        provision_guest_agent_offline("/home/u/.qemu_vms/dev/disk0.qcow2", psk)
+        provision_guest_agent_offline("/home/u/.gorgon/dev/disk0.qcow2", psk)
     """
     if not virt_customize_available():
         raise RuntimeError(

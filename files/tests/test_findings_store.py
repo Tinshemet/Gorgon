@@ -33,7 +33,7 @@ def check(label, cond):
 
 def main():
     import shared.bundle as _bundle
-    _bundle.AGENTS_ROOT = tempfile.mkdtemp()      # isolate bundle storage from ~/.qemu_vms
+    _bundle.AGENTS_ROOT = tempfile.mkdtemp()      # isolate bundle storage from ~/.gorgon
 
     print("save / load roundtrip")
     f = Findings()

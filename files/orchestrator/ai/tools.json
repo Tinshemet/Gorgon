@@ -480,7 +480,7 @@
   "type": "function",
   "function": {
    "name": "mark_as_template",
-   "description": "Turn a stopped VM into a reusable golden-image template. Flattens its current disk state into a protected copy under ~/.qemu_vms/_templates/ and tags the VM with the protected 'template' label. Use when the user says 'mark X as a template' or similar. The VM must be stopped first.",
+   "description": "Turn a stopped VM into a reusable golden-image template. Flattens its current disk state into a protected copy under ~/.gorgon/_templates/ and tags the VM with the protected 'template' label. Use when the user says 'mark X as a template' or similar. The VM must be stopped first.",
    "parameters": {
     "type": "object",
     "properties": {

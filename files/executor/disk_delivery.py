@@ -3,7 +3,7 @@ executor/disk_delivery.py — raw VM disk / bundle delivery for the executor.
 
 Streams a VM's primary qcow2 disk (with SHA-256 + Range support) and the whole VM
 folder as a tar.gz, straight off local disk (the executor is authoritative — it owns
-the qemu_vms tree; the orchestrator's image_delivery only proxies these). Kept out of
+the gorgon tree; the orchestrator's image_delivery only proxies these). Kept out of
 server.py so that module stays routing + auth.
 """
 import hashlib
@@ -16,9 +16,11 @@ from typing import Any, Dict, Iterator
 from fastapi import HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from executor.api._vm_constants import VM_BASE_DIR
+
 _CFG = json.load(open(os.path.join(os.path.dirname(__file__), "config.json")))
 
-_VM_BASE   = pathlib.Path.home() / ".qemu_vms"
+_VM_BASE   = pathlib.Path(VM_BASE_DIR)
 _CHUNK     = _CFG.get("io_chunk_bytes", 4 * 1024 * 1024)   # disk read/stream chunk
 _TAR_CHUNK = _CFG.get("tar_chunk_bytes", 65536)            # tar pipe read chunk
 

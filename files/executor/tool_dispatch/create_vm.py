@@ -35,7 +35,7 @@ def execute_create_vm(args: Dict[str, Any], verbose: bool, raw_os_type: str,
     Example::
         execute_create_vm({"name": "dev", "os_type": "linux"}, False, "",
                           frozenset(), lambda p: p)
-        # -> {"success": True, "name": "dev", "vm_dir": "/home/u/.qemu_vms/dev"}
+        # -> {"success": True, "name": "dev", "vm_dir": "/home/u/.gorgon/dev"}
     """
     raw_name = args.get("name", "") or ""
     name     = re.sub(r"[^a-zA-Z0-9_\-]", "_", str(raw_name).strip())

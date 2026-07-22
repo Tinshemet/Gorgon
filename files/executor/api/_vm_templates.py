@@ -23,7 +23,7 @@ class _VmTemplatesMixin:
         """Snapshot a stopped VM's current disk state into a reusable golden template.
 
         Flattens each disk (qemu-img convert, not a backing-file link) into
-        ``~/.qemu_vms/_templates/<name>/diskN.qcow2`` so the template never depends on the
+        ``~/.gorgon/_templates/<name>/diskN.qcow2`` so the template never depends on the
         source VM's own disk surviving. Tags the source VM with the protected "template"
         label; the template.json copy also records "template" in its own labels.
 

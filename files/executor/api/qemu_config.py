@@ -15,6 +15,8 @@ import shutil
 
 import psutil
 
+from ._vm_constants import VM_BASE_DIR
+
 _CFG  = json.load(open(os.path.join(os.path.dirname(__file__), "config.json")))
 _DIRS = _CFG["dirs"]
 _MC   = _CFG["machine_config_defaults"]
@@ -413,7 +415,7 @@ class MachineConfig:
     hugepages_path:  str           = _MC["hugepages_path"]
     extra_args:      List[str]     = field(default_factory=list)
     labels:          List[str]     = field(default_factory=list)  # user-defined tags (work_vm, test_vm, …)
-    template:        Optional[str] = None  # golden-image name under ~/.qemu_vms/_templates/ to clone disks from
+    template:        Optional[str] = None  # golden-image name under ~/.gorgon/_templates/ to clone disks from
     randomize_root_password: bool = False  # offline-edit the cloned disk's root password (Linux templates only)
     root_password:   Optional[str] = None  # set when randomize_root_password succeeds — the ONLY record of it
     randomize_user_password: bool = False  # offline-edit the cloned disk's primary user's password too
@@ -466,11 +468,11 @@ class MachineConfig:
                 self.bios = "seabios"
                 self.uefi = False
 
-    # Returns the VM's directory path (~/.qemu_vms/<name>).
+    # Returns the VM's directory path (<VM_BASE_DIR>/<name>).
     # In: nothing → Out: str
     def get_vm_dir(self) -> str:
-        """Return this VM's state directory under ~/.qemu_vms."""
-        return os.path.expanduser(f"~/.qemu_vms/{self.name}")
+        """Return this VM's state directory under the VM base dir."""
+        return os.path.join(VM_BASE_DIR, self.name)
 
     # Returns the path to the VM's config.json.
     # In: nothing → Out: str
@@ -522,7 +524,7 @@ class MachineConfig:
         d.pop("serial_agent_socket", None)
         return d
 
-    # Writes the config to ~/.qemu_vms/<name>/config.json.
+    # Writes the config to ~/.gorgon/<name>/config.json.
     # In: nothing → Out: nothing
     def save(self) -> None:
         """Write this config to the VM's config.json."""
@@ -535,7 +537,7 @@ class MachineConfig:
     @classmethod
     def load(cls, name: str) -> "MachineConfig":
         """Load a MachineConfig from a VM's saved config.json."""
-        path = os.path.expanduser(f"~/.qemu_vms/{name}/config.json")
+        path = os.path.join(VM_BASE_DIR, name, "config.json")
         if not os.path.exists(path):
             raise FileNotFoundError(f"No VM config found for '{name}'")
         with open(path) as f:
@@ -547,7 +549,7 @@ class MachineConfig:
 
 # ─────────────────────────────────────────────
 #  CUSTOM PROFILE STORAGE
-#  Profiles are saved to ~/.qemu_vms/_profiles/
+#  Profiles are saved to ~/.gorgon/_profiles/
 # ─────────────────────────────────────────────
 
 PROFILES_DIR = os.path.expanduser(_DIRS["profiles"])

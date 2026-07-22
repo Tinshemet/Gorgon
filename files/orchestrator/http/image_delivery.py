@@ -12,6 +12,8 @@ from typing import Any, Dict, Iterator
 from fastapi import HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from executor.api._vm_constants import VM_BASE_DIR
+
 _CHUNK = 4 * 1024 * 1024  # 4 MB stream chunks
 
 
@@ -29,7 +31,7 @@ def exec_headers() -> dict:
 
 def disk_path(vm_name: str) -> pathlib.Path:
     """Return the path to the first qcow2 disk for *vm_name*, raising HTTP 404 if absent."""
-    vm_dir = pathlib.Path.home() / ".qemu_vms" / vm_name
+    vm_dir = pathlib.Path(VM_BASE_DIR) / vm_name
     if not vm_dir.is_dir():
         raise HTTPException(status_code=404, detail=f"VM '{vm_name}' not found.")
     candidates = sorted(vm_dir.glob("*.qcow2"))
@@ -142,7 +144,7 @@ def vm_bundle(vm_name: str) -> StreamingResponse:
             media_type="application/gzip",
             headers={"Content-Disposition": f'attachment; filename="{vm_name}.tar.gz"'},
         )
-    vm_dir = pathlib.Path.home() / ".qemu_vms" / vm_name
+    vm_dir = pathlib.Path(VM_BASE_DIR) / vm_name
     if not vm_dir.is_dir():
         raise HTTPException(status_code=404, detail=f"VM '{vm_name}' not found.")
 

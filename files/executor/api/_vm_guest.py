@@ -29,6 +29,7 @@ import socket
 import time
 from typing import Any, Dict, List, Optional, Union
 
+from ._vm_constants import VM_BASE_DIR
 from .qemu_config import MachineConfig
 from .qga_client import QGAClient
 from .serial_agent_client import SerialAgentClient
@@ -293,7 +294,7 @@ class _VmGuestMixin:
                     "error": "Windows guest agent uses the QEMU Guest Agent MSI "
                              "(manual install) — not scripted yet."}
 
-        vm_dir = os.path.expanduser(f"~/.qemu_vms/{name}")
+        vm_dir = os.path.join(VM_BASE_DIR, name)
         os.makedirs(vm_dir, exist_ok=True)
 
         if cfg.stealth:

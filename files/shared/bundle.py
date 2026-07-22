@@ -1,5 +1,5 @@
 """
-bundle.py — the agent bundle: a self-contained ~/.qemu_vms/_agents/<name>/ folder.
+bundle.py — the agent bundle: a self-contained ~/.gorgon/_agents/<name>/ folder.
 
 Centralizes "where an agent's pieces live" — the .grgn contract, missions, claim
 findings, tool-reliability stats, the per-agent skin, and per-agent commands — so no
@@ -17,7 +17,7 @@ import os
 
 from shared.config import AGENTS_DIR
 
-# The bundle root (~/.qemu_vms/_agents). A module attribute so tests patch it once.
+# The bundle root (~/.gorgon/_agents). A module attribute so tests patch it once.
 AGENTS_ROOT = AGENTS_DIR
 
 
@@ -92,7 +92,7 @@ def resolve_grgn(name_or_file: str, code_dir: str = None) -> str:
     """The .grgn path for an agent selection (the single resolution authority).
 
     An absolute path is returned as-is; otherwise the bundle contract
-    (~/.qemu_vms/_agents/<name>/<name>.grgn) wins if it exists, falling back to
+    (~/.gorgon/_agents/<name>/<name>.grgn) wins if it exists, falling back to
     ``<code_dir>/<name_or_file>`` — where the built-in doorman and any not-yet-migrated
     agent live. The NAME is the selection's basename without extension.
     """
@@ -110,7 +110,7 @@ def migrate(code_dir: str = None) -> list:
 
     Moves each agent's forged code-dir ``.grgn`` (+ ``.sig``), its
     ``~/.gorgon/missions/<name>/``, and its ``~/.gorgon/{findings,toolstats}.<name>.json``
-    into ``~/.qemu_vms/_agents/<name>/``. The built-in doorman stays code-resident.
+    into ``~/.gorgon/_agents/<name>/``. The built-in doorman stays code-resident.
     Safe to call repeatedly — an agent already present in its bundle is skipped.
     Returns the names touched. (The bundle-first resolver means an unmigrated agent
     still loads from the code dir, so this is consolidation, not a correctness gate.)

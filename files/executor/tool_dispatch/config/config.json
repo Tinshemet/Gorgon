@@ -1,5 +1,5 @@
 {
-  "vm_base": "~/.qemu_vms",
+  "vm_base": "~/.gorgon",
   "valid_machine_types": [
     "q35",
     "pc",

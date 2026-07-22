@@ -1,7 +1,7 @@
 """
 vm_state.py — VM State Persistence Layer
 
-Persists running VM PIDs to ~/.qemu_vms/.state.json so the manager
+Persists running VM PIDs to ~/.gorgon/.state.json so the manager
 can reconnect after a terminal restart. Also provides _PsutilProcWrapper
 which makes a psutil.Process behave like subprocess.Popen.
 

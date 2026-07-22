@@ -706,10 +706,10 @@ def run_executor_test(tc: ExecutorTest) -> TestResult:
         import shutil as _shutil
         vm_name = tc.input_args.get("name","")
         if vm_name and tc.tool == "create_vm":
-            vm_dir = os.path.join(os.path.expanduser("~"), ".qemu_vms", vm_name)
+            vm_dir = os.path.join(os.path.expanduser("~"), ".gorgon", vm_name)
             _shutil.rmtree(vm_dir, ignore_errors=True)
         if _fixture_name:
-            _fx_dir = os.path.join(os.path.expanduser("~"), ".qemu_vms", _fixture_name)
+            _fx_dir = os.path.join(os.path.expanduser("~"), ".gorgon", _fixture_name)
             _shutil.rmtree(_fx_dir, ignore_errors=True)
             if tc.tool == "mark_as_template":
                 from executor.api._vm_constants import TEMPLATES_DIR
