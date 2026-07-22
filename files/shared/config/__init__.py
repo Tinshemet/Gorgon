@@ -53,6 +53,11 @@ AUDIT_LOG_FILE   = os.path.expanduser(_c("audit_log_file"))
 EVENT_LOG_ROTATE_BYTES = _c("event_log_rotate_bytes")   # events.log rotation threshold
 SIGNING_KEY_FILE = os.path.expanduser(_c("signing_key_file"))
 TOKEN_FILE       = os.path.expanduser(_c("token_file"))
+# operator-password hashing (stdlib scrypt) — cost/size parameters
+SCRYPT_N     = _c("scrypt_n")
+SCRYPT_R     = _c("scrypt_r")
+SCRYPT_P     = _c("scrypt_p")
+SCRYPT_DKLEN = _c("scrypt_dklen")
 
 # ── local-server spawn / stop (env wins over JSON, as it always has) ────────────
 SERVER_HOST      = _c("server_host")

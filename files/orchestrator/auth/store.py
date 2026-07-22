@@ -20,13 +20,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from shared.config import SCRYPT_N, SCRYPT_R, SCRYPT_P, SCRYPT_DKLEN
+
 _GORGON_DIR     = Path.home() / ".gorgon"
 OPERATORS_FILE  = _GORGON_DIR / "operators.json"
 
-_SCRYPT_N = 2 ** 14
-_SCRYPT_R = 8
-_SCRYPT_P = 1
-_DKLEN    = 32
+_SCRYPT_N = SCRYPT_N     # scrypt CPU/memory cost (defaults in shared config)
+_SCRYPT_R = SCRYPT_R     # block size
+_SCRYPT_P = SCRYPT_P     # parallelization
+_DKLEN    = SCRYPT_DKLEN  # derived-key length
 
 
 def _load() -> Dict[str, Dict[str, Any]]:

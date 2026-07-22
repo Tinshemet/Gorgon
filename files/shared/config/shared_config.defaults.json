@@ -7,6 +7,10 @@
   "audit_log_file": "~/.gorgon.audit.log",
   "signing_key_file": "~/.gorgon.key",
   "token_file": "~/.gorgon.token",
+  "scrypt_n": 16384,
+  "scrypt_r": 8,
+  "scrypt_p": 1,
+  "scrypt_dklen": 32,
 
   "server_host": "0.0.0.0",
   "server_port": 8080,
