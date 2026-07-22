@@ -11,18 +11,18 @@ class ClaimFindingTool(Tool):
     names = ("claim_finding",)
     def run(self, args, ctx):
         try:
-            from orchestrator.ai.planner.findings import claim_type as _ct, coerce_value as _cv
+            from orchestrator.ai.planner.claim_types import claim_type as _ct
             spec = _ct(args.get("type"))
         except Exception:
             spec = None
         if spec is None:
             return {"success": False, "error": f"unknown claim type '{args.get('type')}'"}
         try:
-            val = _cv(args.get("value"), spec.get("value_type", "string"))
+            val = spec.coerce(args.get("value"))
         except (ValueError, TypeError):
             return {"success": False,
-                    "error": f"claim value {args.get('value')!r} is not a {spec.get('value_type')}"}
-        grounded = bool(spec.get("assertion"))
+                    "error": f"claim value {args.get('value')!r} is not a {spec.value_type_name}"}
+        grounded = spec.grounded
         evidence = (args.get("evidence") or "").strip()
         if not grounded and not evidence:
             # No probe CAN confirm this type, so a human must — and can't without

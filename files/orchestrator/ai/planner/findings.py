@@ -20,10 +20,10 @@ recon stage (scan_network, get_vm_ip), where results are observations, not owned
 state. The schema is data (sits beside the catalog's `effect`), so a new yielding
 tool declares its fact in one place.
 """
-import json
-import os as _os
 import re
 from typing import Any, Dict, Optional
+
+from .claim_types import claim_type      # the typed-claim registry (ClaimType classes)
 
 
 # Per-tool yield-schema: {tool: {"fact": <template over args>, "value": <result key>,
@@ -47,29 +47,6 @@ DEFAULT_SCHEMA: Dict[str, Dict[str, Any]] = {
     # extract_value where the recorded value lives.
     "claim_finding": {"value": "value"},
 }
-
-
-def _load_claim_types() -> Dict[str, Dict[str, Any]]:
-    """The data-driven claim-type registry (name → {value_type, assertion?, operand?})."""
-    try:
-        with open(_os.path.join(_os.path.dirname(__file__), "claim_types.json")) as f:
-            return json.load(f).get("types", {}) or {}
-    except Exception:
-        return {}
-
-
-def claim_type(name: str) -> Optional[Dict[str, Any]]:
-    return _load_claim_types().get(name)
-
-
-def coerce_value(raw: Any, value_type: str):
-    """Coerce a claimed value to its declared type, or raise ValueError. Keeps the
-    ledger typed (balance is an int, not the string '5000')."""
-    if value_type in ("string", "str"):   return str(raw)
-    if value_type in ("int", "integer"):  return int(raw)
-    if value_type == "float":             return float(raw)
-    if value_type in ("bool", "boolean"): return str(raw).strip().lower() in ("1", "true", "yes")
-    return str(raw)
 
 
 class _Blank(dict):
@@ -201,7 +178,7 @@ def yield_fact(tool: str, args: Dict[str, Any], schema: Dict[str, Dict[str, Any]
         ct = claim_type(args.get("type"))
         if ct is None or args.get("value") in (None, ""):
             return None
-        return f"{args['type']}({args['value']})"
+        return ct.fact_key(args["value"])
     spec = (schema or {}).get(tool)
     if not spec:
         return None
@@ -234,14 +211,11 @@ def finding_probe_spec(tool: str, args: Dict[str, Any],
     This is deterministic finding-validation: a value read from a tool's (possibly
     free-text) output counts only if a read-only guest_probe independently confirms
     it — closing the "trust the extracted value" hole."""
-    if tool == "claim_finding":                       # typed claim → probe from claim_types
+    if tool == "claim_finding":                       # typed claim → probe from the ClaimType
         ct = claim_type(args.get("type"))
-        if not ct or not ct.get("assertion"):
+        if not ct or not ct.grounded:
             return None                                # no probe for this type → unverified claim
-        spec_str = f"{args.get('vm')}:{ct['assertion']}:{args.get('value')}"
-        if ct.get("operand"):                          # two-operand assertion (e.g. host_reachable)
-            spec_str += f":{args.get('operand', '')}"
-        return spec_str
+        return ct.probe_spec(args.get("vm"), args.get("value"), args.get("operand"))
     spec = (schema or {}).get(tool)
     if not spec or not spec.get("verify"):
         return None
