@@ -3,7 +3,7 @@ orchestrator/auth/store.py — Operator account storage.
 
 Backs the operator login layer that sits above the existing API_TOKEN
 bearer secret (see orchestrator/http/api_server.py's _require_auth and
-orchestrator/ai/direct_cli.py's cli_direct() gate). Single-operator in
+orchestrator/ai/chat/commands/'s cli_direct() gate). Single-operator in
 practice for 1.1, but the on-disk schema carries `role`/`tenant_id` so the
 1.2 multi-tenant milestone can extend this store instead of migrating it.
 

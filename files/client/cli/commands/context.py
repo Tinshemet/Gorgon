@@ -110,7 +110,7 @@ def _allowed_tools() -> "set | None":
 
 
 # login/logout bypass the gate itself; everything else — including "operator"
-# management — is held to it. Mirrors orchestrator/ai/direct_cli.py's
+# management — is held to it. Mirrors orchestrator/ai/chat/commands/context.py's
 # _operator_gate_ok exactly: this is the OTHER in-process, unauthenticated-by-
 # default path to `manager` (client_wrapper's `gorgon <cmd>` uses THIS package).
 _AUTH_EXEMPT_COMMANDS = {"login", "logout"}

@@ -24,7 +24,7 @@ Each command entry (command_catalog.json "commands"):
   terminal    False for AI-only capabilities that have no terminal verb.
 
 Keep command_catalog.json in sync with the dispatch tables in client/cli/commands.py
-and orchestrator/ai/direct_cli.py — it is the authored list they should both render.
+and orchestrator/ai/chat/commands/ — it is the authored list they should both render.
 """
 import json
 import os

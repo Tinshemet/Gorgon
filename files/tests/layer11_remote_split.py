@@ -1499,7 +1499,7 @@ def _t_direct_cli_gate() -> List[str]:
     _require_auth. Exercised directly, no TestClient involved."""
     issues = []
     with _isolated_auth_paths():
-        from orchestrator.ai.chat.direct_cli import _operator_gate_ok
+        from orchestrator.ai.chat.commands.context import _operator_gate_ok
         from orchestrator.auth import sessions as op_sessions
         from orchestrator.auth import store as op_store
 

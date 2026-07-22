@@ -4,7 +4,7 @@ orchestrator/auth/sessions.py — Operator session tokens.
 Distinct from the unrelated chat-conversation `_sessions` dict in
 orchestrator/http/api_server.py (that's per-conversation message history;
 this is operator identity). File-backed rather than in-memory, on purpose:
-orchestrator/ai/direct_cli.py's in-process dispatch path and the HTTP server
+orchestrator/ai/chat/commands/'s in-process dispatch path and the HTTP server
 are separate processes that both need to see the same live session state —
 the same reasoning behind executor/api/vm_state.py's VMState fix this same
 session (every read re-loads the file rather than trusting a snapshot, since
@@ -25,7 +25,7 @@ _GORGON_DIR      = Path.home() / ".gorgon"
 SESSIONS_FILE    = _GORGON_DIR / "operator_sessions.json"
 # This box's currently-logged-in operator, as distinct from SESSIONS_FILE (all
 # valid sessions server-side) — conceptually separate even though both live on
-# one host today. Shared by orchestrator/ai/direct_cli.py's cli_direct() gate
+# one host today. Shared by orchestrator/ai/chat/commands/'s cli_direct() gate
 # and cli.py's chat_loop() gate so the two entry points can't drift.
 CURRENT_SESSION_FILE = _GORGON_DIR / "current_session"
 

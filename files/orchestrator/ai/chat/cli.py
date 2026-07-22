@@ -227,7 +227,7 @@ def chat_loop(verbose: bool = False) -> None:
     _forced_verbose = verbose      # -v forces it on; otherwise follow the persisted toggle,
     verbose = _forced_verbose or get_verbose()   # refreshed each turn so `verbose on/off` applies live
 
-    # Same gate as direct_cli.py's cli_direct() — both are local, in-process
+    # Same gate as chat/commands/ cli_direct() — both are local, in-process
     # entry points to `manager`, so both need it independently (neither goes
     # through orchestrator/http/api_server.py's _require_auth). Pre-bootstrap
     # (no operator accounts yet) this is a no-op, matching legacy behavior.
@@ -475,7 +475,7 @@ def chat_loop(verbose: bool = False) -> None:
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    from .direct_cli import cli_direct
+    from .commands import cli_direct
 
     argv    = sys.argv[1:]
     verbose = "-v" in argv or "--verbose" in argv or get_verbose()   # persisted toggle applies to the terminal too
