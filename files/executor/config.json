@@ -1,5 +1,7 @@
 {
   "host": "0.0.0.0",
   "port": 8001,
-  "token": ""
+  "token": "",
+  "io_chunk_bytes": 4194304,
+  "tar_chunk_bytes": 65536
 }
