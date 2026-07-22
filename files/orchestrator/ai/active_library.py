@@ -39,6 +39,17 @@ def _local_manager():
         return None
 
 
+def _remote_mode() -> bool:
+    """True in split mode — the executor (and the VMs) is a separate server. The in-process
+    'local' manager would scan the orchestrator's own empty ~/.gorgon, so the library must
+    pull state from the executor over the wire instead."""
+    try:
+        from orchestrator.executor_client import API_URL
+        return bool(API_URL) and API_URL != "local"
+    except Exception:
+        return False
+
+
 # ── Tool metadata — DERIVED from the canonical registry (executor/command_catalog) ─
 # _TOOL_EFFECTS = which compartment each mutating tool refreshes (read-only tools
 # absent → no update); _VM_NAME_ARG = which arg names the VM its effect targets
@@ -101,9 +112,18 @@ class ActiveLibrary:
     # ── full build (session start) ─────────────────────────────────────────────
     def snapshot(self, manager=None) -> "ActiveLibrary":
         """Build the whole registry from scratch. Call once at session start."""
-        mgr = manager or _local_manager()
         self._vms, self._profiles, self._networks, self._templates, self._isos = {}, {}, {}, {}, []
         self._transactions = []
+
+        # Split mode: the VMs live on the executor, not the orchestrator's local disk. Pull the
+        # whole registry over the wire (execute_tool routes to the executor) — otherwise the
+        # local manager scans an empty ~/.gorgon and the AI grounds on "(no VMs)".
+        if manager is None and _remote_mode():
+            self._snapshot_remote()
+            self.built = True
+            return self
+
+        mgr = manager or _local_manager()
         if mgr is None:
             self.built = False   # remote/unavailable — callers fall back to a live query
             return self
@@ -119,6 +139,57 @@ class ActiveLibrary:
         self._refresh_networks(mgr)
         self._refresh_templates(mgr)
         return self
+
+    @staticmethod
+    def _remote_vm_record(row: Dict[str, Any]) -> Dict[str, Any]:
+        """Build a VM record from an executor list_vms row (split mode). Lighter than the
+        local _vm_record — arch/template/guest_agent aren't in list_vms — but carries the
+        name/status/os/specs/flags the digest needs so the AI sees the VMs exist."""
+        return {
+            "name":        row.get("name"),
+            "os_type":     row.get("os", "") or "",
+            "os_name":     row.get("os", "") or "",
+            "arch":        row.get("arch", "") or "",
+            "status":      row.get("status", "unknown"),
+            "cpu_cores":   row.get("cpu_cores", 0),
+            "memory_mb":   row.get("memory_mb", 0),
+            "disks":       row.get("disks", 0),
+            "labels":      list(row.get("labels", []) or []),
+            "flags":       list(row.get("flags", []) or []),
+            "template":    row.get("template"),
+            "guest_agent": row.get("guest_agent"),
+        }
+
+    def _snapshot_remote(self) -> None:
+        """Populate the registry from the executor over HTTP (split mode). Each list is
+        best-effort — a failed call leaves that compartment empty rather than raising."""
+        from orchestrator.executor_client import execute_tool
+
+        def _rows(tool: str) -> list:
+            try:
+                raw = execute_tool(tool, {}, log=False)
+            except Exception:
+                return []
+            if isinstance(raw, list):
+                return raw
+            if isinstance(raw, dict):
+                return raw.get("vms") or raw.get("profiles") or raw.get("templates") \
+                    or raw.get("networks") or []
+            return []
+
+        for row in _rows("list_vms"):
+            if isinstance(row, dict) and row.get("name"):
+                self._vms[row["name"]] = self._remote_vm_record(row)
+        for p in _rows("list_profiles"):
+            name = p.get("name") if isinstance(p, dict) else p
+            if name:
+                self._profiles[name] = p if isinstance(p, dict) else {"name": p}
+        for t in _rows("list_templates"):
+            if isinstance(t, dict) and t.get("name"):
+                self._templates[t["name"]] = t
+        for n in _rows("list_networks"):
+            if isinstance(n, dict) and n.get("name"):
+                self._networks[n["name"]] = n
 
     def _refresh_profiles(self) -> None:
         try:
