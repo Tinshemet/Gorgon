@@ -12,6 +12,7 @@ from typing import Any, Dict
 
 from ..fields import ExpiryField
 from shared.bundle import resolve_grgn as _resolve_grgn
+from shared.config import DEFAULT_AGENT
 
 
 def _is_expired(grgn: Dict[str, Any]) -> bool:
@@ -39,10 +40,10 @@ def _load_active() -> "tuple":
     try:
         from shared.agent_select import resolve as _resolve_agent
     except Exception:
-        _resolve_agent = lambda: "doorman.grgn"                                # type: ignore[assignment]
+        _resolve_agent = lambda: DEFAULT_AGENT                                 # type: ignore[assignment]
     agent_file = _resolve_agent()
     here       = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # up from contract/ to agent/
-    doorman    = os.path.join(here, "doorman.grgn")
+    doorman    = os.path.join(here, DEFAULT_AGENT)
     agent_path = agent_grgn_path(agent_file, here)
     if not os.path.isfile(agent_path):
         # A stale selection (deleted file) must not brick startup — fall back safely.

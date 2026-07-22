@@ -16,8 +16,10 @@ import json
 import os
 from typing import List
 
+from shared.config import DEFAULT_AGENT
+
 _PATH = os.path.expanduser("~/.gorgon/voided.json")
-PROTECTED = frozenset({"doorman"})     # the fallback agent is never voidable
+PROTECTED = frozenset({os.path.splitext(DEFAULT_AGENT)[0]})   # the fallback agent is never voidable
 
 
 def _load() -> List[str]:
