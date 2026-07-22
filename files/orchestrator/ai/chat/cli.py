@@ -367,9 +367,20 @@ class OrchestratorCLI:
     def run(self, argv=None) -> None:
         """Parse the flags and dispatch. ``argv`` defaults to ``sys.argv[1:]``;
         pass a list to drive it in tests."""
+        self._migrate_bundles()
         argv = list(sys.argv[1:] if argv is None else argv)
         argv, verbose = self._parse_flags(argv)
         self._dispatch(argv, verbose)
+
+    def _migrate_bundles(self) -> None:
+        """Best-effort, idempotent one-time consolidation of legacy scattered agent
+        state into ~/.qemu_vms/_agents/ bundles. Never blocks startup."""
+        try:
+            import shared.bundle as _bundle
+            from orchestrator.ai.agent import forge as _forge
+            _bundle.migrate(os.path.dirname(os.path.abspath(_forge.__file__)))
+        except Exception:
+            pass
 
     def _parse_flags(self, argv):
         """Strip -v/-cu/-cs (applying their side effects); return (argv, verbose).

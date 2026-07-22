@@ -21,12 +21,12 @@ class AgentCommand(Command):
         # contract's blacklist — an agent under a locked contract can't switch
         # itself out — and (2) operator re-authentication. The client never
         # restarts the server; a change takes effect when the operator reboots it.
-        import glob as _glob
+        import shared.bundle as _bundle
         from shared import agent_select as _sel
         from shared import audit as _audit
         from orchestrator.ai.agent import forge as _forge
-        _agent_dir = os.path.dirname(os.path.abspath(_forge.__file__))
-        _resolve  = lambda f: f if os.path.isabs(f) else os.path.join(_agent_dir, f)
+        _agent_dir = os.path.dirname(os.path.abspath(_forge.__file__))   # code-resident templates
+        _resolve  = lambda f: _bundle.resolve_grgn(f, _agent_dir)   # bundle-first, code fallback
         _op       = _auth_sessions.current_username() if _auth_sessions else None
 
         def _validate(f: str):
@@ -71,7 +71,7 @@ class AgentCommand(Command):
                 _grgn_status = lambda p: "unknown"
             _colors = {"encrypted": "green", "signed": "green",
                        "unsigned": "yellow", "tampered": "bold red"}
-            for p in sorted(_glob.glob(os.path.join(_agent_dir, "*.grgn"))):
+            for p in _bundle.list_agent_grgns(_agent_dir):   # bundle contracts + code templates
                 st = _grgn_status(p)
                 c = _colors.get(st, "dim")
                 console.print(f"  [{c}]{os.path.basename(p):<22} {st}[/{c}]")

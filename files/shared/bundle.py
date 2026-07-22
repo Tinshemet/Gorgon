@@ -101,6 +101,68 @@ def resolve_grgn(name_or_file: str, code_dir: str = None) -> str:
     return os.path.join(code_dir, name_or_file) if code_dir else b.contract_path
 
 
+def migrate(code_dir: str = None) -> list:
+    """One-time, idempotent migration of legacy scattered agent state into bundles.
+
+    Moves each agent's forged code-dir ``.grgn`` (+ ``.sig``), its
+    ``~/.gorgon/missions/<name>/``, and its ``~/.gorgon/{findings,toolstats}.<name>.json``
+    into ``~/.qemu_vms/_agents/<name>/``. The built-in doorman stays code-resident.
+    Safe to call repeatedly — an agent already present in its bundle is skipped.
+    Returns the names touched. (The bundle-first resolver means an unmigrated agent
+    still loads from the code dir, so this is consolidation, not a correctness gate.)
+    """
+    import shutil
+    legacy = os.path.expanduser("~/.gorgon")
+    touched = set()
+
+    # 1. forged code-dir .grgn (doorman stays code-resident)
+    if code_dir and os.path.isdir(code_dir):
+        for f in glob.glob(os.path.join(code_dir, "*.grgn")):
+            name = os.path.splitext(os.path.basename(f))[0]
+            b = Bundle(name)
+            if name == "doorman" or b.has_contract():
+                continue
+            b.ensure()
+            shutil.move(f, b.contract_path)
+            if os.path.isfile(f + ".sig"):
+                shutil.move(f + ".sig", b.sig_path)
+            touched.add(name)
+
+    # 2. legacy per-agent missions folders (per-file move: ensure() may have already
+    # created an empty missions/, so guard on the file, not the dir)
+    legacy_missions = os.path.join(legacy, "missions")
+    if os.path.isdir(legacy_missions):
+        for name in os.listdir(legacy_missions):
+            src = os.path.join(legacy_missions, name)
+            if not os.path.isdir(src):
+                continue
+            b = Bundle(name)
+            b.ensure()
+            for mf in os.listdir(src):
+                dst = os.path.join(b.missions_dir, mf)
+                if os.path.exists(dst):
+                    continue
+                shutil.move(os.path.join(src, mf), dst)
+                touched.add(name)
+            try:
+                os.rmdir(src)          # drop the now-empty legacy folder
+            except OSError:
+                pass
+
+    # 3. legacy claim + tool-reliability files
+    for prefix, dest in (("findings", "findings_path"), ("toolstats", "toolstats_path")):
+        for f in glob.glob(os.path.join(legacy, f"{prefix}.*.json")):
+            name = os.path.basename(f)[len(prefix) + 1:-len(".json")]
+            b    = Bundle(name)
+            if os.path.isfile(getattr(b, dest)):
+                continue
+            b.ensure()
+            shutil.move(f, getattr(b, dest))
+            touched.add(name)
+
+    return sorted(touched)
+
+
 def list_agent_grgns(code_dir: str = None) -> list:
     """Every agent .grgn path: bundle contracts first, then the code-resident
     templates (doorman, …) not shadowed by a bundle of the same name."""

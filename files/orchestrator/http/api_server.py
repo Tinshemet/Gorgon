@@ -110,6 +110,12 @@ async def _startup() -> None:
     from orchestrator.executor_client import sync as _sync
     _sync()
     try:
+        import shared.bundle as _bundle
+        from orchestrator.ai.agent import forge as _forge
+        _bundle.migrate(os.path.dirname(os.path.abspath(_forge.__file__)))   # legacy → bundles
+    except Exception:
+        pass
+    try:
         from orchestrator.ai.agent import contract as _contract
         from shared.grgn_sign import ensure_integrity
         ensure_integrity(_contract._AGENT_PATH)       # sign plaintext templates (TOFU)
