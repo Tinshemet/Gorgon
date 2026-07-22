@@ -36,7 +36,7 @@ def _build_system_prompt() -> str:
     custom_note = (
         "\nCUSTOM MODE ACTIVE (-cu): product_name and manufacturer can be any fictional values. "
         "Skip all warnings about unverifiable hardware."
-    ) if _host_probe._CUSTOM_MODE else ""
+    ) if _host_probe.custom_mode() else ""
 
     # Active Library: current system state + relations, so the model resolves
     # references ("same OS as test1", "all redteam VMs") from ground truth
