@@ -18,6 +18,13 @@ with open(os.path.join(os.path.dirname(__file__), "config.json")) as _f:
     _CFG = json.load(_f)
 _PORTS               = _CFG["ports"]
 _TIMEOUTS            = _CFG["timeouts"]
+
+# Port-pool bases live here (next to next_free_port / _port_free) so the qemu_arg_builder
+# mixins can import them without a cycle back to qemu_arg_builder. qemu_arg_builder re-exports
+# them for its long-standing importers (_vm_lifecycle, _vm_runtime).
+VNC_PORT_START       = _PORTS["vnc_start"]
+SPICE_PORT_START     = _PORTS["spice_start"]
+PORT_RANGE           = _PORTS["port_range"]
 PORT_RANGE           = _PORTS["port_range"]
 _ISO_DESKTOP_SUBDIRS = set(_CFG["iso_desktop_subdirs"])
 _ISO_HOME_SUBDIRS    = _CFG["iso_home_subdirs"]
