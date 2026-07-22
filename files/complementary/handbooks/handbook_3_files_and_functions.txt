@@ -15,7 +15,7 @@ ORCHESTRATOR  (files/orchestrator/)
 ────────────────────────────────────────────────────────────────────────────────
 
 ────────────────────────────────────────────────────────────────────────────────
-orchestrator/ai/cli.py
+orchestrator/ai/chat/cli.py
 ────────────────────────────────────────────────────────────────────────────────
 PURPOSE
   The interactive AI chat REPL entry point. Loads session state, prints the
@@ -25,7 +25,7 @@ PURPOSE
   the module __main__ resolves to when invoked with no CLI arguments; with
   arguments it hands off to direct_cli.cli_direct(). There is no more
   "ollama_wrapper.py" shim — this file (plus direct_cli.py) IS the entry
-  point package, imported directly as orchestrator.ai.cli.
+  point package, imported directly as orchestrator.ai.chat.cli.
 
 MODULE-LEVEL STATE
   _CFG            — config from orchestrator/ai/config.json
@@ -94,7 +94,7 @@ IMPORTANT NOTES
     -> chat_turn's _is_critical only; http_chat never imports cli.
 
 ────────────────────────────────────────────────────────────────────────────────
-orchestrator/ai/direct_cli.py
+orchestrator/ai/chat/commands/
 ────────────────────────────────────────────────────────────────────────────────
 PURPOSE
   Dispatches the non-interactive `gorgon <cmd>` sub-commands (list, launch,
@@ -634,7 +634,7 @@ ENDPOINT: POST /chat (auth) — the full multi-turn AI chat endpoint. Session
   delete_disks=True for delete_vm) and appends a synthetic assistant/tool
   message pair to the session so the next Ollama call sees a completed
   action instead of repeating it. Otherwise calls
-  orchestrator.ai.cli.process_message() (imported at call time from
+  orchestrator.ai.chat.cli.process_message() (imported at call time from
   http_chat via cli's re-export) and stores the resulting messages/
   pending_tool.
 ENDPOINT: GET /sessions (auth) / DELETE /sessions/{id} (auth) — list / clear
@@ -980,7 +980,7 @@ PURPOSE
   description, filtered to the executor's currently-allowed tools) and the
   AI-chat CLI help (same, plus a short example prompt per command). Rendered
   by shared/command_help.py. Kept in sync by hand with the dispatch tables in
-  client/cli/commands/ and orchestrator/ai/direct_cli.py.
+  client/cli/commands/ and orchestrator/ai/chat/commands/.
 
 DATA: COMMAND_CATALOG: List[Dict]
   Each entry: command (terminal verb, "" for AI-only capabilities), tools

@@ -14,7 +14,7 @@ of this request lifecycle.
 
 Even in the common single-machine setup, the client is a real HTTP client of
 the orchestrator — "gorgon" does NOT run an in-process chat loop by default.
-The only in-process chat loop is orchestrator/ai/cli.py's chat_loop(), reached
+The only in-process chat loop is orchestrator/ai/chat/cli.py's chat_loop(), reached
 by running cli.py directly as a script (orchestrator-side debugging), not by
 the "gorgon" alias.
 
@@ -27,7 +27,7 @@ When you run "gorgon" the following happens in order:
   1. Shell expands the alias (written by setup_client.sh / install_orchestrator.sh):
        alias gorgon='PYTHONPATH=~/Desktop/gorgon/files python3 ~/Desktop/gorgon/files/client/client_wrapper.py'
 
-  2. Python executes client/client_wrapper.py [main()]:
+  2. Python executes client/client_wrapper.py [ClientCLI.run()]:
      - Parses flags: -v (verbose), -cu (custom mode), -cs (clear session),
        -tf <vm> (fingerprint report — calls client/cli/commands/ directly,
        no AI, and returns immediately)
@@ -75,8 +75,8 @@ whatever's on the other end of SERVER_URL and reports "Cannot connect" if
 nothing answers.
 
 Alternate entry point (bypasses the client and HTTP entirely): running
-"python3 -m orchestrator.ai.cli" directly (no args) calls chat_loop() in
-orchestrator/ai/cli.py — the interactive REPL that talks to Ollama and the
+"python3 -m orchestrator.ai.chat.cli" directly (no args) calls chat_loop() in
+orchestrator/ai/chat/cli.py — the interactive REPL that talks to Ollama and the
 executor pipeline in the same process, with no client_wrapper.py, no curses
 TUI, and no /chat HTTP hop. This is for orchestrator-side debugging only; the
 "gorgon" alias never invokes it.
@@ -316,11 +316,11 @@ executor/server.py also exposes GET /profiles, /capabilities, /status,
 proxies through for `gorgon fetch` / `gorgon bundle` in split mode.
 
 ────────────────────────────────────────────────────────────────────────────────
-2B. THE INTERACTIVE REPL PATH (orchestrator/ai/cli.py chat_loop) — NOT the
+2B. THE INTERACTIVE REPL PATH (orchestrator/ai/chat/cli.py chat_loop) — NOT the
     normal "gorgon" flow
 ────────────────────────────────────────────────────────────────────────────────
 
-Running orchestrator/ai/cli.py directly (chat_loop(), no client, no HTTP)
+Running orchestrator/ai/chat/cli.py directly (chat_loop(), no client, no HTTP)
 follows almost the same gate sequence as http_chat.py, but the gates
 themselves live in orchestrator/ai/chat_turn.py's _process_tool_call() and
 prompt the terminal interactively (console.input()) instead of returning

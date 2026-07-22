@@ -297,7 +297,7 @@ SECTION 3 — SINGLE-MACHINE MODE vs SPLIT MODE
   │    → runs QEMU/KVM directly, in-process                     │
   └─────────────────────────────────────────────────────────────┘
 
-  The interactive loop (orchestrator/ai/cli.py → chat_loop) is also available
+  The interactive loop (orchestrator/ai/chat/cli.py → chat_loop) is also available
   and bypasses HTTP entirely — useful for orchestrator-side debugging.
 
 3.3  SPLIT MODE (separate client / orchestrator / executor machines)

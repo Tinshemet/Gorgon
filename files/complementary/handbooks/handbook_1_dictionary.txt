@@ -811,11 +811,11 @@ X-SHA256 header
 
 liveness monitor
   A background daemon thread started by the orchestrator's own interactive
-  chat_loop (orchestrator/ai/cli.py) that pings GET /health every 30 seconds
+  chat_loop (orchestrator/ai/chat/cli.py) that pings GET /health every 30 seconds
   against API_URL when it isn't "local" — i.e. it monitors the EXECUTOR's
   reachability when the executor is split onto its own machine. Alerts with
   a red warning if unreachable.
-  Source: orchestrator/ai/cli.py → chat_loop()
+  Source: orchestrator/ai/chat/cli.py → chat_loop()
 
 rotate-token
   POST /rotate-token endpoint. Replaces the in-memory API token and writes
@@ -826,7 +826,7 @@ fetch command
   A CLI/chat command that downloads the primary disk of a named VM from the
   remote orchestrator machine to the local machine. Checks SHA-256 first to
   skip redundant downloads, uses HTTP Range to resume interrupted ones.
-  Source: orchestrator/ai/direct_cli.py → fetch subcommand
+  Source: orchestrator/ai/chat/commands/ → fetch subcommand
 
 TestClient (FastAPI)
   A synchronous HTTP client that talks to a FastAPI app in-process (no real
@@ -866,12 +866,12 @@ chat_loop
   The main interactive loop. Reads user input, sends to Ollama, receives tool
   calls, sanitises, preflights, executes, displays results, repeats.
   Built-in shortcuts bypass Ollama entirely (list, profiles, system, exit).
-  Source: orchestrator/ai/cli.py → chat_loop()
+  Source: orchestrator/ai/chat/cli.py → chat_loop()
 
 cli_direct
   The non-interactive CLI mode. Handles subcommands like gorgon list,
   gorgon launch <name>, etc. No AI involved.
-  Source: orchestrator/ai/cli.py → cli_direct()
+  Source: orchestrator/ai/chat/cli.py → cli_direct()
 
 session
   The AI conversation history. Loaded from ~/.qemu_vms/.session.json at
@@ -981,7 +981,7 @@ PYTHONPATH
   Environment variable that adds directories to Python's module search path.
   Required when running scripts under files/ because Python adds the script's
   own directory to sys.path, not the files/ root. Setting PYTHONPATH=files/
-  makes "from orchestrator.ai.cli import ..." (and the other top-level
+  makes "from orchestrator.ai.chat.cli import ..." (and the other top-level
   packages) resolve.
   Source: ~/.zshrc alias, setup scripts
 

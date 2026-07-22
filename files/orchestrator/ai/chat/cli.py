@@ -1,9 +1,12 @@
 """
-cli.py — CLI Entry Point and Chat Loop Layer
+cli.py — orchestrator CLI entry point and chat-loop layer.
 
-Provides the interactive AI chat loop and the direct sub-command CLI
-(gorgon list, launch, stop, etc.). This is the main entry point
-for both modes; ollama_wrapper.py is a thin shim that re-exports from here.
+The terminal entry point for the orchestrator side: ``OrchestratorCLI.run()`` (via
+``python3 -m orchestrator.ai.chat.cli``) parses the -v/-cu/-cs flags and routes to
+the direct sub-command CLI (``chat/commands`` → ``cli_direct``, args present) or the
+interactive AI chat REPL (``chat_loop``, no args). The client-side entry is
+``client/client_wrapper.py`` → ``ClientCLI`` (the ``gorgon`` alias). ``process_message``
+(the HTTP single-turn twin of ``chat_loop``) is re-exported here for the api_server.
 """
 
 import json
@@ -351,24 +354,45 @@ def chat_loop(verbose: bool = False) -> None:
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 
+class OrchestratorCLI:
+    """The orchestrator terminal entry point (``python3 -m orchestrator.ai.chat.cli``).
+
+    ``run()`` parses the leading flags — ``-v``/``--verbose`` (verbose tool output),
+    ``-cu`` (custom mode: skip product verification), ``-cs`` (clear the saved
+    session) — then routes: any remaining args → the direct sub-command CLI
+    (``cli_direct``); no args → the interactive chat REPL (``chat_loop``).
+    """
+
+    def run(self, argv=None) -> None:
+        """Parse the flags and dispatch. ``argv`` defaults to ``sys.argv[1:]``;
+        pass a list to drive it in tests."""
+        argv = list(sys.argv[1:] if argv is None else argv)
+        argv, verbose = self._parse_flags(argv)
+        self._dispatch(argv, verbose)
+
+    def _parse_flags(self, argv):
+        """Strip -v/-cu/-cs (applying their side effects); return (argv, verbose).
+        Verbose is on if -v/--verbose is present OR the persisted toggle is set."""
+        verbose = "-v" in argv or "--verbose" in argv or get_verbose()
+        argv    = [a for a in argv if a not in ("-v", "--verbose")]
+        if "-cu" in argv:
+            argv = [a for a in argv if a != "-cu"]
+            set_custom_mode(True)
+            console.print("[dim]Custom mode active — product verification disabled[/dim]")
+        if "-cs" in argv:
+            argv = [a for a in argv if a != "-cs"]
+            clear_session()
+            console.print("[dim]Session cleared.[/dim]")
+        return argv, verbose
+
+    def _dispatch(self, argv, verbose) -> None:
+        """Route: remaining args → the direct sub-command CLI; none → the chat REPL."""
+        if argv:
+            from .commands import cli_direct
+            cli_direct(argv, verbose=verbose)
+        else:
+            chat_loop(verbose=verbose)
+
+
 if __name__ == "__main__":
-    from .commands import cli_direct
-
-    argv    = sys.argv[1:]
-    verbose = "-v" in argv or "--verbose" in argv or get_verbose()   # persisted toggle applies to the terminal too
-    argv    = [a for a in argv if a not in ("-v", "--verbose")]
-
-    if "-cu" in argv:
-        set_custom_mode(True)
-        argv = [a for a in argv if a != "-cu"]
-        console.print("[dim]Custom mode active — product verification disabled[/dim]")
-
-    if "-cs" in argv:
-        clear_session()
-        argv = [a for a in argv if a != "-cs"]
-        console.print("[dim]Session cleared.[/dim]")
-
-    if argv:
-        cli_direct(argv, verbose=verbose)
-    else:
-        chat_loop(verbose=verbose)
+    OrchestratorCLI().run()

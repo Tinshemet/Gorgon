@@ -348,7 +348,7 @@ if [[ "${GORGON_SKIP_OPERATOR_PROMPT:-0}" != "1" ]]; then
     echo ""
     read -r -p "  Enable operator-only mode now? [y/N]: " ENABLE_OPERATOR
     if [[ "$ENABLE_OPERATOR" =~ ^[Yy] ]]; then
-        PYTHONPATH="$FILES_DIR" python3 -m orchestrator.ai.cli login
+        PYTHONPATH="$FILES_DIR" python3 -m orchestrator.ai.chat.cli login
     else
         info "Staying operatorless for now — run 'gorgon login' any time to enable it."
     fi

@@ -332,7 +332,7 @@ HOW LAYER 11 WORKS
   4. Mocks execute_tool and _preflight_check with patch()
      (patching the canonical paths: "orchestrator.executor_client.execute_tool",
       "orchestrator.preflight.validator._preflight_check",
-      "orchestrator.ai.cli.process_message", etc. — the legacy files/server/
+      "orchestrator.ai.chat.cli.process_message", etc. — the legacy files/server/
       compat-shim has been removed, so all patches now target orchestrator.*)
   5. Each test sends HTTP requests to the TestClient and asserts the response
 
