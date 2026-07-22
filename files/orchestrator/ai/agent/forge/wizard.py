@@ -47,6 +47,11 @@ def finalize_forge(spec: Dict[str, Any], safeword: str, write_dir: str = ".",
         from shared.skin import SKIN_KEYS
         with open(skin_path, "w") as sf:
             json.dump({k: None for k in SKIN_KEYS}, sf, indent=2)
+    # Scaffold an empty per-agent command map (verb → {tool, args, help}) to edit.
+    cmd_path = os.path.join(bundle_dir, "commands.json")
+    if not os.path.exists(cmd_path):
+        with open(cmd_path, "w") as cf:
+            json.dump({}, cf, indent=2)
     return path, []
 
 

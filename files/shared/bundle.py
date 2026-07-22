@@ -61,6 +61,10 @@ class Bundle:
         return os.path.join(self.path, "skin.json")
 
     @property
+    def commands_path(self) -> str:
+        return os.path.join(self.path, "commands.json")
+
+    @property
     def commands_dir(self) -> str:
         return os.path.join(self.path, "commands")
 

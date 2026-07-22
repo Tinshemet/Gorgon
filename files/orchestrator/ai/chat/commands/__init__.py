@@ -64,6 +64,26 @@ def _render_help() -> None:
     ctx.console.print(Panel(body, border_style="cyan", title="gorgon help"))
 
 
+def _run_agent_macro(cmd: str, verbose: bool) -> bool:
+    """Run a per-agent declarative command macro (verb → tool call) if the ACTIVE
+    agent's bundle declares one for ``cmd``. Returns True if it handled the verb.
+    Macros are data (a named tool call), never code — so a shared bundle can't run
+    arbitrary Python."""
+    try:
+        from shared.agent_commands import load_agent_commands
+        from orchestrator.ai.agent.contract import active_agent_key
+        macro = load_agent_commands(active_agent_key()).get(cmd)
+    except Exception:
+        return False
+    if not macro:
+        return False
+    ctx.console.print(f"[dim]↪ agent command '{cmd}': {macro['tool']}"
+                      + (f" — {macro['help']}" if macro["help"] else "") + "[/dim]")
+    result = ctx.execute_tool(macro["tool"], dict(macro["args"]), verbose)
+    ctx.pp(result, True)
+    return True
+
+
 # Dispatches direct sub-commands (list, launch, stop, snapshot, network, etc.) to
 # the registered Command and renders output.
 # In: List[str] args, bool verbose → Out: nothing
@@ -86,6 +106,8 @@ def cli_direct(args: List[str], verbose: bool = False) -> None:
 
     command = _REGISTRY.get(cmd)
     if command is None or len(rest) < command.min_args:
+        if _run_agent_macro(cmd, verbose):     # a per-agent declarative command?
+            return
         _render_help()
         return
 
