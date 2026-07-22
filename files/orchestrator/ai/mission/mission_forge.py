@@ -21,7 +21,14 @@ _AI = os.path.dirname(__file__)
 
 
 def _schema() -> dict:
-    return json.load(open(os.path.join(_AI, "mission_fields.json")))
+    """The mission field schema: the config blocks (header, seal_prompt) from
+    mission_fields.json + the ``fields`` list built from the mission Field classes
+    (fields.MISSION_FIELD_ORDER) — the single source, so adding a class grows the
+    wizard. Shape strategies stay shared with agent forging."""
+    from .fields import mission_schema_fields
+    cfg = json.load(open(os.path.join(_AI, "mission_fields.json")))
+    cfg["fields"] = mission_schema_fields()
+    return cfg
 
 
 def forge_mission_interactive(ask: Callable[[str], str], out: Callable[[str], None],

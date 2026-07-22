@@ -1,17 +1,5 @@
 {
-  "_doc": "Declarative field schema for the MISSION wizard — what you task an agent to do. Only title + goal are essential; every other field is optional and, left blank, INHERITS the agent's default (see mission.py / contract.default_*). Reuses the forge FieldType registry (str/csv/predicate/optfloat), so a new mission field is one entry here.",
+  "_doc": "Config blocks for the MISSION wizard — what you task an agent to do. The FIELD DEFINITIONS now live as classes in fields.py (fields.MISSION_FIELD_ORDER), the single source mission_forge._schema() builds from; adding a Field subclass grows the wizard. This file keeps only the non-field config: the header and the seal prompt. Fields reuse the shared forge shape strategies (str/csv/predicate/optfloat/toolkit).",
   "header": "═ Author a mission ═  (title + goal required; blank = inherit the agent's default)",
-  "seal_prompt": "Mission is coherent. Seal it? (blank to cancel, or type a note to confirm)",
-  "fields": [
-    {"key": "title", "prompt": "Mission title (its name)", "parse": "str", "essential": true},
-    {"key": "goal", "prompt": "Goal", "parse": "str", "essential": true},
-    {"key": "sub_goals", "prompt": "Sub-goals (comma-separated, optional)", "parse": "csv"},
-    {"key": "success_predicate", "prompt": "Done-when — checkable clauses 'criterion:target' (e.g. found:ip(web01), present:honeypot; optional)", "parse": "predicate"},
-    {"key": "reward", "prompt": "Reward — base payoff for closing it (blank = agent default)", "parse": "optfloat"},
-    {"key": "importance", "prompt": "Importance — multiplier on the reward (blank = agent default)", "parse": "optfloat"},
-    {"key": "weight", "prompt": "Weight — planning weight (blank = agent default)", "parse": "optfloat"},
-    {"key": "tool_whitelist", "prompt": "Tool whitelist for this mission (comma-separated; blank = agent toolkit)", "parse": "toolkit"},
-    {"key": "tool_blacklist", "prompt": "Extra red lines for this mission (comma-separated; blank = none beyond the agent's)", "parse": "toolkit"},
-    {"key": "scrutiny", "prompt": "Scrutiny level (blank = agent default)", "parse": "str"}
-  ]
+  "seal_prompt": "Mission is coherent. Seal it? (blank to cancel, or type a note to confirm)"
 }
