@@ -20,8 +20,7 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..agent import contract as _contract
-
-_DIR = os.path.expanduser("~/.gorgon/missions")
+from shared.bundle import Bundle
 
 # The mission fields, and which are required. Data-driven so the wizard, the
 # validator, and this model agree on one list (mirrors the forge field schema).
@@ -166,7 +165,8 @@ def slug(title: str) -> str:
 
 
 def missions_dir(agent: Optional[str] = None) -> str:
-    return os.path.join(_DIR, _safe(agent or _contract.active_agent_key()))
+    """The agent's missions folder inside its bundle (~/.qemu_vms/_agents/<agent>/missions)."""
+    return Bundle(_safe(agent or _contract.active_agent_key())).missions_dir
 
 
 def mission_path(name: str, agent: Optional[str] = None) -> str:

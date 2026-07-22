@@ -32,7 +32,8 @@ def check(label, cond):
 
 
 def main():
-    store._DIR = tempfile.mkdtemp()      # isolate from ~/.gorgon
+    import shared.bundle as _bundle
+    _bundle.AGENTS_ROOT = tempfile.mkdtemp()      # isolate bundle storage from ~/.qemu_vms
 
     print("save / load roundtrip")
     f = Findings()
@@ -69,8 +70,8 @@ def main():
     print("\nper-agent isolation")
     store.merge_into("doorman", {"user(bob)": {"value": "bob", "status": "verified"}})
     check("barenboim's store is empty (doorman's claim doesn't leak)", store.load("barenboim") == {})
-    check("a path-traversal agent name is sanitized (stays under the store dir)",
-          os.path.dirname(store.store_path("../../etc/passwd")) == store._DIR)
+    check("a path-traversal agent name is sanitized (stays under the bundle root)",
+          os.path.dirname(os.path.dirname(store.store_path("../../etc/passwd"))) == _bundle.AGENTS_ROOT)
 
     print("\ntool-stats store: learned p_world survives restarts")
     check("empty store → {}", store.load_tool_counts("barenboim") == {})
@@ -82,7 +83,7 @@ def main():
     check("tool stats don't leak into the claim store", store.load("barenboim") == {})
     check("tool stats are per-agent isolated", store.load_tool_counts("doorman") == {})
     check("a path-traversal agent name is sanitized",
-          os.path.dirname(store.tool_stats_path("../../etc/passwd")) == store._DIR)
+          os.path.dirname(os.path.dirname(store.tool_stats_path("../../etc/passwd"))) == _bundle.AGENTS_ROOT)
     # the round-trip a fresh process does: load → learn p_world
     from orchestrator.ai.planner.reward_cost import p_world_estimate
     pw = p_world_estimate(store.load_tool_counts("barenboim"))

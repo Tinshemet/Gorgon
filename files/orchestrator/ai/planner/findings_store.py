@@ -26,16 +26,17 @@ import os
 import re
 from typing import Any, Dict, List, Optional
 
-_DIR = os.path.expanduser("~/.gorgon")
+from shared.bundle import Bundle
 
 
 def _safe(agent: Optional[str]) -> str:
-    """A filesystem-safe agent key (never traverses out of the store dir)."""
+    """A filesystem-safe agent key (never traverses out of the bundle root)."""
     return re.sub(r"[^a-zA-Z0-9_.-]", "_", agent or "default") or "default"
 
 
 def store_path(agent: Optional[str]) -> str:
-    return os.path.join(_DIR, f"findings.{_safe(agent)}.json")
+    """The agent's claim store inside its bundle (~/.qemu_vms/_agents/<agent>/findings.json)."""
+    return Bundle(_safe(agent)).findings_path
 
 
 def load(agent: Optional[str]) -> Dict[str, Dict[str, Any]]:
@@ -51,8 +52,8 @@ def load(agent: Optional[str]) -> Dict[str, Dict[str, Any]]:
 def save(agent: Optional[str], entries: Dict[str, Dict[str, Any]]) -> None:
     """Atomically replace the agent's store with `entries` (write-temp-then-rename,
     so a crash mid-write can't corrupt the file)."""
-    os.makedirs(_DIR, exist_ok=True)
     path = store_path(agent)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = f"{path}.tmp"
     with open(tmp, "w") as f:
         json.dump(entries, f, indent=2, sort_keys=True)
@@ -77,7 +78,7 @@ def merge_into(agent: Optional[str], entries: Dict[str, Dict[str, Any]]) -> None
 def tool_stats_path(agent: Optional[str]) -> str:
     """Sibling store to the claims file — per-tool WORLD-reliability tallies, kept
     separate so it never collides with claim entries (which are keyed by fact)."""
-    return os.path.join(_DIR, f"toolstats.{_safe(agent)}.json")
+    return Bundle(_safe(agent)).toolstats_path
 
 
 def load_tool_counts(agent: Optional[str]) -> Dict[str, Dict[str, int]]:
@@ -108,8 +109,8 @@ def merge_tool_counts(agent: Optional[str], counts: Dict[str, Dict[str, int]]) -
         o = data.setdefault(tool, {"ok": 0, "n": 0})
         o["ok"] += int(a.get("ok", 0))
         o["n"] += int(a.get("n", 0))
-    os.makedirs(_DIR, exist_ok=True)
     path = tool_stats_path(agent)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = f"{path}.tmp"
     with open(tmp, "w") as f:
         json.dump(data, f, indent=2, sort_keys=True)
