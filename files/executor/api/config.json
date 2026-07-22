@@ -24,6 +24,8 @@
   "timeouts": {
     "qemu_version": 5,
     "qmp_connect": 5,
+    "qmp_probe": 2,
+    "virt_cat_read": 30,
     "gl_check": 3,
     "stop_graceful": 30,
     "cpu_pinning_delay": 1,

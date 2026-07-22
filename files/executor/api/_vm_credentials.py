@@ -15,6 +15,8 @@ import shutil
 import string
 import subprocess
 
+from ._vm_constants import _TIMEOUTS
+
 _PASSWORD_ALPHABET = string.ascii_letters + string.digits
 # POSIX portable username rules — also closes off shell injection into the
 # --run-command string below, which interpolates this value into a real shell
@@ -46,7 +48,7 @@ def linux_os_installed(disk_path: str) -> bool:
     try:
         result = subprocess.run(
             ["virt-cat", "-a", disk_path, "/etc/os-release"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=_TIMEOUTS["virt_cat_read"],
         )
     except Exception:
         return False
@@ -162,7 +164,7 @@ def find_primary_user(disk_path: str) -> "str | None":
     try:
         result = subprocess.run(
             ["virt-cat", "-a", disk_path, "/etc/passwd"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=_TIMEOUTS["virt_cat_read"],
         )
     except Exception:
         return None

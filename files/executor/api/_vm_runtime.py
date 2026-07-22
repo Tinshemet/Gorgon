@@ -243,7 +243,7 @@ class _VmRuntimeMixin:
             for _attempt in range(15):
                 try:
                     _qmp = QMPClient(config.get_qmp_socket())
-                    _qmp.connect(timeout=2)
+                    _qmp.connect(timeout=_TIMEOUTS["qmp_probe"])
                     break
                 except Exception:
                     _qmp = None

@@ -25,6 +25,8 @@ import subprocess
 import tempfile
 import os
 
+from ._vm_constants import _TIMEOUTS
+
 _HOSTNAME_ALPHABET = string.ascii_lowercase + string.digits
 _WINDOWS_ALPHABET = string.ascii_uppercase + string.digits
 # Windows partition holding the OS — matches how the rest of this project
@@ -49,7 +51,7 @@ def _current_linux_hostname(disk_path: str) -> "str | None":
     try:
         result = subprocess.run(
             ["virt-cat", "-a", disk_path, "/etc/hostname"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=_TIMEOUTS["virt_cat_read"],
         )
     except Exception:
         return None

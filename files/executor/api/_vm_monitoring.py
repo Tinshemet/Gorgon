@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 import psutil
 
-from ._vm_constants import VM_BASE_DIR, infer_os_name
+from ._vm_constants import VM_BASE_DIR, infer_os_name, _TIMEOUTS
 from .qemu_config import MachineConfig
 from .qmp_client import QMPClient
 
@@ -168,7 +168,7 @@ class _VmMonitoringMixin:
             try:
                 cfg = MachineConfig.load(name)
                 with QMPClient(cfg.get_qmp_socket()) as qmp:
-                    qmp.connect(timeout=2)
+                    qmp.connect(timeout=_TIMEOUTS["qmp_probe"])
                     info = qmp.execute("query-status")
                     status["qemu_status"] = info.get("return", {}).get("status", "unknown")
             except Exception:
@@ -231,7 +231,7 @@ class _VmMonitoringMixin:
         try:
             cfg = MachineConfig.load(name)
             with QMPClient(cfg.get_qmp_socket()) as qmp:
-                qmp.connect(timeout=2)
+                qmp.connect(timeout=_TIMEOUTS["qmp_probe"])
                 bs  = qmp.execute("query-blockstats")
                 if "return" in bs:
                     report["block_stats"] = [
