@@ -27,7 +27,18 @@ from unittest.mock import patch
 import orchestrator.ai.chat.cli as cli
 import orchestrator.ai.chat.chat_turn as chat_turn
 import orchestrator.ai.chat.chat_types as chat_types
+# The gate pipeline lives in chat/gates/ (one module per gate + the dispatch hub);
+# each binds its own seam names at import time, so patches must reach them there.
+from orchestrator.ai.chat.gates import (
+    dispatch as _g_dispatch, preflight as _g_preflight, context as _g_context,
+    safety as _g_safety, manual_config as _g_manual, debug as _g_debug,
+    config as _g_config,
+)
 import shared.display as _display
+
+# Every module a _seam name might be bound into (gate pipeline + REPL shell + base).
+_SEAM_MODULES = (cli, chat_turn, chat_types, _g_dispatch, _g_preflight,
+                 _g_context, _g_safety, _g_manual, _g_debug, _g_config)
 
 
 @dataclass
@@ -145,13 +156,14 @@ def run_chat(
     add = stack.enter_context
     # Environment: force local mode (no liveness thread, full preflight path) and
     # disable session auto-clear so the run is deterministic.
-    # A boundary is patched in BOTH modules that import it: the gate pipeline
-    # now lives in chat_turn.py while the REPL shell stays in cli.py, and each
-    # binds these names into its own namespace at import time. patch.object
-    # rebinds per-namespace, so a seam reached from both sides must be patched
-    # on both. hasattr keeps it correct when a name lives in only one module.
+    # A boundary is patched in EVERY module that imports it: the gate pipeline is
+    # split across chat/gates/* (dispatch + one module per gate) while the REPL
+    # shell stays in cli.py, and each binds these names into its own namespace at
+    # import time. patch.object rebinds per-namespace, so a seam reached from
+    # several sides must be patched on all. hasattr keeps it correct when a name
+    # lives in only one module.
     def _seam(name, repl):
-        for _mod in (cli, chat_turn, chat_types):
+        for _mod in _SEAM_MODULES:
             if hasattr(_mod, name):
                 add(patch.object(_mod, name, repl))
 
