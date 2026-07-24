@@ -201,6 +201,29 @@ def run_score(
                              reason="goal_predicate_unmet", **extra)
         return _node(node_goal, "done", children=children, **extra)
 
+    def _reattempt(node: Dict[str, Any], node_goal: str, depth: int,
+                   path: List[str], failed: List[str]) -> Dict[str, Any]:
+        """Re-attempt a not-done node — the shared body of the backtrack and revision
+        loops. For an AND COMPOSITE, re-resolve ONLY the not-`done` children and re-close;
+        completed steps stand, so a NON-IDEMPOTENT step ('create 5 vms') is never redone —
+        the fix for the 5→10→15 duplication cascade (re-planning the whole node re-ran every
+        clause, minting fresh vms each pass). The corrective remainder IS the un-done children.
+
+        A LEAF (no children) or an OR node (mode='or', children are alternatives not steps)
+        keeps the wholesale re-plan: a leaf wants a different approach to the same goal, and
+        an OR must re-rank/try its alternatives, not splice them. An unverified AND whose
+        children are ALL done re-resolves nothing — a genuine no-op, since re-running
+        identical steps can't move a predicate the completed plan already failed (so it stops
+        cleanly instead of duplicating work)."""
+        kids = node.get("children")
+        if not kids or node.get("mode") == "or":
+            return _attempt(node_goal, depth, path, True, failed, use_cache=False)
+        revised = [c if c.get("status") == "done"
+                   else _resolve(c.get("goal"), depth + 1, path + [node_goal])
+                   for c in kids]
+        extra = {"method": node["method"]} if node.get("method") else {}
+        return _close_and(node_goal, depth, revised, **extra)
+
     def _close_and(node_goal: str, depth: int, children: List[Dict[str, Any]],
                    **extra) -> Dict[str, Any]:
         """AND closure: every child is a REQUIRED step — all must be done, else partial.
@@ -279,6 +302,14 @@ def run_score(
         node  = _attempt(node_goal, depth, path, True, failed)
         tries = rolled = 0
         while node.get("status") in _RETRY_STATUS and tries < max_retries:
+            # A fully-executed composite that closed `unverified` (every REQUIRED step done,
+            # yet the ROOT predicate still rejects the result) cannot be helped by re-running
+            # the SAME plan — identical steps yield an identical predicate, and re-running a
+            # non-idempotent step ('create 5 vms') only DUPLICATES work (the 5→10→15 cascade).
+            # It's an honest terminal miss, not a soft failure: stop retrying.
+            if node.get("children") and node.get("mode") != "or" \
+                    and all(c.get("status") == "done" for c in node["children"]):
+                break
             give_up = False
             cont = None
             if estimate is not None:
@@ -301,9 +332,10 @@ def run_score(
                 break
             failed.append(_approach_desc(node))
             tries += 1
-            # A re-attempt SKIPS the method cache: the cached decomposition is exactly the
-            # one that just failed (the root-replan landmine), so re-planning must reach the
-            # model, not re-hit the same short-circuit.
+            # Backtrack is for LEAVES and OR nodes (a soft failure wanting a different
+            # approach) — AND composites broke out above. A re-attempt SKIPS the method
+            # cache: the cached decomposition is exactly the one that just failed (the
+            # root-replan landmine), so re-planning must reach the model.
             node = _attempt(node_goal, depth, path, True, failed, use_cache=False)
         if tries:
             node["retries"] = tries
@@ -327,7 +359,18 @@ def run_score(
                and node.get("children") and node.get("status") == "partial"):
             failed.append(_plan_desc(node))
             revisions += 1
-            node = _attempt(node_goal, depth, path, True, failed, use_cache=False)
+            # TARGETED first: re-resolve only the not-done children (the corrective
+            # remainder), leaving completed steps untouched — so a non-idempotent step that
+            # already ran ('create 5 vms') is never redone. Often enough on its own: a step
+            # that failed for a now-satisfied prerequisite (attach before the net existed)
+            # succeeds on a clean second try.
+            node = _reattempt(node, node_goal, depth, path, failed)
+            # ESCALATE only if the same sub-goals still can't close the plan — then the
+            # DECOMPOSITION itself was wrong, so re-plan wholesale and let the model choose
+            # DIFFERENT steps (swap a broken tool for a fallback). This is the one path that
+            # may re-touch done steps; it fires only when targeted correction was insufficient.
+            if node.get("status") == "partial":
+                node = _attempt(node_goal, depth, path, True, failed, use_cache=False)
         if revisions:
             node["revisions"] = revisions
             if node.get("status") == "done":

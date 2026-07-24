@@ -142,6 +142,38 @@ def main():
     check("revision reached the model despite the cache → recovered", r["root"]["status"] == "done"
           and r["root"].get("revised") is True and "web" in w.configured)
 
+    print("\nTARGETED revision — a completed NON-IDEMPOTENT step is NOT re-run")
+    # The 5-vm regression in miniature: plan = [create (non-idempotent), configure].
+    # configure fails the first time (prerequisite not yet satisfied) and succeeds the
+    # second. The OLD wholesale re-plan re-ran BOTH steps → create fired twice (the
+    # duplication cascade). Targeted revision re-resolves ONLY the not-done `configure`,
+    # so `create` runs exactly ONCE.
+    class CountWorld:
+        def __init__(self):
+            self.creates = 0
+            self.configure_calls = 0
+        def execute(self, tool, args):
+            if tool == "create_vm":
+                self.creates += 1                       # non-idempotent: each call is a NEW resource
+                return {"success": True}
+            if tool == "configure_vm":
+                self.configure_calls += 1
+                return {"success": self.configure_calls >= 2}   # transient: fails once, then works
+            return {"success": True}
+    w = CountWorld()
+    def cmodel(m, tools):
+        g = _goal(m)
+        if g == "provision X":
+            return _dec(["create X", "configure X"])    # SAME plan every time — no fallback
+        if g == "create X":    return _tc("create_vm", {"name": "X"})
+        if g == "configure X": return _tc("configure_vm", {"name": "X"})
+        return {"message": {"tool_calls": []}}
+    r = run_score("provision X", call_model=cmodel, execute=w.execute, tools=_TOOLS,
+                  engine=Engine(legal_filter=_NO_LEGAL, max_revisions=1), max_retries=0)
+    check("plan recovered to done", r["root"]["status"] == "done")
+    check("the non-idempotent create ran EXACTLY once (not re-run on revision)", w.creates == 1)
+    check("configure was retried (ran twice: fail then succeed)", w.configure_calls == 2)
+
     print(f"\n{_PASS}/{_PASS + _FAIL} passed")
     sys.exit(1 if _FAIL else 0)
 
