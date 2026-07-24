@@ -184,6 +184,8 @@ def main():
     check("an atomic goal is NOT split", sp("create a vm named beta", []) is None)
     check("a noun-conjunction ('a and b') is NOT split (one action over a set)",
           sp("create two vms named alpha and beta", []) is None)
+    check("a SHARED-VERB conjunction is NOT split (create a net AND a vm — the vm has no verb)",
+          sp("create a network called lab and a vm named web, then put web on lab network", []) is None)
     # END-TO-END: the model fuses create+attach into one sub-goal; the harness splits it.
     class CompWorld:
         def __init__(self): self.vms = {}; self.nets = set()

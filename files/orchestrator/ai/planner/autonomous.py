@@ -354,8 +354,14 @@ def make_compound_splitter():
         parts = [p.strip() for p in _COORD_RE.split(goal or "") if p and p.strip()]
         if len(parts) < 2:
             return None
-        acting = [p for p in parts if scan_tool_hints(p)]      # a clause that names an action
-        return acting if len(acting) >= 2 else None            # ≥2 actions joined → a compound
+        # Split ONLY a clean conjunction where EVERY part independently names an action (hints
+        # a tool). If any part doesn't — a bare object sharing an earlier verb ("create a net
+        # AND a vm named web"), or "b" in "a and b" — the split would drop/mangle it, so leave
+        # the goal whole for the model. This is what keeps a shared-verb or noun conjunction
+        # (which the model handles fine) from being wrongly torn apart.
+        if all(scan_tool_hints(p) for p in parts):
+            return parts
+        return None
     return split
 
 
