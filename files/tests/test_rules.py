@@ -76,6 +76,61 @@ def main():
         signed_ok = False
     check("sign() refuses the incoherent rule set", signed_ok is False)
 
+    print("\nRuleSet resolver — the unified law drives enforcement")
+    from orchestrator.ai.agent.contract.rules import RuleSet
+    law = [
+        {"w": 0, "kind": "access",     "text": "never delete prod",  "effect": {"forbid": ["delete_vm"]}},
+        {"w": 2, "kind": "access",     "text": "may recon",          "effect": {"allow": ["scan_network"]}},
+        {"w": 1, "kind": "delegation", "text": "destructive irrev → double",
+         "effect": {"tier": "double", "when": {"reversible": False, "destructiveness": ">=0.7"}}},
+        {"w": 2, "kind": "delegation", "text": "decoy deletes → y/n", "effect": {"tier": "normal", "tools": ["delete_vm"]}},
+        {"w": 1, "kind": "provisions", "text": "more stealth effort", "effect": {"reward_cost": {"alpha": 0.4}}},
+        {"w": 1, "kind": "decree",     "text": "fleet reachable",     "effect": {"success_predicate": [{"criterion": "mesh", "target": "fleet"}]}},
+    ]
+    rs = RuleSet(law)
+    check("ACCESS w:0 forbid wins (the blacklist)", rs.forbids("delete_vm") is True)
+    check("ACCESS allow surfaces the tool", "scan_network" in rs.allowed_tools())
+    check("a tool no rule mentions falls to the base forbidden list",
+          rs.forbids("wipe_disk", base_forbidden=["wipe_disk"]) is True and rs.forbids("launch_vm") is False)
+    check("DELEGATION: risky delete → 'when' rule (w:1) beats the tools rule (w:2) → double",
+          rs.tier_for("delete_vm", {"reversible": False, "destructiveness": 1.0}, "name") == "double")
+    check("DELEGATION: reversible delete → w:1 when misses, w:2 tools rule → normal",
+          rs.tier_for("delete_vm", {"reversible": True, "destructiveness": 0.1}, "name") == "normal")
+    check("DELEGATION: an unruled tool keeps its substrate tier", rs.tier_for("create_vm", {}, "normal") == "normal")
+    check("PROVISIONS override the reward-cost knobs", rs.reward_cost_overrides() == {"alpha": 0.4})
+    check("DECREE extends the goal predicate", rs.decrees() == [{"criterion": "mesh", "target": "fleet"}])
+    check("by_weight groups the law into tiers", sorted(rs.by_weight().keys()) == [0, 1, 2])
+
+    print("\ncoherence + backward-compat")
+    check("clean law → no conflicts", conflicts(law) == [])
+    check("unknown kind flagged", any("unknown kind" in p for p in conflicts([{"w": 1, "kind": "wat", "text": "x", "effect": {"a": 1}}])))
+    check("effect-bearing kind with no effect flagged",
+          any("no effect" in p for p in conflicts([{"w": 1, "kind": "delegation", "text": "x"}])))
+    check("legacy {text, weight} rules still resolve (no kind → documentary)",
+          [r["weight"] for r in resolve([{"text": "old rule", "weight": 3}])] == [3])
+    check("empty ruleset is inert", RuleSet([]).forbids("anything") is False and RuleSet(None).decrees() == [])
+
+    print("\nintegration: the LAW drives the live Contract accessors (law over physics)")
+    import json
+    from orchestrator.ai.agent.contract.core import Contract
+    _files = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    g = json.load(open(os.path.join(_files, "orchestrator/ai/agent/doorman.grgn")))
+    g["contract"]["rules"] = [
+        {"w": 0, "kind": "access",     "text": "clone is a red line",   "effect": {"forbid": ["clone_vm"]}},
+        {"w": 1, "kind": "delegation", "text": "create needs YES+name", "effect": {"tier": "double", "tools": ["create_vm"]}},
+        {"w": 1, "kind": "provisions", "text": "more effort",           "effect": {"reward_cost": {"alpha": 0.5}}},
+        {"w": 1, "kind": "decree",     "text": "fleet reachable",       "effect": {"success_predicate": [{"criterion": "mesh", "target": "fleet"}]}},
+    ]
+    c = Contract(g, "doorman", "signed")
+    check("ACCESS rule forbids clone_vm (was allowed by physics)", c.is_forbidden("clone_vm") is True)
+    check("DELEGATION lifts create_vm's tier normal → double", c.resolve_tier("create_vm") == "double")
+    check("an unruled tool keeps its substrate tier", c.resolve_tier("stop_vm") == "normal")
+    check("PROVISIONS override the reward-cost cfg", c.reward_cost_cfg().get("alpha") == 0.5)
+    check("DECREE extends the goal predicate", {"criterion": "mesh", "target": "fleet"} in (c.goal_predicate() or []))
+    g["contract"]["forbidden"] = ["delete_vm"]
+    check("legacy `forbidden` still enforced (migrated to a w:0 access rule)",
+          Contract(g, "doorman", "signed").is_forbidden("delete_vm") is True)
+
     print(f"\n{_PASS}/{_PASS + _FAIL} passed")
     sys.exit(1 if _FAIL else 0)
 

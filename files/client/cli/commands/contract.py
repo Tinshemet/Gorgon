@@ -47,6 +47,33 @@ class ContractCommand(Command):
             else:
                 console.print(_forge.render(g))
                 console.print(f"[dim]{os.path.basename(path)} · integrity: {st}[/dim]")
+        elif sub == "rules":
+            # THE LAW — the weighted rules[] resolved over the substrate, grouped by weight.
+            from shared.grgn_sign import read as _read_grgn
+            from shared import agent_select as _sel
+            from orchestrator.ai.agent.contract.rules import RuleSet, effective_rules
+            target = rest[1] if len(rest) >= 2 else (
+                os.environ.get("GORGON_AGENT") or _sel.get_selection() or "doorman.grgn")
+            path = _bundle.resolve_grgn(target, _agent_dir)
+            g, st = _read_grgn(path)
+            if g is None:
+                console.print(f"[bold red]Cannot read {os.path.basename(target)} ({st}).[/bold red]")
+            else:
+                rs = RuleSet(effective_rules(g.get("contract", {})))
+                labels = {0: "critical", 1: "important", 2: "standard", 3: "minor", 4: "advisory"}
+                by = rs.by_weight()
+                console.print(f"[bold]⚖ THE LAW — {os.path.basename(path)}[/bold]  "
+                              f"[dim](by weight · 0 = inviolable)[/dim]")
+                if not by:
+                    console.print("[dim]  (no rules — governance is pure substrate: "
+                                  "risk formula → tier → disposition)[/dim]")
+                for w in sorted(by):
+                    console.print(f"[bold cyan]  {w} · {labels.get(w, 'weak')}[/bold cyan]")
+                    for r in by[w]:
+                        flag = " [red]⚑[/red]" if r["inviolable"] else ""
+                        console.print(f"    [[bold]{r['kind']}[/bold]]{flag} {r['text']}")
+                        if r["effect"]:
+                            console.print(f"         [dim]→ {r['effect']}[/dim]")
         elif sub == "list":
             import glob as _glob
             from shared.grgn_sign import read as _read_grgn
@@ -197,5 +224,5 @@ class ContractCommand(Command):
                 console.print(f"[yellow]'{key}' was not voided.[/yellow]")
         else:
             console.print("[yellow]Usage: gorgon contract "
-                          "forge [--full] | show [file] | list | sign <file> <safeword> "
+                          "forge [--full] | show [file] | rules [file] | list | sign <file> <safeword> "
                           "| edit <file> | amend <file> | void <agent> | restore <agent> | audit[/yellow]")

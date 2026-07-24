@@ -41,6 +41,7 @@ from ..fields import build_fields
 from .registry import _TOOL_SPECS, _TOOL_NAME_ARG
 from .risk_formula import RiskFormula
 from .tool_policy import ToolPolicy
+from .rules import RuleSet, effective_rules as _effective_rules
 from .loader import _is_expired, agent_grgn_path, _load_active
 
 _HANDLING = {
@@ -83,6 +84,11 @@ class Contract:
         # mission defaults) as objects — each owns its read + legacy fallback.
         self.fields = build_fields()
 
+        # THE LAW: the one weighted rules[] resolved over the numeric substrate. The legacy
+        # `forbidden` red lines migrate in as inviolable w:0 access rules, so a single
+        # resolver (RuleSet) is the authority — old contracts keep working unchanged.
+        self.rules = RuleSet(_effective_rules(self.contract))
+
     @classmethod
     def load(cls) -> "Contract":
         """Load the active agent (resolution + integrity gate) into a Contract."""
@@ -123,7 +129,10 @@ class Contract:
         return self.tool_policy.formula_tier(tool)
 
     def resolve_tier(self, tool: str, args: Optional[Dict[str, Any]] = None) -> str:
-        return self.tool_policy.resolve_tier(tool, args)
+        """The live confirmation tier: the ToolPolicy substrate (formula/pin) OVERRIDDEN by
+        the highest-precedence DELEGATION rule that applies — the law over the physics."""
+        base = self.tool_policy.resolve_tier(tool, args)
+        return self.rules.tier_for(tool, self.tool_risk(tool), base)
 
     def risk_breakdown(self, tool: str, args: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """The weighted risk-score breakdown for a tool — each factor's raw value,
@@ -177,9 +186,14 @@ class Contract:
 
     def goal_predicate(self) -> Optional[list]:
         """The campaign's structured ROOT predicate — the checkable twin of the prose
-        success_criteria, as {criterion, target} clauses. None for an agent with no
-        campaign or only free-text criteria (we won't fake a gate over prose)."""
-        return (self.contract.get("campaign") or {}).get("success_predicate") or None
+        success_criteria, as {criterion, target} clauses — EXTENDED by any DECREE rules
+        (which add goal clauses). None for an agent with no campaign predicate and no
+        decrees (we won't fake a gate over prose)."""
+        base = list((self.contract.get("campaign") or {}).get("success_predicate") or [])
+        for clause in self.rules.decrees():
+            if clause not in base:
+                base.append(clause)
+        return base or None
 
     def _defaults(self) -> Dict[str, Any]:
         """The agent's DEFAULT mission parameters (a mission inherits any it doesn't
@@ -213,9 +227,12 @@ class Contract:
         return self.default_reward()
 
     def reward_cost_cfg(self) -> Dict[str, Any]:
-        """The reward-cost constants (θ, λ, H, κ, weights…) from the formula block;
-        empty → the reward_cost engine DEFAULTS. Keeps ALL tunable policy in the .grgn."""
-        return dict(self.formula.reward_cost)
+        """The reward-cost constants (θ, λ, H, κ, weights…) from the formula block,
+        OVERRIDDEN by any PROVISIONS rules (which shape the economics — "more effort").
+        Empty → the reward_cost engine DEFAULTS. Keeps ALL tunable policy in the .grgn."""
+        cfg = dict(self.formula.reward_cost)
+        cfg.update(self.rules.reward_cost_overrides())
+        return cfg
 
     # ── toolkit / red-lines / verbs / criteria ───────────────────────────────────
     def default_toolkit(self) -> list:
@@ -229,10 +246,11 @@ class Contract:
         return self.fields["forbidden"].read(self.contract)
 
     def is_forbidden(self, tool: str, args: Optional[Dict[str, Any]] = None) -> bool:
-        """LEGAL FILTER (gauntlet step A): a hard, categorical red line the tree may
-        NEVER cross — dropped up front, never costed. Contract-declared via the .grgn
-        ``forbidden`` list."""
-        return self.fields["forbidden"].contains(self.contract, tool)
+        """LEGAL FILTER (gauntlet step A): a hard, categorical red line the tree may NEVER
+        cross — dropped up front, never costed. Resolved via the LAW: the highest-precedence
+        ACCESS rule that mentions the tool decides (a w:0 forbid — incl. the migrated legacy
+        `forbidden` list — is inviolable; an explicit allow can lift a weaker forbid)."""
+        return self.rules.forbids(tool)
 
     def consent_verb(self, tool: str) -> str:
         """A human-readable consequence to SURFACE in a consent referendum."""

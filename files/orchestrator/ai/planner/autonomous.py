@@ -433,6 +433,39 @@ def make_prereq_completer(networks_getter: Optional[Callable[[], Any]] = None):
     return complete
 
 
+def make_grant_handler(agent: Optional[str] = None, prompt=None):
+    """The engine's per-leaf GRANT hook (wired as `referendum=`). A destructive-but-legal
+    action the contract would HALT is offered to the operator ONCE via `prompt(tool, args,
+    consequence) -> granted?`; a grant downgrades the halt to a revertible checkpoint. A
+    DENIAL — or no prompt at all (an unattended run) — auto-DRAFTS a durable referendum
+    proposing to lift that gate (delegation → tier 'normal'), filed for later review. So a
+    live y/N keeps the mission moving, and the pattern of asking becomes a rule proposal
+    the operator weighs later. Draft once per tool per run (no proposal spam)."""
+    drafted: set = set()
+
+    def grant(tool: str, args: Dict[str, Any], consequence: str) -> bool:
+        if prompt is not None:
+            try:
+                if prompt(tool, args, consequence):
+                    return True                       # granted this once
+            except Exception:
+                pass
+        if tool not in drafted:                       # denied or unattended → draft a referendum
+            drafted.add(tool)
+            try:
+                from ..agent import proposals as _proposals
+                a = agent or _contract.active_agent_key()
+                _proposals.propose(
+                    a, kind="delegation", origin="ai", proposed_weight=2,
+                    text=f"Allow {tool} with a confirmation instead of a hard stop — it keeps blocking the goal.",
+                    effect={"tier": "normal", "tools": [tool]},
+                    prompted_by=f"the contract gate halted {tool} during a mission")
+            except Exception:
+                pass
+        return False
+    return grant
+
+
 def make_tool_selector(cap: int = 14):
     """Per-node tool NARROWING for the weak model (the autonomous twin of the chat path's
     round-0 narrowing). Offered all ~50 tools at once, llama3.1 degrades to emitting text

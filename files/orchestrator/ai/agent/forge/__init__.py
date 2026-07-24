@@ -23,7 +23,7 @@ from .schema import (
     validate_answer, elicit_spec,
 )
 from .assemble import (
-    _base_innate, _build_prompt, forge, review, sign, render, write_grgn,
+    _base_innate, _build_prompt, forge, review, sign, amend, render, write_grgn,
 )
 from .wizard import finalize_forge, forge_interactive
 

@@ -30,7 +30,7 @@ class MissionCommand(Command):
         def _fire(goal: str, mission_obj=None) -> None:
             """Run the autonomous loop on a goal (optionally under a sealed mission)."""
             try:
-                from orchestrator.ai.planner.autonomous import run_autonomous_live
+                from orchestrator.ai.planner.autonomous import run_autonomous_live, make_grant_handler
             except ImportError:
                 console.print("[bold red]Autonomous runner unavailable.[/bold red]")
                 return
@@ -46,13 +46,39 @@ class MissionCommand(Command):
                     with Live(tree.render(), console=console, auto_refresh=False,
                               transient=False) as live:
                         tree.on_update = lambda: live.update(tree.render(), refresh=True)
-                        result = run_autonomous_live(goal, mission=mission_obj, on_node=tree.handle)
+                        # GRANT prompt — a red-line action asks the operator once; pause the
+                        # Live so the prompt owns the terminal, then resume. A denial auto-
+                        # drafts a referendum (handled inside make_grant_handler).
+                        def _grant_prompt(tool, args, consequence):
+                            tgt = args.get("name") or args.get("vm_name") or args.get("new_name") or ""
+                            live.stop()
+                            try:
+                                ans = console.input(
+                                    f"\n[bold yellow]⛔ GATE[/bold yellow] the agent wants to "
+                                    f"[bold]{consequence} {tgt}[/bold] (via {tool}) — a red line. "
+                                    f"Grant this once?  [y/N] ").strip().lower()
+                            finally:
+                                live.start()
+                            return ans in ("y", "yes")
+                        result = run_autonomous_live(goal, mission=mission_obj, on_node=tree.handle,
+                                                     referendum=make_grant_handler(prompt=_grant_prompt))
                 else:
-                    result = run_autonomous_live(goal, mission=mission_obj)
+                    # unattended (no TTY): no live grant — a gate auto-drafts a referendum.
+                    result = run_autonomous_live(goal, mission=mission_obj,
+                                                 referendum=make_grant_handler())
             except Exception as e:
                 console.print(f"[bold red]Mission failed: {e}[/bold red]  "
                               "[dim](is Ollama + the executor running?)[/dim]")
                 return
+            # Surface any referendums this run drafted (denied / unattended gates → proposals).
+            try:
+                from orchestrator.ai.agent import proposals as _P, contract as _C
+                _pend = _P.pending(_C.active_agent_key())
+                if _pend:
+                    console.print(f"[yellow]⚑ {len(_pend)} referendum(s) pending — "
+                                  f"review with [bold]gorgon referendum list[/bold][/yellow]")
+            except Exception:
+                pass
             s = result.get("summary", {}) or {}
             mark = "[green]✔[/green]" if result.get("ok") else "[yellow]✖[/yellow]"
             console.print(f"\n{mark} status={s.get('status')}  executed={s.get('executed')}  "
