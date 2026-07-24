@@ -221,6 +221,22 @@ def main():
     check("inherently-collective (ping each other) is NOT expanded", ex("make them all ping each other", []) is None)
     check("no collective phrase → None (atomic goal untouched)", ex("create a vm named web", []) is None)
     check("<2 members → None", make_collective_expander(lambda: {"solo": 1})("label them all", []) is None)
+
+    print("\ncardinal creation (Track 1.1b): 'create N vms' mints N STABLE names deterministically")
+    cx = make_collective_expander(lambda: {})   # no live entities — cardinal doesn't need them
+    check("'create 5 vms' → 5 atomic creates with stable minted names",
+          cx("create 5 vms", []) == [f"create a vm named vm{i}" for i in range(1, 6)])
+    check("number-word count works ('create three machines' → vm1..vm3)",
+          cx("create three machines", []) == ["create a vm named vm1", "create a vm named vm2", "create a vm named vm3"])
+    check("deterministic/stable — the SAME call mints the SAME names (idempotent re-entry)",
+          cx("create 5 vms", []) == cx("create 5 vms", []))
+    check("explicit names are NOT overridden ('create two vms named alpha and beta' → not cardinal)",
+          cx("create two vms named alpha and beta", []) is None)
+    check("non-provisionable noun is ignored ('create 5 reports' → None)", cx("create 5 reports", []) is None)
+    check("count of 1 is not a collective ('create 1 vm' → None)", cx("create 1 vm", []) is None)
+    check("absurd count is bounded ('create 500 vms' → None, no detonation)", cx("create 500 vms", []) is None)
+    check("'create 3 networks' generalizes → network1..network3",
+          cx("create 3 networks", []) == ["create a network named network1", "create a network named network2", "create a network named network3"])
     # END-TO-END: the model NEVER scripts the loop; the harness expands "put them all on net0".
     class NetWorld:
         def __init__(self): self.vms = {}; self.nets = set()

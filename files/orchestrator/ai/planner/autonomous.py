@@ -333,6 +333,48 @@ _COLLECTIVE_RE = re.compile(
 # clause the goal-honesty rule + mesh acceptance already handle).
 _INHERENT_COLLECTIVE_RE = re.compile(r"\b(each other|one another|ping all|connectivity|mesh|reachable)\b", re.I)
 
+# CARDINAL CREATION (Track 1.1b). "create 5 vms" instantiates a NEW set of size N — the
+# collective expander below distributes over EXISTING entities, so it can't touch this, and
+# the weak model handles a bare cardinal inconsistently (wrong count, ad-hoc names, and on
+# any re-plan a FRESH batch — the duplication cascade). The harness mints N STABLE,
+# deterministic names (vm1..vmN) and emits one atomic create each: the count is exact, and a
+# re-entry is naturally idempotent (same names → the executor no-ops instead of duplicating).
+# Fires ONLY when no explicit names are given ("...named a, b" stays the model's job) and the
+# noun is a known provisionable resource (so the minted step routes to the right tool).
+_NUMWORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+             "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
+_CARDINAL_NOUNS = {  # surface form → canonical singular (drives the minted name + tool routing)
+    "vm": "vm", "vms": "vm", "virtual machine": "vm", "virtual machines": "vm",
+    "machine": "vm", "machines": "vm", "instance": "vm", "instances": "vm",
+    "node": "vm", "nodes": "vm", "box": "vm", "boxes": "vm", "server": "vm", "servers": "vm",
+    "network": "network", "networks": "network", "container": "container", "containers": "container",
+}
+_CARDINAL_CREATE_RE = re.compile(
+    r"\b(?:create|make|spin\s*up|provision|launch|deploy|add|start)\s+"
+    r"(?P<count>\d{1,3}|one|two|three|four|five|six|seven|eight|nine|ten)\s+"
+    r"(?:new\s+|identical\s+|separate\s+)*"
+    r"(?P<noun>virtual machines?|vms?|machines?|instances?|nodes?|boxes|servers?|networks?|containers?)\b",
+    re.I)
+_CARDINAL_MAX = 25   # a bound so "create 1000 vms" can't detonate the planner
+
+
+def _cardinal_create_steps(goal: str):
+    """['create a <noun> named <noun><i>' for i in 1..N] for a bare "create N <noun>", else
+    None. Deterministic + stable so a re-entry mints the SAME names (idempotent). Bails when
+    explicit names are present (the model owns those) or the count is out of [2, _CARDINAL_MAX]."""
+    g = goal or ""
+    if re.search(r"\b(?:named|called)\b", g, re.I):     # explicit names → the model's job
+        return None
+    m = _CARDINAL_CREATE_RE.search(g)
+    if not m:
+        return None
+    raw = m.group("count").lower()
+    n = int(raw) if raw.isdigit() else _NUMWORDS.get(raw)
+    noun = _CARDINAL_NOUNS.get(m.group("noun").lower())
+    if not n or not noun or not (2 <= n <= _CARDINAL_MAX):
+        return None
+    return [f"create a {noun} named {noun}{i}" for i in range(1, n + 1)]
+
 
 # COMPOUND DECOMPOSITION (Track 2). The benchmark's last cliff: the weak model fuses two
 # actions into one sub-goal ("create a vm named a AND put it on lab network") and then, at
@@ -375,6 +417,10 @@ def make_collective_expander(entities_getter: Callable[[], Dict[str, Any]]):
         g = goal or ""
         if _INHERENT_COLLECTIVE_RE.search(g):
             return None
+        # CARDINAL CREATION first: "create N <noun>" mints a NEW set (no live members to read).
+        cardinal = _cardinal_create_steps(g)
+        if cardinal:
+            return cardinal
         m = _COLLECTIVE_RE.search(g)
         if not m:
             return None
