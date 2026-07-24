@@ -784,6 +784,12 @@ def run_autonomous(
         ground_steps=ground_steps,             # Track 1.2: bind bare references in decomposed steps
         complete_steps=complete_steps,         # Track 1.4: inject a dropped prerequisite (create network)
     )   # criterion_of/legal_filter default to the active contract inside run_score
+    # MISSION-SCOPED LAW: layer the mission's own rules over the contract for this run only
+    # (the human's per-tasking answer to a referendum). Restored in the finally, so the
+    # active contract is never left mutated — and the contract's red lines stay inviolable.
+    _mission_rules = mission.rules() if mission is not None else []
+    if _mission_rules:
+        _contract.push_rules(_mission_rules)
     try:
         result = run_score(
             goal,
@@ -792,6 +798,8 @@ def run_autonomous(
             max_retries=max_retries, max_depth=max_depth, max_steps=max_steps, ledger=run_ledger,
         )
     finally:
+        if _mission_rules:
+            _contract.pop_rules()
         if deadman is not None:               # disarm the timer no matter how the run ends
             deadman.stop()
     result["events"] = events

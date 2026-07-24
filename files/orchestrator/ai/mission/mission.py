@@ -27,7 +27,7 @@ from shared.bundle import Bundle
 REQUIRED_FIELDS = ("title", "goal")
 OPTIONAL_FIELDS = ("sub_goals", "reward", "importance", "weight",
                    "tool_whitelist", "tool_blacklist", "scrutiny",
-                   "success_predicate", "success_criteria", "reward_cost")
+                   "success_predicate", "success_criteria", "reward_cost", "rules")
 
 
 class Mission:
@@ -105,6 +105,15 @@ class Mission:
         grounding, no faked gate over prose."""
         return self._s.get("success_predicate") or None
 
+    def rules(self) -> List[Dict[str, Any]]:
+        """MISSION-SCOPED law — weighted, typed rules a human authors for THIS tasking (the
+        human's answer to a referendum, without amending the whole campaign). Layered OVER
+        the contract's rules for the run; because the contract's rules resolve first, a
+        mission rule can tighten or adjust weaker gates but can NEVER waive a campaign red
+        line (a w:0 access forbid — that still needs an amendment). Same {w,kind,text,effect}
+        schema; malformed rules are dropped by the resolver."""
+        return list(self._s.get("rules") or [])
+
     def filter_tools(self, tools: List[Dict]) -> List[Dict]:
         """Apply the mission's whitelist/blacklist to a tool list (OpenAI tool dicts):
         keep only whitelisted names (if a whitelist is set), then drop blacklisted."""
@@ -141,6 +150,11 @@ def validate(spec: Dict[str, Any]) -> List[str]:
     for f in REQUIRED_FIELDS:
         if not (spec or {}).get(f):
             issues.append(f"missing required field: {f}")
+    # mission-scoped rules use the same weighted-law schema — catch a malformed one at
+    # authoring time, not silently at run time (mirrors contract review at sign).
+    if (spec or {}).get("rules"):
+        from ..agent.contract.rules import conflicts as _rule_conflicts
+        issues += [f"rule: {p}" for p in _rule_conflicts(spec["rules"])]
     return issues
 
 

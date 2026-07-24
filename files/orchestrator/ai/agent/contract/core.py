@@ -89,6 +89,20 @@ class Contract:
         # resolver (RuleSet) is the authority — old contracts keep working unchanged.
         self.rules = RuleSet(_effective_rules(self.contract))
 
+    def push_rules(self, extra_rules) -> None:
+        """Layer MISSION-SCOPED rules over the contract's law for one run. The contract's
+        rules come FIRST, so a campaign w:0 red line still wins ties — a mission can tighten
+        or adjust weaker gates, never waive an inviolable red line. Always paired with
+        pop_rules() in a finally, so a run can't leave the active law mutated."""
+        self._saved_rules = self.rules
+        self.rules = RuleSet(_effective_rules(self.contract) + list(extra_rules or []))
+
+    def pop_rules(self) -> None:
+        """Restore the contract's own law after a mission-scoped overlay."""
+        if hasattr(self, "_saved_rules"):
+            self.rules = self._saved_rules
+            del self._saved_rules
+
     @classmethod
     def load(cls) -> "Contract":
         """Load the active agent (resolution + integrity gate) into a Contract."""
@@ -366,6 +380,8 @@ def gate_action(tool: str, args: Optional[Dict[str, Any]] = None) -> str:
 
 def safeword() -> Optional[str]: return ACTIVE.safeword()
 def deadman_timeout() -> Optional[float]: return ACTIVE.deadman_timeout()
+def push_rules(extra_rules) -> None: ACTIVE.push_rules(extra_rules)
+def pop_rules() -> None: ACTIVE.pop_rules()
 def goal_predicate() -> Optional[list]: return ACTIVE.goal_predicate()
 def _defaults() -> Dict[str, Any]: return ACTIVE._defaults()
 def default_reward() -> float: return ACTIVE.default_reward()

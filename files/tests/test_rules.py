@@ -131,6 +131,26 @@ def main():
     check("legacy `forbidden` still enforced (migrated to a w:0 access rule)",
           Contract(g, "doorman", "signed").is_forbidden("delete_vm") is True)
 
+    print("\nMISSION-SCOPED rules — the human's per-run law (tighten/adjust, never waive a red line)")
+    from orchestrator.ai.mission.mission import Mission
+    g2 = json.load(open(os.path.join(_files, "orchestrator/ai/agent/doorman.grgn")))
+    g2["contract"]["rules"] = [{"w": 0, "kind": "access", "text": "never delete", "effect": {"forbid": ["delete_vm"]}}]
+    g2["contract"]["forbidden"] = []
+    cc = Contract(g2, "lab", "signed")
+    check("baseline: campaign forbids delete_vm; create_vm is normal",
+          cc.is_forbidden("delete_vm") is True and cc.resolve_tier("create_vm") == "normal")
+    cc.push_rules([
+        {"w": 1, "kind": "delegation", "text": "create is silent this mission", "effect": {"tier": "none", "tools": ["create_vm"]}},
+        {"w": 0, "kind": "access",     "text": "allow delete this mission",      "effect": {"allow": ["delete_vm"]}},
+    ])
+    check("a mission rule ADJUSTS a weaker gate (create_vm → none for this run)", cc.resolve_tier("create_vm") == "none")
+    check("a mission rule CANNOT waive the campaign w:0 red line (delete_vm still forbidden)",
+          cc.is_forbidden("delete_vm") is True)
+    cc.pop_rules()
+    check("after the run the campaign's own law is restored (create_vm → normal)", cc.resolve_tier("create_vm") == "normal")
+    m = Mission({"goal": "x", "rules": [{"w": 1, "kind": "delegation", "text": "t", "effect": {"tier": "none", "tools": ["stop_vm"]}}]}, agent="lab")
+    check("Mission.rules() exposes the mission's own law", len(m.rules()) == 1 and m.rules()[0]["kind"] == "delegation")
+
     print(f"\n{_PASS}/{_PASS + _FAIL} passed")
     sys.exit(1 if _FAIL else 0)
 
