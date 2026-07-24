@@ -176,6 +176,40 @@ def main():
     check("nothing executed and world untouched", seen == [] and w.vms == {})
     check("the refusal carries the priced CE", "ce_est" in r["root"])
 
+    print("\ncompound decomposition (Track 2): the HARNESS splits a fused 'do X and do Y' sub-goal")
+    from orchestrator.ai.planner.autonomous import make_compound_splitter
+    sp = make_compound_splitter()
+    check("an action-conjunction splits into its clauses",
+          sp("create a vm named a and put it on lab network", []) == ["create a vm named a", "put it on lab network"])
+    check("an atomic goal is NOT split", sp("create a vm named beta", []) is None)
+    check("a noun-conjunction ('a and b') is NOT split (one action over a set)",
+          sp("create two vms named alpha and beta", []) is None)
+    # END-TO-END: the model fuses create+attach into one sub-goal; the harness splits it.
+    class CompWorld:
+        def __init__(self): self.vms = {}; self.nets = set()
+        def execute(self, t, a):
+            n = a.get("name") or a.get("vm_name"); net = a.get("net_name")
+            if t == "create_vm": self.vms[n] = {"nets": set()}; return {"success": True}
+            if t == "create_network": self.nets.add(net); return {"success": True}
+            if t == "add_vm_to_network":
+                if n in self.vms and net in self.nets: self.vms[n]["nets"].add(net); return {"success": True}
+                return {"success": False, "error": "missing"}
+            return {"success": True}
+    cw = CompWorld()
+    ctools = [{"type": "function", "function": {"name": x, "parameters": {}}}
+              for x in ("create_vm", "create_network", "add_vm_to_network")]
+    cmodel = scripted({
+        "set up web": ("decompose", {"steps": ["make lab net", "create web and put web on lab network"]}),
+        "make lab net": ("create_network", {"net_name": "lab"}),
+        # "create web and put web on lab network" is DELIBERATELY unscripted — the harness must split it
+        "create web": ("create_vm", {"name": "web"}),
+        "put web on lab network": ("add_vm_to_network", {"vm_name": "web", "net_name": "lab"}),
+    })
+    r = run_autonomous("set up web", call_model=cmodel, execute=cw.execute, tools=ctools,
+                       vms_getter=lambda: {k: {"status": "stopped"} for k in cw.vms}, reward=10.0)
+    check("harness split the fused sub-goal → BOTH create and attach ran",
+          "web" in cw.vms and cw.vms.get("web", {}).get("nets") == {"lab"})
+
     print("\ncollective decomposition (Track 1.1): the HARNESS loops a distributive op over the live set")
     from orchestrator.ai.planner.autonomous import make_collective_expander
     ex = make_collective_expander(lambda: {"a": 1, "b": 1, "c": 1})

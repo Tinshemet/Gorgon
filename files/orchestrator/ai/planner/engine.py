@@ -40,6 +40,7 @@ class Engine:
     commit_gate:     Optional[Callable[[str, Dict], bool]] = None           # per-leaf simulated-ĈE gate for IRREVERSIBLE commits (deliberation scales with irreversibility)
     reason_gate:     Optional[Callable[[str, str, Dict], Optional[str]]] = None  # (goal,tool,args)→problem tag|None: validate the action against its stated reason
     on_node:         Optional[Callable[[Dict], None]] = None                    # live node-lifecycle events (enter/plan/leaf/close) for a streaming tree view
+    expand_compound: Optional[Callable[[str, list], Optional[list]]] = None     # split a "do X and do Y" sub-goal into its action clauses (Track 2)
     expand_collective: Optional[Callable[[str, list], Optional[list]]] = None   # deterministically expand a distributive "do X to all/them" sub-goal into per-member steps
     ground_steps:    Optional[Callable[[str, list], list]] = None               # bind bare entity references in decomposed steps to the parent's named entity
     complete_steps:  Optional[Callable[[str, list], list]] = None               # inject a missing prerequisite (e.g. create the network a step attaches to)

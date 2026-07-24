@@ -115,6 +115,7 @@ def run_score(
     commit_gate     = engine.commit_gate
     reason_gate     = engine.reason_gate
     on_node         = engine.on_node
+    expand_compound = engine.expand_compound
     expand_collective = engine.expand_collective
     ground_steps    = engine.ground_steps
     complete_steps  = engine.complete_steps
@@ -346,12 +347,23 @@ def run_score(
             return _node(node_goal, "blocked", reason="step_budget")
         if killswitch is not None:
             killswitch.checkin()          # a sign of life — resets any armed dead-man's timer
+        # COMPOUND DECOMPOSITION (Track 2): a sub-goal that JOINS two actions ("create X AND
+        # put X on net") is split into its clauses deterministically — the weak model fuses
+        # them and then can't split at depth > 0 (decompose-first is root-only). Runs BEFORE
+        # collective, so "create 5 vms and put them all on a net" splits into the two phases
+        # first, then each phase collective-expands. Only fires on a real action-conjunction
+        # (each clause names a tool), never an atomic goal or noun-conjunction.
+        if expand_compound is not None and allow_decompose and depth < max_depth:
+            xsteps = expand_compound(node_goal, path)
+            if xsteps and len(xsteps) >= 2:
+                _emit("plan", node_goal, depth, path, children=list(xsteps), mode="and", method="compound")
+                children = [_resolve(s, depth + 1, path + [node_goal]) for s in xsteps]
+                return _close_and(node_goal, depth, children, method="compound")
         # COLLECTIVE DECOMPOSITION (Track 1.1): a DISTRIBUTIVE "do X to all/them/each" over a
         # live set is expanded deterministically into one atomic sub-goal per member — the
-        # HARNESS does the loop the weak model can't (the benchmark cliff). Runs FIRST, at any
-        # depth, taking precedence over attach-steer/decompose-first so a collective goal is
-        # never collapsed to a single action or left to the model to loop. No model call, no
-        # variance; per-member sub-goals are atomic, so they never re-expand.
+        # HARNESS does the loop the weak model can't (the benchmark cliff). Runs after the
+        # compound split, at any depth, taking precedence over attach-steer/decompose-first so
+        # a collective goal is never collapsed to a single action or left to the model to loop.
         if expand_collective is not None and allow_decompose and depth < max_depth:
             csteps = expand_collective(node_goal, path)
             if csteps and len(csteps) >= 2:

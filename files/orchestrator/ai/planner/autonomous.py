@@ -334,6 +334,31 @@ _COLLECTIVE_RE = re.compile(
 _INHERENT_COLLECTIVE_RE = re.compile(r"\b(each other|one another|ping all|connectivity|mesh|reachable)\b", re.I)
 
 
+# COMPOUND DECOMPOSITION (Track 2). The benchmark's last cliff: the weak model fuses two
+# actions into one sub-goal ("create a vm named a AND put it on lab network") and then, at
+# depth > 0 (where decompose-first is off), can't split it — it returns TEXT. The harness
+# splits a CONJUNCTION of ACTIONS into its clauses deterministically. Crucially it uses the
+# tool matcher to tell an action-conjunction ("create X and put X on net" → two actions)
+# from a noun-conjunction ("create vms a and b" → one action over a set) so it never
+# over-decomposes an atomic goal — the exact failure decompose-first-at-every-level had.
+_COORD_RE = re.compile(r"\s+(?:and then|and afterwards|then|and|;)\s+|,\s+(?=\w)", re.I)
+
+
+def make_compound_splitter():
+    """A split_compound(goal, path) -> [clause] | None. Splits a sub-goal that JOINS two or
+    more ACTIONS ("do X and do Y") into one atomic clause per action; None for an atomic
+    goal or a mere noun-conjunction. Reuses scan_tool_hints so only clauses that name a real
+    action count — a part that hints no tool ('named a', 'b') is not a step."""
+    from ..chat.context_assistant import scan_tool_hints
+    def split(goal: str, path: List[str]) -> Optional[List[str]]:
+        parts = [p.strip() for p in _COORD_RE.split(goal or "") if p and p.strip()]
+        if len(parts) < 2:
+            return None
+        acting = [p for p in parts if scan_tool_hints(p)]      # a clause that names an action
+        return acting if len(acting) >= 2 else None            # ≥2 actions joined → a compound
+    return split
+
+
 def make_collective_expander(entities_getter: Callable[[], Dict[str, Any]]):
     """An expand_collective(goal, path) -> [per-member sub-goal] | None. Fires when a
     sub-goal applies a DISTRIBUTIVE operation to a collective of live entities ("put them
@@ -761,6 +786,9 @@ def run_autonomous(
     # distributive "do X to all/them" sub-goal over the live entity set — covers the weak
     # model's proven inability to expand a collective operation itself. On whenever we can
     # see the entity set (vms_getter); the per-member steps are atomic, the model's strength.
+    # Compound splitting (Track 2): split a "do X and do Y" sub-goal into its action
+    # clauses — the harness does what the weak model can't at depth. Always on; deterministic.
+    expand_compound = make_compound_splitter()
     expand_collective = make_collective_expander(vms_getter) if vms_getter else None
     # Reference grounding (Track 1.2): bind bare entity references in the model's decomposed
     # steps to the parent's single named entity — deterministic, always on.
@@ -780,6 +808,7 @@ def run_autonomous(
         commit_gate=commit_gate,   # per-leaf simulated-ĈE gate for irreversible commits
         reason_gate=reason_gate,   # opt-in two-stage reason validation (validate_reasons)
         on_node=on_node,           # live node-lifecycle events for a streaming tree view
+        expand_compound=expand_compound,       # Track 2: split a "do X and do Y" sub-goal
         expand_collective=expand_collective,   # Track 1.1: harness-driven collective decomposition
         ground_steps=ground_steps,             # Track 1.2: bind bare references in decomposed steps
         complete_steps=complete_steps,         # Track 1.4: inject a dropped prerequisite (create network)
