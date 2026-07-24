@@ -161,10 +161,15 @@ class Findings:
         ]
 
     def render(self) -> str:
-        """Compact grounding for the planner: what's already known (don't re-learn it)."""
+        """Compact grounding for the planner: what's already known (don't re-learn it).
+        A PENDING claim (unverified, awaiting a human) is tagged so the model can lean on it
+        to plan but never treats it as established fact — mirroring `usable`, which keeps a
+        pending claim from CLOSING a goal. (Acceptance already enforces this; the tag keeps
+        the planning context honest too, so the model doesn't quietly promote a guess.)"""
         if not self._f:
             return ""
-        items = ", ".join(f"{k}={v['value']}" for k, v in sorted(self._f.items()))
+        items = ", ".join(f"{k}={v['value']}" + (" (PENDING — unverified)" if v.get("status") == "pending" else "")
+                          for k, v in sorted(self._f.items()))
         return f"KNOWN FINDINGS (already learned — do NOT re-discover these): {items}"
 
 
