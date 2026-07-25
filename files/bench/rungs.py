@@ -39,6 +39,12 @@ class Rung(NamedTuple):
     check: Callable[[SimWorld], bool]     # objective pass/fail, read off world state
     why: str                              # what reasoning load this rung adds
     setup: Optional[Callable[[SimWorld], None]] = None    # starting state, if any
+    # SAME capability, deliberately DIFFERENT wording. A rung passes on one phrasing and
+    # fails on another when the thing that made it pass was a PATTERN rather than an
+    # ability — not hypothetical: rung 6 passed while "set up three machines tagged alpha"
+    # created nothing, because `set up` was missing from one regex. `--paraphrase` grades
+    # the capability instead of the sentence.
+    paraphrase: Optional[str] = None
 
 
 def _vm(w: SimWorld, name: str, status: str = "stopped", labels=(), nets=()):
@@ -135,29 +141,41 @@ def _r10(w):
 
 RUNGS: List[Rung] = [
     Rung(1, "single", "create a vm named alpha", _r1,
-         "one action, fully specified"),
+         "one action, fully specified", None,
+         "spin up a machine and call it alpha"),
     Rung(2, "sequential", "create a vm named beta and then launch it", _r2,
-         "two ordered actions on one entity"),
+         "two ordered actions on one entity", None,
+         "make a box called beta, then start it up"),
     Rung(3, "dependency-chain", "create a network called lab and a vm named web, then put web on lab", _r3,
-         "an action whose prerequisite must exist first"),
+         "an action whose prerequisite must exist first", None,
+         "set up an isolated network named lab, provision a machine called web, and connect web to it"),
     Rung(4, "collective-loop",
          "create 5 vms, put them all in a network, give them all the 'fleet' label, "
          "and make sure they all ping each other", _r4,
-         "an unnamed set, three distributive ops over it, and an assurance clause"),
+         "an unnamed set, three distributive ops over it, and an assurance clause", None,
+         "spin up five machines, wire them together on one private network, tag every one of "
+         "them 'fleet', and confirm each can reach the others"),
     Rung(5, "filtered-collective", "launch every vm that is currently stopped", _r5,
-         "act on the SUBSET matching a condition, not on everything", _s5),
+         "act on the SUBSET matching a condition, not on everything", _s5,
+         "start up any machine that isn't already running"),
     Rung(6, "partition",
          "create 3 vms labelled 'red' and 2 vms labelled 'blue', put the red ones together "
          "on their own network, and put the blue ones on a different network", _r6,
-         "two groups, treated differently, and kept apart"),
+         "two groups, treated differently, and kept apart", None,
+         "set up three machines tagged 'red' and two tagged 'blue'; the red group must share "
+         "one private network, and the blue group a separate one"),
     Rung(7, "convergence", "make sure exactly 3 vms carry the 'prod' label", _r7,
-         "diff what IS against what is wanted, and change only the difference", _s7),
+         "diff what IS against what is wanted, and change only the difference", _s7,
+         "there should end up being precisely three machines tagged prod, no more and no fewer"),
     Rung(8, "exception",
          "put every vm on a network called core, except db — db goes on a network "
          "called dmz instead", _r8,
-         "a general rule with one carve-out that must survive it", _s8),
+         "a general rule with one carve-out that must survive it", _s8,
+         "connect all the machines to a network named core, apart from db, which belongs on dmz"),
     Rung(9, "diagnosis", "make sure n1, n2 and n3 can all ping each other", _r9,
-         "the goal names an end-state; find WHICH member breaks it", _s9),
+         "the goal names an end-state; find WHICH member breaks it", _s9,
+         "n1, n2 and n3 should all be able to reach one another — sort out whatever is stopping that"),
     Rung(10, "derived-set", "clone golden into 3 new vms and launch all of them", _r10,
-         "a set that does not exist until the model makes it, then acted on", _s10),
+         "a set that does not exist until the model makes it, then acted on", _s10,
+         "take a copy of golden three times over and boot every copy"),
 ]

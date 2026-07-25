@@ -50,8 +50,10 @@ def make_call_model(model: str, temperature: float, timeout: int):
     return call_model
 
 
-def run_rung(rung, call_model, verbose: bool = False, diag: bool = False) -> Dict:
+def run_rung(rung, call_model, verbose: bool = False, diag: bool = False,
+             paraphrase: bool = False) -> Dict:
     """One run of one rung against a FRESH world. Returns the row the report prints."""
+    goal = (rung.paraphrase or rung.goal) if paraphrase else rung.goal
     world = SimWorld()
     if rung.setup:
         rung.setup(world)                # starting state; part of the problem, not scaffolding
@@ -60,7 +62,7 @@ def run_rung(rung, call_model, verbose: bool = False, diag: bool = False) -> Dic
     r = None
     try:
         r = run_autonomous(
-            rung.goal,
+            goal,
             call_model=call_model,
             execute=world.execute,
             tools=TOOLS,
@@ -116,6 +118,9 @@ def main(argv=None) -> int:
     p.add_argument("--timeout", type=int, default=_OLLAMA.get("timeout", 300))
     p.add_argument("-v", "--verbose", action="store_true", help="stream plan-tree nodes")
     p.add_argument("--json", action="store_true", help="emit rows as JSON")
+    p.add_argument("-p", "--paraphrase", action="store_true",
+                   help="run each rung's PARAPHRASE — same capability, different wording. "
+                        "A gap between the two columns is a pattern masquerading as an ability.")
     p.add_argument("-d", "--diag", action="store_true",
                    help="dump calls, final world and the plan tree for each run")
     a = p.parse_args(argv)
@@ -126,9 +131,10 @@ def main(argv=None) -> int:
 
     rows = []
     for rung in rungs:
-        print(f"── rung {rung.n} ({rung.name}) — {rung.why}\n   goal: {rung.goal}")
+        shown = (rung.paraphrase or rung.goal) if a.paraphrase else rung.goal
+        print(f"── rung {rung.n} ({rung.name}) — {rung.why}\n   goal: {shown}")
         for i in range(a.runs):
-            row = run_rung(rung, call_model, a.verbose, a.diag)
+            row = run_rung(rung, call_model, a.verbose, a.diag, a.paraphrase)
             rows.append(row)
             mark = "PASS" if row["passed"] else "FAIL"
             print(f"   [{mark}] run {i+1}/{a.runs} · {row['status']}/{row['disposition']} · {row['world']}")

@@ -89,21 +89,24 @@ def main():
     import time
     from orchestrator.ai.planner.killswitch import DeadMansSwitch
     ks = KillSwitch()
-    dm = DeadMansSwitch(ks, timeout=0.08).start()
+    dm = DeadMansSwitch(ks, timeout=0.30).start()
     check("not tripped immediately", ks.tripped is False)
-    time.sleep(0.20)                                   # no check-in for > timeout
+    time.sleep(0.90)                                   # no check-in for well past the timeout
     check("trips on silence with reason 'deadman'", ks.tripped is True and ks.reason == "deadman")
     dm.stop()
 
     print("\ncheck-ins keep it alive; stop() disarms")
     ks = KillSwitch()
-    dm = DeadMansSwitch(ks, timeout=0.12).start()
+    # Margins are WIDE on purpose: these are real wall-clock timers, and under a loaded
+    # machine a 0.12s window let the timer fire between check-ins, so the suite failed for
+    # reasons that had nothing to do with the switch.
+    dm = DeadMansSwitch(ks, timeout=0.50).start()
     for _ in range(4):                                 # keep checking in inside the window
-        time.sleep(0.05)
+        time.sleep(0.10)
         ks.checkin()                                   # the harness signals a sign of life
     check("still alive while checking in", ks.tripped is False)
     dm.stop()
-    time.sleep(0.20)                                   # past the timeout, but disarmed
+    time.sleep(0.90)                                   # past the timeout, but disarmed
     check("stop() prevents a later fire", ks.tripped is False)
 
     print("\ncheckin() on a bare kill-switch is a harmless no-op")

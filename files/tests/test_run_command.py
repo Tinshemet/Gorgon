@@ -83,7 +83,14 @@ def test_missing_code_rejected():
 
 
 # ── prompt integration: the model is un-fenced (unless the agent forbids run_command) ──
-def test_prompt_unfences_when_available():
+def test_prompt_unfences_when_available(monkeypatch):
+    # Pin the contract state this asserts. The ACTIVE agent decides whether run_command is
+    # available, and the shipped doorman forbids it with a w:0 red line — so without
+    # pinning, the test asserts the opposite of correct behaviour and fails for a good
+    # reason. The sibling test below pins the other direction.
+    import orchestrator.ai.chat.ollama_client as oc
+    monkeypatch.setattr(oc, "is_forbidden", lambda tool, args=None: False)
+    monkeypatch.setattr(oc, "default_toolkit", lambda: None)
     from orchestrator.ai.chat.ollama_client import _build_system_prompt, _run_command_available
     assert _run_command_available() is True
     p = _build_system_prompt()

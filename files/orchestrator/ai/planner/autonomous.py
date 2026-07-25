@@ -136,6 +136,9 @@ _SAT_LABEL_RES = (
     re.compile(r"\blabel\s+['\"]?(?P<vm>[a-z][\w.-]*)['\"]?\s+(?:as|with)\s+['\"]?(?P<label>[\w.-]+)", re.I),
 )
 # Words that describe a network rather than name it.
+# Words that DESCRIBE a network rather than name it. One list, used by both the state
+# reader (an adjective is not a name, so "the NEW network" is unreadable, not absent) and
+# the prerequisite completer (an article is not a network to go and create).
 _NET_ADJECTIVES = frozenset({
     "new", "same", "different", "other", "another", "isolated", "private", "own",
     "second", "third", "shared", "common", "virtual", "a", "an", "the", "one", "this",
@@ -756,18 +759,17 @@ _ANON_NET_RE = re.compile(
 _ANON_NET_NAME = "net1"
 
 
-def _thread_anonymous_network(steps: List[str], stem: Optional[str] = None) -> Optional[List[str]]:
+def _thread_anonymous_network(steps: List[str]) -> Optional[List[str]]:
     """['create a network called <net>'] + `steps` rewritten to name that network, when the
     steps attach to an UNNAMED one; None when they don't (nothing to thread). Deterministic
     — the same collective always threads the same name.
 
-    `stem` names the net after the group it belongs to ("the red ones … their own network"
-    → rednet). Two groups in one goal each needing their OWN network would otherwise both
-    thread the single fixed name and end up on the SAME network — silently collapsing a
-    partition into one pool."""
+    (A `stem` parameter naming the net after its group once lived here, for the case of two
+    groups each needing their own network. Its only caller was the label-scoped collective
+    expansion, removed as benchmark-shaped; dropped rather than left dangling.)"""
     if not any(_ANON_NET_RE.search(s or "") for s in steps):
         return None
-    net = f"{re.sub(r'[^a-z0-9]', '', stem.lower())[:12]}net" if stem else _ANON_NET_NAME
+    net = _ANON_NET_NAME
     named = [_ANON_NET_RE.sub(lambda m: f"{m.group('prep')} the network called {net}",
                               s or "", count=1) for s in steps]
     return [f"create a network called {net}"] + named
@@ -842,7 +844,7 @@ def make_step_grounder():
 _NET_NAMED_RE = re.compile(r"\bnetwork\s+(?:called|named)\s+([a-z][\w-]*)", re.I)   # "network called lab"
 _NET_ADJ_RE   = re.compile(r"\b([a-z][\w-]*)\s+network\b", re.I)                   # "lab network"
 _NET_CREATE_RE = re.compile(r"\b(?:create|make|provision|set\s*up|add)\s+(?:a\s+|an\s+|the\s+)?(?:new\s+|isolated\s+|private\s+)*network\b", re.I)
-_NET_ARTICLES = {"a", "an", "the", "new", "isolated", "private", "this", "that", "same", "one", "virtual"}
+_NET_ARTICLES = _NET_ADJECTIVES        # same concept; kept as an alias for its readers
 
 
 def _network_names(text: str):
@@ -1120,6 +1122,7 @@ def run_autonomous(
         tools = mission.filter_tools(tools)
 
     _world_stamp = [0]      # bumped on every executed tool → invalidates cached state reads
+    _net_names: Dict[str, Any] = {"stamp": None, "value": []}
 
     def _exec(tool: str, args: Dict[str, Any]) -> Any:
         r = execute(tool, args)
@@ -1317,7 +1320,25 @@ def run_autonomous(
     ground_steps = make_step_grounder()
     # Dependency completion (Track 1.4): inject a missing prerequisite (create the network a
     # step attaches to) the weak model drops. Always on; deterministic, plan-level.
-    complete_steps = make_prereq_completer()
+    def _live_networks():
+        """Network names from the executor, for the prerequisite completer's existence
+        check. Without it the completer prepends "create a network called X" for a network
+        that is already there — its guard was written but never armed. Cached against the
+        same world stamp as the state reader, so a burst of nodes costs one read."""
+        if _net_names["stamp"] == _world_stamp[0]:
+            return _net_names["value"]
+        names = []
+        try:
+            raw = execute("list_networks", {})
+            rows = raw if isinstance(raw, list) else (raw or {}).get("networks") or []
+            names = [r.get("name") if isinstance(r, dict) else r for r in rows]
+            names = [n for n in names if n]
+        except Exception:
+            names = []
+        _net_names.update(stamp=_world_stamp[0], value=names)
+        return names
+
+    complete_steps = make_prereq_completer(_live_networks)
     engine = Engine(
         gate=gate, verify=verify, verify_goal=verify_goal, referendum=referendum,
         watchdog=watchdog, killswitch=killswitch, findings=findings,
