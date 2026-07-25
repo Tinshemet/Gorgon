@@ -359,21 +359,6 @@ def main():
     check("a non-parallel fragment is NOT invented into a step (goal stays whole)",
           _sp("create a vm with 4 cores and 8gb ram", []) is None)
 
-    print("\nlabel-scoped collectives: 'the red ones' is the SUBSET carrying that tag")
-    _tagged = {"red1": {"labels": ["red"], "flags": []}, "red2": {"labels": ["red"], "flags": []},
-               "blue1": {"labels": ["blue"], "flags": []}, "blue2": {"labels": ["blue"], "flags": []}}
-    _lx = make_collective_expander(lambda: _tagged)
-    red = _lx("put the red ones together on their own network", [])
-    blue = _lx("put the blue ones on a different network", [])
-    check("it resolves to the tagged members only",
-          red and [s for s in red if "red1" in s or "red2" in s] and not any("blue" in s for s in red))
-    check("each group gets its OWN network, named after it",
-          red[0] == "create a network called rednet" and blue[0] == "create a network called bluenet")
-    check("...which is what stops a partition collapsing into one pool",
-          red[0] != blue[0])
-    check("a STATUS word is not mistaken for a label",
-          _lx("put the stopped ones on a network", []) is None)
-
     print("\nattach-steer must not hijack a node that says CREATE")
     from orchestrator.ai.planner.score.ledger_util import _attach_steer
     _led = [{"tool": "create_network", "args": {"net_name": "rednet"}, "ok": True}]

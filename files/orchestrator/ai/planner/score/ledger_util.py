@@ -38,6 +38,26 @@ def _progress_summary(ledger: List[Dict[str, Any]]) -> str:
             "or re-discover them):\n" + "\n".join(lines))
 
 
+# Tools that only OBSERVE. Needed because a set-valued goal can legitimately be answered
+# by a single read ("list all vms"), while a single MUTATION cannot discharge one. Listed
+# explicitly rather than inferred from the risk table, which is populated for only a
+# handful of tools — create_network, add_vm_to_network and add_label all carry no risk
+# entry, and those are exactly the calls a bogus set-goal close hides behind.
+_OBSERVER_TOOLS = frozenset({
+    "list_vms", "list_networks", "list_labels", "list_profiles", "list_templates",
+    "snapshot_list", "vm_status", "show_config", "check_system", "check_disk",
+    "check_profile_compatibility", "scan_isos", "get_vm_logs", "guest_probe",
+    "local_probe", "guest_ping", "fingerprint_vm", "monitor_vm", "print_command",
+    "clarify", "claim_finding",
+})
+
+# A goal that addresses a GROUP rather than one named entity. Such a node cannot be
+# reduced to a single attach, however tempting the narrowed tool set makes it look.
+_SET_VALUED_RE = re.compile(
+    r"\b(?:ones|them|they|all|each|every|both|either|vms|machines|boxes|servers|"
+    r"instances|nodes|members|group)\b", re.I)
+
+
 def _attach_steer(base: List[Dict], node_goal: str, ledger: List[Dict[str, Any]],
                   tools: List[Dict]) -> tuple:
     """Ledger-aware tool steering (data-driven from POST_CREATE_ATTACH).
@@ -78,7 +98,14 @@ def _attach_steer(base: List[Dict], node_goal: str, ledger: List[Dict[str, Any]]
         if referenced and attach is not None:
             core = [t for t in tools if t.get("function", {}).get("name") in _NARROW_CORE_TOOLS]
             tight = [attach] + [t for t in core if t is not attach]
-            return tight, True
+            # "steered" claims the node is ONE primitive, and the caller drops `decompose`
+            # on the strength of that. True for "put red1 on rednet"; FALSE for a SET —
+            # "put the red ones on their own network" needs a network made and three
+            # separate attaches, none of which one add_vm_to_network call can express. With
+            # the tool narrowed AND decompose withdrawn, the model has no legal way to say
+            # what the step requires, so it says nothing and the node dies `no_action`.
+            # A set-valued attach keeps decompose: narrowed tools, but still able to plan.
+            return tight, not _SET_VALUED_RE.search(low)
     return base, False
 
 

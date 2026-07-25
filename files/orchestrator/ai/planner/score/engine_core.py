@@ -526,6 +526,9 @@ def run_score(
         # every level makes the weak model OVER-decompose atomic sub-goals ("create a
         # vm named beta" → "create a vm" + "name it beta" = junk). Sub-goals use the
         # natural primitive-first path, which one-shots atomic goals correctly.
+        # (Tried and REVERTED 2026-07-25: extending this to set-valued sub-goals. It
+        # reproduced exactly that over-decomposition — "add red2 vms to the cluster" —
+        # and lost one group's network entirely. The note above is right.)
         if decompose_first and offer_decompose and depth == 0:
             # METHOD CACHE first: a known goal shape decomposes DETERMINISTICALLY (no
             # model, no variance). Only a novel goal reaches the model, and a good

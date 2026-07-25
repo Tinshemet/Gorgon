@@ -474,11 +474,6 @@ _COLLECTIVE_RE = re.compile(
 # Inherently-collective operations are NOT distributive — "ping each other" / mesh is one
 # fact over the whole set, not a per-member step. Never expand these (they're the assurance
 # clause the goal-honesty rule + mesh acceptance already handle).
-# "the red ones", "all red vms", "the red machines" — a collective scoped to a TAG rather
-# than to the whole live set. The group word is required (a bare "the red" is not a set).
-_LABEL_COLLECTIVE_RE = re.compile(
-    r"\b(?:the|all|all\s+the|every|each)\s+(?P<label>[a-z][\w-]*)\s+"
-    r"(?:ones|vms?|virtual machines?|machines?|boxes|servers?|instances?|nodes?)\b", re.I)
 _INHERENT_COLLECTIVE_RE = re.compile(r"\b(each other|one another|ping all|connectivity|mesh|reachable)\b", re.I)
 
 # CARDINAL CREATION (Track 1.1b). "create 5 vms" instantiates a NEW set of size N — the
@@ -678,20 +673,6 @@ def make_collective_expander(entities_getter: Callable[[], Dict[str, Any]]):
         if cardinal:
             return cardinal
         ents = entities_getter() or {}
-        # LABEL-SCOPED collective: "put the red ones on their own network" addresses the
-        # SUBSET carrying a tag, not the whole set. Resolved against live tags, and only
-        # when the tag really exists — so "the stopped ones" (a status, not a label) is not
-        # mistaken for one. Runs BEFORE the plain collective, whose "all \\w+" pattern would
-        # otherwise chew "all red vms" into a broken substitution.
-        lm = _LABEL_COLLECTIVE_RE.search(g)
-        if lm:
-            label = lm.group("label").lower()
-            tagged = [n for n, rec in ents.items() if label in {t.lower() for t in _vm_tags(rec)}]
-            if len(tagged) >= 2:
-                steps = [(g[:lm.start()] + e + g[lm.end():]).strip() for e in tagged]
-                # the group's own network is named AFTER the group, so two groups don't
-                # collapse onto one net
-                return _thread_anonymous_network(steps, stem=label) or steps
         m = _COLLECTIVE_RE.search(g)
         if not m:
             return None
