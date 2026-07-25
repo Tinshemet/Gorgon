@@ -289,6 +289,51 @@ def _has_assurance_intent(goal: str) -> bool:
     return bool(_ASSURANCE_RE.search(goal or ""))
 
 
+# A COUNTED state assertion — "make sure exactly 3 vms carry the 'prod' label", "all vms
+# are running". The generic assurance rule demands a FINDING, which is right for a claim
+# about connectivity (you cannot see reachability in a registry) and wrong for a claim
+# about state: the registry IS the evidence. Without this a goal reaches the exact world
+# it asked for and still closes `unverified`, because it looked for the proof in the one
+# place that could never hold it.
+_COUNT_ASSERT_RE = re.compile(
+    r"\b(?P<qual>exactly|at\s+least|at\s+most|no\s+more\s+than|no\s+fewer\s+than)?\s*"
+    r"(?P<n>\d{1,3}|one|two|three|four|five|six|seven|eight|nine|ten)\s+"
+    r"(?:vms?|virtual machines?|machines?|boxes|servers?|instances?|nodes?)\s+"
+    r"(?:carry|carries|have|has|hold|with|are\s+labell?ed|are\s+tagged|labell?ed|tagged)\s+"
+    r"(?:the\s+)?['\"]?(?P<label>[\w.-]+)['\"]?", re.I)
+_ALL_STATUS_RE = re.compile(
+    r"\b(?:all|every|each)\s+(?:the\s+)?(?:vms?|virtual machines?|machines?|boxes|servers?)\s+"
+    r"(?:is|are|be)\s+(?P<status>running|stopped)\b", re.I)
+
+
+def _state_assertion(goal: str, vms: Dict[str, Dict[str, Any]]) -> Optional[bool]:
+    """True/False for a goal that asserts a COUNTABLE fact about live state; None when the
+    goal asserts nothing this can read. Never guesses — an unreadable assertion falls
+    through to the findings rule exactly as before."""
+    m = _COUNT_ASSERT_RE.search(goal or "")
+    if m:
+        raw = m.group("n").lower()
+        want = int(raw) if raw.isdigit() else _NUMWORDS.get(raw)
+        if not want:
+            return None
+        label = m.group("label").lower()
+        have = sum(1 for r in (vms or {}).values()
+                   if label in {t.lower() for t in _vm_tags(r)})
+        qual = re.sub(r"\s+", " ", (m.group("qual") or "").strip().lower())
+        if qual == "exactly":
+            return have == want
+        if qual in ("at most", "no more than"):
+            return have <= want
+        return have >= want          # "at least", "no fewer than", or a bare count
+    m = _ALL_STATUS_RE.search(goal or "")
+    if m:
+        if not vms:
+            return None              # nothing to be true OF
+        want_running = m.group("status").lower() == "running"
+        return all(_is_running(r) == want_running for r in vms.values())
+    return None
+
+
 def make_goal_assessor(vms_getter: Callable[[], Dict[str, Dict[str, Any]]], findings=None, probe=None,
                        predicate=None):
     """An assess(goal, children, ledger) -> (verdict, complaint) — the CONTRACT ROOT
@@ -333,6 +378,15 @@ def make_goal_assessor(vms_getter: Callable[[], Dict[str, Dict[str, Any]]], find
             # assurance intent → None, so ordinary goals keep structural acceptance.
             if findings is None or not _has_assurance_intent(goal):
                 return None, ""
+            # A claim about STATE is settled by state — before falling back to findings,
+            # which are the right evidence only for what a registry cannot show.
+            st = _state_assertion(goal, vms_getter() or {})
+            if st is True:
+                return True, ""
+            if st is False:
+                return False, ("the goal states a countable end-state that does NOT hold in "
+                               "the live registry — count what is actually there and change "
+                               "only the difference.")
             facts = list(findings.facts())
             if _CONNECTIVITY_RE.search(goal or ""):
                 # A connectivity assurance needs at least one USABLE mesh/reachable

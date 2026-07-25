@@ -7,6 +7,7 @@ unit. The stateless helpers, meta-tool schemas, and injected-dep fallbacks are
 imported from the sibling modules.
 """
 
+import re
 from typing import Any, Callable, Dict, List, Optional
 
 from .meta_tools import DECOMPOSE_TOOL, ALTERNATIVES_TOOL, _NODE_SYSTEM, _OPAQUE_TOOLS
@@ -256,6 +257,12 @@ def run_score(
                 return False              # something moved since; do it again
         return True
 
+    def _strip_purpose(goal: str) -> str:
+        """The goal without its trailing purpose phrase — "…for the red VMs", "…so the blue
+        ones can talk". What remains is what the step actually does."""
+        return re.split(r"\b(?:for|so that|so|to be used by|intended for|meant for)\b",
+                        goal or "", maxsplit=1, flags=re.I)[0]
+
     def _touched(mark: int) -> set:
         """The distinct entities this node's subtree actually acted on, read off the
         ledger slice it produced."""
@@ -292,7 +299,12 @@ def run_score(
                 return node
             if holds is True:
                 return node
-        if _SET_VALUED_RE.search(node_goal or "") and len(_touched(mark)) < 2:
+        # …but only when the group is what the action ACTS ON. "create a new isolated
+        # network FOR THE RED VMS" creates one network and correctly touches no VM — the
+        # group names the network's purpose, not its object. Reading that as a group action
+        # refuses a step that did exactly the right thing, which sends its parent into an
+        # endless re-plan: measured as the entire convergence cost of the partition rung.
+        if _SET_VALUED_RE.search(_strip_purpose(node_goal)) and len(_touched(mark)) < 2:
             node["status"], node["reason"] = "unverified", "set_goal_uncovered"
         return node
 
