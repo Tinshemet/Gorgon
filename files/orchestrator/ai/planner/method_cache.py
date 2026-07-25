@@ -72,9 +72,25 @@ class MethodCache:
         return None
 
     def remember(self, goal: str, steps: List[str]) -> Optional[str]:
-        """Learn a method from a successful decomposition. Generalizes entity names
-        (tokens shared between the goal and its steps) into slots. Returns the new
-        method's name, or None if nothing generalizable / already covered."""
+        """Learn a method from a decomposition. Generalizes entity names (tokens shared
+        between the goal and its steps) into slots. Returns the method's name, or None if
+        nothing generalizable / already covered.
+
+        A re-plan SUPERSEDES the unproven method learned from the same goal. Without that,
+        a goal whose first plan failed keeps that plan: `lookup` matches the discarded
+        method, so the corrective decomposition is never learned, and `confirm` then marks
+        the FAILED one proven when the retry closes — durably teaching every future run a
+        plan known not to work. Only UNPROVEN methods are superseded; one that already
+        earned its place is never overwritten by a fresh guess."""
+        g = (goal or "").strip()
+        prior = next((m for m in self._methods
+                      if m.get("learned") and m.get("source") == g), None)
+        if prior is not None and not prior.get("proven"):
+            meth = _generalize(g, steps)
+            if not meth:
+                return None
+            self._methods[self._methods.index(prior)] = meth   # the newer plan is the one under test
+            return meth["name"]
         if self.lookup(goal):
             return None
         meth = _generalize(goal, steps)

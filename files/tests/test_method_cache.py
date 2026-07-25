@@ -75,6 +75,28 @@ def main():
           and isinstance(rec[0]["pattern"], str) and len(rec[0]["steps"]) == 2)
     check("SEEDS are never persisted (code is their SSOT)", seeded().proven() == [])
 
+    print("\na re-plan SUPERSEDES the unproven method it replaces")
+    # The regression this guards: the first plan is learned at PLAN time, before anything
+    # runs. If it fails and a revision produces a better plan, `lookup` would match the
+    # discarded method and refuse to learn the good one — and `confirm` would then mark the
+    # FAILED plan proven, durably teaching every future run a plan known not to work.
+    sc = MethodCache()
+    sc.remember("set up dev", ["create dev", "fiddle dev"])           # the plan that fails
+    sc.remember("set up dev", ["create dev", "launch dev"])           # the corrective re-plan
+    check("only one method is held for the goal (superseded, not duplicated)",
+          len([m for m in sc._methods if m.get("learned")]) == 1)
+    check("it is the RE-PLAN, not the discarded first attempt",
+          sc.lookup("set up dev") == ["create dev", "launch dev"])
+    sc.confirm("set up dev")
+    check("so confirming the close persists the plan that WORKED",
+          [m["steps"] for m in sc.proven()] == [["create {s0}", "launch {s0}"]])
+    pc = MethodCache()
+    pc.remember("set up dev", ["create dev", "launch dev"])
+    pc.confirm("set up dev")
+    pc.remember("set up dev", ["create dev", "fiddle dev"])           # a later guess
+    check("a PROVEN method is never overwritten by a fresh guess",
+          pc.lookup("set up dev") == ["create dev", "launch dev"])
+
     print("\nrehydration: a stored method decomposes without the model")
     rc = MethodCache.from_records(rec)
     check("the learned shape survives a round trip",
