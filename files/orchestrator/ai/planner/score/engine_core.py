@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from .meta_tools import DECOMPOSE_TOOL, ALTERNATIVES_TOOL, _NODE_SYSTEM, _OPAQUE_TOOLS
 from .ledger_util import (_node, _norm, _progress_summary, _attach_steer, _first_tool_call,
-                          _SET_VALUED_RE)
+                          _SET_VALUED_RE, _OBSERVER_TOOLS)
 from ._deps import (
     _default_gate, _default_criterion, _default_legal, _consent_verb, _tool_risk,
     _yield_fact, _extract_value, _finding_probe_spec,
@@ -226,6 +226,35 @@ def run_score(
             return fn(*a, **kw)
         finally:
             _correcting["n"] -= 1
+
+    def _entities(args: Dict[str, Any]) -> set:
+        return {str(v).lower() for k, v in (args or {}).items()
+                if k in ("name", "vm_name", "new_name", "target", "net_name")
+                and isinstance(v, str) and v}
+
+    def _already_done_this_run(name: str, args: Dict[str, Any]) -> bool:
+        """This exact call already SUCCEEDED in this run and nothing has touched its
+        entities since — so running it again cannot change the world.
+
+        A re-plan re-emits steps that already ran, and the state reader can only catch the
+        ones it can parse; a step the MODEL phrased ("move blue1 to the new network")
+        refers to its network by adjective and is unreadable by construction. The ledger
+        does not have that problem — it records what was actually called. Bounded by
+        invalidation: any later successful MUTATION touching the same entities means state
+        may have moved on, so the call is allowed through. Observations are never
+        suppressed; re-reading moving state is legitimate."""
+        if name in _OBSERVER_TOOLS:
+            return False
+        ents, last = _entities(args), -1
+        for i, e in enumerate(ledger):
+            if e.get("tool") == name and e.get("args") == args and e.get("ok"):
+                last = i
+        if last < 0:
+            return False
+        for e in ledger[last + 1:]:
+            if e.get("ok") and e.get("tool") not in _OBSERVER_TOOLS and _entities(e.get("args") or {}) & ents:
+                return False              # something moved since; do it again
+        return True
 
     def _touched(mark: int) -> set:
         """The distinct entities this node's subtree actually acted on, read off the
@@ -501,7 +530,14 @@ def run_score(
         # far is preserved (suspend, not delete).
         if killswitch is not None and killswitch.tripped:
             return _node(node_goal, "aborted", reason=killswitch.reason)
-        _budget["n"] += 1                 # count every node attempt (Track 1.5 thrashing bound)
+        # THRASHING BOUND (Track 1.5): count every node attempt.
+        # (Tried and REVERTED 2026-07-25: refunding the bound for FREE closures — an
+        # already-satisfied goal, a suppressed repeat — on the reasoning that a node
+        # costing no model call is not planning. Sound in principle, measurably worse in
+        # practice: on the partition rung it bought the run more room without converging,
+        # so it spent 106 model calls instead of 71 to reach the same `blocked`. The budget
+        # is not what stops that rung — convergence is.)
+        _budget["n"] += 1
         if max_steps and _budget["n"] > max_steps:
             return _node(node_goal, "blocked", reason="step_budget")
         if killswitch is not None:
@@ -737,6 +773,10 @@ def run_score(
                 return _node(node_goal, "blocked", tool=name, args=args, rationale=rationale,
                              reason=f"reason_mismatch:{problem}")
         _rat = {"rationale": rationale} if rationale else {}
+
+        if _already_done_this_run(name, args):
+            _emit("leaf", node_goal, depth, path, tool=name, args=args, repeat="suppressed")
+            return _node(node_goal, "done", tool=name, args=args, repeat="already_done", **_rat)
 
         act = gate(name, args) if gate else "proceed"
         checkpoint_label = None
