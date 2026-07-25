@@ -96,6 +96,111 @@ def make_probe(execute: Callable[[str, Dict], Any]):
     return probe
 
 
+# ALREADY-SATISFIED LEAVES. When a step's effect is ALREADY in place, the right move is to
+# make no tool call — and the weak model often gets this right. But the engine reads "no
+# call" as `no_action`, a failure, which poisons the enclosing composite to `partial`
+# forever: it can never close, so revision re-runs it, and the re-run declines again. That
+# loop is what turns an idempotent re-entry into wasted passes.
+#
+# The fix is to ask STATE, never the model: does the goal's effect already hold? Only goal
+# shapes that can be read UNAMBIGUOUSLY off the live registry are answered; everything else
+# is False. An unrecognized goal is never "already done" — claiming a satisfaction the
+# state doesn't show is exactly the false-success failure mode this system refuses.
+#
+# Deliberately NOT covered: deletion. "delete X" when X is absent looks satisfied, but it's
+# indistinguishable from the model targeting the wrong name — and no benefit is worth
+# teaching the harness to call a mis-aimed destructive step done.
+_SAT_NAME = r"['\"]?(?P<name>[a-z][\w.-]*)['\"]?"
+_SAT_VM = r"(?:vm|virtual machine|machine|instance|node|box|server)"
+_SAT_CREATE_VM_RE = re.compile(
+    # NOT "launch": in this tool vocabulary launch means START an existing VM, so
+    # "launch a vm named X" must be answered by the status rule below (or not at all),
+    # never by mere existence — a stopped X would score satisfied.
+    rf"\b(?:create|make|provision|spin\s*up|deploy|add)\s+(?:a\s+|an\s+|the\s+)?(?:new\s+)?"
+    rf"{_SAT_VM}\s+(?:named|called)\s+{_SAT_NAME}", re.I)
+_SAT_CREATE_NET_RE = re.compile(
+    rf"\b(?:create|make|provision|set\s*up|add)\s+(?:a\s+|an\s+|the\s+)?(?:new\s+|isolated\s+|private\s+)*"
+    rf"network\s+(?:named|called)\s+{_SAT_NAME}", re.I)
+_SAT_ATTACH_RE = re.compile(
+    r"\b(?:put|add|attach|connect|move|join)\s+['\"]?(?P<vm>[a-z][\w.-]*)['\"]?\s+"
+    r"(?:to|on|onto|into|in|in\s+to)\s+(?:the\s+)?"
+    r"(?:network\s+(?:named|called)\s+['\"]?(?P<net1>[a-z][\w.-]*)|"
+    r"['\"]?(?P<net2>[a-z][\w.-]*)['\"]?\s+network)", re.I)
+_SAT_LABEL_RES = (
+    re.compile(r"\bgive\s+['\"]?(?P<vm>[a-z][\w.-]*)['\"]?\s+the\s+['\"]?(?P<label>[\w.-]+)['\"]?\s+label\b", re.I),
+    re.compile(r"\b(?:add|apply)\s+(?:the\s+)?(?:label|tag)\s+['\"]?(?P<label>[\w.-]+)['\"]?\s+to\s+['\"]?(?P<vm>[a-z][\w.-]*)", re.I),
+    re.compile(r"\blabel\s+['\"]?(?P<vm>[a-z][\w.-]*)['\"]?\s+(?:as|with)\s+['\"]?(?P<label>[\w.-]+)", re.I),
+)
+_SAT_LAUNCH_RE = re.compile(rf"\b(?:launch|start|boot|power\s*on)\s+(?:the\s+)?(?:{_SAT_VM}\s+)?{_SAT_NAME}\s*$", re.I)
+_SAT_STOP_RE = re.compile(rf"\b(?:stop|shut\s*down|power\s*off|halt)\s+(?:the\s+)?(?:{_SAT_VM}\s+)?{_SAT_NAME}\s*$", re.I)
+
+
+def make_state_check(vms_getter: Callable[[], Dict[str, Dict[str, Any]]],
+                     execute: Optional[Callable[[str, Dict], Any]] = None):
+    """A satisfied(goal) -> bool: does live state ALREADY show this leaf goal's effect?
+
+    VM facts come from the registry (`vms_getter`). Network facts need a read-only
+    `list_networks` through `execute` — the same "verify with a real read-only call"
+    pattern make_probe uses — because the VM registry doesn't carry membership. No
+    executor, or a failed call, means the network question is UNKNOWN, which reads as
+    not-satisfied: the conservative direction.
+    """
+    def _networks() -> Dict[str, set]:
+        """{network name: {member vm names}} from the executor, or {} if unavailable."""
+        if execute is None:
+            return {}
+        try:
+            raw = execute("list_networks", {})
+        except Exception:
+            return {}
+        rows = raw if isinstance(raw, list) else (raw or {}).get("networks") or []
+        out: Dict[str, set] = {}
+        for r in rows:
+            if isinstance(r, dict) and r.get("name"):
+                out[str(r["name"]).lower()] = {str(m).lower() for m in (r.get("members") or [])}
+            elif isinstance(r, str):
+                out[r.lower()] = set()
+        return out
+
+    def _tags(rec: Dict[str, Any]) -> set:
+        return {str(t).lower() for t in (list(rec.get("labels") or []) + list(rec.get("flags") or []))}
+
+    def satisfied(goal: str) -> bool:
+        g = goal or ""
+        vms = {str(k).lower(): v for k, v in (vms_getter() or {}).items()}
+
+        m = _SAT_CREATE_VM_RE.search(g)
+        if m:
+            return m.group("name").lower() in vms
+
+        m = _SAT_CREATE_NET_RE.search(g)
+        if m:
+            return m.group("name").lower() in _networks()
+
+        m = _SAT_ATTACH_RE.search(g)
+        if m:
+            net = (m.group("net1") or m.group("net2") or "").lower()
+            return m.group("vm").lower() in _networks().get(net, set())
+
+        for rx in _SAT_LABEL_RES:
+            m = rx.search(g)
+            if m:
+                rec = vms.get(m.group("vm").lower())
+                return bool(rec) and m.group("label").lower() in _tags(rec)
+
+        m = _SAT_LAUNCH_RE.search(g)
+        if m:
+            return _is_running(vms.get(m.group("name").lower()))
+
+        m = _SAT_STOP_RE.search(g)
+        if m:
+            rec = vms.get(m.group("name").lower())
+            return rec is not None and not _is_running(rec)
+
+        return False          # unrecognized shape → never "already done"
+    return satisfied
+
+
 # An ASSURANCE goal asserts a checkable end-state the plan must actually establish —
 # not merely a set of steps to run. Detecting that intent lets the ephemeral (no-
 # predicate) path apply a goal-level honesty rule instead of closing on structure alone.
@@ -895,6 +1000,9 @@ def run_autonomous(
         expand_collective=expand_collective,   # Track 1.1: harness-driven collective decomposition
         ground_steps=ground_steps,             # Track 1.2: bind bare references in decomposed steps
         complete_steps=complete_steps,         # Track 1.4: inject a dropped prerequisite (create network)
+        # "no tool call" is only a failure when something was left to do — an already-in-
+        # place effect (idempotent re-entry) closes done on STATE, not on the model's word.
+        already_satisfied=(make_state_check(vms_getter, execute) if vms_getter else None),
     )   # criterion_of/legal_filter default to the active contract inside run_score
     # MISSION-SCOPED LAW: layer the mission's own rules over the contract for this run only
     # (the human's per-tasking answer to a referendum). Restored in the finally, so the

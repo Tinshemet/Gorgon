@@ -131,7 +131,11 @@ class SimWorld:
                                           "networks": sorted(self.vms[n]["nets"])} for n in names]}
 
     def _t_list_networks(self, a):
-        return {"success": True, "networks": sorted(self.nets)}
+        # Row shape matches the real executor's (name + members) — the Active Library and
+        # the planner's state check both read membership off these rows.
+        return {"success": True, "networks": [
+            {"name": n, "members": sorted(v for v, r in self.vms.items() if n in r["nets"])}
+            for n in sorted(self.nets)]}
 
     def _t_guest_ping(self, a):
         n = self._vm(a)
@@ -158,9 +162,12 @@ class SimWorld:
 
     # ── grounding for the planner ──
     def vms_getter(self) -> Dict[str, Dict[str, Any]]:
-        """The Active-Library shape run_autonomous grounds planning in."""
-        return {n: {"status": v["status"], "labels": sorted(v["labels"]),
-                    "networks": sorted(v["nets"])} for n, v in self.vms.items()}
+        """The Active-Library shape run_autonomous grounds planning in. Deliberately does
+        NOT expose network membership: the real LIBRARY.vms record doesn't either (nets
+        live in its own compartment, reached via list_networks), and a bench that hands the
+        planner a field production lacks would test a system that doesn't exist."""
+        return {n: {"status": v["status"], "labels": sorted(v["labels"]), "flags": []}
+                for n, v in self.vms.items()}
 
     def summary(self) -> str:
         return (f"{len(self.vms)} vms {sorted(self.vms)} | nets {sorted(self.nets)} | "

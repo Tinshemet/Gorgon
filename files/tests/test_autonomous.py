@@ -265,6 +265,41 @@ def main():
     check("harness looped the attach over BOTH members (the model never scripted the loop)",
           nw.vms.get("alpha", {}).get("nets") == {"net0"} and nw.vms.get("beta", {}).get("nets") == {"net0"})
 
+    print("\nstate check: is a leaf goal's effect ALREADY in place? (state answers, not the model)")
+    from orchestrator.ai.planner.autonomous import make_state_check
+    _vms = {"web": {"status": "running", "labels": ["fleet"], "flags": []},
+            "db":  {"status": "stopped", "labels": [], "flags": ["stealth"]}}
+    _nets = {"success": True, "networks": [{"name": "lab", "members": ["web"]},
+                                           {"name": "empty", "members": []}]}
+    sat = make_state_check(lambda: _vms, lambda t, a: _nets if t == "list_networks" else {})
+    check("create a vm that EXISTS → satisfied", sat("create a vm named web") is True)
+    check("create a vm that does NOT exist → not satisfied", sat("create a vm named ghost") is False)
+    check("create a network that exists → satisfied", sat("create a network called lab") is True)
+    check("create a network that doesn't → not satisfied", sat("create a network called nope") is False)
+    check("attach that already holds → satisfied", sat("put web in the network called lab") is True)
+    check("attach that does NOT hold → not satisfied", sat("put db in the network called lab") is False)
+    check("'<net> network' phrasing works too", sat("add web to the lab network") is True)
+    check("a label already carried → satisfied", sat("give web the 'fleet' label") is True)
+    check("a label NOT carried → not satisfied", sat("give db the 'fleet' label") is False)
+    check("an auto-FLAG counts as a tag", sat("give db the 'stealth' label") is True)
+    check("label phrasing variants", sat("add the label fleet to web") is True and sat("label web as fleet") is True)
+    check("launch of a RUNNING vm → satisfied", sat("launch web") is True)
+    check("launch of a stopped vm → not satisfied", sat("launch db") is False)
+    check("stop of a STOPPED vm → satisfied", sat("stop db") is True)
+    check("stop of a running vm → not satisfied", sat("stop web") is False)
+    # The safety direction: never claim a satisfaction the state doesn't show.
+    check("an unrecognized goal shape is NEVER 'already done'",
+          sat("make sure they all ping each other") is False and sat("do the thing") is False)
+    check("'launch a vm named X' is NOT answered by mere existence (launch = start, not create)",
+          sat("launch a vm named db") is False)
+    check("DELETION is deliberately not answered (absent ≠ done; could be a mis-aimed target)",
+          sat("delete web") is False and sat("delete ghost") is False)
+    check("no executor → network questions are UNKNOWN, which reads as not-satisfied",
+          make_state_check(lambda: _vms)("create a network called lab") is False)
+    check("a failing executor can't crash the check",
+          make_state_check(lambda: _vms, lambda t, a: (_ for _ in ()).throw(RuntimeError("down")))
+          ("create a network called lab") is False)
+
     print("\nanonymous-network prereq (Track 1.4b): an UNNAMED shared network is named + created FIRST")
     ax = make_collective_expander(lambda: {"a": 1, "b": 1})
     check("'put them all in a network' → create net1 first, every member threaded to it",

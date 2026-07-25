@@ -44,6 +44,7 @@ class Engine:
     expand_collective: Optional[Callable[[str, list], Optional[list]]] = None   # deterministically expand a distributive "do X to all/them" sub-goal into per-member steps
     ground_steps:    Optional[Callable[[str, list], list]] = None               # bind bare entity references in decomposed steps to the parent's named entity
     complete_steps:  Optional[Callable[[str, list], list]] = None               # inject a missing prerequisite (e.g. create the network a step attaches to)
+    already_satisfied: Optional[Callable[[str], bool]] = None                   # (goal)→bool: live state already shows this leaf's effect, so "no tool call" is correct, not a failure
 
     @classmethod
     def from_kwargs(cls, kw: Dict[str, Any]) -> "Engine":

@@ -174,6 +174,54 @@ def main():
     check("the non-idempotent create ran EXACTLY once (not re-run on revision)", w.creates == 1)
     check("configure was retried (ran twice: fail then succeed)", w.configure_calls == 2)
 
+    print("\nalready-satisfied leaves: 'no tool call' is correct when the effect is in place")
+    # The defect: on a re-entry the model rightly declines to redo a done step, the engine
+    # scores that no_action, and the composite is stuck `partial` forever — it can never
+    # close, so revision re-runs it, and it declines again.
+    sat_world = {"seen": 0}
+    def _mute_on_second(m, tools):
+        g = _goal(m)
+        if g == "set up X":
+            return _dec(["create a vm named x", "configure X"])
+        if g == "create a vm named x":
+            sat_world["seen"] += 1
+            if sat_world["seen"] == 1:
+                return _tc("create_vm", {"name": "x"})
+            return {"message": {"tool_calls": []}}      # already there → no call (correct!)
+        if g == "configure X":
+            return _tc("configure_vm", {"name": "X"}) if sat_world["seen"] < 2 else _tc("configure_fallback", {"name": "X"})
+        return {"message": {"tool_calls": []}}
+    w2 = World()
+    r = run_score("set up X", call_model=_mute_on_second, execute=w2.execute, tools=_TOOLS,
+                  engine=Engine(legal_filter=_NO_LEGAL, max_revisions=1,
+                                already_satisfied=lambda g: "named x" in g and "x" in w2.vms),
+                  max_retries=0)
+    creates = [n for n in r["root"]["children"] if "named x" in n["goal"]]
+    check("the re-entered create closed DONE, not no_action", creates and creates[0]["status"] == "done")
+    check("it is marked as satisfied-by-state, not by a tool call",
+          creates and creates[0].get("satisfied") == "already" and creates[0].get("tool") is None)
+    check("so the composite could close (no permanent partial)", r["root"]["status"] == "done")
+
+    # The guard: satisfaction is read off STATE, so a goal whose effect is NOT in place
+    # still fails on a mute model — the check can never launder a real no_action into done.
+    w3 = World()
+    sat_world["seen"] = 1                                # so the create step mutes immediately
+    r = run_score("set up X", call_model=_mute_on_second, execute=w3.execute, tools=_TOOLS,
+                  engine=Engine(legal_filter=_NO_LEGAL, already_satisfied=lambda g: False),
+                  max_retries=0)
+    creates = [n for n in r["root"]["children"] if "named x" in n["goal"]]
+    check("state says NOT satisfied → the same mute model is still no_action",
+          creates and creates[0]["status"] == "no_action" and "x" not in w3.vms)
+    r = run_score("make Y", call_model=lambda m, t: {"message": {"tool_calls": []}},
+                  execute=World().execute, tools=_TOOLS,
+                  engine=Engine(legal_filter=_NO_LEGAL, already_satisfied=lambda g: False),
+                  max_retries=0)
+    check("a mute model with nothing satisfied stays no_action", r["root"]["status"] == "no_action")
+    r = run_score("make Y", call_model=lambda m, t: {"message": {"tool_calls": []}},
+                  execute=World().execute, tools=_TOOLS,
+                  engine=Engine(legal_filter=_NO_LEGAL), max_retries=0)
+    check("no check wired → unchanged behavior (no_action)", r["root"]["status"] == "no_action")
+
     print(f"\n{_PASS}/{_PASS + _FAIL} passed")
     sys.exit(1 if _FAIL else 0)
 

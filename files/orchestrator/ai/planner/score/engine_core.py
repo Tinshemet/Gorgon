@@ -119,6 +119,7 @@ def run_score(
     expand_collective = engine.expand_collective
     ground_steps    = engine.ground_steps
     complete_steps  = engine.complete_steps
+    already_satisfied = engine.already_satisfied
 
     def _refine_steps(parent_goal: str, steps: list) -> list:
         """Apply the harness's step-refinement passes to a model decomposition: bind bare
@@ -474,6 +475,15 @@ def run_score(
         name, args = _first_tool_call(call_model(messages, offered))
 
         if name is None:
+            # The model declined to act. That's a FAILURE only if something was left to do.
+            # On an idempotent re-entry — a revision re-running a step whose effect is
+            # already in place — making no call is the CORRECT answer, and scoring it
+            # `no_action` poisons the enclosing composite to `partial` permanently: it can
+            # never close, so revision re-runs it, and it declines again. Ask live state
+            # (never the model's say-so): if the effect already holds, this leaf is done.
+            if already_satisfied is not None and already_satisfied(node_goal):
+                _emit("leaf", node_goal, depth, path, tool=None, satisfied="already")
+                return _node(node_goal, "done", satisfied="already")
             return _node(node_goal, "no_action")
 
         if name == "decompose":
