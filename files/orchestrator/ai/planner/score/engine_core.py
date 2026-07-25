@@ -466,7 +466,15 @@ def run_score(
                         method_cache.remember(node_goal, steps)   # learn this decomposition
                     _emit("plan", node_goal, depth, path, children=list(steps), mode="and", method="model")
                     children = [_resolve(s, depth + 1, path + [node_goal]) for s in steps]
-                    return _close_and(node_goal, depth, children, method="model")
+                    node = _close_and(node_goal, depth, children, method="model")
+                    # A method earns DURABILITY by working. `remember` above ran before a
+                    # single child executed, so it captured a plan the model PROPOSED;
+                    # only a decomposition that actually closed is worth handing to future
+                    # runs (the store persists confirmed methods only). This branch is
+                    # root-only, which is also the only depth `lookup` is consulted at.
+                    if method_cache and depth == 0 and node.get("status") == "done":
+                        method_cache.confirm(node_goal)
+                    return node
             offer_decompose = False   # atomic (or the model refused) → let it pick a primitive
 
         # Both meta-tools ride with the primitives when decomposition is allowed:
@@ -496,9 +504,20 @@ def run_score(
                 if allow_decompose:
                     return _attempt(node_goal, depth, path, False, failed, use_cache)
                 return _node(node_goal, "blocked", reason="no_progress")
-            _emit("plan", node_goal, depth, path, children=list(steps), mode="and")
+            if method_cache:
+                method_cache.remember(node_goal, steps)   # learn it here too — this is the
+            # path a decomposition takes whenever plan-first didn't yield (and at every
+            # depth > 0), so without this the cache only ever sees root plan-first goals.
+            _emit("plan", node_goal, depth, path, children=list(steps), mode="and", method="model")
             children = [_resolve(s, depth + 1, path + [node_goal]) for s in steps]
-            return _close_and(node_goal, depth, children)
+            node = _close_and(node_goal, depth, children, method="model")
+            # DURABLE only at the ROOT. Lookup happens at depth 0, so a sub-goal method
+            # could never be reused — persisting them would just crowd the capped store and
+            # evict the root shapes that DO recur across runs. In-run learning still
+            # happens at every depth; it simply doesn't outlive the process.
+            if method_cache and depth == 0 and node.get("status") == "done":
+                method_cache.confirm(node_goal)
+            return node
 
         if name == "alternatives":
             # OR goal: try each alternative in order, STOP at the first that's done, and

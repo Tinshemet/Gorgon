@@ -490,6 +490,62 @@ def main():
                         vms_getter=lambda: {}, persist_claims=True)
     check("a later run (no prior=) still closes the loop and re-persists", _store.load_reliability(agent) != {})
 
+    print("\nstructural memory: a PROVEN decomposition outlives the process")
+    from orchestrator.ai.planner import method_store as _mstore
+    _mstore.clear(agent)
+    def _goal_of(messages):
+        return next((x["content"][6:] for x in messages
+                     if x["role"] == "user" and x["content"].startswith("Goal: ")), "")
+    def _steps_model(plans):
+        """Decomposes the goals in `plans`; executes any 'create/launch … named <x>' leaf for
+        ANY name — the leaves must work for a name the script never saw, since that's what a
+        generalized method produces."""
+        def _call(messages, tools):
+            g = _goal_of(messages)
+            if g in plans:
+                return {"message": {"tool_calls": [{"function": {
+                    "name": "decompose", "arguments": {"steps": plans[g]}}}]}}
+            if g.startswith("create a vm named"):
+                return {"message": {"tool_calls": [{"function": {
+                    "name": "create_vm", "arguments": {"name": g.split()[-1], "os_type": "linux"}}}]}}
+            if g.startswith("launch the vm named"):
+                return {"message": {"tool_calls": [{"function": {
+                    "name": "launch_vm", "arguments": {"name": g.split()[-1]}}}]}}
+            return {"message": {"tool_calls": []}}
+        return _call
+    w = World()
+    m1 = _steps_model({"prepare the rig xyz": ["create a vm named xyz", "launch the vm named xyz"]})
+    r = run_autonomous("prepare the rig xyz", call_model=m1, execute=w.execute, tools=_TOOLS,
+                       vms_getter=lambda: w.vms, reward=10.0, persist_claims=True)
+    check("the run's plan closed done via the MODEL", r["root"]["status"] == "done"
+          and r["root"].get("method") == "model")
+    check("the decomposition was proven and persisted",
+          [m["source"] for m in r["methods_learned"]] == ["prepare the rig xyz"]
+          and [m["source"] for m in _mstore.load(agent)] == ["prepare the rig xyz"])
+    # The claim under test: a LATER process inherits the skill. The model is given a goal of
+    # the same shape but a new name, and CANNOT plan it — only the store can.
+    w2 = World()
+    m2 = _steps_model({})                    # no plan for ANY goal — the model cannot decompose
+    def _cant_plan(msgs, tools):
+        return m2(msgs, tools)
+    r2 = run_autonomous("prepare the rig abc", call_model=_cant_plan, execute=w2.execute,
+                        tools=_TOOLS, vms_getter=lambda: w2.vms, reward=10.0, persist_claims=True)
+    check("a later run decomposes it from the STORE, with no model plan",
+          r2["root"].get("method") == "cache" and r2["root"]["status"] == "done")
+    check("and the steps really ran, generalized to the new name",
+          [c["goal"] for c in r2["root"]["children"]]
+          == ["create a vm named abc", "launch the vm named abc"] and "abc" in w2.vms)
+    # The guard: an UNPROVEN method (its plan didn't close) must never reach the store.
+    _mstore.clear(agent)
+    w3 = World()
+    m3 = _steps_model({"botch the rig q": ["create a vm named q", "do the impossible q"]})
+    # "do the impossible q" matches no leaf rule → that child can't close → composite partial
+    r3 = run_autonomous("botch the rig q", call_model=m3, execute=w3.execute, tools=_TOOLS,
+                        vms_getter=lambda: w3.vms, reward=10.0, persist_claims=True)
+    check("a plan that did NOT close is learned in-run but never persisted",
+          r3["root"]["status"] != "done" and r3["methods_learned"] == []
+          and _mstore.load(agent) == [])
+
     print(f"\n{_PASS}/{_PASS + _FAIL} passed")
     sys.exit(1 if _FAIL else 0)
 

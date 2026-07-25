@@ -24,7 +24,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from .score import run_score, _first_tool_call, _NODE_SYSTEM, DECOMPOSE_TOOL
 from ..agent import contract as _contract
-from .method_cache import seeded as _seeded_cache
+from .method_cache import MethodCache as _MethodCache, seeded as _seeded_cache
 from .findings import Findings, DEFAULT_SCHEMA
 from .reward_cost import (economics as _economics, p_self_estimate as _p_self, dials as _dials,
                           cfg_with as _cfg_with, leaf_cost as _leaf_cost, ce as _ce,
@@ -896,7 +896,21 @@ def run_autonomous(
                 parts += [s for s in (render_state(vms_getter()), findings.render()) if s]
             return "\n\n".join(parts)
     if method_cache is None:
-        method_cache = _seeded_cache()
+        # STRUCTURAL MEMORY: load what this agent has already learned to decompose, over
+        # the seed library. Without this the cache is rebuilt empty every run and the
+        # system re-asks the model the same planning questions forever — it can only
+        # "un-reason over time" if the methods outlive the process. Best-effort: a bad
+        # store must degrade to seeds-only, never brick a run.
+        _stored = []
+        if persist_claims:
+            try:
+                from . import method_store as _mstore
+                from ..agent.contract import active_agent_key as _agent_key
+                agent_key = agent_key or _agent_key()
+                _stored = _mstore.load(agent_key)
+            except Exception:
+                _stored = []
+        method_cache = _MethodCache.from_records(_stored) if _stored else _seeded_cache()
     # HARD-seed the root decomposition from a mission's declared sub_goals: score.py's
     # depth-0 method-cache path (a known goal shape decomposes DETERMINISTICALLY, no model)
     # then forces the plan tree to form along those exact steps — so they are GUARANTEED
@@ -1097,6 +1111,17 @@ def run_autonomous(
         try:                                       # the live drivers self-tighten without prior=
             from . import findings_store as _store
             _store.save_reliability(agent_key, result["reliability"])
+        except Exception:
+            pass
+    # STRUCTURAL MEMORY (the durable half of the method cache): fold the decompositions
+    # this run PROVED — the ones whose composite closed done — into the agent's store, so
+    # the next run decomposes them without asking the model. Unproven learning is dropped
+    # with the process on purpose; only what worked is worth inheriting.
+    result["methods_learned"] = method_cache.proven() if hasattr(method_cache, "proven") else []
+    if persist_claims and result["methods_learned"]:
+        try:
+            from . import method_store as _mstore
+            _mstore.merge_into(agent_key, result["methods_learned"])
         except Exception:
             pass
     result["summary"] = _summarize(result)

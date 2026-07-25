@@ -9,6 +9,7 @@ Run:  PYTHONPATH=files python3 files/tests/test_method_cache.py
 """
 import os
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -61,6 +62,55 @@ def main():
           got == ["delete the web vm", "delete the db vm"])
     check("re-remembering a covered goal is a no-op",
           lc.remember("wipe the x vm and the y vm", ["delete the x vm", "delete the y vm"]) is None)
+
+    print("\nproven-only durability: a method earns persistence by WORKING")
+    check("a freshly learned method is NOT yet proven", lc.proven() == [])
+    check("confirm marks the method learned from that goal",
+          lc.confirm("wipe the alpha vm and the beta vm") is True)
+    check("confirming twice is a no-op", lc.confirm("wipe the alpha vm and the beta vm") is False)
+    check("confirming an unknown goal marks nothing", lc.confirm("something else entirely") is False)
+    rec = lc.proven()
+    check("now it is durable, as a plain JSON record",
+          len(rec) == 1 and rec[0]["source"] == "wipe the alpha vm and the beta vm"
+          and isinstance(rec[0]["pattern"], str) and len(rec[0]["steps"]) == 2)
+    check("SEEDS are never persisted (code is their SSOT)", seeded().proven() == [])
+
+    print("\nrehydration: a stored method decomposes without the model")
+    rc = MethodCache.from_records(rec)
+    check("the learned shape survives a round trip",
+          rc.lookup("wipe the web vm and the db vm") == ["delete the web vm", "delete the db vm"])
+    check("seeds are layered underneath",
+          rc.lookup("create two ubuntu vms named a and b") is not None)
+    check("a rehydrated method stays proven (re-saving is idempotent)", len(rc.proven()) == 1)
+    check("a CORRUPT record is dropped, not raised on",
+          MethodCache.from_records([{"name": "bad", "pattern": "([unclosed", "steps": ["x", "y"]}]
+                                   ).lookup("anything") is None)
+
+    print("\nthe durable store (per-agent, on disk)")
+    import shared.bundle as _bundle
+    _bundle.AGENTS_ROOT = tempfile.mkdtemp()      # isolate bundle storage from ~/.gorgon
+    from orchestrator.ai.planner import method_store as mstore
+    check("no store yet → empty, never raises", mstore.load("doorman") == [])
+    check("merge reports what is genuinely new", mstore.merge_into("doorman", rec) == 1)
+    check("it round-trips through disk",
+          MethodCache.from_records(mstore.load("doorman")).lookup("wipe the x vm and the y vm")
+          == ["delete the x vm", "delete the y vm"])
+    check("re-merging the same shape adds no twin", mstore.merge_into("doorman", rec) == 0
+          and len(mstore.load("doorman")) == 1)
+    check("stores are per-agent isolated", mstore.load("barenboim") == [])
+    check("a path-traversal agent name is sanitized (stays under the bundle root)",
+          os.path.normpath(mstore.store_path("../../etc/passwd"))
+          .startswith(os.path.normpath(_bundle.AGENTS_ROOT)))
+    check("newest learning is listed FIRST (outranks older on lookup)",
+          mstore.merge_into("doorman", [{"name": "n", "pattern": "^brand new$",
+                                         "steps": ["a", "b"], "source": "brand new"}]) == 1
+          and mstore.load("doorman")[0]["source"] == "brand new")
+    mstore.save("capped", [{"name": f"m{i}", "pattern": f"^g{i}$", "steps": ["a", "b"],
+                            "source": f"g{i}"} for i in range(mstore.MAX_METHODS + 50)])
+    check("the store is capped (unbounded growth would slow every lookup)",
+          len(mstore.load("capped")) == mstore.MAX_METHODS)
+    check("forget clears it", mstore.clear("doorman") is True and mstore.load("doorman") == [])
+    check("forgetting nothing is False, not an error", mstore.clear("never-existed") is False)
 
     print(f"\n{_PASS}/{_PASS + _FAIL} passed")
     sys.exit(1 if _FAIL else 0)
