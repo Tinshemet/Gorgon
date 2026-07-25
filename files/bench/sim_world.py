@@ -70,6 +70,17 @@ class SimWorld:
         self.vms[n] = {"status": "stopped", "labels": set(), "nets": set()}
         return {"success": True, "name": n}
 
+    def _t_clone_vm(self, a):
+        src = a.get("name") or a.get("source")
+        dst = a.get("new_name") or a.get("clone_name") or a.get("target")
+        if src not in self.vms:
+            return {"success": False, "error": f"no VM named {src}"}
+        if not dst:
+            return {"success": False, "error": "new_name is required"}
+        rec = self.vms[src]
+        self.vms[dst] = {"status": "stopped", "labels": set(rec["labels"]), "nets": set(rec["nets"])}
+        return {"success": True, "name": dst}
+
     def _t_delete_vm(self, a):
         n = self._vm(a)
         if n not in self.vms:

@@ -6,6 +6,7 @@ These are the genuinely top-level (state-free) helpers the recursive engine call
 they hold no engine state, so they live outside the closure in engine_core.
 """
 
+import re
 from typing import Any, Dict, List
 
 from ._deps import _POST_CREATE_ATTACH, _NARROW_CORE_TOOLS
@@ -62,6 +63,15 @@ def _attach_steer(base: List[Dict], node_goal: str, ledger: List[Dict[str, Any]]
                 if e.get("tool") == creator and e.get("ok")]
         made = [n for n in made if n]
         if not made:
+            continue
+        # A node that explicitly says CREATE one of these is not "referencing the entity we
+        # just made" — it is asking for a DIFFERENT one. Steering it drops the creator from
+        # the offered tools, so the model cannot do what the step says and returns nothing.
+        # That was the whole failure of a two-network partition: the second network was never
+        # created, so every attach to it failed, repeated, and got throttled as a loop.
+        if re.search(rf"\b(?:create|make|provision|set\s*up)\s+(?:a\s+|an\s+|the\s+)?"
+                     rf"(?:new\s+|isolated\s+|private\s+|separate\s+|different\s+|second\s+)*"
+                     rf"{re.escape(spec['keyword'])}\b", low):
             continue
         referenced = spec["keyword"] in low or any(str(n).lower() in low for n in made)
         attach = by_name.get(spec["attach"])

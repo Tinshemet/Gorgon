@@ -474,6 +474,11 @@ _COLLECTIVE_RE = re.compile(
 # Inherently-collective operations are NOT distributive — "ping each other" / mesh is one
 # fact over the whole set, not a per-member step. Never expand these (they're the assurance
 # clause the goal-honesty rule + mesh acceptance already handle).
+# "the red ones", "all red vms", "the red machines" — a collective scoped to a TAG rather
+# than to the whole live set. The group word is required (a bare "the red" is not a set).
+_LABEL_COLLECTIVE_RE = re.compile(
+    r"\b(?:the|all|all\s+the|every|each)\s+(?P<label>[a-z][\w-]*)\s+"
+    r"(?:ones|vms?|virtual machines?|machines?|boxes|servers?|instances?|nodes?)\b", re.I)
 _INHERENT_COLLECTIVE_RE = re.compile(r"\b(each other|one another|ping all|connectivity|mesh|reachable)\b", re.I)
 
 # CARDINAL CREATION (Track 1.1b). "create 5 vms" instantiates a NEW set of size N — the
@@ -501,10 +506,23 @@ _CARDINAL_CREATE_RE = re.compile(
 _CARDINAL_MAX = 25   # a bound so "create 1000 vms" can't detonate the planner
 
 
+# A cardinal phrase may carry a QUALIFIER — "create 3 vms labelled 'red'". Minting three
+# bare creates would drop it silently, and because each create then succeeds the clause
+# closes `done` having never labelled anything: the harness manufacturing a false success.
+# A label qualifier is understood and expanded into real steps; anything else we can't
+# faithfully carry means the whole optimization stands down and the model keeps the goal.
+_CARD_LABEL_RE = re.compile(
+    r"^\s*(?:that\s+are\s+|which\s+are\s+)?(?:labell?ed|tagged|with\s+the\s+label|"
+    r"with\s+label|labelled\s+as)\s+['\"]?(?P<label>[\w.-]+)['\"]?\s*$", re.I)
+
+
 def _cardinal_create_steps(goal: str):
-    """['create a <noun> named <noun><i>' for i in 1..N] for a bare "create N <noun>", else
-    None. Deterministic + stable so a re-entry mints the SAME names (idempotent). Bails when
-    explicit names are present (the model owns those) or the count is out of [2, _CARDINAL_MAX]."""
+    """['create a <noun> named <noun><i>' for i in 1..N] for a bare "create N <noun>", plus
+    one labelling step per member when the phrase carries a label qualifier. None when the
+    goal isn't a bare cardinal create. Deterministic + stable so a re-entry mints the SAME
+    names (idempotent). Bails when explicit names are present (the model owns those), when
+    the count is out of [2, _CARDINAL_MAX], or when a trailing qualifier is present that
+    this cannot faithfully express — dropping meaning is worse than not firing."""
     g = goal or ""
     if re.search(r"\b(?:named|called)\b", g, re.I):     # explicit names → the model's job
         return None
@@ -516,7 +534,23 @@ def _cardinal_create_steps(goal: str):
     noun = _CARDINAL_NOUNS.get(m.group("noun").lower())
     if not n or not noun or not (2 <= n <= _CARDINAL_MAX):
         return None
-    return [f"create a {noun} named {noun}{i}" for i in range(1, n + 1)]
+    label = None
+    tail = g[m.end():].strip(" ,.;")
+    if tail:                                            # something qualifies the cardinal
+        lm = _CARD_LABEL_RE.match(tail)
+        if not lm:
+            return None                                 # unknown qualifier → don't fire at all
+        label = lm.group("label")
+    # Name from the QUALIFIER when there is one. Two cardinal clauses in one goal ("3 vms
+    # labelled red and 2 labelled blue") would otherwise both mint vm1, vm2… — the blue
+    # creates would no-op onto the red VMs and the second group would never exist. `red1,
+    # blue1` keeps the groups distinct while staying just as stable across a re-entry.
+    stem = re.sub(r"[^a-z0-9]", "", label.lower())[:12] if label else noun
+    names = [f"{stem or noun}{i}" for i in range(1, n + 1)]
+    steps = [f"create a {noun} named {nm}" for nm in names]
+    if label:                                           # carry the qualifier, don't drop it
+        steps += [f"give {nm} the '{label}' label" for nm in names]
+    return steps
 
 
 # COMPOUND DECOMPOSITION (Track 2). The benchmark's last cliff: the weak model fuses two
@@ -527,6 +561,38 @@ def _cardinal_create_steps(goal: str):
 # from a noun-conjunction ("create vms a and b" → one action over a set) so it never
 # over-decomposes an atomic goal — the exact failure decompose-first-at-every-level had.
 _COORD_RE = re.compile(r"\s+(?:and then|and afterwards|then|and|;)\s+|,\s+(?=\w)", re.I)
+
+# A conjunction can leave a clause SHARING the earlier verb: "create 3 vms labelled 'red'
+# and 2 vms labelled 'blue'" — the second half is an object, not an action. The tool-hint
+# test alone waves it through (a bare "2 vms" hints the VM tools), and the orphan then
+# closes `done` having run nothing. Where the fragment is unmistakably parallel to what
+# came before — a COUNT of a known provisionable noun — the verb is inherited so it becomes
+# a real step; anything less obvious is left alone and the goal stays whole for the model.
+_BARE_CARDINAL_RE = re.compile(
+    r"^(?:\d{1,3}|one|two|three|four|five|six|seven|eight|nine|ten)\s+"
+    r"(?:new\s+|identical\s+|separate\s+)*"
+    r"(?:virtual machines?|vms?|machines?|instances?|nodes?|boxes|servers?|networks?|containers?)\b",
+    re.I)
+_LEAD_VERB_RE = re.compile(
+    r"^(?:and\s+|then\s+|also\s+)*(?P<verb>create|make|spin\s*up|provision|launch|start|deploy|"
+    r"add|put|attach|connect|join|move|give|label|tag|stop|shut|delete|destroy|remove|clone|"
+    r"ping|check|verify|ensure|make\s+sure|configure|set|run|list|show)\b", re.I)
+
+
+def _inherit_verbs(parts: List[str]) -> List[str]:
+    """Give a verbless parallel fragment the verb of the clause before it, so a shared-verb
+    conjunction splits into real actions instead of an orphan."""
+    out, last_verb = [], None
+    for p in parts:
+        vm = _LEAD_VERB_RE.match(p)
+        if vm:
+            last_verb = vm.group("verb")
+            out.append(p)
+        elif last_verb and _BARE_CARDINAL_RE.match(p):
+            out.append(f"{last_verb} {p}")
+        else:
+            out.append(p)
+    return out
 
 
 def make_compound_splitter():
@@ -544,7 +610,11 @@ def make_compound_splitter():
         # AND a vm named web"), or "b" in "a and b" — the split would drop/mangle it, so leave
         # the goal whole for the model. This is what keeps a shared-verb or noun conjunction
         # (which the model handles fine) from being wrongly torn apart.
-        if all(scan_tool_hints(p) for p in parts):
+        parts = _inherit_verbs(parts)
+        # Every part must name an action: hint a tool AND lead with a verb. The tool hint
+        # alone is not enough — "2 vms labelled 'blue'" hints the VM tools while being a
+        # bare object, and splitting it off strands work no step will ever do.
+        if all(scan_tool_hints(p) and _LEAD_VERB_RE.match(p) for p in parts):
             return parts
         return None
     return split
@@ -559,23 +629,34 @@ def make_compound_splitter():
 # front, prepend its creation, and thread that name through every member step. Stable, so a
 # re-entry threads the SAME net (the executor no-ops the create) instead of minting another.
 # `net1` rather than `network1` so it can't collide with a cardinal "create N networks" set.
+# NB "the network" is deliberately NOT a determiner here: a definite reference points at
+# an existing network, and minting a new one would be the wrong reading. "their own" and
+# "a different" ARE — both assert a net that doesn't exist yet, which is exactly the case
+# a partition depends on.
 _ANON_NET_RE = re.compile(
     r"\b(?P<prep>in|into|on|onto|to|inside|within)\s+"
-    r"(?:a|an|one|the\s+same|a\s+single|a\s+shared|a\s+common)\s+"
-    r"(?:new\s+|single\s+|shared\s+|common\s+|isolated\s+|private\s+|virtual\s+)*"
+    r"(?:a|an|one|the\s+same|a\s+single|a\s+shared|a\s+common|their\s+own|its\s+own)\s+"
+    r"(?:new\s+|single\s+|shared\s+|common\s+|isolated\s+|private\s+|virtual\s+|own\s+|"
+    r"different\s+|separate\s+|dedicated\s+|second\s+)*"
     r"network\b", re.I)
 _ANON_NET_NAME = "net1"
 
 
-def _thread_anonymous_network(steps: List[str]) -> Optional[List[str]]:
-    """['create a network called net1'] + `steps` rewritten to name that network, when the
+def _thread_anonymous_network(steps: List[str], stem: Optional[str] = None) -> Optional[List[str]]:
+    """['create a network called <net>'] + `steps` rewritten to name that network, when the
     steps attach to an UNNAMED one; None when they don't (nothing to thread). Deterministic
-    — the same collective always threads the same name."""
+    — the same collective always threads the same name.
+
+    `stem` names the net after the group it belongs to ("the red ones … their own network"
+    → rednet). Two groups in one goal each needing their OWN network would otherwise both
+    thread the single fixed name and end up on the SAME network — silently collapsing a
+    partition into one pool."""
     if not any(_ANON_NET_RE.search(s or "") for s in steps):
         return None
-    named = [_ANON_NET_RE.sub(lambda m: f"{m.group('prep')} the network called {_ANON_NET_NAME}",
+    net = f"{re.sub(r'[^a-z0-9]', '', stem.lower())[:12]}net" if stem else _ANON_NET_NAME
+    named = [_ANON_NET_RE.sub(lambda m: f"{m.group('prep')} the network called {net}",
                               s or "", count=1) for s in steps]
-    return [f"create a network called {_ANON_NET_NAME}"] + named
+    return [f"create a network called {net}"] + named
 
 
 def make_collective_expander(entities_getter: Callable[[], Dict[str, Any]]):
@@ -592,10 +673,25 @@ def make_collective_expander(entities_getter: Callable[[], Dict[str, Any]]):
         cardinal = _cardinal_create_steps(g)
         if cardinal:
             return cardinal
+        ents = entities_getter() or {}
+        # LABEL-SCOPED collective: "put the red ones on their own network" addresses the
+        # SUBSET carrying a tag, not the whole set. Resolved against live tags, and only
+        # when the tag really exists — so "the stopped ones" (a status, not a label) is not
+        # mistaken for one. Runs BEFORE the plain collective, whose "all \\w+" pattern would
+        # otherwise chew "all red vms" into a broken substitution.
+        lm = _LABEL_COLLECTIVE_RE.search(g)
+        if lm:
+            label = lm.group("label").lower()
+            tagged = [n for n, rec in ents.items() if label in {t.lower() for t in _vm_tags(rec)}]
+            if len(tagged) >= 2:
+                steps = [(g[:lm.start()] + e + g[lm.end():]).strip() for e in tagged]
+                # the group's own network is named AFTER the group, so two groups don't
+                # collapse onto one net
+                return _thread_anonymous_network(steps, stem=label) or steps
         m = _COLLECTIVE_RE.search(g)
         if not m:
             return None
-        members = list((entities_getter() or {}).keys())
+        members = list(ents.keys())
         if len(members) < 2:
             return None
         # replace the collective phrase with each member name → per-member atomic sub-goals

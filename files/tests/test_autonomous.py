@@ -64,6 +64,10 @@ def scripted(script):
 
 _TOOLS = [{"type": "function", "function": {"name": n, "parameters": {}}}
           for n in ("create_vm", "launch_vm", "stop_vm", "delete_vm")]
+# A wider set for the steering tests, which need the real network tool names.
+_TOOLS2 = [{"type": "function", "function": {"name": n, "parameters": {}}}
+           for n in ("create_vm", "launch_vm", "create_network", "add_vm_to_network",
+                     "list_vms", "clarify", "check_system")]
 
 
 def main():
@@ -325,6 +329,60 @@ def main():
     check("a failing executor can't crash the check",
           make_state_check(lambda: _vms, lambda t, a: (_ for _ in ()).throw(RuntimeError("down")))
           ("create a network called lab") is False)
+
+    print("\ncardinal QUALIFIERS are carried, never dropped")
+    # The bug this guards: "create 3 vms labelled 'red'" minted three bare creates and
+    # threw the label away. Each create then succeeded, so the clause closed `done` having
+    # labelled nothing — the harness manufacturing a false success.
+    from orchestrator.ai.planner.autonomous import _cardinal_create_steps as _card
+    check("a label qualifier becomes real steps",
+          _card("create 3 vms labelled 'red'") ==
+          ["create a vm named red1", "create a vm named red2", "create a vm named red3",
+           "give red1 the 'red' label", "give red2 the 'red' label", "give red3 the 'red' label"])
+    check("the group NAMES itself after the label, so two groups can't collide",
+          [s for s in _card("create 2 vms labelled 'blue'") if s.startswith("create")]
+          == ["create a vm named blue1", "create a vm named blue2"])
+    check("a plain cardinal is unchanged", _card("create 5 vms")
+          == [f"create a vm named vm{i}" for i in range(1, 6)])
+    check("an UNPARSEABLE qualifier stands the whole thing down (never drop meaning)",
+          _card("create 3 vms with 8gb ram") is None)
+
+    print("\na verbless parallel clause inherits its verb instead of being orphaned")
+    # "create 3 vms labelled 'red' and 2 vms labelled 'blue'" — the second half is an
+    # object, not an action. Splitting it off strands work no step will ever do.
+    _sp = make_compound_splitter()
+    got = _sp("create 3 vms labelled 'red' and 2 vms labelled 'blue', "
+              "put the red ones together on their own network, "
+              "and put the blue ones on a different network", [])
+    check("the fragment becomes a real action", got and got[1] == "create 2 vms labelled 'blue'")
+    check("and all four clauses survive", got and len(got) == 4)
+    check("a non-parallel fragment is NOT invented into a step (goal stays whole)",
+          _sp("create a vm with 4 cores and 8gb ram", []) is None)
+
+    print("\nlabel-scoped collectives: 'the red ones' is the SUBSET carrying that tag")
+    _tagged = {"red1": {"labels": ["red"], "flags": []}, "red2": {"labels": ["red"], "flags": []},
+               "blue1": {"labels": ["blue"], "flags": []}, "blue2": {"labels": ["blue"], "flags": []}}
+    _lx = make_collective_expander(lambda: _tagged)
+    red = _lx("put the red ones together on their own network", [])
+    blue = _lx("put the blue ones on a different network", [])
+    check("it resolves to the tagged members only",
+          red and [s for s in red if "red1" in s or "red2" in s] and not any("blue" in s for s in red))
+    check("each group gets its OWN network, named after it",
+          red[0] == "create a network called rednet" and blue[0] == "create a network called bluenet")
+    check("...which is what stops a partition collapsing into one pool",
+          red[0] != blue[0])
+    check("a STATUS word is not mistaken for a label",
+          _lx("put the stopped ones on a network", []) is None)
+
+    print("\nattach-steer must not hijack a node that says CREATE")
+    from orchestrator.ai.planner.score.ledger_util import _attach_steer
+    _led = [{"tool": "create_network", "args": {"net_name": "rednet"}, "ok": True}]
+    _t2, steered = _attach_steer(_TOOLS2, "create a network called bluenet", _led, _TOOLS2)
+    check("a create node is left alone (it needs the creator tool)",
+          steered is False and "create_network" in [t["function"]["name"] for t in _t2])
+    _t3, steered3 = _attach_steer(_TOOLS2, "put blue1 on the network called bluenet", _led, _TOOLS2)
+    check("a real attach node is still steered", steered3 is True
+          and "add_vm_to_network" in [t["function"]["name"] for t in _t3])
 
     print("\nanonymous-network prereq (Track 1.4b): an UNNAMED shared network is named + created FIRST")
     ax = make_collective_expander(lambda: {"a": 1, "b": 1})

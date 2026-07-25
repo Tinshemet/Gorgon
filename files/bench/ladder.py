@@ -50,10 +50,14 @@ def make_call_model(model: str, temperature: float, timeout: int):
     return call_model
 
 
-def run_rung(rung, call_model, verbose: bool = False) -> Dict:
+def run_rung(rung, call_model, verbose: bool = False, diag: bool = False) -> Dict:
     """One run of one rung against a FRESH world. Returns the row the report prints."""
     world = SimWorld()
+    if rung.setup:
+        rung.setup(world)                # starting state; part of the problem, not scaffolding
+        world.calls.clear()              # …so it isn't charged to the run's call count
     on_node = (lambda e: print(f"   · {e.get('kind'):5} {str(e.get('goal'))[:70]}")) if verbose else None
+    r = None
     try:
         r = run_autonomous(
             rung.goal,
@@ -69,10 +73,38 @@ def run_rung(rung, call_model, verbose: bool = False) -> Dict:
         status, disposition = root.get("status"), r.get("disposition")
     except Exception as e:                       # a crash is a result, not a stopped benchmark
         status, disposition = "error", f"{type(e).__name__}: {e}"
+    if diag:
+        _dump(rung, world, r)
     return {"rung": rung.n, "name": rung.name, "passed": bool(rung.check(world)),
             "status": status, "disposition": disposition,
             "calls": len(world.calls), "vms": len(world.vms), "nets": len(world.nets),
             "world": world.summary()}
+
+
+def _dump(rung, world, result) -> None:
+    """Everything needed to see WHY a rung failed: the calls it made, the state it left,
+    and the plan tree with each node's verdict. A failing rung is only useful if the
+    failure is legible."""
+    print("\n   ── tool calls ──")
+    for i, c in enumerate(world.calls, 1):
+        print(f"   {i:3} {c['tool']:20} {json.dumps(c['args'])[:80]}")
+    print("   ── world ──")
+    for n, v in sorted(world.vms.items()):
+        print(f"   {n}: status={v['status']} labels={sorted(v['labels'])} nets={sorted(v['nets'])}")
+    print(f"   networks: {sorted(world.nets)}  |  CHECK={rung.check(world)}")
+    if not result:
+        return
+    print("   ── plan tree ──")
+
+    def walk(n, d=0):
+        extra = n.get("reason") or n.get("satisfied") or ""
+        print("   " + "  " * d + f"[{n.get('status')}] {str(n.get('goal'))[:72]}"
+              + (f"  ({extra})" if extra else ""))
+        for c in (n.get("children") or []):
+            walk(c, d + 1)
+    walk(result.get("root") or {})
+    for f in (result.get("plans_failed") or []):
+        print(f"   failed-plan: {f['why'][:100]}")
 
 
 def main(argv=None) -> int:
@@ -84,6 +116,8 @@ def main(argv=None) -> int:
     p.add_argument("--timeout", type=int, default=_OLLAMA.get("timeout", 300))
     p.add_argument("-v", "--verbose", action="store_true", help="stream plan-tree nodes")
     p.add_argument("--json", action="store_true", help="emit rows as JSON")
+    p.add_argument("-d", "--diag", action="store_true",
+                   help="dump calls, final world and the plan tree for each run")
     a = p.parse_args(argv)
 
     rungs = [r for r in RUNGS if not a.rung or r.n in a.rung]
@@ -94,7 +128,7 @@ def main(argv=None) -> int:
     for rung in rungs:
         print(f"── rung {rung.n} ({rung.name}) — {rung.why}\n   goal: {rung.goal}")
         for i in range(a.runs):
-            row = run_rung(rung, call_model, a.verbose)
+            row = run_rung(rung, call_model, a.verbose, a.diag)
             rows.append(row)
             mark = "PASS" if row["passed"] else "FAIL"
             print(f"   [{mark}] run {i+1}/{a.runs} · {row['status']}/{row['disposition']} · {row['world']}")
