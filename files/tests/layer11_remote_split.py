@@ -1967,7 +1967,7 @@ def cleanup_remote_artifacts() -> None:
     """
     import os
     import shutil
-    vm_dir = os.path.expanduser("~/.qemu_vms")
+    vm_dir = os.path.expanduser("~/.gorgon")
     if not os.path.isdir(vm_dir):
         return
     for entry in os.listdir(vm_dir):

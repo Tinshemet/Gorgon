@@ -372,7 +372,7 @@ class OrchestratorCLI:
 
     def _migrate_bundles(self) -> None:
         """Best-effort, idempotent one-time consolidation of legacy scattered agent
-        state into ~/.qemu_vms/_agents/ bundles. Never blocks startup."""
+        state into ~/.gorgon/_agents/ bundles. Never blocks startup."""
         try:
             import shared.bundle as _bundle
             from orchestrator.ai.agent import AGENT_DIR

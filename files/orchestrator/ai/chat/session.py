@@ -19,7 +19,7 @@ AUTO_CLEAR_SESSION  = _SESSION_CFG.get("auto_clear", False)
 VERBOSE             = _SESSION_CFG.get("verbose", False)
 
 
-# Reads chat history from ~/.qemu_vms/.session.json, capped at the last 40 messages.
+# Reads chat history from ~/.gorgon/.session.json, capped at the last 40 messages.
 # In: nothing → Out: List[dict]
 def load_session() -> List[Dict]:
     """Load the saved chat history (most recent messages), or an empty list."""

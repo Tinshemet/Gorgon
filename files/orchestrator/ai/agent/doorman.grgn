@@ -120,7 +120,7 @@
         "theta": 0.0,
         "lambda": 0.5,
         "H": 0.05,
-        "kappa": 0.2,
+        "kappa": 1.0,
         "w_resource": 1.0,
         "w_time": 0.3,
         "time": 1.0,
@@ -282,6 +282,12 @@
         "verify": "restored"
       }
     },
-    "forbidden": []
+    "forbidden": [],
+    "_rules_doc": "THE LAW — one weighted, typed, plain-text list that DRIVES enforcement over the numeric substrate above (tools/formula = the physics). w: 0=critical/inviolable … higher=weaker. kind: access(allow/deny) · delegation(tier) · provisions(reward-cost) · decree(goal) · rule(documentary). Resolved by RuleSet (precedence by weight, stable tie-break). Referendums (AI-proposed) and amendments (human) are weighted inserts here.",
+    "rules": [
+      { "w": 0, "kind": "access", "text": "The front desk wields no host-level execution — it may never run arbitrary host commands.", "effect": { "forbid": ["run_command"] } },
+      { "w": 0, "kind": "delegation", "text": "Irreversibly destroying a VM always demands the strictest confirmation (type YES, then the name) — inviolable.", "effect": { "tier": "double", "tools": ["delete_vm"] } },
+      { "w": 2, "kind": "rule", "text": "The Doorman is a supervised front-desk agent: it holds no offensive capability and surfaces every non-trivial action to the operator (disposition = human-confirm)." }
+    ]
   }
 }

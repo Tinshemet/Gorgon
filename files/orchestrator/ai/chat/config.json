@@ -7,7 +7,7 @@
     "timeout": 120
   },
   "session": {
-    "file": "~/.qemu_vms/.session.json",
+    "file": "~/.gorgon/.session.json",
     "max_history": 10,
     "auto_clear": true,
     "verbose": false

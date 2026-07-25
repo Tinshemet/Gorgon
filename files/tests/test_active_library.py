@@ -36,14 +36,14 @@ def check(label, cond):
 NAMES = ["alib-a", "alib-b", "alib-c"]
 
 def _mk(name, **kw):
-    shutil.rmtree(os.path.expanduser(f"~/.qemu_vms/{name}"), ignore_errors=True)
+    shutil.rmtree(os.path.expanduser(f"~/.gorgon/{name}"), ignore_errors=True)
     MachineConfig(name=name, **kw).save()
 
 def _rm(name):
     for lb in ("redteam", "vip"):
         try: manager.remove_label(name, lb)
         except Exception: pass
-    shutil.rmtree(os.path.expanduser(f"~/.qemu_vms/{name}"), ignore_errors=True)
+    shutil.rmtree(os.path.expanduser(f"~/.gorgon/{name}"), ignore_errors=True)
 
 
 def main():

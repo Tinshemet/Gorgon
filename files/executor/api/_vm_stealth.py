@@ -8,6 +8,7 @@ import os
 import threading
 from typing import Any, Dict, Optional
 
+from ._vm_constants import VM_BASE_DIR
 from .qemu_config import MachineConfig
 
 _CFG = json.load(open(os.path.join(os.path.dirname(__file__), "config.json")))
@@ -39,7 +40,7 @@ class _VmStealthMixin:
     def generate_guest_setup(self, name: str) -> Dict[str, Any]:
         """Generate a guest-side stealth script for Linux or Windows.
 
-        Writes a ``.sh`` or ``.ps1`` to ``~/.qemu_vms/<name>/`` that,
+        Writes a ``.sh`` or ``.ps1`` to ``~/.gorgon/<name>/`` that,
         when run inside the VM, blacklists QEMU kernel modules, installs
         a Firefox stealth WebGL profile, and patches display names.
 
@@ -53,7 +54,7 @@ class _VmStealthMixin:
 
         Example::
             >>> mgr.generate_guest_setup("my-linux")
-            {"success": True, "path": "~/.qemu_vms/my-linux/guest_setup.sh",
+            {"success": True, "path": "~/.gorgon/my-linux/guest_setup.sh",
              "cmd_template": "curl http://10.0.2.2:{port}/guest_setup.sh | sudo bash"}
         """
         try:
@@ -65,7 +66,7 @@ class _VmStealthMixin:
         if gate:
             return gate
 
-        vm_dir = os.path.expanduser(f"~/.qemu_vms/{name}")
+        vm_dir = os.path.join(VM_BASE_DIR, name)
         os.makedirs(vm_dir, exist_ok=True)
 
         mfr            = cfg.manufacturer or "Unknown"
@@ -105,7 +106,7 @@ class _VmStealthMixin:
         if gate:
             return gate
 
-        vm_dir   = os.path.expanduser(f"~/.qemu_vms/{name}")
+        vm_dir   = os.path.join(VM_BASE_DIR, name)
         sentinel = os.path.join(vm_dir, ".stealth_done")
         try:
             with open(sentinel, "w"):

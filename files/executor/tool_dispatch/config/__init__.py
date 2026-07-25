@@ -12,7 +12,7 @@ import os
 
 _CFG = json.load(open(os.path.join(os.path.dirname(__file__), "config.json")))
 
-VM_BASE             = _CFG.get("vm_base", "~/.qemu_vms")
+VM_BASE             = _CFG.get("vm_base", "~/.gorgon")
 VM_DEFS             = _CFG["create_vm_defaults"]
 TOOL_DEFS           = _CFG["tool_defaults"]
 VALID_MACHINE_TYPES = set(_CFG["valid_machine_types"])

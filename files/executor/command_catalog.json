@@ -198,7 +198,15 @@
         "group",
         "run on all",
         "act on all",
-        "whole fleet"
+        "whole fleet",
+        "ping",
+        "ping each other",
+        "ping all",
+        "reachable",
+        "reach each other",
+        "connectivity",
+        "mesh",
+        "all connected"
       ],
       "ai_example": "run 'uptime' on all my redteam VMs",
       "category": "Fleet"
@@ -840,6 +848,23 @@
         "command"
       ],
       "vm": true,
+      "effect": null,
+      "rev": false
+    },
+    "run_command": {
+      "req": [
+        "code"
+      ],
+      "vm": false,
+      "effect": null,
+      "rev": false
+    },
+    "local_probe": {
+      "req": [
+        "assertion",
+        "target"
+      ],
+      "vm": false,
       "effect": null,
       "rev": false
     },

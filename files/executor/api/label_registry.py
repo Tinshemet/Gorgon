@@ -3,7 +3,7 @@ label_registry.py — universal user-defined VM label registry.
 
 Labels (e.g. "work_vm", "test_vm") are free-form user tags assigned to VMs.
 Like profiles, the SET of known label names is saved to the machine
-(~/.qemu_vms/_labels.json) so labels can be referenced across many VMs with a
+(~/.gorgon/_labels.json) so labels can be referenced across many VMs with a
 canonical, typo-free name. Per-VM assignment lives on MachineConfig.labels;
 this module owns only the universal registry of label NAMES.
 """
@@ -11,7 +11,9 @@ import json
 import os
 from typing import List
 
-_REGISTRY = os.path.expanduser("~/.qemu_vms/_labels.json")
+from ._vm_constants import VM_BASE_DIR
+
+_REGISTRY = os.path.join(VM_BASE_DIR, "_labels.json")
 
 
 # Reads the label registry file from disk (empty list if absent/corrupt).

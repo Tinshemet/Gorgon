@@ -46,7 +46,7 @@ def _c(key: str):
 AGENT_SELECTION_FILE = os.path.expanduser(_c("agent_selection_file"))
 DEFAULT_AGENT        = _c("default_agent")
 AGENT_ENV_VAR        = _c("agent_env_var")
-AGENTS_DIR           = os.path.expanduser(_c("agents_dir"))   # ~/.qemu_vms/_agents — bundle root
+AGENTS_DIR           = os.path.expanduser(_c("agents_dir"))   # ~/.gorgon/_agents — bundle root
 
 # ── on-disk secrets / logs ──────────────────────────────────────────────────────
 AUDIT_LOG_FILE   = os.path.expanduser(_c("audit_log_file"))

@@ -10,6 +10,7 @@ dict or None (= ok).
 import os
 from typing import Any, Dict, Optional
 
+from executor.api._vm_constants import VM_BASE_DIR
 from .base import PreflightCheck
 from .context import (
     _PREFLIGHT_HW_FIELDS, _DESTRUCTIVE_MON_CMDS, _triage,
@@ -82,7 +83,7 @@ class LaunchVMCheck(PreflightCheck):
                 if not vm_exists:
                     candidates = [n for n in vm_names if name.lower() in n.lower()]
             except Exception:
-                vm_dir = os.path.join(os.path.expanduser("~"), ".qemu_vms", name)
+                vm_dir = os.path.join(VM_BASE_DIR, name)
                 vm_exists = os.path.exists(vm_dir)
             if not vm_exists:
                 if candidates:

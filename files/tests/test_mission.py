@@ -76,7 +76,7 @@ def main():
     from orchestrator.ai.mission import mission as Mstore
     from orchestrator.ai.mission import mission_forge as MF
     import shared.bundle as _bundle
-    _bundle.AGENTS_ROOT = tempfile.mkdtemp()        # isolate bundle storage from ~/.qemu_vms
+    _bundle.AGENTS_ROOT = tempfile.mkdtemp()        # isolate bundle storage from ~/.gorgon
     # answers in schema order + seal confirm
     answers = iter(["Recon web01", "map ports", "scan, fingerprint", "found:ip(web01)",
                     "", "2", "", "", "delete_vm", "", "yes"])

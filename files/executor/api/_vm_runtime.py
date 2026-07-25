@@ -37,7 +37,7 @@ class _VmRuntimeMixin:
         """Build the QEMU command, start the process, record PID, apply CPU pinning.
 
         Args:
-            name:           VM name (must exist in ``~/.qemu_vms/``).
+            name:           VM name (must exist in ``~/.gorgon/``).
             display:        Override the display backend for this launch only
                             (e.g. ``"vnc"``).
             dry_run:        If True, build and return the command without executing.
@@ -313,8 +313,9 @@ class _VmRuntimeMixin:
                 f"        from executor.api.qemu_config import MachineConfig\n"
                 f"        cfg = MachineConfig.load(name)\n"
                 f"        if cfg.stealth:\n"
+                f"            from executor.api._vm_constants import VM_BASE_DIR\n"
                 f"            stealth_done = os.path.join("
-                f"os.path.expanduser('~/.qemu_vms'), name, '.stealth_done')\n"
+                f"VM_BASE_DIR, name, '.stealth_done')\n"
                 f"            while not os.path.exists(stealth_done):\n"
                 f"                time.sleep(5)\n"
                 f"    except Exception: pass\n"
@@ -348,7 +349,7 @@ class _VmRuntimeMixin:
         """
         import traceback as _tb
         import datetime as _dt
-        _log_dir = os.path.expanduser(f"~/.qemu_vms/{name}")
+        _log_dir = os.path.join(VM_BASE_DIR, name)
         if os.path.isdir(_log_dir):
             with open(os.path.join(_log_dir, "stop_vm.log"), "a") as _lf:
                 _lf.write(
@@ -359,7 +360,7 @@ class _VmRuntimeMixin:
 
         # Cancel auto-relaunch before anything else — intentional stop must win.
         relaunch_flag = os.path.join(
-            os.path.expanduser(f"~/.qemu_vms/{name}"), ".relaunch_after_install"
+            os.path.join(VM_BASE_DIR, name), ".relaunch_after_install"
         )
         if os.path.exists(relaunch_flag):
             os.unlink(relaunch_flag)

@@ -1161,7 +1161,7 @@ def cleanup_probe_artifacts():
     from orchestrator.pipeline import execute_tool as _et
     from executor.api.qemu_config import get_all_profiles, delete_custom_profile
 
-    vm_dir = os.path.expanduser("~/.qemu_vms")
+    vm_dir = os.path.expanduser("~/.gorgon")
     if os.path.isdir(vm_dir):
         for entry in os.listdir(vm_dir):
             if entry.startswith(_PROBE_VM_PREFIX):

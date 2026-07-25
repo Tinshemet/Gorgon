@@ -118,9 +118,9 @@ def generate_autounattend_iso(
 
     Example::
 
-        generate_autounattend_iso("/home/u/.qemu_vms/win11", computer_name="win11",
+        generate_autounattend_iso("/home/u/.gorgon/win11", computer_name="win11",
                                   username="lab")
-        # → "/home/u/.qemu_vms/win11/autounattend.iso"
+        # → "/home/u/.gorgon/win11/autounattend.iso"
     """
     tool = iso_tool_available()
     if not tool:

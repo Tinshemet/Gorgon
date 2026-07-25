@@ -91,7 +91,7 @@ CASES = [
 
 def _seed():
     for name, kw in _FIXTURE.items():
-        shutil.rmtree(os.path.expanduser(f"~/.qemu_vms/{name}"), ignore_errors=True)
+        shutil.rmtree(os.path.expanduser(f"~/.gorgon/{name}"), ignore_errors=True)
         MachineConfig(name=name, **kw).save()
 
 def _cleanup():
@@ -99,7 +99,7 @@ def _cleanup():
         for lb in ("benchfleet",):
             try: manager.remove_label(name, lb)
             except Exception: pass
-        shutil.rmtree(os.path.expanduser(f"~/.qemu_vms/{name}"), ignore_errors=True)
+        shutil.rmtree(os.path.expanduser(f"~/.gorgon/{name}"), ignore_errors=True)
 
 
 def main():

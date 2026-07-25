@@ -161,7 +161,7 @@ def make_test_vm(name, *, guest_agent=True, psk=_TEST_PSK):
 
 
 def cleanup_vm(name):
-    d = os.path.expanduser(f"~/.qemu_vms/{name}")
+    d = os.path.expanduser(f"~/.gorgon/{name}")
     if os.path.isdir(d):
         shutil.rmtree(d)
 

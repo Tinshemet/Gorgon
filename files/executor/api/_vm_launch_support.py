@@ -17,6 +17,7 @@ import psutil
 
 from typing import Optional
 
+from ._vm_constants import VM_BASE_DIR
 from .qemu_config import MachineConfig
 
 
@@ -77,7 +78,7 @@ class _VmLaunchSupportMixin:
         pidfile alone isn't enough — orphans accumulate otherwise.
         """
         import signal as _signal
-        vm_dir  = os.path.expanduser(f"~/.qemu_vms/{name}")
+        vm_dir  = os.path.join(VM_BASE_DIR, name)
         tpm_pid = os.path.join(vm_dir, "tpm.pid")
         tpm_dir = os.path.join(vm_dir, "tpm")
 

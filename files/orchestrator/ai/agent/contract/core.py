@@ -41,6 +41,7 @@ from ..fields import build_fields
 from .registry import _TOOL_SPECS, _TOOL_NAME_ARG
 from .risk_formula import RiskFormula
 from .tool_policy import ToolPolicy
+from .rules import RuleSet, effective_rules as _effective_rules
 from .loader import _is_expired, agent_grgn_path, _load_active
 
 _HANDLING = {
@@ -83,6 +84,25 @@ class Contract:
         # mission defaults) as objects — each owns its read + legacy fallback.
         self.fields = build_fields()
 
+        # THE LAW: the one weighted rules[] resolved over the numeric substrate. The legacy
+        # `forbidden` red lines migrate in as inviolable w:0 access rules, so a single
+        # resolver (RuleSet) is the authority — old contracts keep working unchanged.
+        self.rules = RuleSet(_effective_rules(self.contract))
+
+    def push_rules(self, extra_rules) -> None:
+        """Layer MISSION-SCOPED rules over the contract's law for one run. The contract's
+        rules come FIRST, so a campaign w:0 red line still wins ties — a mission can tighten
+        or adjust weaker gates, never waive an inviolable red line. Always paired with
+        pop_rules() in a finally, so a run can't leave the active law mutated."""
+        self._saved_rules = self.rules
+        self.rules = RuleSet(_effective_rules(self.contract) + list(extra_rules or []))
+
+    def pop_rules(self) -> None:
+        """Restore the contract's own law after a mission-scoped overlay."""
+        if hasattr(self, "_saved_rules"):
+            self.rules = self._saved_rules
+            del self._saved_rules
+
     @classmethod
     def load(cls) -> "Contract":
         """Load the active agent (resolution + integrity gate) into a Contract."""
@@ -123,7 +143,10 @@ class Contract:
         return self.tool_policy.formula_tier(tool)
 
     def resolve_tier(self, tool: str, args: Optional[Dict[str, Any]] = None) -> str:
-        return self.tool_policy.resolve_tier(tool, args)
+        """The live confirmation tier: the ToolPolicy substrate (formula/pin) OVERRIDDEN by
+        the highest-precedence DELEGATION rule that applies — the law over the physics."""
+        base = self.tool_policy.resolve_tier(tool, args)
+        return self.rules.tier_for(tool, self.tool_risk(tool), base)
 
     def risk_breakdown(self, tool: str, args: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """The weighted risk-score breakdown for a tool — each factor's raw value,
@@ -163,11 +186,28 @@ class Contract:
         its KillSwitch with this."""
         return self.fields["safeword"].read(self.contract)
 
+    def deadman_timeout(self) -> Optional[float]:
+        """The UNATTENDED dead-man's timeout (seconds): the longest the run may go without
+        a sign of life before it auto-aborts. None (default) = off — the safeword is the
+        attended stop; this is the unattended backstop. Read from campaign.deadman; the
+        harness arms a DeadMansSwitch with it. A non-positive / unparseable value = off."""
+        v = (self.contract.get("campaign") or {}).get("deadman")
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return None
+        return f if f > 0 else None
+
     def goal_predicate(self) -> Optional[list]:
         """The campaign's structured ROOT predicate — the checkable twin of the prose
-        success_criteria, as {criterion, target} clauses. None for an agent with no
-        campaign or only free-text criteria (we won't fake a gate over prose)."""
-        return (self.contract.get("campaign") or {}).get("success_predicate") or None
+        success_criteria, as {criterion, target} clauses — EXTENDED by any DECREE rules
+        (which add goal clauses). None for an agent with no campaign predicate and no
+        decrees (we won't fake a gate over prose)."""
+        base = list((self.contract.get("campaign") or {}).get("success_predicate") or [])
+        for clause in self.rules.decrees():
+            if clause not in base:
+                base.append(clause)
+        return base or None
 
     def _defaults(self) -> Dict[str, Any]:
         """The agent's DEFAULT mission parameters (a mission inherits any it doesn't
@@ -201,9 +241,12 @@ class Contract:
         return self.default_reward()
 
     def reward_cost_cfg(self) -> Dict[str, Any]:
-        """The reward-cost constants (θ, λ, H, κ, weights…) from the formula block;
-        empty → the reward_cost engine DEFAULTS. Keeps ALL tunable policy in the .grgn."""
-        return dict(self.formula.reward_cost)
+        """The reward-cost constants (θ, λ, H, κ, weights…) from the formula block,
+        OVERRIDDEN by any PROVISIONS rules (which shape the economics — "more effort").
+        Empty → the reward_cost engine DEFAULTS. Keeps ALL tunable policy in the .grgn."""
+        cfg = dict(self.formula.reward_cost)
+        cfg.update(self.rules.reward_cost_overrides())
+        return cfg
 
     # ── toolkit / red-lines / verbs / criteria ───────────────────────────────────
     def default_toolkit(self) -> list:
@@ -217,10 +260,11 @@ class Contract:
         return self.fields["forbidden"].read(self.contract)
 
     def is_forbidden(self, tool: str, args: Optional[Dict[str, Any]] = None) -> bool:
-        """LEGAL FILTER (gauntlet step A): a hard, categorical red line the tree may
-        NEVER cross — dropped up front, never costed. Contract-declared via the .grgn
-        ``forbidden`` list."""
-        return self.fields["forbidden"].contains(self.contract, tool)
+        """LEGAL FILTER (gauntlet step A): a hard, categorical red line the tree may NEVER
+        cross — dropped up front, never costed. Resolved via the LAW: the highest-precedence
+        ACCESS rule that mentions the tool decides (a w:0 forbid — incl. the migrated legacy
+        `forbidden` list — is inviolable; an explicit allow can lift a weaker forbid)."""
+        return self.rules.forbids(tool)
 
     def consent_verb(self, tool: str) -> str:
         """A human-readable consequence to SURFACE in a consent referendum."""
@@ -335,6 +379,9 @@ def gate_action(tool: str, args: Optional[Dict[str, Any]] = None) -> str:
 
 
 def safeword() -> Optional[str]: return ACTIVE.safeword()
+def deadman_timeout() -> Optional[float]: return ACTIVE.deadman_timeout()
+def push_rules(extra_rules) -> None: ACTIVE.push_rules(extra_rules)
+def pop_rules() -> None: ACTIVE.pop_rules()
 def goal_predicate() -> Optional[list]: return ACTIVE.goal_predicate()
 def _defaults() -> Dict[str, Any]: return ACTIVE._defaults()
 def default_reward() -> float: return ACTIVE.default_reward()

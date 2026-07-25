@@ -79,7 +79,7 @@ class _VmMonitoringMixin:
     # ------------------------------------------------------------------
 
     def list_vms(self, label: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Scan ``~/.qemu_vms/`` and return status info for every VM directory.
+        """Scan ``~/.gorgon/`` and return status info for every VM directory.
 
         Args:
             label: If given, return only VMs carrying this auto-flag or user label.

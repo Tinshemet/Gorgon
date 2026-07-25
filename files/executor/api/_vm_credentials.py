@@ -41,7 +41,7 @@ def linux_os_installed(disk_path: str) -> bool:
         a failed check just means "can't confirm yet", not "definitely not".
 
     Example::
-        linux_os_installed("/home/u/.qemu_vms/dev/disk0.qcow2")
+        linux_os_installed("/home/u/.gorgon/dev/disk0.qcow2")
     """
     if not shutil.which("virt-cat"):
         return False
@@ -73,7 +73,7 @@ def randomize_root_password(disk_path: str) -> str:
             (e.g. the disk has no recognizable Linux root filesystem).
 
     Example::
-        randomize_root_password("/home/u/.qemu_vms/test/disk0.qcow2")
+        randomize_root_password("/home/u/.gorgon/test/disk0.qcow2")
         # -> "kJ3xQ9mPz2Rn8wLt"
     """
     if not virt_customize_available():
@@ -111,7 +111,7 @@ def rename_user(disk_path: str, new_username: str, old_username: "str | None" = 
             itself fails.
 
     Example::
-        rename_user("/home/u/.qemu_vms/test/disk0.qcow2", "alice")
+        rename_user("/home/u/.gorgon/test/disk0.qcow2", "alice")
         # -> "alice"
     """
     if not _USERNAME_RE.match(new_username):
@@ -156,7 +156,7 @@ def find_primary_user(disk_path: str) -> "str | None":
         The username, or None if it can't be read or none qualifies.
 
     Example::
-        find_primary_user("/home/u/.qemu_vms/test/disk0.qcow2")
+        find_primary_user("/home/u/.gorgon/test/disk0.qcow2")
         # -> "masteruser"
     """
     if not shutil.which("virt-cat"):
@@ -199,7 +199,7 @@ def randomize_user_password(disk_path: str, username: str) -> str:
             (e.g. the username doesn't exist on this disk).
 
     Example::
-        randomize_user_password("/home/u/.qemu_vms/test/disk0.qcow2", "masteruser")
+        randomize_user_password("/home/u/.gorgon/test/disk0.qcow2", "masteruser")
         # -> "Rz8tQmXpL3ohWK9v"
     """
     if not virt_customize_available():
