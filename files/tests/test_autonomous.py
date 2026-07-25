@@ -265,6 +265,24 @@ def main():
     check("harness looped the attach over BOTH members (the model never scripted the loop)",
           nw.vms.get("alpha", {}).get("nets") == {"net0"} and nw.vms.get("beta", {}).get("nets") == {"net0"})
 
+    print("\nstate grounding: the planner context names the GROUPS, at parity with the chat digest")
+    from orchestrator.ai.planner.autonomous import render_state
+    _s = render_state({"vm1": {"status": "stopped", "labels": ["fleet"], "flags": []},
+                       "vm2": {"status": "running", "labels": ["fleet"], "flags": ["stealth"]},
+                       "solo": {"status": "stopped"}})
+    check("a VM's tags are shown, not just its status", "vm1(stopped tags=fleet)" in _s)
+    check("labels and auto-flags are both tags", "vm2(running tags=fleet,stealth)" in _s)
+    # The (B) defect: with no label anywhere in the context, a goal about a GROUP left the
+    # model to invent an identifier for it — and it reached for the network name it had
+    # just used. A group is addressed by its label, so the label must be in the context.
+    check("the fleet groupings are named (label → members)",
+          "FLEETS (label/flag → members): fleet=[vm1, vm2]; stealth=[vm2]" in _s)
+    check("an untagged VM is still listed, with no tags clause", "solo(stopped)" in _s)
+    check("no tags at all → no FLEETS line",
+          "FLEETS" not in render_state({"a": {"status": "stopped"}}))
+    check("no VMs → the unchanged empty-state warning",
+          render_state({}).startswith("CURRENT STATE: no VMs exist yet"))
+
     print("\nstate check: is a leaf goal's effect ALREADY in place? (state answers, not the model)")
     from orchestrator.ai.planner.autonomous import make_state_check
     _vms = {"web": {"status": "running", "labels": ["fleet"], "flags": []},

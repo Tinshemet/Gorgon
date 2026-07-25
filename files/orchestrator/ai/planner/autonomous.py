@@ -733,16 +733,38 @@ def render_mission_plan(steps: List[str]) -> str:
             f"earns its share of the reward:\n  {lines}")
 
 
+def _vm_tags(rec: Dict[str, Any]) -> List[str]:
+    """A VM's groupings: user labels ∪ auto-flags, the same union LIBRARY.fleets uses."""
+    return sorted(set(rec.get("labels") or []) | set(rec.get("flags") or []))
+
+
 def render_state(vms: Dict[str, Dict[str, Any]]) -> str:
     """Compact current-state grounding from the VM registry — so the model plans
     against reality (won't act on VMs that don't exist) and, on a retry, SEES why the
     last approach failed. The live loop grounds against LIBRARY.ai_digest the same way.
+
+    Shows TAGS and the FLEET groupings, not just status, at PARITY with the chat path's
+    ai_digest. The autonomous planner used to be grounded strictly weaker than chat: a
+    goal about a group ("make sure they all ping each other") was planned against a
+    context that never named a single label, so the model had to invent an identifier for
+    the group — and reached for the most recent name it had seen, the NETWORK. A group is
+    addressed by its label, so the label has to be in the context.
     """
     if not vms:
         return "CURRENT STATE: no VMs exist yet — do not act on VMs that don't exist."
-    items = ", ".join(f"{n}({r.get('status', '?')})" for n, r in sorted(vms.items()))
-    return ("CURRENT STATE (resolve references against this; never act on a VM not "
-            f"listed here):\n  known VMs: {items}")
+    items = ", ".join(
+        f"{n}({r.get('status', '?')}" + (f" tags={','.join(t)}" if (t := _vm_tags(r)) else "") + ")"
+        for n, r in sorted(vms.items()))
+    lines = ["CURRENT STATE (resolve references against this; never act on a VM not "
+             "listed here):", f"  known VMs: {items}"]
+    fleets: Dict[str, List[str]] = {}
+    for n, r in sorted(vms.items()):
+        for tag in _vm_tags(r):
+            fleets.setdefault(tag, []).append(n)
+    if fleets:
+        lines.append("  FLEETS (label/flag → members): "
+                     + "; ".join(f"{k}=[{', '.join(v)}]" for k, v in sorted(fleets.items())))
+    return "\n".join(lines)
 
 
 def _summarize(result: Dict[str, Any]) -> Dict[str, Any]:
