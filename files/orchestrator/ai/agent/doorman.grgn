@@ -299,6 +299,15 @@
           "commitment": 0.0
         },
         "verb": "label VM"
+      },
+      "add_vm_to_network": {
+        "risk": {
+          "reversible": true,
+          "destructiveness": 0.0,
+          "blast": "entity",
+          "commitment": 0.3
+        },
+        "verb": "attach VM to network"
       }
     },
     "forbidden": [],
