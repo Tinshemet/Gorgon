@@ -121,8 +121,12 @@ _SAT_CREATE_VM_RE = re.compile(
 _SAT_CREATE_NET_RE = re.compile(
     rf"\b(?:create|make|provision|set\s*up|add)\s+(?:a\s+|an\s+|the\s+)?(?:new\s+|isolated\s+|private\s+)*"
     rf"network\s+(?:named|called)\s+{_SAT_NAME}", re.I)
+# An adverb may sit between the entity and the preposition ("put red1 TOGETHER on …") —
+# the harness's own collective expansion produces exactly that, and without tolerating it
+# the reader cannot recognise work it just did and the step is redone.
 _SAT_ATTACH_RE = re.compile(
     r"\b(?:put|add|attach|connect|move|join)\s+['\"]?(?P<vm>[a-z][\w.-]*)['\"]?\s+"
+    r"(?:(?:together|directly|also|now|straight|immediately|as\s+well)\s+)*"
     r"(?:to|on|onto|into|in|in\s+to)\s+(?:the\s+)?"
     r"(?:network\s+(?:named|called)\s+['\"]?(?P<net1>[a-z][\w.-]*)|"
     r"['\"]?(?P<net2>[a-z][\w.-]*)['\"]?\s+network)", re.I)
@@ -131,6 +135,12 @@ _SAT_LABEL_RES = (
     re.compile(r"\b(?:add|apply)\s+(?:the\s+)?(?:label|tag)\s+['\"]?(?P<label>[\w.-]+)['\"]?\s+to\s+['\"]?(?P<vm>[a-z][\w.-]*)", re.I),
     re.compile(r"\blabel\s+['\"]?(?P<vm>[a-z][\w.-]*)['\"]?\s+(?:as|with)\s+['\"]?(?P<label>[\w.-]+)", re.I),
 )
+# Words that describe a network rather than name it.
+_NET_ADJECTIVES = frozenset({
+    "new", "same", "different", "other", "another", "isolated", "private", "own",
+    "second", "third", "shared", "common", "virtual", "a", "an", "the", "one", "this",
+    "that", "its", "their",
+})
 _SAT_LAUNCH_RE = re.compile(rf"\b(?:launch|start|boot|power\s*on)\s+(?:the\s+)?(?:{_SAT_VM}\s+)?{_SAT_NAME}\s*$", re.I)
 _SAT_STOP_RE = re.compile(rf"\b(?:stop|shut\s*down|power\s*off|halt)\s+(?:the\s+)?(?:{_SAT_VM}\s+)?{_SAT_NAME}\s*$", re.I)
 
@@ -225,10 +235,16 @@ def make_state_verdict(vms_getter: Callable[[], Dict[str, Dict[str, Any]]],
 
         m = _SAT_ATTACH_RE.search(g)
         if m:
+            net = (m.group("net1") or m.group("net2") or "").lower()
+            # "the NEW network", "a DIFFERENT network" — the adjective is not the network's
+            # name. Checking membership of a network called "new" answers False for a VM
+            # that is correctly attached, and a False here REFUSES a node that succeeded.
+            # An unnamed reference is unreadable, which is what None is for.
+            if net in _NET_ADJECTIVES:
+                return None
             nets = _networks()
             if nets is None:
                 return None
-            net = (m.group("net1") or m.group("net2") or "").lower()
             return m.group("vm").lower() in nets.get(net, set())
 
         for rx in _SAT_LABEL_RES:
