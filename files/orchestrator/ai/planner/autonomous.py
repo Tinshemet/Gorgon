@@ -638,7 +638,11 @@ _ANON_NET_RE = re.compile(
     r"(?:a|an|one|the\s+same|a\s+single|a\s+shared|a\s+common|their\s+own|its\s+own)\s+"
     r"(?:new\s+|single\s+|shared\s+|common\s+|isolated\s+|private\s+|virtual\s+|own\s+|"
     r"different\s+|separate\s+|dedicated\s+|second\s+)*"
-    r"network\b", re.I)
+    # …and NOT when the very next words name it. "a network called core" is a NAMED
+    # network that merely reads like an indefinite one; threading it would rename the
+    # operator's network to a minted one and mangle the step into "the network called
+    # net1 called core".
+    r"network\b(?!\s+(?:called|named)\b)", re.I)
 _ANON_NET_NAME = "net1"
 
 
