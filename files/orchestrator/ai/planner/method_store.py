@@ -89,3 +89,92 @@ def clear(agent: Optional[str]) -> bool:
         return True
     except Exception:
         return False
+
+
+# ── the NEGATIVE twin: plans that did NOT work ────────────────────────────────
+# The system remembered what worked and forgot what didn't. Within a run, the `failed`
+# post-mortems are what make revision corrective — the model is told "✗ attach b (no
+# network lab)" and re-plans against it. At process exit that memory was thrown away, so
+# the next run re-derived the same broken plan and re-discovered it was broken, paying
+# full price each time. This is that memory, made durable.
+#
+# Stored per agent at ~/.gorgon/_agents/<agent>/plan_failures.json as
+# {pattern, source, steps, why, n}, where `pattern` is the SAME generalization the method
+# cache uses — so a failure learned on one goal warns about the next goal of that shape.
+# It is advisory only: it becomes planning CONTEXT ("this was tried and failed"), never a
+# block. A plan that failed for a transient reason must stay retryable.
+
+MAX_FAILURES = 100
+
+
+def failures_path(agent: Optional[str]) -> str:
+    """The agent's failed-plan memory (~/.gorgon/_agents/<agent>/plan_failures.json)."""
+    return Bundle(_safe(agent)).plan_failures_path
+
+
+def load_failures(agent: Optional[str]) -> List[Dict[str, Any]]:
+    """The stored failure records ([] if none / unreadable — never raises)."""
+    try:
+        with open(failures_path(agent)) as f:
+            data = json.load(f)
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+    return [r for r in data if isinstance(r, dict) and r.get("pattern") and r.get("why")]
+
+
+def save_failures(agent: Optional[str], records: List[Dict[str, Any]]) -> None:
+    """Atomically replace the agent's failure memory."""
+    path = failures_path(agent)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = f"{path}.tmp"
+    with open(tmp, "w") as f:
+        json.dump(records[:MAX_FAILURES], f, indent=2)
+    os.replace(tmp, path)
+
+
+def record_failures(agent: Optional[str], records: List[Dict[str, Any]]) -> int:
+    """Fold this run's failures in, newest first. A repeat of a failure already on file
+    bumps its count rather than adding a twin — so "this keeps failing" is visible, and
+    one flaky run doesn't look like ten. Returns the number of genuinely new records."""
+    if not records:
+        return 0
+    existing = load_failures(agent)
+    by_key = {(r.get("pattern"), r.get("why")): dict(r) for r in existing}
+    new = 0
+    fresh: List[Dict[str, Any]] = []
+    for r in records:
+        key = (r.get("pattern"), r.get("why"))
+        if key in by_key:
+            by_key[key]["n"] = int(by_key[key].get("n", 1)) + 1
+        else:
+            rec = dict(r)
+            rec["n"] = 1
+            fresh.append(rec)
+            new += 1
+    merged = fresh + [by_key[k] for k in by_key]
+    save_failures(agent, merged)
+    return new
+
+
+def warnings_for(records: List[Dict[str, Any]], goal: str) -> List[Dict[str, Any]]:
+    """The stored failures whose pattern matches `goal` — what to warn the planner about
+    before it re-derives them. A record with an uncompilable pattern is skipped."""
+    out = []
+    for r in records or []:
+        try:
+            if re.search(r["pattern"], (goal or "").strip(), re.I):
+                out.append(r)
+        except Exception:
+            continue
+    return out
+
+
+def clear_failures(agent: Optional[str]) -> bool:
+    """Forget this agent's failed-plan memory. Returns whether a store existed."""
+    try:
+        os.remove(failures_path(agent))
+        return True
+    except Exception:
+        return False

@@ -554,6 +554,56 @@ def main():
           r3["root"]["status"] != "done" and r3["methods_learned"] == []
           and _mstore.load(agent) == [])
 
+    print("\nfailure memory: the next run is WARNED about a plan shape that already failed")
+    _mstore.clear(agent); _mstore.clear_failures(agent)
+    class BrokenAttach:
+        def __init__(self): self.vms = {}
+        def execute(self, tool, args):
+            if tool == "create_vm":
+                self.vms[args.get("name")] = {"status": "stopped"}; return {"success": True}
+            return {"success": False, "error": "attach: no such network"}
+    _ATOOLS = [{"type": "function", "function": {"name": n, "parameters": {}}}
+               for n in ("create_vm", "attach")]
+    def _wire_model(msgs, tools):
+        g = _goal_of(msgs)
+        if g == "wire up q":
+            return {"message": {"tool_calls": [{"function": {"name": "decompose", "arguments": {
+                "steps": ["create a vm named q", "attach q to netX"]}}}]}}
+        if g.startswith("create a vm named"):
+            return {"message": {"tool_calls": [{"function": {"name": "create_vm", "arguments":
+                    {"name": g.split()[-1]}}}]}}
+        if g.startswith("attach"):
+            return {"message": {"tool_calls": [{"function": {"name": "attach", "arguments": {"name": "q"}}}]}}
+        return {"message": {"tool_calls": []}}
+    bw = BrokenAttach()
+    r = run_autonomous("wire up q", call_model=_wire_model, execute=bw.execute, tools=_ATOOLS,
+                       vms_getter=lambda: bw.vms, reward=10.0, persist_claims=True, max_revisions=1)
+    check("the failed PLAN was harvested with its concrete post-mortem",
+          r["root"]["status"] != "done"
+          and any("no such network" in f["why"] for f in r["plans_failed"]))
+    check("and persisted for the next run", len(_mstore.load_failures(agent)) == 1)
+    seen = []
+    def _watched(msgs, tools):
+        seen.append(next((x["content"] for x in msgs if x["role"] == "system"), ""))
+        return _wire_model(msgs, tools)
+    bw2 = BrokenAttach()
+    run_autonomous("wire up q", call_model=_watched, execute=bw2.execute, tools=_ATOOLS,
+                   vms_getter=lambda: bw2.vms, reward=10.0, persist_claims=True, max_revisions=1)
+    check("the NEXT run's planner is told it was tried before",
+          any("TRIED BEFORE AND FAILED" in p and "no such network" in p for p in seen))
+    check("a repeat is counted, not duplicated",
+          [f["n"] for f in _mstore.load_failures(agent)] == [2])
+    check("it is ADVISORY — the run still proceeded rather than being blocked",
+          "q" in bw2.vms)
+    # A plan that WORKS leaves no failure record.
+    _mstore.clear_failures(agent)
+    okw = World()
+    r = run_autonomous("prepare the rig xyz", call_model=m1, execute=okw.execute, tools=_TOOLS,
+                       vms_getter=lambda: okw.vms, reward=10.0, persist_claims=True)
+    check("a successful plan records no failure",
+          r["root"]["status"] == "done" and r["plans_failed"] == []
+          and _mstore.load_failures(agent) == [])
+
     print(f"\n{_PASS}/{_PASS + _FAIL} passed")
     sys.exit(1 if _FAIL else 0)
 

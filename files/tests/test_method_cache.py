@@ -134,6 +134,29 @@ def main():
     check("forget clears it", mstore.clear("doorman") is True and mstore.load("doorman") == [])
     check("forgetting nothing is False, not an error", mstore.clear("never-existed") is False)
 
+    print("\nthe NEGATIVE twin: plans that did not work are remembered too")
+    fail = {"pattern": r"wire\ up\ (?P<s0>[\w-]+)", "source": "wire up q",
+            "steps": ["create a vm named {s0}", "attach {s0} to netX"],
+            "why": "plan [✓ create; ✗ attach (no such network)] → partial"}
+    check("no failures yet → empty, never raises", mstore.load_failures("doorman") == [])
+    check("recording reports what is new", mstore.record_failures("doorman", [fail]) == 1)
+    check("a REPEAT bumps the count instead of adding a twin",
+          mstore.record_failures("doorman", [fail]) == 0
+          and [r["n"] for r in mstore.load_failures("doorman")] == [2])
+    check("it warns about a NEW goal of the same shape",
+          [r["source"] for r in mstore.warnings_for(mstore.load_failures("doorman"), "wire up zeta")]
+          == ["wire up q"])
+    check("and stays quiet about an unrelated goal",
+          mstore.warnings_for(mstore.load_failures("doorman"), "delete the web vm") == [])
+    check("a corrupt pattern is skipped, not raised on",
+          mstore.warnings_for([{"pattern": "([unclosed", "why": "x"}], "anything") == [])
+    check("failures are per-agent isolated", mstore.load_failures("barenboim") == [])
+    check("the failure store is capped",
+          (mstore.save_failures("cf", [{"pattern": f"^g{i}$", "why": "w"} for i in range(mstore.MAX_FAILURES + 25)])
+           or len(mstore.load_failures("cf"))) == mstore.MAX_FAILURES)
+    check("forgetting failures works", mstore.clear_failures("doorman") is True
+          and mstore.load_failures("doorman") == [])
+
     print(f"\n{_PASS}/{_PASS + _FAIL} passed")
     sys.exit(1 if _FAIL else 0)
 

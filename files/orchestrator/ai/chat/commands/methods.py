@@ -20,9 +20,9 @@ class MethodsCommand(Command):
         from orchestrator.ai.agent import contract as _contract
         if rest and rest[0] == "forget":               # gorgon methods forget [agent]
             agent = rest[1] if len(rest) >= 2 else _contract.active_agent_key()
-            ok = _store.clear(agent)
-            ctx.console.print(f"[success]Forgot the learned decompositions for '{agent}'.[/success]" if ok
-                              else f"[dim]No learned decompositions to forget for '{agent}'.[/dim]")
+            ok = _store.clear(agent) | _store.clear_failures(agent)   # both halves of the memory
+            ctx.console.print(f"[success]Forgot what '{agent}' had learned (methods + failures).[/success]" if ok
+                              else f"[dim]Nothing learned to forget for '{agent}'.[/dim]")
             return
         agent   = rest[0] if rest else _contract.active_agent_key()
         records = _store.load(agent)
@@ -45,4 +45,18 @@ class MethodsCommand(Command):
                 f"[dim]{len(records)} method(s), most recent first — a match decomposes "
                 f"deterministically (no model call, no variance). "
                 f"`gorgon methods forget {agent}` clears them.[/dim]")
-        ctx.pp({"agent": agent, "methods": records}, verbose)
+        # The negative half: plan shapes that FAILED before. The planner is warned about
+        # these rather than blocked by them, so an operator should be able to see them.
+        failures = _store.load_failures(agent)
+        if failures:
+            ft = Table(box=box.ROUNDED, border_style="yellow",
+                       title=f"plan shapes that FAILED before — agent '{agent}'")
+            ft.add_column("goal", style="bold", overflow="fold")
+            ft.add_column("×", justify="right")
+            ft.add_column("why it failed", style="dim", overflow="fold")
+            for r in failures:
+                ft.add_row(r.get("source", "?"), str(r.get("n", 1)), r.get("why", ""))
+            ctx.console.print(ft)
+            ctx.console.print("[dim]Advisory only — these are injected as planning context "
+                              "('tried before and failed'), never enforced as a block.[/dim]")
+        ctx.pp({"agent": agent, "methods": records, "failures": failures}, verbose)

@@ -771,6 +771,45 @@ def render_mission_plan(steps: List[str]) -> str:
             f"earns its share of the reward:\n  {lines}")
 
 
+def render_failure_warnings(records: List[Dict[str, Any]]) -> str:
+    """Planning context for plan shapes that have FAILED before (cross-run memory).
+
+    Advisory, never a block: a plan that failed for a transient reason must stay
+    retryable, so this warns and lets the model decide. It is the durable form of the
+    same post-mortem that makes in-run revision corrective."""
+    if not records:
+        return ""
+    lines = ["TRIED BEFORE AND FAILED (earlier runs — do NOT re-derive these):"]
+    for r in records[:5]:
+        again = f" (failed {r['n']}×)" if int(r.get("n", 1)) > 1 else ""
+        steps = " → ".join(r.get("steps") or [])
+        lines.append(f"- {steps or r.get('source', '?')}{again}: {r.get('why', '')}")
+    return "\n".join(lines)
+
+
+def _harvest_failures(root: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """The PLANS this run tried that did not close, generalized for reuse. Composites
+    only: a plan is the reusable unit, while a leaf's failure ("no network lab") is a
+    fact about that moment's state, not about the approach."""
+    from .method_cache import _generalize
+    out: List[Dict[str, Any]] = []
+
+    def walk(n: Dict[str, Any]) -> None:
+        kids = n.get("children") or []
+        if kids and n.get("status") != "done" and n.get("mode") != "or":
+            steps = [c.get("goal", "") for c in kids]
+            why = next((t for t in reversed(n.get("tried") or []) if t), None) \
+                or f"the plan closed {n.get('status')}"
+            meth = _generalize(n.get("goal", ""), steps)
+            out.append({"pattern": meth["pattern"].pattern if meth else re.escape(n.get("goal", "")),
+                        "source": n.get("goal", ""),
+                        "steps": (meth["steps"] if meth else steps), "why": why})
+        for c in kids:
+            walk(c)
+    walk(root or {})
+    return out
+
+
 def _vm_tags(rec: Dict[str, Any]) -> List[str]:
     """A VM's groupings: user labels ∪ auto-flags, the same union LIBRARY.fleets uses."""
     return sorted(set(rec.get("labels") or []) | set(rec.get("flags") or []))
@@ -939,6 +978,10 @@ def run_autonomous(
                 parts.append(render_mission_plan(_steps))
             if vms_getter:
                 parts += [s for s in (render_state(vms_getter()), findings.render()) if s]
+            if _prior_failures:      # what this shape of plan cost us last time
+                warn = render_failure_warnings(_mstore.warnings_for(_prior_failures, goal))
+                if warn:
+                    parts.append(warn)
             return "\n\n".join(parts)
     if method_cache is None:
         # STRUCTURAL MEMORY: load what this agent has already learned to decompose, over
@@ -956,6 +999,17 @@ def run_autonomous(
             except Exception:
                 _stored = []
         method_cache = _MethodCache.from_records(_stored) if _stored else _seeded_cache()
+    # The NEGATIVE twin of the method cache: plan shapes that failed in earlier runs, so
+    # the planner is warned before re-deriving one. Advisory context, never a block.
+    _prior_failures = []
+    if persist_claims:
+        try:
+            from . import method_store as _mstore
+            from ..agent.contract import active_agent_key as _agent_key
+            agent_key = agent_key or _agent_key()
+            _prior_failures = _mstore.load_failures(agent_key)
+        except Exception:
+            _prior_failures = []
     # HARD-seed the root decomposition from a mission's declared sub_goals: score.py's
     # depth-0 method-cache path (a known goal shape decomposes DETERMINISTICALLY, no model)
     # then forces the plan tree to form along those exact steps — so they are GUARANTEED
@@ -1169,6 +1223,15 @@ def run_autonomous(
         try:
             from . import method_store as _mstore
             _mstore.merge_into(agent_key, result["methods_learned"])
+        except Exception:
+            pass
+    # …and the negative half: the plans that did NOT close. Remembering only successes
+    # meant the next run re-derived the same broken plan and re-paid to discover it.
+    result["plans_failed"] = _harvest_failures(result.get("root") or {})
+    if persist_claims and result["plans_failed"]:
+        try:
+            from . import method_store as _mstore
+            _mstore.record_failures(agent_key, result["plans_failed"])
         except Exception:
             pass
     result["summary"] = _summarize(result)
