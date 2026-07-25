@@ -135,9 +135,19 @@ _SAT_LAUNCH_RE = re.compile(rf"\b(?:launch|start|boot|power\s*on)\s+(?:the\s+)?(
 _SAT_STOP_RE = re.compile(rf"\b(?:stop|shut\s*down|power\s*off|halt)\s+(?:the\s+)?(?:{_SAT_VM}\s+)?{_SAT_NAME}\s*$", re.I)
 
 
-def make_state_check(vms_getter: Callable[[], Dict[str, Dict[str, Any]]],
-                     execute: Optional[Callable[[str, Dict], Any]] = None):
-    """A satisfied(goal) -> bool: does live state ALREADY show this leaf goal's effect?
+def make_state_verdict(vms_getter: Callable[[], Dict[str, Dict[str, Any]]],
+                       execute: Optional[Callable[[str, Dict], Any]] = None,
+                       stamp: Optional[List[int]] = None):
+    """A verdict(goal) -> True / False / None(unrecognized): does live state show this
+    goal's effect?
+
+    TRI-STATE, and the third value is the important one. "Not satisfied" and "I cannot
+    read this goal" are different facts: the first can refuse a bogus `done`, the second
+    must never do so. Collapsing them would make every unparseable goal unverifiable and
+    stall the tree. The harness mints its own steps in a fixed canonical form ("create a
+    vm named red1", "give red1 the 'red' label"), so for those the parse is exact — this
+    is the intended effect of a generated step, read back off the phrasing that generated
+    it rather than authored a second time in a place that could drift.
 
     VM facts come from the registry (`vms_getter`). Network facts need a read-only
     `list_networks` through `execute` — the same "verify with a real read-only call"
@@ -145,27 +155,50 @@ def make_state_check(vms_getter: Callable[[], Dict[str, Dict[str, Any]]],
     executor, or a failed call, means the network question is UNKNOWN, which reads as
     not-satisfied: the conservative direction.
     """
-    def _networks() -> Dict[str, set]:
-        """{network name: {member vm names}} from the executor, or {} if unavailable."""
+    _net_stamp = stamp if stamp is not None else [0]
+    _net_cache: Dict[str, Any] = {"stamp": None, "value": None}
+
+    def _networks() -> Optional[Dict[str, set]]:
+        """{network name: {member vm names}} from the executor, or None when the registry
+        cannot be READ. None and {} are different answers: an empty registry means no
+        networks exist (so an attach definitely did not happen), while an unreadable one
+        means we know nothing — and a reader that confuses them will refuse a `done` that
+        was perfectly good. Readability is judged by the SHAPE of the reply, since an
+        executor with no networks still returns the key."""
         if execute is None:
-            return {}
+            return None
+        # The verdict is asked at EVERY node closure, and each ask was a fresh registry
+        # read — real HTTP against the executor in a live run. Memoized against a stamp the
+        # caller bumps when the world changes, so a burst of closures over unchanged state
+        # costs one read instead of twenty.
+        stamp = _net_stamp[0]
+        if _net_cache["stamp"] == stamp:
+            return _net_cache["value"]
         try:
             raw = execute("list_networks", {})
         except Exception:
-            return {}
-        rows = raw if isinstance(raw, list) else (raw or {}).get("networks") or []
+            _net_cache.update(stamp=stamp, value=None)
+            return None
+        if isinstance(raw, list):
+            rows = raw
+        elif isinstance(raw, dict) and "networks" in raw:
+            rows = raw.get("networks") or []
+        else:
+            _net_cache.update(stamp=stamp, value=None)
+            return None                        # no networks key at all → not a real reply
         out: Dict[str, set] = {}
         for r in rows:
             if isinstance(r, dict) and r.get("name"):
                 out[str(r["name"]).lower()] = {str(m).lower() for m in (r.get("members") or [])}
             elif isinstance(r, str):
                 out[r.lower()] = set()
+        _net_cache.update(stamp=stamp, value=out)
         return out
 
     def _tags(rec: Dict[str, Any]) -> set:
         return {str(t).lower() for t in (list(rec.get("labels") or []) + list(rec.get("flags") or []))}
 
-    def satisfied(goal: str) -> bool:
+    def verdict(goal: str) -> Optional[bool]:
         g = goal or ""
         # ATOMIC GOALS ONLY. The rules below match a clause, so a COMPOUND goal ("create a
         # vm named web AND launch it") would report satisfied on the strength of its first
@@ -176,7 +209,7 @@ def make_state_check(vms_getter: Callable[[], Dict[str, Dict[str, Any]]],
             from ..chat.context_assistant import scan_tool_hints
             parts = [p.strip() for p in _COORD_RE.split(g) if p and p.strip()]
             if len(parts) > 1 and sum(1 for p in parts if scan_tool_hints(p)) > 1:
-                return False
+                return None                    # compound: not one effect to read
         except Exception:
             pass
         vms = {str(k).lower(): v for k, v in (vms_getter() or {}).items()}
@@ -187,12 +220,16 @@ def make_state_check(vms_getter: Callable[[], Dict[str, Dict[str, Any]]],
 
         m = _SAT_CREATE_NET_RE.search(g)
         if m:
-            return m.group("name").lower() in _networks()
+            nets = _networks()
+            return None if nets is None else m.group("name").lower() in nets
 
         m = _SAT_ATTACH_RE.search(g)
         if m:
+            nets = _networks()
+            if nets is None:
+                return None
             net = (m.group("net1") or m.group("net2") or "").lower()
-            return m.group("vm").lower() in _networks().get(net, set())
+            return m.group("vm").lower() in nets.get(net, set())
 
         for rx in _SAT_LABEL_RES:
             m = rx.search(g)
@@ -209,8 +246,16 @@ def make_state_check(vms_getter: Callable[[], Dict[str, Dict[str, Any]]],
             rec = vms.get(m.group("name").lower())
             return rec is not None and not _is_running(rec)
 
-        return False          # unrecognized shape → never "already done"
-    return satisfied
+        return None           # unrecognized shape → no opinion, never a refusal
+    return verdict
+
+
+def make_state_check(vms_getter: Callable[[], Dict[str, Dict[str, Any]]],
+                     execute: Optional[Callable[[str, Dict], Any]] = None):
+    """The boolean view of make_state_verdict: satisfied(goal) -> bool. Only a definite
+    True counts as satisfied, so an unreadable goal is never "already done"."""
+    verdict = make_state_verdict(vms_getter, execute)
+    return lambda goal: verdict(goal) is True
 
 
 # An ASSURANCE goal asserts a checkable end-state the plan must actually establish —
@@ -1004,8 +1049,11 @@ def run_autonomous(
     if mission is not None:
         tools = mission.filter_tools(tools)
 
+    _world_stamp = [0]      # bumped on every executed tool → invalidates cached state reads
+
     def _exec(tool: str, args: Dict[str, Any]) -> Any:
         r = execute(tool, args)
+        _world_stamp[0] += 1
         ev = {"tool": tool, "args": args,
               "ok": not (isinstance(r, dict) and (r.get("success") is False or r.get("error")))}
         events.append(ev)
@@ -1218,7 +1266,11 @@ def run_autonomous(
         complete_steps=complete_steps,         # Track 1.4: inject a dropped prerequisite (create network)
         # "no tool call" is only a failure when something was left to do — an already-in-
         # place effect (idempotent re-entry) closes done on STATE, not on the model's word.
+        # ONE reader, two uses: `already_satisfied` pre-empts finished work during a
+        # correction (True only), `goal_effect` refuses a `done` the state contradicts
+        # (False only). The tri-state keeps "unreadable" from ever becoming a refusal.
         already_satisfied=(make_state_check(vms_getter, execute) if vms_getter else None),
+        goal_effect=(make_state_verdict(vms_getter, execute, _world_stamp) if vms_getter else None),
         goal_complaint=goal_complaint,   # why the predicate rejected a fully-executed plan
 
     )   # criterion_of/legal_filter default to the active contract inside run_score

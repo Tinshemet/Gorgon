@@ -10,7 +10,8 @@ imported from the sibling modules.
 from typing import Any, Callable, Dict, List, Optional
 
 from .meta_tools import DECOMPOSE_TOOL, ALTERNATIVES_TOOL, _NODE_SYSTEM, _OPAQUE_TOOLS
-from .ledger_util import _node, _norm, _progress_summary, _attach_steer, _first_tool_call
+from .ledger_util import (_node, _norm, _progress_summary, _attach_steer, _first_tool_call,
+                          _SET_VALUED_RE)
 from ._deps import (
     _default_gate, _default_criterion, _default_legal, _consent_verb, _tool_risk,
     _yield_fact, _extract_value, _finding_probe_spec,
@@ -121,6 +122,7 @@ def run_score(
     complete_steps  = engine.complete_steps
     already_satisfied = engine.already_satisfied
     goal_complaint    = engine.goal_complaint
+    goal_effect       = engine.goal_effect
 
     def _refine_steps(parent_goal: str, steps: list) -> list:
         """Apply the harness's step-refinement passes to a model decomposition: bind bare
@@ -225,6 +227,46 @@ def run_score(
         finally:
             _correcting["n"] -= 1
 
+    def _touched(mark: int) -> set:
+        """The distinct entities this node's subtree actually acted on, read off the
+        ledger slice it produced."""
+        seen = set()
+        for e in ledger[mark:]:
+            for k in ("name", "vm_name", "new_name", "target"):
+                v = (e.get("args") or {}).get(k)
+                if isinstance(v, str) and v:
+                    seen.add(v.lower())
+        return seen
+
+    def _audit(node: Dict[str, Any], node_goal: str, mark: int) -> Dict[str, Any]:
+        """Refuse a `done` the world does not support. A node is judged by its tool call
+        succeeding, which leaves the middle of the tree unguarded: "put the red ones
+        together on their own network" closed done because create_network succeeded, with
+        not one red VM attached, and that false success propagated to a done ROOT.
+
+        Two questions, in order of precision:
+          • Can this goal's effect be READ off state? Then it must actually hold. Exact,
+            and it covers every step the harness minted, since those are phrased by the
+            same canonical grammar the reader parses.
+          • Otherwise, is the goal about a GROUP? Then something must have happened to a
+            group — at least two distinct entities acted on somewhere in its subtree. This
+            asks nothing about WHICH members, so it needs no label vocabulary and cannot
+            do the model's reasoning; it can only withhold a claim.
+        Only ever downgrades done → unverified, and says nothing about an unreadable,
+        non-collective goal."""
+        if node.get("status") != "done":
+            return node
+        if goal_effect is not None:
+            holds = goal_effect(node_goal)
+            if holds is False:
+                node["status"], node["reason"] = "unverified", "goal_effect_unmet"
+                return node
+            if holds is True:
+                return node
+        if _SET_VALUED_RE.search(node_goal or "") and len(_touched(mark)) < 2:
+            node["status"], node["reason"] = "unverified", "set_goal_uncovered"
+        return node
+
     def _reattempt(node: Dict[str, Any], node_goal: str, depth: int,
                    path: List[str], failed: List[str]) -> Dict[str, Any]:
         """Re-attempt a not-done node — the shared body of the backtrack and revision
@@ -323,7 +365,7 @@ def run_score(
         floor = max(0.0, best_alt)
         failed: List[str] = []
         mark  = len(ledger)
-        node  = _attempt(node_goal, depth, path, True, failed)
+        node  = _audit(_attempt(node_goal, depth, path, True, failed), node_goal, mark)
         tries = rolled = 0
         while node.get("status") in _RETRY_STATUS and tries < max_retries:
             # A fully-executed composite that closed `unverified` (every REQUIRED step done,
@@ -360,7 +402,8 @@ def run_score(
             # approach) — AND composites broke out above. A re-attempt SKIPS the method
             # cache: the cached decomposition is exactly the one that just failed (the
             # root-replan landmine), so re-planning must reach the model.
-            node = _correct(_attempt, node_goal, depth, path, True, failed, use_cache=False)
+            node = _audit(_correct(_attempt, node_goal, depth, path, True, failed, use_cache=False),
+                          node_goal, mark)
         if tries:
             node["retries"] = tries
             node["tried"]   = list(failed)
@@ -423,20 +466,22 @@ def run_score(
                 failed.append(_plan_desc(node))
             revisions += 1
             if unmet:                      # nothing un-done to target — re-plan wholesale
-                node = _correct(_attempt, node_goal, depth, path, True, failed, use_cache=False)
+                node = _audit(_correct(_attempt, node_goal, depth, path, True, failed, use_cache=False),
+                              node_goal, mark)
                 continue
             # TARGETED first: re-resolve only the not-done children (the corrective
             # remainder), leaving completed steps untouched — so a non-idempotent step that
             # already ran ('create 5 vms') is never redone. Often enough on its own: a step
             # that failed for a now-satisfied prerequisite (attach before the net existed)
             # succeeds on a clean second try.
-            node = _correct(_reattempt, node, node_goal, depth, path, failed)
+            node = _audit(_correct(_reattempt, node, node_goal, depth, path, failed), node_goal, mark)
             # ESCALATE only if the same sub-goals still can't close the plan — then the
             # DECOMPOSITION itself was wrong, so re-plan wholesale and let the model choose
             # DIFFERENT steps (swap a broken tool for a fallback). This is the one path that
             # may re-touch done steps; it fires only when targeted correction was insufficient.
             if node.get("status") == "partial":
-                node = _correct(_attempt, node_goal, depth, path, True, failed, use_cache=False)
+                node = _audit(_correct(_attempt, node_goal, depth, path, True, failed, use_cache=False),
+                              node_goal, mark)
         if revisions:
             node["revisions"] = revisions
             # ON THE RECORD: what the re-plan was told (failed steps, or the predicate's

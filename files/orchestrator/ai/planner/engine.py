@@ -45,6 +45,7 @@ class Engine:
     ground_steps:    Optional[Callable[[str, list], list]] = None               # bind bare entity references in decomposed steps to the parent's named entity
     complete_steps:  Optional[Callable[[str, list], list]] = None               # inject a missing prerequisite (e.g. create the network a step attaches to)
     already_satisfied: Optional[Callable[[str], bool]] = None                   # (goal)→bool: live state already shows this leaf's effect, so "no tool call" is correct, not a failure
+    goal_effect:     Optional[Callable[[str], Optional[bool]]] = None           # (goal)→True/False/None: does live state show THIS goal's effect? None = unreadable, no opinion
     goal_complaint:  Optional[Callable[[str, list, list], str]] = None          # (goal,children,ledger)→why the root predicate REJECTED a fully-executed plan, so revision can correct it
 
     @classmethod
