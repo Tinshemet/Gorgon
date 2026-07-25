@@ -265,6 +265,50 @@ def main():
     check("harness looped the attach over BOTH members (the model never scripted the loop)",
           nw.vms.get("alpha", {}).get("nets") == {"net0"} and nw.vms.get("beta", {}).get("nets") == {"net0"})
 
+    print("\nanonymous-network prereq (Track 1.4b): an UNNAMED shared network is named + created FIRST")
+    ax = make_collective_expander(lambda: {"a": 1, "b": 1})
+    check("'put them all in a network' → create net1 first, every member threaded to it",
+          ax("put them all in a network", []) ==
+          ["create a network called net1",
+           "put a in the network called net1", "put b in the network called net1"])
+    check("the preposition is preserved ('connect them all to a network')",
+          ax("connect them all to a network", [])[1] == "connect a to the network called net1")
+    check("determiner variants collapse to ONE net ('on the same private network')",
+          ax("put them all on the same private network", []) ==
+          ["create a network called net1",
+           "put a on the network called net1", "put b on the network called net1"])
+    check("a NAMED network is left alone (the prereq completer's job, no create prepended)",
+          ax("put them all on the lab network", []) ==
+          ["put a on the lab network", "put b on the lab network"])
+    check("stable — the same collective threads the SAME net (idempotent re-entry)",
+          ax("put them all in a network", []) == ax("put them all in a network", []))
+    check("no collective, no threading ('put a in a network' stays the model's atomic job)",
+          ax("put a in a network", []) is None)
+    # END-TO-END: the cannibalization the fix targets — a sim where an attach either creates
+    # OR attaches (one action), so a member whose step must do both ends up OFF the network.
+    class AnonWorld:
+        def __init__(self): self.vms = {"a": {"nets": set()}, "b": {"nets": set()}}; self.nets = set()
+        def execute(self, t, ar):
+            n = ar.get("name") or ar.get("vm_name"); net = ar.get("net_name") or ar.get("network")
+            if t == "create_vm": self.vms[n] = {"nets": set()}; return {"success": True}
+            if t == "create_network": self.nets.add(net); return {"success": True}
+            if t == "add_vm_to_network":
+                if n in self.vms and net in self.nets: self.vms[n]["nets"].add(net); return {"success": True}
+                return {"success": False, "error": f"no network {net}"}
+            return {"success": True}
+    aw = AnonWorld()
+    amodel = scripted({
+        "network the fleet": ("decompose", {"steps": ["put them all in a network"]}),
+        "create a network called net1": ("create_network", {"net_name": "net1"}),
+        "put a in the network called net1": ("add_vm_to_network", {"vm_name": "a", "net_name": "net1"}),
+        "put b in the network called net1": ("add_vm_to_network", {"vm_name": "b", "net_name": "net1"}),
+        # "put them all in a network" is unscripted — the harness must name, create, and loop it.
+    })
+    r = run_autonomous("network the fleet", call_model=amodel, execute=aw.execute, tools=ntools,
+                       vms_getter=lambda: {k: {"status": "stopped"} for k in aw.vms}, reward=10.0)
+    check("BOTH members landed on the SAME minted network (no attach was cannibalized)",
+          aw.vms.get("a", {}).get("nets") == {"net1"} and aw.vms.get("b", {}).get("nets") == {"net1"})
+
     print("\ndependency completion (Track 1.4): the harness injects a dropped prerequisite (create the network)")
     from orchestrator.ai.planner.autonomous import make_prereq_completer
     pc = make_prereq_completer()

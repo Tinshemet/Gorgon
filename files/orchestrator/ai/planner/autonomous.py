@@ -407,6 +407,34 @@ def make_compound_splitter():
     return split
 
 
+# ANONYMOUS-NETWORK PREREQ (Track 1.4b). A collective can carry an IMPLICIT shared
+# prerequisite: "put them all in a network" names no network, so every per-member step reads
+# "put <m> in a network" — and the FIRST member's step spends its one action CREATING the
+# net instead of attaching, leaving that member off it (the attach is cannibalized) while the
+# rest attach to a net the goal never named. The prereq completer can't see this: it keys on
+# a network NAME, and there isn't one. So the harness names it — mint ONE stable name up
+# front, prepend its creation, and thread that name through every member step. Stable, so a
+# re-entry threads the SAME net (the executor no-ops the create) instead of minting another.
+# `net1` rather than `network1` so it can't collide with a cardinal "create N networks" set.
+_ANON_NET_RE = re.compile(
+    r"\b(?P<prep>in|into|on|onto|to|inside|within)\s+"
+    r"(?:a|an|one|the\s+same|a\s+single|a\s+shared|a\s+common)\s+"
+    r"(?:new\s+|single\s+|shared\s+|common\s+|isolated\s+|private\s+|virtual\s+)*"
+    r"network\b", re.I)
+_ANON_NET_NAME = "net1"
+
+
+def _thread_anonymous_network(steps: List[str]) -> Optional[List[str]]:
+    """['create a network called net1'] + `steps` rewritten to name that network, when the
+    steps attach to an UNNAMED one; None when they don't (nothing to thread). Deterministic
+    — the same collective always threads the same name."""
+    if not any(_ANON_NET_RE.search(s or "") for s in steps):
+        return None
+    named = [_ANON_NET_RE.sub(lambda m: f"{m.group('prep')} the network called {_ANON_NET_NAME}",
+                              s or "", count=1) for s in steps]
+    return [f"create a network called {_ANON_NET_NAME}"] + named
+
+
 def make_collective_expander(entities_getter: Callable[[], Dict[str, Any]]):
     """An expand_collective(goal, path) -> [per-member sub-goal] | None. Fires when a
     sub-goal applies a DISTRIBUTIVE operation to a collective of live entities ("put them
@@ -428,7 +456,10 @@ def make_collective_expander(entities_getter: Callable[[], Dict[str, Any]]):
         if len(members) < 2:
             return None
         # replace the collective phrase with each member name → per-member atomic sub-goals
-        return [(g[:m.start()] + e + g[m.end():]).strip() for e in members]
+        steps = [(g[:m.start()] + e + g[m.end():]).strip() for e in members]
+        # …then name any UNNAMED shared network the members attach to, and create it FIRST,
+        # so no member's attach is spent creating it (Track 1.4b).
+        return _thread_anonymous_network(steps) or steps
     return expand
 
 
