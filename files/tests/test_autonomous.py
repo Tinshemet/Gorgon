@@ -306,6 +306,14 @@ def main():
     check("stop of a STOPPED vm → satisfied", sat("stop db") is True)
     check("stop of a running vm → not satisfied", sat("stop web") is False)
     # The safety direction: never claim a satisfaction the state doesn't show.
+    # A COMPOUND goal is not satisfied because ONE of its clauses is — the rules match a
+    # clause, so without this guard "create a vm named web and launch it" would report
+    # satisfied off the create alone, claiming done for work that never happened.
+    check("a compound goal is not satisfied by one finished clause",
+          sat("create a vm named web and launch it") is False
+          and sat("create a vm named web, then launch it") is False)
+    check("...while each clause on its own still answers",
+          sat("create a vm named web") is True and sat("launch web") is True)
     check("an unrecognized goal shape is NEVER 'already done'",
           sat("make sure they all ping each other") is False and sat("do the thing") is False)
     check("'launch a vm named X' is NOT answered by mere existence (launch = start, not create)",

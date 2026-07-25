@@ -20,7 +20,7 @@ restored) against the live VM registry, catching a tool that reports success but
 actually change the world.
 """
 import re
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .score import run_score, _first_tool_call, _NODE_SYSTEM, DECOMPOSE_TOOL
 from ..agent import contract as _contract
@@ -167,6 +167,18 @@ def make_state_check(vms_getter: Callable[[], Dict[str, Dict[str, Any]]],
 
     def satisfied(goal: str) -> bool:
         g = goal or ""
+        # ATOMIC GOALS ONLY. The rules below match a clause, so a COMPOUND goal ("create a
+        # vm named web AND launch it") would report satisfied on the strength of its first
+        # clause alone — claiming done for work that never happened. Reuse the compound
+        # splitter's own atomicity test: two or more parts that each name an action means
+        # this goal is not one effect, and one satisfied clause says nothing about the rest.
+        try:
+            from ..chat.context_assistant import scan_tool_hints
+            parts = [p.strip() for p in _COORD_RE.split(g) if p and p.strip()]
+            if len(parts) > 1 and sum(1 for p in parts if scan_tool_hints(p)) > 1:
+                return False
+        except Exception:
+            pass
         vms = {str(k).lower(): v for k, v in (vms_getter() or {}).items()}
 
         m = _SAT_CREATE_VM_RE.search(g)
@@ -216,9 +228,16 @@ def _has_assurance_intent(goal: str) -> bool:
     return bool(_ASSURANCE_RE.search(goal or ""))
 
 
-def make_goal_verifier(vms_getter: Callable[[], Dict[str, Dict[str, Any]]], findings=None, probe=None,
+def make_goal_assessor(vms_getter: Callable[[], Dict[str, Dict[str, Any]]], findings=None, probe=None,
                        predicate=None):
-    """A verify_goal(goal, children, ledger) — the CONTRACT ROOT PREDICATE.
+    """An assess(goal, children, ledger) -> (verdict, complaint) — the CONTRACT ROOT
+    PREDICATE plus, when it REJECTS, the reason in one line.
+
+    The verdict alone is what acceptance needs; the complaint is what SELF-CORRECTION
+    needs. A goal that ran to completion and was then rejected is the case with the most
+    diagnostic information available — "mesh(fleet) is not confirmed" says exactly what a
+    corrective re-plan has to fix — and throwing that away left the loop re-planning blind.
+    verify_goal below is the verdict-only view, unchanged for its existing callers.
 
     Checks the active contract's structured goal predicate (contract.goal_predicate(),
     a list of {criterion, target} clauses). Two kinds of clause:
@@ -238,7 +257,7 @@ def make_goal_verifier(vms_getter: Callable[[], Dict[str, Dict[str, Any]]], find
         # until a human confirms it (see findings.usable / gorgon claim confirm).
         return findings is not None and findings.usable(fact)
 
-    def verify_goal(goal: str, children: list, ledger: list) -> Optional[bool]:
+    def assess(goal: str, children: list, ledger: list) -> Tuple[Optional[bool], str]:
         # Acceptance clauses come from the MISSION (what you tasked) when one is given;
         # otherwise fall back to the contract's legacy goal_predicate (pre-split). No
         # clauses → None, so acceptance falls to the Library (state) + findings grounding.
@@ -252,40 +271,59 @@ def make_goal_verifier(vms_getter: Callable[[], Dict[str, Dict[str, Any]]], find
             # (false success is the worst failure mode for a corrigible agent). No
             # assurance intent → None, so ordinary goals keep structural acceptance.
             if findings is None or not _has_assurance_intent(goal):
-                return None
+                return None, ""
             facts = list(findings.facts())
             if _CONNECTIVITY_RE.search(goal or ""):
                 # A connectivity assurance needs at least one USABLE mesh/reachable
                 # finding — a recorded-but-false mesh (the "plan ran, mesh is broken"
                 # case) does NOT count, so the goal can't falsely close on it.
                 conn = [f for f in facts if f.startswith("mesh(") or f.startswith("reachable(")]
-                return any(_finding_true(f) for f in conn)
+                if any(_finding_true(f) for f in conn):
+                    return True, ""
+                return False, ("connectivity was never CONFIRMED — no usable mesh/reachable "
+                               "finding (a recorded-but-false mesh does not count). Find which "
+                               "members cannot reach each other and fix that, then re-check.")
             # Generic assurance → at least one usable (probe-grounded or human-vouched)
             # finding; a plan that learned nothing verifiable can't claim assurance.
-            return any(_finding_true(f) for f in facts)
+            if any(_finding_true(f) for f in facts):
+                return True, ""
+            return False, ("the goal asserts an end-state but nothing verifiable was learned — "
+                           "OBSERVE the result (probe/ping/check) instead of assuming it.")
         vms = vms_getter() or {}
         for c in clauses:
             crit, target = c.get("criterion"), c.get("target")
             if crit == "mesh":
                 if not _finding_true(f"mesh({target})"):
-                    return False
+                    return False, (f"mesh({target}) is not confirmed — the '{target}' members are "
+                                   f"not known to reach each other. Check they share one network.")
             elif crit == "reachable":
                 if not _finding_true(f"reachable({target})"):
-                    return False
+                    return False, f"reachable({target}) is not confirmed — {target} was never reached."
             elif crit == "found":
                 # Generic epistemic acceptance: the target IS the fact key
                 # (e.g. found:ip(web01)) — accept only if the ledger learned it.
                 # Generalizes mesh/reachable to any registered yield-schema fact.
                 if not _finding_true(target):
-                    return False
+                    return False, f"the fact {target} was never learned — go and establish it."
             elif crit == "probe":
                 # Grounded: verify the assertion with an actual read-only probe.
                 # Unverifiable (no probe fn, or the probe failed) → NOT done.
                 if probe is None or probe(target) is not True:
-                    return False
+                    return False, f"the probe {target} does not hold (or could not be run)."
             elif not _criterion_holds(crit, target, vms):
-                return False
-        return True
+                return False, f"{target} is not {crit} — the required end-state does not hold."
+        return True, ""
+    return assess
+
+
+def make_goal_verifier(vms_getter: Callable[[], Dict[str, Dict[str, Any]]], findings=None, probe=None,
+                       predicate=None):
+    """The verdict-only view of make_goal_assessor: verify_goal(goal, children, ledger)
+    -> True / False / None(no predicate declared). What ACCEPTANCE needs."""
+    assess = make_goal_assessor(vms_getter, findings, probe, predicate)
+
+    def verify_goal(goal: str, children: list, ledger: list) -> Optional[bool]:
+        return assess(goal, children, ledger)[0]
     return verify_goal
 
 
@@ -877,10 +915,17 @@ def run_autonomous(
             pass
     # Built AFTER findings exists: the root predicate reads epistemic clauses (mesh /
     # reachable) from the findings ledger, not just VM state.
-    verify_goal = make_goal_verifier(
+    # ONE assessor, two views: the VERDICT accepts (or refuses) the goal, and the
+    # COMPLAINT tells self-correction what the predicate objected to — so a plan that ran
+    # in full and still missed can be re-planned against the actual objection instead of
+    # blind. Same clause evaluation behind both; the complaint is only asked for on the
+    # revision path.
+    _assess = make_goal_assessor(
         vms_getter, findings, probe=make_probe(execute),
         predicate=(mission.predicate() if mission is not None else None),
     ) if vms_getter else None
+    verify_goal    = (lambda g, c, l: _assess(g, c, l)[0]) if _assess else None
+    goal_complaint = (lambda g, c, l: _assess(g, c, l)[1]) if _assess else None
     # Ground planning in BOTH state (what is) and findings (what's known) — the two
     # externalized memories that stop the weak model acting on the nonexistent or
     # re-discovering what it already learned. A mission's declared sub_goals seed the ROOT
@@ -1039,6 +1084,8 @@ def run_autonomous(
         # "no tool call" is only a failure when something was left to do — an already-in-
         # place effect (idempotent re-entry) closes done on STATE, not on the model's word.
         already_satisfied=(make_state_check(vms_getter, execute) if vms_getter else None),
+        goal_complaint=goal_complaint,   # why the predicate rejected a fully-executed plan
+
     )   # criterion_of/legal_filter default to the active contract inside run_score
     # MISSION-SCOPED LAW: layer the mission's own rules over the contract for this run only
     # (the human's per-tasking answer to a referendum). Restored in the finally, so the

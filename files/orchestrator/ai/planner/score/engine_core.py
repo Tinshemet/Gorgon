@@ -120,6 +120,7 @@ def run_score(
     ground_steps    = engine.ground_steps
     complete_steps  = engine.complete_steps
     already_satisfied = engine.already_satisfied
+    goal_complaint    = engine.goal_complaint
 
     def _refine_steps(parent_goal: str, steps: list) -> list:
         """Apply the harness's step-refinement passes to a model decomposition: bind bare
@@ -147,6 +148,9 @@ def run_score(
     if ledger is None:
         ledger = []
     _RETRY_STATUS = {"failed", "unverified"}   # soft failures worth a different approach
+    # Depth of the correction we're inside (backtrack retry / revision / escalation). Not a
+    # mode flag: nested _resolve calls increment it, so it stays correct for sub-trees too.
+    _correcting = {"n": 0}
     # THRASHING BOUND (Track 1.5): a broken decomposition can send backtrack × revision ×
     # re-decompose into a call explosion that never converges. `max_steps` caps the total
     # node attempts; once spent, planning stops and the offending node closes `blocked
@@ -187,6 +191,16 @@ def run_score(
                 parts.append(f"✗ {c['goal']}{_fail_detail(c)}")
         return "plan [" + "; ".join(parts) + f"] → {node.get('status')}"
 
+    def _unmet_desc(node: Dict[str, Any], complaint: str) -> str:
+        """Post-mortem for a plan that RAN IN FULL and was then rejected by the goal
+        predicate. Every step is ✓, so a step-by-step tells the model nothing — what it
+        needs is the predicate's own objection ("mesh(fleet) is not confirmed"). The plan
+        wasn't incomplete, it was WRONG; the corrective plan has to target the objection."""
+        ran = "; ".join(f"✓ {c['goal']}" for c in (node.get("children") or []))
+        return (f"plan [{ran}] ran in FULL, but the goal is still NOT met: "
+                f"{complaint or 'the goal predicate rejected the result'} "
+                f"Do NOT simply repeat those steps — fix what is missing.")
+
     def _root_gate(node_goal: str, depth: int, children: List[Dict[str, Any]],
                    extra: Dict[str, Any]) -> Dict[str, Any]:
         """The CONTRACT ROOT PREDICATE (gauntlet E). A composite whose children satisfy
@@ -201,6 +215,15 @@ def run_score(
                 return _node(node_goal, "unverified", children=children,
                              reason="goal_predicate_unmet", **extra)
         return _node(node_goal, "done", children=children, **extra)
+
+    def _correct(fn, *a, **kw):
+        """Run a re-attempt inside the correction scope, so leaves below it may close on
+        state alone instead of redoing work that is already finished."""
+        _correcting["n"] += 1
+        try:
+            return fn(*a, **kw)
+        finally:
+            _correcting["n"] -= 1
 
     def _reattempt(node: Dict[str, Any], node_goal: str, depth: int,
                    path: List[str], failed: List[str]) -> Dict[str, Any]:
@@ -337,7 +360,7 @@ def run_score(
             # approach) — AND composites broke out above. A re-attempt SKIPS the method
             # cache: the cached decomposition is exactly the one that just failed (the
             # root-replan landmine), so re-planning must reach the model.
-            node = _attempt(node_goal, depth, path, True, failed, use_cache=False)
+            node = _correct(_attempt, node_goal, depth, path, True, failed, use_cache=False)
         if tries:
             node["retries"] = tries
             node["tried"]   = list(failed)
@@ -346,6 +369,16 @@ def run_score(
             if node.get("status") == "done":
                 node["recovered"] = True
 
+        # ROLLBACK POLICY, stated deliberately (it is a decision, not an omission): a
+        # REVISION DOES NOT ROLL BACK. Backtrack does — it retries the SAME goal, so a
+        # checkpointed destructive leaf must not retry from dirty state. Revision is the
+        # opposite move: it keeps what worked and corrects the remainder, and targeted
+        # revision is BUILT on completed children standing (undoing them is the 5→10→15
+        # duplication cascade). Per-leaf undo still happens where it belongs — inside the
+        # failing leaf's own backtrack loop above — so a checkpointed leaf is already clean
+        # by the time its parent revises. What carries forward is on the record: `tried`
+        # holds the post-mortem, and pre-empted steps are marked satisfied="already".
+        #
         # PLAN-LEVEL REVISION (self-correction): an AND plan that came up `partial` — a
         # REQUIRED step failed for good — is not a dead branch. Re-PLAN the goal: the
         # model sees what's already done (progress summary, injected in _attempt) plus a
@@ -356,24 +389,61 @@ def run_score(
         # can't be re-planned. Re-attempts skip the cache (same landmine). Off unless
         # max_revisions > 0 (the autonomous driver turns it on; run_score defaults off).
         revisions = 0
-        while (max_revisions and revisions < max_revisions
-               and node.get("children") and node.get("status") == "partial"):
-            failed.append(_plan_desc(node))
+        while max_revisions and revisions < max_revisions and node.get("children"):
+            # TWO correctable shapes, not one:
+            #  • `partial` — a REQUIRED step failed; the corrective remainder is the
+            #    un-done children (targeted revision handles it).
+            #  • `unverified` — every step ran and the goal predicate STILL rejects the
+            #    result. This used to be terminal, which had it backwards: it is the case
+            #    with the MOST information (the predicate says exactly what is wrong), and
+            #    the honesty rule produces it precisely when the agent knows it failed.
+            #    Targeted revision is a no-op here (nothing is un-done), so it goes
+            #    straight to a wholesale re-plan carrying the predicate's objection.
+            status = node.get("status")
+            unmet = (status == "unverified" and node.get("mode") != "or"
+                     and all(c.get("status") == "done" for c in node["children"]))
+            if status != "partial" and not unmet:
+                break
+            # WORTH-IT (the same discipline backtrack applies): a re-plan is the most
+            # expensive move in the system, and it was the only loop here charging nothing
+            # for it. Continue-value = estimate(goal) − H·(attempts so far); at or below the
+            # floor, stop and keep the honest verdict instead of buying another pass.
+            if estimate is not None:
+                cont = estimate(node_goal, depth)
+                if cont is not None:
+                    cont -= retry_penalty * (tries + revisions)
+                    if cont <= floor:
+                        node["revision_abandoned"] = {"continue_ce": round(cont, 4),
+                                                      "floor": round(floor, 4)}
+                        break
+            if unmet:
+                complaint = goal_complaint(node_goal, node["children"], ledger) if goal_complaint else ""
+                failed.append(_unmet_desc(node, complaint))
+            else:
+                failed.append(_plan_desc(node))
             revisions += 1
+            if unmet:                      # nothing un-done to target — re-plan wholesale
+                node = _correct(_attempt, node_goal, depth, path, True, failed, use_cache=False)
+                continue
             # TARGETED first: re-resolve only the not-done children (the corrective
             # remainder), leaving completed steps untouched — so a non-idempotent step that
             # already ran ('create 5 vms') is never redone. Often enough on its own: a step
             # that failed for a now-satisfied prerequisite (attach before the net existed)
             # succeeds on a clean second try.
-            node = _reattempt(node, node_goal, depth, path, failed)
+            node = _correct(_reattempt, node, node_goal, depth, path, failed)
             # ESCALATE only if the same sub-goals still can't close the plan — then the
             # DECOMPOSITION itself was wrong, so re-plan wholesale and let the model choose
             # DIFFERENT steps (swap a broken tool for a fallback). This is the one path that
             # may re-touch done steps; it fires only when targeted correction was insufficient.
             if node.get("status") == "partial":
-                node = _attempt(node_goal, depth, path, True, failed, use_cache=False)
+                node = _correct(_attempt, node_goal, depth, path, True, failed, use_cache=False)
         if revisions:
             node["revisions"] = revisions
+            # ON THE RECORD: what the re-plan was told (failed steps, or the predicate's
+            # objection). Backtrack already records its `tried` list; revision fed the same
+            # post-mortem to the model and then dropped it, so an operator reading the tree
+            # could see THAT a plan was revised but never WHY.
+            node["tried"] = list(failed)
             if node.get("status") == "done":
                 node["revised"] = True
         return node
@@ -391,6 +461,18 @@ def run_score(
             return _node(node_goal, "blocked", reason="step_budget")
         if killswitch is not None:
             killswitch.checkin()          # a sign of life — resets any armed dead-man's timer
+        # DON'T REDO FINISHED WORK WHILE CORRECTING. A wholesale re-plan may re-emit steps
+        # that already succeeded — the one path that re-touches done work, and the reason a
+        # correction used to cost a second full pass of tool calls. During a correction
+        # only, close a step whose effect live state ALREADY shows, with no model call and
+        # no tool call. Scoped deliberately: on a FIRST attempt the check needs the model's
+        # agreement too (it fires on `no action`, two independent judgements), and this is
+        # the one place it acts alone — so it is confined to re-work, where "already done"
+        # is precisely the question. `already_satisfied` answers atomic goals only, so a
+        # compound node falls through to normal decomposition.
+        if _correcting["n"] and already_satisfied is not None and already_satisfied(node_goal):
+            _emit("leaf", node_goal, depth, path, tool=None, satisfied="already")
+            return _node(node_goal, "done", satisfied="already")
         # COMPOUND DECOMPOSITION (Track 2): a sub-goal that JOINS two actions ("create X AND
         # put X on net") is split into its clauses deterministically — the weak model fuses
         # them and then can't split at depth > 0 (decompose-first is root-only). Runs BEFORE
