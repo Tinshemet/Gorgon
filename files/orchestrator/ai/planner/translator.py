@@ -38,6 +38,38 @@ vocabulary and it would drift, which is the whole thing we are trying to stop.
 FAILURE IS ALWAYS BACKWARDS-COMPATIBLE. A missing model, malformed arguments, an empty
 result, an exception — every path returns the goal unchanged. The worst case of this
 module is exactly today's behaviour.
+
+STATUS: OFF BY DEFAULT (`run_autonomous(translate=False)`), 2026-07-26. It works, and it
+does not pay for itself. Measured over the full ladder, both columns, llama3.1:8b at
+temp 0:
+
+  * It genuinely helps IMPERATIVE goals whose vocabulary is discoverable from the
+    catalog. Rung 4's paraphrase went from one VM to a clean pass; rung 2's cost fell to
+    the theoretical minimum.
+  * It reliably MANGLES DECLARATIVE goals. "make sure exactly 3 vms carry the prod
+    label" became "label 3 vms as prod" — the count restated as an instruction, so the
+    two VMs already labelled were labelled again and the convergence broke. The same
+    slip turned a mesh assurance into three pairwise pings, and a filter clause ("that
+    is currently stopped") into a separate fake action.
+  * Four prompt iterations each TRADED rungs rather than winning them. v2 fixed rungs
+    5/7/9 and broke 9-literal (the model echoed a worked example out of the tool
+    description back as its answer). v3 fixed that and rung 8, and broke rung 4. The
+    literal column ended where it started, 7/10 — a DIFFERENT seven.
+  * At one run per cell the effect is smaller than the noise: rung 4 swung 24 → 42 calls
+    between runs. Resolving it would cost hours of model time to measure a wash.
+
+WHY IT CANNOT BE PROMPTED AWAY, and why this is an argument rather than an excuse: three
+of the four regressions are one slip — an assurance read as an action. English does not
+mark that difference; "make sure X" and "do X" are a preposition apart, so the model
+slides between them and instruction text does not pin it. The target is underdetermined,
+not the model. In the IR the distinction is a node type — `ensure{predicate}` versus
+`call{tool, args}` — and the slip is not expressible.
+
+KEEP IT because it is the phase-2 skeleton, not a relic: one model call per goal,
+constrained tool output, the same seam in run_autonomous. Swap `clauses: [string]` for
+IR statements and the component is already the right shape. `bench/translate_probe.py`
+is how you iterate on it — 30 seconds to read a translation versus 25 minutes for a
+ladder run.
 """
 
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -77,10 +109,8 @@ RESTATE_TOOL: Dict[str, Any] = {
                         "One entry per distinct thing the operator asked for, in the "
                         "SAME order, each restated in standard wording. Split only where "
                         "the operator already asked for separate things — do not break a "
-                        "single action into smaller steps. Example: 'set up three "
-                        "machines tagged alpha and make sure they can reach each other' "
-                        "becomes ['create 3 vms labelled alpha', 'make sure they all "
-                        "ping each other']."
+                        "single action into smaller steps. Each entry is one plain "
+                        "sentence about THIS request; never a list, and never an example."
                     ),
                 },
             },
@@ -128,7 +158,23 @@ def _system_prompt() -> str:
         "the operator asked you to DO. Return exactly that many clauses, in that order. "
         "If the request asks for three things, return three clauses — never two.",
         "",
+        "A REQUIRED END-STATE IS NOT AN INSTRUCTION. When the operator describes how the "
+        "world should END UP — 'make sure ...', 'ensure ...', 'there should be ...', "
+        "'... should be able to ...' — keep it as a statement about the end state. Do NOT "
+        "turn it into an instruction to perform an action. 'make sure exactly 3 vms carry "
+        "the prod label' stays 'make sure exactly 3 vms carry the prod label'; it is NOT "
+        "'label 3 vms as prod' (which ignores the ones already labelled) and it is NOT "
+        "'create 3 vms labelled prod' (nothing is being created).",
+        "",
+        "A CONDITION IS PART OF ITS ACTION, NEVER ITS OWN CLAUSE. 'launch every vm that is "
+        "currently stopped' is ONE clause — the filter 'that is currently stopped' says "
+        "WHICH vms, so splitting it off changes the request into 'launch every vm'. The "
+        "same goes for 'the ones that are red', 'except db', 'no more and no fewer'.",
+        "",
         "Rules:",
+        "  - Never split ONE action into steps. Deciding the steps is someone else's job; "
+        "if the operator said one thing, return one clause. 'make sure n1, n2 and n3 can "
+        "all ping each other' is ONE clause, not three pairwise checks.",
         "  - Never drop an action. Creating a thing and then using it are TWO actions: "
         "'set up a network called lab and connect web to it' is 'create a network "
         "called lab' AND 'attach web to the network called lab'.",
@@ -150,10 +196,22 @@ def _system_prompt() -> str:
 
 
 def _clean(clauses: Any) -> List[str]:
-    """Strings only, stripped, empties dropped, order preserved."""
+    """Strings only, stripped, empties dropped, order preserved — and no serialised lists.
+
+    A weak model sometimes answers with the LIST rendered into one string, e.g. the single
+    clause ``"['create 3 vms labelled alpha', 'make sure they all ping each other']"``.
+    Observed for real: it echoed a worked example out of the tool description back as the
+    answer to an unrelated goal. Such a clause is not a restatement of anything, and
+    planning against it would act on names the operator never mentioned — so the whole
+    translation is discarded and the caller keeps its original goal.
+    """
     if not isinstance(clauses, (list, tuple)):
         return []
-    return [c.strip() for c in clauses if isinstance(c, str) and c.strip()]
+    out = [c.strip() for c in clauses if isinstance(c, str) and c.strip()]
+    if any((c.startswith("[") and c.endswith("]")) or "', '" in c or '", "' in c
+           for c in out):
+        return []
+    return out
 
 
 def join_clauses(clauses: List[str]) -> str:

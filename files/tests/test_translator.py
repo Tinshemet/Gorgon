@@ -110,6 +110,24 @@ def main():
         g2, c2 = normalize_goal(original, model)
         check(f"{label} → goal unchanged, clauses None", g2 == original and c2 is None)
 
+    print("\na serialised LIST is not a clause — the example-echo failure")
+    # Observed for real on rung 9: the model answered an unrelated goal by echoing a
+    # worked example out of the tool description, rendered as one string containing the
+    # whole list. It is not a restatement of anything, and planning against it would act
+    # on names the operator never mentioned — so the translation is discarded entirely.
+    for bad in ["['create 3 vms labelled alpha', 'make sure they all ping each other']",
+                '["create 3 vms", "launch them"]']:
+        gb, cb = normalize_goal("sort out the mesh between n1 and n2", _answer([bad]))
+        check("a stringified list is rejected outright",
+              gb == "sort out the mesh between n1 and n2" and cb is None)
+    # …and one bad clause poisons the batch: a partially-echoed answer is not salvageable.
+    g7, c7 = normalize_goal("do the thing",
+                            _answer(["create a vm named alpha", "['a', 'b']"]))
+    check("one serialised clause discards the whole translation",
+          g7 == "do the thing" and c7 is None)
+    check("the tool description no longer carries an echoable example",
+          "alpha" not in RESTATE_TOOL["function"]["parameters"]["properties"]["clauses"]["description"])
+
     print("\nnon-goals and no-ops")
     g3, c3 = normalize_goal("", _answer(["anything"]))
     check("an empty goal is left alone (no model call needed)", g3 == "" and c3 is None)
@@ -188,7 +206,7 @@ def main():
     tools = [{"type": "function", "function": {"name": "create_vm", "parameters": {}}}]
     r = run_autonomous("spin up a machine and call it alpha", call_model=model,
                        execute=lambda t, a: {"success": True}, tools=tools,
-                       max_retries=0, max_depth=1)
+                       max_retries=0, max_depth=1, translate=True)
     check("the planner was given the RESTATED goal",
           any("create a vm named alpha" in g for g in seen["planner_goals"]))
     check("the planner never saw the original wording",
@@ -199,14 +217,17 @@ def main():
     check("and the clauses it was built from",
           r["goal_translated"]["clauses"] == ["create a vm named alpha"])
 
-    print("\ntranslate=False is a real off-switch (needed to A/B the ladder)")
+    print("\ntranslate is OFF BY DEFAULT — measured as a wash, see the module docstring")
     seen["planner_goals"] = []
+    # No `translate=` argument at all: the DEFAULT must leave the goal alone. This is the
+  # assertion that would fail if someone flipped it back on without re-measuring.
     r2 = run_autonomous("spin up a machine and call it alpha", call_model=model,
                         execute=lambda t, a: {"success": True}, tools=tools,
-                        max_retries=0, max_depth=1, translate=False)
-    check("the planner gets the goal verbatim",
+                        max_retries=0, max_depth=1)
+    check("by DEFAULT the planner gets the goal verbatim",
           any("spin up a machine" in g for g in seen["planner_goals"]))
-    check("nothing is reported as translated", "goal_translated" not in r2)
+    check("by default nothing is reported as translated", "goal_translated" not in r2)
+    check("the original goal is still reported", r2["goal"] == "spin up a machine and call it alpha")
 
     print("\na dead translator leaves the run exactly as it was")
     seen["planner_goals"] = []
@@ -219,7 +240,7 @@ def main():
 
     r3 = run_autonomous("spin up a machine and call it alpha", call_model=half_dead,
                         execute=lambda t, a: {"success": True}, tools=tools,
-                        max_retries=0, max_depth=1)
+                        max_retries=0, max_depth=1, translate=True)
     check("the run still happens on the original goal",
           any("spin up a machine" in g for g in seen["planner_goals"]))
     # Any normal close will do — the point is that a dead translator does not crash the

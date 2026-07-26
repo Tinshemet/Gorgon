@@ -1104,7 +1104,11 @@ def run_autonomous(
     max_steps:   int = 60,
     validate_reasons: bool = False,
     persist_claims: bool = False,
-    translate: bool = True,
+    # OFF by default — measured, not assumed. See translator.py: it swaps rungs rather
+    # than winning them (literal stayed 7/10, trading rung 4 for rung 8), and the effect
+    # is smaller than the run-to-run noise. Switchable because the module is the phase-2
+    # skeleton: the same call emits IR instead of English.
+    translate: bool = False,
     agent_key: Optional[str] = None,
     mission=None,
     verbose: bool = False,
