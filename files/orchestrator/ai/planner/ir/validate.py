@@ -5,10 +5,20 @@ Three questions are kept separate on purpose, because a run needs to know which 
 
     well-formed  right shape?                        here
     grounded     real tools, real kinds, no dangling refs?   here
+    satisfiable  could this hold in ANY world?        here
     meaningful   does it say what the goal meant?     nowhere in code
 
-The third is a human's job, or the ladder's. Answering it would need a second definition
+The last is a human's job, or the ladder's. Answering it would need a second definition
 of every goal, which is how a benchmark starts measuring its own grader.
+
+`satisfiable` is separate from `meaningful` and much narrower — it asks only whether a
+statement contradicts ITSELF, which needs no knowledge of the goal and no world. Rung 9
+is why it exists: the author wrote REACH(SELECT vm WHERE name = 'n1') >= 3 three times.
+A name identifies at most one machine, so a floor of three over it cannot hold in any
+world that could ever exist — and the world happened to end up right, so the rung checker
+said PASS over a program that did not mean its goal. A check that cannot pass is not a
+weak check; it is a broken one, and it is exactly the false assurance this system refuses
+everywhere else.
 
 Every problem names the statement and what specifically was wrong, because this message
 is not a log line — it is fed BACK to the model on a retry, and the design treats a
@@ -305,6 +315,19 @@ def _check_call(st: Dict[str, Any], where: str, tools, bound) -> List[str]:
     return out
 
 
+def _at_most_one(sel: Any) -> bool:
+    """Does this select match at most one member, whatever the world contains?
+
+    True when it pins the kind's KEY to a literal — `name` for a vm, `net_name` for a
+    network. A `$reference` does not count: it may resolve to a whole set.
+    """
+    if not isinstance(sel, dict):
+        return False
+    key = (config.KINDS.get(sel.get("kind")) or {}).get("key")
+    val = sel.get(key) if key else None
+    return isinstance(val, str) and bool(val) and not refs.names(val)
+
+
 def _check_predicate(pred: Any, where: str) -> List[str]:
     """A predicate names its `shape` and supplies that shape's operand."""
     if pred is None:
@@ -348,6 +371,20 @@ def _check_predicate(pred: Any, where: str) -> List[str]:
     elif operand == "sets":
         if not isinstance(value, (list, tuple)) or len(value) < 2:
             out.append(f"{where}: {shape} needs `sets` — two or more, got {value!r}")
+    # A floor above one over a set that can hold at most one member is unsatisfiable by
+    # construction. Reported as a problem, not a warning: the whole contract of ENSURE is
+    # that passing it means something.
+    if operand == "select" and _at_most_one(value):
+        key = (config.KINDS.get(value.get("kind")) or {}).get("key")
+        for c, floor in (("min", 1), ("gte", 1), ("eq", 1)):
+            n = pred.get(c)
+            if isinstance(n, int) and n > floor:
+                out.append(
+                    f"{where}: {shape} over {key} = {value.get(key)!r} can never reach "
+                    f"{n} — a {value.get('kind')} {key} names ONE resource. Select the "
+                    f"whole set (e.g. a shared label), or drop the floor.")
+                break
+
     if (spec["comparators"] and not spec.get("comparators_optional")
             and not (set(pred) & set(spec["comparators"]))):
         # `reach` opts out. Its own doc reads "the members can reach each other" and the

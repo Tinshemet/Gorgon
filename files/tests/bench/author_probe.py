@@ -48,12 +48,27 @@ def _call_spec():
             "required": ["tool", "args"]}
 
 
-def _select_spec():
-    """A select: the kind, plus whichever attributes that kind declares queryable."""
+def _select_spec(depth: int = 1):
+    """A select: the kind, plus whichever attributes that kind declares queryable, plus
+    the `not` carve-out.
+
+    `not` was implemented in the validator and never offered here, so rung 8 — "every vm
+    except db" — could not be said. The author invented `name: '!db'`, a syntax that does
+    not exist, and was marked down for it. That is the recurring shape of every defect in
+    this probe: the language had the construct, the schema withheld it, and the model got
+    the blame. Depth-limited because a carve-out inside a carve-out is a double negative
+    nobody should write.
+    """
     props = {"kind": {"type": "string", "enum": list(config.KINDS)}}
     for k in config.KINDS.values():
         for attr in k["attrs"]:
             props.setdefault(attr, {"type": "string"})
+    if depth > 0:
+        inner = {a: v for a, v in props.items() if a != "kind"}
+        props["not"] = {"type": "object", "properties": inner,
+                        "minProperties": 1,
+                        "description": "EXCLUDE members matching these filters, e.g. "
+                                       "{\"name\": \"db\"} for 'every vm except db'"}
     return {"type": "object", "properties": props, "required": ["kind"]}
 
 
@@ -334,7 +349,8 @@ def repair(goal, program, problems, model, temp, shots, known_names=None, timeou
     return prog, ([] if ok else probs)
 
 
-def revise(goal, program, world, why, model, temp, shots, timeout=600):
+def revise(goal, program, world, why, model, temp, shots, timeout=600,
+           reason="its own check REJECTED the result"):
     """Author a CORRECTIVE program, given what the last one did and what went wrong.
 
     The correction runs against the world the first program left behind — it does not
@@ -346,7 +362,7 @@ def revise(goal, program, world, why, model, temp, shots, timeout=600):
     msgs.append({"role": "user", "content": goal})
     msgs.append({"role": "assistant", "content": json.dumps(program)})
     msgs.append({"role": "user", "content":
-                 f"That program ran, and its own check REJECTED the result: {why}\n\n"
+                 f"That program ran, and {reason}: {why}\n\n"
                  f"{world_state(world)}\n\n"
                  f"The goal was: {goal}\n"
                  "Write a program that fixes ONLY the difference between the state above "
@@ -371,19 +387,28 @@ def _seams(world):
     def select(sel):
         kind = sel.get("kind")
         alias = (config.KINDS.get(kind) or {}).get("aliases") or {}
-        sel = {alias.get(k, k): v for k, v in sel.items()}
+
+        def _matches(name, vm, filters):
+            """One member against one set of filters. The SAME function answers both the
+            include and the exclude side, so a carve-out cannot drift from the selection
+            it carves out of — the exact bug that made `iso_lab` match `id=iso_lab2` in
+            the network attach, arriving in a second place."""
+            f = {alias.get(k, k): v for k, v in filters.items() if k != "not"}
+            if "label" in f and f["label"] not in (vm["labels"] | vm.get("flags", set())):
+                return False
+            if "status" in f and vm["status"] != f["status"]:
+                return False
+            if "name" in f and name != f["name"]:
+                return False
+            if "os_type" in f and vm.get("os_type") != f["os_type"]:
+                return False
+            return True
+
         if kind == "network":
             return sorted(world.nets)
-        out = []
-        for name, vm in sorted(world.vms.items()):
-            if "label" in sel and sel["label"] not in (vm["labels"] | vm.get("flags", set())):
-                continue
-            if "status" in sel and vm["status"] != sel["status"]:
-                continue
-            if "name" in sel and name != sel["name"]:
-                continue
-            out.append(name)
-        return out
+        carve = sel.get("not") or {}
+        return [n for n, vm in sorted(world.vms.items())
+                if _matches(n, vm, sel) and not (carve and _matches(n, vm, carve))]
 
     def holds(pred, scope):
         shape = pred.get("shape")
@@ -505,7 +530,13 @@ def main(argv=None) -> int:
                     res = {**res, "ok": False, "failed": "unsatisfied", "why": why}
 
             rounds = 0
-            while (not res["ok"] and res.get("failed") == "unsatisfied"
+            # `calls_failed` is revisable too, and for the same reason `unsatisfied` is:
+            # the run produced a specific, actionable objection. Rung 8 attached VMs to a
+            # network it never created — every call was rejected by the world, the
+            # program asserted nothing, and the loop simply stopped, because the trigger
+            # only ever named one of the two failure modes. A program that made only
+            # failing calls is the case MOST worth re-planning, not the one to give up on.
+            while (not res["ok"] and res.get("failed") in ("unsatisfied", "calls_failed")
                    and rounds < a.revisions):
                 rounds += 1
                 # DERIVE FIRST. Where the fix is computable it is computed: the harness
@@ -522,8 +553,29 @@ def main(argv=None) -> int:
                     print(f"          -> revision {rounds}: predicate already satisfied")
                     break
                 else:
-                    fix, fix_problems = revise(goal, prog, world, res.get("why", ""),
-                                               a.model, a.temp, shots)
+                    # Say which failure actually happened. "Its own check rejected the
+                    # result" is false when no check ran and the CALLS were rejected —
+                    # and the objection is the only thing the corrective author has.
+                    fix, fix_problems = revise(
+                        goal, prog, world, res.get("why", ""), a.model, a.temp, shots,
+                        reason=("its own check REJECTED the result"
+                                if res.get("failed") == "unsatisfied" else
+                                "the world REJECTED its calls, so it did nothing"))
+                # A REVISION can be invalid too, and rung 8's was — rejected for
+                # inventing a clone of a network. Repair applied to first authoring and
+                # not to corrections, which left the sharpest objection in the run
+                # unanswered at exactly the point the loop was trying to recover.
+                for _ in range(a.revisions if fix_problems and fix is not None else 0):
+                    fix2, fix_problems2 = repair(goal, fix, fix_problems, a.model,
+                                                 a.temp, shots,
+                                                 known_names=world.names())
+                    if fix2 is None:
+                        break
+                    repairs += 1
+                    print(f"          x{rounds}| (revision rejected: {fix_problems[0]})")
+                    fix, fix_problems = fix2, fix_problems2
+                    if not fix_problems:
+                        break
                 if fix is None or fix_problems:
                     print(f"          -> revision {rounds}: "
                           f"{'error' if fix is None else 'INVALID'} "

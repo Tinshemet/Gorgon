@@ -157,8 +157,20 @@ def _select(sel) -> str:
     if not isinstance(sel, dict):
         return f"<not a set: {sel!r}>"
     kind = sel.get("kind", "?")
-    where = " AND ".join(f"{k} = '{v}'" for k, v in sel.items() if k != "kind")
-    return f"SELECT {kind}" + (f" WHERE {where}" if where else "")
+    terms = [f"{k} = '{v}'" for k, v in sel.items() if k not in ("kind", "not")]
+    # The carve-out reads as EXCEPT, which is what the operator said out loud: "every vm
+    # except db". Rendering it as another equality printed
+    # `WHERE not = '{'name': 'db'}'` — a filter on an attribute called "not", against a
+    # dict stringified into a quoted literal. Nobody could read that, and the whole point
+    # of the written surface is that a human can check what the machine understood.
+    out = f"SELECT {kind}" + (f" WHERE {' AND '.join(terms)}" if terms else "")
+    # EXCEPT is its OWN clause, not another WHERE term — `WHERE EXCEPT name = 'db'` is
+    # not English and not SQL. It follows WHERE when both are present, so the sentence
+    # reads in the order the operator said it: this set, minus these.
+    carve = sel.get("not")
+    if isinstance(carve, dict) and carve:
+        out += " EXCEPT " + " AND ".join(f"{k} = '{v}'" for k, v in carve.items())
+    return out
 
 
 def _pred(p) -> str:
