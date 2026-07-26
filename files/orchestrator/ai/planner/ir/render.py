@@ -86,9 +86,17 @@ def _statement(st: Any, indent: str) -> list:
         # to follow the binding.
         member = f"{config.SIGIL}{config.LOOP_VAR}"
         par = " ASYNC" if st.get("async") else ""
+        # A block body prints as its statements; the single-call shorthand prints as the
+        # one call. Both wear the same braces, so the shorthand is invisible to a reader —
+        # which is the point of having it.
+        body = []
+        if isinstance(st.get("do"), list):
+            for kid in st["do"]:
+                body += _statement(kid, indent + "  ")
+        else:
+            body = _statement({"op": "call", **inner}, indent + "  ")
         return _with_tail([f"{indent}FOREACH {member} IN {src}{par} {{"]
-                          + _statement({"op": "call", **inner}, indent + "  ")
-                          + [f"{indent}}}"], st, indent)
+                          + body + [f"{indent}}}"], st, indent)
 
     if op == "ensure":
         return [f"{indent}ENSURE {_pred(st.get('predicate'))};"]

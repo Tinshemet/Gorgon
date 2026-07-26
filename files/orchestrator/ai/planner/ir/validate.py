@@ -65,8 +65,17 @@ def coerce_body(raw: Any) -> Optional[List[Any]]:
     return raw if isinstance(raw, list) and raw else None
 
 
-def validate(program: Any, known_tools=None, known_names=None) -> Tuple[bool, List[str]]:
+def validate(program: Any, known_tools=None, known_names=None,
+             bound: Optional[set] = None) -> Tuple[bool, List[str]]:
     """(ok, problems).
+
+    `bound` is what is already in scope — passed when validating a nested block, so the
+    block can see the names its enclosing statements bound. It is a COPY at every level,
+    which gives block scoping for nothing: a name grafted inside a loop is not visible
+    after it. That is the right rule and it is also the one rung 11 needed, from both
+    sides — the body could not see `$item` (reported "never created" for the loop's own
+    member), and the statement after the loop could see a per-iteration result it has no
+    business reading.
 
     `known_names` is what the world already contains. Optional, because well-formedness
     must be answerable without a world — but when a caller HAS one, `FROM` can be
@@ -83,7 +92,7 @@ def validate(program: Any, known_tools=None, known_names=None) -> Tuple[bool, Li
     # AUTHORED — only the author knows what varies per invocation — where `imports` are
     # DERIVED by the harness. Different provenance, so different halves of the header.
     params = program.get("params") if isinstance(program, dict) else None
-    bound = set()
+    bound = set(bound or ())        # a COPY — see the docstring on scoping
     for name, typ in (params or {}).items():
         if typ not in config.PARAM_TYPES:
             problems.append(f"parameter {name!r}: unknown type {typ!r} "
@@ -108,18 +117,21 @@ def validate(program: Any, known_tools=None, known_names=None) -> Tuple[bool, Li
         # quietly created ONE resource instead of three — a program that looks right,
         # validates, and does a fifth of what it says. Any stale or mistyped field now
         # names itself instead.
-        known = set(spec["fields"]) | set(spec.get("one_of") or []) | {"op"}
+        # `one_of` is a list of GROUPS, because an op can hold more than one either/or:
+        # a foreach chooses its set (select | in) AND its body (call | do), and the two
+        # choices are independent.
+        groups = _one_of_groups(spec)
+        known = set(spec["fields"]) | {f for g in groups for f in g} | {"op"}
         for extra in sorted(set(st) - known):
             problems.append(f"{where}: {op} has no field {extra!r} "
                             f"(it takes {', '.join(sorted(known - {'op'}))})")
-        alts = spec.get("one_of")
-        if alts:
+        for alts in groups:
             present = [f for f in alts if st.get(f) not in (None, "", {})]
             if not present:
                 problems.append(f"{where}: {op} needs one of "
                                 f"{' or '.join(repr(f) for f in alts)}")
             elif len(present) > 1:
-                problems.append(f"{where}: {op} names its set twice "
+                problems.append(f"{where}: {op} says it twice "
                                 f"({', '.join(present)}) — use one")
 
         if op == "new":
@@ -202,6 +214,14 @@ def validate(program: Any, known_tools=None, known_names=None) -> Tuple[bool, Li
                 # the loop binds its member, so it is in scope inside the body
                 problems += _check_call(inner, f"{where} (foreach body)", tools,
                                         bound | {config.LOOP_VAR})
+            block = st.get("do")
+            if block is not None:
+                if not isinstance(block, list) or not block:
+                    problems.append(f"{where}: `do` is a list of statements, got {block!r}")
+                else:
+                    _, sub = validate({"body": block}, tools, known_names,
+                                      bound | {config.LOOP_VAR})
+                    problems += [f"{where} (foreach body) → {x}" for x in sub]
         elif op == "ensure":
             problems += _check_predicate(st.get("predicate"), where)
         elif op == "if":
@@ -213,7 +233,7 @@ def validate(program: Any, known_tools=None, known_names=None) -> Tuple[bool, Li
                 if not isinstance(kids, list) or not kids:
                     problems.append(f"{where}: `{branch}` is a list of statements, got {kids!r}")
                 else:
-                    ok2, sub = validate({"body": kids}, tools)
+                    ok2, sub = validate({"body": kids}, tools, known_names, bound)
                     problems += [f"{where} ({branch}) → {x}" for x in sub]
         # A grafted name is in scope from here on, and IFAILS carries statements wherever
         # it appears — both checked once, for every acting op, rather than per branch.
@@ -224,7 +244,7 @@ def validate(program: Any, known_tools=None, known_names=None) -> Tuple[bool, Li
             if not isinstance(recov, list) or not recov:
                 problems.append(f"{where}: `ifails` is a list of statements, got {recov!r}")
             else:
-                _, sub = validate({"body": recov}, tools)
+                _, sub = validate({"body": recov}, tools, known_names, bound)
                 problems += [f"{where} (ifails) → {x}" for x in sub]
     return (not problems), problems
 
@@ -249,6 +269,19 @@ def _creator_for(kind: str, st: Dict[str, Any], with_supplied: bool = False):
         supplied.add(chosen["from"])
     tool = chosen.get("tool") or spec.get("create")
     return (tool, {x for x in supplied if x}) if with_supplied else tool
+
+
+def _one_of_groups(spec: Dict[str, Any]) -> List[List[str]]:
+    """An op's either/or groups, normalised.
+
+    Accepts the old flat form (`["select", "in"]`) as a single group so a manifest
+    written either way means the same thing — this is the shape the schema generator
+    reads too, and the two must not disagree about it.
+    """
+    alts = spec.get("one_of") or []
+    if alts and isinstance(alts[0], str):
+        return [list(alts)]
+    return [list(g) for g in alts]
 
 
 def _check_select(sel: Any, where: str) -> List[str]:

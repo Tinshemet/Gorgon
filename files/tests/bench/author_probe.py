@@ -32,6 +32,7 @@ import sys
 import urllib.request
 
 from orchestrator.ai.planner.ir import config, derive, render, run, validate
+from orchestrator.ai.planner.ir.validate import _one_of_groups
 
 from .ladder import BENCH_MODEL
 from .rungs import RUNGS
@@ -88,7 +89,7 @@ def _field_schema(name: str):
         return _select_spec()
     if name == "call":
         return _call_spec()
-    if name in ("then", "else", "ifails"):
+    if name in ("then", "else", "ifails", "do"):
         return {"type": "array", "items": {"$ref": "#/$defs/stmt"}, "description": doc}
     if name in ("cond", "predicate"):
         return {"$ref": "#/$defs/pred"}
@@ -162,16 +163,23 @@ def program_schema():
         props = {"op": {"type": "string", "const": op, "description": spec["doc"]}}
         for f in spec["fields"]:
             props[f] = _field_schema(f)
-        alts = spec.get("one_of")
-        if alts:
+        groups = _one_of_groups(spec)
+        if groups:
             # `one_of` has to reach the DECODER, not just the validator. Collapsing it
             # into a single branch with both fields optional is what produced
             # `FOREACH $item IN None` five times in one program: nothing forced a set to
             # be named. One branch per alternative, each REQUIRING its own field.
-            for alt in alts:
-                sub = {k: v for k, v in props.items() if k not in set(alts) - {alt}}
+            # One branch per COMBINATION of choices. `foreach` picks its set
+            # (select | in) and its body (call | do) independently, so it has four —
+            # and each branch must drop the alternatives it did not take, or the decoder
+            # is free to supply both and mean neither.
+            import itertools
+            allfields = {f for g in groups for f in g}
+            for combo in itertools.product(*groups):
+                sub = {k: v for k, v in props.items()
+                       if k not in allfields - set(combo)}
                 branches.append({"type": "object", "properties": sub,
-                                 "required": ["op", alt] + list(spec["required"])})
+                                 "required": ["op"] + list(combo) + list(spec["required"])})
         else:
             branches.append({"type": "object", "properties": props,
                              "required": ["op"] + list(spec["required"])})
@@ -214,6 +222,17 @@ SHOTS = [
          {"op": "if", "cond": {"shape": "is", "of": "$answer.alive", "eq": True},
           "then": [{"op": "call", "tool": "add_label",
                     "args": {"name": "web", "label": "up"}}]}]}),
+    # A BLOCK body — a loop doing more than one thing per member. Deliberately WITHOUT a
+    # conditional: the shape being taught is "a body can hold several statements", not
+    # rung 11's answer. Whether the model composes a block with graft+if, having seen
+    # each separately, is the thing worth measuring.
+    ("snapshot every running vm and label each one 'backed-up'",
+     {"body": [
+         {"op": "foreach", "select": {"kind": "vm", "status": "running"},
+          "do": [{"op": "call", "tool": "snapshot_create",
+                  "args": {"name": "$item", "snap_name": "$item-backup"}},
+                 {"op": "call", "tool": "add_label",
+                  "args": {"name": "$item", "label": "backed-up"}}]}]}),
     # The carve-out and creating by copying, again on a non-rung goal.
     ("copy golden twice, and label every vm except golden itself 'derived'",
      {"body": [

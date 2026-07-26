@@ -175,10 +175,27 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
             # change — it forces the query-freshness question, since a parallel loop can
             # mutate the set it is iterating — and shipping the FLAG before the semantics
             # would let programs be written against behaviour that does not exist yet.
-            inner = st["call"]
+            inner = st.get("call")
+            block = st.get("do")
             for m in members:
-                _do(inner["tool"],
-                    _resolve(inner.get("args") or {}, {**scope, config.LOOP_VAR: m}))
+                if inner is not None:
+                    _do(inner["tool"],
+                        _resolve(inner.get("args") or {}, {**scope, config.LOOP_VAR: m}))
+                    continue
+                # A BLOCK body, scoped per iteration. The member is bound for the pass and
+                # anything the body binds is discarded at the end of it — so `graft` inside
+                # a loop names THIS member's answer, and the next pass cannot read the last
+                # one's. The alternative, accumulating a list, is a different feature; a
+                # per-item conditional needs this one, and quietly providing the other
+                # would make `IF IS($answer.alive)` mean "the answer from some earlier
+                # machine", which is worse than not having it.
+                outer = dict(scope)
+                scope[config.LOOP_VAR] = m
+                bad = _block(block)
+                scope.clear()
+                scope.update(outer)
+                if bad is not None:
+                    return bad
 
         elif op == "ensure":
             if holds is None:

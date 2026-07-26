@@ -92,18 +92,23 @@
       ]
     },
     "foreach": {
-      "required": [
-        "call"
-      ],
+      "required": [],
       "one_of": [
-        "select",
-        "in"
+        [
+          "select",
+          "in"
+        ],
+        [
+          "call",
+          "do"
+        ]
       ],
-      "doc": "apply ONE call to every member of a set. Name the set with `select` (a query over current state), or with `in` \u2014 either a set you bound (\"$vms\") or a literal list of names ([\"one\",\"two\"]). Plus `call`.",
+      "doc": "apply statements to every member of a set. Name the set with `select` (a query over current state), or with `in` \u2014 either a set you bound (\"$vms\") or a literal list of names ([\"one\",\"two\"]). The body is `do`, a list of statements, or `call` as the shorthand when the body is a single call. Inside the body $item is the current member.",
       "fields": [
         "select",
         "in",
         "call",
+        "do",
         "async",
         "ifails"
       ]
@@ -342,6 +347,10 @@
     "else": {
       "type": "array",
       "doc": "if: statements when it does not"
+    },
+    "do": {
+      "type": "array",
+      "doc": "the statements to run for each member; $item is the current one"
     }
   },
   "_authoring_doc": "HOW the model is asked to write a program. 'program' offers one emit_program tool taking the whole body as an array of statement objects. 'statements' offers ONE TOOL PER OP, each a flat object of scalars, and the harness assembles the program from the calls. The second exists because of a consistent measurement: decompose{steps:[string]} \u2014 an array of STRINGS \u2014 works reliably every day, while an array of structured OBJECTS collapses, and collapses harder the more structure is declared (oneOf and a nested required both took emission to 0/4). A statement tool asks for exactly the shape the model produces all day when it calls create_vm(name=alpha): two or three scalar arguments. Nested objects are flattened for the same reason \u2014 select{kind,label} becomes select_kind/select_attr/select_value.",
