@@ -31,7 +31,7 @@ import json
 import sys
 import urllib.request
 
-from orchestrator.ai.planner.ir import config, render, run, validate
+from orchestrator.ai.planner.ir import config, derive, render, run, validate
 
 from .ladder import BENCH_MODEL
 from .rungs import RUNGS
@@ -253,6 +253,9 @@ def main(argv=None) -> int:
     p.add_argument("-m", "--model", default=BENCH_MODEL)
     p.add_argument("-t", "--temp", type=float, default=0.0)
     p.add_argument("-p", "--paraphrase", action="store_true")
+    p.add_argument("--no-derive", action="store_true",
+                   help="ablate harness-derived convergence — corrections come only from "
+                        "the model. This is the before/after for rung 7.")
     p.add_argument("--revisions", type=int, default=2,
                    help="how many corrective programs to allow after a failed ENSURE "
                         "(default 2). The English path gets retries and re-planning; "
@@ -326,8 +329,22 @@ def main(argv=None) -> int:
             while (not res["ok"] and res.get("failed") == "unsatisfied"
                    and rounds < a.revisions):
                 rounds += 1
-                fix, fix_problems = revise(goal, prog, world, res.get("why", ""),
-                                           a.model, a.temp, shots)
+                # DERIVE FIRST. Where the fix is computable it is computed: the harness
+                # closes "six exist, three wanted" in one line, and the model provably
+                # cannot — it oscillated 6->5->7->5 with state and objection in hand. The
+                # model is asked only when derivation returns None, meaning the gap is
+                # genuinely not computable (which shapes those are is stated in derive.py,
+                # not guessed at here).
+                derived = None if a.no_derive else derive(goal_pred, sel, res.get("scope"))
+                if derived:
+                    fix, fix_problems = {"body": derived}, []
+                    print(f"          d{rounds}| (derived)")
+                elif derived == []:
+                    print(f"          -> revision {rounds}: predicate already satisfied")
+                    break
+                else:
+                    fix, fix_problems = revise(goal, prog, world, res.get("why", ""),
+                                               a.model, a.temp, shots)
                 if fix is None or fix_problems:
                     print(f"          -> revision {rounds}: "
                           f"{'error' if fix is None else 'INVALID'} "
