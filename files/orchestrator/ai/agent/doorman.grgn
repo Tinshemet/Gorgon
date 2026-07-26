@@ -308,6 +308,149 @@
           "commitment": 0.3
         },
         "verb": "attach VM to network"
+      },
+      "run_command": {
+        "risk": {
+          "reversible": false,
+          "destructiveness": 0.5,
+          "blast": "entity",
+          "commitment": 0.2
+        },
+        "verb": "run code ON THE HOST (sandboxed: workspace-only, no network)",
+        "field": "code",
+        "pin": "normal",
+        "_flag": "Formula rates this 'name' (0.550). Pinned 'normal' by operator judgment 2026-07-26: a warning plus y/n is the right friction for host execution — typing a target name is meaningless here, since the target IS the code. `field: code` makes the confirmation display the code being run. Note the doorman forbids run_command outright (w:0 red line), so this tier only takes effect for an agent that deliberately grants it."
+      },
+      "send_monitor_cmd": {
+        "risk": {
+          "reversible": false,
+          "destructiveness": 0.5,
+          "blast": "entity",
+          "commitment": 0.2
+        },
+        "verb": "send QEMU monitor command to VM",
+        "field": "cmd"
+      },
+      "remove_template": {
+        "risk": {
+          "reversible": false,
+          "destructiveness": 0.6,
+          "blast": "entity",
+          "commitment": 0.0
+        },
+        "verb": "delete template (removes its golden disk)"
+      },
+      "fleet": {
+        "risk": {
+          "reversible": false,
+          "destructiveness": 0.3,
+          "blast": "fleet",
+          "commitment": 0.2
+        },
+        "verb": "broadcast fleet action",
+        "field": "label",
+        "_flag": "Tier is action-conditional (fleet_actions), resolved BEFORE risk is read — so these facts do not gate anything. They exist for PRICING: a fleet broadcast was previously costed at zero by leaf_cost and CE."
+      },
+      "revert": {
+        "risk": {
+          "reversible": false,
+          "destructiveness": 0.4,
+          "blast": "entity",
+          "commitment": 0.0
+        },
+        "verb": "undo the last action"
+      },
+      "provision_guest_agent_offline": {
+        "risk": {
+          "reversible": false,
+          "destructiveness": 0.2,
+          "blast": "entity",
+          "commitment": 0.4
+        },
+        "verb": "provision stealth guest agent offline"
+      },
+      "mark_as_template": {
+        "risk": {
+          "reversible": true,
+          "destructiveness": 0.0,
+          "blast": "entity",
+          "commitment": 0.7
+        },
+        "verb": "mark VM as template"
+      },
+      "snapshot_create": {
+        "risk": {
+          "reversible": true,
+          "destructiveness": 0.0,
+          "blast": "entity",
+          "commitment": 0.5
+        },
+        "verb": "create snapshot"
+      },
+      "open_shell": {
+        "risk": {
+          "reversible": true,
+          "destructiveness": 0.2,
+          "blast": "entity",
+          "commitment": 0.1
+        },
+        "verb": "open shell to VM"
+      },
+      "open_display": {
+        "risk": {
+          "reversible": true,
+          "destructiveness": 0.0,
+          "blast": "entity",
+          "commitment": 0.1
+        },
+        "verb": "open VM display"
+      },
+      "generate_guest_agent_setup": {
+        "risk": {
+          "reversible": true,
+          "destructiveness": 0.0,
+          "blast": "entity",
+          "commitment": 0.1
+        },
+        "verb": "generate guest-agent setup script"
+      },
+      "create_profile": {
+        "risk": {
+          "reversible": true,
+          "destructiveness": 0.0,
+          "blast": "entity",
+          "commitment": 0.1
+        },
+        "verb": "save hardware profile",
+        "field": "profile_name"
+      },
+      "remove_label": {
+        "risk": {
+          "reversible": true,
+          "destructiveness": 0.0,
+          "blast": "entity",
+          "commitment": 0.0
+        },
+        "verb": "remove VM label"
+      },
+      "claim_finding": {
+        "risk": {
+          "reversible": true,
+          "destructiveness": 0.0,
+          "blast": "none",
+          "commitment": 0.0
+        },
+        "verb": "record a claim"
+      },
+      "remove_vm_from_network": {
+        "risk": {
+          "reversible": true,
+          "destructiveness": 0.1,
+          "blast": "entity",
+          "commitment": 0.0
+        },
+        "verb": "detach VM from network",
+        "_flag": "Mirrors add_vm_to_network (0.120, tier none) — a detach is fully undoable now that both directions exist. Slight destructiveness over the attach because removing a NIC can break connectivity a plan depends on; no commitment because it RELEASES a resource rather than taking one."
       }
     },
     "forbidden": [],

@@ -46,6 +46,19 @@ EXPECTED_NON_NONE = {
     "set_resource_limits": "normal",
     "checkpoint": "acknowledge",   # safe savepoint → heads-up only
     "rollback": "name",            # destructive restore → type the label
+    # Assessed 2026-07-26, when the sweep found 14 MUTATING tools carrying no risk
+    # facts at all — so they gated at `none` AND priced at zero. Read-only tools are
+    # deliberately still unassessed: None is the right answer when there is no risk
+    # to state. These eight are the ones whose tier actually moved.
+    "send_monitor_cmd": "name",    # arbitrary QEMU monitor command
+    "remove_template": "name",     # deletes a golden disk — sibling of delete_profile
+    "run_command": "normal",       # PINNED down from `name`: warn + y/n, and the
+                                   # confirmation shows the code (field: code)
+    "revert": "normal",            # undoes the last action; cannot be un-reverted
+    "provision_guest_agent_offline": "normal",
+    "mark_as_template": "acknowledge",  # zero destructiveness, real disk commitment
+    "snapshot_create": "acknowledge",   # ditto
+    "open_shell": "acknowledge",        # grants interactive access, mutates nothing
 }
 
 
