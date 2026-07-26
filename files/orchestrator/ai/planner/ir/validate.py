@@ -93,6 +93,7 @@ def validate(program: Any, known_tools=None, known_names=None,
     # DERIVED by the harness. Different provenance, so different halves of the header.
     params = program.get("params") if isinstance(program, dict) else None
     bound = set(bound or ())        # a COPY — see the docstring on scoping
+    everywhere = _all_bindings(body) | bound
     for name, typ in (params or {}).items():
         if typ not in config.PARAM_TYPES:
             problems.append(f"parameter {name!r}: unknown type {typ!r} "
@@ -223,9 +224,9 @@ def validate(program: Any, known_tools=None, known_names=None,
                                       bound | {config.LOOP_VAR})
                     problems += [f"{where} (foreach body) → {x}" for x in sub]
         elif op in ("ensure", "achieve"):
-            problems += _check_predicate(st.get("predicate"), where, bound)
+            problems += _check_predicate(st.get("predicate"), where, bound, everywhere)
         elif op == "if":
-            problems += _check_predicate(st.get("cond"), where, bound)
+            problems += _check_predicate(st.get("cond"), where, bound, everywhere)
             for branch in ("then", "else"):
                 kids = st.get(branch)
                 if kids is None:
@@ -283,6 +284,32 @@ def _one_of_groups(spec: Dict[str, Any]) -> List[List[str]]:
     if alts and isinstance(alts[0], str):
         return [list(alts)]
     return [list(g) for g in alts]
+
+
+def _all_bindings(body: Any) -> set:
+    """Every name the program binds ANYWHERE, nested blocks included.
+
+    Used only to tell two diagnoses apart: a name bound in a scope that has closed
+    (a loop-local result read after the loop) versus a name that is never bound at all.
+    They are different mistakes with different fixes, and saying the wrong one sends the
+    author to the wrong place.
+    """
+    out: set = set()
+    for st in body or []:
+        if not isinstance(st, dict):
+            continue
+        for field in ("var", "graft"):
+            v = st.get(field)
+            if isinstance(v, str) and v:
+                out.add(v.lstrip(config.SIGIL))
+        for field in ("do", "then", "else", "ifails"):
+            kids = st.get(field)
+            if isinstance(kids, list):
+                out |= _all_bindings(kids)
+        inner = st.get("call")
+        if isinstance(inner, dict):
+            out |= _all_bindings([inner])
+    return out
 
 
 # Ops that change the world — the same set consent.py counts, for the same reason.
@@ -397,7 +424,8 @@ def _at_most_one(sel: Any) -> bool:
     return isinstance(val, str) and bool(val) and not refs.names(val)
 
 
-def _check_predicate(pred: Any, where: str, bound: Optional[set] = None) -> List[str]:
+def _check_predicate(pred: Any, where: str, bound: Optional[set] = None,
+                     elsewhere: Optional[set] = None) -> List[str]:
     """A predicate names its `shape` and supplies that shape's operand."""
     if pred is None:
         return []
@@ -427,9 +455,17 @@ def _check_predicate(pred: Any, where: str, bound: Optional[set] = None) -> List
         if bound is not None:
             for ref in refs.names(value):
                 if ref not in bound:
+                    # Say WHICH mistake it is. Blaming loop scoping unconditionally was
+                    # wrong for rung 13, where the call had no `graft` at all — the model
+                    # simply never bound the name, and was told it had bound it in the
+                    # wrong place. A diagnosis that names the wrong cause costs a repair
+                    # round and teaches the wrong lesson.
+                    hint = ("a result grafted inside a loop does not outlive it"
+                            if ref in (elsewhere or ()) else
+                            f"nothing binds it — add graft: {ref!r} to the call whose "
+                            f"answer you mean")
                     return [f"{where}: {shape} reads {config.SIGIL}{ref}, which is not in "
-                            f"scope here — a result grafted inside a loop does not "
-                            f"outlive it"]
+                            f"scope here — {hint}"]
         return []
     if operand == "of":
         # A composite's operand is other predicates, checked recursively — so a malformed
@@ -441,7 +477,7 @@ def _check_predicate(pred: Any, where: str, bound: Optional[set] = None) -> List
         elif not isinstance(value, (list, tuple)) or len(value) < 2:
             return [f"{where}: {shape} takes two or more checks under `of`, got {value!r}"]
         for kid in kids:
-            out += _check_predicate(kid, where, bound)
+            out += _check_predicate(kid, where, bound, elsewhere)
         return out
     if operand == "select":
         if not isinstance(value, dict):

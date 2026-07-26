@@ -90,7 +90,13 @@ def _field_schema(name: str):
     if name == "call":
         return _call_spec()
     if name in ("then", "else", "ifails", "do"):
-        return {"type": "array", "items": {"$ref": "#/$defs/stmt"}, "description": doc}
+        # minItems, so the decoder cannot emit an EMPTY branch. It did: rung 11 wrote a
+        # perfectly correct `IF ... = false { stop_vm }` and preceded it with a dead
+        # `IF ... = true { }`, which the validator rejected and which sank an otherwise
+        # right program. Constraints belong where the decoder sees them; discovering an
+        # empty block afterwards only lets you complain about it.
+        return {"type": "array", "items": {"$ref": "#/$defs/stmt"},
+                "minItems": 1, "description": doc}
     if name in ("cond", "predicate"):
         return {"$ref": "#/$defs/pred"}
     if name == "in":
