@@ -51,7 +51,8 @@ def _mint(kind: str, var: str, i: int, n: int) -> str:
 def run(program: Any, execute: Callable[[str, Dict], Any], *,
         select: Optional[Callable[[Dict], List[str]]] = None,
         holds: Optional[Callable[[Dict, Dict], Tuple[bool, str]]] = None,
-        params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        params: Optional[Dict[str, Any]] = None,
+        known_names: Optional[set] = None) -> Dict[str, Any]:
     """Run a program. Returns {ok, scope, calls, failed}.
 
     `select` answers a registry query (kind + attribute filters) -> member names, and
@@ -60,7 +61,7 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
     ledger, and this module has no business reaching into either. It also means the bench
     world can drive the same visitor the orchestrator does.
     """
-    ok, problems = validate(program)
+    ok, problems = validate(program, known_names=known_names)
     if not ok:
         return {"ok": False, "failed": "invalid", "problems": problems,
                 "scope": {}, "calls": []}

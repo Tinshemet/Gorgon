@@ -30,6 +30,10 @@ class SimWorld:
         self.unreachable: Set[str] = set()
         self.calls: List[Dict[str, Any]] = []       # every tool call, in order (the run's cost)
 
+    def names(self) -> Set[str]:
+        """Every resource that exists, for grounding a program's `FROM` before it runs."""
+        return set(self.vms) | set(self.nets) | set(self.snapshots)
+
     # ── the reach predicate (SSOT: the fleet tool AND the rung checker both use it) ──
     def members(self, label: str) -> List[str]:
         return sorted(n for n, v in self.vms.items() if label in v["labels"])

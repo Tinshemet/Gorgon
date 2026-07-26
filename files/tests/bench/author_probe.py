@@ -89,16 +89,49 @@ def _field_schema(name: str):
 
 
 def _pred_spec():
-    """Every predicate shape in one schema, composites and IS() included."""
-    comparators = sorted({c for p in config.PREDICATES.values()
-                          for c in (p.get("comparators") or {})})
-    props = {"shape": {"type": "string", "enum": list(config.PREDICATES)},
-             "select": _select_spec(),
-             "of": {"description": "composites: the check(s). is: a $grafted.value"},
-             "sets": {"type": "array", "items": {"type": "string"}}}
-    for c in comparators:
-        props[c] = {"type": ["integer", "boolean", "string"]}
-    return {"type": "object", "properties": props, "required": ["shape"]}
+    """One branch PER SHAPE, each requiring the operand that shape actually takes.
+
+    A single flat object with only `shape` required let the decoder emit
+    `{"shape":"reach","min":5}` — a number and no set — which is precisely what rungs 4,
+    9 and 13 produced. It is the same defect as a collapsed `one_of`, one level down: a
+    requirement the validator knows about and the decoder does not is a requirement the
+    author can still walk into. The manifest already records each shape's `operand`; this
+    just stops throwing that away.
+    """
+    branches = []
+    for shape, spec in config.PREDICATES.items():
+        operand, arity = spec["operand"], spec.get("arity")
+        props = {"shape": {"type": "string", "const": shape,
+                           "description": spec["doc"]}}
+        if operand == "select":
+            props["select"] = _select_spec()
+        elif operand == "sets":
+            props["sets"] = {"type": "array", "items": {"type": "string"},
+                             "minItems": 2,
+                             "description": "two or more $names of sets"}
+        elif operand == "of":
+            props["of"] = ({"type": "string",
+                            "description": "a $grafted.value, e.g. $answer.alive"}
+                           if arity == "value" else
+                           {"type": "array", "items": {"$ref": "#/$defs/pred"},
+                            "minItems": 2 if arity == "many" else 1,
+                            "description": "the check(s) this combines"})
+        for c in spec.get("comparators") or {}:
+            props[c] = {"type": ["integer", "boolean", "string"],
+                        "description": f"compare with {spec['comparators'][c]}"}
+        # A shape whose comparator is mandatory must REQUIRE one — COUNT with no number
+        # is as meaningless as REACH with no set. Several comparators means several
+        # branches, one per choice; requiring none of three is how `count` would have
+        # kept slipping through. `reach` opts out by manifest.
+        comps = list(spec.get("comparators") or {})
+        if comps and not spec.get("comparators_optional"):
+            for c in comps:
+                branches.append({"type": "object", "properties": props,
+                                 "required": ["shape", operand, c]})
+        else:
+            branches.append({"type": "object", "properties": props,
+                             "required": ["shape", operand]})
+    return {"oneOf": branches}
 
 
 def program_schema():
@@ -232,7 +265,7 @@ def _messages(goal: str, shots: bool):
     return msgs
 
 
-def author(goal: str, model: str, temp: float, shots: bool, timeout: int = 600):
+def author(goal: str, model: str, temp: float, shots: bool, timeout: int = 600, known_names=None):
     req = {"model": model, "stream": False, "format": program_schema(),
            "options": {"temperature": temp}, "messages": _messages(goal, shots)}
     try:
@@ -242,7 +275,7 @@ def author(goal: str, model: str, temp: float, shots: bool, timeout: int = 600):
         prog = json.loads(json.loads(r.read())["message"]["content"])
     except Exception as e:
         return None, [f"{type(e).__name__}: {e}"]
-    ok, problems = validate(prog)
+    ok, problems = validate(prog, known_names=known_names)
     return prog, ([] if ok else problems)
 
 
@@ -264,6 +297,41 @@ def world_state(world) -> str:
                      + (f" networks={','.join(nets)}" if nets else ""))
     return ("CURRENT STATE:\n" + ("\n".join(lines) if lines else "  (no vms)")
             + f"\n  networks: {', '.join(sorted(world.nets)) or '(none)'}")
+
+
+def repair(goal, program, problems, model, temp, shots, known_names=None, timeout=600):
+    """Re-author a program that did not validate, given the validator's objections.
+
+    Revision only ever fired on a failed ENSURE, so a program rejected before it ran got
+    a precise, actionable objection — "there is no vm named 'golden'" — and no chance to
+    answer it. That is a strange asymmetry: the structural objection is the SHARPER of
+    the two, since it names the exact statement and the exact rule, while a failed
+    postcondition only reports that the end state is wrong.
+
+    Distinct from revise() because nothing has run: there is no world to diff against, no
+    work to avoid repeating, and the whole program is in scope rather than the remaining
+    difference. This is a rewrite, not a correction.
+    """
+    msgs = _messages(goal, shots)[:-1]
+    msgs.append({"role": "user", "content": goal})
+    msgs.append({"role": "assistant", "content": json.dumps(program)})
+    msgs.append({"role": "user", "content":
+                 "That program was REJECTED before running:\n"
+                 + "\n".join(f"  - {p}" for p in problems[:6])
+                 + f"\n\nThe goal was: {goal}\n"
+                 "Write the whole program again, fixing exactly those objections and "
+                 "changing nothing else. Nothing has run yet — the world is untouched."})
+    req = {"model": model, "stream": False, "format": program_schema(),
+           "options": {"temperature": temp}, "messages": msgs}
+    try:
+        r = urllib.request.urlopen(urllib.request.Request(
+            _OLLAMA, json.dumps(req).encode(), {"Content-Type": "application/json"}),
+            timeout=timeout)
+        prog = json.loads(json.loads(r.read())["message"]["content"])
+    except Exception as e:
+        return None, [f"{type(e).__name__}: {e}"]
+    ok, probs = validate(prog, known_names=known_names)
+    return prog, ([] if ok else probs)
 
 
 def revise(goal, program, world, why, model, temp, shots, timeout=600):
@@ -367,14 +435,35 @@ def main(argv=None) -> int:
           f"{' · few-shot' if shots else ' · NO shots'}"
           f"{' · PARAPHRASE' if a.paraphrase else ''}\n")
 
-    valid = correct = revised = fixed = 0
+    valid = correct = revised = fixed = repairs = 0
     for rung in rungs:
         goal = (rung.paraphrase or rung.goal) if a.paraphrase else rung.goal
         print(f"── rung {rung.n} ({rung.name})\n   goal: {goal}")
-        prog, problems = author(goal, a.model, a.temp, shots)
+        # Seed the world BEFORE authoring, not after. The program is validated against
+        # what exists — `FROM golden` is only meaningful if golden is there — so the
+        # world has to precede the verdict. It also removes a smaller dishonesty: the
+        # probe used to print [VALID] and then have run() reject the same program,
+        # because the two calls were answering the question against different worlds.
+        world = SimWorld()
+        if rung.setup:
+            rung.setup(world)
+            world.calls.clear()
+        prog, problems = author(goal, a.model, a.temp, shots,
+                                known_names=world.names())
         if prog is None:
             print(f"   [ERROR] {problems[0]}\n")
             continue
+        if problems and a.revisions:
+            for attempt in range(a.revisions):
+                fixed_prog, problems2 = repair(goal, prog, problems, a.model, a.temp,
+                                               shots, known_names=world.names())
+                if fixed_prog is None:
+                    break
+                repairs += 1
+                print(f"          x{attempt + 1}| (rejected: {problems[0]})")
+                prog, problems = fixed_prog, problems2
+                if not problems:
+                    break
         ok = not problems
         valid += ok
         print(f"   [{'VALID' if ok else 'INVALID'}] "
@@ -384,12 +473,9 @@ def main(argv=None) -> int:
         for line in render(prog).splitlines():
             print(f"          | {line}")
         if a.execute and ok:
-            world = SimWorld()
-            if rung.setup:
-                rung.setup(world)
-                world.calls.clear()
             sel, holds = _seams(world)
-            res = run(prog, world.execute, select=sel, holds=holds)
+            res = run(prog, world.execute, select=sel, holds=holds,
+                      known_names=world.names())
             print(f"          -> ran {len(res['calls'])} calls, "
                   f"ensure={'ok' if res['ok'] else res.get('failed')}"
                   f"{'' if res['ok'] else ' (' + str(res.get('why','')) + ')'}")
@@ -443,7 +529,8 @@ def main(argv=None) -> int:
                           f"{'error' if fix is None else 'INVALID'} "
                           f"{(fix_problems or ['?'])[0]}")
                     break
-                res = run(fix, world.execute, select=sel, holds=holds)
+                res = run(fix, world.execute, select=sel, holds=holds,
+                             known_names=world.names())
                 for line in render(fix).splitlines():
                     print(f"          r{rounds}| {line}")
                 # Re-assert the GOAL, not the fix's own opinion of itself.
@@ -463,7 +550,8 @@ def main(argv=None) -> int:
                   f"   world: {world.summary()}")
         print()
 
-    print(f"── summary\n   structurally valid : {valid}/{len(rungs)}")
+    print(f"── summary\n   structurally valid : {valid}/{len(rungs)}"
+          + (f"  (after {repairs} repair round(s))" if repairs else ""))
     if a.execute:
         print(f"   ACHIEVES THE GOAL  : {correct}/{len(rungs)}")
         if revised:

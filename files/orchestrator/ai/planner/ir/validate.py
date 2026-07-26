@@ -55,8 +55,14 @@ def coerce_body(raw: Any) -> Optional[List[Any]]:
     return raw if isinstance(raw, list) and raw else None
 
 
-def validate(program: Any, known_tools=None) -> Tuple[bool, List[str]]:
-    """(ok, problems)."""
+def validate(program: Any, known_tools=None, known_names=None) -> Tuple[bool, List[str]]:
+    """(ok, problems).
+
+    `known_names` is what the world already contains. Optional, because well-formedness
+    must be answerable without a world — but when a caller HAS one, `FROM` can be
+    grounded against it, and that is worth having: a program that read the label 'red' as
+    a machine to clone from validated cleanly and then made fifteen failing calls.
+    """
     tools = _KNOWN_TOOLS if known_tools is None else known_tools
     body = coerce_body(program)
     if body is None:
@@ -136,6 +142,15 @@ def validate(program: Any, known_tools=None) -> Tuple[bool, List[str]]:
                                     f"(no creator takes a source)")
                 elif not isinstance(src, str) or not src.strip():
                     problems.append(f"{where}: `from` names the resource to copy, got {src!r}")
+                elif (known_names is not None and not refs.names(src)
+                        and src not in known_names):
+                    # A literal source has to EXIST. `NEW vm FROM red` — red being a
+                    # label, not a machine — is the mistake worth catching, and it is
+                    # only catchable here: `from` is the one field naming something the
+                    # program does not create and cannot bind.
+                    problems.append(
+                        f"{where}: `from` copies an EXISTING {kind} — there is no {kind} "
+                        f"named {src!r}. A label is not a source.")
             a = st.get("args")
             if a is not None and not isinstance(a, dict):
                 problems.append(f"{where}: args must be an object")
