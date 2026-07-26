@@ -21,13 +21,18 @@ def render(program: Any) -> str:
     """A program as readable text."""
     body = coerce_body(program) or []
     out = []
+    named = isinstance(program, dict) and bool(program.get("name"))
     if isinstance(program, dict):
+        sig = _signature(program)
+        if sig:
+            out.append(sig)
         for imp in (program.get("imports") or []):
             v = f" @{imp['version']}" if isinstance(imp, dict) and imp.get("version") else ""
             pkg = imp.get("package") if isinstance(imp, dict) else imp
             out.append(f"IMPORT {pkg}{v};")
         if out:
             out.append("")
+    indent = "  " if named else ""
     for st in body:
         if not isinstance(st, dict):
             out.append(f"<not a statement: {st!r}>")
@@ -35,19 +40,42 @@ def render(program: Any) -> str:
         op = st.get("op")
         if op == "new":
             n = st.get("count", 1)
-            many = f" x{n}" if isinstance(n, int) and n > 1 else ""
-            out.append(f"LET {st.get('var')} = NEW {st.get('kind')}{many};")
+            # A $parameter count has to SHOW — it silently vanished, so `create X vms`
+            # rendered as `NEW vm`, i.e. one. The operator reads this to decide whether
+            # to sign it; a dropped multiplier is the worst thing it could hide.
+            many = (f" x{n}" if (isinstance(n, str) and n.startswith(config.SIGIL))
+                    or (isinstance(n, int) and n > 1) else "")
+            out.append(f"{indent}LET {st.get('var')} = NEW {st.get('kind')}{many};")
         elif op == "call":
-            out.append(f"{st.get('tool')}({_args(st.get('args'))});")
+            out.append(f"{indent}{st.get('tool')}({_args(st.get('args'))});")
         elif op == "foreach":
             inner = st.get("call") if isinstance(st.get("call"), dict) else {}
-            out.append(f"FOREACH x IN ({_select(st.get('select'))})")
-            out.append(f"  DO {inner.get('tool')}({_args(inner.get('args'))}); END")
+            src = (f"({_select(st.get('select'))})" if st.get("select") is not None
+                   else str(st.get("in")))
+            out.append(f"{indent}FOREACH x IN {src}")
+            out.append(f"{indent}  DO {inner.get('tool')}({_args(inner.get('args'))}); END")
         elif op == "ensure":
-            out.append(f"ENSURE {_pred(st.get('predicate'))};")
+            out.append(f"{indent}ENSURE {_pred(st.get('predicate'))};")
         else:
             out.append(f"<unknown op {op!r}>")
+    if named:
+        out.append("END")
     return "\n".join(out)
+
+
+def _signature(program: dict) -> str:
+    """`PROCEDURE name(p TYPE, ...) AS` — only for a NAMED program.
+
+    A bare goal renders as plain statements, because that is what an ad-hoc run is. The
+    signature appears once there is something to store and sign, which is the point at
+    which the parameters matter.
+    """
+    name = program.get("name")
+    if not name:
+        return ""
+    args = ", ".join(f"{k} {config.PARAM_TYPES.get(v, {}).get('sql', str(v).upper())}"
+                     for k, v in (program.get("params") or {}).items())
+    return f"PROCEDURE {name}({args}) AS"
 
 
 def _args(args) -> str:

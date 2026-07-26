@@ -70,6 +70,10 @@ def emit_program_tool() -> Dict[str, Any]:
                                 "tool":   {"type": "string", "description": "call: the tool name"},
                                 "args":   {"type": "object", "description": "call: the tool's arguments"},
                                 "select": {"type": "object", "description": config.PROMPT["select_hint"]},
+                                "in":     {"type": "string",
+                                           "description": "foreach: a set you already "
+                                                          "bound, e.g. \"$vms\" — use "
+                                                          "instead of select"},
                                 "call":   {"type": "object",
                                            "description": "foreach: the call to apply to each member"},
                                 "predicate": _predicate_property(),

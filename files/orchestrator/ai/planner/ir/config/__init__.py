@@ -47,6 +47,7 @@ def _c(key: str):
 
 SIGIL      = _c("sigil")           # marks a reference to a bound name
 LOOP_VAR   = _c("loop_var")        # the member inside a foreach
+PARAM_TYPES = _c("param_types")    # declarable parameter types -> {sql}
 
 OPS        = _c("ops")             # statement type -> {required, doc}
 KINDS      = _c("kinds")           # THE RESOURCE MANIFEST: kind -> {package, create, list, key, attrs}

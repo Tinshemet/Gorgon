@@ -62,7 +62,16 @@ def validate(program: Any, known_tools=None) -> Tuple[bool, List[str]]:
         return False, ["program has no statements"]
 
     problems: List[str] = []
+    # A $reference resolves against PARAMS first, then names bound by `new`. Params are
+    # AUTHORED — only the author knows what varies per invocation — where `imports` are
+    # DERIVED by the harness. Different provenance, so different halves of the header.
+    params = program.get("params") if isinstance(program, dict) else None
     bound = set()
+    for name, typ in (params or {}).items():
+        if typ not in config.PARAM_TYPES:
+            problems.append(f"parameter {name!r}: unknown type {typ!r} "
+                            f"(known: {', '.join(sorted(config.PARAM_TYPES))})")
+        bound.add(str(name))
     for i, st in enumerate(body):
         where = f"statement {i + 1}"
         if not isinstance(st, dict):
@@ -77,6 +86,15 @@ def validate(program: Any, known_tools=None) -> Tuple[bool, List[str]]:
         for field in spec["required"]:
             if st.get(field) in (None, "", {}):
                 problems.append(f"{where}: {op} is missing {field!r}")
+        alts = spec.get("one_of")
+        if alts:
+            present = [f for f in alts if st.get(f) not in (None, "", {})]
+            if not present:
+                problems.append(f"{where}: {op} needs one of "
+                                f"{' or '.join(repr(f) for f in alts)}")
+            elif len(present) > 1:
+                problems.append(f"{where}: {op} names its set twice "
+                                f"({', '.join(present)}) — use one")
 
         if op == "new":
             kind = st.get("kind")
@@ -84,14 +102,28 @@ def validate(program: Any, known_tools=None) -> Tuple[bool, List[str]]:
                 problems.append(f"{where}: unknown kind {kind!r} "
                                 f"(known: {', '.join(sorted(config.KINDS))})")
             n = st.get("count", 1)
-            if not isinstance(n, int) or n < 1:
-                problems.append(f"{where}: count must be a positive integer, got {n!r}")
+            if isinstance(n, str) and n.startswith(config.SIGIL):
+                # "create X vms" — the count is a parameter, resolved at invocation.
+                if n[len(config.SIGIL):] not in bound:
+                    problems.append(f"{where}: count {n} is not a declared parameter")
+            elif not isinstance(n, int) or n < 1:
+                problems.append(f"{where}: count must be a positive integer or a "
+                                f"$parameter, got {n!r}")
             if st.get("var"):
                 bound.add(str(st["var"]).lstrip(config.SIGIL))
         elif op == "call":
             problems += _check_call(st, where, tools, bound)
         elif op == "foreach":
-            problems += _check_select(st.get("select"), where)
+            if st.get("select") is not None:
+                problems += _check_select(st.get("select"), where)
+            src = st.get("in")
+            if isinstance(src, str) and src.startswith(config.SIGIL):
+                if src[len(config.SIGIL):] not in bound:
+                    problems.append(f"{where}: foreach in {src} refers to something "
+                                    f"never created")
+            elif src is not None:
+                problems.append(f"{where}: foreach `in` must be a ${'{'}name{'}'} "
+                                f"reference, got {src!r}")
             inner = st.get("call")
             if inner is not None and not isinstance(inner, dict):
                 problems.append(f"{where}: foreach call must be an object")

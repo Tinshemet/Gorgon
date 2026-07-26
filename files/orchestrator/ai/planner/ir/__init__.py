@@ -14,6 +14,7 @@ WHAT IS WHERE — one concern per file, and the language itself is DATA:
     schema.py   the tool the model fills in, assembled from the manifest
     validate.py well-formed? grounded? (never "meaningful" — that is a human's job)
     render.py   the operator's SQL-shaped view, one direction
+    execute.py  the visitor — one case per op; every effect still leaves through the gate
 
 The test this structure exists to pass: adding a resource type is ONE ROW in
 config/ir.defaults.json and zero language code. Same for a predicate. If something has
@@ -25,6 +26,7 @@ performs on every tool call.
 """
 
 from .config import KINDS, LOOP_VAR, OPS, PREDICATES, SIGIL, packages_for
+from .execute import Unsatisfied, run
 from .render import render
 from .schema import emit_program_tool, system_prompt
 from .validate import coerce_body, kinds_used, validate
@@ -36,6 +38,6 @@ EMIT_PROGRAM_TOOL = emit_program_tool()
 __all__ = [
     "EMIT_PROGRAM_TOOL", "emit_program_tool", "system_prompt",
     "validate", "coerce_body", "kinds_used",
-    "render",
+    "render", "run", "Unsatisfied",
     "KINDS", "OPS", "PREDICATES", "SIGIL", "LOOP_VAR", "packages_for",
 ]

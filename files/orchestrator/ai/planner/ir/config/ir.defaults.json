@@ -4,7 +4,14 @@
   "sigil": "$",
   "loop_var": "item",
 
-  "_ops_doc": "The statement types. `required` is what validate() insists on; `doc` is what the model is shown. Adding an op here does NOT make it executable — the visitor must learn it too — so this table is the contract between the two, not a switch.",
+  "_params_doc": "Parameter types a procedure may declare. Parameters are AUTHORED, not derived — unlike `imports`, which the harness computes: only the author knows which values are meant to vary per invocation. A $reference resolves against params first, then against names bound by `new`.",
+  "param_types": {
+    "int":  {"sql": "INT"},
+    "text": {"sql": "TEXT"},
+    "bool": {"sql": "BOOL"}
+  },
+
+  "_ops_doc": "The statement types. `one_of` means exactly one of those fields must be present — foreach names its set EITHER by querying state (`select`) OR by referring to a set already bound (`in`). Those are different things and conflating them was a real gap: `new` with a count binds a SET, and until `in` existed there was no way to act on it before its members had an attribute to query by. \"Create X vms and label them\" was inexpressible. `required` is what validate() insists on; `doc` is what the model is shown. Adding an op here does NOT make it executable — the visitor must learn it too — so this table is the contract between the two, not a switch.",
   "ops": {
     "new": {
       "required": ["var", "kind"],
@@ -15,8 +22,9 @@
       "doc": "invoke one tool. Fields: tool, args."
     },
     "foreach": {
-      "required": ["select", "call"],
-      "doc": "apply ONE call to every member of a set. Fields: select, call."
+      "required": ["call"],
+      "one_of": ["select", "in"],
+      "doc": "apply ONE call to every member of a set. Name the set EITHER with `select` (a query over current state, e.g. {\"kind\":\"vm\",\"tag\":\"red\"}) OR with `in` (a set you already bound, e.g. \"$vms\"). Plus `call`."
     },
     "ensure": {
       "required": ["predicate"],
