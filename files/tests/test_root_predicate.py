@@ -60,10 +60,10 @@ def _model(m, t):
     return _tc("create_vm", {"name": goal.split()[-1]})
 
 
-def _run(verify_goal):
+def _run(verify_goal, **engine_kw):
     return run_score("build lab", call_model=_model,
                      execute=lambda t, a: {"success": True}, tools=_TOOLS,
-                     engine=Engine(verify_goal=verify_goal))
+                     engine=Engine(verify_goal=verify_goal, **engine_kw))
 
 
 def main():
@@ -72,10 +72,25 @@ def main():
     check("root is unverified, not done", r["root"]["status"] == "unverified")
     check("reason is goal_predicate_unmet", r["root"].get("reason") == "goal_predicate_unmet")
     check("run is not ok (no reward)", r["ok"] is False)
-    # An unverified root is a SOFT failure → it backtracks: the gate doesn't just
-    # reject a bad plan, it drives a retry (3 leaves × 3 attempts = 9 executions).
-    check("the rejected plan backtracked (retried)", r["root"].get("retries") == 2)
-    check("every attempt's steps ran", len(r["ledger"]) == 9)
+    # A rejected plan is NOT re-run blind. This used to assert the opposite (retries == 2,
+    # 9 ledger entries = 3 leaves × 3 attempts), and 0aba77b deliberately ended that: an
+    # AND composite whose every step is `done` cannot be helped by re-running the SAME
+    # plan — identical steps yield an identical predicate — and re-running a
+    # non-idempotent step ('create 5 vms') duplicates work, the measured 5→10→15 cascade.
+    # The correction that REPLACED it is revision (re-plan against the objection), asserted
+    # below. This test kept asserting the old semantics and silently failed for a day; it
+    # is not in the routinely-run list, which is how that went unnoticed.
+    check("the rejected plan is NOT re-run blind", r["root"].get("retries") is None)
+    check("no duplicated work — one honest pass", len(r["ledger"]) == 3)
+
+    print("\nthe correction that replaced the retry: revision, when the driver enables it")
+    # run_score defaults max_revisions=0; the autonomous driver turns it on. With it on,
+    # the unverified root DOES self-correct — and still without duplicating work, because
+    # a call this run already made is suppressed off the ledger.
+    rv = _run(lambda g, kids, led: False, max_revisions=2)
+    check("an unverified root revises when revision is enabled", rv["root"].get("revisions") == 2)
+    check("revision still books no reward on a goal that never holds", rv["ok"] is False)
+    check("revision does not duplicate the executed work", len(rv["ledger"]) == 3)
 
     print("\nthe predicate is gated to the ROOT — intermediate composites stand")
     kids = {c["goal"]: c for c in r["root"]["children"]}
