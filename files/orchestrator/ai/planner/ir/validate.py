@@ -197,6 +197,12 @@ def _check_call(st: Dict[str, Any], where: str, tools, bound) -> List[str]:
         out.append(f"{where}: no such tool {tool!r}")
     if not st.get("args"):
         out.append(f"{where}: call to {tool or '?'} has no args")
+    # A call's REQUIRED arguments, read off the live catalog — the same check `new`
+    # already got, and its absence here was an inconsistency: rung 12 emitted
+    # snapshot_create without snap_name, validated, and both calls were rejected by the
+    # world. Catching it before execution beats discovering it after.
+    for miss in sorted(set(_REQUIRED_FIELDS.get(tool) or []) - set(st.get("args") or {})):
+        out.append(f"{where}: {tool} requires {miss!r}")
     args = st.get("args")
     if args is not None and not isinstance(args, dict):
         return out + [f"{where}: args must be an object"]

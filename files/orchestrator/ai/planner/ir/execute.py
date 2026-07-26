@@ -70,10 +70,29 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
     body = coerce_body(program) or []
     scope: Dict[str, Any] = dict(params or {})
     calls: List[Tuple[str, Dict]] = []
+    failures: List[Dict[str, Any]] = []
+    asserted = False        # did any ENSURE actually vouch for the end state?
 
     def _do(tool: str, args: Dict) -> Any:
+        """Run one call and NOTICE whether it worked.
+
+        This discarded the result, so a program whose every call failed still reported
+        ok — the false-success class living in the executor itself, which is the one
+        thing the rest of this system is built to refuse. Found by rung 12: the model
+        omitted a required argument, both snapshot calls were rejected by the world, and
+        the program cheerfully closed green over zero snapshots.
+
+        Failures are RECORDED, not fatal. A call can fail because its effect already
+        exists, and that is not a broken run — which is why the authority on "did this
+        work" is the ENSURE, not the call. But a program with failures and NO ensure has
+        vouched for nothing, and is not allowed to pass: unverified is not done.
+        """
         calls.append((tool, args))
-        return execute(tool, args)
+        result = execute(tool, args)
+        if isinstance(result, dict) and (result.get("success") is False or result.get("error")):
+            failures.append({"tool": tool, "args": args,
+                             "error": result.get("error") or "call reported failure"})
+        return result
 
     for st in body:
         op = st.get("op")
@@ -116,11 +135,22 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
             if holds is None:
                 return {"ok": False, "failed": "no predicate evaluator",
                         "scope": scope, "calls": calls}
+            asserted = True
             good, why = holds(_resolve(st["predicate"], scope), scope)
             if not good:
                 # A failed postcondition is a PLAN failure with a reason, not a crash —
                 # the caller routes it to revision the way an unverified close already is.
                 return {"ok": False, "failed": "unsatisfied", "why": why,
-                        "predicate": st["predicate"], "scope": scope, "calls": calls}
+                        "predicate": st["predicate"], "scope": scope, "calls": calls,
+                        "failures": failures}
 
-    return {"ok": True, "scope": scope, "calls": calls, "failed": None}
+    if failures and not asserted:
+        # Nothing vouched for the end state and calls failed: there is no basis for a
+        # green close. With an ENSURE present its verdict stands — a failure it tolerated
+        # is one that did not matter.
+        return {"ok": False, "failed": "calls_failed", "scope": scope, "calls": calls,
+                "failures": failures,
+                "why": f"{len(failures)} call(s) failed and no ensure checked the result: "
+                       + "; ".join(f"{f['tool']}: {f['error']}" for f in failures[:3])}
+    return {"ok": True, "scope": scope, "calls": calls, "failed": None,
+            "failures": failures}

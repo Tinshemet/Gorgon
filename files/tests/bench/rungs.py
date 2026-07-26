@@ -18,6 +18,16 @@ Each rung names the reasoning load it ADDS over the one below:
   8  a general rule with an EXCEPTION — "all of them, except this one"
   9  DIAGNOSIS — the goal states an end-state; find which member is wrong and fix it
  10  a derived set — clone from a source, then act on the results
+ 11  RESULT-DEPENDENT action — the condition is a call's ANSWER, not a queryable attribute
+ 12  a SECOND RESOURCE KIND — the manifest's extensibility claim, measured
+ 13  IDEMPOTENT RE-ENTRY — the goal is already satisfied; doing it again must not duplicate
+
+RUNGS 11-13 WERE ADDED 2026-07-26 TO MEASURE THE LANGUAGE, NOT THE MODEL. The first ten
+escalate on structure and the procedure language carries them to rung 7. These three test
+things no earlier rung asks for, and two of them the four-node IR provably CANNOT express
+— there is no conditional and no way to bind a call's result. They are expected to fail
+by construction, and that is their value: a rung that fails because the NODE SET is short
+tells you something a rung that fails because the model is weak does not.
 
 A rung may seed starting state (`setup`); a goal about existing VMs needs VMs to exist.
 The seeded state is part of the problem: rung 5 is only a filter if something is already
@@ -153,6 +163,51 @@ def _r10(w):
     return len(clones) >= 3 and all(w.vms[n]["status"] == "running" for n in clones)
 
 
+# ── 11: result-dependent action ───────────────────────────────────────────────
+def _s11(w):
+    for n in ("alpha", "beta", "gamma", "delta"):
+        _vm(w, n, "running")
+    w.unreachable |= {"beta", "delta"}          # knowable ONLY by pinging
+
+
+def _r11(w):
+    """Exactly the unreachable ones stopped, the reachable ones left alone.
+
+    Which VMs are unreachable is NOT a queryable attribute — the world knows, the
+    registry does not, so no SELECT can find them. The program must ping and act on the
+    ANSWER. Stopping everything fails, and so does stopping nothing."""
+    return (all(w.vms[n]["status"] == "stopped" for n in ("beta", "delta"))
+            and all(w.vms[n]["status"] == "running" for n in ("alpha", "gamma")))
+
+
+# ── 12: a second resource kind ────────────────────────────────────────────────
+def _s12(w):
+    _vm(w, "web", "running"); _vm(w, "db", "running"); _vm(w, "cache", "stopped")
+
+
+def _r12(w):
+    """A snapshot of every RUNNING vm, and none of the stopped one. Snapshots are a third
+    kind — neither vm nor network — so this measures whether a new resource type really is
+    one manifest row, or whether it needs language code."""
+    snapped = {v["vm"] for v in w.snapshots.values()}
+    return snapped == {"web", "db"}
+
+
+# ── 13: idempotent re-entry ───────────────────────────────────────────────────
+def _s13(w):
+    """The goal ALREADY HOLDS. Five labelled vms, one shared network, nothing to do."""
+    w.nets.add("net1")
+    for i in range(1, 6):
+        _vm(w, f"vm{i}", "stopped", labels=["fleet"], nets=["net1"])
+
+
+def _r13(w):
+    """Still exactly five. Re-running a satisfied goal must not duplicate the work — the
+    measured 5 -> 10 -> 15 cascade is what this rung exists to catch, and no earlier rung
+    ever runs against a world where the goal is already true."""
+    return len(w.vms) == 5 and w.reach("fleet", minimum=5)
+
+
 RUNGS: List[Rung] = [
     Rung(1, "single", "create a vm named alpha", _r1,
          "one action, fully specified", None,
@@ -202,4 +257,19 @@ RUNGS: List[Rung] = [
     Rung(10, "derived-set", "clone golden into 3 new vms and launch all of them", _r10,
          "a set that does not exist until the model makes it, then acted on", _s10,
          "take a copy of golden three times over and boot every copy"),
+    Rung(11, "result-dependent",
+         "ping every vm and stop the ones that do not answer", _r11,
+         "the condition is a call's ANSWER, not an attribute anything can query", _s11,
+         "check which machines respond and shut down whichever ones don't"),
+    Rung(12, "second-kind",
+         "take a snapshot of every running vm", _r12,
+         "a resource type that is neither vm nor network — the manifest claim, measured",
+         _s12,
+         "make a restore point for each machine that is currently up"),
+    Rung(13, "idempotent-reentry",
+         "create 5 vms, put them all in a network, give them all the 'fleet' label, "
+         "and make sure they all ping each other", _r13,
+         "the goal ALREADY holds — doing it again must change nothing", _s13,
+         "spin up five machines, wire them together on one private network, tag every one "
+         "of them 'fleet', and confirm each can reach the others"),
 ]

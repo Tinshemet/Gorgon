@@ -25,6 +25,9 @@ class SimWorld:
     def __init__(self) -> None:
         self.vms: Dict[str, Dict[str, Any]] = {}
         self.nets: Set[str] = set()
+        self.snapshots: Dict[str, Dict[str, Any]] = {}   # a THIRD resource kind (rung 12)
+        # VMs that do not answer a ping. Knowable only by asking — see _t_guest_ping.
+        self.unreachable: Set[str] = set()
         self.calls: List[Dict[str, Any]] = []       # every tool call, in order (the run's cost)
 
     # ── the reach predicate (SSOT: the fleet tool AND the rung checker both use it) ──
@@ -173,8 +176,34 @@ class SimWorld:
             for n in sorted(self.nets)]}
 
     def _t_guest_ping(self, a):
+        """Reachability, which a program can only learn by ASKING.
+
+        A VM in `unreachable` answers False. That set is deliberately not exposed as a
+        queryable attribute: rung 11 exists to test acting on a CALL RESULT, and if the
+        answer could be reached with a SELECT the rung would silently become another
+        filtered collective. The world knows; the registry does not.
+        """
         n = self._vm(a)
-        return {"success": n in self.vms}
+        if n not in self.vms:
+            return {"success": False, "error": f"no vm {n}"}
+        return {"success": n not in self.unreachable, "name": n,
+                "reachable": n not in self.unreachable}
+
+    def _t_snapshot_create(self, a):
+        """A third resource kind. The whole point of rung 12: the design claims a new kind
+        is one manifest row and zero language code, and until something other than vm and
+        network exists that claim is untested."""
+        vm, snap = self._vm(a), a.get("snap_name")
+        if vm not in self.vms:
+            return {"success": False, "error": f"no vm {vm}"}
+        if not snap:
+            return {"success": False, "error": "snap_name is required"}
+        self.snapshots[snap] = {"vm": vm}
+        return {"success": True, "snap_name": snap, "vm": vm}
+
+    def _t_snapshot_list(self, a):
+        return {"success": True, "snapshots": [{"snap_name": k, **v}
+                                               for k, v in sorted(self.snapshots.items())]}
 
     def _t_fleet(self, a):
         """The real fleet tool's shape: per-member results plus the `all_reachable` value

@@ -96,6 +96,16 @@
       "aliases": {
         "name": "net_name"
       }
+    },
+    "snapshot": {
+      "package": "core",
+      "create": "snapshot_create",
+      "list": "snapshot_list",
+      "key": "snap_name",
+      "attrs": [
+        "snap_name",
+        "vm"
+      ]
     }
   },
   "_predicates_doc": "What ENSURE can assert. `comparators` maps each comparator to the SYMBOL it renders as, so adding one is a data change — it used to be a dict in render.py, which meant a new comparator printed as `?`. EVERY shape carries its operand under `select` — the same key foreach uses — and names itself under `shape`. That regularity was measured, not chosen: an earlier form keyed the shape and operand together ({count: <select>, eq: N}) and llama3.1 put the NUMBER where the SET belongs on every attempt, while getting foreach's select right in the same programs. `source` records WHERE the truth comes from: `registry` is current state; `findings` is the probe ledger, because reachability is not registry state and is deliberately never inferred from a tool's success flag.",
