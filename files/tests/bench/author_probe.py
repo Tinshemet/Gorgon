@@ -80,7 +80,11 @@ def program_schema():
                 "op": {"const": "foreach"}, "select": sel, "call": call},
              "required": ["op", "select", "call"]},
             {"type": "object", "properties": {
-                "op": {"const": "foreach"}, "in": {"type": "string"}, "call": call},
+                "op": {"const": "foreach"},
+                "in": {"anyOf": [{"type": "string"},
+                                 {"type": "array", "items": {"type": "string"}}],
+                       "description": "a bound set \"$vms\", or a literal list of names"},
+                "call": call},
              "required": ["op", "in", "call"]}]},
         {"type": "object", "properties": {
             "op": {"const": "ensure"},
@@ -154,6 +158,57 @@ def author(goal: str, model: str, temp: float, shots: bool, timeout: int = 600):
     return prog, ([] if ok else problems)
 
 
+def world_state(world) -> str:
+    """The world as the model must see it to CORRECT a program.
+
+    Without this a revision is blind: rung 7 fails at six prod VMs, and the fix is to
+    REMOVE three labels — which is unguessable from the goal alone, because the goal
+    describes an end state and says nothing about what already exists. This is the
+    "observe" in act-observe-correct, and it is the same grounding the English planner
+    gets from the Active Library digest.
+    """
+    lines = []
+    for name, vm in sorted(world.vms.items()):
+        tags = sorted(vm["labels"] | vm.get("flags", set()))
+        nets = sorted(vm.get("nets", set()))
+        lines.append(f"  {name}: status={vm['status']}"
+                     + (f" labels={','.join(tags)}" if tags else "")
+                     + (f" networks={','.join(nets)}" if nets else ""))
+    return ("CURRENT STATE:\n" + ("\n".join(lines) if lines else "  (no vms)")
+            + f"\n  networks: {', '.join(sorted(world.nets)) or '(none)'}")
+
+
+def revise(goal, program, world, why, model, temp, shots, timeout=600):
+    """Author a CORRECTIVE program, given what the last one did and what went wrong.
+
+    The correction runs against the world the first program left behind — it does not
+    start over. That is the whole point: a convergence goal can only be met by acting on
+    the difference between what IS and what was asked for, and the difference only exists
+    after the first attempt.
+    """
+    msgs = _messages(goal, shots)[:-1]
+    msgs.append({"role": "user", "content": goal})
+    msgs.append({"role": "assistant", "content": json.dumps(program)})
+    msgs.append({"role": "user", "content":
+                 f"That program ran, and its own check REJECTED the result: {why}\n\n"
+                 f"{world_state(world)}\n\n"
+                 f"The goal was: {goal}\n"
+                 "Write a program that fixes ONLY the difference between the state above "
+                 "and the goal. Do not repeat work already done — the state above is "
+                 "what your last program left behind."})
+    req = {"model": model, "stream": False, "format": program_schema(),
+           "options": {"temperature": temp}, "messages": msgs}
+    try:
+        r = urllib.request.urlopen(urllib.request.Request(
+            _OLLAMA, json.dumps(req).encode(), {"Content-Type": "application/json"}),
+            timeout=timeout)
+        prog = json.loads(json.loads(r.read())["message"]["content"])
+    except Exception as e:
+        return None, [f"{type(e).__name__}: {e}"]
+    ok, problems = validate(prog)
+    return prog, ([] if ok else problems)
+
+
 def _seams(world):
     """Registry query + predicate evaluation, backed by the sim — the same two seams the
     orchestrator fills with the Active Library and the findings ledger."""
@@ -198,6 +253,10 @@ def main(argv=None) -> int:
     p.add_argument("-m", "--model", default=BENCH_MODEL)
     p.add_argument("-t", "--temp", type=float, default=0.0)
     p.add_argument("-p", "--paraphrase", action="store_true")
+    p.add_argument("--revisions", type=int, default=2,
+                   help="how many corrective programs to allow after a failed ENSURE "
+                        "(default 2). The English path gets retries and re-planning; "
+                        "without this the comparison is not like-for-like.")
     p.add_argument("--execute", action="store_true",
                    help="RUN each program against the sim and apply the rung's own "
                         "checker. Validity is structure; this is whether the program "
@@ -212,7 +271,7 @@ def main(argv=None) -> int:
           f"{' · few-shot' if shots else ' · NO shots'}"
           f"{' · PARAPHRASE' if a.paraphrase else ''}\n")
 
-    valid = correct = 0
+    valid = correct = revised = fixed = 0
     for rung in rungs:
         goal = (rung.paraphrase or rung.goal) if a.paraphrase else rung.goal
         print(f"── rung {rung.n} ({rung.name})\n   goal: {goal}")
@@ -235,11 +294,61 @@ def main(argv=None) -> int:
                 world.calls.clear()
             sel, holds = _seams(world)
             res = run(prog, world.execute, select=sel, holds=holds)
-            passed = bool(rung.check(world))
-            correct += passed
             print(f"          -> ran {len(res['calls'])} calls, "
                   f"ensure={'ok' if res['ok'] else res.get('failed')}"
                   f"{'' if res['ok'] else ' (' + str(res.get('why','')) + ')'}")
+            # REVISION. A failed ENSURE is a plan failure carrying its own objection, and
+            # the correction is authored against the world the last attempt LEFT — the
+            # same act-observe-correct loop the English path already gets. Comparing a
+            # single IR attempt against a path that retries was never a fair fight.
+            # THE ORIGINAL POSTCONDITION IS THE STANDING TEST. A corrective program is
+            # not trusted to carry its own: revision 2 on rung 7 dropped its ENSURE
+            # entirely, `run()` returned ok because nothing was checked, and the loop
+            # believed it had converged at six prod VMs. `ok` from a program with no
+            # postcondition means "nothing was asserted", not "the goal holds" — the same
+            # false success the closure audit exists to refuse, arriving through the
+            # correction path. So the goal's own predicate is re-evaluated after every
+            # round, whatever the fix chose to include.
+            goal_pred = next((st["predicate"] for st in reversed(prog.get("body", []))
+                              if st.get("op") == "ensure"), None)
+
+            def _goal_holds():
+                if goal_pred is None:
+                    return True, ""
+                return holds(goal_pred, {})
+
+            if res["ok"] and goal_pred is not None:
+                good, why = _goal_holds()
+                if not good:
+                    res = {**res, "ok": False, "failed": "unsatisfied", "why": why}
+
+            rounds = 0
+            while (not res["ok"] and res.get("failed") == "unsatisfied"
+                   and rounds < a.revisions):
+                rounds += 1
+                fix, fix_problems = revise(goal, prog, world, res.get("why", ""),
+                                           a.model, a.temp, shots)
+                if fix is None or fix_problems:
+                    print(f"          -> revision {rounds}: "
+                          f"{'error' if fix is None else 'INVALID'} "
+                          f"{(fix_problems or ['?'])[0]}")
+                    break
+                res = run(fix, world.execute, select=sel, holds=holds)
+                for line in render(fix).splitlines():
+                    print(f"          r{rounds}| {line}")
+                # Re-assert the GOAL, not the fix's own opinion of itself.
+                if res["ok"]:
+                    good, why = _goal_holds()
+                    if not good:
+                        res = {**res, "ok": False, "failed": "unsatisfied", "why": why}
+                print(f"          -> revision {rounds}: {len(res['calls'])} calls, "
+                      f"goal={'HOLDS' if res['ok'] else 'unmet'}"
+                      f"{'' if res['ok'] else ' (' + str(res.get('why','')) + ')'}")
+            passed = bool(rung.check(world))
+            correct += passed
+            if rounds:
+                revised += 1
+                fixed += passed
             print(f"          -> RUNG CHECKER: {'PASS' if passed else 'FAIL'}"
                   f"   world: {world.summary()}")
         print()
@@ -247,6 +356,8 @@ def main(argv=None) -> int:
     print(f"── summary\n   structurally valid : {valid}/{len(rungs)}")
     if a.execute:
         print(f"   ACHIEVES THE GOAL  : {correct}/{len(rungs)}")
+        if revised:
+            print(f"   needed revision    : {revised}  (of which recovered: {fixed})")
     print("\n   Validity is structure + grounding only. Whether a program MEANS its goal\n"
           "   is for a human reading the rendered forms above — scoring that needs a\n"
           "   second definition of every goal, which is a benchmark grading itself.")

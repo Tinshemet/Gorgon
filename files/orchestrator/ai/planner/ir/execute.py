@@ -95,6 +95,7 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
 
         elif op == "foreach":
             if st.get("in") is not None:
+                # A literal list is already the members; a $reference resolves to them.
                 members = _resolve(st["in"], scope)
                 members = members if isinstance(members, list) else [members]
             else:

@@ -14,7 +14,7 @@
       "sql": "BOOL"
     }
   },
-  "_ops_doc": "The statement types. `one_of` means exactly one of those fields must be present — foreach names its set EITHER by querying state (`select`) OR by referring to a set already bound (`in`). Those are different things and conflating them was a real gap: `new` with a count binds a SET, and until `in` existed there was no way to act on it before its members had an attribute to query by. \"Create X vms and label them\" was inexpressible. `required` is what validate() insists on; `doc` is what the model is shown. Adding an op here does NOT make it executable — the visitor must learn it too — so this table is the contract between the two, not a switch.",
+  "_ops_doc": "The statement types. `one_of` means exactly one of those fields must be present — foreach names its set EITHER by querying state (`select`) OR by referring to a set already bound (`in`). Those are different things and conflating them was a real gap: `new` with a count binds a SET, and until `in` existed there was no way to act on it before its members had an attribute to query by. \"Create X vms and label them\" was inexpressible. `required` is what validate() insists on; `doc` is what the model is shown. Adding an op here does NOT make it executable — the visitor must learn it too — so this table is the contract between the two, not a switch. `in` accepts a LITERAL LIST as well as a bound reference, because a correction usually acts on specific things the last attempt left behind — the model reached for exactly that on rung 7, naming three VMs it had read off current state, and the language had no way to say it.",
   "ops": {
     "new": {
       "required": [
@@ -47,7 +47,7 @@
         "select",
         "in"
       ],
-      "doc": "apply ONE call to every member of a set. Name the set EITHER with `select` (a query over current state, e.g. {\"kind\":\"vm\",\"tag\":\"red\"}) OR with `in` (a set you already bound, e.g. \"$vms\"). Plus `call`.",
+      "doc": "apply ONE call to every member of a set. Name the set with `select` (a query over current state), or with `in` — either a set you bound (\"$vms\") or a literal list of names ([\"one\",\"two\"]). Plus `call`.",
       "fields": [
         "select",
         "in",
@@ -172,8 +172,11 @@
       "doc": "a set described by a query over current state"
     },
     "in": {
-      "type": "string",
-      "doc": "a set you already bound, e.g. \"$vms\""
+      "type": [
+        "string",
+        "array"
+      ],
+      "doc": "a set you already bound (\"$vms\"), or a literal list of names"
     },
     "call": {
       "type": "object",

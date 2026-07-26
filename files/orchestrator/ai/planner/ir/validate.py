@@ -117,13 +117,21 @@ def validate(program: Any, known_tools=None) -> Tuple[bool, List[str]]:
             if st.get("select") is not None:
                 problems += _check_select(st.get("select"), where)
             src = st.get("in")
-            if isinstance(src, str) and src.startswith(config.SIGIL):
+            if isinstance(src, list):
+                # A literal set — the members are named outright. This is what a
+                # CORRECTION needs: it acts on specific things the previous attempt left
+                # behind, which no query describes and no earlier statement bound.
+                bad = [x for x in src if not isinstance(x, str) or not x.strip()]
+                if bad or not src:
+                    problems.append(f"{where}: foreach `in` list must be non-empty names, "
+                                    f"got {src!r}")
+            elif isinstance(src, str) and src.startswith(config.SIGIL):
                 if src[len(config.SIGIL):] not in bound:
                     problems.append(f"{where}: foreach in {src} refers to something "
                                     f"never created")
             elif src is not None:
                 problems.append(f"{where}: foreach `in` must be a ${'{'}name{'}'} "
-                                f"reference, got {src!r}")
+                                f"reference or a list of names, got {src!r}")
             inner = st.get("call")
             if inner is not None and not isinstance(inner, dict):
                 problems.append(f"{where}: foreach call must be an object")
