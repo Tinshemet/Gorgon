@@ -51,7 +51,7 @@ def make_call_model(model: str, temperature: float, timeout: int):
 
 
 def run_rung(rung, call_model, verbose: bool = False, diag: bool = False,
-             paraphrase: bool = False) -> Dict:
+             paraphrase: bool = False, translate: bool = True) -> Dict:
     """One run of one rung against a FRESH world. Returns the row the report prints."""
     goal = (rung.paraphrase or rung.goal) if paraphrase else rung.goal
     world = SimWorld()
@@ -70,6 +70,9 @@ def run_rung(rung, call_model, verbose: bool = False, diag: bool = False,
             select_tools=make_tool_selector(),   # the live path's per-node narrowing
             on_node=on_node,
             reward=10.0,          # an operator-scale reward, so the CE gate isn't the thing under test
+            # The goal translator is the thing the paraphrase column exists to grade, so
+            # it has to be switchable here — otherwise there is no before/after to compare.
+            translate=translate,
         )
         root = (r.get("root") or {})
         status, disposition = root.get("status"), r.get("disposition")
@@ -81,13 +84,20 @@ def run_rung(rung, call_model, verbose: bool = False, diag: bool = False,
     return {"rung": rung.n, "name": rung.name, "passed": bool(rung.check(world)),
             "status": status, "disposition": disposition,
             "calls": calls, "vms": len(world.vms), "nets": len(world.nets),
-            "minimum": rung.minimum, "best": rung.best,
+            "minimum": rung.minimum, "best": rung.best, "paraphrase": paraphrase,
             # A cost REGRESSION is a separate verdict from pass/fail, deliberately: the
             # checker grades the world, and a rung that reaches the right world by a more
             # expensive route is still correct — just worse. Reporting them together would
             # invite tuning the harness to make a number go down, which is the one thing
             # the standing principle forbids.
-            "cost_regressed": bool(rung.best is not None and calls > rung.best),
+            #
+            # Flagged on the LITERAL column only. `best` was measured on the literal
+            # wording, so holding a paraphrase run to it compares two different things and
+            # cries wolf — a paraphrase legitimately costs more while the harness is still
+            # learning to read it. The number is still printed for a paraphrase run,
+            # because watching it fall is how the translator's progress is visible.
+            "cost_regressed": bool(rung.best is not None and calls > rung.best
+                                   and not paraphrase),
             "world": world.summary()}
 
 
@@ -129,6 +139,10 @@ def main(argv=None) -> int:
     p.add_argument("-p", "--paraphrase", action="store_true",
                    help="run each rung's PARAPHRASE — same capability, different wording. "
                         "A gap between the two columns is a pattern masquerading as an ability.")
+    p.add_argument("--no-translate", action="store_true",
+                   help="disable the goal translator (translator.normalize_goal). The "
+                        "before/after for the paraphrase column — that column is the "
+                        "scoreboard the translator is judged on.")
     p.add_argument("--cost-gate", action="store_true",
                    help="exit non-zero (2) when a rung exceeds its best measured cost, "
                         "even if every rung passes. For CI.")
@@ -138,21 +152,25 @@ def main(argv=None) -> int:
 
     rungs = [r for r in RUNGS if not a.rung or r.n in a.rung]
     call_model = make_call_model(a.model, a.temp, a.timeout)
-    print(f"ladder · model={a.model} temp={a.temp} runs={a.runs}\n")
+    print(f"ladder · model={a.model} temp={a.temp} runs={a.runs}"
+          f"{' · PARAPHRASE' if a.paraphrase else ''}"
+          f"{' · translator OFF' if a.no_translate else ''}\n")
 
     rows = []
     for rung in rungs:
         shown = (rung.paraphrase or rung.goal) if a.paraphrase else rung.goal
         print(f"── rung {rung.n} ({rung.name}) — {rung.why}\n   goal: {shown}")
         for i in range(a.runs):
-            row = run_rung(rung, call_model, a.verbose, a.diag, a.paraphrase)
+            row = run_rung(rung, call_model, a.verbose, a.diag, a.paraphrase,
+                           translate=not a.no_translate)
             rows.append(row)
             mark = "PASS" if row["passed"] else "FAIL"
             print(f"   [{mark}] run {i+1}/{a.runs} · {row['status']}/{row['disposition']} · {row['world']}")
             if row["best"] is not None:
                 flag = "  <== COST REGRESSION" if row["cost_regressed"] else ""
+                against = "best measured (literal)" if row["paraphrase"] else "best measured"
                 print(f"          cost: {row['calls']} calls "
-                      f"(minimum {row['minimum']}, best measured {row['best']}){flag}")
+                      f"(minimum {row['minimum']}, {against} {row['best']}){flag}")
         print()
 
     print("── summary")

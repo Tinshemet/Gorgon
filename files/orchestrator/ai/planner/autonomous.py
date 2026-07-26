@@ -25,6 +25,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from .score import run_score, _first_tool_call, _NODE_SYSTEM, DECOMPOSE_TOOL
 from ..agent import contract as _contract
 from .method_cache import MethodCache as _MethodCache, seeded as _seeded_cache
+from .translator import normalize_goal as _normalize_goal
 from .findings import Findings, DEFAULT_SCHEMA
 from .reward_cost import (economics as _economics, p_self_estimate as _p_self, dials as _dials,
                           cfg_with as _cfg_with, leaf_cost as _leaf_cost, ce as _ce,
@@ -1103,6 +1104,7 @@ def run_autonomous(
     max_steps:   int = 60,
     validate_reasons: bool = False,
     persist_claims: bool = False,
+    translate: bool = True,
     agent_key: Optional[str] = None,
     mission=None,
     verbose: bool = False,
@@ -1123,6 +1125,21 @@ def run_autonomous(
     tool_counts also persist durably in the findings store when `persist_claims`.
     """
     events: List[Dict[str, Any]] = []
+
+    # TRANSLATE THE GOAL FIRST — before the toolkit, the context or the tree, because
+    # everything downstream reads this string. The planner understands goals by pattern,
+    # and the patterns were written against one phrasing: the ladder scores 7/10 on its
+    # own wording and 2/10 on paraphrases of the SAME capability. Restating the goal in
+    # canonical vocabulary is what makes the existing readers fire again.
+    #
+    # ONE model call per run, not per node. It may reword; it may NOT re-plan — the
+    # clauses come back joined into a single goal string, so the ordinary decomposition
+    # still happens below (see translator.py; feeding them in as sub_goals would seed the
+    # plan, which the benchmark principle forbids). Every failure returns `goal`
+    # untouched, so the worst case here is the behaviour we already had.
+    original_goal, goal_clauses = goal, None
+    if translate:
+        goal, goal_clauses = _normalize_goal(goal, call_model)
 
     # A MISSION narrows the agent to this tasking: restrict the toolkit to the
     # mission's whitelist minus its (agent∪mission) blacklist before the model ever
@@ -1394,6 +1411,13 @@ def run_autonomous(
             deadman.stop()
     result["events"] = events
     result["disposition"] = _contract.disposition()
+    # What the operator ASKED versus what the planner was given. Reported even when
+    # nothing changed, because "the goal was translated" is exactly the kind of silent
+    # rewriting an operator must be able to see — and it is what the coverage check
+    # (next increment) compares the finished tree against.
+    result["goal"] = original_goal
+    if goal_clauses is not None:
+        result["goal_translated"] = {"planned": goal, "clauses": goal_clauses}
     result["findings"] = {f: findings.get(f) for f in findings.facts()}
     # Unverified claims the run recorded — what no probe could confirm, plus the
     # operator's evidence pointer for each, so a human can close the loop by hand.
