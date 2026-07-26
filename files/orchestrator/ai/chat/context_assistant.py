@@ -1,16 +1,25 @@
 """
-context_assistant.py — Post-Inject AI Auditor
+context_assistant.py — the deterministic assistant that brackets the AI on BOTH sides
 
-Runs after the AI produces a tool call, before execute_tool fires.
-Checks two things only:
-  1. Did the AI pick a tool that matches what the user asked for?
-  2. Did the AI invent a value for a field the user never mentioned?
+Two passes, one shared set of deterministic signals (literal slot extraction +
+trigger-word tool hints derived from the command catalog). No model call in either.
 
-Returns a hint string injected as _INTERNAL_ into the message stream
-so the AI can self-correct. Returns None if everything looks fine.
+  BEFORE the AI acts — proactive_prep(user_input) builds grounded guidance into
+  the prompt (cli.py, http_chat.py), and narrow_tools() can cut the offered set.
+  Deliberately at the FRONT to save churning: prepare the turn properly once
+  rather than let the AI guess wrong and correct it round after round.
 
-Never blocks execution directly — downstream layers (context gate,
-preflight) remain the hard stops. This is a soft nudge, not a gate.
+  AFTER the tool call, before execute_tool fires — check_context(...) compares
+  notes on what came back:
+    1. Did the AI pick a tool that matches what the user asked for?
+    2. Did the AI invent a value for a field the user never mentioned?
+  Returns a hint string injected as _INTERNAL_ into the message stream so the AI
+  can self-correct. Returns None if everything looks fine.
+
+The after-pass is a soft nudge, never a gate — downstream layers (context gate,
+preflight) remain the hard stops. Both passes derive their vocabulary FROM the
+tool catalog (executor/command_catalog.py), not from a separate word list that
+drifts: trigger words live WITH the tool.
 """
 
 import json
