@@ -1,0 +1,185 @@
+author probe · model=llama3.1:8b temp=0.0 · constrained decoding · few-shot
+
+── rung 1 (single)
+   goal: create a vm named alpha
+   [VALID] 1 statements
+          | STORE alpha = NEW vm(name: alpha, os_type: linux);
+          -> ran 1 calls, ensure=ok
+          -> RUNG CHECKER: PASS   world: 1 vms ['alpha'] | nets [] | 1 calls
+
+── rung 2 (sequential)
+   goal: create a vm named beta and then launch it
+   [VALID] 2 statements
+          | STORE beta = NEW vm(os_type: linux);
+          | launch_vm(name: $beta);
+          -> ran 2 calls, ensure=ok
+          -> RUNG CHECKER: PASS   world: 1 vms ['beta'] | nets [] | 2 calls
+
+── rung 3 (dependency-chain)
+   goal: create a network called lab and a vm named web, then put web on lab
+   [VALID] 3 statements
+          | STORE lab = NEW network(net_name: lab);
+          | create_vm(name: web, os_type: linux);
+          | add_vm_to_network(net_name: lab, vm_name: web);
+          -> ran 3 calls, ensure=ok
+          -> RUNG CHECKER: PASS   world: 1 vms ['web'] | nets ['lab'] | 3 calls
+
+── rung 4 (collective-loop)
+   goal: create 5 vms, put them all in a network, give them all the 'fleet' label, and make sure they all ping each other
+   [VALID] 4 statements
+          | STORE vms = NEW AMOUNT(5) vm(os_type: linux);
+          | FOREACH $item IN $vms {
+          |   add_label(name: $item, label: fleet);
+          | }
+          | STORE net = NEW network;
+          | FOREACH $item IN $vms {
+          |   add_vm_to_network(net_name: $net, vm_name: $item);
+          | } IFAILS {
+          |   ENSURE REACH(SELECT vm) >= 5;
+          | }
+          -> ran 16 calls, ensure=ok
+          -> RUNG CHECKER: PASS   world: 5 vms ['vms1', 'vms2', 'vms3', 'vms4', 'vms5'] | nets ['net'] | 16 calls
+
+── rung 5 (filtered-collective)
+   goal: launch every vm that is currently stopped
+   [VALID] 1 statements
+          | FOREACH $item IN SELECT vm WHERE status = 'stopped' {
+          |   launch_vm(name: $item);
+          | }
+          -> ran 2 calls, ensure=ok
+          -> RUNG CHECKER: PASS   world: 3 vms ['cache', 'db', 'web'] | nets [] | 2 calls
+
+── rung 6 (partition)
+   goal: create 3 vms labelled 'red' and 2 vms labelled 'blue', put the red ones together on their own network, and put the blue ones on a different network
+          x1| (rejected: statement 1: `from` copies an EXISTING vm — there is no vm named 'red'. A label is not a source.)
+   [VALID] 8 statements
+          | STORE reds = NEW AMOUNT(3) vm(os_type: linux);
+          | FOREACH $item IN $reds {
+          |   add_label(name: $item, label: red);
+          | }
+          | STORE blues = NEW AMOUNT(2) vm(os_type: linux);
+          | FOREACH $item IN $blues {
+          |   add_label(name: $item, label: blue);
+          | }
+          | STORE red_net = NEW network(net_name: reds);
+          | FOREACH $item IN $reds {
+          |   add_vm_to_network(net_name: $red_net, vm_name: $item);
+          | }
+          | STORE blue_net = NEW network(net_name: blues);
+          | FOREACH $item IN $blues {
+          |   add_vm_to_network(net_name: $blue_net, vm_name: $item);
+          | }
+          -> ran 17 calls, ensure=ok
+          -> RUNG CHECKER: PASS   world: 5 vms ['blues1', 'blues2', 'reds1', 'reds2', 'reds3'] | nets ['blue_net', 'red_net'] | 17 calls
+
+── rung 7 (convergence)
+   goal: make sure exactly 3 vms carry the 'prod' label
+   [VALID] 1 statements
+          | ENSURE COUNT(SELECT vm WHERE label = 'prod') = 3;
+          -> ran 0 calls, ensure=unsatisfied (count is 2, wanted == 3)
+          d1| (derived)
+          r1| FOREACH $item IN [four] {
+          r1|   add_label(name: $item, label: prod);
+          r1| }
+          -> revision 1: 1 calls, goal=HOLDS
+          -> RUNG CHECKER: PASS   world: 4 vms ['four', 'one', 'three', 'two'] | nets [] | 1 calls
+
+── rung 8 (exception)
+   goal: put every vm on a network called core, except db — db goes on a network called dmz instead
+   [VALID] 2 statements
+          | FOREACH $item IN SELECT vm EXCEPT name = 'db' {
+          |   add_vm_to_network(net_name: core, vm_name: $item);
+          | }
+          | add_vm_to_network(net_name: dmz, vm_name: db);
+          -> ran 4 calls, ensure=calls_failed (4 call(s) failed and no ensure checked the result: add_vm_to_network: no network named core; add_vm_to_network: no network named core; add_vm_to_network: no network named core)
+          x1| (revision rejected: statement 3: network cannot be created by copying (no creator takes a source))
+          r1| STORE core = NEW network(net_name: core);
+          r1| FOREACH $item IN SELECT vm EXCEPT name = 'db' {
+          r1|   add_vm_to_network(net_name: $core, vm_name: $item);
+          r1| }
+          r1| STORE dmz = NEW network(net_name: dmz);
+          r1| add_vm_to_network(net_name: $dmz, vm_name: db);
+          -> revision 1: 6 calls, goal=HOLDS
+          -> RUNG CHECKER: PASS   world: 4 vms ['app1', 'app2', 'app3', 'db'] | nets ['core', 'dmz'] | 10 calls
+
+── rung 9 (diagnosis)
+   goal: make sure n1, n2 and n3 can all ping each other
+          x1| (rejected: statement 1: reach over name = 'n1' can never reach 3 — a vm name names ONE resource. Select the whole set (e.g. a shared label), or drop the floor.)
+   [VALID] 2 statements
+          | ENSURE REACH(SELECT vm WHERE label = 'shared') >= 3;
+          | FOREACH $item IN [n1, n2, n3] {
+          |   add_label(name: $item, label: shared);
+          | }
+          -> ran 0 calls, ensure=unsatisfied (reach over 0 member(s), floor 3 -> False)
+          r1| FOREACH $item IN [n1, n2] {
+          r1|   add_vm_to_network(net_name: mesh0, vm_name: $item);
+          r1| }
+          r1| ENSURE REACH(SELECT vm WHERE label = 'shared') >= 3;
+          -> revision 1: 2 calls, goal=unmet (reach over 0 member(s), floor 3 -> False)
+          r2| FOREACH $item IN [n1, n2] {
+          r2|   add_vm_to_network(net_name: mesh0, vm_name: $item);
+          r2| }
+          r2| ENSURE REACH(SELECT vm WHERE label = 'shared') >= 3;
+          -> revision 2: 2 calls, goal=unmet (reach over 0 member(s), floor 3 -> False)
+          -> RUNG CHECKER: FAIL   world: 3 vms ['n1', 'n2', 'n3'] | nets ['mesh0'] | 4 calls
+
+── rung 10 (derived-set)
+   goal: clone golden into 3 new vms and launch all of them
+   [VALID] 3 statements
+          | STORE clones = NEW AMOUNT(3) vm FROM golden;
+          | FOREACH $item IN $clones {
+          |   clone_vm(source_name: golden, new_name: $item);
+          | }
+          | FOREACH $item IN $clones {
+          |   launch_vm(name: $item);
+          | }
+          -> ran 9 calls, ensure=ok
+          -> RUNG CHECKER: PASS   world: 4 vms ['clones1', 'clones2', 'clones3', 'golden'] | nets [] | 9 calls
+
+── rung 11 (result-dependent)
+   goal: ping every vm and stop the ones that do not answer
+          x1| (rejected: statement 2 (then) → statement 1: name=$item refers to $item, which is never created)
+          x2| (rejected: statement 1: foreach in $vms refers to something never created)
+   [INVALID] 2 statements
+          - statement 1: foreach in $vms refers to something never created
+          - statement 2 (then) → statement 1: name=$item refers to $item, which is never created
+          | FOREACH $item IN $vms {
+          |   guest_ping(name: $item);
+          | }
+          | IF IS($answer.alive) = false {
+          |   stop_vm(name: $item);
+          | }
+
+── rung 12 (second-kind)
+   goal: take a snapshot of every running vm
+   [VALID] 1 statements
+          | FOREACH $item IN SELECT vm WHERE status = 'running' {
+          |   snapshot_create(name: $item, snap_name: $item-snap);
+          | }
+          -> ran 2 calls, ensure=ok
+          -> RUNG CHECKER: PASS   world: 3 vms ['cache', 'db', 'web'] | nets [] | 2 calls
+
+── rung 13 (idempotent-reentry)
+   goal: create 5 vms, put them all in a network, give them all the 'fleet' label, and make sure they all ping each other
+   [VALID] 4 statements
+          | STORE vms = NEW AMOUNT(5) vm(os_type: linux);
+          | FOREACH $item IN $vms {
+          |   add_label(name: $item, label: fleet);
+          | }
+          | STORE net = NEW network;
+          | FOREACH $item IN $vms {
+          |   add_vm_to_network(net_name: $net, vm_name: $item);
+          | } IFAILS {
+          |   ENSURE REACH(SELECT vm) >= 5;
+          | }
+          -> ran 16 calls, ensure=ok
+          -> RUNG CHECKER: FAIL   world: 10 vms ['vm1', 'vm2', 'vm3', 'vm4', 'vm5', 'vms1', 'vms2', 'vms3', 'vms4', 'vms5'] | nets ['net', 'net1'] | 16 calls
+
+── summary
+   structurally valid : 12/13  (after 5 repair round(s))
+   ACHIEVES THE GOAL  : 10/13
+   needed revision    : 3  (of which recovered: 2)
+
+   Validity is structure + grounding only. Whether a program MEANS its goal
+   is for a human reading the rendered forms above — scoring that needs a
+   second definition of every goal, which is a benchmark grading itself.
