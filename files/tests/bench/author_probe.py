@@ -323,6 +323,7 @@ def _system() -> str:
             f"predicate is a check, never a loop or a call:\n{preds}\n\n"
             f"{config.PROMPT['reference']}\n{config.PROMPT['ordering']}\n"
             f"{config.PROMPT['grounding']}\n\n"
+            f"{config.PROMPT['shape']}\n\n"
             f"Tools, with the arguments each one REQUIRES:\n{_tool_lines()}\n\n"
             f"NEW supplies the resource's own name; pass everything else the creator "
             f"needs in args, e.g. NEW vm(os_type: linux).")

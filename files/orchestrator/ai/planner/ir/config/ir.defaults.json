@@ -301,7 +301,8 @@
     "retry_no_program": "You did not return a program. Call emit_program with a `body` array of statements.",
     "retry_rejected": "That program was rejected:",
     "retry_fix": "Fix exactly those problems and call emit_program again.",
-    "grounding": "ENSURE vs ACHIEVE \u2014 pick by asking what the program is FOR. ACHIEVE is the goal: the state the operator asked you to bring about. It goes LAST, or stands alone when the harness should work out the plan. ENSURE is a ground check: something that must already be true at that point, used FIRST to confirm the world is as you assume before acting. If the operator's sentence describes the outcome they want, that is ACHIEVE \u2014 including when they phrase it as \"make sure ...\". Nothing may act after ACHIEVE, and a program has at most one."
+    "grounding": "ENSURE vs ACHIEVE \u2014 pick by what the operator wants BACK. ACHIEVE is the goal: the state they asked you to bring about. It goes LAST, or stands alone when the harness should work out the plan. ENSURE is a ground check: something that must ALREADY be true, used FIRST to confirm the lab is as you assume. Nothing may act after ACHIEVE, and a program has at most one.",
+    "shape": "A GOOD PROGRAM USES ALL THREE, and they do different jobs.\n  FETCH   gets your initial ground \u2014 what is actually in this lab right now, before you assume anything. Read first.\n  ENSURE  grounds you \u2014 states what must be true, so the plan rests on fact and not on a guess about the world.\n  ACHIEVE is the muscle \u2014 the end state you are being asked to bring about, and the only thing that says what done means.\nReach for all three unless the operator asked for less. A program that only acts has vouched for nothing; a program that only checks changes nothing."
   },
   "_schema_doc": "Knobs for the tool schema handed to the model, each carrying the measurement behind it. `statement_form`: 'oneof' is the CORRECT schema \u2014 one branch per op, so a statement's type determines its fields and `op` cannot be omitted \u2014 and it is set to 'flat' anyway, because oneof drops emission to 0/4. Flat gives the model no structural cue (qwen2.5:14b returned six of nine statements with no `op`), but it at least gets called. Same story as `predicate_required`: adding a nested required took llama3.1 from 3/4 emitting to 0/4. The pattern across every experiment is that this tool-call surface trades guidance against fidelity, and fidelity is the binding constraint. Note what DOES work reliably: decompose{steps:[string]} \u2014 an array of STRINGS. Emission collapses on an array of structured objects, which is the strongest hint about where to go next. Change these only with a measurement; tests/bench/ir_probe.py is how.",
   "schema": {
@@ -403,5 +404,47 @@
     },
     "achieve": "ACHIEVE",
     "fetch": "FETCH"
+  },
+  "intent": {
+    "_doc": "What the operator wants BACK \u2014 data, a verdict, or the thing done \u2014 is theirs to say, not the author's to infer. The three intents are the three words: FETCH retrieves, ENSURE verifies, ACHIEVE commands. Authority nests (fetch < ensure < achieve) and is ENFORCED, see ir/intent.py. These markers are deliberately FEW: a marker set, not a vocabulary trying to parse English. A sentence using none is asked about, not guessed at.",
+    "markers": {
+      "fetch": [
+        "how many",
+        "list",
+        "which",
+        "show me",
+        "what is",
+        "what are",
+        "tell me the"
+      ],
+      "ensure": [
+        "check",
+        "verify",
+        "confirm",
+        "is there",
+        "are there",
+        "do we have",
+        "tell me whether",
+        "has not been"
+      ],
+      "achieve": [
+        "get",
+        "bring",
+        "create",
+        "build",
+        "make it",
+        "set up",
+        "end with",
+        "there should be",
+        "spin up",
+        "provision",
+        "wire up",
+        "delete",
+        "launch",
+        "stop",
+        "clone"
+      ]
+    },
+    "default": "fetch"
   }
 }

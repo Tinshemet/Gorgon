@@ -58,6 +58,7 @@ PREDICATES = _c("predicates")      # shape -> {source, operand, comparators, doc
 PROMPT     = _c("prompt")          # every string the model is shown
 SCHEMA     = _c("schema")          # tool-schema knobs
 AUTHORING  = _c("authoring")       # "program" (one tool) or "statements" (one per op)
+INTENT     = _c("intent")          # how the OPERATOR says check-vs-bring-about (ir/intent.py)
 
 
 def packages_for(kinds_used) -> list:

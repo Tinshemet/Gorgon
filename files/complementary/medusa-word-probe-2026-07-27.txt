@@ -1,0 +1,31 @@
+word probe · model=llama3.1:8b temp=0.0 · few-shot
+
+  [MISS] want achieve  got neither  · label four machines 'web'
+          (an outcome the operator wants to exist afterwards)
+          | STORE machines = NEW AMOUNT(4) vm(os_type: linux);
+          | FOREACH $item IN $machines {
+          |   add_label(name: $item, label: web);
+          | }
+
+  [ok  ] want achieve  got achieve  · get two machines running on a network called lab
+
+  [MISS] want achieve  got ensure   · there should be exactly one snapshot of db
+          (states the world as it ought to end up)
+          | ENSURE COUNT(SELECT snapshot WHERE vm = 'db') = 1;
+
+  [ok  ] want achieve  got achieve  · make sure at least 4 machines carry the 'web' label
+
+  [ok  ] want ensure   got ensure   · check whether a machine named golden exists
+
+  [ok  ] want ensure   got ensure   · verify that db is on the dmz network
+
+  [ok  ] want ensure   got ensure   · confirm nothing is running before I leave for the day
+
+  [ok  ] want ensure   got ensure   · make sure golden has not been deleted
+
+  [ok  ] want both     got both     · only if golden exists, clone it twice, and end with at least 3 machines
+
+── 7/9 correct · of the ambiguous ones, 2/2
+
+   These goals are NOT ladder rungs. Tune the prompt here; the ladder
+   stays held out, or the number it reports stops meaning anything.

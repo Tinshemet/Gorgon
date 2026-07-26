@@ -18,7 +18,7 @@ the model invent names. Same rule here: position and index, never a counter or a
 
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import config, consent as _consent, refs
+from . import config, consent as _consent, intent as _intent, refs
 from .validate import coerce_body, validate
 
 
@@ -127,7 +127,8 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
         holds: Optional[Callable[[Dict, Dict], Tuple[bool, str]]] = None,
         params: Optional[Dict[str, Any]] = None,
         known_names: Optional[set] = None,
-        consent: Any = None) -> Dict[str, Any]:
+        consent: Any = None,
+        intent: Optional[str] = None) -> Dict[str, Any]:
     """Run a program. Returns {ok, scope, calls, failed}.
 
     `select` answers a registry query (kind + attribute filters) -> member names, and
@@ -140,6 +141,16 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
     if not ok:
         return {"ok": False, "failed": "invalid", "problems": problems,
                 "scope": {}, "calls": []}
+
+    # AUTHORITY FIRST. A REQUEST was not given permission to change anything, so a
+    # program written under one that contains an acting statement is refused outright —
+    # before grounding, because "did you authorise this at all" precedes "did you check
+    # your work". See intent.py: the operator decides, and it is enforced, not advised.
+    if intent is not None:
+        exceeded = _intent.violations(program, intent)
+        if exceeded:
+            return {"ok": False, "failed": "exceeds_authority", "problems": exceeded,
+                    "why": exceeded[0], "scope": {}, "calls": []}
 
     # GROUNDING. A program that changes the world and never checks it needs the
     # operator's word first — see consent.py. Refused BEFORE the first call, because a
@@ -308,9 +319,21 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
                 #             usually arithmetic, and the harness closes the difference
                 #             (derive.py) because the model provably cannot: it oscillated
                 #             6->5->7->5 with the state and the objection in hand.
+                # A LONE ENSURE THAT FAILED is the one case worth naming, because it is
+                # the likeliest mis-word in the language. "Make sure exactly 3 carry
+                # prod" reads as both "verify that" and "bring that about", and the two
+                # words are the only thing distinguishing them. A program that is
+                # nothing but a check COULD NOT have acted — so if the operator wanted
+                # convergence, the word is wrong, and saying so costs nothing while
+                # leaving a genuine health check perfectly legal.
+                hint = why
+                if op == "ensure" and len(body) == 1 and not calls:
+                    hint = (f"{why}. This program only VERIFIES — it has no work and no "
+                            f"ACHIEVE, so nothing will change. If you meant to bring this "
+                            f"about rather than check it, the word is ACHIEVE.")
                 return {"ok": False,
                         "failed": "unachieved" if op == "achieve" else "unsatisfied",
-                        "why": why, "predicate": st["predicate"], "scope": scope,
+                        "why": hint, "predicate": st["predicate"], "scope": scope,
                         "calls": calls, "failures": failures}
         # IFAILS: recovery runs only if THIS statement's calls actually failed. Scoping it
         # to one statement is why you know what broke — and the failure stays recorded, so
