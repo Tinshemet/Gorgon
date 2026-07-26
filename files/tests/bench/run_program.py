@@ -54,14 +54,21 @@ def seams(world: SimWorld):
     could only read the registry could not express this program's last line.
     """
     def select(sel):
+        # Canonicalise aliases first — a program may say `tag` or `label` and mean the
+        # same attribute; the manifest owns which spellings are equivalent.
+        from orchestrator.ai.planner.ir import config as _ic
         kind = sel.get("kind")
+        alias = (_ic.KINDS.get(kind) or {}).get("aliases") or {}
+        sel = {alias.get(k, k): v for k, v in sel.items()}
         if kind == "network":
             return sorted(world.nets)
         out = []
         for name, vm in sorted(world.vms.items()):
-            if "tag" in sel and sel["tag"] not in (vm["labels"] | vm.get("flags", set())):
+            if "label" in sel and sel["label"] not in (vm["labels"] | vm.get("flags", set())):
                 continue
             if "status" in sel and vm["status"] != sel["status"]:
+                continue
+            if "name" in sel and name != sel["name"]:
                 continue
             out.append(name)
         return out
@@ -77,7 +84,8 @@ def seams(world: SimWorld):
             return False, "no comparator"
         if shape == "reach":
             want = int(pred.get("min", 2))
-            tag = (pred.get("select") or {}).get("tag")
+            _s = pred.get("select") or {}
+            tag = _s.get("label", _s.get("tag"))
             good = world.reach(tag, minimum=want)
             return good, f"reach({tag}, min={want}) is {good}"
         if shape == "disjoint":

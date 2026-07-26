@@ -1,67 +1,120 @@
 {
   "_doc": "The procedure language, AS DATA. Nothing here is a language feature written in code — the ops, the resource kinds, the predicate shapes and every string the model is shown all live in this manifest. That is the extensibility test the design note sets: adding a resource kind, a predicate or a tool must touch ZERO language code. ir.json holds a deployment's overrides and wins on merge.",
-
   "sigil": "$",
   "loop_var": "item",
-
   "_params_doc": "Parameter types a procedure may declare. Parameters are AUTHORED, not derived — unlike `imports`, which the harness computes: only the author knows which values are meant to vary per invocation. A $reference resolves against params first, then against names bound by `new`.",
   "param_types": {
-    "int":  {"sql": "INT"},
-    "text": {"sql": "TEXT"},
-    "bool": {"sql": "BOOL"}
+    "int": {
+      "sql": "INT"
+    },
+    "text": {
+      "sql": "TEXT"
+    },
+    "bool": {
+      "sql": "BOOL"
+    }
   },
-
   "_ops_doc": "The statement types. `one_of` means exactly one of those fields must be present — foreach names its set EITHER by querying state (`select`) OR by referring to a set already bound (`in`). Those are different things and conflating them was a real gap: `new` with a count binds a SET, and until `in` existed there was no way to act on it before its members had an attribute to query by. \"Create X vms and label them\" was inexpressible. `required` is what validate() insists on; `doc` is what the model is shown. Adding an op here does NOT make it executable — the visitor must learn it too — so this table is the contract between the two, not a switch.",
   "ops": {
     "new": {
-      "required": ["var", "kind"],
-      "doc": "create a resource and bind a name to it. Fields: var, kind, count (optional, default 1)."
+      "required": [
+        "var",
+        "kind"
+      ],
+      "doc": "create a resource and bind a name to it. Fields: var, kind, count (optional, default 1).",
+      "fields": [
+        "var",
+        "kind",
+        "count"
+      ]
     },
     "call": {
-      "required": ["tool", "args"],
-      "doc": "invoke one tool. Fields: tool, args."
+      "required": [
+        "tool",
+        "args"
+      ],
+      "doc": "invoke one tool. Fields: tool, args.",
+      "fields": [
+        "tool",
+        "args"
+      ]
     },
     "foreach": {
-      "required": ["call"],
-      "one_of": ["select", "in"],
-      "doc": "apply ONE call to every member of a set. Name the set EITHER with `select` (a query over current state, e.g. {\"kind\":\"vm\",\"tag\":\"red\"}) OR with `in` (a set you already bound, e.g. \"$vms\"). Plus `call`."
+      "required": [
+        "call"
+      ],
+      "one_of": [
+        "select",
+        "in"
+      ],
+      "doc": "apply ONE call to every member of a set. Name the set EITHER with `select` (a query over current state, e.g. {\"kind\":\"vm\",\"tag\":\"red\"}) OR with `in` (a set you already bound, e.g. \"$vms\"). Plus `call`.",
+      "fields": [
+        "select",
+        "in",
+        "call"
+      ]
     },
     "ensure": {
-      "required": ["predicate"],
-      "doc": "state something that must be TRUE at the end. This is a CHECK, not an action."
+      "required": [
+        "predicate"
+      ],
+      "doc": "state something that must be TRUE at the end. This is a CHECK, not an action.",
+      "fields": [
+        "predicate"
+      ]
     }
   },
-
-  "_kinds_doc": "THE RESOURCE MANIFEST (design note 580d54ac §07). One row per resource type, naming its creator tool, its lister, the argument that carries its key, and the attributes legal in a SELECT ... WHERE. This one table feeds NEW (which creator), SELECT (which lister, which attributes) and ENSURE (which predicates typecheck). A new resource type — a container, a conductor's own object — is ONE ROW here and no code. `package` is the module it belongs to; it is what the derived `imports` header is computed from, and the intended endpoint is one package per git submodule.",
+  "_kinds_doc": "THE RESOURCE MANIFEST (design note 580d54ac §07). One row per resource type, naming its creator tool, its lister, the argument that carries its key, and the attributes legal in a SELECT ... WHERE. This one table feeds NEW (which creator), SELECT (which lister, which attributes) and ENSURE (which predicates typecheck). A new resource type — a container, a conductor's own object — is ONE ROW here and no code. `package` is the module it belongs to; it is what the derived `imports` header is computed from, and the intended endpoint is one package per git submodule. ATTRS MUST MATCH THE VOCABULARY THE TOOLS USE. `add_label(name, label)` sets it, so a program selecting on it writes `label` — listing the attribute as `tag` made the model wrong for being consistent with the tool. One concept, one name. `aliases` carries the harness's internal synonyms so existing readers keep working. The KEY is queryable too: selecting a resource by its name is the most obvious query there is, and omitting it rejected `SELECT vm WHERE name = ...` out of hand.",
   "kinds": {
     "vm": {
       "package": "core",
       "create": "create_vm",
       "list": "list_vms",
       "key": "name",
-      "attrs": ["status", "tag", "os_type"]
+      "attrs": [
+        "name",
+        "status",
+        "label",
+        "os_type"
+      ],
+      "aliases": {
+        "tag": "label",
+        "labels": "label",
+        "os": "os_type"
+      }
     },
     "network": {
       "package": "core",
       "create": "create_network",
       "list": "list_networks",
       "key": "net_name",
-      "attrs": ["members"]
+      "attrs": [
+        "net_name",
+        "members"
+      ],
+      "aliases": {
+        "name": "net_name"
+      }
     }
   },
-
   "_predicates_doc": "What ENSURE can assert. `comparators` maps each comparator to the SYMBOL it renders as, so adding one is a data change — it used to be a dict in render.py, which meant a new comparator printed as `?`. EVERY shape carries its operand under `select` — the same key foreach uses — and names itself under `shape`. That regularity was measured, not chosen: an earlier form keyed the shape and operand together ({count: <select>, eq: N}) and llama3.1 put the NUMBER where the SET belongs on every attempt, while getting foreach's select right in the same programs. `source` records WHERE the truth comes from: `registry` is current state; `findings` is the probe ledger, because reachability is not registry state and is deliberately never inferred from a tool's success flag.",
   "predicates": {
     "count": {
       "source": "registry",
       "operand": "select",
-      "comparators": {"eq": "=", "gte": ">=", "lte": "<="},
+      "comparators": {
+        "eq": "=",
+        "gte": ">=",
+        "lte": "<="
+      },
       "doc": "how many members match"
     },
     "reach": {
       "source": "findings",
       "operand": "select",
-      "comparators": {"min": ">="},
+      "comparators": {
+        "min": ">="
+      },
       "doc": "the members can reach each other"
     },
     "disjoint": {
@@ -71,7 +124,6 @@
       "doc": "the named sets share no member"
     }
   },
-
   "_prompt_doc": "Every string the model is shown. Held as data so the wording can be tuned without editing code, and so a change to it is visible in a diff as a change to the LANGUAGE rather than buried in a Python literal.",
   "prompt": {
     "intro": "You turn an operator's request into a PROGRAM — an ordered list of statements that, run top to bottom, achieves it.",
@@ -86,10 +138,50 @@
     "retry_rejected": "That program was rejected:",
     "retry_fix": "Fix exactly those problems and call emit_program again."
   },
-
-  "_schema_doc": "Knobs for the tool schema handed to the model. `predicate_properties` is false DELIBERATELY: declaring nested properties WITH a nested `required` made llama3.1 stop calling the tool at all — 3/4 emitting dropped to 0/4. The schema has a complexity ceiling on this tool-call surface, and the model bake-off already found tool-calling fidelity, not reasoning, to be the binding constraint. Turn it on only with a measurement in hand.",
+  "_schema_doc": "Knobs for the tool schema handed to the model, each carrying the measurement behind it. `statement_form`: 'oneof' is the CORRECT schema — one branch per op, so a statement's type determines its fields and `op` cannot be omitted — and it is set to 'flat' anyway, because oneof drops emission to 0/4. Flat gives the model no structural cue (qwen2.5:14b returned six of nine statements with no `op`), but it at least gets called. Same story as `predicate_required`: adding a nested required took llama3.1 from 3/4 emitting to 0/4. The pattern across every experiment is that this tool-call surface trades guidance against fidelity, and fidelity is the binding constraint. Note what DOES work reliably: decompose{steps:[string]} — an array of STRINGS. Emission collapses on an array of structured objects, which is the strongest hint about where to go next. Change these only with a measurement; tests/bench/ir_probe.py is how.",
   "schema": {
+    "statement_form": "flat",
     "predicate_properties": true,
     "predicate_required": false
+  },
+  "_fields_doc": "Every field a statement may carry, described ONCE. `enum_from` points at another manifest table so the enum tracks it — add a resource kind and `kind`'s enum follows with no edit here. Ops below list which fields they use; both schema forms are built from these rows, so they cannot describe different languages.",
+  "fields": {
+    "var": {
+      "type": "string",
+      "doc": "the name to bind"
+    },
+    "kind": {
+      "type": "string",
+      "enum_from": "kinds",
+      "doc": "the resource type"
+    },
+    "count": {
+      "type": "integer",
+      "doc": "how many (default 1); may be a $parameter"
+    },
+    "tool": {
+      "type": "string",
+      "doc": "the tool to invoke"
+    },
+    "args": {
+      "type": "object",
+      "doc": "the tool's arguments"
+    },
+    "select": {
+      "type": "object",
+      "doc": "a set described by a query over current state"
+    },
+    "in": {
+      "type": "string",
+      "doc": "a set you already bound, e.g. \"$vms\""
+    },
+    "call": {
+      "type": "object",
+      "doc": "the call to apply to each member"
+    },
+    "predicate": {
+      "type": "object",
+      "doc": "what must hold at the end"
+    }
   }
 }

@@ -46,8 +46,58 @@ def _predicate_property() -> Dict[str, Any]:
     return prop
 
 
+def _field(name: str) -> Dict[str, Any]:
+    """One field's JSON-Schema fragment, from the catalogue.
+
+    `enum_from` points at another manifest table, so `kind`'s enum tracks the resource
+    manifest — add a kind and the enum follows with no edit here.
+    """
+    spec = dict(config.FIELDS[name])
+    doc = spec.pop("doc", "")
+    src = spec.pop("enum_from", None)
+    if src:
+        spec["enum"] = list(getattr(config, src.upper()))
+    if name == "predicate":
+        return _predicate_property()
+    return {**spec, "description": doc}
+
+
+def _statement_flat() -> Dict[str, Any]:
+    """One object, every field optional, only `op` required.
+
+    Simple for the model to call and structurally useless: a `new` and an `ensure` are
+    the same type, so nothing stops `{"op":"new","predicate":{...}}` and nothing prompts
+    the model to supply `op` at all. Measured — qwen2.5:14b returned six of nine
+    statements with no `op`. Kept as a knob because it is the SIMPLEST schema, and
+    simplicity is what emission turned out to be sensitive to.
+    """
+    props = {"op": {"type": "string", "enum": list(config.OPS)}}
+    for name in config.FIELDS:
+        props[name] = _field(name)
+    return {"type": "object", "properties": props, "required": ["op"]}
+
+
+def _statement_oneof() -> Dict[str, Any]:
+    """One branch per op, so a statement's type determines its fields.
+
+    `op` is a const per branch, which both forces the discriminator to be present and
+    tells the model which fields go with it. Built from the same rows as the flat form,
+    so the two cannot describe different languages.
+    """
+    branches = []
+    for op, spec in config.OPS.items():
+        props = {"op": {"type": "string", "const": op, "description": spec["doc"]}}
+        for name in spec["fields"]:
+            props[name] = _field(name)
+        required = ["op"] + [f for f in spec["required"]]
+        branches.append({"type": "object", "properties": props, "required": required})
+    return {"oneOf": branches}
+
+
 def emit_program_tool() -> Dict[str, Any]:
     """The tool schema, assembled from the manifest."""
+    form = config.SCHEMA.get("statement_form", "oneof")
+    item = _statement_oneof() if form == "oneof" else _statement_flat()
     return {
         "type": "function",
         "function": {
@@ -56,31 +106,9 @@ def emit_program_tool() -> Dict[str, Any]:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "body": {
-                        "type": "array",
-                        "description": "The statements, in order.",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "op":     {"type": "string", "enum": list(config.OPS)},
-                                "var":    {"type": "string", "description": "new: the name to bind"},
-                                "kind":   {"type": "string", "enum": list(config.KINDS),
-                                           "description": "new: the resource type"},
-                                "count":  {"type": "integer", "description": "new: how many (default 1)"},
-                                "tool":   {"type": "string", "description": "call: the tool name"},
-                                "args":   {"type": "object", "description": "call: the tool's arguments"},
-                                "select": {"type": "object", "description": config.PROMPT["select_hint"]},
-                                "in":     {"type": "string",
-                                           "description": "foreach: a set you already "
-                                                          "bound, e.g. \"$vms\" — use "
-                                                          "instead of select"},
-                                "call":   {"type": "object",
-                                           "description": "foreach: the call to apply to each member"},
-                                "predicate": _predicate_property(),
-                            },
-                            "required": ["op"],
-                        },
-                    },
+                    "body": {"type": "array",
+                             "description": "The statements, in order.",
+                             "items": item},
                 },
                 "required": ["body"],
             },

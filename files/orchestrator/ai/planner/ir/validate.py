@@ -148,10 +148,14 @@ def _check_select(sel: Any, where: str) -> List[str]:
                 f"(known: {', '.join(sorted(config.KINDS))})"]
     if not kind:
         return [f"{where}: select must name a kind"]
-    legal = set(config.KINDS[kind]["attrs"])
+    spec = config.KINDS[kind]
+    legal = set(spec["attrs"]) | set(spec.get("aliases") or {})
     unknown = [k for k in sel if k != "kind" and k not in legal]
+    # Aliases are accepted, not just tolerated: the harness has its own synonyms (`tag`
+    # for a label, `os` for os_type) and a program written either way means the same
+    # thing. Rejecting one spelling of one concept is the vocabulary problem in miniature.
     return [f"{where}: {kind} has no attribute {k!r} "
-            f"(queryable: {', '.join(sorted(legal))})" for k in unknown]
+            f"(queryable: {', '.join(sorted(spec['attrs']))})" for k in unknown]
 
 
 def _check_call(st: Dict[str, Any], where: str, tools, bound) -> List[str]:
