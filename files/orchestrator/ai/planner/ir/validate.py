@@ -223,9 +223,9 @@ def validate(program: Any, known_tools=None, known_names=None,
                                       bound | {config.LOOP_VAR})
                     problems += [f"{where} (foreach body) → {x}" for x in sub]
         elif op == "ensure":
-            problems += _check_predicate(st.get("predicate"), where)
+            problems += _check_predicate(st.get("predicate"), where, bound)
         elif op == "if":
-            problems += _check_predicate(st.get("cond"), where)
+            problems += _check_predicate(st.get("cond"), where, bound)
             for branch in ("then", "else"):
                 kids = st.get(branch)
                 if kids is None:
@@ -361,7 +361,7 @@ def _at_most_one(sel: Any) -> bool:
     return isinstance(val, str) and bool(val) and not refs.names(val)
 
 
-def _check_predicate(pred: Any, where: str) -> List[str]:
+def _check_predicate(pred: Any, where: str, bound: Optional[set] = None) -> List[str]:
     """A predicate names its `shape` and supplies that shape's operand."""
     if pred is None:
         return []
@@ -382,6 +382,18 @@ def _check_predicate(pred: Any, where: str) -> List[str]:
         if not (set(pred) & set(spec["comparators"])):
             return [f"{where}: {shape} needs "
                     f"{'/'.join(spec['comparators'])} to compare against"]
+        # And the name it reads has to BE in scope. Predicates were the one place a
+        # reference went unchecked, which mattered the moment loops got block scoping:
+        # a result grafted inside a loop is gone after it, so `ENSURE IS($answers.alive)`
+        # following the loop reads nothing. It validated silently — the exact shape of
+        # someone reaching for "collect every answer, then check them", which is a
+        # feature the language does not have. Better to say so than to pass.
+        if bound is not None:
+            for ref in refs.names(value):
+                if ref not in bound:
+                    return [f"{where}: {shape} reads {config.SIGIL}{ref}, which is not in "
+                            f"scope here — a result grafted inside a loop does not "
+                            f"outlive it"]
         return []
     if operand == "of":
         # A composite's operand is other predicates, checked recursively — so a malformed
@@ -393,7 +405,7 @@ def _check_predicate(pred: Any, where: str) -> List[str]:
         elif not isinstance(value, (list, tuple)) or len(value) < 2:
             return [f"{where}: {shape} takes two or more checks under `of`, got {value!r}"]
         for kid in kids:
-            out += _check_predicate(kid, where)
+            out += _check_predicate(kid, where, bound)
         return out
     if operand == "select":
         if not isinstance(value, dict):
