@@ -342,14 +342,14 @@
       },
       "fleet": {
         "risk": {
-          "reversible": false,
+          "reversible": true,
           "destructiveness": 0.3,
           "blast": "fleet",
           "commitment": 0.2
         },
         "verb": "broadcast fleet action",
         "field": "label",
-        "_flag": "Tier is action-conditional (fleet_actions), resolved BEFORE risk is read — so these facts do not gate anything. They exist for PRICING: a fleet broadcast was previously costed at zero by leaf_cost and CE."
+        "_flag": "Tier is action-conditional (fleet_actions), resolved BEFORE risk is read — so these facts do not gate anything. They exist for PRICING: a broadcast used to cost zero. REVERSIBLE deliberately, even though `fleet exec` is not: leaf_cost prices irreversibility at kappa (~one entity-unit), and marking the whole tool irreversible charged a read-only `fleet ping` 1.5 instead of 0.3 — enough to push it past the commit floor and BLOCK it (caught by test_epistemic_acceptance 2026-07-26). The dominant actions (ping/status/list) are reads and the destructive ones are gated separately. PROPER FIX, not yet built: make risk action-conditional the way the tier already is, so `fleet exec` prices as irreversible without charging every ping for it."
       },
       "revert": {
         "risk": {
