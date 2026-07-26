@@ -1,0 +1,257 @@
+"""
+author_probe.py — constrained decoding + few-shot: can the model AUTHOR a program?
+
+Eight experiments through the TOOL-CALL channel all hit the same wall: more schema
+guidance bought less emission (oneOf -> 0/4, a nested required -> 0/4, a richer prompt ->
+fewer calls). The model could only ever see the schema as advice.
+
+This uses a different channel. Ollama's `format` takes a JSON Schema and CONSTRAINS THE
+DECODER, so a violating token cannot be produced. Two consequences:
+
+  * structural validity stops being something to hope for;
+  * tightening the schema becomes FREE — there is no "will it call the tool" left to
+    lose, which inverts the tradeoff every previous experiment was fighting.
+
+The tool-call channel is not abandoned, it is reassigned. Routing (primitive vs decompose
+vs program) is a tool call and scores 10/10; authoring is this; execution is neither —
+the visitor issues the calls itself, through the gate. Each channel does what it measures
+well at.
+
+THE FEW-SHOT EXAMPLES ARE DELIBERATELY NOT LADDER RUNGS. They exercise the same
+constructs — a counted `new`, a filtered `foreach`, a bound-set `foreach`, an `ensure` —
+on goals that appear nowhere in the benchmark. Teaching the model the test would make the
+ladder measure this file, which is the standing principle in rungs.py.
+
+Run:  PYTHONPATH=. python3 -m tests.bench.author_probe
+      PYTHONPATH=. python3 -m tests.bench.author_probe --no-shots   # ablate few-shot
+      PYTHONPATH=. python3 -m tests.bench.author_probe -p           # paraphrase column
+"""
+import argparse
+import json
+import sys
+import urllib.request
+
+from orchestrator.ai.planner.ir import config, render, run, validate
+
+from .ladder import BENCH_MODEL
+from .rungs import RUNGS
+from .sim_world import SimWorld
+
+_TOOLS = SimWorld.tools()
+_OLLAMA = "http://localhost:11434/api/chat"
+
+
+def _call_spec():
+    return {"type": "object",
+            "properties": {"tool": {"type": "string", "enum": list(_TOOLS)},
+                           "args": {"type": "object"}},
+            "required": ["tool", "args"]}
+
+
+def _select_spec():
+    """A select: the kind, plus whichever attributes that kind declares queryable."""
+    props = {"kind": {"type": "string", "enum": list(config.KINDS)}}
+    for k in config.KINDS.values():
+        for attr in k["attrs"]:
+            props.setdefault(attr, {"type": "string"})
+    return {"type": "object", "properties": props, "required": ["kind"]}
+
+
+def program_schema():
+    """The FULL schema — one branch per op, every operand required.
+
+    This is the schema that took tool-call emission to 0/4. The decoder accepts it, so
+    the strictness is free here: `foreach` cannot omit its call, `ensure` cannot omit its
+    shape, and select-or-in is a nested oneOf rather than a rule enforced after the fact.
+    """
+    sel, call = _select_spec(), _call_spec()
+    branches = [
+        {"type": "object", "properties": {
+            "op": {"const": "new"}, "var": {"type": "string"},
+            "kind": {"type": "string", "enum": list(config.KINDS)},
+            "count": {"type": "integer"}},
+         "required": ["op", "var", "kind"]},
+        {"type": "object", "properties": {
+            "op": {"const": "call"}, "tool": {"type": "string", "enum": list(_TOOLS)},
+            "args": {"type": "object"}},
+         "required": ["op", "tool", "args"]},
+        {"oneOf": [
+            {"type": "object", "properties": {
+                "op": {"const": "foreach"}, "select": sel, "call": call},
+             "required": ["op", "select", "call"]},
+            {"type": "object", "properties": {
+                "op": {"const": "foreach"}, "in": {"type": "string"}, "call": call},
+             "required": ["op", "in", "call"]}]},
+        {"type": "object", "properties": {
+            "op": {"const": "ensure"},
+            "predicate": {"type": "object", "properties": {
+                "shape": {"type": "string", "enum": list(config.PREDICATES)},
+                "select": sel,
+                "eq": {"type": "integer"}, "gte": {"type": "integer"},
+                "lte": {"type": "integer"}, "min": {"type": "integer"},
+                "sets": {"type": "array", "items": {"type": "string"}}},
+                "required": ["shape"]}},
+         "required": ["op", "predicate"]},
+    ]
+    return {"type": "object",
+            "properties": {"body": {"type": "array", "items": {"oneOf": branches}}},
+            "required": ["body"]}
+
+
+# Worked pairs, none of which is a ladder rung. Between them they demonstrate every
+# construct the rungs need, on goals the benchmark never asks about.
+SHOTS = [
+    ("create a vm called web and put it on a network called dmz",
+     {"body": [
+         {"op": "call", "tool": "create_vm", "args": {"name": "web"}},
+         {"op": "call", "tool": "create_network", "args": {"net_name": "dmz"}},
+         {"op": "call", "tool": "add_vm_to_network",
+          "args": {"net_name": "dmz", "vm_name": "web"}}]}),
+    ("stop every vm that is currently running",
+     {"body": [
+         {"op": "foreach", "select": {"kind": "vm", "status": "running"},
+          "call": {"tool": "stop_vm", "args": {"name": "$item"}}}]}),
+    ("create 4 vms, label them all 'staging', and make sure at least 4 carry that label",
+     {"body": [
+         {"op": "new", "var": "boxes", "kind": "vm", "count": 4},
+         {"op": "foreach", "in": "$boxes",
+          "call": {"tool": "add_label", "args": {"name": "$item", "label": "staging"}}},
+         {"op": "ensure", "predicate": {"shape": "count",
+                                        "select": {"kind": "vm", "label": "staging"},
+                                        "gte": 4}}]}),
+]
+
+
+def _system() -> str:
+    ops = "\n".join(f"  {op:8}— {spec['doc']}" for op, spec in config.OPS.items())
+    return (f"Express the operator's goal as a PROGRAM — statements run top to bottom.\n\n"
+            f"{ops}\n\n"
+            f"{config.PROMPT['reference']}\n{config.PROMPT['ordering']}\n\n"
+            f"Tools: {', '.join(_TOOLS)}.")
+
+
+def _messages(goal: str, shots: bool):
+    msgs = [{"role": "system", "content": _system()}]
+    if shots:
+        for g, prog in SHOTS:
+            msgs.append({"role": "user", "content": g})
+            msgs.append({"role": "assistant", "content": json.dumps(prog)})
+    msgs.append({"role": "user", "content": goal})
+    return msgs
+
+
+def author(goal: str, model: str, temp: float, shots: bool, timeout: int = 600):
+    req = {"model": model, "stream": False, "format": program_schema(),
+           "options": {"temperature": temp}, "messages": _messages(goal, shots)}
+    try:
+        r = urllib.request.urlopen(urllib.request.Request(
+            _OLLAMA, json.dumps(req).encode(), {"Content-Type": "application/json"}),
+            timeout=timeout)
+        prog = json.loads(json.loads(r.read())["message"]["content"])
+    except Exception as e:
+        return None, [f"{type(e).__name__}: {e}"]
+    ok, problems = validate(prog)
+    return prog, ([] if ok else problems)
+
+
+def _seams(world):
+    """Registry query + predicate evaluation, backed by the sim — the same two seams the
+    orchestrator fills with the Active Library and the findings ledger."""
+    def select(sel):
+        kind = sel.get("kind")
+        alias = (config.KINDS.get(kind) or {}).get("aliases") or {}
+        sel = {alias.get(k, k): v for k, v in sel.items()}
+        if kind == "network":
+            return sorted(world.nets)
+        out = []
+        for name, vm in sorted(world.vms.items()):
+            if "label" in sel and sel["label"] not in (vm["labels"] | vm.get("flags", set())):
+                continue
+            if "status" in sel and vm["status"] != sel["status"]:
+                continue
+            if "name" in sel and name != sel["name"]:
+                continue
+            out.append(name)
+        return out
+
+    def holds(pred, scope):
+        shape = pred.get("shape")
+        if shape == "count":
+            n = len(select(pred.get("select") or {}))
+            for c, op in (("eq", "=="), ("gte", ">="), ("lte", "<=")):
+                if c in pred:
+                    good = {"==": n == pred[c], ">=": n >= pred[c], "<=": n <= pred[c]}[op]
+                    return good, f"count is {n}, wanted {op} {pred[c]}"
+            return False, "no comparator"
+        if shape == "reach":
+            s = pred.get("select") or {}
+            tag = s.get("label", s.get("tag"))
+            want = int(pred.get("min", 2))
+            return world.reach(tag, minimum=want), f"reach({tag},{want})"
+        return False, f"unevaluated shape {shape}"
+    return select, holds
+
+
+def main(argv=None) -> int:
+    p = argparse.ArgumentParser(description="Constrained decoding + few-shot authoring")
+    p.add_argument("-r", "--rung", type=int, action="append", help="default 4-7")
+    p.add_argument("-m", "--model", default=BENCH_MODEL)
+    p.add_argument("-t", "--temp", type=float, default=0.0)
+    p.add_argument("-p", "--paraphrase", action="store_true")
+    p.add_argument("--execute", action="store_true",
+                   help="RUN each program against the sim and apply the rung's own "
+                        "checker. Validity is structure; this is whether the program "
+                        "MEANS its goal — the only grade that matters.")
+    p.add_argument("--no-shots", action="store_true",
+                   help="ablate the few-shot examples — isolates what they contribute")
+    a = p.parse_args(argv)
+
+    rungs = [r for r in RUNGS if r.n in (a.rung or [4, 5, 6, 7])]
+    shots = not a.no_shots
+    print(f"author probe · model={a.model} temp={a.temp} · constrained decoding"
+          f"{' · few-shot' if shots else ' · NO shots'}"
+          f"{' · PARAPHRASE' if a.paraphrase else ''}\n")
+
+    valid = correct = 0
+    for rung in rungs:
+        goal = (rung.paraphrase or rung.goal) if a.paraphrase else rung.goal
+        print(f"── rung {rung.n} ({rung.name})\n   goal: {goal}")
+        prog, problems = author(goal, a.model, a.temp, shots)
+        if prog is None:
+            print(f"   [ERROR] {problems[0]}\n")
+            continue
+        ok = not problems
+        valid += ok
+        print(f"   [{'VALID' if ok else 'INVALID'}] "
+              f"{len(prog.get('body', []))} statements")
+        for why in problems[:5]:
+            print(f"          - {why}")
+        for line in render(prog).splitlines():
+            print(f"          | {line}")
+        if a.execute and ok:
+            world = SimWorld()
+            if rung.setup:
+                rung.setup(world)
+                world.calls.clear()
+            sel, holds = _seams(world)
+            res = run(prog, world.execute, select=sel, holds=holds)
+            passed = bool(rung.check(world))
+            correct += passed
+            print(f"          -> ran {len(res['calls'])} calls, "
+                  f"ensure={'ok' if res['ok'] else res.get('failed')}"
+                  f"{'' if res['ok'] else ' (' + str(res.get('why','')) + ')'}")
+            print(f"          -> RUNG CHECKER: {'PASS' if passed else 'FAIL'}"
+                  f"   world: {world.summary()}")
+        print()
+
+    print(f"── summary\n   structurally valid : {valid}/{len(rungs)}")
+    if a.execute:
+        print(f"   ACHIEVES THE GOAL  : {correct}/{len(rungs)}")
+    print("\n   Validity is structure + grounding only. Whether a program MEANS its goal\n"
+          "   is for a human reading the rendered forms above — scoring that needs a\n"
+          "   second definition of every goal, which is a benchmark grading itself.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
