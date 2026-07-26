@@ -77,9 +77,17 @@ def run_rung(rung, call_model, verbose: bool = False, diag: bool = False,
         status, disposition = "error", f"{type(e).__name__}: {e}"
     if diag:
         _dump(rung, world, r)
+    calls = len(world.calls)
     return {"rung": rung.n, "name": rung.name, "passed": bool(rung.check(world)),
             "status": status, "disposition": disposition,
-            "calls": len(world.calls), "vms": len(world.vms), "nets": len(world.nets),
+            "calls": calls, "vms": len(world.vms), "nets": len(world.nets),
+            "minimum": rung.minimum, "best": rung.best,
+            # A cost REGRESSION is a separate verdict from pass/fail, deliberately: the
+            # checker grades the world, and a rung that reaches the right world by a more
+            # expensive route is still correct — just worse. Reporting them together would
+            # invite tuning the harness to make a number go down, which is the one thing
+            # the standing principle forbids.
+            "cost_regressed": bool(rung.best is not None and calls > rung.best),
             "world": world.summary()}
 
 
@@ -121,6 +129,9 @@ def main(argv=None) -> int:
     p.add_argument("-p", "--paraphrase", action="store_true",
                    help="run each rung's PARAPHRASE — same capability, different wording. "
                         "A gap between the two columns is a pattern masquerading as an ability.")
+    p.add_argument("--cost-gate", action="store_true",
+                   help="exit non-zero (2) when a rung exceeds its best measured cost, "
+                        "even if every rung passes. For CI.")
     p.add_argument("-d", "--diag", action="store_true",
                    help="dump calls, final world and the plan tree for each run")
     a = p.parse_args(argv)
@@ -138,16 +149,38 @@ def main(argv=None) -> int:
             rows.append(row)
             mark = "PASS" if row["passed"] else "FAIL"
             print(f"   [{mark}] run {i+1}/{a.runs} · {row['status']}/{row['disposition']} · {row['world']}")
+            if row["best"] is not None:
+                flag = "  <== COST REGRESSION" if row["cost_regressed"] else ""
+                print(f"          cost: {row['calls']} calls "
+                      f"(minimum {row['minimum']}, best measured {row['best']}){flag}")
         print()
 
     print("── summary")
     for rung in rungs:
         got = [r for r in rows if r["rung"] == rung.n]
         n_ok = sum(1 for r in got if r["passed"])
-        print(f"   rung {rung.n} {rung.name:17} {n_ok}/{len(got)}")
+        cost = ""
+        if got and got[0]["best"] is not None:
+            cheapest = min(r["calls"] for r in got)
+            cost = f"   cost {cheapest} (min {got[0]['minimum']}, best {got[0]['best']})"
+            if any(r["cost_regressed"] for r in got):
+                cost += "  REGRESSED"
+        print(f"   rung {rung.n} {rung.name:17} {n_ok}/{len(got)}{cost}")
+
+    regressed = sorted({r["rung"] for r in rows if r["cost_regressed"]})
+    if regressed:
+        print(f"\n   COST REGRESSION on rung(s) {', '.join(map(str, regressed))} — "
+              f"the world is still correct, the route to it got more expensive.")
+        print("   Investigate before treating the ladder score as unchanged; do NOT "
+              "special-case a rung to bring the number back down.")
     if a.json:
         print(json.dumps(rows, indent=2))
-    return 0 if all(r["passed"] for r in rows) else 1
+    # Correctness decides the exit code. Cost regressions are reported loudly but do not
+    # fail the run on their own unless --cost-gate is set (for CI, where silence is the
+    # failure mode that let rung 4 drift from 17 to 35 unnoticed).
+    if not all(r["passed"] for r in rows):
+        return 1
+    return 2 if (a.cost_gate and regressed) else 0
 
 
 if __name__ == "__main__":

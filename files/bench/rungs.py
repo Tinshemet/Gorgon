@@ -45,6 +45,20 @@ class Rung(NamedTuple):
     # created nothing, because `set up` was missing from one regex. `--paraphrase` grades
     # the capability instead of the sentence.
     paraphrase: Optional[str] = None
+    # COST BASELINES. `minimum` = the tool calls the goal logically requires; `best` = the
+    # lowest we have actually MEASURED. The checker grades world state only, so without
+    # these a run can double its cost and still print PASS — which is exactly what
+    # happened: rung 4 was measured at 17/done on 5813493 and had silently become 35/partial
+    # by the next day, because nothing compared the number to anything. The day's own lesson
+    # was that the biggest wins came from measuring COST, not pass/fail; this records it.
+    #
+    # These are a REGRESSION TRIPWIRE, never a target. Per the standing principle above:
+    # do not tune the harness to make a number go down. A rung that gets cheaper because
+    # the system genuinely got better is progress; a rung that gets cheaper because
+    # something was special-cased for it is the benchmark being gamed. Cost is reported
+    # separately from pass/fail for exactly that reason.
+    minimum: Optional[int] = None
+    best: Optional[int] = None
 
 
 def _vm(w: SimWorld, name: str, status: str = "stopped", labels=(), nets=()):
@@ -142,19 +156,26 @@ def _r10(w):
 RUNGS: List[Rung] = [
     Rung(1, "single", "create a vm named alpha", _r1,
          "one action, fully specified", None,
-         "spin up a machine and call it alpha"),
+         "spin up a machine and call it alpha",
+         minimum=1, best=2),          # 1 create; the measured run also lists to ground itself
     Rung(2, "sequential", "create a vm named beta and then launch it", _r2,
          "two ordered actions on one entity", None,
-         "make a box called beta, then start it up"),
+         "make a box called beta, then start it up",
+         minimum=2, best=2),          # create + launch
     Rung(3, "dependency-chain", "create a network called lab and a vm named web, then put web on lab", _r3,
          "an action whose prerequisite must exist first", None,
-         "set up an isolated network named lab, provision a machine called web, and connect web to it"),
+         "set up an isolated network named lab, provision a machine called web, and connect web to it",
+         minimum=3, best=7),          # create net + create vm + attach
     Rung(4, "collective-loop",
          "create 5 vms, put them all in a network, give them all the 'fleet' label, "
          "and make sure they all ping each other", _r4,
          "an unnamed set, three distributive ops over it, and an assurance clause", None,
          "spin up five machines, wire them together on one private network, tag every one of "
-         "them 'fleet', and confirm each can reach the others"),
+         "them 'fleet', and confirm each can reach the others",
+         # 5 creates + 1 net + 5 attaches + 5 labels + 1 ping. 17/done was MEASURED on
+         # 5813493 (grounding parity) and held through 20a7342; af24cd3 (the node-closure
+         # honesty audit) took it to 25/partial and later commits to 35.
+         minimum=17, best=17),
     Rung(5, "filtered-collective", "launch every vm that is currently stopped", _r5,
          "act on the SUBSET matching a condition, not on everything", _s5,
          "start up any machine that isn't already running"),
@@ -163,7 +184,10 @@ RUNGS: List[Rung] = [
          "on their own network, and put the blue ones on a different network", _r6,
          "two groups, treated differently, and kept apart", None,
          "set up three machines tagged 'red' and two tagged 'blue'; the red group must share "
-         "one private network, and the blue group a separate one"),
+         "one private network, and the blue group a separate one",
+         # 5 creates + 2 nets + 5 attaches + 5 labels. 30 was the measured cost at the
+         # 07-25 close, with the redundancy (14 attaches where 5 would do) a known problem.
+         minimum=17, best=30),
     Rung(7, "convergence", "make sure exactly 3 vms carry the 'prod' label", _r7,
          "diff what IS against what is wanted, and change only the difference", _s7,
          "there should end up being precisely three machines tagged prod, no more and no fewer"),
