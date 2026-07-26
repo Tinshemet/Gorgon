@@ -195,7 +195,13 @@ class SimWorld:
         # already refuses elsewhere: success means the command RAN, not that the goal is
         # met. It also makes a program that correctly branches on the answer look like a
         # program whose calls failed.
-        return {"success": True, "name": n, "reachable": n not in self.unreachable}
+        # `alive` is the key the REAL guest_ping returns. The sim said `reachable`, so a
+        # program written and verified here would have read a field that does not exist in
+        # production and branched wrong — silently, since a missing key is just falsy.
+        # A bench that speaks a different vocabulary than the tool it stands in for is
+        # worse than no bench: it certifies programs that cannot work.
+        alive = n not in self.unreachable
+        return {"success": True, "name": n, "alive": alive, "reachable": alive}
 
     def _t_snapshot_create(self, a):
         """A third resource kind. The whole point of rung 12: the design claims a new kind
