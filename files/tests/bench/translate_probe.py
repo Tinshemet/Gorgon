@@ -11,9 +11,9 @@ exists so the translation can be READ. Judging a restatement automatically would
 writing a second vocabulary to judge it against, which is the thing this whole line of
 work is trying to delete.
 
-Run:  PYTHONPATH=. python3 -m bench.translate_probe            # every rung
-      PYTHONPATH=. python3 -m bench.translate_probe -r 4 -r 6  # some rungs
-      PYTHONPATH=. python3 -m bench.translate_probe --literal   # the literal wording too
+Run:  PYTHONPATH=. python3 -m tests.bench.translate_probe            # every rung
+      PYTHONPATH=. python3 -m tests.bench.translate_probe -r 4 -r 6  # some rungs
+      PYTHONPATH=. python3 -m tests.bench.translate_probe --literal   # the literal wording too
 """
 import argparse
 import sys

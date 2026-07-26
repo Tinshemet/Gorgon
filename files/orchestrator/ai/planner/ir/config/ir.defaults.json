@@ -1,0 +1,87 @@
+{
+  "_doc": "The procedure language, AS DATA. Nothing here is a language feature written in code — the ops, the resource kinds, the predicate shapes and every string the model is shown all live in this manifest. That is the extensibility test the design note sets: adding a resource kind, a predicate or a tool must touch ZERO language code. ir.json holds a deployment's overrides and wins on merge.",
+
+  "sigil": "$",
+  "loop_var": "item",
+
+  "_ops_doc": "The statement types. `required` is what validate() insists on; `doc` is what the model is shown. Adding an op here does NOT make it executable — the visitor must learn it too — so this table is the contract between the two, not a switch.",
+  "ops": {
+    "new": {
+      "required": ["var", "kind"],
+      "doc": "create a resource and bind a name to it. Fields: var, kind, count (optional, default 1)."
+    },
+    "call": {
+      "required": ["tool", "args"],
+      "doc": "invoke one tool. Fields: tool, args."
+    },
+    "foreach": {
+      "required": ["select", "call"],
+      "doc": "apply ONE call to every member of a set. Fields: select, call."
+    },
+    "ensure": {
+      "required": ["predicate"],
+      "doc": "state something that must be TRUE at the end. This is a CHECK, not an action."
+    }
+  },
+
+  "_kinds_doc": "THE RESOURCE MANIFEST (design note 580d54ac §07). One row per resource type, naming its creator tool, its lister, the argument that carries its key, and the attributes legal in a SELECT ... WHERE. This one table feeds NEW (which creator), SELECT (which lister, which attributes) and ENSURE (which predicates typecheck). A new resource type — a container, a conductor's own object — is ONE ROW here and no code. `package` is the module it belongs to; it is what the derived `imports` header is computed from, and the intended endpoint is one package per git submodule.",
+  "kinds": {
+    "vm": {
+      "package": "core",
+      "create": "create_vm",
+      "list": "list_vms",
+      "key": "name",
+      "attrs": ["status", "tag", "os_type"]
+    },
+    "network": {
+      "package": "core",
+      "create": "create_network",
+      "list": "list_networks",
+      "key": "net_name",
+      "attrs": ["members"]
+    }
+  },
+
+  "_predicates_doc": "What ENSURE can assert. EVERY shape carries its operand under `select` — the same key foreach uses — and names itself under `shape`. That regularity was measured, not chosen: an earlier form keyed the shape and operand together ({count: <select>, eq: N}) and llama3.1 put the NUMBER where the SET belongs on every attempt, while getting foreach's select right in the same programs. `source` records WHERE the truth comes from: `registry` is current state; `findings` is the probe ledger, because reachability is not registry state and is deliberately never inferred from a tool's success flag.",
+  "predicates": {
+    "count": {
+      "source": "registry",
+      "operand": "select",
+      "comparators": ["eq", "gte", "lte"],
+      "doc": "how many members match"
+    },
+    "reach": {
+      "source": "findings",
+      "operand": "select",
+      "comparators": ["min"],
+      "doc": "the members can reach each other"
+    },
+    "disjoint": {
+      "source": "registry",
+      "operand": "sets",
+      "comparators": [],
+      "doc": "the named sets share no member"
+    }
+  },
+
+  "_prompt_doc": "Every string the model is shown. Held as data so the wording can be tuned without editing code, and so a change to it is visible in a diff as a change to the LANGUAGE rather than buried in a Python literal.",
+  "prompt": {
+    "intro": "You turn an operator's request into a PROGRAM — an ordered list of statements that, run top to bottom, achieves it.",
+    "statements_header": "Statements:",
+    "reference": "Refer to anything you created with a $ prefix: {\"net_name\":\"$net\"}.",
+    "ordering": "Order matters — a foreach over {\"tag\":\"red\"} only finds VMs already labelled.",
+    "select_hint": "select describes the set, e.g. {\"kind\":\"vm\",\"status\":\"stopped\"} or {\"kind\":\"vm\",\"tag\":\"red\"}. Inside a foreach, the member is $item.",
+    "tools_header": "Tools available:",
+    "tools_footer": "Use ONLY those tool names.",
+    "tool_description": "Express the operator's goal as a PROGRAM: an ordered list of statements. Use `new` to create a resource and give it a name you can refer to later (set count to make several at once). Use `call` to invoke one tool. Use `foreach` to apply ONE call to every member of a set you describe with `select`. Use `ensure` to state something that must be TRUE at the end — that is a check, not an action.",
+    "retry_no_program": "You did not return a program. Call emit_program with a `body` array of statements.",
+    "retry_rejected": "That program was rejected:",
+    "retry_fix": "Fix exactly those problems and call emit_program again."
+  },
+
+  "_schema_doc": "Knobs for the tool schema handed to the model. `predicate_properties` is false DELIBERATELY: declaring nested properties WITH a nested `required` made llama3.1 stop calling the tool at all — 3/4 emitting dropped to 0/4. The schema has a complexity ceiling on this tool-call surface, and the model bake-off already found tool-calling fidelity, not reasoning, to be the binding constraint. Turn it on only with a measurement in hand.",
+  "schema": {
+    "predicate_properties": true,
+    "predicate_required": false
+  }
+}

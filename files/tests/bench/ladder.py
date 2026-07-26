@@ -1,8 +1,8 @@
 """ladder.py — run the complexity ladder against the real local model.
 
-    PYTHONPATH=files python3 -m bench.ladder              # every rung, 1 run each
-    PYTHONPATH=files python3 -m bench.ladder -r 4 -n 3    # rung 4, three runs
-    PYTHONPATH=files python3 -m bench.ladder -v           # stream the plan tree
+    PYTHONPATH=files python3 -m tests.bench.ladder              # every rung, 1 run each
+    PYTHONPATH=files python3 -m tests.bench.ladder -r 4 -n 3    # rung 4, three runs
+    PYTHONPATH=files python3 -m tests.bench.ladder -v           # stream the plan tree
 
 What is real here: the model (llama3.1:8b via Ollama), the tool schemas, the Engine and
 every piece of reasoning scaffolding. What is simulated: the executor (bench.SimWorld), so

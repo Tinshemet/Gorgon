@@ -19,7 +19,7 @@ WORDED. It may never change how a goal is BROKEN DOWN. The clauses it returns ar
 re-joined into one canonical goal string and handed to the ordinary planner, which does
 all the decomposition exactly as before. Feeding the clauses in as sub-goals would seed
 the decomposition, which is precisely the benchmark-gaming the standing principle in
-bench/rungs.py forbids — and it would make the ladder measure this module's sentence
+tests/bench/rungs.py forbids — and it would make the ladder measure this module's sentence
 splitting rather than the system's reasoning. If the rungs improve, it must be because
 normalisation made the EXISTING vocabularies fire.
 
@@ -67,7 +67,7 @@ not the model. In the IR the distinction is a node type — `ensure{predicate}` 
 
 KEEP IT because it is the phase-2 skeleton, not a relic: one model call per goal,
 constrained tool output, the same seam in run_autonomous. Swap `clauses: [string]` for
-IR statements and the component is already the right shape. `bench/translate_probe.py`
+IR statements and the component is already the right shape. `tests/bench/translate_probe.py`
 is how you iterate on it — 30 seconds to read a translation versus 25 minutes for a
 ladder run.
 """

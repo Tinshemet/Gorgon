@@ -9,7 +9,7 @@ Covers the three things that decide whether this module is safe to ship:
   * it may reword but NOT re-plan — clauses come back joined into one goal string, so
     the ordinary planner still does the decomposition. Handing the clauses through as
     sub-goals would seed the plan, which is the benchmark-gaming the standing principle
-    in bench/rungs.py forbids;
+    in tests/bench/rungs.py forbids;
   * its vocabulary is DERIVED from the command catalog, so it cannot become the 34th
     hand-maintained word list.
 
