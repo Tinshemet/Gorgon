@@ -69,7 +69,7 @@ def program_schema():
         {"type": "object", "properties": {
             "op": {"const": "new"}, "var": {"type": "string"},
             "kind": {"type": "string", "enum": list(config.KINDS)},
-            "count": {"type": "integer"}},
+            "amount": {"type": "integer"}},
          "required": ["op", "var", "kind"]},
         {"type": "object", "properties": {
             "op": {"const": "call"}, "tool": {"type": "string", "enum": list(_TOOLS)},
@@ -117,7 +117,7 @@ SHOTS = [
           "call": {"tool": "stop_vm", "args": {"name": "$item"}}}]}),
     ("create 4 vms, label them all 'staging', and make sure at least 4 carry that label",
      {"body": [
-         {"op": "new", "var": "boxes", "kind": "vm", "count": 4},
+         {"op": "new", "var": "boxes", "kind": "vm", "amount": 4},
          {"op": "foreach", "in": "$boxes",
           "call": {"tool": "add_label", "args": {"name": "$item", "label": "staging"}}},
          {"op": "ensure", "predicate": {"shape": "count",

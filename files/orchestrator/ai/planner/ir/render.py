@@ -18,53 +18,85 @@ from .validate import coerce_body
 
 
 def render(program: Any) -> str:
-    """A program as readable text."""
+    """A program as readable text.
+
+    SQL keywords in upper case, C-family braces for blocks. The braces are not decoration:
+    every construct coming next — IF/ELSE, IFAILS — carries a statement LIST, and
+    DO … END does not nest legibly. Getting the shape right before those land is cheaper
+    than migrating procedures that were already written.
+    """
     body = coerce_body(program) or []
     out = []
     named = isinstance(program, dict) and bool(program.get("name"))
+    if named:
+        out.append(_signature(program) + " {")
     if isinstance(program, dict):
-        sig = _signature(program)
-        if sig:
-            out.append(sig)
+        pre = []
         for imp in (program.get("imports") or []):
             v = f" @{imp['version']}" if isinstance(imp, dict) and imp.get("version") else ""
             pkg = imp.get("package") if isinstance(imp, dict) else imp
-            out.append(f"IMPORT {pkg}{v};")
-        if out:
-            out.append("")
+            pre.append(f"{'  ' if named else ''}IMPORT {pkg}{v};")
+        if pre:
+            out += pre + [""]
+
     indent = "  " if named else ""
     for st in body:
-        if not isinstance(st, dict):
-            out.append(f"<not a statement: {st!r}>")
-            continue
-        op = st.get("op")
-        if op == "new":
-            n = st.get("count", 1)
-            # A $parameter count has to SHOW — it silently vanished, so `create X vms`
-            # rendered as `NEW vm`, i.e. one. The operator reads this to decide whether
-            # to sign it; a dropped multiplier is the worst thing it could hide.
-            many = (f" x{n}" if (isinstance(n, str) and n.startswith(config.SIGIL))
-                    or (isinstance(n, int) and n > 1) else "")
-            # Dart-style named arguments, which is the surface preference on record and
-            # already how every Gorgon tool takes its arguments.
-            extra = _args(st.get("args")) if st.get("args") else ""
-            out.append(f"{indent}LET {st.get('var')} = NEW {st.get('kind')}"
-                       f"{f'({extra})' if extra else ''}{many};")
-        elif op == "call":
-            out.append(f"{indent}{st.get('tool')}({_args(st.get('args'))});")
-        elif op == "foreach":
-            inner = st.get("call") if isinstance(st.get("call"), dict) else {}
-            src = (f"({_select(st.get('select'))})" if st.get("select") is not None
-                   else str(st.get("in")))
-            out.append(f"{indent}FOREACH x IN {src}")
-            out.append(f"{indent}  DO {inner.get('tool')}({_args(inner.get('args'))}); END")
-        elif op == "ensure":
-            out.append(f"{indent}ENSURE {_pred(st.get('predicate'))};")
-        else:
-            out.append(f"<unknown op {op!r}>")
+        out += _statement(st, indent)
     if named:
-        out.append("END")
+        out.append("}")
     return "\n".join(out)
+
+
+def _statement(st: Any, indent: str) -> list:
+    """One statement, as one or more lines. Blocks recurse, so nesting indents itself."""
+    if not isinstance(st, dict):
+        return [f"{indent}<not a statement: {st!r}>"]
+    op = st.get("op")
+
+    if op == "new":
+        n = st.get("amount", 1)
+        # "NEW 5 vm(...)" reads the way the request does — "create 5 vms". A trailing
+        # multiplier had to be decoded, and a $parameter one silently vanished entirely.
+        many = (f"{n} " if (isinstance(n, str) and n.startswith(config.SIGIL))
+                or (isinstance(n, int) and n > 1) else "")
+        extra = _args(st.get("args")) if st.get("args") else ""
+        return [f"{indent}LET {st.get('var')} = NEW {many}{st.get('kind')}"
+                f"{f'({extra})' if extra else ''};"]
+
+    if op == "call":
+        # A grafted result reads as a binding, the same LET that binds a resource —
+        # because naming a result and naming a resource are the same act.
+        lead = f"LET {st['graft']} = " if st.get("graft") else ""
+        return [f"{indent}{lead}{st.get('tool')}({_args(st.get('args'))});"]
+
+    if op == "foreach":
+        inner = st.get("call") if isinstance(st.get("call"), dict) else {}
+        src = (_select(st.get("select")) if st.get("select") is not None
+               else _setlit(st.get("in")))
+        # The loop variable is printed as what it IS. It used to print `x` while the body
+        # referenced $item — two names for one thing, in the one place a reader most needs
+        # to follow the binding.
+        member = f"{config.SIGIL}{config.LOOP_VAR}"
+        par = " ASYNC" if st.get("async") else ""
+        return ([f"{indent}FOREACH {member} IN {src}{par} {{"]
+                + _statement({"op": "call", **inner}, indent + "  ")
+                + [f"{indent}}}"])
+
+    if op == "ensure":
+        return [f"{indent}ENSURE {_pred(st.get('predicate'))};"]
+
+    if op == "if":
+        out = [f"{indent}IF {_pred(st.get('cond'))} {{"]
+        for inner in (st.get("then") or []):
+            out += _statement(inner, indent + "  ")
+        if st.get("else"):
+            out.append(f"{indent}}} ELSE {{")
+            for inner in st["else"]:
+                out += _statement(inner, indent + "  ")
+        out.append(f"{indent}}}")
+        return out
+
+    return [f"{indent}<unknown op {op!r}>"]
 
 
 def _signature(program: dict) -> str:
@@ -79,7 +111,16 @@ def _signature(program: dict) -> str:
         return ""
     args = ", ".join(f"{k} {config.PARAM_TYPES.get(v, {}).get('sql', str(v).upper())}"
                      for k, v in (program.get("params") or {}).items())
-    return f"PROCEDURE {name}({args}) AS"
+    # No trailing AS: the brace already opens the block, and two openers is one
+    # more thing to get wrong when writing by hand.
+    return f"PROCEDURE {name}({args})"
+
+
+def _setlit(src) -> str:
+    """A bound reference prints as itself; a literal list prints as a list."""
+    if isinstance(src, (list, tuple)):
+        return "[" + ", ".join(str(x) for x in src) + "]"
+    return str(src)
 
 
 def _args(args) -> str:

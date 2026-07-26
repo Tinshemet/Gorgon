@@ -36,7 +36,7 @@ PROGRAM = {
         # that off the live catalog, and this program was refused until it complied.
         # It had been "working" only because the sim world does not enforce required
         # fields; against the real executor it could never have built a VM.
-        {"op": "new", "var": "vms", "kind": "vm", "count": "$X",
+        {"op": "new", "var": "vms", "kind": "vm", "amount": "$X",
          "args": {"os_type": "linux"}},
         {"op": "foreach", "in": "$vms",
          "call": {"tool": "add_label", "args": {"name": "$item", "label": "test"}}},

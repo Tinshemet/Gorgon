@@ -48,17 +48,17 @@ place. Doing one without the other leaves rung 8 unwritable:
 {"kind": "vm", "not": {"name": "db"}}
 ```
 
-## 2. Result binding — `into`
+## 2. Result binding — `graft`
 
 ```json
-{"op": "call", "tool": "guest_ping", "args": {"name": "$item"}, "into": "answer"}
+{"op": "call", "tool": "guest_ping", "args": {"name": "$item"}, "graft": "answer"}
 ```
 
 The bound value is the tool's own result object, so `$answer.reachable` is readable by a
 predicate. This is the construct the Barenboim exercise flagged on day one and rung 11
 measured: observation feeding a later step is most of what an investigation *is*.
 
-**Open question worth settling now:** inside a `foreach`, does `into` bind per-iteration
+**Open question worth settling now:** inside a `foreach`, does `graft` bind per-iteration
 (overwritten each pass) or accumulate into a list? Per-iteration is simpler and is what a
 conditional inside the loop needs. Accumulation is what "collect all the answers, then
 act" needs. They are different features and pretending otherwise will hurt.
@@ -66,10 +66,15 @@ act" needs. They are different features and pretending otherwise will hurt.
 ## 3. Conditional — `if` / `else`
 
 ```json
-{"op": "if",
- "cond": <predicate>,
- "then": [ <statement>, ... ],
- "else": [ <statement>, ... ]}
+{"op": "if", "cond": <predicate>,
+ "then": [ <statement>, ... ], "else": [ <statement>, ... ]}
+```
+```sql
+IF NOT $answer.reachable {
+  stop_vm(name: $item);
+} ELSE {
+  add_label(name: $item, label: ok);
+}
 ```
 
 **Constraint to hold:** `cond` is a PREDICATE, never a free expression. The moment
@@ -77,7 +82,7 @@ conditions become arbitrary expressions we are writing a general language, and t
 parser — validation is schema-checking" property that makes this cheap is gone. Anything
 a condition needs to say, the predicate language should learn to say.
 
-## 4. Loop — `while`
+## 4. Loop — `while` (DROPPED 2026-07-26)
 
 Recorded with a reservation, stated plainly.
 
@@ -94,7 +99,7 @@ declaratively, with a bound, and self-correcting. Rung 7 is exactly that case an
 *without* a loop. Before `while` earns its place, it is worth naming a goal that needs it
 and that `ENSURE` cannot express; if none turns up, the language is smaller for it.
 
-## 5. Failure handling — `try` / `catch`
+## 5. Failure handling — `ifails` (try/catch DROPPED 2026-07-26)
 
 ```json
 {"op": "try", "do": [ ... ], "catch": [ ... ]}
@@ -161,9 +166,50 @@ silently unexecutable statement.
 
 1. **`NOT` / `AND` / `OR`** — smallest, unblocks rung 8, and predicates are shared by three
    consumers so the reach is wide.
-2. **`into` + `if`/`else`** — together, because neither fixes rung 11 alone.
+2. **`graft` + `if`/`else`** — together, because neither fixes rung 11 alone.
 3. **Measure.** Those two steps alone could take the ladder from 4/13 to 7/13.
 4. Then decide `while`, `try/catch` and `parallel` with that data rather than ahead of it.
 
 Steps 1–2 are the ones the ladder demands. Everything after is judgement, and better made
 once the first two have been measured.
+
+
+---
+
+## Surface decisions, settled 2026-07-26
+
+**Upper-case keywords, C-family braces.** `DO … END` became `{ … }`, and the redundant
+`AS` after a procedure signature is gone — the brace already opens the block, and two
+openers is one more thing to get wrong when writing by hand.
+
+The braces are not cosmetic. Every construct still to come — `if`/`else`, `ifails` —
+carries a statement LIST, and `DO … END` does not nest legibly. Fixing the shape before
+those land is much cheaper than migrating procedures already written in the old one.
+
+**`NEW 5 vm(...)`** rather than a trailing multiplier: it reads the way the request does.
+A `$parameter` count reads the same way, and used to vanish from the rendering entirely.
+
+**The loop variable prints as `$item`,** which is what the body actually references. It
+printed `x` before — two names for one thing, in the single place a reader most needs to
+follow the binding.
+
+```sql
+PROCEDURE test_fleet(X INT) {
+  IMPORT core;
+
+  LET net = NEW network;
+  LET vms = NEW $X vm(os_type: linux);
+  FOREACH $item IN $vms {
+    add_label(name: $item, label: test);
+  }
+  FOREACH $item IN SELECT vm WHERE label = 'test' {
+    add_vm_to_network(net_name: $net, vm_name: $item);
+  }
+  ENSURE REACH(SELECT vm WHERE label = 'test') >= $X;
+}
+```
+
+**`graft` names a result** — `into` was the placeholder, `assert` was rejected (it means
+"check this is true" everywhere else, and that operation is already `ensure`), and `embed`
+collides with embeddings in an AI-adjacent codebase. Written form is `LET` either way,
+since naming a result and naming a resource are the same act.

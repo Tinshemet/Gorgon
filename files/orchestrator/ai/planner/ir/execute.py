@@ -100,7 +100,7 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
         if op == "new":
             kind = st["kind"]
             spec = config.KINDS[kind]
-            n = _resolve(st.get("count", 1), scope)
+            n = _resolve(st.get("amount", 1), scope)
             n = int(n) if isinstance(n, (int, str)) and str(n).isdigit() else 1
             names = [_mint(kind, st["var"], i, n) for i in range(n)]
             # Everything else the creator takes rides along — os_type, cpu_cores,

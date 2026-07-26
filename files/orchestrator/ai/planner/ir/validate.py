@@ -87,6 +87,15 @@ def validate(program: Any, known_tools=None) -> Tuple[bool, List[str]]:
         for field in spec["required"]:
             if st.get(field) in (None, "", {}):
                 problems.append(f"{where}: {op} is missing {field!r}")
+        # A field this op does not declare is an ERROR, not something to ignore. Renaming
+        # `count` to `amount` showed why: the old spelling was silently dropped and `new`
+        # quietly created ONE resource instead of three — a program that looks right,
+        # validates, and does a fifth of what it says. Any stale or mistyped field now
+        # names itself instead.
+        known = set(spec["fields"]) | set(spec.get("one_of") or []) | {"op"}
+        for extra in sorted(set(st) - known):
+            problems.append(f"{where}: {op} has no field {extra!r} "
+                            f"(it takes {', '.join(sorted(known - {'op'}))})")
         alts = spec.get("one_of")
         if alts:
             present = [f for f in alts if st.get(f) not in (None, "", {})]
@@ -102,13 +111,13 @@ def validate(program: Any, known_tools=None) -> Tuple[bool, List[str]]:
             if kind is not None and kind not in config.KINDS:
                 problems.append(f"{where}: unknown kind {kind!r} "
                                 f"(known: {', '.join(sorted(config.KINDS))})")
-            n = st.get("count", 1)
+            n = st.get("amount", 1)
             if isinstance(n, str) and n.startswith(config.SIGIL):
                 # "create X vms" — the count is a parameter, resolved at invocation.
                 if n[len(config.SIGIL):] not in bound:
-                    problems.append(f"{where}: count {n} is not a declared parameter")
+                    problems.append(f"{where}: amount {n} is not a declared parameter")
             elif not isinstance(n, int) or n < 1:
-                problems.append(f"{where}: count must be a positive integer or a "
+                problems.append(f"{where}: amount must be a positive integer or a "
                                 f"$parameter, got {n!r}")
             if st.get("var"):
                 bound.add(str(st["var"]).lstrip(config.SIGIL))

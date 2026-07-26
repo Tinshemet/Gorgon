@@ -21,11 +21,11 @@
         "var",
         "kind"
       ],
-      "doc": "create a resource and bind a name to it. Fields: var, kind, count (optional, default 1), args (optional — anything else the creator tool takes, e.g. {\"os_type\":\"linux\",\"cpu_cores\":2,\"memory_mb\":4096}). With count > 1 every resource is created with the same args.",
+      "doc": "create a resource and bind a name to it. Fields: var, kind, amount (optional, default 1), args (optional — anything else the creator tool takes, e.g. {\"os_type\":\"linux\",\"cpu_cores\":2}). With amount > 1 every resource is created with the same args.",
       "fields": [
         "var",
         "kind",
-        "count",
+        "amount",
         "args"
       ]
     },
@@ -155,7 +155,7 @@
     "predicate_properties": true,
     "predicate_required": false
   },
-  "_fields_doc": "Every field a statement may carry, described ONCE. `enum_from` points at another manifest table so the enum tracks it — add a resource kind and `kind`'s enum follows with no edit here. Ops below list which fields they use; both schema forms are built from these rows, so they cannot describe different languages.",
+  "_fields_doc": "Every field a statement may carry, described ONCE. `enum_from` points at another manifest table so the enum tracks it — add a resource kind and `kind`'s enum follows with no edit here. Ops below list which fields they use; both schema forms are built from these rows, so they cannot describe different languages. `amount` is how many a `new` creates, and is deliberately NOT called `count`: `count` is also a PREDICATE shape (how many members match), and one word meaning two things is the kind of collision that only hurts once procedures have been written in it.",
   "fields": {
     "var": {
       "type": "string",
@@ -166,9 +166,9 @@
       "enum_from": "kinds",
       "doc": "the resource type"
     },
-    "count": {
+    "amount": {
       "type": "integer",
-      "doc": "how many (default 1); may be a $parameter"
+      "doc": "how many to create (default 1); may be a $parameter"
     },
     "tool": {
       "type": "string",

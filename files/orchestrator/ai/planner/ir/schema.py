@@ -157,7 +157,7 @@ _STATEMENT_TOOLS = {
         "props": {
             "var":   ("string",  "the name to bind, e.g. 'vms'"),
             "kind":  ("string",  "the resource type"),
-            "count": ("integer", "how many (omit for 1)"),
+            "amount": ("integer", "how many to create (omit for 1)"),
         },
         "required": ["var", "kind"],
     },
@@ -238,14 +238,14 @@ def statement_from(name: str, args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return None
     if op == "new":
         st = {"op": "new", "var": args.get("var"), "kind": args.get("kind")}
-        n = args.get("count")
+        n = args.get("amount")
         # A count arrives as "3" as often as 3 — the schema says integer and the model
         # sends a string anyway. Rejecting that would fail a program for a JSON type,
         # not for meaning. A $parameter passes through untouched.
         if isinstance(n, str) and n.strip().lstrip(config.SIGIL).isdigit():
             n = n.strip() if n.strip().startswith(config.SIGIL) else int(n)
         if n not in (None, 1):
-            st["count"] = n
+            st["amount"] = n
         return st
     if op == "call":
         return {"op": "call", "tool": args.get("tool"), "args": args.get("args") or {}}
