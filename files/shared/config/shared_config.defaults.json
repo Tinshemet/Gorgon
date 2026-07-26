@@ -3,6 +3,7 @@
   "default_agent": "doorman.grgn",
   "agent_env_var": "GORGON_AGENT",
   "agents_dir": "~/.gorgon/_agents",
+ "voided_agents_file": "~/.gorgon/voided.json",
 
   "audit_log_file": "~/.gorgon.audit.log",
   "signing_key_file": "~/.gorgon.key",

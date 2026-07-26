@@ -113,6 +113,38 @@ def test_pairs_are_dropped_never_orphaned(env):
     assert all(a.startswith("-") for a in args[::2]), args
 
 
+def test_attach_prefix_collision_really_attaches(env):
+    """The attach side of the same substring bug: a VM on 'lab2' must still be
+    attachable to 'lab'. The idempotency check used `netid in arg`, so 'iso_lab'
+    matched 'id=iso_lab2' — the attach claimed the VM was already there, wrote the
+    membership row, and never wired the NIC."""
+    mgr, tmp = env
+    _vm("web", tmp)
+    mgr.create_network("lab2")
+    mgr.create_network("lab")
+    mgr.add_vm_to_network("lab2", "web")
+    r = mgr.add_vm_to_network("lab", "web")
+    assert r["success"], r
+    assert "already" not in r["message"], "falsely reported already-attached"
+    args = MachineConfig.load("web").extra_args
+    assert [a for a in args if "id=iso_lab," in a or a.endswith("id=iso_lab")], \
+        "the lab NIC was never actually wired"
+    assert [a for a in args if "iso_lab2" in a], "the lab2 NIC must survive"
+    assert "web" in mgr._load()["lab"]["members"]
+
+
+def test_attach_is_still_idempotent(env):
+    """The exact matcher must not break the real idempotency case."""
+    mgr, tmp = env
+    _vm("web", tmp)
+    mgr.create_network("lab")
+    mgr.add_vm_to_network("lab", "web")
+    n = len(MachineConfig.load("web").extra_args)
+    r = mgr.add_vm_to_network("lab", "web")
+    assert r["success"] and "already" in r["message"]
+    assert len(MachineConfig.load("web").extra_args) == n, "a second NIC was appended"
+
+
 def test_detach_when_not_attached_is_a_successful_noop(env):
     mgr, tmp = env
     _vm("web", tmp)

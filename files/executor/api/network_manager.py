@@ -92,6 +92,33 @@ class IsolatedNetManager:
         self._nets = self._load()   # reflect any out-of-process changes
         return list(self._nets.values())
 
+    # Does this arg (flag + its value) belong to netid's NIC? ONE rule, shared by the
+    # attach's idempotency check and the detach's removal, so the two can never disagree
+    # about what "already on this network" means.
+    # In: str arg, str val, str netid → Out: bool
+    @staticmethod
+    def _is_netid_arg(arg: str, val: str, netid: str) -> bool:
+        """True iff (arg, val) is the -netdev or -device half of netid's NIC.
+
+        Matches an EXACT parsed field, never a substring: `iso_lab` is a substring of
+        `id=iso_lab2`, so a substring test silently confuses two different networks —
+        it makes an attach to 'lab' think the VM is already there when it is only on
+        'lab2', and it makes a detach of 'lab' tear out 'lab2's NIC.
+        """
+        if arg not in ("-netdev", "-device"):
+            return False
+        fields = {f.strip() for f in val.split(",")}
+        return (arg == "-netdev" and f"id={netid}" in fields) or \
+               (arg == "-device" and f"netdev={netid}" in fields)
+
+    # True when the VM's config already carries this network's NIC.
+    # In: List[str] extra_args, str netid → Out: bool
+    @classmethod
+    def _carries_netid(cls, extra_args: List[str], netid: str) -> bool:
+        """True iff extra_args already holds netid's -netdev/-device pair."""
+        return any(cls._is_netid_arg(a, extra_args[i + 1] if i + 1 < len(extra_args) else "", netid)
+                   for i, a in enumerate(extra_args))
+
     # The granular inverse of add_vm_to_network: detach ONE VM from ONE network.
     # Undoes both halves of an attach — the VM's isolated NIC (the -netdev/-device
     # pair carrying this network's id) and the network's member list.
@@ -107,18 +134,14 @@ class IsolatedNetManager:
         except FileNotFoundError as e:
             return {"success": False, "error": str(e)}
         netid = f"iso_{net_name}"
-        # Drop the NIC as flag+value PAIRS, mirroring how the attach appended them.
-        # Matching is on an EXACT parsed field, never a substring: `netid in arg`
-        # would make network 'lab' match 'lab2' and tear out the wrong NIC.
+        # Drop the NIC as flag+value PAIRS, mirroring how the attach appended them —
+        # dropping single entries would orphan a value and corrupt the launch line.
+        # _is_netid_arg owns the matching rule (exact field, never substring).
         kept, dropped, i = [], 0, 0
         while i < len(cfg.extra_args):
             arg = cfg.extra_args[i]
             val = cfg.extra_args[i + 1] if i + 1 < len(cfg.extra_args) else ""
-            fields = {f.strip() for f in val.split(",")}
-            if arg == "-netdev" and f"id={netid}" in fields:
-                dropped, i = dropped + 1, i + 2
-                continue
-            if arg == "-device" and f"netdev={netid}" in fields:
+            if self._is_netid_arg(arg, val, netid):
                 dropped, i = dropped + 1, i + 2
                 continue
             kept.append(arg)
@@ -219,7 +242,11 @@ class IsolatedNetManager:
         # the -device VALUE carries a fresh random MAC each call, so a per-arg
         # `not in` dedup never matches it and would append a second NIC with no
         # preceding -device flag (two devices bound to one netdev → broken launch).
-        if any(netid in a for a in cfg.extra_args):
+        # Uses the shared exact-field matcher: this was `netid in a`, which made
+        # 'lab' match a VM that was only on 'lab2' — the attach then reported
+        # "already on the network", added the membership row, and never wired the
+        # NIC, leaving state that claims a connection the VM does not have.
+        if self._carries_netid(cfg.extra_args, netid):
             if vm_name not in net["members"]:
                 net["members"].append(vm_name)
                 self._save()

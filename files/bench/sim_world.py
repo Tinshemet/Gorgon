@@ -119,6 +119,19 @@ class SimWorld:
         self.vms[n]["nets"].add(net)
         return {"success": True}
 
+    def _t_remove_vm_from_network(self, a):
+        """The granular inverse of the attach — one VM off one network, the rest kept.
+        Mirrors the real tool's shape: an unknown VM or network is an error, and a VM
+        that simply is not on that network is a successful no-op, not a failure."""
+        net = a.get("net_name") or a.get("network")
+        n = self._vm(a)
+        if n not in self.vms:
+            return {"success": False, "error": f"no VM named {n}"}
+        if net not in self.nets:
+            return {"success": False, "error": f"no network named {net}"}
+        self.vms[n]["nets"].discard(net)
+        return {"success": True}
+
     def _t_add_label(self, a):
         n, label = self._vm(a), a.get("label")
         if n not in self.vms:

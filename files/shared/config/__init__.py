@@ -47,6 +47,7 @@ AGENT_SELECTION_FILE = os.path.expanduser(_c("agent_selection_file"))
 DEFAULT_AGENT        = _c("default_agent")
 AGENT_ENV_VAR        = _c("agent_env_var")
 AGENTS_DIR           = os.path.expanduser(_c("agents_dir"))   # ~/.gorgon/_agents — bundle root
+VOIDED_AGENTS_FILE   = os.path.expanduser(_c("voided_agents_file"))   # revoked agents (revocation.py)
 
 # ── on-disk secrets / logs ──────────────────────────────────────────────────────
 AUDIT_LOG_FILE   = os.path.expanduser(_c("audit_log_file"))

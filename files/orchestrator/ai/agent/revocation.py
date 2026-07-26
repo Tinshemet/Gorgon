@@ -16,9 +16,12 @@ import json
 import os
 from typing import List
 
-from shared.config import DEFAULT_AGENT
+from shared.config import DEFAULT_AGENT, VOIDED_AGENTS_FILE
 
-_PATH = os.path.expanduser("~/.gorgon/voided.json")
+# The storage path is config, not a literal — the one place in orchestrator/ that
+# still hardcoded a ~/.gorgon location while its neighbours (findings_store,
+# method_store) went through shared.config → AGENTS_DIR → shared.bundle.
+_PATH = VOIDED_AGENTS_FILE
 PROTECTED = frozenset({os.path.splitext(DEFAULT_AGENT)[0]})   # the fallback agent is never voidable
 
 
