@@ -29,10 +29,9 @@ SESSIONS_FILE    = _GORGON_DIR / "operator_sessions.json"
 # and cli.py's chat_loop() gate so the two entry points can't drift.
 CURRENT_SESSION_FILE = _GORGON_DIR / "current_session"
 
-_CFG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "connection_config.json")
-with open(_CFG_PATH) as _f:
-    _CFG = json.load(_f)
-_TTL_HOURS = _CFG.get("operator_session_ttl_hours", 12)
+from orchestrator import config as _cfg   # config/ folder: defaults ∪ this deployment's overrides
+
+_TTL_HOURS = _cfg.OPERATOR_SESSION_TTL_HOURS
 
 
 def _load() -> Dict[str, Dict[str, Any]]:

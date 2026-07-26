@@ -18,25 +18,25 @@ import time
 
 import requests as _requests
 
-with open(os.path.join(os.path.dirname(__file__), "connection_config.json")) as _f:
-    _CFG = json.load(_f)
-API_URL           = os.environ.get("API_URL",        _CFG.get("url",   "local"))
+from orchestrator import config as _cfg   # config/ folder: defaults ∪ this deployment's overrides
+
+API_URL           = os.environ.get("API_URL",        _cfg.API_URL)
 # Deliberately NOT API_TOKEN — that env var is the orchestrator's own incoming
 # client-facing secret (see orchestrator/http/api_server.py). Reusing it here
 # would make the orchestrator send its client-facing token to the executor,
 # which almost never matches the executor's independently configured secret.
-_TOKEN            = os.environ.get("EXECUTOR_TOKEN", _CFG.get("token", ""))
-_TIMEOUT          = int(os.environ.get("API_TIMEOUT", _CFG.get("timeout", 120)))
-_SYNC_TIMEOUT     = int(_CFG.get("sync_timeout_s", 10))   # shorter timeout for startup /profiles+/capabilities
-_CA_CERT          = os.environ.get("API_CA_CERT", _CFG.get("ca_cert") or None)
+_TOKEN            = os.environ.get("EXECUTOR_TOKEN", _cfg.TOKEN)
+_TIMEOUT          = int(os.environ.get("API_TIMEOUT", _cfg.TIMEOUT))
+_SYNC_TIMEOUT     = int(_cfg.SYNC_TIMEOUT_S)   # shorter timeout for startup /profiles+/capabilities
+_CA_CERT          = os.environ.get("API_CA_CERT", _cfg.CA_CERT or None)
 _VERIFY           = (
     False if os.environ.get("API_VERIFY_SSL", "1") == "0"
-    else (_CA_CERT or _CFG.get("verify_ssl", True))
+    else (_CA_CERT or _cfg.VERIFY_SSL)
 )
-_ALLOWED_VMS:         list = _CFG.get("client_allowed_vms",      [])
-_ALLOWED_PROFILES:    list = _CFG.get("client_allowed_profiles", [])
-_ALLOWED_TOOLS:       set  = set(_CFG.get("allowed_remote_tools", []))
-_LOCAL_ONLY_DISPLAYS: set  = set(_CFG.get("local_only_displays", ["sdl", "gtk"]))
+_ALLOWED_VMS:         list = _cfg.CLIENT_ALLOWED_VMS
+_ALLOWED_PROFILES:    list = _cfg.CLIENT_ALLOWED_PROFILES
+_ALLOWED_TOOLS:       set  = set(_cfg.ALLOWED_REMOTE_TOOLS)
+_LOCAL_ONLY_DISPLAYS: set  = set(_cfg.LOCAL_ONLY_DISPLAYS)
 
 # ── Executor sync cache ───────────────────────────────────────────────────────
 _synced: dict = {}

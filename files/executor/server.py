@@ -11,7 +11,7 @@ Start with:
 Environment variables:
     EXECUTOR_TOKEN   shared secret between orchestrator and executor.
                      Alternatively write the token to ~/.gorgon-executor.token
-                     or set "token" in executor/config.json.
+                     or set "token" in executor/config/server_config.json.
 
 Endpoints:
     GET  /health            — liveness check, no auth required
@@ -34,9 +34,8 @@ from pydantic import BaseModel
 from executor import disk_delivery
 
 # ── Config ────────────────────────────────────────────────────────────────────
-_CFG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
-with open(_CFG_PATH) as _f:
-    _CFG = json.load(_f)
+from executor import config as _CFGMOD   # config/ folder: defaults ∪ this machine's overrides
+_CFG = _CFGMOD.as_dict()
 
 _TOKEN_FILE = pathlib.Path.home() / ".gorgon-executor.token"
 _EVENT_LOG  = pathlib.Path.home() / ".gorgon-executor-events.jsonl"
@@ -59,7 +58,7 @@ if not _TOKEN:
     print(
         "[executor] WARNING: No token configured — remote connections will be refused.\n"
         "  Set EXECUTOR_TOKEN, write to ~/.gorgon-executor.token, "
-        "or set 'token' in executor/config.json."
+        "or set 'token' in executor/config/server_config.json."
     )
 
 # ── Known tools (derived from tool_executor.py's dispatch table) ──────────────

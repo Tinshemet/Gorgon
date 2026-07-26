@@ -18,11 +18,11 @@ from fastapi.responses import StreamingResponse
 
 from executor.api._vm_constants import VM_BASE_DIR
 
-_CFG = json.load(open(os.path.join(os.path.dirname(__file__), "config.json")))
+from executor import config as _cfg   # config/ folder: defaults ∪ this machine's overrides
 
 _VM_BASE   = pathlib.Path(VM_BASE_DIR)
-_CHUNK     = _CFG.get("io_chunk_bytes", 4 * 1024 * 1024)   # disk read/stream chunk
-_TAR_CHUNK = _CFG.get("tar_chunk_bytes", 65536)            # tar pipe read chunk
+_CHUNK     = _cfg.IO_CHUNK_BYTES     # disk read/stream chunk
+_TAR_CHUNK = _cfg.TAR_CHUNK_BYTES    # tar pipe read chunk
 
 
 def disk_path(vm_name: str) -> pathlib.Path:

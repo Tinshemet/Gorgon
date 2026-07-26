@@ -22,12 +22,11 @@ import subprocess
 from executor.tool_dispatch.tools.base import Tool
 from executor.api._vm_constants import WORKSPACE_DIR
 
-_CFG = json.load(open(os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config.json")))
+from executor import config as _cfg   # executor/config/: defaults ∪ this machine's overrides
 
 # WORKSPACE_DIR (the only writable path in the jail) is the SSOT in _vm_constants.
-_TIMEOUT_S    = _CFG.get("run_command_timeout_s", 60)
-_MAX_OUTPUT   = _CFG.get("run_command_max_output_bytes", 1_048_576)
+_TIMEOUT_S    = _cfg.RUN_COMMAND_TIMEOUT_S
+_MAX_OUTPUT   = _cfg.RUN_COMMAND_MAX_OUTPUT_BYTES
 
 _INTERP = {
     "shell":  ["/bin/sh", "-c"],

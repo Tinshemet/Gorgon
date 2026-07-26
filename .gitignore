@@ -2,9 +2,14 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Per-machine configs — never commit these
+# Per-machine config OVERRIDES — never commit these. The matching
+# *.defaults.json manifests ARE committed, so a clean checkout still runs:
+# orchestrator/connection_config.json used to be the only copy, and its absence
+# made `import orchestrator.executor_client` raise FileNotFoundError on a fresh clone.
 files/client/connection_config.json
 files/orchestrator/connection_config.json
+files/orchestrator/config/connection_config.json
+files/executor/config/server_config.json
 
 # Generated test artifact
 files/tests/test_report.json
