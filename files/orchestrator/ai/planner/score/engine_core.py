@@ -263,16 +263,55 @@ def run_score(
         return re.split(r"\b(?:for|so that|so|to be used by|intended for|meant for)\b",
                         goal or "", maxsplit=1, flags=re.I)[0]
 
-    def _touched(mark: int) -> set:
-        """The distinct entities this node's subtree actually acted on, read off the
-        ledger slice it produced."""
+    def _touched(mark: int, node: Optional[Dict[str, Any]] = None) -> set:
+        """The distinct entities this node's subtree accounted for.
+
+        Two sources, because a call is not the only evidence an entity was handled:
+          • the LEDGER slice this node produced — entities it actually acted on;
+          • its `already`-satisfied children — steps that made no call precisely BECAUSE
+            live state already showed their effect.
+
+        The second source is not a concession, it is the stronger evidence: `already` is
+        read off the world, whereas a ledger entry only says a call returned success.
+        Omitting it made two correct mechanisms cancel each other out — the
+        already-satisfied pre-emption erases exactly the ledger rows the group audit
+        demands, so on any re-plan "create 5 vms" closed with all five children `done`
+        and was still refused `set_goal_uncovered`. That refusal drove another re-plan,
+        which was pre-empted again, until the step budget ran out and starved the final
+        assurance clause. Measured on ladder rung 4: 17 calls/done became 35/partial.
+        """
         seen = set()
         for e in ledger[mark:]:
             for k in ("name", "vm_name", "new_name", "target"):
                 v = (e.get("args") or {}).get(k)
                 if isinstance(v, str) and v:
                     seen.add(v.lower())
+        for kid in ((node or {}).get("children") or []):
+            if kid.get("status") == "done" and kid.get("satisfied") == "already":
+                # One satisfied child = one entity accounted for. Keyed by the child's
+                # goal, which is distinct per member for harness-minted steps and needs
+                # no entity vocabulary to tell members apart.
+                seen.add(f"already:{(kid.get('goal') or '').strip().lower()}")
         return seen
+
+    def _group_scoped(mark: int) -> bool:
+        """Did this subtree make a call that acts on a GROUP by construction?
+
+        A collective goal is not always served by N per-entity calls: "make sure they all
+        ping each other" is one `fleet(label=…, action=ping)`, which addresses every member
+        at once. Counting entities in that ledger row finds one group name, or none at all,
+        and the group audit then refuses a step that did exactly the right thing.
+
+        The test needs no tool list and no vocabulary — it reads the ARGS the tool was
+        actually called with. A call that names a GROUP (`label`) and does NOT name an
+        individual (`name`/`vm_name`) is group-scoped: that is `fleet`, and it is not
+        `add_label`, which carries both because it labels one VM at a time.
+        """
+        for e in ledger[mark:]:
+            args = e.get("args") or {}
+            if args.get("label") and not (args.get("name") or args.get("vm_name")):
+                return True
+        return False
 
     def _audit(node: Dict[str, Any], node_goal: str, mark: int) -> Dict[str, Any]:
         """Refuse a `done` the world does not support. A node is judged by its tool call
@@ -304,7 +343,8 @@ def run_score(
         # group names the network's purpose, not its object. Reading that as a group action
         # refuses a step that did exactly the right thing, which sends its parent into an
         # endless re-plan: measured as the entire convergence cost of the partition rung.
-        if _SET_VALUED_RE.search(_strip_purpose(node_goal)) and len(_touched(mark)) < 2:
+        if _SET_VALUED_RE.search(_strip_purpose(node_goal)) \
+                and not _group_scoped(mark) and len(_touched(mark, node)) < 2:
             node["status"], node["reason"] = "unverified", "set_goal_uncovered"
         return node
 
