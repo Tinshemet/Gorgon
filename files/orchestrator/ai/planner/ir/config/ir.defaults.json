@@ -14,18 +14,19 @@
       "sql": "BOOL"
     }
   },
-  "_ops_doc": "The statement types. `one_of` means exactly one of those fields must be present — foreach names its set EITHER by querying state (`select`) OR by referring to a set already bound (`in`). Those are different things and conflating them was a real gap: `new` with a count binds a SET, and until `in` existed there was no way to act on it before its members had an attribute to query by. \"Create X vms and label them\" was inexpressible. `required` is what validate() insists on; `doc` is what the model is shown. Adding an op here does NOT make it executable — the visitor must learn it too — so this table is the contract between the two, not a switch. `in` accepts a LITERAL LIST as well as a bound reference, because a correction usually acts on specific things the last attempt left behind — the model reached for exactly that on rung 7, naming three VMs it had read off current state, and the language had no way to say it.",
+  "_ops_doc": "The statement types. `one_of` means exactly one of those fields must be present — foreach names its set EITHER by querying state (`select`) OR by referring to a set already bound (`in`). Those are different things and conflating them was a real gap: `new` with a count binds a SET, and until `in` existed there was no way to act on it before its members had an attribute to query by. \"Create X vms and label them\" was inexpressible. `required` is what validate() insists on; `doc` is what the model is shown. Adding an op here does NOT make it executable — the visitor must learn it too — so this table is the contract between the two, not a switch. `in` accepts a LITERAL LIST as well as a bound reference, because a correction usually acts on specific things the last attempt left behind — the model reached for exactly that on rung 7, naming three VMs it had read off current state, and the language had no way to say it. `new` carries `args` because a resource is rarely just a name: create_vm alone accepts 47 arguments and REQUIRES os_type. Without them `new` could not build a real VM at all — it passed only because the bench world is lenient about missing required fields, which is exactly the kind of gap a simulator hides.",
   "ops": {
     "new": {
       "required": [
         "var",
         "kind"
       ],
-      "doc": "create a resource and bind a name to it. Fields: var, kind, count (optional, default 1).",
+      "doc": "create a resource and bind a name to it. Fields: var, kind, count (optional, default 1), args (optional — anything else the creator tool takes, e.g. {\"os_type\":\"linux\",\"cpu_cores\":2,\"memory_mb\":4096}). With count > 1 every resource is created with the same args.",
       "fields": [
         "var",
         "kind",
-        "count"
+        "count",
+        "args"
       ]
     },
     "call": {

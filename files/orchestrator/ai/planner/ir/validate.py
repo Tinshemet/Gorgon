@@ -25,9 +25,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from . import config
 
 try:
-    from executor.command_catalog import KNOWN_TOOLS as _KNOWN_TOOLS
+    from executor.command_catalog import (KNOWN_TOOLS as _KNOWN_TOOLS,
+                                          REQUIRED_FIELDS as _REQUIRED_FIELDS)
 except ImportError:                                        # pragma: no cover
-    _KNOWN_TOOLS = frozenset()
+    _KNOWN_TOOLS, _REQUIRED_FIELDS = frozenset(), {}
 
 
 def coerce_body(raw: Any) -> Optional[List[Any]]:
@@ -111,6 +112,22 @@ def validate(program: Any, known_tools=None) -> Tuple[bool, List[str]]:
                                 f"$parameter, got {n!r}")
             if st.get("var"):
                 bound.add(str(st["var"]).lstrip(config.SIGIL))
+            # The creator's OWN required fields are checked, read from the live catalog.
+            # This is the extensibility claim paying off: the manifest names the creator,
+            # the catalog declares what it needs, and `new` is validated for any kind
+            # with no language code. It also catches a real hole — `NEW vm` was passing
+            # only the name, while create_vm requires os_type, so a program that
+            # validated could not have built a VM against the real executor.
+            a = st.get("args")
+            if a is not None and not isinstance(a, dict):
+                problems.append(f"{where}: args must be an object")
+            elif kind in config.KINDS:
+                creator = config.KINDS[kind].get("create")
+                need = set(_REQUIRED_FIELDS.get(creator) or []) - {config.KINDS[kind]["key"]}
+                missing = sorted(need - set((a or {}).keys()))
+                if missing:
+                    problems.append(f"{where}: {creator} also requires "
+                                    f"{', '.join(repr(m) for m in missing)} — pass them in args")
         elif op == "call":
             problems += _check_call(st, where, tools, bound)
         elif op == "foreach":

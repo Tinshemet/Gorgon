@@ -32,7 +32,12 @@ PROGRAM = {
     "imports": [{"package": "core"}],
     "body": [
         {"op": "new", "var": "net", "kind": "network"},
-        {"op": "new", "var": "vms", "kind": "vm", "count": "$X"},
+        # os_type rides along because create_vm REQUIRES it — the validator now reads
+        # that off the live catalog, and this program was refused until it complied.
+        # It had been "working" only because the sim world does not enforce required
+        # fields; against the real executor it could never have built a VM.
+        {"op": "new", "var": "vms", "kind": "vm", "count": "$X",
+         "args": {"os_type": "linux"}},
         {"op": "foreach", "in": "$vms",
          "call": {"tool": "add_label", "args": {"name": "$item", "label": "test"}}},
         {"op": "foreach", "select": {"kind": "vm", "tag": "test"},

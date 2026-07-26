@@ -84,8 +84,12 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
             n = _resolve(st.get("count", 1), scope)
             n = int(n) if isinstance(n, (int, str)) and str(n).isdigit() else 1
             names = [_mint(kind, st["var"], i, n) for i in range(n)]
+            # Everything else the creator takes rides along — os_type, cpu_cores,
+            # memory_mb. With count > 1 each resource is created with the SAME args,
+            # which is the natural reading of "create 5 vms with 4GB each".
+            extra = _resolve(st.get("args") or {}, scope)
             for nm in names:
-                _do(spec["create"], {spec["key"]: nm})
+                _do(spec["create"], {**extra, spec["key"]: nm})
             # One resource binds its name; several bind the LIST, so `foreach in` can
             # iterate what was just created — before it has any attribute to query by.
             scope[st["var"]] = names[0] if n == 1 else names

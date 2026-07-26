@@ -45,7 +45,11 @@ def render(program: Any) -> str:
             # to sign it; a dropped multiplier is the worst thing it could hide.
             many = (f" x{n}" if (isinstance(n, str) and n.startswith(config.SIGIL))
                     or (isinstance(n, int) and n > 1) else "")
-            out.append(f"{indent}LET {st.get('var')} = NEW {st.get('kind')}{many};")
+            # Dart-style named arguments, which is the surface preference on record and
+            # already how every Gorgon tool takes its arguments.
+            extra = _args(st.get("args")) if st.get("args") else ""
+            out.append(f"{indent}LET {st.get('var')} = NEW {st.get('kind')}"
+                       f"{f'({extra})' if extra else ''}{many};")
         elif op == "call":
             out.append(f"{indent}{st.get('tool')}({_args(st.get('args'))});")
         elif op == "foreach":
