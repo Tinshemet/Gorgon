@@ -31,7 +31,7 @@ import json
 import sys
 import urllib.request
 
-from orchestrator.ai.planner.ir import config, derive, render, run, validate
+from orchestrator.ai.planner.ir import config, consent, derive, render, run, validate
 from orchestrator.ai.planner.ir.validate import _one_of_groups
 
 from .ladder import BENCH_MODEL
@@ -479,7 +479,7 @@ def main(argv=None) -> int:
           f"{' · few-shot' if shots else ' · NO shots'}"
           f"{' · PARAPHRASE' if a.paraphrase else ''}\n")
 
-    valid = correct = revised = fixed = repairs = 0
+    valid = correct = revised = fixed = repairs = ungrounded = 0
     for rung in rungs:
         goal = (rung.paraphrase or rung.goal) if a.paraphrase else rung.goal
         print(f"── rung {rung.n} ({rung.name})\n   goal: {goal}")
@@ -518,8 +518,16 @@ def main(argv=None) -> int:
             print(f"          | {line}")
         if a.execute and ok:
             sel, holds = _seams(world)
+            # The bench stands in for the operator and always says yes — but it SAYS so,
+            # because "how many rungs write a program that vouches for nothing" is worth
+            # knowing. Silently auto-consenting would hide the very thing the gate exists
+            # to surface.
+            if consent.question(prog):
+                ungrounded += 1
+                print(f"          ?| NO GROUNDING: {consent.survey(prog)['acts']} acting "
+                      f"statement(s), no ENSURE — operator would be asked here")
             res = run(prog, world.execute, select=sel, holds=holds,
-                      known_names=world.names())
+                      known_names=world.names(), consent=True)
             print(f"          -> ran {len(res['calls'])} calls, "
                   f"ensure={'ok' if res['ok'] else res.get('failed')}"
                   f"{'' if res['ok'] else ' (' + str(res.get('why','')) + ')'}")
@@ -601,7 +609,7 @@ def main(argv=None) -> int:
                           f"{(fix_problems or ['?'])[0]}")
                     break
                 res = run(fix, world.execute, select=sel, holds=holds,
-                             known_names=world.names())
+                             known_names=world.names(), consent=True)
                 for line in render(fix).splitlines():
                     print(f"          r{rounds}| {line}")
                 # Re-assert the GOAL, not the fix's own opinion of itself.
@@ -627,6 +635,8 @@ def main(argv=None) -> int:
         print(f"   ACHIEVES THE GOAL  : {correct}/{len(rungs)}")
         if revised:
             print(f"   needed revision    : {revised}  (of which recovered: {fixed})")
+        if ungrounded:
+            print(f"   NO GROUNDING       : {ungrounded}  (would need operator consent)")
     print("\n   Validity is structure + grounding only. Whether a program MEANS its goal\n"
           "   is for a human reading the rendered forms above — scoring that needs a\n"
           "   second definition of every goal, which is a benchmark grading itself.")

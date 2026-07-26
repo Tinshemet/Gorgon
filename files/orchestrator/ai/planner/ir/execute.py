@@ -18,7 +18,7 @@ the model invent names. Same rule here: position and index, never a counter or a
 
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import config, refs
+from . import config, consent as _consent, refs
 from .validate import coerce_body, validate
 
 
@@ -52,7 +52,8 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
         select: Optional[Callable[[Dict], List[str]]] = None,
         holds: Optional[Callable[[Dict, Dict], Tuple[bool, str]]] = None,
         params: Optional[Dict[str, Any]] = None,
-        known_names: Optional[set] = None) -> Dict[str, Any]:
+        known_names: Optional[set] = None,
+        consent: Any = None) -> Dict[str, Any]:
     """Run a program. Returns {ok, scope, calls, failed}.
 
     `select` answers a registry query (kind + attribute filters) -> member names, and
@@ -64,6 +65,13 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
     ok, problems = validate(program, known_names=known_names)
     if not ok:
         return {"ok": False, "failed": "invalid", "problems": problems,
+                "scope": {}, "calls": []}
+
+    # GROUNDING. A program that changes the world and never checks it needs the
+    # operator's word first — see consent.py. Refused BEFORE the first call, because a
+    # question asked halfway through is not a question, it is a notification.
+    if not _consent.granted(program, consent):
+        return {"ok": False, "failed": "ungrounded", "why": _consent.question(program),
                 "scope": {}, "calls": []}
 
     body = coerce_body(program) or []
@@ -201,6 +209,14 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
             if holds is None:
                 return {"ok": False, "failed": "no predicate evaluator",
                         "scope": scope, "calls": calls}
+            # `nonlocal`, or this binds a fresh local that dies with the call and the
+            # outer flag stays False forever. It did: the "with an ENSURE present its
+            # verdict stands" rule three lines from here has never once fired, so a
+            # grounded program that tolerated a failed call — the ordinary shape of a
+            # RE-RUN, where creation fails because the thing already exists — was
+            # reported as calls_failed anyway. The passing postcondition was computed,
+            # believed, and then ignored.
+            nonlocal asserted
             asserted = True
             good, why = holds(_resolve(st["predicate"], scope), scope)
             if not good:

@@ -83,8 +83,14 @@ class SimWorld:
         n = self._vm(a)
         if not n:
             return {"success": False, "error": "name is required"}
-        if n in self.vms:                                   # idempotent re-entry, as the real one is
-            return {"success": True, "name": n, "note": "already exists"}
+        if n in self.vms:
+            # The REAL create_vm refuses: executor/api/_vm_lifecycle.py returns
+            # {"success": False, "error": "VM 'x' already exists — delete it first."}
+            # This used to answer success with a note, under a comment claiming that was
+            # what the real one did. It is not, and the lie mattered: it made re-running a
+            # program look free and idempotent when in production every creation fails.
+            # A sim that is kinder than the world it stands in measures nothing.
+            return {"success": False, "error": f"VM '{n}' already exists — delete it first."}
         self.vms[n] = {"status": "stopped", "labels": set(), "nets": set()}
         return {"success": True, "name": n}
 
@@ -127,6 +133,8 @@ class SimWorld:
         net = a.get("net_name") or a.get("network")
         if not net:
             return {"success": False, "error": "net_name is required"}
+        if net in self.nets:                       # network_manager.py:62 says the same
+            return {"success": False, "error": f"Network '{net}' already exists."}
         self.nets.add(net)
         return {"success": True, "net_name": net}
 
