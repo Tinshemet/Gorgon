@@ -48,6 +48,17 @@ class SimWorld:
         return len(m) >= minimum and bool(self.common_networks(m))
 
     # ── the executor surface ──
+    @classmethod
+    def tools(cls) -> tuple:
+        """Every tool this world actually simulates, read off its own handlers.
+
+        Derived, never listed: `execute` dispatches to `_t_<tool>`, so the handlers ARE
+        the set. A hand-written copy elsewhere drifts the moment a handler is added or
+        renamed, and a probe offering a tool the world cannot run would be testing the
+        wrong thing — it would look like a model failure.
+        """
+        return tuple(sorted(n[3:] for n in dir(cls) if n.startswith("_t_")))
+
     def execute(self, tool: str, args: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         args = args or {}
         self.calls.append({"tool": tool, "args": args})

@@ -33,14 +33,14 @@ from orchestrator.ai.planner.ir import config as ir_config
 from orchestrator.ai.planner.score import _first_tool_call
 
 from .ladder import BENCH_MODEL, make_call_model
+from .sim_world import SimWorld
 from .rungs import RUNGS
 
-# The tools a ladder goal may legitimately use. The real catalog is 53 tools; the sim
-# implements this handful, and offering only these keeps the test about whether the model
-# can express a PROGRAM rather than whether it can find a tool name in a long list.
-_SIM_TOOLS = ("create_vm", "launch_vm", "stop_vm", "delete_vm", "clone_vm",
-              "create_network", "add_vm_to_network", "remove_vm_from_network",
-              "add_label", "remove_label", "fleet", "list_vms", "list_networks")
+# The tools offered to the model: exactly what the sim world can actually run, read off
+# SimWorld's own handlers. This was a hand-written list of thirteen names, which could
+# drift from the world it is supposed to describe — and a probe offering an unrunnable
+# tool measures the wrong thing while looking like a model failure.
+_SIM_TOOLS = SimWorld.tools()
 
 
 def _system() -> str:

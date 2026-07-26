@@ -74,6 +74,9 @@ def _pred(p) -> str:
         return f"<unknown check {shape!r}>"
     if spec["operand"] == "sets":
         return f"{shape.upper()}({', '.join(str(x) for x in (p.get('sets') or []))})"
+    # The symbol comes from the manifest beside the comparator it belongs to. It used to
+    # be a dict here, so a comparator added to the JSON rendered as "?" — the language
+    # extended in one place and printed wrong in another.
     used = next((c for c in spec["comparators"] if c in p), None)
-    sym = {"eq": "=", "gte": ">=", "lte": "<=", "min": ">="}.get(used, "?")
+    sym = spec["comparators"].get(used, "?")
     return f"{shape.upper()}({_select(p.get('select'))}) {sym} {p.get(used)}"

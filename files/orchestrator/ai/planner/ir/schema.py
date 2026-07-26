@@ -29,7 +29,7 @@ def _predicate_property() -> Dict[str, Any]:
     prop: Dict[str, Any] = {"type": "object", "description": "ensure: what must hold at the end"}
     if not config.SCHEMA.get("predicate_properties"):
         return prop
-    comparators = sorted({c for p in config.PREDICATES.values() for c in p["comparators"]})
+    comparators = sorted({c for p in config.PREDICATES.values() for c in p["comparators"]})  # dict -> its keys
     props: Dict[str, Any] = {
         "shape":  {"type": "string", "enum": list(config.PREDICATES),
                    "description": "which check"},
