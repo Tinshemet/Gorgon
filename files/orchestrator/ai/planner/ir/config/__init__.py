@@ -55,6 +55,7 @@ KINDS      = _c("kinds")           # THE RESOURCE MANIFEST: kind -> {package, cr
 PREDICATES = _c("predicates")      # shape -> {source, operand, comparators, doc}
 PROMPT     = _c("prompt")          # every string the model is shown
 SCHEMA     = _c("schema")          # tool-schema knobs
+AUTHORING  = _c("authoring")       # "program" (one tool) or "statements" (one per op)
 
 
 def packages_for(kinds_used) -> list:

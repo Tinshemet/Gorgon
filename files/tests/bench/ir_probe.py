@@ -28,7 +28,8 @@ import json
 import sys
 
 from orchestrator.ai.planner.ir import (
-    EMIT_PROGRAM_TOOL, coerce_body, render, system_prompt, validate)
+    EMIT_PROGRAM_TOOL, coerce_body, render, statement_from, statement_tools,
+    system_prompt, validate)
 from orchestrator.ai.planner.ir import config as ir_config
 from orchestrator.ai.planner.score import _first_tool_call
 
@@ -49,6 +50,83 @@ def _system() -> str:
     Deliberately NOT written here: the prompt and the validator must describe the same
     language, and the only way to guarantee that is to build both from one table."""
     return system_prompt(_SIM_TOOLS)
+
+
+def _all_tool_calls(resp):
+    """Every tool call in a response, not just the first — a model driving the statement
+    tools may emit several in one turn, and dropping them would look like it stopped."""
+    msg = (resp or {}).get("message", {}) if isinstance(resp, dict) else {}
+    out = []
+    for tc in (msg.get("tool_calls") or []):
+        fn = tc.get("function", {})
+        args = fn.get("arguments", {})
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except Exception:
+                args = {}
+        out.append((fn.get("name"), args or {}))
+    return out
+
+
+def probe_statements(goal: str, call_model, rounds: int = 6) -> dict:
+    """Build a program by calling ONE statement tool at a time.
+
+    The whole-program tool asks for an array of structured objects, which is the shape
+    emission fails on. This asks for what the model produces reliably all day — a call
+    with a few scalar arguments — and the harness assembles the program. The IR that
+    comes out is identical; only how it was obtained differs.
+    """
+    tools = statement_tools()
+    messages = [
+        {"role": "system", "content":
+         "Build a program for the operator's goal by calling ONE statement tool at a "
+         "time, in order. stmt_new creates resources. stmt_call invokes one tool. "
+         "stmt_foreach applies a tool to every member of a set. stmt_ensure states what "
+         "must be true at the end. Use $name to refer to something you created, and "
+         "$item for the current member inside a foreach. When the program is complete, "
+         "reply with the single word DONE and call nothing."},
+        {"role": "user", "content": f"Goal: {goal}"},
+    ]
+    body, transcript = [], []
+    for _ in range(rounds):
+        try:
+            resp = call_model(messages, tools)
+        except Exception as e:
+            transcript.append(f"error: {type(e).__name__}")
+            break
+        calls = _all_tool_calls(resp)
+        if not calls:
+            break
+        added = 0
+        for name, args in calls:
+            st = statement_from(name, args)
+            if st is not None:
+                body.append(st)
+                added += 1
+                transcript.append(name)
+        if not added:
+            break
+        # PROTOCOL, and this was the bug: after a tool call the conversation must carry
+        # the assistant's own message and then a `tool` reply per call. Fabricating an
+        # assistant turn instead left the exchange malformed, and the model answered by
+        # stopping — every program came back exactly one statement long, which VALIDATED
+        # while achieving nothing. A well-formed fragment is the false-success case this
+        # whole project exists to refuse, so it is worth the protocol being exact.
+        messages.append((resp or {}).get("message") or {"role": "assistant", "content": ""})
+        for name, _args in calls:
+            messages.append({"role": "tool", "name": name,
+                             "content": "statement added"})
+        messages.append({"role": "user", "content":
+                         f"The goal was: {goal}\n"
+                         f"The program so far is:\n{render({'body': body})}\n"
+                         "If that does NOT yet achieve the whole goal, call the next "
+                         "statement tool. If it does, reply DONE and call nothing."})
+    if not body:
+        return {"emitted": False, "why": "no statements", "tries": 1, "first_ok": False}
+    ok, problems = validate({"body": body})
+    return {"emitted": True, "valid": ok, "problems": problems, "body": body,
+            "n": len(body), "tries": 1, "first_ok": ok, "transcript": transcript}
 
 
 def _attempt(messages, call_model) -> tuple:
@@ -110,20 +188,26 @@ def main(argv=None) -> int:
                    help="feed validation errors back and retry (default 1) — the design's "
                         "own path: a rejected program is a plan failure, not a crash, and "
                         "routes to revision with the reason attached.")
+    p.add_argument("--statements", action="store_true",
+                   help="build the program ONE STATEMENT AT A TIME via stmt_* tools "
+                        "instead of one whole-program call. The array-of-objects shape "
+                        "is what emission fails on; a call with a few scalars is not.")
     p.add_argument("--json", action="store_true", help="dump the raw programs")
     a = p.parse_args(argv)
 
     rungs = [r for r in RUNGS if r.n in (a.rung or [4, 5, 6, 7])]
     call_model = make_call_model(a.model, a.temp, 300)
     print(f"IR probe · model={a.model} temp={a.temp} runs={a.runs}"
-          f"{' · PARAPHRASE' if a.paraphrase else ''}\n")
+          f"{' · PARAPHRASE' if a.paraphrase else ''}"
+          f"{' · STATEMENT TOOLS' if a.statements else ''}\n")
 
     emitted = valid = total = first_ok = 0
     for rung in rungs:
         goal = (rung.paraphrase or rung.goal) if a.paraphrase else rung.goal
         print(f"── rung {rung.n} ({rung.name})\n   goal: {goal}")
         for i in range(a.runs):
-            row = probe(goal, call_model, retries=a.retries)
+            row = (probe_statements(goal, call_model) if a.statements
+                   else probe(goal, call_model, retries=a.retries))
             total += 1
             if not row["emitted"]:
                 print(f"   [NO PROGRAM] run {i+1}: {row['why']}")

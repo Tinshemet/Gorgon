@@ -10,7 +10,7 @@ tool and the statements arrive as validated JSON arguments. `DECOMPOSE_TOOL` is 
 working precedent — one schema instead of a lexer and a grammar.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 from . import config
 
@@ -138,3 +138,142 @@ def system_prompt(tools) -> str:
     lines += ["", p["reference"], p["ordering"], "",
               f"{p['tools_header']} {', '.join(tools)}.", p["tools_footer"]]
     return "\n".join(lines)
+
+
+# ── authoring mode: one tool per statement ──────────────────────────────────────
+#
+# The whole-program tool asks for an array of structured objects, and that is the shape
+# emission fails on. These ask for what the model demonstrably CAN produce: a call with a
+# handful of scalar arguments, exactly like create_vm(name=alpha). The harness assembles
+# the program from the sequence of calls, so the IR is unchanged — only the way it is
+# obtained differs.
+#
+# Nested objects are flattened for the same reason. `select {kind, label}` becomes three
+# scalars, because a nested object inside a tool argument is the other thing that broke.
+
+_STATEMENT_TOOLS = {
+    "new": {
+        "doc": "Create resources and bind a name to them. Use for 'create N vms'.",
+        "props": {
+            "var":   ("string",  "the name to bind, e.g. 'vms'"),
+            "kind":  ("string",  "the resource type"),
+            "count": ("integer", "how many (omit for 1)"),
+        },
+        "required": ["var", "kind"],
+    },
+    "call": {
+        "doc": "Invoke ONE tool once.",
+        "props": {
+            "tool": ("string", "the tool name"),
+            "args": ("object", "the tool's arguments"),
+        },
+        "required": ["tool", "args"],
+    },
+    "foreach": {
+        "doc": ("Apply one tool to EVERY member of a set. Name the set either by "
+                "querying state (select_kind [+ select_attr/select_value]) or by a set "
+                "you already bound (in_var). The member is $item."),
+        "props": {
+            "select_kind":  ("string", "query: the resource type, e.g. 'vm'"),
+            "select_attr":  ("string", "query: attribute to filter on, e.g. 'label'"),
+            "select_value": ("string", "query: the value it must have"),
+            "in_var":       ("string", "or: a set already bound, e.g. '$vms'"),
+            "tool":         ("string", "the tool to apply to each member"),
+            "args":         ("object", "its arguments; use $item for the member"),
+        },
+        "required": ["tool", "args"],
+    },
+    "ensure": {
+        "doc": "State something that must be TRUE at the end. A check, not an action.",
+        "props": {
+            "shape":        ("string", "count, reach or disjoint"),
+            "select_kind":  ("string", "the resource type to measure"),
+            "select_attr":  ("string", "attribute to filter on"),
+            "select_value": ("string", "the value it must have"),
+            "amount":       ("integer", "the number to compare against"),
+            "compare":      ("string", "eq, gte, lte or min"),
+            "sets":         ("string", "disjoint: comma-separated, e.g. '$a,$b'"),
+        },
+        "required": ["shape"],
+    },
+}
+
+
+def statement_tools() -> List[Dict[str, Any]]:
+    """One tool per op — flat, scalar, and small enough to actually get called."""
+    out = []
+    for op, spec in _STATEMENT_TOOLS.items():
+        props = {n: {"type": t, "description": d} for n, (t, d) in spec["props"].items()}
+        if op == "new":
+            props["kind"]["enum"] = list(config.KINDS)
+        if op == "ensure":
+            props["shape"]["enum"] = list(config.PREDICATES)
+        out.append({"type": "function", "function": {
+            "name": f"stmt_{op}", "description": spec["doc"],
+            "parameters": {"type": "object", "properties": props,
+                           "required": spec["required"]}}})
+    return out
+
+
+def _select_from(args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Rebuild a nested select from the flattened scalars."""
+    kind = args.get("select_kind")
+    if not kind:
+        return None
+    sel = {"kind": kind}
+    if args.get("select_attr"):
+        sel[args["select_attr"]] = args.get("select_value")
+    return sel
+
+
+def statement_from(name: str, args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """One `stmt_*` call -> one IR statement. None if it is not a statement tool.
+
+    This is the only place the flattened surface and the stored IR meet, so the model's
+    convenience never leaks into what gets signed, audited or replayed.
+    """
+    args = args or {}
+    op = name[5:] if name.startswith("stmt_") else None
+    if op not in config.OPS:
+        return None
+    if op == "new":
+        st = {"op": "new", "var": args.get("var"), "kind": args.get("kind")}
+        n = args.get("count")
+        # A count arrives as "3" as often as 3 — the schema says integer and the model
+        # sends a string anyway. Rejecting that would fail a program for a JSON type,
+        # not for meaning. A $parameter passes through untouched.
+        if isinstance(n, str) and n.strip().lstrip(config.SIGIL).isdigit():
+            n = n.strip() if n.strip().startswith(config.SIGIL) else int(n)
+        if n not in (None, 1):
+            st["count"] = n
+        return st
+    if op == "call":
+        return {"op": "call", "tool": args.get("tool"), "args": args.get("args") or {}}
+    if op == "foreach":
+        st = {"op": "foreach",
+              "call": {"tool": args.get("tool"), "args": args.get("args") or {}}}
+        if args.get("in_var"):
+            st["in"] = args["in_var"]
+        else:
+            sel = _select_from(args)
+            if sel is not None:
+                st["select"] = sel
+        return st
+    if op == "ensure":
+        shape = args.get("shape")
+        pred: Dict[str, Any] = {"shape": shape}
+        spec = config.PREDICATES.get(shape) or {}
+        if spec.get("operand") == "sets":
+            pred["sets"] = [s.strip() for s in str(args.get("sets") or "").split(",") if s.strip()]
+        else:
+            sel = _select_from(args)
+            if sel is not None:
+                pred["select"] = sel
+            cmp_ = args.get("compare") or next(iter(spec.get("comparators") or {"eq": ""}), "eq")
+            amount = args.get("amount")
+            if isinstance(amount, str) and amount.strip().isdigit():
+                amount = int(amount)
+            if amount is not None:
+                pred[cmp_] = amount
+        return {"op": "ensure", "predicate": pred}
+    return None

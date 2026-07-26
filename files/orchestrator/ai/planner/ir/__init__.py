@@ -28,7 +28,8 @@ performs on every tool call.
 from .config import KINDS, LOOP_VAR, OPS, PREDICATES, SIGIL, packages_for
 from .execute import Unsatisfied, run
 from .render import render
-from .schema import emit_program_tool, system_prompt
+from .schema import (emit_program_tool, statement_from, statement_tools,
+                     system_prompt)
 from .validate import coerce_body, kinds_used, validate
 
 # The tool schema is built from the manifest at import time; call emit_program_tool()
@@ -37,6 +38,7 @@ EMIT_PROGRAM_TOOL = emit_program_tool()
 
 __all__ = [
     "EMIT_PROGRAM_TOOL", "emit_program_tool", "system_prompt",
+    "statement_tools", "statement_from",
     "validate", "coerce_body", "kinds_used",
     "render", "run", "Unsatisfied",
     "KINDS", "OPS", "PREDICATES", "SIGIL", "LOOP_VAR", "packages_for",

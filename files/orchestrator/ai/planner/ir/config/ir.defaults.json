@@ -183,5 +183,7 @@
       "type": "object",
       "doc": "what must hold at the end"
     }
-  }
+  },
+  "_authoring_doc": "HOW the model is asked to write a program. 'program' offers one emit_program tool taking the whole body as an array of statement objects. 'statements' offers ONE TOOL PER OP, each a flat object of scalars, and the harness assembles the program from the calls. The second exists because of a consistent measurement: decompose{steps:[string]} — an array of STRINGS — works reliably every day, while an array of structured OBJECTS collapses, and collapses harder the more structure is declared (oneOf and a nested required both took emission to 0/4). A statement tool asks for exactly the shape the model produces all day when it calls create_vm(name=alpha): two or three scalar arguments. Nested objects are flattened for the same reason — select{kind,label} becomes select_kind/select_attr/select_value.",
+  "authoring": "statements"
 }
