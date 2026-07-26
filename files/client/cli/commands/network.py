@@ -1,4 +1,4 @@
-"""commands/network.py — gorgon network list|create|delete|add [name] [vm]."""
+"""commands/network.py — gorgon network list|create|delete|add|remove [name] [vm]."""
 
 import json
 
@@ -20,5 +20,7 @@ class NetworkCommand(Command):
             console.print_json(json.dumps(manager.delete_network(rest[1]), default=str))
         elif sub == "add" and len(rest) >= 3:
             console.print_json(json.dumps(manager.add_vm_to_network(rest[1], rest[2]), default=str))
+        elif sub == "remove" and len(rest) >= 3:
+            console.print_json(json.dumps(manager.remove_vm_from_network(rest[1], rest[2]), default=str))
         else:
-            console.print("[dim]Usage: network list|create|delete|add [name] [vm][/dim]")
+            console.print("[dim]Usage: network list|create|delete|add|remove [name] [vm][/dim]")

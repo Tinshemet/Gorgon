@@ -92,6 +92,54 @@ class IsolatedNetManager:
         self._nets = self._load()   # reflect any out-of-process changes
         return list(self._nets.values())
 
+    # The granular inverse of add_vm_to_network: detach ONE VM from ONE network.
+    # Undoes both halves of an attach — the VM's isolated NIC (the -netdev/-device
+    # pair carrying this network's id) and the network's member list.
+    # In: str net_name, str vm_name → Out: dict with success
+    def remove_vm_from_network(self, net_name: str, vm_name: str) -> Dict[str, Any]:
+        """Detach a stopped VM's isolated network interface for one network."""
+        self._nets = self._load()   # reload-before-mutate: another process may have changed state
+        net = self._nets.get(net_name)
+        if not net:
+            return {"success": False, "error": f"Network '{net_name}' not found."}
+        try:
+            cfg = MachineConfig.load(vm_name)
+        except FileNotFoundError as e:
+            return {"success": False, "error": str(e)}
+        netid = f"iso_{net_name}"
+        # Drop the NIC as flag+value PAIRS, mirroring how the attach appended them.
+        # Matching is on an EXACT parsed field, never a substring: `netid in arg`
+        # would make network 'lab' match 'lab2' and tear out the wrong NIC.
+        kept, dropped, i = [], 0, 0
+        while i < len(cfg.extra_args):
+            arg = cfg.extra_args[i]
+            val = cfg.extra_args[i + 1] if i + 1 < len(cfg.extra_args) else ""
+            fields = {f.strip() for f in val.split(",")}
+            if arg == "-netdev" and f"id={netid}" in fields:
+                dropped, i = dropped + 1, i + 2
+                continue
+            if arg == "-device" and f"netdev={netid}" in fields:
+                dropped, i = dropped + 1, i + 2
+                continue
+            kept.append(arg)
+            i += 1
+        was_member = vm_name in net["members"]
+        if not dropped and not was_member:
+            return {"success": True,
+                    "message": f"VM '{vm_name}' is not on isolated network '{net_name}'."}
+        # The two halves are repaired INDEPENDENTLY: a VM can be a listed member with no
+        # NIC (added while its config was missing) or carry a NIC without being listed
+        # (membership dropped by remove_vm_from_all_networks). Detaching should leave
+        # neither behind, so each side is fixed on its own evidence, not on the other's.
+        if was_member:
+            net["members"].remove(vm_name)
+            self._save()
+        if dropped:
+            cfg.extra_args = kept
+            cfg.save()
+        return {"success": True,
+                "message": f"VM '{vm_name}' removed from isolated network '{net_name}'."}
+
     # Drops a VM from every network's member list — called by delete_vm so a
     # deleted VM doesn't linger as a phantom member (e.g. get counted, or have
     # its name reused by an unrelated future VM that then appears to already

@@ -837,7 +837,8 @@ SECTION 6 — executor/api/qemu_manager.py
     set_resource_limits
 
   Isolated networking:
-    create_network / delete_network / list_networks / add_vm_to_network
+    create_network / delete_network / list_networks / add_vm_to_network /
+    remove_vm_from_network
 
   Monitor:
     send_monitor_cmd
@@ -857,7 +858,7 @@ SECTION 7 — AI LAYER  (provider/ai/, shared/sanitizer/, shared/preflight/)
               list_profiles
   Display:    open_display, open_shell
   Networking: create_network, delete_network, list_networks, add_vm_to_network,
-              set_resource_limits
+              remove_vm_from_network, set_resource_limits
   System:     check_system
   Meta:       clarify
 

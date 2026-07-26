@@ -1118,6 +1118,28 @@
  {
   "type": "function",
   "function": {
+   "name": "remove_vm_from_network",
+   "description": "Remove a VM from one isolated network. The inverse of add_vm_to_network: detaches only that network's interface and leaves the VM's other networks alone.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "net_name": {
+      "type": "string"
+     },
+     "vm_name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "net_name",
+     "vm_name"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
    "name": "open_display",
    "description": "Open the display viewer for a running VM.",
    "parameters": {

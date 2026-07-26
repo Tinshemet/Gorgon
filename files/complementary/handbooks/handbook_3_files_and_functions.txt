@@ -392,7 +392,8 @@ PURPOSE
   clone_vm, get_vm_logs, print_command, send_monitor_cmd, scan_isos,
   snapshot_create/list/restore/delete, create_profile/delete_profile/
   list_profiles/check_profile_compatibility, create_network/delete_network/
-  list_networks/add_vm_to_network, set_resource_limits, open_display,
+  list_networks/add_vm_to_network/remove_vm_from_network,
+  set_resource_limits, open_display,
   open_shell, check_system, fingerprint_vm, add_label/remove_label/
   list_labels, mark_as_template/remove_template/list_templates, clarify,
   revert) lives in the JSON data file.
@@ -1074,7 +1075,7 @@ KEY HELPERS (private, shared by all mixins via self)
 
 NETWORK PASS-THROUGHS (delegate to self.iso_nets)
   create_network(net_name), delete_network(net_name), list_networks(),
-  add_vm_to_network(net_name, vm_name)
+  add_vm_to_network(net_name, vm_name), remove_vm_from_network(net_name, vm_name)
 
 ────────────────────────────────────────────────────────────────────────────────
 executor/api/_vm_lifecycle.py  (_VmLifecycleMixin)
@@ -1521,6 +1522,16 @@ FUNCTION: add_vm_to_network(net_name, vm_name) -> dict
   Appends the isolation network args directly into the (stopped) VM's
   extra_args and persists both the VM config and the network membership
   list.
+
+FUNCTION: remove_vm_from_network(net_name, vm_name) -> dict
+  IN:  net_name str, vm_name str → OUT: {"success": True/False, ...}
+  The granular inverse of the above — undoes ONE attach, leaving the VM's
+  other networks alone (remove_vm_from_all_networks drops every one, and is
+  VM-deletion's cleanup, not an agent-callable tool). Removes the -netdev/
+  -device PAIR carrying this network's id and drops the membership entry.
+  Matching is on an exact parsed field, never a substring, so detaching
+  'lab' cannot tear the NIC out of 'lab2'. The two halves are repaired
+  independently, so neither a phantom member nor an orphaned NIC survives.
 
 KEY HELPERS
   _load()/_save() — read/write ~/.qemu_vms/_isolated_nets/networks.json.
@@ -2279,7 +2290,8 @@ FUNCTION: _run(tool_name, args, verbose, *, raw_os_type="",
   launch_vm, stop_vm, vm_status, monitor_vm, show_config, update_config
   (captures old values first so the revert can restore them), resize_disk,
   snapshot_create/list/restore/delete, set_resource_limits, create_network/
-  delete_network/list_networks/add_vm_to_network, open_display, open_shell,
+  delete_network/list_networks/add_vm_to_network/remove_vm_from_network,
+  open_display, open_shell,
   delete_vm, check_disk, get_vm_logs, print_command, fingerprint_vm,
   send_monitor_cmd. Calls the matching shared.display render_*() function
   for each tool's result unless verbose=True.

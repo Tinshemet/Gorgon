@@ -1,4 +1,4 @@
-"""network — list/create/delete networks, attach a VM to one."""
+"""network — list/create/delete networks, attach a VM to one or detach it again."""
 
 import json
 from typing import List
@@ -21,3 +21,5 @@ class NetworkCommand(Command):
             ctx.console.print_json(json.dumps(ctx.manager.delete_network(rest[1]), default=str))
         elif sub == "add" and len(rest) >= 3:
             ctx.console.print_json(json.dumps(ctx.manager.add_vm_to_network(rest[1], rest[2]), default=str))
+        elif sub == "remove" and len(rest) >= 3:
+            ctx.console.print_json(json.dumps(ctx.manager.remove_vm_from_network(rest[1], rest[2]), default=str))

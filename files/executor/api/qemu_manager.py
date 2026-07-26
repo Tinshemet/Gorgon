@@ -169,3 +169,7 @@ class QemuManager(
     def add_vm_to_network(self, net_name: str, vm_name: str) -> Dict[str, Any]:
         """Attach a VM to an isolated network."""
         return self.iso_nets.add_vm_to_network(net_name, vm_name)
+
+    def remove_vm_from_network(self, net_name: str, vm_name: str) -> Dict[str, Any]:
+        """Detach a VM from one isolated network."""
+        return self.iso_nets.remove_vm_from_network(net_name, vm_name)

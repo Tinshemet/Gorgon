@@ -251,10 +251,11 @@
         "list_networks",
         "create_network",
         "delete_network",
-        "add_vm_to_network"
+        "add_vm_to_network",
+        "remove_vm_from_network"
       ],
-      "args": "list|create|delete|add [args]",
-      "desc": "Manage virtual networks and attach VMs to them.",
+      "args": "list|create|delete|add|remove [args]",
+      "desc": "Manage virtual networks, attach VMs to them and detach them again.",
       "related": [
         "network",
         "net",
@@ -531,6 +532,17 @@
       "vm": true,
       "effect": [
         "vm_reload"
+      ],
+      "rev": false
+    },
+    "remove_vm_from_network": {
+      "req": [
+        "net_name",
+        "vm_name"
+      ],
+      "vm": true,
+      "effect": [
+        "networks"
       ],
       "rev": false
     },
@@ -998,6 +1010,18 @@
       "put~on~network",
       "move~to~network",
       "place~on~network"
+    ],
+    "remove_vm_from_network": [
+      "remove~from~network",
+      "detach~from~network",
+      "disconnect~from~network",
+      "take~off~network",
+      "take~out~of~network",
+      "unlink~from~network",
+      "leave~network",
+      "drop~from~network",
+      "pull~from~network",
+      "off~the~network"
     ],
     "check_profile_compatibility": [
       "check profile",

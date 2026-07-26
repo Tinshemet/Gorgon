@@ -95,5 +95,9 @@
     "add_vm_to_network": [
         ["net_name", "Which network would you like to add the VM to?",                  []],
         ["vm_name",  "Which VM would you like to add to the network?",                  []]
+    ],
+    "remove_vm_from_network": [
+        ["net_name", "Which network would you like to remove the VM from?",             []],
+        ["vm_name",  "Which VM would you like to remove from the network?",             []]
     ]
 }
