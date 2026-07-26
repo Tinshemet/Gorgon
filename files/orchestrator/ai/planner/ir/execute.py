@@ -205,7 +205,7 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
                 if bad is not None:
                     return bad
 
-        elif op == "ensure":
+        elif op in ("ensure", "achieve"):
             if holds is None:
                 return {"ok": False, "failed": "no predicate evaluator",
                         "scope": scope, "calls": calls}
@@ -220,11 +220,21 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
             asserted = True
             good, why = holds(_resolve(st["predicate"], scope), scope)
             if not good:
-                # A failed postcondition is a PLAN failure with a reason, not a crash —
-                # the caller routes it to revision the way an unverified close already is.
-                return {"ok": False, "failed": "unsatisfied", "why": why,
-                        "predicate": st["predicate"], "scope": scope, "calls": calls,
-                        "failures": failures}
+                # A failed check is a PLAN failure with a reason, not a crash — the caller
+                # routes it to revision the way an unverified close already is. WHICH
+                # failure it is decides who answers it, and that is the whole point of
+                # having two words:
+                #
+                #   ensure  — a ground check. The world is not what the program assumed,
+                #             so the plan was built on something false. A model rethinks.
+                #   achieve — the goal. The end state is short of what was asked, which is
+                #             usually arithmetic, and the harness closes the difference
+                #             (derive.py) because the model provably cannot: it oscillated
+                #             6->5->7->5 with the state and the objection in hand.
+                return {"ok": False,
+                        "failed": "unachieved" if op == "achieve" else "unsatisfied",
+                        "why": why, "predicate": st["predicate"], "scope": scope,
+                        "calls": calls, "failures": failures}
         # IFAILS: recovery runs only if THIS statement's calls actually failed. Scoping it
         # to one statement is why you know what broke — and the failure stays recorded, so
         # a recovery compensates rather than conceals.

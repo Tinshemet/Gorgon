@@ -117,10 +117,19 @@
       "required": [
         "predicate"
       ],
-      "doc": "state something that must be TRUE at the end. This is a CHECK, not an action.",
+      "doc": "a GROUND CHECK: something that must be true right here. Evaluated where it is written, so it may open a procedure as a precondition \u2014 verify the world is as you expect before touching it. If it fails the program stops.",
       "fields": [
         "predicate"
       ]
+    },
+    "achieve": {
+      "required": [
+        "predicate"
+      ],
+      "fields": [
+        "predicate"
+      ],
+      "doc": "the GOAL: what this whole program is for. Nothing may act after it \u2014 it certifies work already done. If it does not hold, the harness computes the difference and closes it, so a program that is nothing BUT an achieve is a legal way to state a goal and let the harness plan it."
     },
     "if": {
       "required": [
@@ -270,7 +279,8 @@
     "tool_description": "Express the operator's goal as a PROGRAM: an ordered list of statements. Use `new` to create a resource and give it a name you can refer to later (set count to make several at once). Use `call` to invoke one tool. Use `foreach` to apply ONE call to every member of a set you describe with `select`. Use `ensure` to state something that must be TRUE at the end \u2014 that is a check, not an action.",
     "retry_no_program": "You did not return a program. Call emit_program with a `body` array of statements.",
     "retry_rejected": "That program was rejected:",
-    "retry_fix": "Fix exactly those problems and call emit_program again."
+    "retry_fix": "Fix exactly those problems and call emit_program again.",
+    "grounding": "ENSURE vs ACHIEVE \u2014 pick by asking what the program is FOR. ACHIEVE is the goal: the state the operator asked you to bring about. It goes LAST, or stands alone when the harness should work out the plan. ENSURE is a ground check: something that must already be true at that point, used FIRST to confirm the world is as you assume before acting. If the operator's sentence describes the outcome they want, that is ACHIEVE \u2014 including when they phrase it as \"make sure ...\". Nothing may act after ACHIEVE, and a program has at most one."
   },
   "_schema_doc": "Knobs for the tool schema handed to the model, each carrying the measurement behind it. `statement_form`: 'oneof' is the CORRECT schema \u2014 one branch per op, so a statement's type determines its fields and `op` cannot be omitted \u2014 and it is set to 'flat' anyway, because oneof drops emission to 0/4. Flat gives the model no structural cue (qwen2.5:14b returned six of nine statements with no `op`), but it at least gets called. Same story as `predicate_required`: adding a nested required took llama3.1 from 3/4 emitting to 0/4. The pattern across every experiment is that this tool-call surface trades guidance against fidelity, and fidelity is the binding constraint. Note what DOES work reliably: decompose{steps:[string]} \u2014 an array of STRINGS. Emission collapses on an array of structured objects, which is the strongest hint about where to go next. Change these only with a measurement; tests/bench/ir_probe.py is how.",
   "schema": {
@@ -365,6 +375,7 @@
       "not": "NOT",
       "all": "AND",
       "any": "OR"
-    }
+    },
+    "achieve": "ACHIEVE"
   }
 }

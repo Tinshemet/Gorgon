@@ -98,8 +98,11 @@ def _statement(st: Any, indent: str) -> list:
         return _with_tail([f"{indent}FOREACH {member} IN {src}{par} {{"]
                           + body + [f"{indent}}}"], st, indent)
 
-    if op == "ensure":
-        return [f"{indent}ENSURE {_pred(st.get('predicate'))};"]
+    if op in ("ensure", "achieve"):
+        # The keyword comes from the surface table, so a word renamed there is renamed
+        # here — the reason the surface is data in the first place.
+        word = config.SURFACE.get(op, op.upper())
+        return [f"{indent}{word} {_pred(st.get('predicate'))};"]
 
     if op == "if":
         out = [f"{indent}IF {_pred(st.get('cond'))} {{"]

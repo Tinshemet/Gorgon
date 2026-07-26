@@ -222,7 +222,7 @@ def validate(program: Any, known_tools=None, known_names=None,
                     _, sub = validate({"body": block}, tools, known_names,
                                       bound | {config.LOOP_VAR})
                     problems += [f"{where} (foreach body) → {x}" for x in sub]
-        elif op == "ensure":
+        elif op in ("ensure", "achieve"):
             problems += _check_predicate(st.get("predicate"), where, bound)
         elif op == "if":
             problems += _check_predicate(st.get("cond"), where, bound)
@@ -246,6 +246,7 @@ def validate(program: Any, known_tools=None, known_names=None,
             else:
                 _, sub = validate({"body": recov}, tools, known_names, bound)
                 problems += [f"{where} (ifails) → {x}" for x in sub]
+    problems += _check_achieve(body)
     return (not problems), problems
 
 
@@ -282,6 +283,41 @@ def _one_of_groups(spec: Dict[str, Any]) -> List[List[str]]:
     if alts and isinstance(alts[0], str):
         return [list(alts)]
     return [list(g) for g in alts]
+
+
+# Ops that change the world — the same set consent.py counts, for the same reason.
+_ACTS = {"new", "call", "foreach"}
+
+
+def _check_achieve(body: List[Any]) -> List[str]:
+    """ACHIEVE states the goal, so nothing may ACT after it, and there is only one.
+
+    ENSURE is deliberately not restricted this way. It is a ground check and reads
+    correctly anywhere, including as the very first statement — verify the world is as
+    you expect before touching it, the way you check your socks before your shoes. An
+    ACHIEVE in that position means something else entirely: it certifies work already
+    done, and there is none.
+
+    A program that is NOTHING but an achieve is legal and is the declarative form — the
+    harness computes the plan. The error is an achieve with work after it, which claims
+    completion of things that have not happened yet.
+    """
+    out: List[str] = []
+    seen = None
+    for i, st in enumerate(body):
+        if not isinstance(st, dict):
+            continue
+        if st.get("op") == "achieve":
+            if seen is not None:
+                out.append(f"statement {i + 1}: a program has ONE goal — there is already "
+                           f"an `achieve` at statement {seen + 1}")
+            seen = i
+        elif seen is not None and st.get("op") in _ACTS:
+            out.append(f"statement {i + 1}: nothing may act after `achieve` (statement "
+                       f"{seen + 1}) — it certifies work already done. Move the goal to "
+                       f"the end, or use `ensure` if you meant a check before the work.")
+            break
+    return out
 
 
 def _check_select(sel: Any, where: str) -> List[str]:

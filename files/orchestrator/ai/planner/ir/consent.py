@@ -56,7 +56,9 @@ def survey(program: Any) -> Dict[str, Any]:
     body = coerce_body(program) or []
     stmts = _walk(body)
     acts = sum(1 for st in stmts if st.get("op") in _ACTING)
-    asserts = sum(1 for st in stmts if st.get("op") == "ensure")
+    # Both words ground a program. `achieve` is the stronger of the two — it states what
+    # the whole thing was for — so a program carrying one is grounded by definition.
+    asserts = sum(1 for st in stmts if st.get("op") in ("ensure", "achieve"))
     return {"acts": acts, "asserts": asserts, "grounded": acts == 0 or asserts > 0}
 
 

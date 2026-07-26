@@ -210,9 +210,12 @@ SHOTS = [
           "args": {"os_type": "linux"}},
          {"op": "foreach", "in": "$boxes",
           "call": {"tool": "add_label", "args": {"name": "$item", "label": "staging"}}},
-         {"op": "ensure", "predicate": {"shape": "count",
-                                        "select": {"kind": "vm", "label": "staging"},
-                                        "gte": 4}}]}),
+         # The GOAL of this program, so `achieve` — this example ended in `ensure` and was
+         # therefore teaching the old single-word semantics while the prompt taught the
+         # split. The examples always win that argument, and rung 7 lost it.
+         {"op": "achieve", "predicate": {"shape": "count",
+                                         "select": {"kind": "vm", "label": "staging"},
+                                         "gte": 4}}]}),
     # GRAFT + IF, on a goal that is not any rung: rung 11 is ping-and-STOP, this is
     # ping-and-LABEL. Demonstrating that a construct exists is not teaching the test —
     # withholding it would measure whether the model can guess syntax it has never seen.
@@ -222,6 +225,23 @@ SHOTS = [
          {"op": "if", "cond": {"shape": "is", "of": "$answer.alive", "eq": True},
           "then": [{"op": "call", "tool": "add_label",
                     "args": {"name": "web", "label": "up"}}]}]}),
+    # ACHIEVE as the whole program: state the end, let the harness plan it. Not rung 7 —
+    # that one is about the 'prod' label at exactly 3.
+    ("make sure at least 2 vms are running",
+     {"body": [
+         {"op": "achieve", "predicate": {"shape": "count",
+                                         "select": {"kind": "vm", "status": "running"},
+                                         "gte": 2}}]}),
+    # ENSURE as a PRECONDITION — the shape the operator described: check the world is as
+    # you expect BEFORE touching it, then act, then state the goal.
+    ("if there is a golden image, clone it once and make sure two vms exist",
+     {"body": [
+         {"op": "ensure", "predicate": {"shape": "count",
+                                        "select": {"kind": "vm", "name": "golden"},
+                                        "eq": 1}},
+         {"op": "new", "var": "copy", "kind": "vm", "from": "golden"},
+         {"op": "achieve", "predicate": {"shape": "count", "select": {"kind": "vm"},
+                                         "gte": 2}}]}),
     # A BLOCK body — a loop doing more than one thing per member. Deliberately WITHOUT a
     # conditional: the shape being taught is "a body can hold several statements", not
     # rung 11's answer. Whether the model composes a block with graft+if, having seen
@@ -283,7 +303,8 @@ def _system() -> str:
             f"Resource kinds:\n{kinds}\n\n"
             f"ENSURE predicates — the ONLY things a postcondition may be built from. A "
             f"predicate is a check, never a loop or a call:\n{preds}\n\n"
-            f"{config.PROMPT['reference']}\n{config.PROMPT['ordering']}\n\n"
+            f"{config.PROMPT['reference']}\n{config.PROMPT['ordering']}\n"
+            f"{config.PROMPT['grounding']}\n\n"
             f"Tools, with the arguments each one REQUIRES:\n{_tool_lines()}\n\n"
             f"NEW supplies the resource's own name; pass everything else the creator "
             f"needs in args, e.g. NEW vm(os_type: linux).")
@@ -543,8 +564,16 @@ def main(argv=None) -> int:
             # false success the closure audit exists to refuse, arriving through the
             # correction path. So the goal's own predicate is re-evaluated after every
             # round, whatever the fix chose to include.
-            goal_pred = next((st["predicate"] for st in reversed(prog.get("body", []))
-                              if st.get("op") == "ensure"), None)
+            # THE GOAL IS THE `achieve` WHEN THERE IS ONE. Falling back to the last
+            # ensure keeps older programs working, but an ensure is a ground check — a
+            # precondition at the top of a procedure is not what the program was FOR, and
+            # re-testing it after every revision would grade the wrong thing.
+            body_ = prog.get("body", [])
+            goal_pred = next((st["predicate"] for st in body_
+                              if st.get("op") == "achieve"), None)
+            if goal_pred is None:
+                goal_pred = next((st["predicate"] for st in reversed(body_)
+                                  if st.get("op") == "ensure"), None)
 
             def _goal_holds():
                 if goal_pred is None:
@@ -563,7 +592,8 @@ def main(argv=None) -> int:
             # program asserted nothing, and the loop simply stopped, because the trigger
             # only ever named one of the two failure modes. A program that made only
             # failing calls is the case MOST worth re-planning, not the one to give up on.
-            while (not res["ok"] and res.get("failed") in ("unsatisfied", "calls_failed")
+            while (not res["ok"] and res.get("failed") in ("unsatisfied", "unachieved",
+                                               "calls_failed")
                    and rounds < a.revisions):
                 rounds += 1
                 # DERIVE FIRST. Where the fix is computable it is computed: the harness
@@ -572,7 +602,12 @@ def main(argv=None) -> int:
                 # model is asked only when derivation returns None, meaning the gap is
                 # genuinely not computable (which shapes those are is stated in derive.py,
                 # not guessed at here).
-                derived = None if a.no_derive else derive(goal_pred, sel, res.get("scope"))
+                # DERIVE ONLY FOR A GOAL. `unsatisfied` means a ground check was false —
+                # the program assumed something about the world that was not true, and
+                # computing a diff would paper over the wrong assumption instead of
+                # rethinking it. That one is the model's to answer.
+                derived = (None if (a.no_derive or res.get("failed") != "unachieved")
+                           else derive(goal_pred, sel, res.get("scope")))
                 if derived:
                     fix, fix_problems = {"body": derived}, []
                     print(f"          d{rounds}| (derived)")
