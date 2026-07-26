@@ -22,7 +22,7 @@ kinds, predicate shapes and their operands.
 import json
 from typing import Any, Dict, List, Optional, Tuple
 
-from . import config
+from . import config, refs
 
 try:
     from executor.command_catalog import (KNOWN_TOOLS as _KNOWN_TOOLS,
@@ -280,10 +280,13 @@ def _check_call(st: Dict[str, Any], where: str, tools, bound) -> List[str]:
     if args is not None and not isinstance(args, dict):
         return out + [f"{where}: args must be an object"]
     for k, v in (args or {}).items():
-        if isinstance(v, str) and v.startswith(config.SIGIL):
-            ref = v[len(config.SIGIL):]
+        # Every name the argument mentions, not just a whole-string one: `$item-snap`
+        # refers to `item`, and rejecting it as a reference to `item-snap` blamed the
+        # author for the language's missing composition.
+        for ref in refs.names(v):
             if ref not in bound:
-                out.append(f"{where}: {k}={v} refers to something never created")
+                out.append(f"{where}: {k}={v} refers to {config.SIGIL}{ref}, "
+                           f"which is never created")
     return out
 
 
@@ -330,7 +333,13 @@ def _check_predicate(pred: Any, where: str) -> List[str]:
     elif operand == "sets":
         if not isinstance(value, (list, tuple)) or len(value) < 2:
             out.append(f"{where}: {shape} needs `sets` — two or more, got {value!r}")
-    if spec["comparators"] and not (set(pred) & set(spec["comparators"])):
+    if (spec["comparators"] and not spec.get("comparators_optional")
+            and not (set(pred) & set(spec["comparators"]))):
+        # `reach` opts out. Its own doc reads "the members can reach each other" and the
+        # deriver has always defaulted (`min`, 2) — only this check ever demanded a
+        # number, so REACH(SELECT vm WHERE label='fleet') meaning ALL of them was
+        # intended everywhere except the one place that rejected it. An author asked for
+        # "make sure they all ping each other" has no N to supply and had to invent one.
         out.append(f"{where}: {shape} needs one of "
                    f"{'/'.join(spec['comparators'])} to compare against")
     return out

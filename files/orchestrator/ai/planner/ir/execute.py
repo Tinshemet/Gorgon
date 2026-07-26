@@ -18,7 +18,7 @@ the model invent names. Same rule here: position and index, never a counter or a
 
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import config
+from . import config, refs
 from .validate import coerce_body, validate
 
 
@@ -34,14 +34,12 @@ class Unsatisfied(Exception):
 
 
 def _resolve(value: Any, scope: Dict[str, Any]) -> Any:
-    """Substitute $references from scope; leave everything else alone."""
-    if isinstance(value, str) and value.startswith(config.SIGIL):
-        return scope.get(value[len(config.SIGIL):], value)
-    if isinstance(value, dict):
-        return {k: _resolve(v, scope) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_resolve(v, scope) for v in value]
-    return value
+    """Substitute $references from scope; leave everything else alone.
+
+    Delegated to `refs` so the visitor and the validator cannot disagree about what a
+    reference is — see that module for why a string is a template, not a name.
+    """
+    return refs.resolve(value, scope)
 
 
 def _mint(kind: str, var: str, i: int, n: int) -> str:

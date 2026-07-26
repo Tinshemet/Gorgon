@@ -57,49 +57,82 @@ def _select_spec():
     return {"type": "object", "properties": props, "required": ["kind"]}
 
 
-def program_schema():
-    """The FULL schema — one branch per op, every operand required.
+def _field_schema(name: str):
+    """One field's schema, from the manifest's field catalogue.
 
-    This is the schema that took tool-call emission to 0/4. The decoder accepts it, so
-    the strictness is free here: `foreach` cannot omit its call, `ensure` cannot omit its
-    shape, and select-or-in is a nested oneOf rather than a rule enforced after the fact.
+    Built rather than written out. This schema WAS hand-maintained and had already
+    drifted: it still said `count` after the rename to `amount`, and knew nothing of
+    `from`, `graft`, `if` or `ifails` — so the model could not reach constructs that
+    exist. A probe that withholds half the language measures the wrong thing and reports
+    it as a model failure.
     """
-    sel, call = _select_spec(), _call_spec()
-    branches = [
-        {"type": "object", "properties": {
-            "op": {"const": "new"}, "var": {"type": "string"},
-            "kind": {"type": "string", "enum": list(config.KINDS)},
-            "amount": {"type": "integer"}},
-         "required": ["op", "var", "kind"]},
-        {"type": "object", "properties": {
-            "op": {"const": "call"}, "tool": {"type": "string", "enum": list(_TOOLS)},
-            "args": {"type": "object"}},
-         "required": ["op", "tool", "args"]},
-        {"oneOf": [
-            {"type": "object", "properties": {
-                "op": {"const": "foreach"}, "select": sel, "call": call},
-             "required": ["op", "select", "call"]},
-            {"type": "object", "properties": {
-                "op": {"const": "foreach"},
-                "in": {"anyOf": [{"type": "string"},
-                                 {"type": "array", "items": {"type": "string"}}],
-                       "description": "a bound set \"$vms\", or a literal list of names"},
-                "call": call},
-             "required": ["op", "in", "call"]}]},
-        {"type": "object", "properties": {
-            "op": {"const": "ensure"},
-            "predicate": {"type": "object", "properties": {
-                "shape": {"type": "string", "enum": list(config.PREDICATES)},
-                "select": sel,
-                "eq": {"type": "integer"}, "gte": {"type": "integer"},
-                "lte": {"type": "integer"}, "min": {"type": "integer"},
-                "sets": {"type": "array", "items": {"type": "string"}}},
-                "required": ["shape"]}},
-         "required": ["op", "predicate"]},
-    ]
-    return {"type": "object",
-            "properties": {"body": {"type": "array", "items": {"oneOf": branches}}},
-            "required": ["body"]}
+    spec = dict(config.FIELDS.get(name) or {"type": "string"})
+    doc = spec.pop("doc", "")
+    src = spec.pop("enum_from", None)
+    if name == "select":
+        return _select_spec()
+    if name == "call":
+        return _call_spec()
+    if name in ("then", "else", "ifails"):
+        return {"type": "array", "items": {"$ref": "#/$defs/stmt"}, "description": doc}
+    if name in ("cond", "predicate"):
+        return {"$ref": "#/$defs/pred"}
+    if name == "in":
+        return {"anyOf": [{"type": "string"},
+                          {"type": "array", "items": {"type": "string"}}],
+                "description": doc}
+    if src:
+        return {"type": "string", "enum": list(getattr(config, src.upper())),
+                "description": doc}
+    t = spec.get("type")
+    return {"type": t if isinstance(t, str) else "string", "description": doc}
+
+
+def _pred_spec():
+    """Every predicate shape in one schema, composites and IS() included."""
+    comparators = sorted({c for p in config.PREDICATES.values()
+                          for c in (p.get("comparators") or {})})
+    props = {"shape": {"type": "string", "enum": list(config.PREDICATES)},
+             "select": _select_spec(),
+             "of": {"description": "composites: the check(s). is: a $grafted.value"},
+             "sets": {"type": "array", "items": {"type": "string"}}}
+    for c in comparators:
+        props[c] = {"type": ["integer", "boolean", "string"]}
+    return {"type": "object", "properties": props, "required": ["shape"]}
+
+
+def program_schema():
+    """The full schema, assembled from the manifest so it cannot fall behind the language.
+
+    Statement branches come from `ops`, their fields from the field catalogue, predicates
+    from `predicates`. Adding a construct to the JSON offers it here with no edit — the
+    claim the manifest makes everywhere else, applied to the one place that had quietly
+    stopped honouring it.
+    """
+    branches = []
+    for op, spec in config.OPS.items():
+        props = {"op": {"type": "string", "const": op, "description": spec["doc"]}}
+        for f in spec["fields"]:
+            props[f] = _field_schema(f)
+        alts = spec.get("one_of")
+        if alts:
+            # `one_of` has to reach the DECODER, not just the validator. Collapsing it
+            # into a single branch with both fields optional is what produced
+            # `FOREACH $item IN None` five times in one program: nothing forced a set to
+            # be named. One branch per alternative, each REQUIRING its own field.
+            for alt in alts:
+                sub = {k: v for k, v in props.items() if k not in set(alts) - {alt}}
+                branches.append({"type": "object", "properties": sub,
+                                 "required": ["op", alt] + list(spec["required"])})
+        else:
+            branches.append({"type": "object", "properties": props,
+                             "required": ["op"] + list(spec["required"])})
+    return {
+        "$defs": {"stmt": {"oneOf": branches}, "pred": _pred_spec()},
+        "type": "object",
+        "properties": {"body": {"type": "array", "items": {"$ref": "#/$defs/stmt"}}},
+        "required": ["body"],
+    }
 
 
 # Worked pairs, none of which is a ladder rung. Between them they demonstrate every
@@ -107,7 +140,7 @@ def program_schema():
 SHOTS = [
     ("create a vm called web and put it on a network called dmz",
      {"body": [
-         {"op": "call", "tool": "create_vm", "args": {"name": "web"}},
+         {"op": "call", "tool": "create_vm", "args": {"name": "web", "os_type": "linux"}},
          {"op": "call", "tool": "create_network", "args": {"net_name": "dmz"}},
          {"op": "call", "tool": "add_vm_to_network",
           "args": {"net_name": "dmz", "vm_name": "web"}}]}),
@@ -117,21 +150,76 @@ SHOTS = [
           "call": {"tool": "stop_vm", "args": {"name": "$item"}}}]}),
     ("create 4 vms, label them all 'staging', and make sure at least 4 carry that label",
      {"body": [
-         {"op": "new", "var": "boxes", "kind": "vm", "amount": 4},
+         {"op": "new", "var": "boxes", "kind": "vm", "amount": 4,
+          "args": {"os_type": "linux"}},
          {"op": "foreach", "in": "$boxes",
           "call": {"tool": "add_label", "args": {"name": "$item", "label": "staging"}}},
          {"op": "ensure", "predicate": {"shape": "count",
                                         "select": {"kind": "vm", "label": "staging"},
                                         "gte": 4}}]}),
+    # GRAFT + IF, on a goal that is not any rung: rung 11 is ping-and-STOP, this is
+    # ping-and-LABEL. Demonstrating that a construct exists is not teaching the test —
+    # withholding it would measure whether the model can guess syntax it has never seen.
+    ("check whether web answers and label it 'up' if it does",
+     {"body": [
+         {"op": "call", "tool": "guest_ping", "args": {"name": "web"}, "graft": "answer"},
+         {"op": "if", "cond": {"shape": "is", "of": "$answer.alive", "eq": True},
+          "then": [{"op": "call", "tool": "add_label",
+                    "args": {"name": "web", "label": "up"}}]}]}),
+    # The carve-out and creating by copying, again on a non-rung goal.
+    ("copy golden twice, and label every vm except golden itself 'derived'",
+     {"body": [
+         {"op": "new", "var": "copies", "kind": "vm", "amount": 2, "from": "golden"},
+         {"op": "foreach", "select": {"kind": "vm", "not": {"name": "golden"}},
+          "call": {"tool": "add_label", "args": {"name": "$item", "label": "derived"}}}]}),
 ]
+
+
+def _tool_lines() -> str:
+    """Each tool with the arguments it REQUIRES, read off the live catalog.
+
+    Listing bare names was not enough and it showed: the model wrote
+    `NEW vm(name: alpha)` without os_type and `snapshot_create` without snap_name, then
+    got rejected for omitting things nothing had told it about. Asking a model to guess a
+    signature and then failing it for guessing wrong measures the prompt, not the model.
+    """
+    try:
+        from executor.command_catalog import REQUIRED_FIELDS
+    except ImportError:                                    # pragma: no cover
+        REQUIRED_FIELDS = {}
+    out = []
+    for t in _TOOLS:
+        req = REQUIRED_FIELDS.get(t) or []
+        out.append(f"  {t}({', '.join(req)})" if req else f"  {t}()")
+    return "\n".join(out)
 
 
 def _system() -> str:
     ops = "\n".join(f"  {op:8}— {spec['doc']}" for op, spec in config.OPS.items())
+    try:
+        from executor.command_catalog import REQUIRED_FIELDS
+    except ImportError:                                    # pragma: no cover
+        REQUIRED_FIELDS = {}
+    kinds = "\n".join(
+        # The creator's REQUIRED arguments belong on this line. Naming only the creator
+        # made the author join two separate lists to learn that a vm needs os_type — it
+        # managed for `NEW vm` and forgot for `NEW AMOUNT(5) vm`, which is what a
+        # join-two-lists task fails like.
+        f"  {k}: created by {v['create']}"
+        + (f"(needs {', '.join(a for a in (REQUIRED_FIELDS.get(v['create']) or []) if a != 'name')})"
+           if [a for a in (REQUIRED_FIELDS.get(v['create']) or []) if a != 'name'] else "")
+        + f", queryable on {', '.join(v['attrs'])}"
+        for k, v in config.KINDS.items())
+    preds = "\n".join(f"  {name}: {spec['doc']}" for name, spec in config.PREDICATES.items())
     return (f"Express the operator's goal as a PROGRAM — statements run top to bottom.\n\n"
             f"{ops}\n\n"
+            f"Resource kinds:\n{kinds}\n\n"
+            f"ENSURE predicates — the ONLY things a postcondition may be built from. A "
+            f"predicate is a check, never a loop or a call:\n{preds}\n\n"
             f"{config.PROMPT['reference']}\n{config.PROMPT['ordering']}\n\n"
-            f"Tools: {', '.join(_TOOLS)}.")
+            f"Tools, with the arguments each one REQUIRES:\n{_tool_lines()}\n\n"
+            f"NEW supplies the resource's own name; pass everything else the creator "
+            f"needs in args, e.g. NEW vm(os_type: linux).")
 
 
 def _messages(goal: str, shots: bool):
@@ -239,10 +327,15 @@ def _seams(world):
                     return good, f"count is {n}, wanted {op} {pred[c]}"
             return False, "no comparator"
         if shape == "reach":
-            s = pred.get("select") or {}
-            tag = s.get("label", s.get("tag"))
-            want = int(pred.get("min", 2))
-            return world.reach(tag, minimum=want), f"reach({tag},{want})"
+            # Members come from the SAME select() the rest of the language uses. Reading
+            # only `tag` meant REACH(SELECT vm) — no filter, every vm, a perfectly legal
+            # set — looked up the label None and found nobody. A predicate that ignores
+            # its own operand's filters answers a different question than it was asked.
+            members = select(pred.get("select") or {})
+            floor = int(pred.get("min", 2))
+            shared = world.common_networks(members) if members else set()
+            good = len(members) >= floor and bool(shared)
+            return good, f"reach over {len(members)} member(s), floor {floor} -> {good}"
         return False, f"unevaluated shape {shape}"
     return select, holds
 

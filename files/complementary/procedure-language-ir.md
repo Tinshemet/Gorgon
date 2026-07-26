@@ -1,4 +1,4 @@
-# Ladder rungs 4–7 as IR, written by hand
+# Medusa: ladder rungs 4–7 as IR, written by hand
 
 The design note (artifact `580d54ac`) prescribes this as the first thing to produce, and
 says explicitly that it is **not code**: write the benchmark rungs as IR by hand, and

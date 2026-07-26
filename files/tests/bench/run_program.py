@@ -88,11 +88,15 @@ def seams(world: SimWorld):
                     return good, f"count is {n}, wanted {want} {pred[cmp_]}"
             return False, "no comparator"
         if shape == "reach":
-            want = int(pred.get("min", 2))
-            _s = pred.get("select") or {}
-            tag = _s.get("label", _s.get("tag"))
-            good = world.reach(tag, minimum=want)
-            return good, f"reach({tag}, min={want}) is {good}"
+            # Members come from the SAME select() the rest of the language uses. Reading
+            # only `tag` meant REACH(SELECT vm) — no filter, every vm, a perfectly legal
+            # set — looked up the label None and found nobody. A predicate that ignores
+            # its own operand's filters answers a different question than it was asked.
+            members = select(pred.get("select") or {})
+            floor = int(pred.get("min", 2))
+            shared = world.common_networks(members) if members else set()
+            good = len(members) >= floor and bool(shared)
+            return good, f"reach over {len(members)} member(s), floor {floor} -> {good}"
         if shape == "disjoint":
             return False, "disjoint not evaluated in the bench"
         return False, f"unknown shape {shape}"

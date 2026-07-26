@@ -1,4 +1,4 @@
-# The node set, settled before the surface
+# Medusa — the node set, settled before the surface
 
 Written 2026-07-26, before any human-writable syntax exists. The order is deliberate: a
 surface designed for four node types and then retrofitted to nine is the expensive

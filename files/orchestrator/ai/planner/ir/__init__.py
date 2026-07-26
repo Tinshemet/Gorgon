@@ -1,5 +1,9 @@
 """
-ir — the typed program form: the language the model emits instead of English.
+ir — MEDUSA, the Gorgon procedure language: the typed program form the model emits
+instead of English.
+
+Named for one of the gorgons. The platform is Gorgon; this is one of its own, and a
+program written in it is a `.med` file.
 
 WHY THIS EXISTS. The planner used to understand goals by matching English — 33
 hand-maintained vocabularies, `vms` in seven separate constants. A missing verb silently
@@ -26,7 +30,8 @@ validated JSON arguments; translation is schema validation, which the codebase a
 performs on every tool call.
 """
 
-from .config import KINDS, LOOP_VAR, OPS, PREDICATES, SIGIL, packages_for
+from .config import (KINDS, LANGUAGE, LOOP_VAR, OPS, PREDICATES, SIGIL,
+                     packages_for)
 from .derive import derive
 from .execute import Unsatisfied, run
 from .render import render
@@ -43,5 +48,5 @@ __all__ = [
     "statement_tools", "statement_from",
     "validate", "coerce_body", "kinds_used",
     "render", "run", "Unsatisfied", "derive",
-    "KINDS", "OPS", "PREDICATES", "SIGIL", "LOOP_VAR", "packages_for",
+    "KINDS", "OPS", "PREDICATES", "SIGIL", "LOOP_VAR", "LANGUAGE", "packages_for",
 ]

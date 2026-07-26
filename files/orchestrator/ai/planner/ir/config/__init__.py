@@ -1,5 +1,5 @@
 """
-ir/config — the procedure language, loaded from JSON.
+ir/config — MEDUSA, the Gorgon procedure language, loaded from JSON.
 
   ir.defaults.json  — the full manifest: ops, resource kinds, predicate shapes, prompt
   ir.json           — this deployment's overrides (win on merge)
@@ -45,6 +45,7 @@ def _c(key: str):
     return _CFG[key]
 
 
+LANGUAGE   = _c("language")        # name, version, file extension
 SIGIL      = _c("sigil")           # marks a reference to a bound name
 LOOP_VAR   = _c("loop_var")        # the member inside a foreach
 PARAM_TYPES = _c("param_types")    # declarable parameter types -> {sql, py, doc}

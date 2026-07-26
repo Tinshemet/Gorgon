@@ -1,5 +1,11 @@
 {
-  "_doc": "The procedure language, AS DATA. Nothing here is a language feature written in code — the ops, the resource kinds, the predicate shapes and every string the model is shown all live in this manifest. That is the extensibility test the design note sets: adding a resource kind, a predicate or a tool must touch ZERO language code. ir.json holds a deployment's overrides and wins on merge.",
+  "_doc": "MEDUSA — the Gorgon procedure language, AS DATA. Named for one of the gorgons, because the platform is Gorgon and this is one of its own. Nothing here is a language feature written in code: the ops, the resource kinds, the predicate shapes and every string the model is shown all live in this manifest. That is the extensibility test the design note sets — adding a resource kind, a predicate or a tool must touch ZERO language code. ir.json holds a deployment's overrides and wins on merge.",
+  "language": {
+    "name": "Medusa",
+    "of": "Gorgon",
+    "version": "0.1",
+    "extension": ".med"
+  },
   "sigil": "$",
   "loop_var": "item",
   "_params_doc": "Parameter types a procedure may declare, TYPE FIRST: (INT X, STRING name). Parameters are AUTHORED, not derived — unlike `imports`, which the harness computes: only the author knows which values are meant to vary per invocation. `sql` is how the type is written; `py` is what a supplied value is checked against. DURATION and BYTES exist because this domain keeps needing them and a bare int loses the unit — a routine says EVERY 1h, a disk check says 20GB, and 'is 3600 seconds or an hour?' is the kind of ambiguity that only shows up in production.",
@@ -207,7 +213,8 @@
       "comparators": {
         "min": ">="
       },
-      "doc": "the members can reach each other"
+      "comparators_optional": true,
+      "doc": "the members can reach each other; add min: N for 'at least N of them'"
     },
     "disjoint": {
       "source": "registry",
