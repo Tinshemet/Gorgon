@@ -587,8 +587,17 @@ def make_reason_gate(call_model, state_getter=None):
 # sub-goal is expanded deterministically against the LIVE entity set into one atomic
 # sub-goal per member — playing to the model's strength (each atomic step) and covering its
 # weakness (the loop). No model call, no variance.
+# The `all|each|every <word>` arms must NOT swallow a following PREPOSITION. The phrase is
+# replaced by a member name in place, so eating one turns "attach all TO a private network"
+# into "attach fleet1 a private network" — and with the preposition gone _ANON_NET_RE can no
+# longer see the unnamed shared network, so no network is ever minted and every member
+# attaches to nothing. Found 2026-07-26: the goal translator emitted exactly that phrasing
+# and rung 4 built five VMs with zero networks. Nothing about it is translator-specific —
+# an operator typing "attach all to a network" has always hit it.
+_PREPS = r"to|in|into|on|onto|at|with|from|for|by|over|under|across|through|inside|within"
 _COLLECTIVE_RE = re.compile(
-    r"\b(them all|all of them|all the \w+|all \w+|each of them|each \w+|every \w+|them|each)\b", re.I)
+    rf"\b(them all|all of them|all the \w+|all (?!(?:{_PREPS})\b)\w+|each of them|"
+    rf"each (?!(?:{_PREPS})\b)\w+|every (?!(?:{_PREPS})\b)\w+|them|all|each)\b", re.I)
 # Inherently-collective operations are NOT distributive — "ping each other" / mesh is one
 # fact over the whole set, not a per-member step. Never expand these (they're the assurance
 # clause the goal-honesty rule + mesh acceptance already handle).
