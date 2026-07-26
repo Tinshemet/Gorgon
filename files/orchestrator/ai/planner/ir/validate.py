@@ -141,12 +141,31 @@ def validate(program: Any, known_tools=None, known_names=None,
                 problems.append(f"{where}: unknown kind {kind!r} "
                                 f"(known: {', '.join(sorted(config.KINDS))})")
             n = st.get("amount", 1)
-            if isinstance(n, str) and n.startswith(config.SIGIL):
+            if isinstance(n, dict):
+                # THE SHORTFALL FORM: {"minus": [5, "$have"]} — create only what is
+                # missing. Deliberately the ONLY arithmetic in the language: general
+                # expressions are a large addition and this is the one subtraction the
+                # top-up pattern needs. `NEW` still means new; only the count is computed.
+                gap = n.get("minus")
+                if (not isinstance(gap, list) or len(gap) != 2
+                        or not isinstance(gap[0], int)):
+                    problems.append(f"{where}: amount takes {{'minus': [N, '$have']}} — "
+                                    f"a target and what you already have, got {n!r}")
+                else:
+                    for ref in refs.names(gap[1]):
+                        if ref not in bound:
+                            problems.append(f"{where}: amount refers to {config.SIGIL}"
+                                            f"{ref}, which is never fetched or bound")
+            elif isinstance(n, str) and n.startswith(config.SIGIL):
                 # "create X vms" — the count is a parameter, resolved at invocation.
                 if n[len(config.SIGIL):] not in bound:
                     problems.append(f"{where}: amount {n} is not a declared parameter")
-            elif not isinstance(n, int) or n < 1:
-                problems.append(f"{where}: amount must be a positive integer or a "
+            elif not isinstance(n, int) or n < 0:
+                # ZERO IS LEGAL and creates nothing. It has to be: a top-up program run
+                # against a world that is already satisfied computes a shortfall of zero,
+                # and rejecting that would break the statement exactly when it is most
+                # correct — the re-run case this whole shape exists for.
+                problems.append(f"{where}: amount must be a non-negative integer or a "
                                 f"$parameter, got {n!r}")
             if st.get("var"):
                 bound.add(str(st["var"]).lstrip(config.SIGIL))
@@ -187,6 +206,13 @@ def validate(program: Any, known_tools=None, known_names=None,
                 if missing:
                     problems.append(f"{where}: {creator} also requires "
                                     f"{', '.join(repr(m) for m in missing)} — pass them in args")
+        elif op == "fetch":
+            # A read binds a name the same way a creation does — that is the whole point
+            # of it, and the reason it is a statement rather than an expression.
+            problems += _check_select(st.get("select") or st.get("count"), where)
+            if st.get("var"):
+                bound.add(str(st["var"]).lstrip(config.SIGIL))
+
         elif op == "call":
             problems += _check_call(st, where, tools, bound)
         elif op == "foreach":

@@ -86,8 +86,19 @@ def _field_schema(name: str):
     spec = dict(config.FIELDS.get(name) or {"type": "string"})
     doc = spec.pop("doc", "")
     src = spec.pop("enum_from", None)
-    if name == "select":
+    if name in ("select", "count"):
+        # `count` is a select in counting position — same query, different answer. Giving
+        # it the select schema is what lets the author say FETCH COUNT(...) at all.
         return _select_spec()
+    if name == "amount":
+        return {"anyOf": [
+            {"type": "integer", "minimum": 0},
+            {"type": "string", "description": "a $parameter"},
+            {"type": "object", "properties": {
+                "minus": {"type": "array", "minItems": 2, "maxItems": 2,
+                          "description": "[target, \"$have\"] — create only the shortfall"}},
+             "required": ["minus"]}],
+            "description": doc}
     if name == "call":
         return _call_spec()
     if name in ("then", "else", "ifails", "do"):
@@ -317,19 +328,29 @@ def _system() -> str:
             f"needs in args, e.g. NEW vm(os_type: linux).")
 
 
-def _messages(goal: str, shots: bool):
+def _messages(goal: str, shots: bool, world=None):
+    """The author's prompt. `world` is optional and was, for a long time, absent.
+
+    That absence was an ASYMMETRY with no justification: revise() has always been handed
+    the lab state, and the author never was. A blind author cannot notice that a goal
+    already holds, so rung 13 — re-entry against a satisfied world — was not measuring
+    idempotence at all. It was measuring whether a model can guess what it has not been
+    shown. No operator writes a procedure without knowing what is in their lab.
+    """
     msgs = [{"role": "system", "content": _system()}]
     if shots:
         for g, prog in SHOTS:
             msgs.append({"role": "user", "content": g})
             msgs.append({"role": "assistant", "content": json.dumps(prog)})
-    msgs.append({"role": "user", "content": goal})
+    msgs.append({"role": "user", "content":
+                 f"{world_state(world)}\n\n{goal}" if world is not None else goal})
     return msgs
 
 
-def author(goal: str, model: str, temp: float, shots: bool, timeout: int = 600, known_names=None):
+def author(goal: str, model: str, temp: float, shots: bool, timeout: int = 600,
+           known_names=None, world=None):
     req = {"model": model, "stream": False, "format": program_schema(),
-           "options": {"temperature": temp}, "messages": _messages(goal, shots)}
+           "options": {"temperature": temp}, "messages": _messages(goal, shots, world)}
     try:
         r = urllib.request.urlopen(urllib.request.Request(
             _OLLAMA, json.dumps(req).encode(), {"Content-Type": "application/json"}),
@@ -504,6 +525,8 @@ def _seams(world):
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="Constrained decoding + few-shot authoring")
     p.add_argument("-r", "--rung", type=int, action="append", help="default 4-7")
+    p.add_argument("--see-world", action="store_true",
+                   help="show the author the lab state, as revise() already is")
     p.add_argument("-m", "--model", default=BENCH_MODEL)
     p.add_argument("-t", "--temp", type=float, default=0.0)
     p.add_argument("-p", "--paraphrase", action="store_true")
@@ -542,7 +565,8 @@ def main(argv=None) -> int:
             rung.setup(world)
             world.calls.clear()
         prog, problems = author(goal, a.model, a.temp, shots,
-                                known_names=world.names())
+                                known_names=world.names(),
+                                world=world if a.see_world else None)
         if prog is None:
             print(f"   [ERROR] {problems[0]}\n")
             continue

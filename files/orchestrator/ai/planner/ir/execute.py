@@ -42,6 +42,30 @@ def _resolve(value: Any, scope: Dict[str, Any]) -> Any:
     return refs.resolve(value, scope)
 
 
+def _amount(raw: Any, scope: Dict[str, Any]) -> int:
+    """How many to create: a number, a $reference, or the shortfall form.
+
+    {"minus": [5, "$have"]} is "bring it up to five" — the ONLY arithmetic in the
+    language, and it exists for one shape: read what the lab already has, create the
+    difference. Clamped at zero, because a world that already exceeds the target needs
+    nothing created, not a negative number of machines. Zero creates nothing and is a
+    legal, expected outcome — it is what a satisfied re-run looks like.
+    """
+    if isinstance(raw, dict) and isinstance(raw.get("minus"), list):
+        target, have = raw["minus"]
+        got = _resolve(have, scope)
+        got = got if isinstance(got, int) else (len(got) if isinstance(got, list) else 0)
+        return max(0, int(target) - got)
+    val = _resolve(raw, scope)
+    if isinstance(val, bool):
+        return 1
+    if isinstance(val, int):
+        return max(0, val)
+    if isinstance(val, str) and val.lstrip("-").isdigit():
+        return max(0, int(val))
+    return 1
+
+
 def _mint(kind: str, var: str, i: int, n: int) -> str:
     """A stable name for the i-th resource `var` binds. Deterministic in (var, i) so a
     re-run mints the same names and the executor no-ops instead of duplicating."""
@@ -183,8 +207,7 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
             chosen = (next((c for c in creators.values() if c.get("from")), None)
                       if source else None) or creators.get("create") or {"tool": spec.get("create")}
             key_arg = chosen.get("key") or spec["key"]
-            n = _resolve(st.get("amount", 1), scope)
-            n = int(n) if isinstance(n, (int, str)) and str(n).isdigit() else 1
+            n = _amount(st.get("amount", 1), scope)
             names = [_mint(kind, st["var"], i, n) for i in range(n)]
             # Everything else the creator takes rides along — os_type, cpu_cores,
             # memory_mb. With count > 1 each resource is created with the SAME args,
@@ -205,6 +228,18 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
             # an `if` — can read what the call actually said.
             if st.get("graft"):
                 scope[st["graft"]] = result
+
+        elif op == "fetch":
+            # THE WORLD-READ. It goes through the SAME injected `select` seam every query
+            # in the language already uses — the Active Library for registry attributes,
+            # the findings ledger for what was observed. Nothing new had to be built to
+            # answer it; it only had to be bound to a name.
+            if select is None:
+                return {"ok": False, "failed": "no select evaluator",
+                        "scope": scope, "calls": calls}
+            query = st.get("count") or st.get("select")
+            found = select(_resolve(query, scope))
+            scope[st["var"]] = len(found) if st.get("count") else found
 
         elif op == "foreach":
             if st.get("in") is not None:

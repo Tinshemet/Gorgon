@@ -59,9 +59,15 @@ def _statement(st: Any, indent: str) -> list:
         # multiplier had to be decoded, and a $parameter one silently vanished entirely.
         # AMOUNT(5) rather than a bare 5: it reads as a count instead of an argument that
         # happens to be a number, and it mirrors COUNT(...) on the predicate side.
-        many = (f"{config.SURFACE['amount']}({n}) "
-                if (isinstance(n, str) and n.startswith(config.SIGIL))
-                or (isinstance(n, int) and n > 1) else "")
+        if isinstance(n, dict) and isinstance(n.get("minus"), list):
+            # The shortfall, printed as the subtraction it is. A reader has to be able to
+            # see that this creates the DIFFERENCE and not the target — it is the one
+            # line where "5" would be actively misleading about how many machines appear.
+            many = f"{config.SURFACE['amount']}({n['minus'][0]} - {n['minus'][1]}) "
+        else:
+            many = (f"{config.SURFACE['amount']}({n}) "
+                    if (isinstance(n, str) and n.startswith(config.SIGIL))
+                    or (isinstance(n, int) and n != 1) else "")
         extra = _args(st.get("args")) if st.get("args") else ""
         # FROM has to show. A clone reads almost identically to a fresh create, and the
         # difference — whether this copies something that exists — is exactly what an
@@ -97,6 +103,12 @@ def _statement(st: Any, indent: str) -> list:
             body = _statement({"op": "call", **inner}, indent + "  ")
         return _with_tail([f"{indent}FOREACH {member} IN {src}{par} {{"]
                           + body + [f"{indent}}}"], st, indent)
+
+    if op == "fetch":
+        q = st.get("count") or st.get("select")
+        inner = _select(q)
+        body = f"COUNT({inner})" if st.get("count") else inner
+        return [f"{indent}STORE {st.get('var', '?')} = FETCH {body};"]
 
     if op in ("ensure", "achieve"):
         # The keyword comes from the surface table, so a word renamed there is renamed
