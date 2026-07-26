@@ -45,6 +45,46 @@ def _walk(body: Any) -> List[Dict[str, Any]]:
     return out
 
 
+def composition(program: Any) -> Dict[str, Any]:
+    """Which of the three a program uses, and whether that combination can stand.
+
+    ENSURE is the load-bearing one, and ACHIEVE is a permutation of it — the same check
+    with a convergence loop behind it: act until the condition is met, then confirm it
+    is. So ACHIEVE self-grounds; it does not need an ENSURE beside it.
+
+      only ENSURE    fine. Read, judge, report. A complete program.
+      only ACHIEVE   fine. Check, and close the difference if there is one.
+      only FETCH     NOT fine. It retrieves and never checks what it got, so nothing in
+                     it can be believed — retrieval with no verdict is data nobody
+                     vouched for.
+      only actions   NOT fine, for the same reason: work nothing vouched for.
+
+    Which is one rule, not three: a program needs at least one VERDICT. FETCH answers
+    with data and actions answer with nothing, and neither is a judgement about the
+    world. ENSURE and ACHIEVE are the only two statements that produce one.
+    """
+    from .validate import coerce_body
+    stmts = _walk(coerce_body(program) or [])
+    ops = [st.get("op") for st in stmts]
+    return {"fetch": ops.count("fetch"), "ensure": ops.count("ensure"),
+            "achieve": ops.count("achieve"),
+            "acts": sum(1 for o in ops if o in _ACTING)}
+
+
+def unsound(program: Any) -> Optional[str]:
+    """Why this combination cannot stand, or None if it can."""
+    c = composition(program)
+    if c["ensure"] or c["achieve"]:
+        return None
+    if c["fetch"] and not c["acts"]:
+        return ("this program only FETCHES. It reads the world and never says what must "
+                "be true of what it found, so nothing in it is verified — add an ENSURE, "
+                "or an ACHIEVE if you want the gap closed rather than reported.")
+    return ("nothing in this program produces a VERDICT. It fetches and acts, and neither "
+            "is a judgement about the world — add an ENSURE for what must be true, or an "
+            "ACHIEVE for what must end up true.")
+
+
 def survey(program: Any) -> Dict[str, Any]:
     """What this program does and whether anything checks it.
 
@@ -72,10 +112,15 @@ def question(program: Any) -> Optional[str]:
     s = survey(program)
     if s["grounded"]:
         return None
+    why = unsound(program)
     n = s["acts"]
-    return (f"This program has no grounding: {n} statement{'s' if n != 1 else ''} "
-            f"change{'' if n != 1 else 's'} the world and no ENSURE checks the result. "
-            f"Nothing will vouch for what it did. Run it anyway?")
+    # ONE gate, not two. `unsound` says precisely which of the three is missing, and that
+    # is a better sentence than the generic one it replaces — but it stays a QUESTION.
+    # The operator's ruling was ask, not refuse, and a hard block here would quietly
+    # overturn it: there are legitimate one-shots, and the person running them is the one
+    # who gets to say so.
+    return ((why or f"{n} statement{'s' if n != 1 else ''} change the world and nothing "
+             f"checks the result") + " Run it anyway?")
 
 
 def granted(program: Any, consent: Any) -> bool:
