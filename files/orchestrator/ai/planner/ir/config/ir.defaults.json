@@ -2,16 +2,57 @@
   "_doc": "The procedure language, AS DATA. Nothing here is a language feature written in code — the ops, the resource kinds, the predicate shapes and every string the model is shown all live in this manifest. That is the extensibility test the design note sets: adding a resource kind, a predicate or a tool must touch ZERO language code. ir.json holds a deployment's overrides and wins on merge.",
   "sigil": "$",
   "loop_var": "item",
-  "_params_doc": "Parameter types a procedure may declare. Parameters are AUTHORED, not derived — unlike `imports`, which the harness computes: only the author knows which values are meant to vary per invocation. A $reference resolves against params first, then against names bound by `new`.",
+  "_params_doc": "Parameter types a procedure may declare, TYPE FIRST: (INT X, STRING name). Parameters are AUTHORED, not derived — unlike `imports`, which the harness computes: only the author knows which values are meant to vary per invocation. `sql` is how the type is written; `py` is what a supplied value is checked against. DURATION and BYTES exist because this domain keeps needing them and a bare int loses the unit — a routine says EVERY 1h, a disk check says 20GB, and 'is 3600 seconds or an hour?' is the kind of ambiguity that only shows up in production.",
   "param_types": {
     "int": {
-      "sql": "INT"
+      "sql": "INT",
+      "py": "int",
+      "doc": "whole number"
     },
-    "text": {
-      "sql": "TEXT"
+    "double": {
+      "sql": "DOUBLE",
+      "py": "float",
+      "doc": "fractional number"
     },
     "bool": {
-      "sql": "BOOL"
+      "sql": "BOOL",
+      "py": "bool",
+      "doc": "true or false"
+    },
+    "char": {
+      "sql": "CHAR",
+      "py": "str",
+      "doc": "a single character"
+    },
+    "string": {
+      "sql": "STRING",
+      "py": "str",
+      "doc": "text"
+    },
+    "date": {
+      "sql": "DATE",
+      "py": "str",
+      "doc": "a calendar day, YYYY-MM-DD"
+    },
+    "time": {
+      "sql": "TIME",
+      "py": "str",
+      "doc": "a time of day, HH:MM[:SS]"
+    },
+    "datetime": {
+      "sql": "DATETIME",
+      "py": "str",
+      "doc": "a day and a time, ISO-8601"
+    },
+    "duration": {
+      "sql": "DURATION",
+      "py": "str",
+      "doc": "a span — 30s, 15m, 1h, 7d. What a ROUTINE's schedule and a timeout are"
+    },
+    "bytes": {
+      "sql": "BYTES",
+      "py": "str",
+      "doc": "a size — 512MB, 20GB. Disk and memory, with the unit kept"
     }
   },
   "_ops_doc": "The statement types. `one_of` means exactly one of those fields must be present — foreach names its set EITHER by querying state (`select`) OR by referring to a set already bound (`in`). Those are different things and conflating them was a real gap: `new` with a count binds a SET, and until `in` existed there was no way to act on it before its members had an attribute to query by. \"Create X vms and label them\" was inexpressible. `required` is what validate() insists on; `doc` is what the model is shown. Adding an op here does NOT make it executable — the visitor must learn it too — so this table is the contract between the two, not a switch. `in` accepts a LITERAL LIST as well as a bound reference, because a correction usually acts on specific things the last attempt left behind — the model reached for exactly that on rung 7, naming three VMs it had read off current state, and the language had no way to say it. `new` carries `args` because a resource is rarely just a name: create_vm alone accepts 47 arguments and REQUIRES os_type. Without them `new` could not build a real VM at all — it passed only because the bench world is lenient about missing required fields, which is exactly the kind of gap a simulator hides.",
@@ -21,12 +62,14 @@
         "var",
         "kind"
       ],
-      "doc": "create a resource and bind a name to it. Fields: var, kind, amount (optional, default 1), args (optional — anything else the creator tool takes, e.g. {\"os_type\":\"linux\",\"cpu_cores\":2}). With amount > 1 every resource is created with the same args.",
+      "doc": "create a resource and bind a name to it. Fields: var, kind, amount (optional, default 1), args (optional — anything else the creator takes), `from` (optional — create by COPYING the named resource instead of making a fresh one).",
       "fields": [
         "var",
         "kind",
         "amount",
-        "args"
+        "args",
+        "from",
+        "ifails"
       ]
     },
     "call": {
@@ -37,7 +80,9 @@
       "doc": "invoke one tool. Fields: tool, args.",
       "fields": [
         "tool",
-        "args"
+        "args",
+        "graft",
+        "ifails"
       ]
     },
     "foreach": {
@@ -52,7 +97,9 @@
       "fields": [
         "select",
         "in",
-        "call"
+        "call",
+        "async",
+        "ifails"
       ]
     },
     "ensure": {
@@ -63,9 +110,21 @@
       "fields": [
         "predicate"
       ]
+    },
+    "if": {
+      "required": [
+        "cond",
+        "then"
+      ],
+      "fields": [
+        "cond",
+        "then",
+        "else"
+      ],
+      "doc": "branch on a check. Fields: cond (a check), then (statements), else (optional statements)."
     }
   },
-  "_kinds_doc": "THE RESOURCE MANIFEST (design note 580d54ac §07). One row per resource type, naming its creator tool, its lister, the argument that carries its key, and the attributes legal in a SELECT ... WHERE. This one table feeds NEW (which creator), SELECT (which lister, which attributes) and ENSURE (which predicates typecheck). A new resource type — a container, a conductor's own object — is ONE ROW here and no code. `package` is the module it belongs to; it is what the derived `imports` header is computed from, and the intended endpoint is one package per git submodule. ATTRS MUST MATCH THE VOCABULARY THE TOOLS USE. `add_label(name, label)` sets it, so a program selecting on it writes `label` — listing the attribute as `tag` made the model wrong for being consistent with the tool. One concept, one name. `aliases` carries the harness's internal synonyms so existing readers keep working. The KEY is queryable too: selecting a resource by its name is the most obvious query there is, and omitting it rejected `SELECT vm WHERE name = ...` out of hand.",
+  "_kinds_doc": "THE RESOURCE MANIFEST (design note 580d54ac §07). One row per resource type, naming its creator tool, its lister, the argument that carries its key, and the attributes legal in a SELECT ... WHERE. This one table feeds NEW (which creator), SELECT (which lister, which attributes) and ENSURE (which predicates typecheck). A new resource type — a container, a conductor's own object — is ONE ROW here and no code. `package` is the module it belongs to; it is what the derived `imports` header is computed from, and the intended endpoint is one package per git submodule. ATTRS MUST MATCH THE VOCABULARY THE TOOLS USE. `add_label(name, label)` sets it, so a program selecting on it writes `label` — listing the attribute as `tag` made the model wrong for being consistent with the tool. One concept, one name. `aliases` carries the harness's internal synonyms so existing readers keep working. The KEY is queryable too: selecting a resource by its name is the most obvious query there is, and omitting it rejected `SELECT vm WHERE name = ...` out of hand. A select may carry `not`, whose value is another select's filters — that is what a carve-out needs: 'every vm EXCEPT db' cannot be written by any positive filter, because the thing excluded is named rather than described. `creators` lets a kind be made more than one way — a machine can be built fresh or CLONED, and with a single creator 'clone golden three times' was unsayable. Which creator runs is chosen by whether `from` is present, so the language gains no keyword for it.",
   "kinds": {
     "vm": {
       "package": "core",
@@ -82,6 +141,18 @@
         "tag": "label",
         "labels": "label",
         "os": "os_type"
+      },
+      "creators": {
+        "create": {
+          "tool": "create_vm",
+          "doc": "a fresh machine"
+        },
+        "clone": {
+          "tool": "clone_vm",
+          "key": "new_name",
+          "from": "source_name",
+          "doc": "a copy of an existing machine"
+        }
       }
     },
     "network": {
@@ -95,6 +166,11 @@
       ],
       "aliases": {
         "name": "net_name"
+      },
+      "creators": {
+        "create": {
+          "tool": "create_network"
+        }
       }
     },
     "snapshot": {
@@ -105,10 +181,15 @@
       "attrs": [
         "snap_name",
         "vm"
-      ]
+      ],
+      "creators": {
+        "create": {
+          "tool": "snapshot_create"
+        }
+      }
     }
   },
-  "_predicates_doc": "What ENSURE can assert. `comparators` maps each comparator to the SYMBOL it renders as, so adding one is a data change — it used to be a dict in render.py, which meant a new comparator printed as `?`. EVERY shape carries its operand under `select` — the same key foreach uses — and names itself under `shape`. That regularity was measured, not chosen: an earlier form keyed the shape and operand together ({count: <select>, eq: N}) and llama3.1 put the NUMBER where the SET belongs on every attempt, while getting foreach's select right in the same programs. `source` records WHERE the truth comes from: `registry` is current state; `findings` is the probe ledger, because reachability is not registry state and is deliberately never inferred from a tool's success flag.",
+  "_predicates_doc": "What ENSURE can assert. `comparators` maps each comparator to the SYMBOL it renders as, so adding one is a data change — it used to be a dict in render.py, which meant a new comparator printed as `?`. EVERY shape carries its operand under `select` — the same key foreach uses — and names itself under `shape`. That regularity was measured, not chosen: an earlier form keyed the shape and operand together ({count: <select>, eq: N}) and llama3.1 put the NUMBER where the SET belongs on every attempt, while getting foreach's select right in the same programs. `source` records WHERE the truth comes from: `registry` is current state; `findings` is the probe ledger, because reachability is not registry state and is deliberately never inferred from a tool's success flag. `not`/`all`/`any` are COMPOSITE: their operand is other predicates rather than a set, which is why `source` is neither registry nor findings — they read whatever their children read. All three take parentheses in the written form, so a reader never has to know operator precedence, because there is none. `is` reads a GRAFTED RESULT rather than the world — IS($answer.reachable) = false. It is the only shape whose source is neither the registry nor findings, and it exists because rung 11's condition is a call's answer: which machines are unreachable is knowable only by asking.",
   "predicates": {
     "count": {
       "source": "registry",
@@ -133,6 +214,36 @@
       "operand": "sets",
       "comparators": {},
       "doc": "the named sets share no member"
+    },
+    "not": {
+      "source": "composite",
+      "operand": "of",
+      "arity": "one",
+      "comparators": {},
+      "doc": "the opposite of another check"
+    },
+    "all": {
+      "source": "composite",
+      "operand": "of",
+      "arity": "many",
+      "comparators": {},
+      "doc": "every one of these checks holds"
+    },
+    "any": {
+      "source": "composite",
+      "operand": "of",
+      "arity": "many",
+      "comparators": {},
+      "doc": "at least one of these checks holds"
+    },
+    "is": {
+      "source": "graft",
+      "operand": "of",
+      "arity": "value",
+      "comparators": {
+        "eq": "="
+      },
+      "doc": "a value from a grafted result equals this"
     }
   },
   "_prompt_doc": "Every string the model is shown. Held as data so the wording can be tuned without editing code, and so a change to it is visible in a diff as a change to the LANGUAGE rather than buried in a Python literal.",
@@ -196,8 +307,48 @@
     "predicate": {
       "type": "object",
       "doc": "what must hold at the end"
+    },
+    "from": {
+      "type": "string",
+      "doc": "create by copying this existing resource instead"
+    },
+    "graft": {
+      "type": "string",
+      "doc": "bind what this call returned, under this name"
+    },
+    "ifails": {
+      "type": "array",
+      "doc": "statements to run if this one fails"
+    },
+    "async": {
+      "type": "boolean",
+      "doc": "start it and do not wait"
+    },
+    "cond": {
+      "type": "object",
+      "doc": "if: the check to branch on"
+    },
+    "then": {
+      "type": "array",
+      "doc": "if: statements when the check holds"
+    },
+    "else": {
+      "type": "array",
+      "doc": "if: statements when it does not"
     }
   },
   "_authoring_doc": "HOW the model is asked to write a program. 'program' offers one emit_program tool taking the whole body as an array of statement objects. 'statements' offers ONE TOOL PER OP, each a flat object of scalars, and the harness assembles the program from the calls. The second exists because of a consistent measurement: decompose{steps:[string]} — an array of STRINGS — works reliably every day, while an array of structured OBJECTS collapses, and collapses harder the more structure is declared (oneOf and a nested required both took emission to 0/4). A statement tool asks for exactly the shape the model produces all day when it calls create_vm(name=alpha): two or three scalar arguments. Nested objects are flattened for the same reason — select{kind,label} becomes select_kind/select_attr/select_value.",
-  "authoring": "statements"
+  "authoring": "statements",
+  "_surface_doc": "How the written form spells things the stored form keeps as plain values. Wrappers are OPTIONAL where a bare value is unambiguous and REQUIRED where it is not: AMOUNT(5) reads as a count rather than an argument that happens to be a number, and matches COUNT(...) on the predicate side. NOT/AND/OR all take parentheses so a reader never has to know precedence — there is none to know. VAL(X) is the long form of $X; inside a loop $ is the one to use, because $item is what the body is full of.",
+  "surface": {
+    "bind": "STORE",
+    "amount": "AMOUNT",
+    "value": "VAL",
+    "sigil": "$",
+    "combinators": {
+      "not": "NOT",
+      "all": "AND",
+      "any": "OR"
+    }
+  }
 }

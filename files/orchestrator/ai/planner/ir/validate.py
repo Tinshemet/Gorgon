@@ -127,12 +127,24 @@ def validate(program: Any, known_tools=None) -> Tuple[bool, List[str]]:
             # with no language code. It also catches a real hole — `NEW vm` was passing
             # only the name, while create_vm requires os_type, so a program that
             # validated could not have built a VM against the real executor.
+            src = st.get("from")
+            if src is not None:
+                creators = config.KINDS.get(kind, {}).get("creators") or {}
+                by_copy = next((c for c in creators.values() if c.get("from")), None)
+                if by_copy is None:
+                    problems.append(f"{where}: {kind} cannot be created by copying "
+                                    f"(no creator takes a source)")
+                elif not isinstance(src, str) or not src.strip():
+                    problems.append(f"{where}: `from` names the resource to copy, got {src!r}")
             a = st.get("args")
             if a is not None and not isinstance(a, dict):
                 problems.append(f"{where}: args must be an object")
             elif kind in config.KINDS:
-                creator = config.KINDS[kind].get("create")
-                need = set(_REQUIRED_FIELDS.get(creator) or []) - {config.KINDS[kind]["key"]}
+                creator, supplied = _creator_for(kind, st, with_supplied=True)
+                # The executor supplies the key and, when copying, the source — so those
+                # are not the author's to pass. Demanding them would make every clone
+                # statement carry two arguments the language already knows.
+                need = set(_REQUIRED_FIELDS.get(creator) or []) - supplied
                 missing = sorted(need - set((a or {}).keys()))
                 if missing:
                     problems.append(f"{where}: {creator} also requires "
@@ -167,7 +179,51 @@ def validate(program: Any, known_tools=None) -> Tuple[bool, List[str]]:
                                         bound | {config.LOOP_VAR})
         elif op == "ensure":
             problems += _check_predicate(st.get("predicate"), where)
+        elif op == "if":
+            problems += _check_predicate(st.get("cond"), where)
+            for branch in ("then", "else"):
+                kids = st.get(branch)
+                if kids is None:
+                    continue
+                if not isinstance(kids, list) or not kids:
+                    problems.append(f"{where}: `{branch}` is a list of statements, got {kids!r}")
+                else:
+                    ok2, sub = validate({"body": kids}, tools)
+                    problems += [f"{where} ({branch}) → {x}" for x in sub]
+        # A grafted name is in scope from here on, and IFAILS carries statements wherever
+        # it appears — both checked once, for every acting op, rather than per branch.
+        if st.get("graft"):
+            bound.add(str(st["graft"]).lstrip(config.SIGIL))
+        recov = st.get("ifails")
+        if recov is not None:
+            if not isinstance(recov, list) or not recov:
+                problems.append(f"{where}: `ifails` is a list of statements, got {recov!r}")
+            else:
+                _, sub = validate({"body": recov}, tools)
+                problems += [f"{where} (ifails) → {x}" for x in sub]
     return (not problems), problems
+
+
+def _creator_for(kind: str, st: Dict[str, Any], with_supplied: bool = False):
+    """Which tool creates this resource — chosen by whether `from` is present.
+
+    A kind may be made more than one way (a machine built fresh, or cloned). Selecting
+    between them by the presence of a field rather than a keyword keeps the choice out of
+    the language: adding a third way to create something stays a manifest row.
+    """
+    spec = config.KINDS.get(kind) or {}
+    creators = spec.get("creators") or {}
+    chosen, supplied = None, {spec.get("key")}
+    if st.get("from"):
+        chosen = next((c for c in creators.values() if c.get("from")), None)
+    if chosen is None:
+        chosen = creators.get("create") or {"tool": spec.get("create")}
+    if chosen.get("key"):
+        supplied.add(chosen["key"])
+    if chosen.get("from"):
+        supplied.add(chosen["from"])
+    tool = chosen.get("tool") or spec.get("create")
+    return (tool, {x for x in supplied if x}) if with_supplied else tool
 
 
 def _check_select(sel: Any, where: str) -> List[str]:
@@ -184,12 +240,20 @@ def _check_select(sel: Any, where: str) -> List[str]:
         return [f"{where}: select must name a kind"]
     spec = config.KINDS[kind]
     legal = set(spec["attrs"]) | set(spec.get("aliases") or {})
-    unknown = [k for k in sel if k != "kind" and k not in legal]
+    # `not` holds another set of filters — the carve-out. Checked with the same rules, so
+    # an excluded attribute is validated exactly like an included one.
+    out = []
+    if "not" in sel:
+        if not isinstance(sel["not"], dict) or not sel["not"]:
+            out.append(f"{where}: `not` takes the filters to EXCLUDE, e.g. {{'name':'db'}}")
+        else:
+            out += _check_select({"kind": kind, **sel["not"]}, where)
+    unknown = [k for k in sel if k not in ("kind", "not") and k not in legal]
     # Aliases are accepted, not just tolerated: the harness has its own synonyms (`tag`
     # for a label, `os` for os_type) and a program written either way means the same
     # thing. Rejecting one spelling of one concept is the vocabulary problem in miniature.
-    return [f"{where}: {kind} has no attribute {k!r} "
-            f"(queryable: {', '.join(sorted(spec['attrs']))})" for k in unknown]
+    return out + [f"{where}: {kind} has no attribute {k!r} "
+                  f"(queryable: {', '.join(sorted(spec['attrs']))})" for k in unknown]
 
 
 def _check_call(st: Dict[str, Any], where: str, tools, bound) -> List[str]:
@@ -236,6 +300,27 @@ def _check_predicate(pred: Any, where: str) -> List[str]:
                 f"{', '.join(config.PREDICATES)}, got {shape!r}"]
     out, operand = [], spec["operand"]
     value = pred.get(operand)
+    if spec.get("arity") == "value":
+        # IS($answer.reachable) = false — reads a grafted result, not the world.
+        if not isinstance(value, str) or not value.startswith(config.SIGIL):
+            return [f"{where}: {shape} reads a grafted value, e.g. "
+                    f"{config.SIGIL}answer.reachable — got {value!r}"]
+        if not (set(pred) & set(spec["comparators"])):
+            return [f"{where}: {shape} needs "
+                    f"{'/'.join(spec['comparators'])} to compare against"]
+        return []
+    if operand == "of":
+        # A composite's operand is other predicates, checked recursively — so a malformed
+        # child names itself rather than the parent looking wrong.
+        kids = [value] if spec.get("arity") == "one" else value
+        if spec.get("arity") == "one":
+            if not isinstance(value, dict):
+                return [f"{where}: {shape} takes one check under `of`, got {value!r}"]
+        elif not isinstance(value, (list, tuple)) or len(value) < 2:
+            return [f"{where}: {shape} takes two or more checks under `of`, got {value!r}"]
+        for kid in kids:
+            out += _check_predicate(kid, where)
+        return out
     if operand == "select":
         if not isinstance(value, dict):
             out.append(f"{where}: {shape} needs `select` — the set to measure, "

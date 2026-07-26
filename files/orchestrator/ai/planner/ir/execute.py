@@ -94,12 +94,51 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
                              "error": result.get("error") or "call reported failure"})
         return result
 
-    for st in body:
+    def _holds(pred: Dict, scope: Dict) -> tuple:
+        """A predicate's verdict. `is` reads a GRAFTED result out of scope; everything
+        else asks the injected evaluator, which reads the world. Keeping that split here
+        means the caller never has to know which predicates are about state and which are
+        about what a call just said."""
+        spec = config.PREDICATES.get(pred.get("shape")) or {}
+        if spec.get("arity") == "value":
+            ref = str(pred.get("of", ""))[len(config.SIGIL):]
+            name, _, path = ref.partition(".")
+            val = scope.get(name)
+            for part in filter(None, path.split(".")):
+                val = val.get(part) if isinstance(val, dict) else None
+            want = next((pred[c] for c in spec["comparators"] if c in pred), None)
+            return val == want, f"{pred.get('of')} is {val!r}, wanted {want!r}"
+        if holds is None:
+            return False, "no predicate evaluator"
+        return holds(_resolve(pred, scope), scope)
+
+    def _block(stmts: List[Dict]) -> Optional[Dict]:
+        """Run statements in order. Returns a failure dict, or None if all ran."""
+        for st in stmts:
+            bad = _one(st)
+            if bad is not None:
+                return bad
+        return None
+
+    def _one(st: Dict) -> Optional[Dict]:
         op = st.get("op")
+        before = len(failures)
+
+        if op == "if":
+            good, _why = _holds(st.get("cond") or {}, scope)
+            return _block(st.get("then" if good else "else") or [])
 
         if op == "new":
             kind = st["kind"]
             spec = config.KINDS[kind]
+            # Which creator runs is decided by whether `from` is present — a machine can
+            # be built fresh or copied, and choosing between them by a field rather than a
+            # keyword keeps the choice out of the language.
+            creators = spec.get("creators") or {}
+            source = _resolve(st.get("from"), scope) if st.get("from") else None
+            chosen = (next((c for c in creators.values() if c.get("from")), None)
+                      if source else None) or creators.get("create") or {"tool": spec.get("create")}
+            key_arg = chosen.get("key") or spec["key"]
             n = _resolve(st.get("amount", 1), scope)
             n = int(n) if isinstance(n, (int, str)) and str(n).isdigit() else 1
             names = [_mint(kind, st["var"], i, n) for i in range(n)]
@@ -108,13 +147,20 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
             # which is the natural reading of "create 5 vms with 4GB each".
             extra = _resolve(st.get("args") or {}, scope)
             for nm in names:
-                _do(spec["create"], {**extra, spec["key"]: nm})
+                call_args = {**extra, key_arg: nm}
+                if source and chosen.get("from"):
+                    call_args[chosen["from"]] = source
+                _do(chosen["tool"], call_args)
             # One resource binds its name; several bind the LIST, so `foreach in` can
             # iterate what was just created — before it has any attribute to query by.
             scope[st["var"]] = names[0] if n == 1 else names
 
         elif op == "call":
-            _do(st["tool"], _resolve(st.get("args") or {}, scope))
+            result = _do(st["tool"], _resolve(st.get("args") or {}, scope))
+            # A grafted result enters scope under its name, so a later statement — usually
+            # an `if` — can read what the call actually said.
+            if st.get("graft"):
+                scope[st["graft"]] = result
 
         elif op == "foreach":
             if st.get("in") is not None:
@@ -126,6 +172,10 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
                     return {"ok": False, "failed": "no select evaluator",
                             "scope": scope, "calls": calls}
                 members = select(_resolve(st["select"], scope))
+            # `async` is accepted and runs serially here. Concurrency is a real execution
+            # change — it forces the query-freshness question, since a parallel loop can
+            # mutate the set it is iterating — and shipping the FLAG before the semantics
+            # would let programs be written against behaviour that does not exist yet.
             inner = st["call"]
             for m in members:
                 _do(inner["tool"],
@@ -143,6 +193,18 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
                 return {"ok": False, "failed": "unsatisfied", "why": why,
                         "predicate": st["predicate"], "scope": scope, "calls": calls,
                         "failures": failures}
+        # IFAILS: recovery runs only if THIS statement's calls actually failed. Scoping it
+        # to one statement is why you know what broke — and the failure stays recorded, so
+        # a recovery compensates rather than conceals.
+        if len(failures) > before and st.get("ifails"):
+            _block(st["ifails"])
+        return None
+
+    for st in body:
+        bad = _one(st)
+        if bad is not None:
+            return bad
+    op = None
 
     if failures and not asserted:
         # Nothing vouched for the end state and calls failed: there is no basis for a

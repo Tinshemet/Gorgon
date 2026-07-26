@@ -57,17 +57,25 @@ def _statement(st: Any, indent: str) -> list:
         n = st.get("amount", 1)
         # "NEW 5 vm(...)" reads the way the request does — "create 5 vms". A trailing
         # multiplier had to be decoded, and a $parameter one silently vanished entirely.
-        many = (f"{n} " if (isinstance(n, str) and n.startswith(config.SIGIL))
+        # AMOUNT(5) rather than a bare 5: it reads as a count instead of an argument that
+        # happens to be a number, and it mirrors COUNT(...) on the predicate side.
+        many = (f"{config.SURFACE['amount']}({n}) "
+                if (isinstance(n, str) and n.startswith(config.SIGIL))
                 or (isinstance(n, int) and n > 1) else "")
         extra = _args(st.get("args")) if st.get("args") else ""
-        return [f"{indent}LET {st.get('var')} = NEW {many}{st.get('kind')}"
-                f"{f'({extra})' if extra else ''};"]
+        # FROM has to show. A clone reads almost identically to a fresh create, and the
+        # difference — whether this copies something that exists — is exactly what an
+        # operator is deciding about when they read the line.
+        src = f" FROM {st['from']}" if st.get("from") else ""
+        return _with_tail([f"{indent}{config.SURFACE['bind']} {st.get('var')} = NEW {many}"
+                           f"{st.get('kind')}{f'({extra})' if extra else ''}{src};"], st, indent)
 
     if op == "call":
         # A grafted result reads as a binding, the same LET that binds a resource —
         # because naming a result and naming a resource are the same act.
-        lead = f"LET {st['graft']} = " if st.get("graft") else ""
-        return [f"{indent}{lead}{st.get('tool')}({_args(st.get('args'))});"]
+        lead = f"{config.SURFACE['bind']} {st['graft']} = " if st.get("graft") else ""
+        return _with_tail([f"{indent}{lead}{st.get('tool')}({_args(st.get('args'))});"],
+                          st, indent)
 
     if op == "foreach":
         inner = st.get("call") if isinstance(st.get("call"), dict) else {}
@@ -78,9 +86,9 @@ def _statement(st: Any, indent: str) -> list:
         # to follow the binding.
         member = f"{config.SIGIL}{config.LOOP_VAR}"
         par = " ASYNC" if st.get("async") else ""
-        return ([f"{indent}FOREACH {member} IN {src}{par} {{"]
-                + _statement({"op": "call", **inner}, indent + "  ")
-                + [f"{indent}}}"])
+        return _with_tail([f"{indent}FOREACH {member} IN {src}{par} {{"]
+                          + _statement({"op": "call", **inner}, indent + "  ")
+                          + [f"{indent}}}"], st, indent)
 
     if op == "ensure":
         return [f"{indent}ENSURE {_pred(st.get('predicate'))};"]
@@ -99,6 +107,20 @@ def _statement(st: Any, indent: str) -> list:
     return [f"{indent}<unknown op {op!r}>"]
 
 
+def _with_tail(lines: list, st: dict, indent: str) -> list:
+    """Append `IFAILS { … }` to a statement's rendering, if it carries one."""
+    recov = st.get("ifails")
+    if not recov:
+        return lines
+    lines = list(lines)
+    lines[-1] = lines[-1].rstrip(";") + "; IFAILS {" if lines[-1].endswith(";") \
+        else lines[-1] + " IFAILS {"
+    for inner in recov:
+        lines += _statement(inner, indent + "  ")
+    lines.append(f"{indent}}}")
+    return lines
+
+
 def _signature(program: dict) -> str:
     """`PROCEDURE name(p TYPE, ...) AS` — only for a NAMED program.
 
@@ -109,7 +131,9 @@ def _signature(program: dict) -> str:
     name = program.get("name")
     if not name:
         return ""
-    args = ", ".join(f"{k} {config.PARAM_TYPES.get(v, {}).get('sql', str(v).upper())}"
+    # TYPE FIRST — (INT X), the way a declaration reads in C, Java and Dart. It puts the
+    # kind of thing before its name, which is what you want when scanning a signature.
+    args = ", ".join(f"{config.PARAM_TYPES.get(v, {}).get('sql', str(v).upper())} {k}"
                      for k, v in (program.get("params") or {}).items())
     # No trailing AS: the brace already opens the block, and two openers is one
     # more thing to get wrong when writing by hand.
@@ -145,6 +169,23 @@ def _pred(p) -> str:
     spec = config.PREDICATES.get(shape)
     if spec is None:
         return f"<unknown check {shape!r}>"
+    # NOT / AND / OR all take parentheses, so a reader never has to know precedence —
+    # there is none to know. AND(a, b) reads the way NOT(a) does.
+    if spec.get("arity") == "value":
+        # IS($answer.reachable) = false — a grafted result, not a set.
+        used = next((c for c in spec["comparators"] if c in p), None)
+        sym = spec["comparators"].get(used, "?")
+        val = p.get(used)
+        lit = "true" if val is True else "false" if val is False else repr(val).strip("'\"") \
+            if not isinstance(val, str) else f"'{val}'"
+        return f"{shape.upper()}({p.get('of')}) {sym} {lit}"
+    if spec["operand"] == "of":
+        word = config.SURFACE["combinators"][shape]
+        inner = p.get("of")
+        if spec.get("arity") == "one":
+            return f"{word}({_pred(inner)})"
+        parts = ", ".join(_pred(x) for x in (inner if isinstance(inner, list) else []))
+        return f"{word}({parts})"
     if spec["operand"] == "sets":
         return f"{shape.upper()}({', '.join(str(x) for x in (p.get('sets') or []))})"
     # The symbol comes from the manifest beside the comparator it belongs to. It used to

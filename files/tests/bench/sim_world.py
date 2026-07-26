@@ -85,7 +85,10 @@ class SimWorld:
         return {"success": True, "name": n}
 
     def _t_clone_vm(self, a):
-        src = a.get("name") or a.get("source")
+        # `source_name` is what the REAL clone_vm takes; the others are spellings the
+        # model has reached for. Accepting the real one matters most — the sim silently
+        # refusing a correctly-formed call would look like a language bug.
+        src = a.get("source_name") or a.get("name") or a.get("source")
         dst = a.get("new_name") or a.get("clone_name") or a.get("target")
         if src not in self.vms:
             return {"success": False, "error": f"no VM named {src}"}
@@ -186,8 +189,13 @@ class SimWorld:
         n = self._vm(a)
         if n not in self.vms:
             return {"success": False, "error": f"no vm {n}"}
-        return {"success": n not in self.unreachable, "name": n,
-                "reachable": n not in self.unreachable}
+        # A ping that reports "not reachable" has SUCCEEDED — it ran and produced an
+        # answer. Returning success:False for a negative answer conflates "the call
+        # failed" with "the answer is no", which is the same conflation the codebase
+        # already refuses elsewhere: success means the command RAN, not that the goal is
+        # met. It also makes a program that correctly branches on the answer look like a
+        # program whose calls failed.
+        return {"success": True, "name": n, "reachable": n not in self.unreachable}
 
     def _t_snapshot_create(self, a):
         """A third resource kind. The whole point of rung 12: the design claims a new kind
