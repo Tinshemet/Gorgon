@@ -31,7 +31,8 @@ import json
 import sys
 import urllib.request
 
-from orchestrator.ai.planner.ir import config, consent, derive, render, run, validate
+from orchestrator.ai.planner.ir import (config, consent, derive, evaluate, render,
+                                       run, validate)
 from orchestrator.ai.planner.ir.validate import _one_of_groups
 
 from .ladder import BENCH_MODEL
@@ -396,7 +397,7 @@ def repair(goal, program, problems, model, temp, shots, known_names=None, timeou
 
 
 def revise(goal, program, world, why, model, temp, shots, timeout=600,
-           reason="its own check REJECTED the result"):
+           reason="its own check REJECTED the result", failures=None):
     """Author a CORRECTIVE program, given what the last one did and what went wrong.
 
     The correction runs against the world the first program left behind — it does not
@@ -407,8 +408,23 @@ def revise(goal, program, world, why, model, temp, shots, timeout=600,
     msgs = _messages(goal, shots)[:-1]
     msgs.append({"role": "user", "content": goal})
     msgs.append({"role": "assistant", "content": json.dumps(program)})
+    # BOTH objections, when there are both. Measured, not assumed: a goal shortfall names
+    # the SYMPTOM ("count is 0, wanted >= 3") while a rejected call names the CAUSE ("no
+    # network named core"). Given only the shortfall the model kept re-attaching to a
+    # network that did not exist, three rounds running; given the rejection it created the
+    # network immediately. Withholding the failures because a postcondition was present
+    # was throwing away the more actionable half.
+    detail = why
+    if failures:
+        seen, lines = set(), []
+        for f in failures:
+            msg = f.get("error") or "call failed"
+            if msg not in seen:
+                seen.add(msg)
+                lines.append(f"  - {f.get('tool')}: {msg}")
+        detail = f"{why}\n\nCalls the world REJECTED:\n" + "\n".join(lines)
     msgs.append({"role": "user", "content":
-                 f"That program ran, and {reason}: {why}\n\n"
+                 f"That program ran, and {reason}: {detail}\n\n"
                  f"{world_state(world)}\n\n"
                  f"The goal was: {goal}\n"
                  "Write a program that fixes ONLY the difference between the state above "
@@ -447,6 +463,12 @@ def _seams(world):
             if "name" in f and name != f["name"]:
                 return False
             if "os_type" in f and vm.get("os_type") != f["os_type"]:
+                return False
+            # Membership, not equality: a machine sits on a SET of networks. Written as
+            # equality (`network = 'core'`) because that is how the operator says it —
+            # "is it on core" — and the query language should not make a reader learn
+            # which attributes happen to be multi-valued.
+            if "network" in f and f["network"] not in vm.get("nets", set()):
                 return False
             return True
 
@@ -582,9 +604,14 @@ def main(argv=None) -> int:
                                   if st.get("op") == "ensure"), None)
 
             def _goal_holds():
+                # `evaluate`, not the raw leaf reader. Calling `holds` directly here lost
+                # composites and IS() — an ACHIEVE built from AND(...) came back
+                # "unevaluated shape all" and was counted as FAILED, so a goal that
+                # actually held kept the revision loop running. The visitor had the right
+                # logic; this path was reaching around it.
                 if goal_pred is None:
                     return True, ""
-                return holds(goal_pred, {})
+                return evaluate(goal_pred, {}, holds)
 
             if res["ok"] and goal_pred is not None:
                 good, why = _goal_holds()
@@ -627,8 +654,9 @@ def main(argv=None) -> int:
                     fix, fix_problems = revise(
                         goal, prog, world, res.get("why", ""), a.model, a.temp, shots,
                         reason=("its own check REJECTED the result"
-                                if res.get("failed") == "unsatisfied" else
-                                "the world REJECTED its calls, so it did nothing"))
+                                if res.get("failed") in ("unsatisfied", "unachieved")
+                                else "the world REJECTED its calls, so it did nothing"),
+                        failures=res.get("failures"))
                 # A REVISION can be invalid too, and rung 8's was — rejected for
                 # inventing a clone of a network. Repair applied to first authoring and
                 # not to corrections, which left the sharpest objection in the run

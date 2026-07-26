@@ -155,12 +155,16 @@
         "name",
         "status",
         "label",
-        "os_type"
+        "os_type",
+        "network"
       ],
       "aliases": {
         "tag": "label",
         "labels": "label",
-        "os": "os_type"
+        "os": "os_type",
+        "net": "network",
+        "net_name": "network",
+        "on": "network"
       },
       "creators": {
         "create": {

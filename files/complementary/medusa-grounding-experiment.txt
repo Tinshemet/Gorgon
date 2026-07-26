@@ -1,0 +1,58 @@
+========================================================================
+ARM A — no goal. The program as the model wrote it.
+========================================================================
+FOREACH $item IN SELECT vm EXCEPT name = 'db' {
+  add_vm_to_network(net_name: core, vm_name: $item);
+}
+add_vm_to_network(net_name: dmz, vm_name: db);
+
+  first run: ok=False failed=calls_failed
+  round 1: model revision
+    | STORE core_net = NEW network(net_name: core);
+    | add_vm_to_network(net_name: $core_net, vm_name: app1);
+    | add_vm_to_network(net_name: $core_net, vm_name: app2);
+    | add_vm_to_network(net_name: $core_net, vm_name: app3);
+    -> GOAL HOLDS
+
+  RUNG CHECKER: FAIL
+  world: 4 vms ['app1', 'app2', 'app3', 'db'] | nets ['core_net'] | 8 calls
+  rounds used: 1
+
+========================================================================
+ARM B — same program, ACHIEVE appended. Objection = goal + rejected calls.
+========================================================================
+FOREACH $item IN SELECT vm EXCEPT name = 'db' {
+  add_vm_to_network(net_name: core, vm_name: $item);
+}
+add_vm_to_network(net_name: dmz, vm_name: db);
+ACHIEVE AND(COUNT(SELECT vm WHERE network = 'core' EXCEPT name = 'db') >= 3, COUNT(SELECT vm WHERE network = 'dmz' AND name = 'db') = 1, COUNT(SELECT vm WHERE network = 'core' AND name = 'db') = 0);
+
+  first run: ok=False failed=unachieved
+  round 1: model revision
+    | STORE networks = NEW AMOUNT(2) network(net_name: ['core', 'dmz']);
+    | FOREACH $item IN [app1, app2, app3] {
+    |   add_vm_to_network(net_name: core, vm_name: $item);
+    | } IFAILS {
+    |   ENSURE COUNT(SELECT vm WHERE network = 'core') >= 3;
+    | }
+    | add_vm_to_network(net_name: dmz, vm_name: db);
+    -> still short: count is 0, wanted >= 3; count is 0, wanted == 1
+  round 2: model revision
+    | create_network(net_name: core);
+    | add_vm_to_network(net_name: core, vm_name: app1);
+    | add_vm_to_network(net_name: core, vm_name: app2);
+    | create_network(net_name: dmz);
+    | add_vm_to_network(net_name: dmz, vm_name: db);
+    -> still short: count is 2, wanted >= 3
+  round 3: model revision
+    | add_vm_to_network(net_name: core, vm_name: app3);
+    | ACHIEVE COUNT(SELECT vm WHERE network = 'core') >= 3;
+    -> GOAL HOLDS
+
+  RUNG CHECKER: PASS
+  world: 4 vms ['app1', 'app2', 'app3', 'db'] | nets ['core', 'dmz', 'networks1', 'networks2'] | 16 calls
+  rounds used: 3
+
+========================================================================
+  no goal : FAIL  (8 calls, 1 rounds)
+  goal    : PASS  (16 calls, 3 rounds)

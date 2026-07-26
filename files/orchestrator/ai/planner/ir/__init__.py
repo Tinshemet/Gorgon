@@ -33,7 +33,7 @@ performs on every tool call.
 from .config import (KINDS, LANGUAGE, LOOP_VAR, OPS, PREDICATES, SIGIL,
                      packages_for)
 from .derive import derive
-from .execute import Unsatisfied, run
+from .execute import Unsatisfied, evaluate, run
 from .render import render
 from .schema import (emit_program_tool, statement_from, statement_tools,
                      system_prompt)
@@ -47,6 +47,7 @@ __all__ = [
     "EMIT_PROGRAM_TOOL", "emit_program_tool", "system_prompt",
     "statement_tools", "statement_from",
     "validate", "coerce_body", "kinds_used",
-    "render", "run", "Unsatisfied", "derive",
+    "render", "evaluate",
+    "run", "Unsatisfied", "derive",
     "KINDS", "OPS", "PREDICATES", "SIGIL", "LOOP_VAR", "LANGUAGE", "packages_for",
 ]

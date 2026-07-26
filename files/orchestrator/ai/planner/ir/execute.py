@@ -48,6 +48,56 @@ def _mint(kind: str, var: str, i: int, n: int) -> str:
     return var if n == 1 else f"{var}{i + 1}"
 
 
+def evaluate(pred: Dict, scope: Dict, leaf: Optional[Callable]) -> Tuple[bool, str]:
+    """A predicate's verdict: composites and grafted values here, world queries delegated.
+
+    Module-level ON PURPOSE. This lived inside run()'s closure, which meant only the
+    visitor could use it — so every OTHER caller that needed a verdict (the bench's goal
+    re-check, any harness re-testing a goal after a revision) called the injected leaf
+    evaluator directly and silently lost composites and IS(). They came back "unevaluated
+    shape all", which a postcondition then counted as FAILED. Logic that more than one
+    caller needs cannot live in a closure.
+
+      not/all/any  pure logic over other verdicts — no world access, so the language
+                   answers them and no evaluator has to reimplement boolean algebra
+      is           reads a grafted result out of scope, not the world
+      everything   delegated to `leaf`, which is the registry or the findings ledger
+    """
+    spec = config.PREDICATES.get(pred.get("shape")) or {}
+
+    if spec.get("source") == "composite":
+        shape = pred.get("shape")
+        kids = pred.get("of") or []
+        kids = kids if isinstance(kids, list) else [kids]
+        verdicts = [evaluate(k, scope, leaf) for k in kids if isinstance(k, dict)]
+        if not verdicts:
+            return False, f"{shape} has nothing to combine"
+        if shape == "not":
+            good, why = verdicts[0]
+            return (not good), f"NOT({why})"
+        if shape == "all":
+            bad = [w for g, w in verdicts if not g]
+            return (not bad), ("all held" if not bad else "; ".join(bad))
+        if shape == "any":
+            good = any(g for g, _ in verdicts)
+            return good, ("one held" if good
+                          else "none held: " + "; ".join(w for _, w in verdicts))
+        return False, f"unknown composite {shape}"
+
+    if spec.get("arity") == "value":
+        ref = str(pred.get("of", ""))[len(config.SIGIL):]
+        name, _, path = ref.partition(".")
+        val = scope.get(name)
+        for part in filter(None, path.split(".")):
+            val = val.get(part) if isinstance(val, dict) else None
+        want = next((pred[c] for c in spec["comparators"] if c in pred), None)
+        return val == want, f"{pred.get('of')} is {val!r}, wanted {want!r}"
+
+    if leaf is None:
+        return False, "no predicate evaluator"
+    return leaf(pred, scope)
+
+
 def run(program: Any, execute: Callable[[str, Dict], Any], *,
         select: Optional[Callable[[Dict], List[str]]] = None,
         holds: Optional[Callable[[Dict, Dict], Tuple[bool, str]]] = None,
@@ -102,22 +152,9 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
         return result
 
     def _holds(pred: Dict, scope: Dict) -> tuple:
-        """A predicate's verdict. `is` reads a GRAFTED result out of scope; everything
-        else asks the injected evaluator, which reads the world. Keeping that split here
-        means the caller never has to know which predicates are about state and which are
-        about what a call just said."""
-        spec = config.PREDICATES.get(pred.get("shape")) or {}
-        if spec.get("arity") == "value":
-            ref = str(pred.get("of", ""))[len(config.SIGIL):]
-            name, _, path = ref.partition(".")
-            val = scope.get(name)
-            for part in filter(None, path.split(".")):
-                val = val.get(part) if isinstance(val, dict) else None
-            want = next((pred[c] for c in spec["comparators"] if c in pred), None)
-            return val == want, f"{pred.get('of')} is {val!r}, wanted {want!r}"
-        if holds is None:
-            return False, "no predicate evaluator"
-        return holds(_resolve(pred, scope), scope)
+        """This program's predicate verdict — the shared evaluator, bound to the
+        injected leaf reader."""
+        return evaluate(pred, scope, holds)
 
     def _block(stmts: List[Dict]) -> Optional[Dict]:
         """Run statements in order. Returns a failure dict, or None if all ran."""
@@ -218,7 +255,12 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
             # believed, and then ignored.
             nonlocal asserted
             asserted = True
-            good, why = holds(_resolve(st["predicate"], scope), scope)
+            # `_holds`, not the injected `holds`. The ensure branch called the evaluator
+            # DIRECTLY, so it skipped the language's own predicate handling entirely:
+            # composites came back "unevaluated shape all" and `IS(...)` could not read a
+            # grafted result at all. Only `if` went through _holds, which is why the gap
+            # stayed hidden — the conditional worked and the postcondition did not.
+            good, why = _holds(_resolve(st["predicate"], scope), scope)
             if not good:
                 # A failed check is a PLAN failure with a reason, not a crash — the caller
                 # routes it to revision the way an unverified close already is. WHICH
