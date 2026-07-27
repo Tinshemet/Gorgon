@@ -315,6 +315,73 @@ def test_the_surface_spells_every_word_it_owns():
                   bool(spec["comparators"][comparator]))
 
 
+def test_the_two_selects_answer_the_same_question():
+    """The bench seam and the production seam must agree on every construct.
+
+    Every rung was measured against the BENCH select. If the production one answers
+    differently — misses a carve-out, ignores an alias, drops a group — then the ladder is
+    a statement about a simulator and nothing else. Same world, same query, same answer,
+    or the number means nothing.
+    """
+    from orchestrator.ai.active_library import ActiveLibrary
+    from orchestrator.ai.planner.findings import Findings
+    from orchestrator.ai.planner.program import make_select
+
+    # One lab, built twice — once as the bench world, once as the registry.
+    w = SimWorld()
+    for n, os_type in (("app1", "linux"), ("app2", "linux"), ("db", "windows")):
+        w.execute("create_vm", {"name": n, "os_type": os_type})
+    w.execute("launch_vm", {"name": "app1"})
+    w.execute("add_label", {"name": "app1", "label": "fleet"})
+    w.execute("add_label", {"name": "app2", "label": "fleet"})
+    w.execute("add_label", {"name": "db", "label": "prod"})
+    w.execute("create_network", {"net_name": "core"})
+    w.execute("add_vm_to_network", {"net_name": "core", "vm_name": "app1"})
+    w.calls.clear()
+
+    lib = ActiveLibrary()
+    lib._vms = {n: {"name": n, "os_type": v.get("os_type", "linux"),
+                    "status": v["status"], "labels": sorted(v["labels"]), "flags": []}
+                for n, v in w.vms.items()}
+    lib._networks = {net: {"members": sorted(n for n, v in w.vms.items()
+                                             if net in v.get("nets", set()))}
+                     for net in w.nets}
+    ledger = Findings()
+    bench_select, _ = _seams(w)
+    prod_select = make_select(lib, ledger)
+
+    queries = [
+        {"kind": "vm"},
+        {"kind": "vm", "label": "fleet"},
+        {"kind": "vm", "tag": "fleet"},                       # an alias
+        {"kind": "vm", "status": "running"},
+        {"kind": "vm", "os_type": "windows"},
+        {"kind": "vm", "network": "core"},
+        {"kind": "vm", "not": {"name": "db"}},                # the carve-out
+        {"kind": "vm", "name": {"in": ["app1", "db"]}},       # membership
+        {"kind": "vm", "label": {"in": ["fleet", "prod"]}},
+        {"kind": "vm", "any": [{"label": "fleet"}, {"label": "prod"}]},
+        {"kind": "vm", "label": "fleet", "name": {"in": ["app1"]}},
+        {"kind": "vm", "name": {"in": ["app1", "db"]}, "not": {"name": "db"}},
+        {"kind": "vm", "alive": "unknown"},                   # observed, unprobed
+        {"kind": "network"},
+    ]
+    for q in queries:
+        b, pr = bench_select(q), prod_select(q)
+        check(f"same answer for {str(q)[:58]}", sorted(b) == sorted(pr))
+
+    # ...and once the ledger holds an observation, both must move together.
+    w.unreachable.add("app2")
+    for n in ("app1", "app2"):
+        w.execute("guest_ping", {"name": n})
+    for n in ("app1", "app2"):
+        ledger.record(f"reachable({n})", n != "app2", source="guest_ping")
+    for value in ("true", "false", "unknown"):
+        q = {"kind": "vm", "alive": value}
+        check(f"same answer for alive = {value!r} after probing",
+              sorted(bench_select(q)) == sorted(prod_select(q)))
+
+
 def main():
     for fn in (test_every_predicate_shape_has_an_evaluator,
                test_every_predicate_shape_renders_legibly,
@@ -327,7 +394,8 @@ def main():
                test_every_kind_names_real_tools,
                test_every_observed_attribute_is_actually_learnable,
                test_bindable_names_are_exactly_readable_names,
-               test_the_surface_spells_every_word_it_owns):
+               test_the_surface_spells_every_word_it_owns,
+               test_the_two_selects_answer_the_same_question):
         print(f"\n── {fn.__name__}")
         fn()
     print(f"\n{_PASS}/{_PASS + _FAIL} passed")

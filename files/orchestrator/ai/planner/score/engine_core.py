@@ -122,6 +122,8 @@ def run_score(
     ground_steps    = engine.ground_steps
     complete_steps  = engine.complete_steps
     already_satisfied = engine.already_satisfied
+    program_tool    = engine.program_tool
+    run_program     = engine.run_program
     goal_complaint    = engine.goal_complaint
     goal_effect       = engine.goal_effect
 
@@ -574,6 +576,96 @@ def run_score(
                 node["revised"] = True
         return node
 
+    def _guard(name, args, node_goal, depth=0, path=()):
+        """May this call proceed? THE one authority, for leaves and for programs alike.
+
+        Returns (action, info):
+          "refuse"  info carries the node fields explaining why — a red line, a denied
+                    referendum, a throttle, a tripped killswitch, an unworthy commit.
+          "skip"    the effect is already in place (a known finding, or this exact call
+                    already made this run). Not a failure: doing it again is the waste.
+          "proceed" info carries the savepoint label and the stated rationale.
+
+        EXTRACTED so a MEDUSA program's calls meet the same gauntlet a leaf does. The
+        design note is explicit that "the program body is NOT a trusted region" — a
+        `delete_vm` inside a program must meet the double confirmation it meets in chat.
+        The alternative was to repeat this sequence at the program seam, which is how two
+        security paths diverge: one of them gets a fix and the other does not.
+        """
+        # LEGAL FILTER (gauntlet A): a hard, categorical red line — dropped up front,
+        # never costed, never surfaced. Distinct from the destructiveness/consent axis.
+        if legal_filter and legal_filter(name, args):
+            return "refuse", {"status": "forbidden", "reason": "legal_red_line"}
+
+        # Anti-rediscovery (Findings ledger): if this call's finding is already
+        # known, don't re-run the tool that would learn it — return the cached fact.
+        fact = _yield_fact(name, args, findings_schema) if (findings is not None and findings_schema) else None
+        if fact and findings.has(fact):
+            return "skip", {"cached_finding": fact,
+                            "result": {"finding": fact, "value": findings.get(fact),
+                                       "cached": True}}
+
+        # SIMULATED ĈE COMMIT GATE (deliberation scales with irreversibility): a
+        # REVERSIBLE leaf just acts — reality is a free act-observe-correct oracle, no
+        # simulation. An IRREVERSIBLE leaf commits only if its SIMULATED certainty-
+        # equivalent clears the worth-it bar; otherwise it's blocked here, before any
+        # savepoint or execution. Distinct from the whole-goal gate (prices the GOAL) and
+        # the checkpoint path (revertibility): this is the per-leaf irreversible go/no-go.
+        # commit_gate returns True for reversible/unknown risk (the default when unset).
+        if commit_gate is not None and not commit_gate(name, args):
+            return "refuse", {"status": "blocked", "reason": "not_worth_committing"}
+
+        # REASON-VALIDATION GATE (two-stage, opt-in): capture the model's stated REASON for
+        # this action, then check the ACTION against it as a spec — STRUCTURAL, not a
+        # model-judge (the p_self firewall). Flags clear divergence (no reason; the target
+        # absent from the justification; or — grounded — a reason that CONTRADICTS the live
+        # state). The stated reason is RECORDED on the leaf (rationale) and streamed to the
+        # live tree, so even a passed lie stays auditable after the run.
+        rationale = None
+        if reason_gate is not None:
+            rg = reason_gate(node_goal, name, args)
+            problem   = rg.get("problem") if isinstance(rg, dict) else rg
+            rationale = rg.get("reason")  if isinstance(rg, dict) else None
+            if problem:
+                return "refuse", {"status": "blocked", "rationale": rationale,
+                                  "reason": f"reason_mismatch:{problem}"}
+        _rat = {"rationale": rationale} if rationale else {}
+
+        if _already_done_this_run(name, args):
+            _emit("leaf", node_goal, depth, path, tool=name, args=args, repeat="suppressed")
+            return "skip", {"repeat": "already_done", **_rat}
+
+        act = gate(name, args) if gate else "proceed"
+        checkpoint_label = None
+        if act == "halt":
+            # CONSENT SURFACE (gauntlet D): destructive-but-legal → a referendum WITH
+            # its consequence. Granted → proceed (kept revertible via checkpoint);
+            # denied, or no referendum handler → blocked. (Was a categorical halt.)
+            if referendum and referendum(name, args, _consent_verb(name)):
+                act = "checkpoint"
+            else:
+                return "refuse", {"status": "blocked",
+                                  "reason": "consent_denied" if referendum else "contract_halt"}
+        if act == "checkpoint":
+            checkpoint_label = f"pre_{name}_{len(ledger)}"
+            cp    = execute("checkpoint", {"label": checkpoint_label})
+            cp_ok = not (isinstance(cp, dict) and (cp.get("success") is False or cp.get("error")))
+            ledger.append({"goal": node_goal, "tool": "checkpoint", "args": {"label": checkpoint_label},
+                           "ok": cp_ok, "result": cp})
+            if not cp_ok:               # can't make it revertible → don't do the irreversible thing
+                return "refuse", {"status": "blocked", "reason": "checkpoint_failed"}
+
+        # WATCHDOG (farming/loop): a signature throttled for zero-progress repetition
+        # is blocked (reversibly) — the deterministic backstop once the tree acts.
+        if watchdog is not None and watchdog.throttled(name, args):
+            return "refuse", {"status": "blocked", "reason": "watchdog_throttle"}
+
+        # Kill-switch may have tripped during planning — check once more before we ACT.
+        if killswitch is not None and killswitch.tripped:
+            return "refuse", {"status": "aborted", "reason": killswitch.reason}
+        return "proceed", {"checkpoint": checkpoint_label, "rationale": rationale,
+                           "fact": fact}
+
     def _attempt(node_goal: str, depth: int, path: List[str],
                  allow_decompose: bool, failed: List[str],
                  use_cache: bool = True) -> Dict[str, Any]:
@@ -697,7 +789,14 @@ def run_score(
 
         # Both meta-tools ride with the primitives when decomposition is allowed:
         # `decompose` (AND, ordered steps) and `alternatives` (OR, one-of).
+        # THE THIRD REGIME. `decompose` (AND, ordered steps) and `alternatives` (OR,
+        # one-of) have always ridden with the primitives, and WHICH the model picks is the
+        # atomicity judgment. A program is the third answer, for a goal whose shape is a
+        # SET, an ORDERING and a POSTCONDITION — the case neither of the others states.
+        # Offered only where it has been wired, so programs are off by default.
         offered = base + ([DECOMPOSE_TOOL, ALTERNATIVES_TOOL] if offer_decompose else [])
+        if program_tool and run_program and offer_decompose:
+            offered = offered + [program_tool]
         name, args = _first_tool_call(call_model(messages, offered))
 
         if name is None:
@@ -711,6 +810,59 @@ def run_score(
                 _emit("leaf", node_goal, depth, path, tool=None, satisfied="already")
                 return _node(node_goal, "done", satisfied="already")
             return _node(node_goal, "no_action")
+
+        if program_tool and run_program and name == program_tool.get(
+                "function", {}).get("name"):
+            # A program's statements reach the world through `_guard` and nothing else —
+            # the same gauntlet a leaf meets, so the design note's "the program body is
+            # NOT a trusted region" is enforced rather than asserted. A `delete_vm` inside
+            # a program meets the double confirmation it meets in chat.
+            def _call(tool: str, tool_args: Dict[str, Any]):
+                action, info = _guard(tool, tool_args, node_goal, depth, path)
+                if action == "refuse":
+                    ledger.append({"goal": node_goal, "tool": tool, "args": tool_args,
+                                   "ok": False, "result": {"blocked": info.get("reason")}})
+                    return {"success": False, "error": info.get("reason", "refused")}
+                if action == "skip":
+                    return {"success": True, **{k: v for k, v in info.items()
+                                                if k != "rationale"}}
+                result = execute(tool, tool_args)
+                ok_call = not (isinstance(result, dict)
+                               and (result.get("success") is False or result.get("error")))
+                # The run's own record, and the epistemic one. Without these a program's
+                # calls would be invisible to p_world and to anti-rediscovery — which is
+                # the whole reason for wiring this, not a side effect of it.
+                ledger.append({"goal": node_goal, "tool": tool, "args": tool_args,
+                               "ok": ok_call, "result": result})
+                fact_key = info.get("fact")
+                if ok_call and fact_key and findings is not None and findings_schema:
+                    findings.record(fact_key,
+                                    _extract_value(result, findings_schema[tool]),
+                                    source=tool)
+                return result
+
+            outcome = run_program(args, node_goal, _call)
+            if not outcome or outcome.get("invalid"):
+                # An unusable program is CHEAP: fall back to a primitive, exactly as a
+                # non-progressing decomposition does. The regime being wrong costs one
+                # re-ask; the path that works today is still there.
+                _emit("plan", node_goal, depth, path, mode="program",
+                      rejected=(outcome or {}).get("problems", ["no program"])[:3])
+                if allow_decompose:
+                    return _attempt(node_goal, depth, path, False, failed, use_cache)
+                return _node(node_goal, "blocked", reason="invalid_program")
+            _emit("plan", node_goal, depth, path, mode="program",
+                  children=outcome.get("rendered", "").splitlines() or None)
+            # A program's VERDICT is its own ENSURE/ACHIEVE — the language's soundness rule
+            # decides this node, not the call count. `unverified` where it acted and
+            # vouched for nothing, so the closure audit still has something to refuse.
+            if outcome.get("ok"):
+                status = "done" if outcome.get("asserted") else "unverified"
+            else:
+                status = "partial"
+            return _node(node_goal, status, mode="program",
+                         calls=len(outcome.get("calls") or []),
+                         reason=outcome.get("failed"), why=outcome.get("why"))
 
         if name == "decompose":
             # Drop non-progressing steps — the weak model often "decomposes" an atomic
@@ -788,78 +940,16 @@ def run_score(
         # dynamic replanning can't escape the contract. CHECKPOINT takes a savepoint
         # FIRST, so a destructive-but-authorized leaf stays revertible (the
         # autonomous act-observe-correct default).
-        # LEGAL FILTER (gauntlet A): a hard, categorical red line — dropped up front,
-        # never costed, never surfaced. Distinct from the destructiveness/consent axis.
-        if legal_filter and legal_filter(name, args):
-            return _node(node_goal, "forbidden", tool=name, args=args, reason="legal_red_line")
-
-        # Anti-rediscovery (Findings ledger): if this call's finding is already
-        # known, don't re-run the tool that would learn it — return the cached fact.
-        fact = _yield_fact(name, args, findings_schema) if (findings is not None and findings_schema) else None
-        if fact and findings.has(fact):
-            return _node(node_goal, "done", tool=name, args=args, cached_finding=fact,
-                         result={"finding": fact, "value": findings.get(fact), "cached": True})
-
-        # SIMULATED ĈE COMMIT GATE (deliberation scales with irreversibility): a
-        # REVERSIBLE leaf just acts — reality is a free act-observe-correct oracle, no
-        # simulation. An IRREVERSIBLE leaf commits only if its SIMULATED certainty-
-        # equivalent clears the worth-it bar; otherwise it's blocked here, before any
-        # savepoint or execution. Distinct from the whole-goal gate (prices the GOAL) and
-        # the checkpoint path (revertibility): this is the per-leaf irreversible go/no-go.
-        # commit_gate returns True for reversible/unknown risk (the default when unset).
-        if commit_gate is not None and not commit_gate(name, args):
-            return _node(node_goal, "blocked", tool=name, args=args, reason="not_worth_committing")
-
-        # REASON-VALIDATION GATE (two-stage, opt-in): capture the model's stated REASON for
-        # this action, then check the ACTION against it as a spec — STRUCTURAL, not a
-        # model-judge (the p_self firewall). Flags clear divergence (no reason; the target
-        # absent from the justification; or — grounded — a reason that CONTRADICTS the live
-        # state). The stated reason is RECORDED on the leaf (rationale) and streamed to the
-        # live tree, so even a passed lie stays auditable after the run.
-        rationale = None
-        if reason_gate is not None:
-            rg = reason_gate(node_goal, name, args)
-            problem   = rg.get("problem") if isinstance(rg, dict) else rg
-            rationale = rg.get("reason")  if isinstance(rg, dict) else None
-            if problem:
-                return _node(node_goal, "blocked", tool=name, args=args, rationale=rationale,
-                             reason=f"reason_mismatch:{problem}")
+        action, info = _guard(name, args, node_goal, depth, path)
+        if action == "refuse":
+            return _node(node_goal, info["status"], tool=name, args=args,
+                         **{k: v for k, v in info.items() if k != "status"})
+        if action == "skip":
+            return _node(node_goal, "done", tool=name, args=args, **info)
+        checkpoint_label, rationale, fact = (info["checkpoint"], info["rationale"],
+                                             info["fact"])
         _rat = {"rationale": rationale} if rationale else {}
-
-        if _already_done_this_run(name, args):
-            _emit("leaf", node_goal, depth, path, tool=name, args=args, repeat="suppressed")
-            return _node(node_goal, "done", tool=name, args=args, repeat="already_done", **_rat)
-
-        act = gate(name, args) if gate else "proceed"
-        checkpoint_label = None
-        if act == "halt":
-            # CONSENT SURFACE (gauntlet D): destructive-but-legal → a referendum WITH
-            # its consequence. Granted → proceed (kept revertible via checkpoint);
-            # denied, or no referendum handler → blocked. (Was a categorical halt.)
-            if referendum and referendum(name, args, _consent_verb(name)):
-                act = "checkpoint"
-            else:
-                return _node(node_goal, "blocked", tool=name, args=args,
-                             reason="consent_denied" if referendum else "contract_halt")
-        if act == "checkpoint":
-            checkpoint_label = f"pre_{name}_{len(ledger)}"
-            cp    = execute("checkpoint", {"label": checkpoint_label})
-            cp_ok = not (isinstance(cp, dict) and (cp.get("success") is False or cp.get("error")))
-            ledger.append({"goal": node_goal, "tool": "checkpoint", "args": {"label": checkpoint_label},
-                           "ok": cp_ok, "result": cp})
-            if not cp_ok:               # can't make it revertible → don't do the irreversible thing
-                return _node(node_goal, "blocked", reason="checkpoint_failed", tool=name, args=args)
-        # Carry the savepoint label onto the leaf so backtrack can roll back to it.
         _cp = {"checkpoint": checkpoint_label} if checkpoint_label else {}
-
-        # WATCHDOG (farming/loop): a signature throttled for zero-progress repetition
-        # is blocked (reversibly) — the deterministic backstop once the tree acts.
-        if watchdog is not None and watchdog.throttled(name, args):
-            return _node(node_goal, "blocked", tool=name, args=args, reason="watchdog_throttle")
-
-        # Kill-switch may have tripped during planning — check once more before we ACT.
-        if killswitch is not None and killswitch.tripped:
-            return _node(node_goal, "aborted", tool=name, args=args, reason=killswitch.reason)
 
         _emit("leaf", node_goal, depth, path, tool=name, args=args, rationale=rationale)
         result = execute(name, args)

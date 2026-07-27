@@ -118,6 +118,15 @@ def _derive_reach(pred, select, scope) -> Optional[List[Dict[str, Any]]]:
     out.append({"op": "foreach", "in": sorted(members),
                 "call": {"tool": "add_vm_to_network",
                          "args": {"net_name": net, "vm_name": "$item"}}})
+    # AND THEN ASK. Attaching machines to one network does not make them reachable, it
+    # makes them ADDRESSABLE — reachability is a finding, which is why the manifest gives
+    # this shape `source: findings` and why an observed attribute reads `unknown` until
+    # something probes. A derivation that stopped at the attach closed the BENCH's reach
+    # (which asks only whether a network is shared) and left production's unestablished,
+    # so the harness would have declared a goal met on evidence it never gathered. The
+    # probe is part of the fix, not a step after it.
+    out.append({"op": "foreach", "in": sorted(members),
+                "call": {"tool": "guest_ping", "args": {"name": "$item"}}})
     return out
 
 

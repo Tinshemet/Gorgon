@@ -25,6 +25,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from .score import run_score, _first_tool_call, _NODE_SYSTEM, DECOMPOSE_TOOL
 from ..agent import contract as _contract
 from .method_cache import MethodCache as _MethodCache, seeded as _seeded_cache
+from .ir import EMIT_PROGRAM_TOOL as _EMIT_PROGRAM_TOOL
+from .program import make_run_program as _make_run_program
 from .translator import normalize_goal as _normalize_goal
 from .findings import Findings, DEFAULT_SCHEMA
 from .reward_cost import (economics as _economics, p_self_estimate as _p_self, dials as _dials,
@@ -1102,6 +1104,12 @@ def run_autonomous(
     max_revisions: int = 1,
     max_depth:   int = 3,
     max_steps:   int = 60,
+    # THE PROGRAM REGIME, off by default and deliberately so. A program is the third
+    # answer at a node — beside a primitive and a decomposition — for a goal whose shape
+    # is a set, an ordering and a postcondition. It is measured on the bench (13 rungs,
+    # several columns) and has never run in production, so it opts IN until it has.
+    use_programs: bool = False,
+    library=None,
     validate_reasons: bool = False,
     persist_claims: bool = False,
     # OFF by default — measured, not assumed. See translator.py: it swaps rungs rather
@@ -1393,6 +1401,16 @@ def run_autonomous(
         already_satisfied=(make_state_check(vms_getter, execute) if vms_getter else None),
         goal_effect=(make_state_verdict(vms_getter, execute, _world_stamp) if vms_getter else None),
         goal_complaint=goal_complaint,   # why the predicate rejected a fully-executed plan
+        # Both hooks or neither: the engine offers the tool only where it can also run
+        # what comes back, so there is no state in which the model is invited to write a
+        # program nothing will execute.
+        program_tool=(_EMIT_PROGRAM_TOOL if (use_programs and library is not None)
+                      else None),
+        run_program=(_make_run_program(
+            library, findings,
+            known_names=(library.known_names() if hasattr(library, "known_names")
+                         else None))
+            if (use_programs and library is not None) else None),
 
     )   # criterion_of/legal_filter default to the active contract inside run_score
     # MISSION-SCOPED LAW: layer the mission's own rules over the contract for this run only

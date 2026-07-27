@@ -47,6 +47,15 @@ class Engine:
     already_satisfied: Optional[Callable[[str], bool]] = None                   # (goal)→bool: live state already shows this leaf's effect, so "no tool call" is correct, not a failure
     goal_effect:     Optional[Callable[[str], Optional[bool]]] = None           # (goal)→True/False/None: does live state show THIS goal's effect? None = unreadable, no opinion
     goal_complaint:  Optional[Callable[[str, list, list], str]] = None          # (goal,children,ledger)→why the root predicate REJECTED a fully-executed plan, so revision can correct it
+    # A MEDUSA program as the third regime, beside a primitive and a decomposition. Both
+    # injected, so the engine never imports the language and programs are simply OFF where
+    # they are not wired — which is the right default until the regime has been measured
+    # in production. `program_tool` is the schema offered at a node; `run_program` takes
+    # (args, node_goal, call) and returns the run's result, where `call` is the engine's
+    # own guarded executor. It is handed IN rather than taken, so a program's statements
+    # cannot reach the world by any path a leaf does not.
+    program_tool:    Optional[Dict[str, Any]] = None
+    run_program:     Optional[Callable[[Dict, str, Callable], Dict]] = None
 
     @classmethod
     def from_kwargs(cls, kw: Dict[str, Any]) -> "Engine":

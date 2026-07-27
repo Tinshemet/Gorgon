@@ -1035,8 +1035,13 @@ def test_the_harness_can_close_a_named_member_goal():
     check("the harness computes the plan", bool(steps))
     run({"body": steps}, w.execute, select=sel, holds=holds, consent=True)
     check("and running it satisfies the rung's own checker", bool(r9.check(w)))
-    check("in the minimum work: one network plus three attaches",
-          len(w.calls) == 4)
+    # One network, three attaches, AND THREE PROBES. Attaching machines makes them
+    # addressable, not reachable — reachability is a finding, so a derivation that stopped
+    # at the attach would close the bench's reach (which asks only whether a network is
+    # shared) and leave production's unestablished. The probe is part of the fix.
+    check("one network, three attaches, three probes",
+          len(w.calls) == 7
+          and [c["tool"] for c in w.calls].count("guest_ping") == 3)
 
 
 def test_render_never_raises_on_malformed_input():
