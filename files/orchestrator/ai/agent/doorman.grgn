@@ -192,7 +192,14 @@
           "commitment": 1.0
         },
         "verb": "create VM",
-        "verify": "present"
+        "verify": "present",
+        "_arg_tiers_doc": "A MACHINE'S REACH IS NOT THE SAME DECISION AS ITS EXISTENCE. Creating an isolated VM is ordinary lab work and stays a y/n. Creating one on NAT hands it outbound internet (QEMU slirp); creating one on a bridge puts it on the real LAN with a spoofed MAC. Those are the acts that made the lab the widest hole in the system, so they carry the strictest confirmation this gate has.",
+        "arg_tiers": {
+          "network_mode": {
+            "nat": "double",
+            "bridge": "double"
+          }
+        }
       },
       "clone_vm": {
         "risk": {
@@ -231,7 +238,14 @@
           "blast": "entity",
           "commitment": 0.6
         },
-        "verb": "update config for VM"
+        "verb": "update config for VM",
+        "_arg_tiers_doc": "Locking a machine's reach at CREATION is worth nothing if it can be changed for free afterwards, so update_config carries the same escalation create_vm does. The mode sits inside `updates`, hence the dotted key.",
+        "arg_tiers": {
+          "updates.network_mode": {
+            "nat": "double",
+            "bridge": "double"
+          }
+        }
       },
       "resize_disk": {
         "risk": {
@@ -252,6 +266,7 @@
         "verb": "set resource limits for VM"
       },
       "run_guest_command": {
+        "_doc": "ARBITRARY CODE AS ROOT INSIDE A GUEST. Pinned `none` \u2014 zero confirmation \u2014 until 2026-07-27, while run_command (bubblewrapped: no network, workspace-only writes, NoNewPrivs) was pinned `normal` and additionally forbidden outright by the front-desk red line. The confinement was therefore INVERTED: the heavily defended door opened onto a padded cell, and the undefended one onto a full filesystem. Now `normal`, the same y/n run_command gets, and `field` shows the command being run so the confirmation says what it is confirming.",
         "risk": {
           "reversible": false,
           "destructiveness": 0.4,
@@ -259,7 +274,8 @@
           "commitment": 0.2
         },
         "verb": "run guest command on VM",
-        "pin": "none",
+        "field": "command",
+        "pin": "normal",
         "_flag": "Formula rates this 'normal' (arbitrary guest exec). Pinned 'none' to preserve today's behavior — top candidate to promote."
       },
       "checkpoint": {

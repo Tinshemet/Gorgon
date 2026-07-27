@@ -54,6 +54,13 @@ EXPECTED_NON_NONE = {
     "remove_template": "name",     # deletes a golden disk — sibling of delete_profile
     "run_command": "normal",       # PINNED down from `name`: warn + y/n, and the
                                    # confirmation shows the code (field: code)
+    # UNPINNED from `none` 2026-07-27 (operator decision). It ran arbitrary code as ROOT
+    # inside a guest with ZERO confirmation, while run_command — bubblewrapped with no
+    # network and workspace-only writes — required a y/n AND was forbidden outright by
+    # the front-desk red line. The confinement was inverted: the defended door opened
+    # onto a padded cell. Now the same y/n, with field: command so the prompt shows what
+    # is about to run. The formula wanted `normal` all along; see test_disagreements.
+    "run_guest_command": "normal",
     "revert": "normal",            # undoes the last action; cannot be un-reverted
     "provision_guest_agent_offline": "normal",
     "mark_as_template": "acknowledge",  # zero destructiveness, real disk commitment
@@ -141,7 +148,8 @@ def test_disposition_handling():
     check("delete_vm -> ask_double", gate_action("delete_vm") == "ask_double")
     check("create_vm -> ask_yn", gate_action("create_vm") == "ask_yn")
     check("list_vms -> proceed", gate_action("list_vms") == "proceed")
-    check("run_guest_command -> proceed (tier none)", gate_action("run_guest_command") == "proceed")
+    check("run_guest_command -> ask_yn (unpinned 2026-07-27)",
+          gate_action("run_guest_command") == "ask_yn")
     # The autonomous policy exists and diverges: same tiers, no human.
     auto = _HANDLING["autonomous"]
     check("autonomous double -> halt", auto["double"] == "halt")
@@ -152,8 +160,12 @@ def test_disposition_handling():
 def test_disagreements_are_intentional():
     print("[worklist] pins that override the formula are the known set")
     dis = pinned_disagreements()
-    check("run_guest_command flagged (formula wants normal, pinned none)",
-          dis.get("run_guest_command", {}).get("formula") == "normal")
+    # run_guest_command USED to be the entry here — pinned `none` while the formula said
+    # `normal`. This test recorded that disagreement as intentional for as long as it
+    # stood, which is exactly what it is for; the operator reversed it on 2026-07-27 and
+    # the pin now agrees with the formula, so it must no longer appear.
+    check("run_guest_command no longer disagrees with its own formula",
+          "run_guest_command" not in dis)
     print(f"       current disagreements: {dis}")
 
 

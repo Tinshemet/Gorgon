@@ -12,6 +12,16 @@ from .registry import _TOOL_SPECS, _TOOL_NAME_ARG
 from .risk_formula import RiskFormula
 
 
+def _dig(args: Dict[str, Any], path: str) -> Any:
+    """Read `a.b.c` out of a nested args dict, or None at the first missing step."""
+    cur: Any = args
+    for part in str(path).split("."):
+        if not isinstance(cur, dict):
+            return None
+        cur = cur.get(part)
+    return cur
+
+
 class ToolPolicy:
     """The per-tool contract data: the ``tools`` map ({risk, verb, verify, pin, field}),
     the fleet action→tier map, and the tier resolution over them (pin > formula), plus
@@ -41,16 +51,43 @@ class ToolPolicy:
     def resolve_tier(self, tool: str, args: Optional[Dict[str, Any]] = None) -> str:
         """The LIVE confirmation tier for a proposed tool call — the gate's answer.
 
-        Resolution order: ``fleet`` is action-conditional; then a ``pin`` wins if set;
-        otherwise the tier is COMPUTED from the contract's risk facts. A tool absent
-        from the registry defaults to ``none``.
+        Resolution order: ``fleet`` is action-conditional; then ``arg_tiers`` escalate on
+        a specific ARGUMENT VALUE; then a ``pin`` wins if set; otherwise the tier is
+        COMPUTED from the contract's risk facts. A tool absent from the registry defaults
+        to ``none``.
         """
         if tool == "fleet":
             action = ((args or {}).get("action") or "").strip().lower()
             return self.fleet_actions.get(action, "none")
         if tool not in _TOOL_SPECS:
             return "none"
-        pin = (self.tools.get(tool) or {}).get("pin")
+        attrs = self.tools.get(tool) or {}
+        # ARGUMENT-CONDITIONAL TIERS. The same tool can be routine or serious depending on
+        # ONE argument, and `create_vm` is the case that forced this: creating an isolated
+        # machine is ordinary lab work, while creating one on NAT or a bridge hands it
+        # outbound internet or puts it on the real LAN. Pricing those identically is what
+        # made the lab the widest hole in the system — run_command is bubblewrapped with
+        # --unshare-net, but a VM created through the front door was not.
+        #
+        # Expressed as DATA in the contract ({arg: {value: tier}}), which generalises the
+        # `fleet_actions` special case above rather than adding a second mechanism. The
+        # HIGHEST tier among matching args wins: an escalation must not be cancelled by
+        # another argument that happens to be tame.
+        # The key may be a DOTTED PATH, because the argument that decides the tier is not
+        # always top-level: `update_config` takes {name, updates}, and the network mode
+        # that matters sits inside `updates`. Keying only on top-level args would have
+        # left the after-the-fact change unpriced while pricing the creation — and
+        # locking a machine's reach at creation is worth nothing if it can be changed for
+        # free afterwards.
+        arg_tiers = attrs.get("arg_tiers") or {}
+        if arg_tiers and args:
+            hits = [tier for path, table in arg_tiers.items()
+                    for value, tier in table.items()
+                    if str(_dig(args, path) or "").strip().lower() == value.lower()]
+            if hits:
+                order = getattr(self.formula, "_tiers", None) or []
+                return max(hits, key=lambda t: order.index(t) if t in order else -1)
+        pin = attrs.get("pin")
         if pin is not None:
             return pin
         risk = self.tool_risk(tool)

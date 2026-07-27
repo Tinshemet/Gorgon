@@ -57,7 +57,7 @@
     "display":       "sdl",
     "gpu":           "virtio",
     "audio":         "hda",
-    "network_mode":  "nat",
+    "network_mode":  "none",
     "disk_format":   "qcow2",
     "bios":          "ovmf",
     "machine_arch":  "x86_64",

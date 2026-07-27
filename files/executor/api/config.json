@@ -165,8 +165,9 @@
     "ssd": false,
     "boot": false
   },
+  "_network_default_doc": "ISOLATED BY DEFAULT (operator decision 2026-07-27). This was \"nat\", which _qemu_device_config.to_qemu_args turns into `-netdev user,id=net0` \u2014 QEMU slirp, i.e. OUTBOUND INTERNET on every VM unless someone said otherwise. That made the lab the widest hole in the system: run_command is bubblewrapped with --unshare-net, but an agent could create a VM and reach the network from inside it, using the product exactly as designed. `none` emits `-nic none`, which disables only the DEFAULT nic \u2014 isolated networks attach through their own `-netdev socket,mcast=...` in extra_args, so create_network/add_vm_to_network are untouched. Reaching NAT or bridge is now a deliberate, separately-confirmed act.",
   "network_config_defaults": {
-    "mode": "nat",
+    "mode": "none",
     "model": "e1000e",
     "bridge": "virbr0"
   },

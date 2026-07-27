@@ -26,7 +26,7 @@
   },
   "vm_defs": {
     "disk_size_gb": 60,
-    "network_mode": "nat",
+    "network_mode": "none",
     "disk_bus": "virtio"
   },
   "liveness": {
