@@ -59,6 +59,7 @@ PROMPT     = _c("prompt")          # every string the model is shown
 SCHEMA     = _c("schema")          # tool-schema knobs
 AUTHORING  = _c("authoring")       # "program" (one tool) or "statements" (one per op)
 INTENT     = _c("intent")          # how the OPERATOR says check-vs-bring-about (ir/intent.py)
+GATE       = _c("gate")            # the schema gate's weighted factors and bands (ir/gate.py)
 
 OBSERVED_VALUES  = _c("observed_values")    # true / false / unknown
 OBSERVED_UNKNOWN = _c("observed_unknown")   # the value meaning "nobody asked"

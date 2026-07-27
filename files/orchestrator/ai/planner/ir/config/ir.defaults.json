@@ -492,5 +492,59 @@
     },
     "default": "fetch"
   },
-  "_derivable_doc": "EVERY PREDICATE SHAPE MUST SAY WHETHER THE HARNESS CAN CLOSE IT. A shape either has a deriver in ir/derive.py or declares derivable:false with a reason. tests/test_medusa_invariants.py holds this: the alternative is a shape that silently cannot converge, which is how `disjoint` sat DECLARED, OFFERED, VALIDATED and RENDERED for weeks with no evaluator at all — always false, in every world, and nothing said so."
+  "_derivable_doc": "EVERY PREDICATE SHAPE MUST SAY WHETHER THE HARNESS CAN CLOSE IT. A shape either has a deriver in ir/derive.py or declares derivable:false with a reason. tests/test_medusa_invariants.py holds this: the alternative is a shape that silently cannot converge, which is how `disjoint` sat DECLARED, OFFERED, VALIDATED and RENDERED for weeks with no evaluator at all — always false, in every world, and nothing said so.",
+  "_gate_doc": "THE SCHEMA GATE. The master decides what MAY be emitted; the gate decides whether what WAS emitted should run. The split is structural rather than stylistic: a schema can constrain the form of a statement and cannot compel that a program SAYS something, so 'every identifier the operator named appears somewhere' is unexpressible as schema and has to be judged after authoring. Mechanically this is the contract's risk formula again — weighted factors, a score, threshold bands — with one correction that matters: the contract scores DECLARED facts about a tool, and the gate scores COMPUTED facts about a program. Every factor here is structural and readable off the IR. No factor asks a model whether a program looks right; that is the p_self firewall the reason gate already drew, and a gate that consults the author it is judging has judged nothing. Scoring rather than a boolean verdict, because a boolean cannot tell an improving correction from a degrading one, and 'getting worse' is one of the four ways the clarify loop terminates. REFUSE IS REACHED BY ACCUMULATION, NOT BY ANY SINGLE FACTOR, and that is deliberate: validate.py already refuses everything that is illogical on its own, so the gate's refuse band means 'too many things are wrong at once for re-asking to fix it' rather than repeating a judgement something upstream has already made. No weight here reaches the refuse threshold alone.",
+  "gate": {
+    "weights": {
+      "no_verdict": 0.3,
+      "intent_unmet": 0.28,
+      "inert": 0.18,
+      "goal_unnamed": 0.17,
+      "dead_binding": 0.07
+    },
+    "thresholds": {
+      "refuse": 0.5,
+      "clarify": 0.15
+    },
+    "factors": {
+      "no_verdict": {
+        "doc": "the program acts and asserts nothing. Medusa's one soundness rule — a run that vouches for nothing has established nothing.",
+        "why_not_schema": "A schema constrains one statement at a time and this is a property of the whole body — 'somewhere in this program there is an ENSURE or an ACHIEVE'. JSON Schema can require a field of an object; it cannot require that one member of an array has a particular discriminator. Requiring EVERY statement to be a verdict would forbid every program that does anything."
+      },
+      "intent_unmet": {
+        "doc": "the program does not produce the KIND of answer the operator asked for: an achieve with no ACHIEVE, an ensure with no ENSURE, a fetch with no FETCH. Intent is consumed here, never sniffed (decision 5).",
+        "why_not_schema": "Same shape as no_verdict — a whole-body property, not a per-statement one. The master DOES carry the constrainable half of intent: ops above the operator's rung are not offered at all. What is left here is the part a schema cannot state, which is that at least one statement of the right kind must be PRESENT."
+      },
+      "inert": {
+        "doc": "an achieve whose program contains no acting statement at all. The operator asked for it done and the program only looks. Not fatal alone — the declarative form is legal and derive() computes the calls — which is why it scores rather than refuses.",
+        "why_not_schema": "Presence again, and of a class of statements rather than a field: 'at least one acting statement somewhere'. It is also legitimately absent — the declarative ACHIEVE is a valid program — so even if it could be required, requiring it would be wrong."
+      },
+      "goal_unnamed": {
+        "doc": "the fraction of identifiers the operator wrote that appear NOWHERE in the program. The MUST a schema cannot express, and the reason the gate exists separately from the master.",
+        "why_not_schema": "The canonical case, and the reason the gate exists apart from the master. A schema can constrain what a name may BE — `from` is enumerated from the lab for exactly that reason — and cannot compel that a particular name APPEARS. 'Mention core somewhere' is not expressible as a constraint on any single value."
+      },
+      "dead_binding": {
+        "doc": "the fraction of bound names never read back. A smell rather than a fault — deliberately below the clarify threshold on its own, because a program can legitimately bind something it does not use.",
+        "why_not_schema": "A relationship between two statements that may be arbitrarily far apart: a binding here, a reference there. A schema validates each statement against its branch with no knowledge of the others, so a cross-statement relationship is structurally out of reach. The one constrainable PART of this — that a bound name must be pronounceable — is already a schema pattern on `var` and `graft`, and is not repeated here."
+      }
+    },
+    "naming_cues": [
+      "called",
+      "call it",
+      "named",
+      "name it",
+      "name them",
+      "call them",
+      "labelled",
+      "labeled",
+      "label them",
+      "label it",
+      "tagged"
+    ],
+    "_naming_cues_doc": "The forms in which an operator SAYS a name, for master.named(). Deliberately few — a cue set, not a vocabulary trying to parse English — and the same shape as the intent markers. Precision matters far more than recall here: a name this misses costs nothing (the factor stays at zero), and a name it wrongly finds suppresses a correct program. The other two forms need no cues: a quoted word, and a token carrying a digit, underscore or hyphen, which English words do not.",
+    "_no_unclosable_doc": "An ACHIEVE on a predicate declaring `derivable: false` (not/all/any/is) was a factor here and was WRONG. derive() returning None is a documented fallback, not a dead end — 'the caller falls back to asking the model on None and stops on []' — so ACHIEVE ALL(...) is a legitimate goal that reaches its answer through the author rather than the deriver. Scoring it as unclosable would have refused a working capability, and refused it for a reason no rewording could satisfy.",
+    "attempts": 3,
+    "_attempts_doc": "How many times the clarify loop may re-ask before it refuses. The other three terminations — stale, worse, timeout — can end it sooner.",
+    "_why_not_schema_doc": "THE INVARIANT: no constrainable rule may live only in the gate. A rule a schema could enforce belongs to the master, where the decoder cannot violate it — catching it afterwards costs an authoring round to discover something that could have been impossible to write. So every factor here states why it is NOT expressible as a constraint, the same declare-or-say-why shape the tool `verify` coverage uses, and the suite asserts the field is present and that validate() ACCEPTS each factor's own example — a factor whose example is already rejected upstream is repeating a judgement rather than adding one."
+  }
 }

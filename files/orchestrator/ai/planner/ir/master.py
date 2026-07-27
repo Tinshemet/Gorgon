@@ -77,6 +77,16 @@ def identifiers(goal: str = "", known: Optional[set] = None,
     What the union still kills is the case that actually bit: `core_net` is in none of the
     three, so a creator silently renaming the operator's `core` becomes unrepresentable.
 
+    NOT CURRENTLY WIRED INTO ANY SCHEMA, and that is a conclusion rather than a gap. A
+    name turns out not to be a CLOSED set: `NEW AMOUNT(5) vm` mints names nobody can know
+    at authoring time, so an enum over the union would forbid legal programs to prevent a
+    mistake nobody has measured. The slots it would go in agree — `args` is an untyped
+    object with nowhere to put an enum, and a literal `in` list has no validator rule to
+    relocate, only a new restriction to invent. `sources()` below is the identifier slot
+    that IS closed, and it is enumerated. This stays because the union is the right shape
+    for whatever uses it next, and because writing down why it is not used is worth more
+    than deleting it and rediscovering the reasoning.
+
     Returns [] when there is nothing to say, which callers must read as "do not constrain"
     rather than "no names are legal".
     """
@@ -98,7 +108,7 @@ def _goal_tokens(goal: str) -> List[str]:
     "machine".
     """
     import re
-    words = re.findall(r"[A-Za-z_][A-Za-z0-9_-]*", goal or "")
+    words = re.findall(r"[A-Za-z_][A-Za-z0-9_-]*", _intent.strip_prefix(goal or ""))
     stop = _stopwords()
     return [w for w in words if w.lower() not in stop and len(w) > 1]
 
@@ -108,10 +118,18 @@ def _stopwords() -> set:
 
     Kept small on purpose. A big list is a vocabulary that drifts; a small one leaves a few
     harmless extra names in an enum, which costs nothing because the enum is a union.
+
+    THE INTENT MARKERS COME FROM THE MANIFEST, so a word that already told the harness
+    what the operator WANTS is not then read as something they NAMED. "bring up three vms
+    called n1 n2 n3" was yielding `bring` as an identifier — harmless in a union, and not
+    harmless at all to the gate, which scores how many of the operator's names the program
+    failed to mention. Data, not a list here, so the two uses cannot drift apart.
     """
+    markers = {w.split()[0] for words in (config.INTENT.get("markers") or {}).values()
+               for w in words if w}
     lang = {op for op in config.OPS} | {s for s in config.PREDICATES} | {
         str(v).lower() for v in config.SURFACE.values() if isinstance(v, str)}
-    return lang | {
+    return lang | markers | {
         "a", "an", "the", "and", "or", "of", "to", "on", "in", "at", "it", "its", "them",
         "they", "all", "each", "every", "any", "that", "this", "with", "for", "from",
         "make", "made", "create", "creates", "put", "puts", "set", "sets", "give", "gives",
@@ -121,6 +139,52 @@ def _stopwords() -> set:
         "networks", "net", "nets", "label", "labels", "tag", "tags", "name", "named",
         "called", "currently", "already", "not", "no", "if", "when", "while", "just",
     }
+
+
+def named(goal: str = "") -> List[str]:
+    """Names the operator EXPLICITLY gave — high precision, low recall, on purpose.
+
+    NOT `identifiers()` WITH A TIGHTER FILTER; a different question for a different
+    consumer, and the difference is the whole reason both exist. `identifiers()` feeds an
+    enum, where an extra name is harmless — it widens what may be said. This feeds the
+    gate, where an extra name is a FALSE ACCUSATION: the gate scores how many of the
+    operator's names a program failed to mention, so a word wrongly read as a name becomes
+    a suppression of a correct program. Same input, opposite cost of being wrong.
+
+    Measured on the crude version: "make sure it is all fine" yielded `fine`, so a perfectly
+    good program was one word away from being suppressed for not mentioning an adjective.
+    That is the context assistant's own failure — `mac` inside "machine" — arriving by a
+    different route, and it is why the two functions are not one function with a flag.
+
+    THREE HIGH-CONFIDENCE FORMS, and nothing else:
+
+      after a naming cue    "a vm called core"      -> core
+      quoted                "label them 'fleet'"    -> fleet
+      identifier-shaped     n1, web_02, red-net     -> a digit, underscore or hyphen is
+                            something English words do not have
+
+    RECALL IS DELIBERATELY SACRIFICED. A name this misses costs nothing — the factor stays
+    at zero and the program is judged on everything else. A name it invents costs a
+    correct program. Silence is the safe direction, so it takes it.
+    """
+    import re
+    text = _intent.strip_prefix(goal or "")
+    out: List[str] = []
+
+    def add(word: str):
+        if word and word.lower() not in _stopwords() and word not in out:
+            out.append(word)
+
+    cues = (config.GATE.get("naming_cues") or []) if hasattr(config, "GATE") else []
+    for cue in cues:
+        for m in re.finditer(rf"\b{re.escape(cue)}\b\s+['\"]?([A-Za-z_][A-Za-z0-9_-]*)",
+                             text, re.I):
+            add(m.group(1))
+    for m in re.finditer(r"['\"]([A-Za-z_][A-Za-z0-9_-]*)['\"]", text):
+        add(m.group(1))
+    for m in re.finditer(r"\b([A-Za-z_][A-Za-z0-9_-]*[0-9_-][A-Za-z0-9_-]*)\b", text):
+        add(m.group(1))
+    return out
 
 
 def sources(known: Optional[set] = None) -> List[str]:
