@@ -31,8 +31,8 @@ import json
 import sys
 import urllib.request
 
-from orchestrator.ai.planner.ir import (config, consent, derive, evaluate, master,
-                                       observe, refs, render, run, validate)
+from orchestrator.ai.planner.ir import (config, consent, derive, evaluate, gate,
+                                       master, observe, refs, render, run, validate)
 from orchestrator.ai.planner.ir import intent as _intent
 from orchestrator.ai.planner.ir import schema as _ir_schema
 from orchestrator.ai.planner.ir.validate import _one_of_groups
@@ -851,6 +851,12 @@ def main(argv=None) -> int:
     # for the meaning-preservation rules that keep it from corrupting the goal.
     p.add_argument("--mutate", choices=sorted(MUTATIONS),
                    help="perturb each goal by this rule before authoring")
+    p.add_argument("--no-gate", action="store_true",
+                   help="skip the SCHEMA GATE. It sits between validate and run, exactly "
+                        "where production puts it, and re-asks the author when a program "
+                        "is coherent but does not answer what was asked. Off is the "
+                        "control column — with no run to compare against, a gated score "
+                        "cannot be attributed to the gate.")
     p.add_argument("--no-shots", action="store_true",
                    help="ablate the few-shot examples — isolates what they contribute")
     a = p.parse_args(argv)
@@ -866,6 +872,11 @@ def main(argv=None) -> int:
 
     valid = correct = revised = fixed = repairs = ungrounded = 0
     noresult = 0
+    # The gate's own tally, kept separate from `valid` so its cost and its benefit are
+    # both visible: how many programs it re-asked for, how many that fixed, how many it
+    # refused outright. A gate reported only through the pass count could suppress as much
+    # as it saves and read as neutral.
+    gate_rounds = gate_fixed = gate_refused = 0
     for rung in rungs:
         goal = (rung.paraphrase or rung.goal) if a.paraphrase else rung.goal
         unmutated = False
@@ -926,9 +937,55 @@ def main(argv=None) -> int:
                 prog, problems = fixed_prog, problems2
                 if not problems:
                     break
+        # ── THE SCHEMA GATE, in the same position it holds in production ──────────
+        #
+        # After validate, before anything runs — `make_run_program` puts it exactly
+        # there, and a benchmark that gated somewhere else would be measuring a
+        # different system. It had been built, tested deterministically, wired into the
+        # planner, and never once shown a model; every part of this language that stayed
+        # unreached stayed broken, so this is the measurement that says whether it helps.
+        #
+        # `--no-gate` exists because a column with the gate on and no column with it off
+        # cannot attribute anything. The two runs are the comparison.
         ok = not problems
+        gate_note = ""
+        if ok and not a.no_gate:
+            def _reauthor(program, reasons):
+                """Re-ask the author with the gate's objections, via the repair path.
+
+                Returns None — which `clarify()` reads as STALE — when the answer does
+                not come back clean. A malformed correction is not an improved program,
+                and handing one to the gate would have it score structure the validator
+                has already refused."""
+                fixed, probs = repair(goal, program, reasons, a.model, a.temp, shots,
+                                      known_names=world.names(), want=want,
+                                      world=None if a.blind_author else world)
+                return None if (fixed is None or probs) else fixed
+
+            said = []
+            verdict = gate.clarify(prog, goal, want, _reauthor, say=said.append)
+            for line in said:
+                print(f"          #| {line}")
+            gate_rounds += verdict.get("attempts", 0)
+            if verdict["band"] == gate.PROCEED:
+                if verdict.get("attempts"):
+                    gate_fixed += 1
+                    gate_note = f" (gate: clarified in {verdict['attempts']})"
+                prog = verdict["program"]
+            else:
+                # A REFUSAL ENDS THE RUNG. Production falls back to a primitive; the
+                # bench has no fallback, because here the program IS the answer. Counted
+                # as a failure rather than a no-result: the gate reached a verdict, and
+                # a harness declining to run its own author's program is a real outcome,
+                # not a missing measurement.
+                gate_refused += 1
+                ok = False
+                gate_note = f" (GATE {verdict['band'].upper()} @ {verdict['score']:.2f})"
+                problems = list(verdict["reasons"])
+
+        ok = ok and not problems
         valid += ok
-        print(f"   [{'VALID' if ok else 'INVALID'}] "
+        print(f"   [{'VALID' if ok else 'INVALID'}]{gate_note} "
               f"{len(prog.get('body', []))} statements")
         for why in problems[:5]:
             print(f"          - {why}")
@@ -1100,6 +1157,12 @@ def main(argv=None) -> int:
             print(f"   needed revision    : {revised}  (of which recovered: {fixed})")
         if ungrounded:
             print(f"   NO GROUNDING       : {ungrounded}  (would need operator consent)")
+    # BOTH SIDES OF THE GATE'S LEDGER, always together. A gate reported only through the
+    # pass count can suppress exactly as much as it saves and still read as neutral, so
+    # what it fixed and what it refused are printed side by side with what it cost.
+    if not a.no_gate and (gate_rounds or gate_refused):
+        print(f"   SCHEMA GATE        : {gate_fixed} clarified, {gate_refused} refused"
+              f"  ({gate_rounds} re-author round(s) spent)")
     print("\n   Validity is structure + grounding only. Whether a program MEANS its goal\n"
           "   is for a human reading the rendered forms above — scoring that needs a\n"
           "   second definition of every goal, which is a benchmark grading itself.")
