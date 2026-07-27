@@ -60,6 +60,83 @@ SCHEMA     = _c("schema")          # tool-schema knobs
 AUTHORING  = _c("authoring")       # "program" (one tool) or "statements" (one per op)
 INTENT     = _c("intent")          # how the OPERATOR says check-vs-bring-about (ir/intent.py)
 
+OBSERVED_VALUES  = _c("observed_values")    # true / false / unknown
+OBSERVED_UNKNOWN = _c("observed_unknown")   # the value meaning "nobody asked"
+
+
+def observed(kind: str) -> dict:
+    """This kind's findings-sourced attributes -> {fact, by, doc}.
+
+    Empty for a kind that has none, which is most of them: an observed attribute exists
+    only where a tool goes and LOOKS. See `_observed_doc` in the manifest for why the
+    answer to decision 6 was "nothing escapes a loop" rather than an accumulator.
+    """
+    return (KINDS.get(kind) or {}).get("observed") or {}
+
+
+def queryable(kind: str) -> set:
+    """Every attribute legal in a SELECT ... WHERE for this kind — registry, observed,
+    and the harness's own synonyms.
+
+    ONE authority for the question. The attribute set was read straight off `attrs` in
+    four separate places (the validator's legality check, its rejection message, the
+    schema offered to the author, and the prompt's "queryable on" line), so adding a
+    findings-sourced attribute in the manifest alone would have been accepted by the
+    validator and never OFFERED to the model — the schema-withholding failure that
+    accounted for more measured "model errors" than anything else. A new row is now
+    visible in all four places or none.
+    """
+    spec = KINDS.get(kind) or {}
+    return set(spec.get("attrs") or ()) | set(spec.get("aliases") or ()) | set(observed(kind))
+
+
+def canonical(kind: str, attr: str) -> str:
+    """An attribute under its ONE name — `tag` and `labels` are both `label`.
+
+    The harness has its own synonyms and a program written either way means the same
+    thing, so every check that reasons about an attribute has to resolve them first or it
+    silently skips the spellings it does not recognise.
+    """
+    return ((KINDS.get(kind) or {}).get("aliases") or {}).get(attr, attr)
+
+
+def values_for(kind: str, attr: str):
+    """The closed set of values `attr` may take, or None when it is open text.
+
+    ONE answer for both sorts of attribute — a registry one with a fixed vocabulary
+    (`status` is running or stopped) and an observed one (`alive` is true, false or
+    unknown). Callers ask this instead of knowing which sort they hold, so offering a new
+    constrained attribute to the author stays a manifest row.
+
+    None is a real answer and means "anything": a name or a label is open by nature and
+    pretending otherwise would reject legitimate programs.
+    """
+    spec = KINDS.get(kind) or {}
+    attr = canonical(kind, attr)
+    if attr in (spec.get("observed") or {}):
+        return list(OBSERVED_VALUES)
+    vals = (spec.get("attr_values") or {}).get(attr)
+    return list(vals) if vals else None
+
+
+def fact_key(kind: str, attr: str, member: str):
+    """The ledger key holding `attr` for `member` — `reachable(web)`, or None if this
+    attribute is not observed.
+
+    The template binds the kind's KEY to the member, so the manifest writes it the same
+    way the tool's own yield schema does. Read from the query side here and from the call
+    side in findings.yield_fact; both format the same template, which is what stops the
+    two directions from drifting into different vocabularies.
+    """
+    spec = observed(kind).get(attr)
+    key = (KINDS.get(kind) or {}).get("key")
+    if not spec or not key:
+        return None
+    try:
+        return spec["fact"].format(**{key: member})
+    except (KeyError, IndexError):
+        return None
+
 
 def packages_for(kinds_used) -> list:
     """The packages a program depends on, DERIVED from the kinds it touches.

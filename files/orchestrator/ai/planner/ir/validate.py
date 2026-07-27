@@ -66,7 +66,8 @@ def coerce_body(raw: Any) -> Optional[List[Any]]:
 
 
 def validate(program: Any, known_tools=None, known_names=None,
-             bound: Optional[set] = None) -> Tuple[bool, List[str]]:
+             bound: Optional[set] = None,
+             sets: Optional[set] = None) -> Tuple[bool, List[str]]:
     """(ok, problems).
 
     `bound` is what is already in scope — passed when validating a nested block, so the
@@ -81,6 +82,15 @@ def validate(program: Any, known_tools=None, known_names=None,
     must be answerable without a world — but when a caller HAS one, `FROM` can be
     grounded against it, and that is worth having: a program that read the label 'red' as
     a machine to clone from validated cleanly and then made fifteen failing calls.
+
+    `sets` is which of those bound names hold a SET rather than one value. Tracked because
+    the two are not interchangeable and the language has exactly one place that cares:
+    a filter compares an attribute against ONE value, while `FOREACH ... IN` wants the
+    whole set. Rung 9 walked straight into it — `STORE vms = FETCH SELECT vm WHERE ...`
+    followed by `ENSURE REACH(SELECT vm WHERE label = '$vms')`. That validated, and then
+    `refs.resolve` did exactly what it should (one token and nothing else keeps its type,
+    which is what makes `IN $vms` iterate) and handed a LIST to a filter, which tried to
+    hash it and took the whole 13-rung run down with a TypeError.
     """
     tools = _KNOWN_TOOLS if known_tools is None else known_tools
     body = coerce_body(program)
@@ -93,6 +103,17 @@ def validate(program: Any, known_tools=None, known_names=None,
     # DERIVED by the harness. Different provenance, so different halves of the header.
     params = program.get("params") if isinstance(program, dict) else None
     bound = set(bound or ())        # a COPY — see the docstring on scoping
+    # Which bound names hold a CALL RESULT. Only those have fields, so only those may
+    # carry a dotted path.
+    grafted: set = set()
+    sets = set(sets or ())          # of those, the ones holding several things
+    # Names this program will bring into existence, so a SECOND creation of the same one
+    # can be refused. See the duplicate-creation check in the `call` branch.
+    created: set = set()
+    # var -> the names its `new` mints, so `create_network(net_name: $net2)` is caught as
+    # the duplicate it is. Keying only on LITERAL names missed the commoner form: the
+    # model refers to the variable it just bound, not to the name behind it.
+    created_by_var: Dict[str, List[str]] = {}
     everywhere = _all_bindings(body) | bound
     for name, typ in (params or {}).items():
         if typ not in config.PARAM_TYPES:
@@ -110,6 +131,21 @@ def validate(program: Any, known_tools=None, known_names=None,
             problems.append(f"{where}: unknown op {op!r} "
                             f"(expected one of {', '.join(config.OPS)})")
             continue
+        # A NAME YOU CAN BIND IS A NAME YOU CAN READ — checked once, for every op that
+        # binds. `STORE red-net = NEW network` bound a name no reference can pronounce
+        # (`$red-net` reads as `$red` plus the literal `-net`), so the next line was told
+        # it referred to something "never created" one statement after creating it. Rung
+        # 6's paraphrase hit this in three samples out of three. See refs.is_referenceable.
+        for field in ("var", "graft"):
+            nm = st.get(field)
+            if nm is not None and not refs.is_referenceable(str(nm).lstrip(config.SIGIL)):
+                problems.append(
+                    f"{where}: {field} {nm!r} cannot be referred to — "
+                    f"{config.SIGIL}{nm} reads as "
+                    f"{config.SIGIL}{str(nm).lstrip(config.SIGIL).split('-')[0]} followed "
+                    f"by text, because `-` composes names ({config.SIGIL}item-snap). Use "
+                    f"letters, digits and underscores: "
+                    f"{str(nm).lstrip(config.SIGIL).replace('-', '_')!r}.")
         for field in spec["required"]:
             if st.get(field) in (None, "", {}):
                 problems.append(f"{where}: {op} is missing {field!r}")
@@ -167,8 +203,17 @@ def validate(program: Any, known_tools=None, known_names=None,
                 # correct — the re-run case this whole shape exists for.
                 problems.append(f"{where}: amount must be a non-negative integer or a "
                                 f"$parameter, got {n!r}")
+            created.update(_minted(st))
             if st.get("var"):
+                created_by_var[str(st["var"]).lstrip(config.SIGIL)] = _minted(st)
                 bound.add(str(st["var"]).lstrip(config.SIGIL))
+                # An amount that is not literally one binds the LIST of what was made —
+                # that is what lets `FOREACH ... IN $vms` act on machines before they have
+                # an attribute to query by. A `$parameter` or a shortfall counts as
+                # several, because neither is known to be one until it runs, and guessing
+                # "probably one" is how a set reaches a filter.
+                if st.get("amount", 1) != 1:
+                    sets.add(str(st["var"]).lstrip(config.SIGIL))
             # The creator's OWN required fields are checked, read from the live catalog.
             # This is the extensibility claim paying off: the manifest names the creator,
             # the catalog declares what it needs, and `new` is validated for any kind
@@ -197,6 +242,19 @@ def validate(program: Any, known_tools=None, known_names=None,
             if a is not None and not isinstance(a, dict):
                 problems.append(f"{where}: args must be an object")
             elif kind in config.KINDS:
+                # NEW's ARGS ARE REFERENCE-CHECKED, exactly as a call's are. They were
+                # not, and `_check_call` has always done it — so `NEW network(net_name:
+                # $blue_net)` with nothing binding `blue_net` validated, the token
+                # survived resolution, and the lab ended up holding a network literally
+                # named `$blue_net` and machines named `$blues1`. The rung checker passed
+                # it, because it inspects shape and not name sanity. Two statements that
+                # both take `args` must both check them.
+                for k, v in (a or {}).items():
+                    for ref in refs.names(v):
+                        if ref not in bound:
+                            problems.append(
+                                f"{where}: {k}={v} refers to {config.SIGIL}{ref}, "
+                                f"which is never created")
                 creator, supplied = _creator_for(kind, st, with_supplied=True)
                 # The executor supplies the key and, when copying, the source — so those
                 # are not the author's to pass. Demanding them would make every clone
@@ -204,20 +262,70 @@ def validate(program: Any, known_tools=None, known_names=None,
                 need = set(_REQUIRED_FIELDS.get(creator) or []) - supplied
                 missing = sorted(need - set((a or {}).keys()))
                 if missing:
-                    problems.append(f"{where}: {creator} also requires "
-                                    f"{', '.join(repr(m) for m in missing)} — pass them in args")
+                    # NAME THE STATEMENT THE AUTHOR MUST EDIT, not the tool underneath it.
+                    # This said "create_vm also requires 'os_type'", and the model did
+                    # exactly what that sentence asks: it added a separate
+                    # `create_vm(name: $item, os_type: linux)` call beside the NEW —
+                    # creating everything twice — and the repair loop then re-rejected
+                    # the untouched NEW twice more and gave up. Rungs 4 and 13 both died
+                    # that way in the paraphrase column. The author writes MEDUSA; an
+                    # objection phrased in terms of the tool sends them to write a call.
+                    shown = ", ".join(f"{m}: ..." for m in missing)
+                    problems.append(
+                        f"{where}: NEW {kind} also requires "
+                        f"{', '.join(repr(m) for m in missing)} — put them in this "
+                        f"statement's own arguments, e.g. NEW {kind}({shown}). NEW "
+                        f"already calls {creator}; do NOT add a separate {creator} call.")
         elif op == "fetch":
             # A read binds a name the same way a creation does — that is the whole point
             # of it, and the reason it is a statement rather than an expression.
-            problems += _check_select(st.get("select") or st.get("count"), where)
+            problems += _check_select(st.get("select") or st.get("count"), where, sets)
             if st.get("var"):
                 bound.add(str(st["var"]).lstrip(config.SIGIL))
+                # `count` binds a NUMBER, `select` binds the NAMES. The whole distinction
+                # between the two forms, and the one that decides whether the result may
+                # sit in a filter.
+                if st.get("select") is not None:
+                    sets.add(str(st["var"]).lstrip(config.SIGIL))
 
         elif op == "call":
-            problems += _check_call(st, where, tools, bound)
+            problems += _check_call(st, where, tools, bound, grafted)
+            # CREATING SOMETHING THIS PROGRAM ALREADY CREATED IS ALWAYS WRONG. The model
+            # writes `STORE lab = NEW network;` and then `create_network(net_name: lab)` —
+            # NEW already calls the creator, so the second one is refused by the world
+            # ("Network 'lab' already exists") and, with no ENSURE present, sinks the whole
+            # program. Rung 3 died exactly this way under the `terse` mutation, and its
+            # recovery was worse than the fault: revision 2 wrote `delete_vm(web)` followed
+            # by `NEW vm FROM web`, cloning a machine it had just deleted, and the rung
+            # ended with zero VMs.
+            #
+            # It was never diagnosed because the objection that says "NEW already calls
+            # create_vm" only fires when a REQUIRED ARGUMENT is missing. Here the NEW was
+            # perfectly valid, so nothing was said at all.
+            made = _creator_tools().get(st.get("tool"))
+            if made:
+                kind, key = made
+                nm = (st.get("args") or {}).get(key)
+                # A reference to a var a `new` bound names what that `new` created.
+                ref = refs.names(nm)[0] if isinstance(nm, str) and refs.is_reference(nm) \
+                    and refs.names(nm) else None
+                if ref and ref in created_by_var:
+                    problems.append(
+                        f"{where}: {st['tool']} creates {kind} {config.SIGIL}{ref}, which "
+                        f"`new` already created — `new` calls the creator itself, so a "
+                        f"separate call makes it twice and the second is refused. Drop "
+                        f"this statement, or drop the `new`.")
+                elif isinstance(nm, str) and nm and not refs.names(nm):
+                    if nm in created:
+                        problems.append(
+                            f"{where}: {st['tool']} creates {kind} {nm!r}, which this "
+                            f"program already creates — `new` calls the creator itself, so "
+                            f"a separate call makes it twice and the second is refused. "
+                            f"Drop this statement, or drop the `new`.")
+                    created.add(nm)
         elif op == "foreach":
             if st.get("select") is not None:
-                problems += _check_select(st.get("select"), where)
+                problems += _check_select(st.get("select"), where, sets)
             src = st.get("in")
             if isinstance(src, list):
                 # A literal set — the members are named outright. This is what a
@@ -240,19 +348,46 @@ def validate(program: Any, known_tools=None, known_names=None,
             elif isinstance(inner, dict):
                 # the loop binds its member, so it is in scope inside the body
                 problems += _check_call(inner, f"{where} (foreach body)", tools,
-                                        bound | {config.LOOP_VAR})
+                                        bound | {config.LOOP_VAR}, grafted)
             block = st.get("do")
             if block is not None:
                 if not isinstance(block, list) or not block:
                     problems.append(f"{where}: `do` is a list of statements, got {block!r}")
+                elif any(k.get("op") == "foreach" for k in _walk_stmts(block)):
+                    # A LOOP INSIDE A LOOP REBINDS THE ONLY MEMBER NAME THERE IS. The
+                    # language has one loop variable, so the inner `$item` shadows the
+                    # outer and the outer member becomes unreachable for the rest of the
+                    # body — which means the nesting cannot express anything the inner
+                    # loop alone does not, while multiplying the work by the size of the
+                    # outer set. Rungs 4 and 13 both wrote `FOREACH $item IN SELECT vm {
+                    # FOREACH $item IN $vms { guest_ping } }` and issued 50 pings for 5
+                    # machines, 66 calls in total. Rejected rather than silently run,
+                    # because it validates, executes, and is never what anyone meant.
+                    # NAME THE CONSTRUCT THAT DOES EXPRESS IT. The first version of this
+                    # said "keep the inner loop and drop the outer, or put the two loops
+                    # one after the other" — and neither is the fix when what the author
+                    # actually wants is to relate every member to every OTHER member.
+                    # Rung 4 wrote a pairwise loop for "make sure they all ping each
+                    # other" and got a remedy that does not apply. Medusa has no pairwise
+                    # iteration; a relation over a whole set is a PREDICATE, which is
+                    # what REACH is for. That is a fact about the language, not about any
+                    # one goal.
+                    problems.append(
+                        f"{where}: a foreach inside a foreach rebinds "
+                        f"{config.SIGIL}{config.LOOP_VAR}, so the outer member is lost — "
+                        f"the language has one loop variable. If you are relating every "
+                        f"member to every OTHER member, that is a CHECK over the whole "
+                        f"set, not nested loops — state it as one predicate (e.g. REACH "
+                        f"over the set). Otherwise keep the inner loop and drop the "
+                        f"outer, or put the two loops one after the other.")
                 else:
                     _, sub = validate({"body": block}, tools, known_names,
-                                      bound | {config.LOOP_VAR})
+                                      bound | {config.LOOP_VAR}, sets)
                     problems += [f"{where} (foreach body) → {x}" for x in sub]
         elif op in ("ensure", "achieve"):
-            problems += _check_predicate(st.get("predicate"), where, bound, everywhere)
+            problems += _check_predicate(st.get("predicate"), where, bound, everywhere, sets)
         elif op == "if":
-            problems += _check_predicate(st.get("cond"), where, bound, everywhere)
+            problems += _check_predicate(st.get("cond"), where, bound, everywhere, sets)
             for branch in ("then", "else"):
                 kids = st.get(branch)
                 if kids is None:
@@ -260,18 +395,19 @@ def validate(program: Any, known_tools=None, known_names=None,
                 if not isinstance(kids, list) or not kids:
                     problems.append(f"{where}: `{branch}` is a list of statements, got {kids!r}")
                 else:
-                    ok2, sub = validate({"body": kids}, tools, known_names, bound)
+                    ok2, sub = validate({"body": kids}, tools, known_names, bound, sets)
                     problems += [f"{where} ({branch}) → {x}" for x in sub]
         # A grafted name is in scope from here on, and IFAILS carries statements wherever
         # it appears — both checked once, for every acting op, rather than per branch.
         if st.get("graft"):
             bound.add(str(st["graft"]).lstrip(config.SIGIL))
+            grafted.add(str(st["graft"]).lstrip(config.SIGIL))
         recov = st.get("ifails")
         if recov is not None:
             if not isinstance(recov, list) or not recov:
                 problems.append(f"{where}: `ifails` is a list of statements, got {recov!r}")
             else:
-                _, sub = validate({"body": recov}, tools, known_names, bound)
+                _, sub = validate({"body": recov}, tools, known_names, bound, sets)
                 problems += [f"{where} (ifails) → {x}" for x in sub]
     problems += _check_achieve(body)
     return (not problems), problems
@@ -373,7 +509,7 @@ def _check_achieve(body: List[Any]) -> List[str]:
     return out
 
 
-def _check_select(sel: Any, where: str) -> List[str]:
+def _check_select(sel: Any, where: str, sets: Optional[set] = None) -> List[str]:
     """A select names a known kind and filters on attributes that kind declares."""
     if sel is None:
         return []
@@ -386,7 +522,11 @@ def _check_select(sel: Any, where: str) -> List[str]:
     if not kind:
         return [f"{where}: select must name a kind"]
     spec = config.KINDS[kind]
-    legal = set(spec["attrs"]) | set(spec.get("aliases") or {})
+    # `config.queryable`, not `spec["attrs"]`. Registry attributes and OBSERVED ones (read
+    # from the findings ledger — see the manifest's _observed_doc) are equally legal in a
+    # WHERE, and asking one place means a manifest row cannot be accepted here while being
+    # withheld from the schema the author actually sees.
+    legal = config.queryable(kind)
     # `not` holds another set of filters — the carve-out. Checked with the same rules, so
     # an excluded attribute is validated exactly like an included one.
     out = []
@@ -394,16 +534,106 @@ def _check_select(sel: Any, where: str) -> List[str]:
         if not isinstance(sel["not"], dict) or not sel["not"]:
             out.append(f"{where}: `not` takes the filters to EXCLUDE, e.g. {{'name':'db'}}")
         else:
-            out += _check_select({"kind": kind, **sel["not"]}, where)
-    unknown = [k for k in sel if k not in ("kind", "not") and k not in legal]
+            out += _check_select({"kind": kind, **sel["not"]}, where, sets)
+    # GROUPS: `any` is OR, `all` an explicit AND. Each branch is a filter set in its own
+    # right, checked by the same rules at every depth, so a group cannot smuggle in an
+    # attribute the flat form would reject. Same words the predicate combinators use, on
+    # purpose: one concept with two vocabularies is what this language exists to delete.
+    for group in ("any", "all"):
+        if group not in sel:
+            continue
+        kids = sel[group]
+        if not isinstance(kids, list) or len(kids) < 2:
+            out.append(f"{where}: `{group}` takes two or more filter sets, got {kids!r}")
+            continue
+        for kid in kids:
+            if not isinstance(kid, dict) or not kid:
+                out.append(f"{where}: each `{group}` branch is a filter set, got {kid!r}")
+            else:
+                out += _check_select({"kind": kind, **kid}, where, sets)
+    # AN ATTRIBUTE WITH A CLOSED VOCABULARY IS POLICED AGAINST IT. `status` is running or
+    # stopped; `alive` is true, false or unknown. Offered as bare strings, both were
+    # invented: rung 5 wrote `status = 'not running'`, which matches nobody, ran zero
+    # calls and reported ok — a program that looks right, validates, and does nothing.
+    # `values_for` answers for registry and observed attributes alike, so this check does
+    # not have to know which sort it is holding.
+    for attr, val in sel.items():
+        if attr in ("kind", "not", "any", "all"):
+            continue
+        legal_values = config.values_for(kind, attr)
+        if legal_values is None or isinstance(val, dict):
+            continue                       # open text — a name, a label
+        if refs.names(val if isinstance(val, str) else ""):
+            continue                       # a $reference resolves at run time
+        if str(val).lower() not in legal_values:
+            spec_obs = config.observed(kind).get(config.canonical(kind, attr))
+            hint = ""
+            if spec_obs:
+                hint = (f" '{config.OBSERVED_UNKNOWN}' means nothing has asked yet; "
+                        f"{spec_obs.get('by', 'a probe')} is what learns it.")
+            out.append(f"{where}: {attr} is {' or '.join(legal_values)}, "
+                       f"got {val!r}.{hint}")
+    # A FILTER COMPARES ONE VALUE. Rung 9 is the case: `STORE vms = FETCH SELECT ...`
+    # binds the NAMES, and the next line wrote `SELECT vm WHERE label = '$vms'`. Nothing
+    # rejected it, `refs.resolve` correctly kept the list type — that is what makes
+    # `FOREACH ... IN $vms` iterate rather than walk a string — and a list arrived at
+    # `f["label"] not in {...}`, which cannot hash it. The run died with a TypeError at
+    # rung 9 and took rungs 10-13 with it.
+    #
+    # Both halves are worth naming separately, because they are different mistakes: a
+    # LITERAL list means the author wanted several members and reached for the only
+    # syntax they had; a REFERENCE to a set means they had the set and put it in the
+    # wrong position. The fix differs, so the message does.
+    for attr, val in sel.items():
+        if attr in ("kind", "not", "any", "all"):
+            continue
+        # MEMBERSHIP: {attr: {"in": [...]}} or {"in": "$set"} — the attribute is ANY of
+        # these. A literal list names members outright, which is what rung 9's "n1, n2 and
+        # n3" needed and what only `foreach` could say before; a bound set makes "the five
+        # I just created" checkable by a predicate.
+        if isinstance(val, dict) and "in" in val:
+            members = val["in"]
+            if isinstance(members, str):
+                if not refs.is_reference(members):
+                    out.append(f"{where}: {attr} IN expects a list of values or a "
+                               f"{config.SIGIL}set, got {members!r}")
+                elif sets and refs.names(members) and refs.names(members)[0] not in sets:
+                    out.append(f"{where}: {attr} IN {members} — that name does not hold a "
+                               f"set. Bind one with `fetch ... select`, or list the "
+                               f"values outright.")
+            elif not isinstance(members, list) or not members:
+                out.append(f"{where}: {attr} IN takes a non-empty list of values, "
+                           f"got {members!r}")
+            elif [m for m in members if not isinstance(m, (str, int, bool))]:
+                out.append(f"{where}: {attr} IN takes plain values, got "
+                           f"{[m for m in members if not isinstance(m, (str, int, bool))][0]!r}")
+            continue
+        if isinstance(val, (list, dict, set, tuple)):
+            out.append(f"{where}: {attr} compares against ONE value, got {val!r}. "
+                       f"To name several, say MEMBERSHIP: "
+                       f"{{'{attr}': {{'in': [...]}}}} — written "
+                       f"INCLUDE {attr} = [a, b, c].")
+            continue
+        if sets:
+            for ref in refs.names(val if isinstance(val, str) else ""):
+                if ref in sets:
+                    out.append(
+                        f"{where}: {attr} = {config.SIGIL}{ref} puts a SET where one "
+                        f"value belongs — {config.SIGIL}{ref} holds the members, not an "
+                        f"attribute they share. Say MEMBERSHIP instead: "
+                        f"{{'{attr}': {{'in': '{config.SIGIL}{ref}'}}}}, written "
+                        f"INCLUDE {attr} = {config.SIGIL}{ref}.")
+    unknown = [k for k in sel
+               if k not in ("kind", "not", "any", "all") and k not in legal]
     # Aliases are accepted, not just tolerated: the harness has its own synonyms (`tag`
     # for a label, `os` for os_type) and a program written either way means the same
     # thing. Rejecting one spelling of one concept is the vocabulary problem in miniature.
     return out + [f"{where}: {kind} has no attribute {k!r} "
-                  f"(queryable: {', '.join(sorted(spec['attrs']))})" for k in unknown]
+                  f"(queryable: {', '.join(sorted(legal))})" for k in unknown]
 
 
-def _check_call(st: Dict[str, Any], where: str, tools, bound) -> List[str]:
+def _check_call(st: Dict[str, Any], where: str, tools, bound,
+                grafted: Optional[set] = None) -> List[str]:
     """A call names a REAL tool, carries args, and references only what exists.
 
     `args` is checked here rather than left to the per-op required-field pass so it
@@ -434,7 +664,107 @@ def _check_call(st: Dict[str, Any], where: str, tools, bound) -> List[str]:
             if ref not in bound:
                 out.append(f"{where}: {k}={v} refers to {config.SIGIL}{ref}, "
                            f"which is never created")
+            elif grafted is not None and ref not in grafted and _dotted(v, ref):
+                # A DOTTED PATH ONLY MEANS SOMETHING ON A CALL'S RESULT. Everything else
+                # a program binds is a NAME (a string) or a set of them, and a string has
+                # no fields. The model wrote `add_vm_to_network(net_name:
+                # $item.networks[0], ...)`, inventing array indexing; `item` IS in scope,
+                # so nothing objected, `resolve` left the token standing as written (it
+                # does that on purpose, so a ledger row stays debuggable), and the literal
+                # text `$item.networks[0]` was handed to the tool as a network name.
+                out.append(f"{where}: {k}={v} reads a field off "
+                           f"{config.SIGIL}{ref}, which is a NAME, not a call's result — "
+                           f"only something bound by `graft` has fields. Select what you "
+                           f"need instead, or graft the call whose answer you mean.")
     return out
+
+
+def _creator_tools() -> Dict[str, tuple]:
+    """Every tool that CREATES something -> (kind, the argument carrying its name).
+
+    Read off the resource manifest, so a kind added there is covered here with no edit —
+    the same extensibility rule the rest of the language follows.
+    """
+    out: Dict[str, tuple] = {}
+    for kind, spec in config.KINDS.items():
+        key = spec.get("key")
+        for creator in (spec.get("creators") or {}).values():
+            tool = creator.get("tool")
+            if tool:
+                out[tool] = (kind, creator.get("key") or key)
+        if spec.get("create"):
+            out.setdefault(spec["create"], (kind, key))
+    return out
+
+
+def _minted(st: Dict[str, Any]) -> List[str]:
+    """The names a `new` statement will bring into existence.
+
+    Mirrors execute._mint: the author's own key argument wins when they supplied one,
+    otherwise the variable name; several resources suffix it. Kept in step with the
+    visitor deliberately — this predicts what that code will do, and a prediction that
+    drifts is worse than none.
+    """
+    kind = st.get("kind")
+    spec = config.KINDS.get(kind) or {}
+    creators = spec.get("creators") or {}
+    chosen = (next((c for c in creators.values() if c.get("from")), None)
+              if st.get("from") else None) or creators.get("create") or {}
+    key = chosen.get("key") or spec.get("key")
+    supplied = (st.get("args") or {}).get(key)
+    base = (supplied if isinstance(supplied, str) and supplied.strip()
+            and not refs.names(supplied) else st.get("var"))
+    if not isinstance(base, str) or not base:
+        return []
+    n = st.get("amount", 1)
+    if not isinstance(n, int) or n < 1:
+        return [base]                      # a $parameter or a shortfall: predict the base
+    return [base] if n == 1 else [f"{base}{i + 1}" for i in range(n)]
+
+
+def _walk_stmts(body: Any) -> List[Dict[str, Any]]:
+    """Every statement under `body`, nested blocks included.
+
+    A shallow scan of a loop's direct children is not enough and rung 13 proved it: the
+    inner `foreach` sat inside an `if` inside the body, slipped the nesting check, and ran
+    23 calls. Anything asking "does this block CONTAIN X" has to descend.
+    """
+    out: List[Dict[str, Any]] = []
+    for st in body or []:
+        if not isinstance(st, dict):
+            continue
+        out.append(st)
+        for field in ("do", "then", "else", "ifails"):
+            kids = st.get(field)
+            if isinstance(kids, list):
+                out += _walk_stmts(kids)
+    return out
+
+
+def one_check(value: Any) -> Any:
+    """The single predicate an arity-one combinator wraps — `NOT(x)`'s x.
+
+    Accepts a ONE-ELEMENT LIST as well as a bare object, and the reason is that three
+    parts of this system disagreed about which it was. The manifest says `not` takes one
+    check; the SCHEMA offered `of` as an array for every non-value arity, so constrained
+    decoding produced `[{...}]` exactly as instructed; the executor coerced a list and ran
+    it fine; and only the validator refused. Rung 8 and rung 5 both died there, on
+    programs that were correct in every other respect and that the runtime would have
+    executed.
+
+    Shared by the validator and the renderer rather than written twice, because they were
+    already answering the same question differently — the renderer printed
+    `<not a predicate: [...]>` for the shape the executor accepts. Fix the reader, not the
+    model: the same argument `coerce_body` makes one level up.
+    """
+    if isinstance(value, (list, tuple)) and len(value) == 1:
+        return value[0]
+    return value
+
+
+def _dotted(value: Any, root: str) -> bool:
+    """Does `value` reach into `root` with a dotted path — `$item.networks`?"""
+    return isinstance(value, str) and f"{config.SIGIL}{root}." in value
 
 
 def _at_most_one(sel: Any) -> bool:
@@ -442,16 +772,30 @@ def _at_most_one(sel: Any) -> bool:
 
     True when it pins the kind's KEY to a literal — `name` for a vm, `net_name` for a
     network. A `$reference` does not count: it may resolve to a whole set.
+
+    THE LOOP VARIABLE IS THE EXCEPTION, and it is not a special case so much as the
+    definition of `foreach`: `$item` is ONE member of the set being walked, always. Rung 9
+    wrote `ENSURE REACH(SELECT vm WHERE name = '$item') >= 2` inside a loop — asking
+    whether one machine can reach two, which cannot hold in any world — and the check that
+    already refuses exactly this shape for a literal name declined to look, because a
+    reference "might be a set". It never can be here. The program aborted on its first
+    iteration after a single call, and the rung was scored as a planning failure.
     """
     if not isinstance(sel, dict):
         return False
     key = (config.KINDS.get(sel.get("kind")) or {}).get("key")
     val = sel.get(key) if key else None
-    return isinstance(val, str) and bool(val) and not refs.names(val)
+    if not isinstance(val, str) or not val:
+        return False
+    named = refs.names(val)
+    if not named:
+        return True                        # a literal name
+    return named == [config.LOOP_VAR] and val == f"{config.SIGIL}{config.LOOP_VAR}"
 
 
 def _check_predicate(pred: Any, where: str, bound: Optional[set] = None,
-                     elsewhere: Optional[set] = None) -> List[str]:
+                     elsewhere: Optional[set] = None,
+                     sets: Optional[set] = None) -> List[str]:
     """A predicate names its `shape` and supplies that shape's operand."""
     if pred is None:
         return []
@@ -472,6 +816,20 @@ def _check_predicate(pred: Any, where: str, bound: Optional[set] = None,
         if not (set(pred) & set(spec["comparators"])):
             return [f"{where}: {shape} needs "
                     f"{'/'.join(spec['comparators'])} to compare against"]
+        # `IS` READS A CALL'S RESULT, and the loop member is not one. `$item` is the
+        # member's NAME — a plain string — so `IS($item.name) = 'db'` reaches for a field
+        # on a string, resolves to nothing, and is false for every member in every world.
+        # Rung 8 wrote exactly that: `NOT(IS($item.name) = 'db')` was therefore true for
+        # everything, db went onto `core` with the rest, six calls ran, no error was
+        # raised and the program reported ok. It validated because `item` IS in scope —
+        # which is the wrong question to ask about it.
+        if refs.names(value) == [config.LOOP_VAR]:
+            return [f"{where}: {shape} reads what a CALL returned, and "
+                    f"{config.SIGIL}{config.LOOP_VAR} is the member's name, not a result "
+                    f"— reading a field off it is always empty. To treat one member "
+                    f"differently, filter the SET instead: `select` takes "
+                    f"`name = '...'`, and a carve-out excludes one "
+                    f"(EXCEPT name = '...')."]
         # And the name it reads has to BE in scope. Predicates were the one place a
         # reference went unchecked, which mattered the moment loops got block scoping:
         # a result grafted inside a loop is gone after it, so `ENSURE IS($answers.alive)`
@@ -496,6 +854,8 @@ def _check_predicate(pred: Any, where: str, bound: Optional[set] = None,
     if operand == "of":
         # A composite's operand is other predicates, checked recursively — so a malformed
         # child names itself rather than the parent looking wrong.
+        if spec.get("arity") == "one":
+            value = one_check(value)       # `[{...}]` is what the schema asks the model for
         kids = [value] if spec.get("arity") == "one" else value
         if spec.get("arity") == "one":
             if not isinstance(value, dict):
@@ -503,14 +863,14 @@ def _check_predicate(pred: Any, where: str, bound: Optional[set] = None,
         elif not isinstance(value, (list, tuple)) or len(value) < 2:
             return [f"{where}: {shape} takes two or more checks under `of`, got {value!r}"]
         for kid in kids:
-            out += _check_predicate(kid, where, bound, elsewhere)
+            out += _check_predicate(kid, where, bound, elsewhere, sets)
         return out
     if operand == "select":
         if not isinstance(value, dict):
             out.append(f"{where}: {shape} needs `select` — the set to measure, "
                        f"e.g. {{'kind':'vm','tag':'prod'}}")
         else:
-            out += _check_select(value, where)
+            out += _check_select(value, where, sets)
     elif operand == "sets":
         if not isinstance(value, (list, tuple)) or len(value) < 2:
             out.append(f"{where}: {shape} needs `sets` — two or more, got {value!r}")

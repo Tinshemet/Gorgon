@@ -219,11 +219,35 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
                       if source else None) or creators.get("create") or {"tool": spec.get("create")}
             key_arg = chosen.get("key") or spec["key"]
             n = _amount(st.get("amount", 1), scope)
-            names = [_mint(kind, st["var"], i, n) for i in range(n)]
             # Everything else the creator takes rides along — os_type, cpu_cores,
             # memory_mb. With count > 1 each resource is created with the SAME args,
             # which is the natural reading of "create 5 vms with 4GB each".
             extra = _resolve(st.get("args") or {}, scope)
+            # THE AUTHOR'S OWN NAME WINS. Minting exists to supply a name when nobody
+            # said one — not to overrule someone who did. This line used to read
+            # `{**extra, key_arg: nm}` with `nm` always minted from the VARIABLE, so
+            # `STORE core_net = NEW network(net_name: core)` created a network called
+            # `core_net` and every later reference to `core` failed against a world that
+            # had never contained it. Rung 8 died exactly there, twice: the model wrote a
+            # correct statement, the executor silently renamed the resource, and the rung
+            # was scored as the model's mistake. Silently discarding an argument the
+            # author explicitly passed is the same defect class as the schema withholding
+            # a construct the validator already implemented.
+            supplied = extra.get(key_arg)
+            # ...unless it is not a NAME. An unresolved `$reference` still carries the
+            # sigil — the author wrote `NEW network(net_name: $blue_net)` with nothing
+            # binding `blue_net`, `refs.resolve` correctly left the token alone, and the
+            # world ended up holding machines called `$blues1` and a network called
+            # `$blue_net`. A value that still has a sigil in it is not a name in any
+            # program, so fall back to minting rather than create the nonsense. The
+            # validator refuses this case outright now; this is the belt beside it,
+            # because a parameter supplied at invocation is not knowable statically.
+            if (isinstance(supplied, str) and supplied.strip()
+                    and not refs.names(supplied)):
+                base = supplied
+            else:
+                base = st["var"]
+            names = [_mint(kind, base, i, n) for i in range(n)]
             for nm in names:
                 call_args = {**extra, key_arg: nm}
                 if source and chosen.get("from"):
@@ -232,6 +256,46 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
             # One resource binds its name; several bind the LIST, so `foreach in` can
             # iterate what was just created — before it has any attribute to query by.
             scope[st["var"]] = names[0] if n == 1 else names
+            # ── NEW's OWN ENSURE ────────────────────────────────────────────────────
+            # `new` is the ONE op where the harness itself invents something: it mints
+            # the name, chooses the creator, and supplies the key argument. A `call`
+            # passes the author's arguments through and decides nothing. So `new` is the
+            # only statement that can quietly produce something OTHER than what was
+            # asked for — and it did, three separate ways in one day: the minted name
+            # overrode an explicit `net_name` (a network called `core` came out as
+            # `core_net`), an unresolved `$reference` became a literal resource name, and
+            # a supplied base was suffixed. Every one of those reported success, because
+            # the creator call genuinely succeeded — it just created the wrong thing.
+            #
+            # So the statement vouches for itself, which is the language's own rule
+            # (a program needs a VERDICT) applied to the one op that needs it most.
+            # Deliberately a POST-check: skipping a `new` whose effect already holds is
+            # ADOPTING, and decision 2 refuses that outright — "if the user asks for new,
+            # he means new". This asks "did I make what I said?", never "need I bother?".
+            #
+            # Costs one lister call per STATEMENT, not per resource, and needs no new
+            # manifest data: every kind already declares `list` and `key`, which is what
+            # the injected `select` reads.
+            if select is not None and names:
+                try:
+                    present = set(select({"kind": kind}))
+                except Exception as exc:                       # a seam that cannot answer
+                    present, missing = None, []                # is not evidence of absence
+                    failures.append({"tool": chosen["tool"], "args": {},
+                                     "error": f"could not verify the new {kind}: {exc}"})
+                else:
+                    missing = [nm for nm in names if nm not in present]
+                if missing:
+                    asked = extra.get(key_arg)
+                    failures.append({
+                        "tool": chosen["tool"],
+                        "args": {key_arg: missing[0]},
+                        "error": (
+                            f"{chosen['tool']} reported success but no {kind} named "
+                            f"{', '.join(repr(m) for m in missing)} exists"
+                            + (f" (the statement asked for {asked!r})"
+                               if isinstance(asked, str) and asked not in names else "")
+                            + ". The creator ran and made something else, or nothing.")})
 
         elif op == "call":
             result = _do(st["tool"], _resolve(st.get("args") or {}, scope))

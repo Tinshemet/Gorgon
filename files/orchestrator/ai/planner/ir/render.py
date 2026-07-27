@@ -14,7 +14,18 @@ that once, on a predicate holding a number where a set belonged.
 from typing import Any
 
 from . import config
-from .validate import coerce_body
+from .validate import coerce_body, one_check
+
+
+def _w(key: str) -> str:
+    """A printed keyword, from the surface table.
+
+    Every word the renderer emits comes from here, so renaming one is a data change and
+    the stored form never moves — which is what "syntax is a VIEW" was supposed to mean.
+    Two of seven ops had an entry before test_medusa_invariants asked, and `fetch` had one
+    the renderer ignored in favour of a literal.
+    """
+    return config.SURFACE.get(key, key.upper())
 
 
 def render(program: Any) -> str:
@@ -35,7 +46,7 @@ def render(program: Any) -> str:
         for imp in (program.get("imports") or []):
             v = f" @{imp['version']}" if isinstance(imp, dict) and imp.get("version") else ""
             pkg = imp.get("package") if isinstance(imp, dict) else imp
-            pre.append(f"{'  ' if named else ''}IMPORT {pkg}{v};")
+            pre.append(f"{'  ' if named else ''}{_w('import')} {pkg}{v};")
         if pre:
             out += pre + [""]
 
@@ -73,7 +84,7 @@ def _statement(st: Any, indent: str) -> list:
         # difference — whether this copies something that exists — is exactly what an
         # operator is deciding about when they read the line.
         src = f" FROM {st['from']}" if st.get("from") else ""
-        return _with_tail([f"{indent}{config.SURFACE['bind']} {st.get('var')} = NEW {many}"
+        return _with_tail([f"{indent}{config.SURFACE['bind']} {st.get('var')} = {_w('new')} {many}"
                            f"{st.get('kind')}{f'({extra})' if extra else ''}{src};"], st, indent)
 
     if op == "call":
@@ -91,7 +102,7 @@ def _statement(st: Any, indent: str) -> list:
         # referenced $item — two names for one thing, in the one place a reader most needs
         # to follow the binding.
         member = f"{config.SIGIL}{config.LOOP_VAR}"
-        par = " ASYNC" if st.get("async") else ""
+        par = f" {_w('async')}" if st.get("async") else ""
         # A block body prints as its statements; the single-call shorthand prints as the
         # one call. Both wear the same braces, so the shorthand is invisible to a reader —
         # which is the point of having it.
@@ -101,14 +112,15 @@ def _statement(st: Any, indent: str) -> list:
                 body += _statement(kid, indent + "  ")
         else:
             body = _statement({"op": "call", **inner}, indent + "  ")
-        return _with_tail([f"{indent}FOREACH {member} IN {src}{par} {{"]
+        return _with_tail([f"{indent}{_w('foreach')} {member} {_w('in')} {src}{par} {{"]
                           + body + [f"{indent}}}"], st, indent)
 
     if op == "fetch":
         q = st.get("count") or st.get("select")
         inner = _select(q)
-        body = f"COUNT({inner})" if st.get("count") else inner
-        return [f"{indent}STORE {st.get('var', '?')} = FETCH {body};"]
+        body = f"{_w('count')}({inner})" if st.get("count") else inner
+        return [f"{indent}{config.SURFACE['bind']} {st.get('var', '?')} = "
+                f"{_w('fetch')} {body};"]
 
     if op in ("ensure", "achieve"):
         # The keyword comes from the surface table, so a word renamed there is renamed
@@ -117,11 +129,11 @@ def _statement(st: Any, indent: str) -> list:
         return [f"{indent}{word} {_pred(st.get('predicate'))};"]
 
     if op == "if":
-        out = [f"{indent}IF {_pred(st.get('cond'))} {{"]
+        out = [f"{indent}{_w('if')} {_pred(st.get('cond'))} {{"]
         for inner in (st.get("then") or []):
             out += _statement(inner, indent + "  ")
         if st.get("else"):
-            out.append(f"{indent}}} ELSE {{")
+            out.append(f"{indent}}} {_w('else')} {{")
             for inner in st["else"]:
                 out += _statement(inner, indent + "  ")
         out.append(f"{indent}}}")
@@ -136,8 +148,8 @@ def _with_tail(lines: list, st: dict, indent: str) -> list:
     if not recov:
         return lines
     lines = list(lines)
-    lines[-1] = lines[-1].rstrip(";") + "; IFAILS {" if lines[-1].endswith(";") \
-        else lines[-1] + " IFAILS {"
+    lines[-1] = (lines[-1].rstrip(";") + f"; {_w('ifails')} {{" if lines[-1].endswith(";")
+                 else lines[-1] + f" {_w('ifails')} {{")
     for inner in recov:
         lines += _statement(inner, indent + "  ")
     lines.append(f"{indent}}}")
@@ -160,7 +172,7 @@ def _signature(program: dict) -> str:
                      for k, v in (program.get("params") or {}).items())
     # No trailing AS: the brace already opens the block, and two openers is one
     # more thing to get wrong when writing by hand.
-    return f"PROCEDURE {name}({args})"
+    return f"{_w('procedure')} {name}({args})"
 
 
 def _setlit(src) -> str:
@@ -180,19 +192,45 @@ def _select(sel) -> str:
     if not isinstance(sel, dict):
         return f"<not a set: {sel!r}>"
     kind = sel.get("kind", "?")
-    terms = [f"{k} = '{v}'" for k, v in sel.items() if k not in ("kind", "not")]
+
+    def _term(k, v):
+        # MEMBERSHIP reads as INCLUDE, positioned like EXCEPT — the two are mirrors and a
+        # reader who knows one should recognise the other on sight.
+        if isinstance(v, dict) and "in" in v:
+            m = v["in"]
+            listed = ", ".join(str(x) for x in m) if isinstance(m, (list, tuple)) else m
+            return (f"{_w('include')} {k} = [{listed}]" if isinstance(m, (list, tuple))
+                    else f"{_w('include')} {k} = {listed}")
+        return f"{k} = '{v}'"
+
+    groups = []
+    for group, word in (("any", "OR"), ("all", "AND")):
+        kids = sel.get(group)
+        if isinstance(kids, list) and kids:
+            inner = [" AND ".join(_term(k, v) for k, v in kid.items() if k != "kind")
+                     for kid in kids if isinstance(kid, dict)]
+            if inner:
+                groups.append("(" + f" {word} ".join(inner) + ")")
+    plain = [(k, v) for k, v in sel.items() if k not in ("kind", "not", "any", "all")]
+    includes = [_term(k, v) for k, v in plain if isinstance(v, dict) and "in" in v]
+    terms = [_term(k, v) for k, v in plain if not (isinstance(v, dict) and "in" in v)]
+    terms += groups
     # The carve-out reads as EXCEPT, which is what the operator said out loud: "every vm
     # except db". Rendering it as another equality printed
     # `WHERE not = '{'name': 'db'}'` — a filter on an attribute called "not", against a
     # dict stringified into a quoted literal. Nobody could read that, and the whole point
     # of the written surface is that a human can check what the machine understood.
-    out = f"SELECT {kind}" + (f" WHERE {' AND '.join(terms)}" if terms else "")
+    out = f"SELECT {kind}" + (f" {_w('where')} {' AND '.join(terms)}" if terms else "")
+    # INCLUDE follows WHERE and precedes EXCEPT, so the line reads in the order it is
+    # said: this kind, narrowed by these conditions, restricted to these, minus those.
+    if includes:
+        out += " " + " ".join(includes)
     # EXCEPT is its OWN clause, not another WHERE term — `WHERE EXCEPT name = 'db'` is
     # not English and not SQL. It follows WHERE when both are present, so the sentence
     # reads in the order the operator said it: this set, minus these.
     carve = sel.get("not")
     if isinstance(carve, dict) and carve:
-        out += " EXCEPT " + " AND ".join(f"{k} = '{v}'" for k, v in carve.items())
+        out += f" {_w('except')} " + " AND ".join(f"{k} = '{v}'" for k, v in carve.items())
     return out
 
 
@@ -218,7 +256,11 @@ def _pred(p) -> str:
         word = config.SURFACE["combinators"][shape]
         inner = p.get("of")
         if spec.get("arity") == "one":
-            return f"{word}({_pred(inner)})"
+            # `one_check`, so the renderer shows what the executor would RUN. It printed
+            # `<not a predicate: [{...}]>` for a one-element list — the shape the schema
+            # asks the model to produce — which made a legible program look malformed at
+            # exactly the moment an operator was reading it to decide.
+            return f"{word}({_pred(one_check(inner))})"
         parts = ", ".join(_pred(x) for x in (inner if isinstance(inner, list) else []))
         return f"{word}({parts})"
     if spec["operand"] == "sets":
@@ -227,5 +269,13 @@ def _pred(p) -> str:
     # be a dict here, so a comparator added to the JSON rendered as "?" — the language
     # extended in one place and printed wrong in another.
     used = next((c for c in spec["comparators"] if c in p), None)
+    if used is None:
+        # NO COMPARATOR IS LEGAL where the manifest says so — `reach` declares
+        # comparators_optional, and a bare REACH(...) means "these can reach each other"
+        # with the default floor. This printed `REACH(SELECT vm) ? None`, so a perfectly
+        # valid statement read as malformed to the one person who has to approve it. The
+        # renderer exists so a human can check what the machine understood; garbling a
+        # legal program defeats the only thing it is for.
+        return f"{shape.upper()}({_select(p.get('select'))})"
     sym = spec["comparators"].get(used, "?")
     return f"{shape.upper()}({_select(p.get('select'))}) {sym} {p.get(used)}"

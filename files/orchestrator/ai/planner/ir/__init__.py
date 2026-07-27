@@ -20,6 +20,7 @@ WHAT IS WHERE — one concern per file, and the language itself is DATA:
     render.py   the operator's SQL-shaped view, one direction
     execute.py  the visitor — one case per op; every effect still leaves through the gate
     derive.py   close an unmet predicate by COMPUTING the fix, where the model cannot
+    observe.py  attributes learned by ASKING — three-valued, and unknown is not false
 
 The test this structure exists to pass: adding a resource type is ONE ROW in
 config/ir.defaults.json and zero language code. Same for a predicate. If something has
@@ -31,9 +32,10 @@ performs on every tool call.
 """
 
 from .config import (KINDS, LANGUAGE, LOOP_VAR, OPS, PREDICATES, SIGIL,
-                     packages_for)
+                     observed, packages_for, queryable)
 from .derive import derive
 from .execute import Unsatisfied, evaluate, run
+from .observe import matches as observed_matches, value as observed_value
 from .render import render
 from .schema import (emit_program_tool, statement_from, statement_tools,
                      system_prompt)
@@ -49,5 +51,6 @@ __all__ = [
     "validate", "coerce_body", "kinds_used",
     "render", "evaluate",
     "run", "Unsatisfied", "derive",
+    "observed_matches", "observed_value", "observed", "queryable",
     "KINDS", "OPS", "PREDICATES", "SIGIL", "LOOP_VAR", "LANGUAGE", "packages_for",
 ]

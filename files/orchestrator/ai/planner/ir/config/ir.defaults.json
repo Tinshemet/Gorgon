@@ -1,5 +1,5 @@
 {
-  "_doc": "MEDUSA \u2014 the Gorgon procedure language, AS DATA. Named for one of the gorgons, because the platform is Gorgon and this is one of its own. Nothing here is a language feature written in code: the ops, the resource kinds, the predicate shapes and every string the model is shown all live in this manifest. That is the extensibility test the design note sets \u2014 adding a resource kind, a predicate or a tool must touch ZERO language code. ir.json holds a deployment's overrides and wins on merge.",
+  "_doc": "MEDUSA — the Gorgon procedure language, AS DATA. Named for one of the gorgons, because the platform is Gorgon and this is one of its own. Nothing here is a language feature written in code: the ops, the resource kinds, the predicate shapes and every string the model is shown all live in this manifest. That is the extensibility test the design note sets — adding a resource kind, a predicate or a tool must touch ZERO language code. ir.json holds a deployment's overrides and wins on merge.",
   "language": {
     "name": "Medusa",
     "of": "Gorgon",
@@ -8,7 +8,7 @@
   },
   "sigil": "$",
   "loop_var": "item",
-  "_params_doc": "Parameter types a procedure may declare, TYPE FIRST: (INT X, STRING name). Parameters are AUTHORED, not derived \u2014 unlike `imports`, which the harness computes: only the author knows which values are meant to vary per invocation. `sql` is how the type is written; `py` is what a supplied value is checked against. DURATION and BYTES exist because this domain keeps needing them and a bare int loses the unit \u2014 a routine says EVERY 1h, a disk check says 20GB, and 'is 3600 seconds or an hour?' is the kind of ambiguity that only shows up in production.",
+  "_params_doc": "Parameter types a procedure may declare, TYPE FIRST: (INT X, STRING name). Parameters are AUTHORED, not derived — unlike `imports`, which the harness computes: only the author knows which values are meant to vary per invocation. `sql` is how the type is written; `py` is what a supplied value is checked against. DURATION and BYTES exist because this domain keeps needing them and a bare int loses the unit — a routine says EVERY 1h, a disk check says 20GB, and 'is 3600 seconds or an hour?' is the kind of ambiguity that only shows up in production.",
   "param_types": {
     "int": {
       "sql": "INT",
@@ -53,22 +53,22 @@
     "duration": {
       "sql": "DURATION",
       "py": "str",
-      "doc": "a span \u2014 30s, 15m, 1h, 7d. What a ROUTINE's schedule and a timeout are"
+      "doc": "a span — 30s, 15m, 1h, 7d. What a ROUTINE's schedule and a timeout are"
     },
     "bytes": {
       "sql": "BYTES",
       "py": "str",
-      "doc": "a size \u2014 512MB, 20GB. Disk and memory, with the unit kept"
+      "doc": "a size — 512MB, 20GB. Disk and memory, with the unit kept"
     }
   },
-  "_ops_doc": "The statement types. `one_of` means exactly one of those fields must be present \u2014 foreach names its set EITHER by querying state (`select`) OR by referring to a set already bound (`in`). Those are different things and conflating them was a real gap: `new` with a count binds a SET, and until `in` existed there was no way to act on it before its members had an attribute to query by. \"Create X vms and label them\" was inexpressible. `required` is what validate() insists on; `doc` is what the model is shown. Adding an op here does NOT make it executable \u2014 the visitor must learn it too \u2014 so this table is the contract between the two, not a switch. `in` accepts a LITERAL LIST as well as a bound reference, because a correction usually acts on specific things the last attempt left behind \u2014 the model reached for exactly that on rung 7, naming three VMs it had read off current state, and the language had no way to say it. `new` carries `args` because a resource is rarely just a name: create_vm alone accepts 47 arguments and REQUIRES os_type. Without them `new` could not build a real VM at all \u2014 it passed only because the bench world is lenient about missing required fields, which is exactly the kind of gap a simulator hides.",
+  "_ops_doc": "The statement types. `one_of` means exactly one of those fields must be present — foreach names its set EITHER by querying state (`select`) OR by referring to a set already bound (`in`). Those are different things and conflating them was a real gap: `new` with a count binds a SET, and until `in` existed there was no way to act on it before its members had an attribute to query by. \"Create X vms and label them\" was inexpressible. `required` is what validate() insists on; `doc` is what the model is shown. Adding an op here does NOT make it executable — the visitor must learn it too — so this table is the contract between the two, not a switch. `in` accepts a LITERAL LIST as well as a bound reference, because a correction usually acts on specific things the last attempt left behind — the model reached for exactly that on rung 7, naming three VMs it had read off current state, and the language had no way to say it. `new` carries `args` because a resource is rarely just a name: create_vm alone accepts 47 arguments and REQUIRES os_type. Without them `new` could not build a real VM at all — it passed only because the bench world is lenient about missing required fields, which is exactly the kind of gap a simulator hides.",
   "ops": {
     "new": {
       "required": [
         "var",
         "kind"
       ],
-      "doc": "create a resource and bind a name to it. Fields: var, kind, amount (optional, default 1), args (optional \u2014 anything else the creator takes), `from` (optional \u2014 create by COPYING the named resource instead of making a fresh one).",
+      "doc": "create a resource and bind a name to it. NEW ISSUES THE CREATION ITSELF — it calls create_vm / create_network for you, so NEVER write a separate creator call beside it. Fields: var, kind, amount (optional, default 1), args (optional — anything else the creator takes), `from` (optional — create by COPYING the named resource instead of making a fresh one).",
       "fields": [
         "var",
         "kind",
@@ -93,7 +93,7 @@
         "select",
         "count"
       ],
-      "doc": "READ the world and bind what you find. `count` binds HOW MANY match (a number); `select` binds the matching names (a set). This is the only way to write one program that is correct whatever the lab already holds \u2014 read first, then act on the difference."
+      "doc": "READ the world and bind what you find. `count` binds HOW MANY match (a number); `select` binds the matching names (a set). This is the only way to write one program that is correct whatever the lab already holds — read first, then act on the difference."
     },
     "call": {
       "required": [
@@ -120,7 +120,7 @@
           "do"
         ]
       ],
-      "doc": "apply statements to every member of a set. Name the set with `select` (a query over current state), or with `in` \u2014 either a set you bound (\"$vms\") or a literal list of names ([\"one\",\"two\"]). The body is `do`, a list of statements, or `call` as the shorthand when the body is a single call. Inside the body $item is the current member.",
+      "doc": "apply statements to every member of a set. Name the set with `select` (a query over current state), or with `in` — either a set you bound (\"$vms\") or a literal list of names ([\"one\",\"two\"]). The body is `do`, a list of statements, or `call` as the shorthand when the body is a single call. Inside the body $item is the current member.",
       "fields": [
         "select",
         "in",
@@ -134,7 +134,7 @@
       "required": [
         "predicate"
       ],
-      "doc": "a GROUND CHECK: something that must be true right here. Evaluated where it is written, so it may open a procedure as a precondition \u2014 verify the world is as you expect before touching it. If it fails the program stops.",
+      "doc": "a GROUND CHECK: something that must be true right here. Evaluated where it is written, so it may open a procedure as a precondition — verify the world is as you expect before touching it. If it fails the program stops.",
       "fields": [
         "predicate"
       ]
@@ -146,7 +146,7 @@
       "fields": [
         "predicate"
       ],
-      "doc": "the GOAL: what this whole program is for. Nothing may act after it \u2014 it certifies work already done. If it does not hold, the harness computes the difference and closes it, so a program that is nothing BUT an achieve is a legal way to state a goal and let the harness plan it."
+      "doc": "the GOAL: what this whole program is for. Nothing may act after it — it certifies work already done. If it does not hold, the harness computes the difference and closes it, so a program that is nothing BUT an achieve is a legal way to state a goal and let the harness plan it."
     },
     "if": {
       "required": [
@@ -161,7 +161,16 @@
       "doc": "branch on a check. Fields: cond (a check), then (statements), else (optional statements)."
     }
   },
-  "_kinds_doc": "THE RESOURCE MANIFEST (design note 580d54ac \u00a707). One row per resource type, naming its creator tool, its lister, the argument that carries its key, and the attributes legal in a SELECT ... WHERE. This one table feeds NEW (which creator), SELECT (which lister, which attributes) and ENSURE (which predicates typecheck). A new resource type \u2014 a container, a conductor's own object \u2014 is ONE ROW here and no code. `package` is the module it belongs to; it is what the derived `imports` header is computed from, and the intended endpoint is one package per git submodule. ATTRS MUST MATCH THE VOCABULARY THE TOOLS USE. `add_label(name, label)` sets it, so a program selecting on it writes `label` \u2014 listing the attribute as `tag` made the model wrong for being consistent with the tool. One concept, one name. `aliases` carries the harness's internal synonyms so existing readers keep working. The KEY is queryable too: selecting a resource by its name is the most obvious query there is, and omitting it rejected `SELECT vm WHERE name = ...` out of hand. A select may carry `not`, whose value is another select's filters \u2014 that is what a carve-out needs: 'every vm EXCEPT db' cannot be written by any positive filter, because the thing excluded is named rather than described. `creators` lets a kind be made more than one way \u2014 a machine can be built fresh or CLONED, and with a single creator 'clone golden three times' was unsayable. Which creator runs is chosen by whether `from` is present, so the language gains no keyword for it.",
+  "_filters_doc": "WHAT A SELECT'S FILTERS MAY SAY. Three forms, and the third and fourth were added 2026-07-27 because the author kept reaching for them and being marked wrong. (1) EQUALITY — {attr: value} — the member's attribute is exactly this. Sibling keys are ANDed, which is the common case and stays implicit. (2) THE CARVE-OUT — {not: {filters}} — every member EXCEPT those matching, written EXCEPT. It has existed since rung 8 and it is what makes the next one necessary: a select could already NAME a member, but only to exclude it. (3) MEMBERSHIP — {attr: {in: [...]}} or {attr: {in: '$set'}} — the attribute is ANY of these, written INCLUDE attr = [a, b, c] to mirror EXCEPT. This is the one predicates could not live without: `foreach` can walk a literal list (IN [n1, n2]) but a PREDICATE takes a select and nothing else, so before this a check could never be about particular machines — and rung 9's goal is literally 'make sure n1, n2 and n3 can all ping each other'. Accepting a bound set as well as a literal is what makes 'the five I just created' checkable. Note EQUALITY still refuses a set reference: `label = $vms` was rung 9's actual mistake, putting the members where a shared attribute belongs, and membership is now the right way to say what it was reaching for. (4) GROUPS — {any: [f, f]} and {all: [f, f]} — nested filter sets, written (a OR b) and (a AND b). Deliberately the SAME WORDS the predicate combinators use (not/all/any -> NOT/AND/OR), because one concept with two vocabularies is the thing this language exists to delete. ALL FOUR STAY DATA: a filter can still be inverted by derive.py, which is why a lambda was refused here — an opaque boolean cannot be turned back into the actions that would satisfy it, and rung 7 closes in one call precisely because a predicate can.",
+  "_attr_values_doc": "ATTRIBUTES WITH A CLOSED SET OF VALUES, declared so the author is TOLD them. `status` is running or stopped and nothing else (executor/api/_vm_monitoring.py:155 is the authority), but the schema offered it as a bare string, so the decoder was free to invent one — and did: rung 5 wrote `SELECT vm WHERE status = 'not running'`, which matches nobody, ran zero calls and reported ok. Rung 12 reached for `label = 'up'` for 'each machine that is currently up' for the same reason: not knowing what status can be, it invented a label. Neither is a model failure; both are the schema withholding something the world already knows, which is the single most repeated defect in this language's history. An attribute listed here is offered as an ENUM to the author and policed by the validator; one absent from here is open text (a name, a label — sets nobody can enumerate in advance). Same role `observed_values` plays for observed attributes, which is why config.values_for() answers for both and neither caller has to know which kind it is asking about.",
+  "_observed_doc": "OBSERVED ATTRIBUTES — decision 6, settled 2026-07-27. The question was what may escape a FOREACH iteration, so that a fleet-wide judgement can be built out of per-member call results ('ping every machine, and if any failed to answer, stop the rollout'). The answer chosen: NOTHING escapes. The loop probes, the FINDINGS LEDGER remembers, and a later SELECT reads it back — so the language gains no accumulator, no new op and no second data type. Its one data type stays 'a set of names'. The precedent was already load-bearing: the `reach` predicate reads the findings ledger rather than the registry, precisely because reachability is DISCOVERED by a probe and never inferred from a tool's success flag. An observed attribute generalises that one predicate into the query form. Each row names the FACT template the ledger stores it under and the tool that writes it (`by`), which is the same yield-schema orchestrator/ai/planner/findings.py already keeps — one authority, read from two directions: the tool call writes the fact, the query reads it. The template is formatted with the kind's KEY bound to the member, so `reachable({name})` asks about vm `web` as `reachable(web)`. THREE-VALUED, AND THIS IS THE LOAD-BEARING PART: an observed attribute is 'true', 'false', or 'unknown', and UNKNOWN IS NOT A MATCH FOR EITHER OTHER VALUE. A machine nobody probed is not alive and is not dead — it is unasked. Collapsing unknown into false would let `SELECT vm WHERE alive = 'false'` mean 'everything I never looked at', which is the false-success class this whole layer exists to refuse, arriving through a query instead of a closure. Making it sayable is what keeps a goal honest: `COUNT(SELECT vm WHERE label='fleet' AND alive='unknown') = 0` asserts that every member was actually asked, which is the clause that stops a program from closing green having probed nothing at all.",
+  "observed_values": [
+    "true",
+    "false",
+    "unknown"
+  ],
+  "observed_unknown": "unknown",
+  "_kinds_doc": "THE RESOURCE MANIFEST (design note 580d54ac §07). One row per resource type, naming its creator tool, its lister, the argument that carries its key, and the attributes legal in a SELECT ... WHERE. This one table feeds NEW (which creator), SELECT (which lister, which attributes) and ENSURE (which predicates typecheck). A new resource type — a container, a conductor's own object — is ONE ROW here and no code. `package` is the module it belongs to; it is what the derived `imports` header is computed from, and the intended endpoint is one package per git submodule. ATTRS MUST MATCH THE VOCABULARY THE TOOLS USE. `add_label(name, label)` sets it, so a program selecting on it writes `label` — listing the attribute as `tag` made the model wrong for being consistent with the tool. One concept, one name. `aliases` carries the harness's internal synonyms so existing readers keep working. The KEY is queryable too: selecting a resource by its name is the most obvious query there is, and omitting it rejected `SELECT vm WHERE name = ...` out of hand. A select may carry `not`, whose value is another select's filters — that is what a carve-out needs: 'every vm EXCEPT db' cannot be written by any positive filter, because the thing excluded is named rather than described. `creators` lets a kind be made more than one way — a machine can be built fresh or CLONED, and with a single creator 'clone golden three times' was unsayable. Which creator runs is chosen by whether `from` is present, so the language gains no keyword for it.",
   "kinds": {
     "vm": {
       "package": "core",
@@ -182,6 +191,19 @@
         "net": "network",
         "net_name": "network",
         "on": "network"
+      },
+      "attr_values": {
+        "status": [
+          "running",
+          "stopped"
+        ]
+      },
+      "observed": {
+        "alive": {
+          "fact": "reachable({name})",
+          "by": "guest_ping",
+          "doc": "whether the machine answers its guest agent. LEARNED BY ASKING, never inferred — probe it first or it reads 'unknown'."
+        }
       },
       "creators": {
         "create": {
@@ -230,7 +252,7 @@
       }
     }
   },
-  "_predicates_doc": "What ENSURE can assert. `comparators` maps each comparator to the SYMBOL it renders as, so adding one is a data change \u2014 it used to be a dict in render.py, which meant a new comparator printed as `?`. EVERY shape carries its operand under `select` \u2014 the same key foreach uses \u2014 and names itself under `shape`. That regularity was measured, not chosen: an earlier form keyed the shape and operand together ({count: <select>, eq: N}) and llama3.1 put the NUMBER where the SET belongs on every attempt, while getting foreach's select right in the same programs. `source` records WHERE the truth comes from: `registry` is current state; `findings` is the probe ledger, because reachability is not registry state and is deliberately never inferred from a tool's success flag. `not`/`all`/`any` are COMPOSITE: their operand is other predicates rather than a set, which is why `source` is neither registry nor findings \u2014 they read whatever their children read. All three take parentheses in the written form, so a reader never has to know operator precedence, because there is none. `is` reads a GRAFTED RESULT rather than the world \u2014 IS($answer.reachable) = false. It is the only shape whose source is neither the registry nor findings, and it exists because rung 11's condition is a call's answer: which machines are unreachable is knowable only by asking.",
+  "_predicates_doc": "What ENSURE can assert. `comparators` maps each comparator to the SYMBOL it renders as, so adding one is a data change — it used to be a dict in render.py, which meant a new comparator printed as `?`. EVERY shape carries its operand under `select` — the same key foreach uses — and names itself under `shape`. That regularity was measured, not chosen: an earlier form keyed the shape and operand together ({count: <select>, eq: N}) and llama3.1 put the NUMBER where the SET belongs on every attempt, while getting foreach's select right in the same programs. `source` records WHERE the truth comes from: `registry` is current state; `findings` is the probe ledger, because reachability is not registry state and is deliberately never inferred from a tool's success flag. `not`/`all`/`any` are COMPOSITE: their operand is other predicates rather than a set, which is why `source` is neither registry nor findings — they read whatever their children read. All three take parentheses in the written form, so a reader never has to know operator precedence, because there is none. `is` reads a GRAFTED RESULT rather than the world — IS($answer.reachable) = false. It is the only shape whose source is neither the registry nor findings, and it exists because rung 11's condition is a call's answer: which machines are unreachable is knowable only by asking.",
   "predicates": {
     "count": {
       "source": "registry",
@@ -262,21 +284,27 @@
       "operand": "of",
       "arity": "one",
       "comparators": {},
-      "doc": "the opposite of another check"
+      "doc": "the opposite of another check",
+      "derivable": false,
+      "_derivable_doc": "the opposite of a check does not name a state to bring about — satisfying NOT(x) means any world where x is false, and choosing one is a decision, not a computation"
     },
     "all": {
       "source": "composite",
       "operand": "of",
       "arity": "many",
       "comparators": {},
-      "doc": "every one of these checks holds"
+      "doc": "every one of these checks holds",
+      "derivable": false,
+      "_derivable_doc": "a composite is only as derivable as its children, and combining their plans is a scheduling problem this layer deliberately does not have"
     },
     "any": {
       "source": "composite",
       "operand": "of",
       "arity": "many",
       "comparators": {},
-      "doc": "at least one of these checks holds"
+      "doc": "at least one of these checks holds",
+      "derivable": false,
+      "_derivable_doc": "satisfying ONE of several checks means picking which — that is the operator's call, not arithmetic"
     },
     "is": {
       "source": "graft",
@@ -285,32 +313,34 @@
       "comparators": {
         "eq": "="
       },
-      "doc": "a value from a grafted result equals this"
+      "doc": "a value from a grafted result equals this",
+      "derivable": false,
+      "_derivable_doc": "reads a call's RESULT. No sequence of actions makes a past answer different"
     }
   },
   "_prompt_doc": "Every string the model is shown. Held as data so the wording can be tuned without editing code, and so a change to it is visible in a diff as a change to the LANGUAGE rather than buried in a Python literal.",
   "prompt": {
-    "intro": "You turn an operator's request into a PROGRAM \u2014 an ordered list of statements that, run top to bottom, achieves it.",
+    "intro": "You turn an operator's request into a PROGRAM — an ordered list of statements that, run top to bottom, achieves it.",
     "statements_header": "Statements:",
     "reference": "Refer to anything you created with a $ prefix: {\"net_name\":\"$net\"}.",
-    "ordering": "Order matters \u2014 a foreach over {\"tag\":\"red\"} only finds VMs already labelled.",
+    "ordering": "Order matters — a foreach over {\"tag\":\"red\"} only finds VMs already labelled.",
     "select_hint": "select describes the set, e.g. {\"kind\":\"vm\",\"status\":\"stopped\"} or {\"kind\":\"vm\",\"tag\":\"red\"}. Inside a foreach, the member is $item.",
     "tools_header": "Tools available:",
     "tools_footer": "Use ONLY those tool names.",
-    "tool_description": "Express the operator's goal as a PROGRAM: an ordered list of statements. Use `new` to create a resource and give it a name you can refer to later (set count to make several at once). Use `call` to invoke one tool. Use `foreach` to apply ONE call to every member of a set you describe with `select`. Use `ensure` to state something that must be TRUE at the end \u2014 that is a check, not an action.",
+    "tool_description": "Express the operator's goal as a PROGRAM: an ordered list of statements. Use `new` to create a resource and give it a name you can refer to later (set count to make several at once). Use `call` to invoke one tool. Use `foreach` to apply ONE call to every member of a set you describe with `select`. Use `ensure` to state something that must be TRUE at the end — that is a check, not an action.",
     "retry_no_program": "You did not return a program. Call emit_program with a `body` array of statements.",
     "retry_rejected": "That program was rejected:",
     "retry_fix": "Fix exactly those problems and call emit_program again.",
-    "grounding": "ENSURE vs ACHIEVE \u2014 pick by what the operator wants BACK. ACHIEVE is the goal: the state they asked you to bring about. It goes LAST, or stands alone when the harness should work out the plan. ENSURE is a ground check: something that must ALREADY be true, used FIRST to confirm the lab is as you assume. Nothing may act after ACHIEVE, and a program has at most one.",
-    "shape": "A GOOD PROGRAM USES ALL THREE, and they do different jobs.\n  FETCH   gets your initial ground \u2014 what is actually in this lab right now, before you assume anything. Read first.\n  ENSURE  grounds you \u2014 states what must be true, so the plan rests on fact and not on a guess about the world.\n  ACHIEVE is the muscle \u2014 the end state you are being asked to bring about, and the only thing that says what done means.\nReach for all three unless the operator asked for less. A program that only acts has vouched for nothing; a program that only checks changes nothing."
+    "grounding": "ENSURE vs ACHIEVE — pick by what the operator wants BACK. ACHIEVE is the goal: the state they asked you to bring about. It goes LAST, or stands alone when the harness should work out the plan. ENSURE is a ground check: something that must ALREADY be true, used FIRST to confirm the lab is as you assume. Nothing may act after ACHIEVE, and a program has at most one.",
+    "shape": "A GOOD PROGRAM USES ALL THREE, and they do different jobs.\n  FETCH   gets your initial ground — what is actually in this lab right now, before you assume anything. Read first.\n  ENSURE  grounds you — states what must be true, so the plan rests on fact and not on a guess about the world.\n  ACHIEVE is the muscle — the end state you are being asked to bring about, and the only thing that says what done means.\nReach for all three unless the operator asked for less. A program that only acts has vouched for nothing; a program that only checks changes nothing."
   },
-  "_schema_doc": "Knobs for the tool schema handed to the model, each carrying the measurement behind it. `statement_form`: 'oneof' is the CORRECT schema \u2014 one branch per op, so a statement's type determines its fields and `op` cannot be omitted \u2014 and it is set to 'flat' anyway, because oneof drops emission to 0/4. Flat gives the model no structural cue (qwen2.5:14b returned six of nine statements with no `op`), but it at least gets called. Same story as `predicate_required`: adding a nested required took llama3.1 from 3/4 emitting to 0/4. The pattern across every experiment is that this tool-call surface trades guidance against fidelity, and fidelity is the binding constraint. Note what DOES work reliably: decompose{steps:[string]} \u2014 an array of STRINGS. Emission collapses on an array of structured objects, which is the strongest hint about where to go next. Change these only with a measurement; tests/bench/ir_probe.py is how.",
+  "_schema_doc": "Knobs for the tool schema handed to the model, each carrying the measurement behind it. `statement_form`: 'oneof' is the CORRECT schema — one branch per op, so a statement's type determines its fields and `op` cannot be omitted — and it is set to 'flat' anyway, because oneof drops emission to 0/4. Flat gives the model no structural cue (qwen2.5:14b returned six of nine statements with no `op`), but it at least gets called. Same story as `predicate_required`: adding a nested required took llama3.1 from 3/4 emitting to 0/4. The pattern across every experiment is that this tool-call surface trades guidance against fidelity, and fidelity is the binding constraint. Note what DOES work reliably: decompose{steps:[string]} — an array of STRINGS. Emission collapses on an array of structured objects, which is the strongest hint about where to go next. Change these only with a measurement; tests/bench/ir_probe.py is how.",
   "schema": {
     "statement_form": "flat",
     "predicate_properties": true,
     "predicate_required": false
   },
-  "_fields_doc": "Every field a statement may carry, described ONCE. `enum_from` points at another manifest table so the enum tracks it \u2014 add a resource kind and `kind`'s enum follows with no edit here. Ops below list which fields they use; both schema forms are built from these rows, so they cannot describe different languages. `amount` is how many a `new` creates, and is deliberately NOT called `count`: `count` is also a PREDICATE shape (how many members match), and one word meaning two things is the kind of collision that only hurts once procedures have been written in it.",
+  "_fields_doc": "Every field a statement may carry, described ONCE. `enum_from` points at another manifest table so the enum tracks it — add a resource kind and `kind`'s enum follows with no edit here. Ops below list which fields they use; both schema forms are built from these rows, so they cannot describe different languages. `amount` is how many a `new` creates, and is deliberately NOT called `count`: `count` is also a PREDICATE shape (how many members match), and one word meaning two things is the kind of collision that only hurts once procedures have been written in it.",
   "fields": {
     "var": {
       "type": "string",
@@ -354,7 +384,7 @@
     },
     "from": {
       "type": "string",
-      "doc": "OMIT unless the goal says to copy/clone an existing resource. Names that existing resource \u2014 never a label, never a new name. The copy IS the creation: do not also call the clone tool"
+      "doc": "OMIT unless the goal says to copy/clone an existing resource. Names that existing resource — never a label, never a new name. The copy IS the creation: do not also call the clone tool"
     },
     "graft": {
       "type": "string",
@@ -386,12 +416,12 @@
     },
     "count": {
       "type": "object",
-      "doc": "the query to count \u2014 same form as a select"
+      "doc": "the query to count — same form as a select"
     }
   },
-  "_authoring_doc": "HOW the model is asked to write a program. 'program' offers one emit_program tool taking the whole body as an array of statement objects. 'statements' offers ONE TOOL PER OP, each a flat object of scalars, and the harness assembles the program from the calls. The second exists because of a consistent measurement: decompose{steps:[string]} \u2014 an array of STRINGS \u2014 works reliably every day, while an array of structured OBJECTS collapses, and collapses harder the more structure is declared (oneOf and a nested required both took emission to 0/4). A statement tool asks for exactly the shape the model produces all day when it calls create_vm(name=alpha): two or three scalar arguments. Nested objects are flattened for the same reason \u2014 select{kind,label} becomes select_kind/select_attr/select_value.",
+  "_authoring_doc": "HOW the model is asked to write a program. 'program' offers one emit_program tool taking the whole body as an array of statement objects. 'statements' offers ONE TOOL PER OP, each a flat object of scalars, and the harness assembles the program from the calls. The second exists because of a consistent measurement: decompose{steps:[string]} — an array of STRINGS — works reliably every day, while an array of structured OBJECTS collapses, and collapses harder the more structure is declared (oneOf and a nested required both took emission to 0/4). A statement tool asks for exactly the shape the model produces all day when it calls create_vm(name=alpha): two or three scalar arguments. Nested objects are flattened for the same reason — select{kind,label} becomes select_kind/select_attr/select_value.",
   "authoring": "statements",
-  "_surface_doc": "How the written form spells things the stored form keeps as plain values. Wrappers are OPTIONAL where a bare value is unambiguous and REQUIRED where it is not: AMOUNT(5) reads as a count rather than an argument that happens to be a number, and matches COUNT(...) on the predicate side. NOT/AND/OR all take parentheses so a reader never has to know precedence \u2014 there is none to know. VAL(X) is the long form of $X; inside a loop $ is the one to use, because $item is what the body is full of.",
+  "_surface_doc": "How the written form spells things the stored form keeps as plain values. Wrappers are OPTIONAL where a bare value is unambiguous and REQUIRED where it is not: AMOUNT(5) reads as a count rather than an argument that happens to be a number, and matches COUNT(...) on the predicate side. NOT/AND/OR all take parentheses so a reader never has to know precedence — there is none to know. VAL(X) is the long form of $X; inside a loop $ is the one to use, because $item is what the body is full of.",
   "surface": {
     "bind": "STORE",
     "amount": "AMOUNT",
@@ -403,10 +433,25 @@
       "any": "OR"
     },
     "achieve": "ACHIEVE",
-    "fetch": "FETCH"
+    "fetch": "FETCH",
+    "new": "NEW",
+    "foreach": "FOREACH",
+    "in": "IN",
+    "ensure": "ENSURE",
+    "if": "IF",
+    "else": "ELSE",
+    "where": "WHERE",
+    "except": "EXCEPT",
+    "include": "INCLUDE",
+    "ifails": "IFAILS",
+    "async": "ASYNC",
+    "count": "COUNT",
+    "procedure": "PROCEDURE",
+    "import": "IMPORT",
+    "_doc": "`call` is deliberately absent: an invocation has no keyword, it reads as tool(args). Everything else the renderer prints is here, so renaming a word is a data change and the stored form never moves."
   },
   "intent": {
-    "_doc": "What the operator wants BACK \u2014 data, a verdict, or the thing done \u2014 is theirs to say, not the author's to infer. The three intents are the three words: FETCH retrieves, ENSURE verifies, ACHIEVE commands. Authority nests (fetch < ensure < achieve) and is ENFORCED, see ir/intent.py. These markers are deliberately FEW: a marker set, not a vocabulary trying to parse English. A sentence using none is asked about, not guessed at.",
+    "_doc": "What the operator wants BACK — data, a verdict, or the thing done — is theirs to say, not the author's to infer. The three intents are the three words: FETCH retrieves, ENSURE verifies, ACHIEVE commands. Authority nests (fetch < ensure < achieve) and is ENFORCED, see ir/intent.py. These markers are deliberately FEW: a marker set, not a vocabulary trying to parse English. A sentence using none is asked about, not guessed at.",
     "markers": {
       "fetch": [
         "how many",
@@ -446,5 +491,6 @@
       ]
     },
     "default": "fetch"
-  }
+  },
+  "_derivable_doc": "EVERY PREDICATE SHAPE MUST SAY WHETHER THE HARNESS CAN CLOSE IT. A shape either has a deriver in ir/derive.py or declares derivable:false with a reason. tests/test_medusa_invariants.py holds this: the alternative is a shape that silently cannot converge, which is how `disjoint` sat DECLARED, OFFERED, VALIDATED and RENDERED for weeks with no evaluator at all — always false, in every world, and nothing said so."
 }

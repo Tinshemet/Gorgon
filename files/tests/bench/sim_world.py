@@ -18,6 +18,9 @@ requiring one would measure a different thing than the set-tracking this ladder 
 """
 from typing import Any, Dict, List, Optional, Set
 
+from orchestrator.ai.planner.findings import (DEFAULT_SCHEMA, Findings, extract_value,
+                                              yield_fact)
+
 
 class SimWorld:
     """The lab: VMs (status/labels/networks) and isolated networks, driven by tool calls."""
@@ -29,6 +32,11 @@ class SimWorld:
         # VMs that do not answer a ping. Knowable only by asking — see _t_guest_ping.
         self.unreachable: Set[str] = set()
         self.calls: List[Dict[str, Any]] = []       # every tool call, in order (the run's cost)
+        # WHAT HAS BEEN LEARNED, as opposed to what is. The epistemic half of the world,
+        # and the thing an OBSERVED attribute is read out of (decision 6). Starts empty on
+        # purpose: before anything asks, every observed attribute reads `unknown`, and a
+        # world that began by knowing would make the third value untestable.
+        self.findings = Findings()
 
     def names(self) -> Set[str]:
         """Every resource that exists, for grounding a program's `FROM` before it runs."""
@@ -74,7 +82,32 @@ class SimWorld:
             # Unknown/unsimulated tool: fail LOUDLY rather than returning a bogus success —
             # a silent True would let a run "pass" a rung on a tool the world never modelled.
             return {"success": False, "error": f"{tool} is not simulated by the bench world"}
-        return fn(args)
+        result = fn(args)
+        self._observe(tool, args, result)
+        return result
+
+    def _observe(self, tool: str, args: Dict[str, Any], result: Any) -> None:
+        """Record what this call LEARNED, through the PRODUCTION yield schema.
+
+        `yield_fact` and `extract_value` are imported from findings.py rather than
+        reimplemented, for the reason the rest of this file already gives about tool names
+        and result keys: a bench that speaks its own vocabulary certifies programs that
+        cannot work. It matters more here than anywhere else, because an observed
+        attribute is read back out under the fact key the SCHEMA chose — so if the sim
+        minted keys of its own, `SELECT vm WHERE alive = 'false'` would answer correctly
+        in the bench and find nothing in production.
+
+        Only a call that RAN records anything. A failed call learned nothing, and writing
+        a fact from one would put the ledger's own conflation — the call worked, therefore
+        the answer is yes — right back in after it was taken out of the schema.
+        """
+        if not (isinstance(result, dict) and result.get("success")):
+            return
+        fact = yield_fact(tool, args, DEFAULT_SCHEMA)
+        if fact is None:
+            return
+        self.findings.record(fact, extract_value(result, DEFAULT_SCHEMA.get(tool) or {}),
+                             source=tool)
 
     def _vm(self, args: Dict[str, Any]) -> Optional[str]:
         return args.get("name") or args.get("vm_name")

@@ -52,6 +52,33 @@ def is_reference(value: Any) -> bool:
     return m is not None
 
 
+# A NAME YOU CAN BIND IS A NAME YOU CAN READ. Same character set as a reference token,
+# minus the dotted path — you bind `answer`, not `answer.alive`.
+_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+
+
+def is_referenceable(name: Any) -> bool:
+    """Can a program refer back to something bound under this name?
+
+    THE INVARIANT: the set of legal BINDING names must equal the set of READABLE names.
+    It did not, and the gap is silent. `-` is deliberately excluded from a reference token
+    so `$item-snap` composes a name out of `$item` plus `-snap` — which rung 12 needs — but
+    that also means a variable called `red-net` can be bound and then never read: `$red-net`
+    parses as `$red` followed by the literal text `-net`.
+
+    Rung 6's paraphrase walked straight into it, three samples out of three:
+
+        STORE red-net = NEW network;
+        add_vm_to_network(net_name: $red-net, vm_name: $item);
+            -> "net_name=$red-net refers to $red, which is never created"
+
+    The author is told it never created something it plainly did create, one line above.
+    Binding a name the language cannot pronounce is not a program error to diagnose, it is
+    a name the language should never have accepted.
+    """
+    return isinstance(name, str) and _NAME.match(name.strip()) is not None
+
+
 def _lookup(path: str, scope: Dict[str, Any]) -> Any:
     """Walk `name.field.field` through scope, returning None at the first missing step."""
     head, *rest = path.split(".")
