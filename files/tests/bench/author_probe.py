@@ -877,6 +877,10 @@ def main(argv=None) -> int:
     # refused outright. A gate reported only through the pass count could suppress as much
     # as it saves and read as neutral.
     gate_rounds = gate_fixed = gate_refused = 0
+    # Programs the EXECUTOR could not run at all. Counted separately from a
+    # failed goal: a validated program that raises is a harness defect, and
+    # folding it into the ordinary miss count would hide one behind the other.
+    crashed = 0
     for rung in rungs:
         goal = (rung.paraphrase or rung.goal) if a.paraphrase else rung.goal
         unmutated = False
@@ -1004,8 +1008,33 @@ def main(argv=None) -> int:
             # `intent=` reaches the runtime too, so the authority check in run() —
             # built, enforced, and never once exercised by this benchmark — actually
             # runs against every program the ladder produces.
-            res = run(prog, world.execute, select=sel, holds=holds,
-                      known_names=world.names(), consent=True, intent=want)
+            # A CRASHING PROGRAM FAILS ITS OWN RUNG AND NOTHING ELSE.
+            #
+            # It used to take the whole column with it. A rung-4 program wrote
+            # `FOREACH $item IN [$vms]`, bound $item to the entire set, handed a list to a
+            # scalar tool argument, and the TypeError out of the executor ended the
+            # process — costing rungs 5 through 13 of measurement, twice, on two
+            # paraphrase runs that were otherwise fine.
+            #
+            # Nine rungs of silence is not a neutral outcome: it reads as though they were
+            # never attempted, when in fact one unrelated program crashed. This is the
+            # honesty rule the probe already applies to an author timeout — report it as
+            # what it is rather than let it deflate every column it lands in — arriving at
+            # the other end of the same run.
+            #
+            # Deliberately CAUGHT AND NAMED rather than suppressed: an executor that
+            # raises on a validated program is a real defect, and the run says so loudly
+            # while continuing.
+            try:
+                res = run(prog, world.execute, select=sel, holds=holds,
+                          known_names=world.names(), consent=True, intent=want)
+            except Exception as exc:
+                crashed += 1
+                print(f"          !! EXECUTOR CRASHED on a VALIDATED program: "
+                      f"{type(exc).__name__}: {exc}")
+                print(f"          !! this rung fails; the column continues")
+                res = {"ok": False, "failed": "executor_crash", "why": f"{type(exc).__name__}: {exc}",
+                       "calls": [], "failures": []}
             print(f"          -> ran {len(res['calls'])} calls, "
                   f"ensure={'ok' if res['ok'] else res.get('failed')}"
                   f"{'' if res['ok'] else ' (' + str(res.get('why','')) + ')'}")
@@ -1160,6 +1189,9 @@ def main(argv=None) -> int:
     # BOTH SIDES OF THE GATE'S LEDGER, always together. A gate reported only through the
     # pass count can suppress exactly as much as it saves and still read as neutral, so
     # what it fixed and what it refused are printed side by side with what it cost.
+    if crashed:
+        print(f"   EXECUTOR CRASHES    : {crashed}  <== validated programs that could not "
+              f"be run at all")
     if not a.no_gate and (gate_rounds or gate_refused):
         print(f"   SCHEMA GATE        : {gate_fixed} clarified, {gate_refused} refused"
               f"  ({gate_rounds} re-author round(s) spent)")

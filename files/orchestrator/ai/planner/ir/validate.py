@@ -335,6 +335,21 @@ def validate(program: Any, known_tools=None, known_names=None,
                 if bad or not src:
                     problems.append(f"{where}: foreach `in` list must be non-empty names, "
                                     f"got {src!r}")
+                # A SET WRAPPED IN A LIST IS NOT A LIST OF NAMES. `IN [$vms]` is one
+                # element that happens to BE the whole set, so `$item` binds to the list
+                # rather than to a member, and the first tool argument it reaches gets a
+                # list where a name belongs. That is not a rejected call — it is a
+                # TypeError out of the executor, which took a whole benchmark column with
+                # it twice: `add_vm_to_network(vm_name: $item)` with $item = ['vm1', ...].
+                #
+                # The author is one bracket from correct, so the message says which
+                # bracket. `IN $vms` iterates the set; `IN [$vms]` iterates a list of one.
+                for x in src:
+                    if isinstance(x, str) and any(n in sets for n in refs.names(x)):
+                        problems.append(
+                            f"{where}: foreach in [{x}] wraps a SET in a list, so $item "
+                            f"binds to the whole set instead of a member. Drop the "
+                            f"brackets: `in {x}`.")
             elif isinstance(src, str) and src.startswith(config.SIGIL):
                 if src[len(config.SIGIL):] not in bound:
                     problems.append(f"{where}: foreach in {src} refers to something "
