@@ -410,6 +410,7 @@ def validate(program: Any, known_tools=None, known_names=None,
                 _, sub = validate({"body": recov}, tools, known_names, bound, sets)
                 problems += [f"{where} (ifails) → {x}" for x in sub]
     problems += _check_achieve(body)
+    problems += _check_precondition_is_not_the_goal(body)
     return (not problems), problems
 
 
@@ -676,6 +677,52 @@ def _check_call(st: Dict[str, Any], where: str, tools, bound,
                            f"{config.SIGIL}{ref}, which is a NAME, not a call's result — "
                            f"only something bound by `graft` has fields. Select what you "
                            f"need instead, or graft the call whose answer you mean.")
+    return out
+
+
+def _check_precondition_is_not_the_goal(body: Any) -> List[str]:
+    """An opening ENSURE that IS the goal makes the program's own work unreachable.
+
+    ENSURE is a ground check, true where it is written, and a failed one STOPS the
+    program — decision 3, and the reason it opens a procedure as a precondition
+    ("checking your socks before you put on your shoes"). Assert the GOAL there and the
+    shoes never go on:
+
+        ENSURE COUNT(SELECT vm WHERE label = 'prod') = 3;   <- the goal, before any work
+        FOREACH $item IN [four, one, three] { add_label(...); }
+        ENSURE COUNT(SELECT vm WHERE label = 'prod') = 3;
+            -> ran 0 calls
+
+    Rungs 7 and 9 both did exactly this, and the model was arguably following
+    instructions: intent.instruction(ACHIEVE) says "open with ENSURE if something must
+    already be true", and the prompt says a ground check is used FIRST. It put the right
+    shape around the wrong predicate.
+
+    Detected, not guessed: the SAME predicate appears again later as a verdict, with
+    acting statements in between. That is unambiguous — a check identical to the one that
+    certifies the work cannot also be a precondition FOR the work.
+    """
+    stmts = [st for st in (body or []) if isinstance(st, dict)]
+    out: List[str] = []
+    for i, st in enumerate(stmts):
+        if st.get("op") != "ensure":
+            continue
+        pred = st.get("predicate")
+        for j in range(i + 1, len(stmts)):
+            later = stmts[j]
+            if later.get("op") not in ("ensure", "achieve"):
+                continue
+            if later.get("predicate") != pred:
+                continue
+            if not any(stmts[k].get("op") in _ACTS for k in range(i + 1, j)):
+                continue
+            out.append(
+                f"statement {i + 1}: this ENSURE is the same check as statement {j + 1}, "
+                f"with work in between — a ground check STOPS the program when it fails, "
+                f"so asserting the goal before the work means the work never runs. Drop "
+                f"this one and keep the check at the end, or open with a precondition the "
+                f"work actually needs (that the thing you are about to change EXISTS).")
+            break
     return out
 
 

@@ -1044,6 +1044,50 @@ def test_the_harness_can_close_a_named_member_goal():
           and [c["tool"] for c in w.calls].count("guest_ping") == 3)
 
 
+def test_the_goal_cannot_be_its_own_precondition():
+    """Rungs 7 and 9, 2026-07-27. Both opened with an ENSURE that WAS the goal:
+
+        ENSURE COUNT(SELECT vm WHERE label = 'prod') = 3;
+        FOREACH $item IN [four, one, three] { add_label(...); }
+        ENSURE COUNT(SELECT vm WHERE label = 'prod') = 3;
+            -> ran 0 calls
+
+    ENSURE is a ground check that STOPS the program when it fails — decision 3, and the
+    reason it may open a procedure. Assert the goal there and the work is unreachable. The
+    model was arguably obeying instructions: intent.instruction(ACHIEVE) says "open with
+    ENSURE if something must already be true" and the prompt says a ground check comes
+    FIRST. It put the right shape around the wrong predicate.
+    """
+    goal = {"shape": "count", "select": {"kind": "vm", "label": "prod"}, "eq": 3}
+    work = {"op": "foreach", "in": ["a"],
+            "call": {"tool": "add_label", "args": {"name": "$item", "label": "prod"}}}
+    ok, probs = validate({"body": [{"op": "ensure", "predicate": goal}, work,
+                                   {"op": "ensure", "predicate": goal}]})
+    check("the goal asserted before its own work is refused", not ok)
+    check("and the message says the work never runs",
+          probs and "the work never runs" in probs[0])
+    check("and names the statement it duplicates", probs and "statement 3" in probs[0])
+    check("an ACHIEVE at the end is the same mistake when pre-asserted",
+          not validate({"body": [{"op": "ensure", "predicate": goal}, work,
+                                 {"op": "achieve", "predicate": goal}]})[0])
+    # WHAT MUST STAY LEGAL — a real precondition is a DIFFERENT check about something the
+    # work needs to exist, which is exactly the shape decision 3 blessed.
+    real = {"body": [
+        {"op": "ensure", "predicate": {"shape": "count",
+                                       "select": {"kind": "vm", "name": "golden"},
+                                       "eq": 1}},
+        {"op": "new", "var": "copy", "kind": "vm", "from": "golden",
+         "args": {"os_type": "linux"}},
+        {"op": "achieve", "predicate": goal}]}
+    check("a genuine precondition still validates",
+          validate(real, known_names={"golden"})[0])
+    check("work then goal, the ordinary shape, is untouched",
+          validate({"body": [work, {"op": "achieve", "predicate": goal}]})[0])
+    check("the same check twice with NO work between is not this mistake",
+          validate({"body": [{"op": "ensure", "predicate": goal},
+                             {"op": "ensure", "predicate": goal}]})[0])
+
+
 def test_render_never_raises_on_malformed_input():
     """It renders UNVALIDATED model output, so a renderer that crashes hides the very
     thing you opened it to look at."""
@@ -1098,6 +1142,7 @@ def main():
                test_the_repair_budget_carries_distinct_objections,
                test_a_select_can_name_its_members,
                test_the_harness_can_close_a_named_member_goal,
+               test_the_goal_cannot_be_its_own_precondition,
                test_render_never_raises_on_malformed_input):
         print(f"\n── {fn.__name__}")
         fn()
