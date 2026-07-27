@@ -123,6 +123,31 @@ def _stopwords() -> set:
     }
 
 
+def sources(known: Optional[set] = None) -> List[str]:
+    """What a `NEW ... FROM x` may copy — and this one really is CLOSED.
+
+    Unlike a name in general, a copy source is not open: you cannot copy something that
+    does not exist, so the set is exactly what the lab holds. The validator has always
+    said so — *"`from` copies an EXISTING vm — there is no vm named 'red'. A label is not
+    a source."* — and `from` is the one field naming something the program neither creates
+    nor binds, which is why it was the one field that could be checked at all.
+
+    Relocating it is the same move as `ops()`: the rule does not change, only when it
+    fires. `NEW vm FROM red`, red being a label rather than a machine, currently costs a
+    full authoring round to discover; as an enum the decoder cannot write it.
+
+    MATCHES THE VALIDATOR EXACTLY, including the part that looks like an omission: a name
+    minted EARLIER IN THE SAME PROGRAM is not a legal source today, and it is not added
+    here. Whether it should be is a separate question with a separate answer; making the
+    schema more permissive than the validator would just move the rejection back to where
+    it already was, with the decoder and the validator disagreeing in between.
+
+    Empty when the lab is unknown, which callers read as "do not constrain" — a `from`
+    checked against a world nobody supplied would forbid every source there is.
+    """
+    return sorted(known or ())
+
+
 def constraints(want: Optional[str] = None, goal: str = "",
                 known: Optional[set] = None, minted: Optional[set] = None) -> Dict[str, Any]:
     """Everything the master narrows, in one object, for a builder to apply.
@@ -134,6 +159,7 @@ def constraints(want: Optional[str] = None, goal: str = "",
     return {
         "ops": ops(want),
         "identifiers": identifiers(goal, known, minted),
+        "sources": sources(known),
         "values": {kind: {attr: config.values_for(kind, attr)
                           for attr in config.queryable(kind)
                           if config.values_for(kind, attr)}

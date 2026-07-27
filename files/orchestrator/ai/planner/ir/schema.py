@@ -52,11 +52,12 @@ def _predicate_property() -> Dict[str, Any]:
     return prop
 
 
-def _field(name: str) -> Dict[str, Any]:
+def _field(name: str, known: Optional[set] = None) -> Dict[str, Any]:
     """One field's JSON-Schema fragment, from the catalogue.
 
     `enum_from` points at another manifest table, so `kind`'s enum tracks the resource
-    manifest — add a kind and the enum follows with no edit here.
+    manifest — add a kind and the enum follows with no edit here. `known` is the lab, and
+    the master decides what it narrows.
     """
     spec = dict(config.FIELDS[name])
     doc = spec.pop("doc", "")
@@ -65,10 +66,28 @@ def _field(name: str) -> Dict[str, Any]:
         spec["enum"] = list(getattr(config, src.upper()))
     if name == "predicate":
         return _predicate_property()
+    if name == "from":
+        return _from_field(doc, known)
     return {**spec, "description": doc}
 
 
-def _statement_flat(want: Optional[str] = None) -> Dict[str, Any]:
+def _from_field(doc: str, known: Optional[set]) -> Dict[str, Any]:
+    """`from` names something that ALREADY EXISTS, so the lab is its enum.
+
+    The `$ref` branch is not a loophole, it is the other legal form: `NEW vm FROM $golden`
+    copies something an earlier statement bound, and `refs.names()` is what the validator
+    checks it with. Enumerating without it would forbid the composable case and leave only
+    the literal one.
+    """
+    names = master.sources(known)
+    if not names:
+        return {"type": "string", "description": doc}
+    return {"anyOf": [{"type": "string", "enum": names},
+                      {"type": "string", "pattern": f"^\\{config.SIGIL}"}],
+            "description": doc + f" It must already exist — one of: {', '.join(names)}."}
+
+
+def _statement_flat(want: Optional[str] = None, known: Optional[set] = None) -> Dict[str, Any]:
     """One object, every field optional, only `op` required.
 
     Simple for the model to call and structurally useless: a `new` and an `ensure` are
@@ -79,11 +98,11 @@ def _statement_flat(want: Optional[str] = None) -> Dict[str, Any]:
     """
     props = {"op": {"type": "string", "enum": master.ops(want)}}
     for name in config.FIELDS:
-        props[name] = _field(name)
+        props[name] = _field(name, known)
     return {"type": "object", "properties": props, "required": ["op"]}
 
 
-def _statement_oneof(want: Optional[str] = None) -> Dict[str, Any]:
+def _statement_oneof(want: Optional[str] = None, known: Optional[set] = None) -> Dict[str, Any]:
     """One branch per op, so a statement's type determines its fields.
 
     `op` is a const per branch, which both forces the discriminator to be present and
@@ -95,16 +114,17 @@ def _statement_oneof(want: Optional[str] = None) -> Dict[str, Any]:
         spec = config.OPS[op]
         props = {"op": {"type": "string", "const": op, "description": spec["doc"]}}
         for name in spec["fields"]:
-            props[name] = _field(name)
+            props[name] = _field(name, known)
         required = ["op"] + [f for f in spec["required"]]
         branches.append({"type": "object", "properties": props, "required": required})
     return {"oneOf": branches}
 
 
-def emit_program_tool(want: Optional[str] = None) -> Dict[str, Any]:
+def emit_program_tool(want: Optional[str] = None, known: Optional[set] = None) -> Dict[str, Any]:
     """The tool schema, assembled from the manifest and narrowed by the master."""
     form = config.SCHEMA.get("statement_form", "oneof")
-    item = _statement_oneof(want) if form == "oneof" else _statement_flat(want)
+    item = (_statement_oneof(want, known) if form == "oneof"
+            else _statement_flat(want, known))
     return {
         "type": "function",
         "function": {

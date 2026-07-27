@@ -532,6 +532,61 @@ def test_the_offer_never_exceeds_the_authority():
               named <= allowed)
 
 
+def test_a_copy_source_is_offered_only_from_what_exists():
+    """`NEW vm FROM red` — red being a LABEL rather than a machine — is the mistake, and
+    until now it could only be caught after the program was written.
+
+    `from` is the one field naming something the program neither creates nor binds, which
+    is exactly why the validator could check it and exactly why the schema should. The set
+    is genuinely closed: you cannot copy what does not exist. That is the discipline the
+    master works to — constrain what is CLOSED, never what is open — and it is why this
+    test exists for `from` and not for names in general. A name is NOT closed: `NEW
+    AMOUNT(5) vm` mints names nobody can predict at authoring time, so enumerating them
+    would forbid legal programs to prevent a mistake nobody has measured.
+
+    THE SCHEMA AND THE VALIDATOR MUST AGREE ON EVERY CANDIDATE, in both directions —
+    a schema stricter than the validator makes a legal program undecodable, and a schema
+    looser than it just moves the rejection back to where it already was.
+    """
+    from orchestrator.ai.planner.ir import master, schema as _schema
+
+    lab = {"golden", "web", "core"}
+    field = _schema._field("from", lab)
+    offered = next((b["enum"] for b in field["anyOf"] if "enum" in b), [])
+    check("the copy source is enumerated from the lab", set(offered) == lab)
+    check("a $reference is still expressible",
+          any("pattern" in b for b in field["anyOf"]))
+
+    # The two must answer the same about every candidate — the real ones, a label that is
+    # not a machine, and a bound reference.
+    def schema_allows(src):
+        return src in offered or src.startswith(config.SIGIL)
+
+    def validator_allows(src):
+        prog = {"body": [{"op": "new", "var": "copy", "kind": "vm", "from": src},
+                         {"op": "ensure", "predicate": {"shape": "count",
+                                                        "select": {"kind": "vm"}, "gte": 1}}]}
+        _ok, probs = validate(prog, known_names=lab)
+        return not any("`from`" in p for p in probs)
+
+    for src in ("golden", "web", "core", "red", "prod", "nope", "$golden", "$vms"):
+        check(f"`from {src}`: schema and validator agree",
+              schema_allows(src) == validator_allows(src))
+
+    # An UNKNOWN lab constrains nothing. Narrowing on a fact nobody supplied would forbid
+    # every source there is — the same unknown-is-not-false rule the observed attributes
+    # are built on, applied to the offer.
+    check("an unsupplied lab narrows nothing",
+          "anyOf" not in _schema._field("from", None)
+          and "enum" not in _schema._field("from", None))
+    check("an EMPTY lab narrows nothing either", master.sources(set()) == [])
+
+    # Both surfaces build `from` from the same function, so they cannot disagree.
+    from tests.bench.author_probe import _field_schema
+    check("the bench and the ir schema offer the same copy sources",
+          _field_schema("from", lab) == field)
+
+
 def main():
     for fn in (test_every_predicate_shape_has_an_evaluator,
                test_every_predicate_shape_renders_legibly,
@@ -547,7 +602,8 @@ def main():
                test_the_surface_spells_every_word_it_owns,
                test_the_two_selects_answer_the_same_question,
                test_every_mutating_tool_says_what_done_means,
-               test_the_offer_never_exceeds_the_authority):
+               test_the_offer_never_exceeds_the_authority,
+               test_a_copy_source_is_offered_only_from_what_exists):
         print(f"\n── {fn.__name__}")
         fn()
     print(f"\n{_PASS}/{_PASS + _FAIL} passed")

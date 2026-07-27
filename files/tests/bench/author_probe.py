@@ -34,6 +34,7 @@ import urllib.request
 from orchestrator.ai.planner.ir import (config, consent, derive, evaluate, master,
                                        observe, refs, render, run, validate)
 from orchestrator.ai.planner.ir import intent as _intent
+from orchestrator.ai.planner.ir import schema as _ir_schema
 from orchestrator.ai.planner.ir.validate import _one_of_groups
 
 from .ladder import BENCH_MODEL
@@ -118,7 +119,7 @@ def _select_spec(depth: int = 1):
     return {"type": "object", "properties": props, "required": ["kind"]}
 
 
-def _field_schema(name: str):
+def _field_schema(name: str, known=None):
     """One field's schema, from the manifest's field catalogue.
 
     Built rather than written out. This schema WAS hand-maintained and had already
@@ -130,6 +131,12 @@ def _field_schema(name: str):
     spec = dict(config.FIELDS.get(name) or {"type": "string"})
     doc = spec.pop("doc", "")
     src = spec.pop("enum_from", None)
+    if name == "from":
+        # THE ONE IDENTIFIER SLOT THAT IS GENUINELY CLOSED — you cannot copy what does not
+        # exist. The validator has always said so and could only say it afterwards; the
+        # master says it to the decoder. `_from_field` is shared with the ir schema so the
+        # two surfaces cannot answer differently.
+        return _ir_schema._from_field(doc, known)
     if name in ("select", "count"):
         # `count` is a select in counting position — same query, different answer. Giving
         # it the select schema is what lets the author say FETCH COUNT(...) at all.
@@ -232,7 +239,7 @@ def _pred_spec():
     return {"oneOf": branches}
 
 
-def program_schema(want: str = None):
+def program_schema(want: str = None, known=None):
     """The full schema, assembled from the manifest so it cannot fall behind the language.
 
     Statement branches come from `ops`, their fields from the field catalogue, predicates
@@ -253,7 +260,7 @@ def program_schema(want: str = None):
         spec = config.OPS[op]
         props = {"op": {"type": "string", "const": op, "description": spec["doc"]}}
         for f in spec["fields"]:
-            props[f] = _field_schema(f)
+            props[f] = _field_schema(f, known)
         groups = _one_of_groups(spec)
         if groups:
             # `one_of` has to reach the DECODER, not just the validator. Collapsing it
@@ -479,7 +486,8 @@ def _messages(goal: str, shots: bool, world=None, want=None):
 
 def author(goal: str, model: str, temp: float, shots: bool, timeout: int = 600,
            known_names=None, world=None, want=None):
-    req = {"model": model, "stream": False, "format": program_schema(want),
+    req = {"model": model, "stream": False,
+           "format": program_schema(want, known_names),
            "options": {"temperature": temp}, "messages": _messages(goal, shots, world, want)}
     try:
         r = urllib.request.urlopen(urllib.request.Request(
@@ -587,7 +595,8 @@ def repair(goal, program, problems, model, temp, shots, known_names=None, timeou
                  + f"\n\nThe goal was: {goal}\n"
                  "Write the whole program again, fixing exactly those objections and "
                  "changing nothing else. Nothing has run yet — the world is untouched."})
-    req = {"model": model, "stream": False, "format": program_schema(want),
+    req = {"model": model, "stream": False,
+           "format": program_schema(want, known_names),
            "options": {"temperature": temp}, "messages": msgs}
     try:
         r = urllib.request.urlopen(urllib.request.Request(
@@ -608,7 +617,14 @@ def revise(goal, program, world, why, model, temp, shots, timeout=600,
     start over. That is the whole point: a convergence goal can only be met by acting on
     the difference between what IS and what was asked for, and the difference only exists
     after the first attempt.
+
+    THE LAB IS TAKEN FROM THE WORLD IT WAS HANDED, and it had to be added: author() and
+    repair() both name-check their output against `known_names` and revise() checked
+    against nothing — so the one loop that runs when a world already exists was the one
+    loop that could invent a `FROM` source with nobody objecting. It has the world right
+    there in its arguments; the omission was that nobody asked it for the names.
     """
+    known_names = world.names() if hasattr(world, "names") else None
     msgs = _messages(goal, shots, want=want)[:-1]
     msgs.append({"role": "user", "content": goal})
     msgs.append({"role": "assistant", "content": json.dumps(program)})
@@ -634,7 +650,8 @@ def revise(goal, program, world, why, model, temp, shots, timeout=600,
                  "Write a program that fixes ONLY the difference between the state above "
                  "and the goal. Do not repeat work already done — the state above is "
                  "what your last program left behind."})
-    req = {"model": model, "stream": False, "format": program_schema(want),
+    req = {"model": model, "stream": False,
+           "format": program_schema(want, known_names),
            "options": {"temperature": temp}, "messages": msgs}
     try:
         r = urllib.request.urlopen(urllib.request.Request(
@@ -643,7 +660,7 @@ def revise(goal, program, world, why, model, temp, shots, timeout=600,
         prog = json.loads(json.loads(r.read())["message"]["content"])
     except Exception as e:
         return None, [f"{type(e).__name__}: {e}"]
-    ok, problems = validate(prog)
+    ok, problems = validate(prog, known_names=known_names)
     return prog, ([] if ok else problems)
 
 
