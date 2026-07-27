@@ -409,7 +409,24 @@ def validate(program: Any, known_tools=None, known_names=None,
             else:
                 _, sub = validate({"body": recov}, tools, known_names, bound, sets)
                 problems += [f"{where} (ifails) → {x}" for x in sub]
-    problems += _check_achieve(body)
+    # THERE IS NO ACHIEVE-ORDERING CHECK, and its absence is the rule.
+    #
+    # Two used to live here: one ACHIEVE per program, and nothing may act after it. Both
+    # came from reading ACHIEVE as "the goal, certified at the end". The operator's
+    # correction is that it is not that at all — ENSURE asks "do you exist", ACHIEVE says
+    # "MAKE SURE you exist", and once it is a MAKE rather than a CHECK you want it wherever
+    # something has to be true before the rest of the program can work. A network must
+    # exist before anything attaches to it; that is an ACHIEVE at statement 1 with all the
+    # work after it, and it was rejected.
+    #
+    # "Nothing may act after achieve" was, in the operator's words, wishful thinking that
+    # is not based in what we are seeing, and "one per program" was philosophically a wash:
+    # if ACHIEVE means make-sure-of-this, a program can need several.
+    #
+    # THE RUNTIME ALREADY DOES THE RIGHT THING and always did — execute.py checks each
+    # ACHIEVE in order and returns on the first failure, which IS the barrier: the run
+    # cannot pass this point unless the thing is true. Only the validator forbade it. So
+    # this is a restriction being removed, not a feature being added.
     problems += _check_precondition_is_not_the_goal(body)
     return (not problems), problems
 
@@ -477,37 +494,6 @@ def _all_bindings(body: Any) -> set:
 
 # Ops that change the world — the same set consent.py counts, for the same reason.
 _ACTS = {"new", "call", "foreach"}
-
-
-def _check_achieve(body: List[Any]) -> List[str]:
-    """ACHIEVE states the goal, so nothing may ACT after it, and there is only one.
-
-    ENSURE is deliberately not restricted this way. It is a ground check and reads
-    correctly anywhere, including as the very first statement — verify the world is as
-    you expect before touching it, the way you check your socks before your shoes. An
-    ACHIEVE in that position means something else entirely: it certifies work already
-    done, and there is none.
-
-    A program that is NOTHING but an achieve is legal and is the declarative form — the
-    harness computes the plan. The error is an achieve with work after it, which claims
-    completion of things that have not happened yet.
-    """
-    out: List[str] = []
-    seen = None
-    for i, st in enumerate(body):
-        if not isinstance(st, dict):
-            continue
-        if st.get("op") == "achieve":
-            if seen is not None:
-                out.append(f"statement {i + 1}: a program has ONE goal — there is already "
-                           f"an `achieve` at statement {seen + 1}")
-            seen = i
-        elif seen is not None and st.get("op") in _ACTS:
-            out.append(f"statement {i + 1}: nothing may act after `achieve` (statement "
-                       f"{seen + 1}) — it certifies work already done. Move the goal to "
-                       f"the end, or use `ensure` if you meant a check before the work.")
-            break
-    return out
 
 
 def _check_select(sel: Any, where: str, sets: Optional[set] = None) -> List[str]:
