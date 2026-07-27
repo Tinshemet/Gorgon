@@ -8,11 +8,17 @@ the JSON changes what the model is offered, with no edit here.
 There is no parser anywhere in this package, and that is the point: the model CALLS this
 tool and the statements arrive as validated JSON arguments. `DECOMPOSE_TOOL` is the
 working precedent — one schema instead of a lexer and a grammar.
+
+WHAT IS OFFERED IS NOT THIS MODULE'S DECISION. Every builder here takes `want` — the
+operator's intent — and asks `master.ops(want)` rather than reading `config.OPS` itself.
+The manifest still says what the language HAS; the master says what this particular
+request may be shown, and the two are different questions. `want=None` narrows nothing,
+so an absent fact never becomes a silent restriction.
 """
 
 from typing import Any, Dict, List, Optional
 
-from . import config
+from . import config, master
 
 
 def _predicate_property() -> Dict[str, Any]:
@@ -62,7 +68,7 @@ def _field(name: str) -> Dict[str, Any]:
     return {**spec, "description": doc}
 
 
-def _statement_flat() -> Dict[str, Any]:
+def _statement_flat(want: Optional[str] = None) -> Dict[str, Any]:
     """One object, every field optional, only `op` required.
 
     Simple for the model to call and structurally useless: a `new` and an `ensure` are
@@ -71,13 +77,13 @@ def _statement_flat() -> Dict[str, Any]:
     statements with no `op`. Kept as a knob because it is the SIMPLEST schema, and
     simplicity is what emission turned out to be sensitive to.
     """
-    props = {"op": {"type": "string", "enum": list(config.OPS)}}
+    props = {"op": {"type": "string", "enum": master.ops(want)}}
     for name in config.FIELDS:
         props[name] = _field(name)
     return {"type": "object", "properties": props, "required": ["op"]}
 
 
-def _statement_oneof() -> Dict[str, Any]:
+def _statement_oneof(want: Optional[str] = None) -> Dict[str, Any]:
     """One branch per op, so a statement's type determines its fields.
 
     `op` is a const per branch, which both forces the discriminator to be present and
@@ -85,7 +91,8 @@ def _statement_oneof() -> Dict[str, Any]:
     so the two cannot describe different languages.
     """
     branches = []
-    for op, spec in config.OPS.items():
+    for op in master.ops(want):
+        spec = config.OPS[op]
         props = {"op": {"type": "string", "const": op, "description": spec["doc"]}}
         for name in spec["fields"]:
             props[name] = _field(name)
@@ -94,10 +101,10 @@ def _statement_oneof() -> Dict[str, Any]:
     return {"oneOf": branches}
 
 
-def emit_program_tool() -> Dict[str, Any]:
-    """The tool schema, assembled from the manifest."""
+def emit_program_tool(want: Optional[str] = None) -> Dict[str, Any]:
+    """The tool schema, assembled from the manifest and narrowed by the master."""
     form = config.SCHEMA.get("statement_form", "oneof")
-    item = _statement_oneof() if form == "oneof" else _statement_flat()
+    item = _statement_oneof(want) if form == "oneof" else _statement_flat(want)
     return {
         "type": "function",
         "function": {
@@ -116,16 +123,19 @@ def emit_program_tool() -> Dict[str, Any]:
     }
 
 
-def system_prompt(tools) -> str:
+def system_prompt(tools, want: Optional[str] = None) -> str:
     """What the model needs to know to write a program — ops, kinds, predicates, tools.
 
     Assembled from the manifest so the prompt cannot drift from what validate() accepts:
-    both read the same table.
+    both read the same table. The op LISTING is narrowed by the master for the same reason
+    the schema is — a prompt that describes `new` while the decoder cannot emit it is the
+    four-way disagreement in miniature, and the model spends its reasoning on a construct
+    it will never be able to produce.
     """
     p = config.PROMPT
     lines = [p["intro"], "", p["statements_header"]]
-    for op, spec in config.OPS.items():
-        lines.append(f"  {op:8}— {spec['doc']}")
+    for op in master.ops(want):
+        lines.append(f"  {op:8}— {config.OPS[op]['doc']}")
     lines += ["", "  " + p["select_hint"], "",
               "  ensure shapes (each names its `shape` and takes its operand under "
               "`select`, exactly like foreach):"]
@@ -199,10 +209,21 @@ _STATEMENT_TOOLS = {
 }
 
 
-def statement_tools() -> List[Dict[str, Any]]:
-    """One tool per op — flat, scalar, and small enough to actually get called."""
+def statement_tools(want: Optional[str] = None) -> List[Dict[str, Any]]:
+    """One tool per op — flat, scalar, and small enough to actually get called.
+
+    NOTE THE GAP, which narrowing by intent is what made visible: `_STATEMENT_TOOLS` above
+    covers new/call/foreach/ensure and predates `fetch`, `achieve` and `if`. So a `fetch`
+    intent narrows this surface to NOTHING. That is the honest answer — this surface cannot
+    serve a retrieval — and a caller must read [] as "not offerable here", never as "no
+    statements are permitted". Papering over it by handing back the unnarrowed set would
+    offer `new` to an operator who asked to be told something.
+    """
+    offered = set(master.ops(want))
     out = []
     for op, spec in _STATEMENT_TOOLS.items():
+        if op not in offered:
+            continue
         props = {n: {"type": t, "description": d} for n, (t, d) in spec["props"].items()}
         if op == "new":
             props["kind"]["enum"] = list(config.KINDS)

@@ -35,6 +35,7 @@ from .config import (KINDS, LANGUAGE, LOOP_VAR, OPS, PREDICATES, SIGIL,
                      observed, packages_for, queryable)
 from .derive import derive
 from .execute import Unsatisfied, evaluate, run
+from .master import constraints as master_constraints, ops as offered_ops
 from .observe import matches as observed_matches, value as observed_value
 from .render import render
 from .schema import (emit_program_tool, statement_from, statement_tools,
@@ -43,11 +44,18 @@ from .validate import coerce_body, kinds_used, validate
 
 # The tool schema is built from the manifest at import time; call emit_program_tool()
 # directly if a caller ever needs to rebuild it after overriding config at runtime.
+#
+# THIS CONSTANT IS INTENT-BLIND, unavoidably — it is built once at import, and the
+# operator's intent is not known until there is a goal. It is therefore the WIDEST schema,
+# the whole language, and a caller that knows the intent must call `emit_program_tool(want)`
+# rather than reach for this. Kept because removing it would break importers that have no
+# intent to supply, and widest-is-the-default is the right failure direction: narrowing on
+# an absent fact is the mistake, not declining to.
 EMIT_PROGRAM_TOOL = emit_program_tool()
 
 __all__ = [
     "EMIT_PROGRAM_TOOL", "emit_program_tool", "system_prompt",
-    "statement_tools", "statement_from",
+    "statement_tools", "statement_from", "offered_ops", "master_constraints",
     "validate", "coerce_body", "kinds_used",
     "render", "evaluate",
     "run", "Unsatisfied", "derive",

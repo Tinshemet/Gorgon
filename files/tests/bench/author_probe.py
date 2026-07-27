@@ -31,8 +31,8 @@ import json
 import sys
 import urllib.request
 
-from orchestrator.ai.planner.ir import (config, consent, derive, evaluate, observe,
-                                       refs, render, run, validate)
+from orchestrator.ai.planner.ir import (config, consent, derive, evaluate, master,
+                                       observe, refs, render, run, validate)
 from orchestrator.ai.planner.ir import intent as _intent
 from orchestrator.ai.planner.ir.validate import _one_of_groups
 
@@ -232,16 +232,25 @@ def _pred_spec():
     return {"oneOf": branches}
 
 
-def program_schema():
+def program_schema(want: str = None):
     """The full schema, assembled from the manifest so it cannot fall behind the language.
 
     Statement branches come from `ops`, their fields from the field catalogue, predicates
     from `predicates`. Adding a construct to the JSON offers it here with no edit — the
     claim the manifest makes everywhere else, applied to the one place that had quietly
     stopped honouring it.
+
+    `want` is the operator's intent, and it reaches the DECODER here rather than only the
+    prompt. `_system()` has told the author its rung in prose since the day intent was
+    wired in, and prose is advisory: under `ensure:` the model could still emit `new`,
+    write a program that creates machines, and have the whole thing thrown away by
+    `intent.violations()` afterwards. Offering only the permitted branches makes that
+    program unrepresentable instead of rejected — the same fact, moved from description to
+    constraint.
     """
     branches = []
-    for op, spec in config.OPS.items():
+    for op in master.ops(want):
+        spec = config.OPS[op]
         props = {"op": {"type": "string", "const": op, "description": spec["doc"]}}
         for f in spec["fields"]:
             props[f] = _field_schema(f)
@@ -399,7 +408,11 @@ def _system(want: str = None) -> str:
     PHRASING was choosing the engine. That is the failure decision 5 exists to remove,
     and the benchmark had never supplied the fact that removes it.
     """
-    ops = "\n".join(f"  {op:8}— {spec['doc']}" for op, spec in config.OPS.items())
+    # Narrowed by the master, so the listing and the decoder agree. Describing `new` under
+    # an `ensure:` and then refusing to decode it is the disagreement in miniature: the
+    # model reasons its way to a construct it has no branch for, and the failure surfaces
+    # as a malformed program rather than as the authority refusal it actually is.
+    ops = "\n".join(f"  {op:8}— {config.OPS[op]['doc']}" for op in master.ops(want))
     try:
         from executor.command_catalog import REQUIRED_FIELDS
     except ImportError:                                    # pragma: no cover
@@ -466,7 +479,7 @@ def _messages(goal: str, shots: bool, world=None, want=None):
 
 def author(goal: str, model: str, temp: float, shots: bool, timeout: int = 600,
            known_names=None, world=None, want=None):
-    req = {"model": model, "stream": False, "format": program_schema(),
+    req = {"model": model, "stream": False, "format": program_schema(want),
            "options": {"temperature": temp}, "messages": _messages(goal, shots, world, want)}
     try:
         r = urllib.request.urlopen(urllib.request.Request(
@@ -574,7 +587,7 @@ def repair(goal, program, problems, model, temp, shots, known_names=None, timeou
                  + f"\n\nThe goal was: {goal}\n"
                  "Write the whole program again, fixing exactly those objections and "
                  "changing nothing else. Nothing has run yet — the world is untouched."})
-    req = {"model": model, "stream": False, "format": program_schema(),
+    req = {"model": model, "stream": False, "format": program_schema(want),
            "options": {"temperature": temp}, "messages": msgs}
     try:
         r = urllib.request.urlopen(urllib.request.Request(
@@ -621,7 +634,7 @@ def revise(goal, program, world, why, model, temp, shots, timeout=600,
                  "Write a program that fixes ONLY the difference between the state above "
                  "and the goal. Do not repeat work already done — the state above is "
                  "what your last program left behind."})
-    req = {"model": model, "stream": False, "format": program_schema(),
+    req = {"model": model, "stream": False, "format": program_schema(want),
            "options": {"temperature": temp}, "messages": msgs}
     try:
         r = urllib.request.urlopen(urllib.request.Request(

@@ -143,7 +143,18 @@ def violations(program: Any, intent: str) -> List[str]:
     quietly creates a machine on the way to telling them has exceeded what it was given,
     and no postcondition makes that acceptable. Empty for an ACHIEVE, which sits at the
     top of the ladder and may use the whole language.
+
+    `None` means NO INTENT WAS SUPPLIED, and nothing is refused. That is one word meaning
+    one thing: `resolve()` is the only place absence becomes FETCH, because the safe
+    default belongs where the operator is asked, not scattered through every consumer.
+    This used to fall back to FETCH's set, which made the offer and the enforcement
+    disagree on an unsupplied intent — the schema master offered the whole language while
+    this function would have refused five sevenths of it. `run()` never hit it because it
+    guards on `is not None`, so the disagreement was latent rather than live; it was found
+    by asking the two sides the same question.
     """
+    if intent is None:
+        return []
     allowed = _PERMITS.get(intent, _PERMITS[FETCH])
     if allowed is None:
         return []

@@ -443,6 +443,95 @@ def test_every_mutating_tool_says_what_done_means():
                            {"vm_name": "web", "net_name": "core"}, None) is True)
 
 
+def _ops_named_in(text: str) -> set:
+    """Which op names a piece of prose actually LISTS, read from its own listing lines.
+
+    Matched on the listing form specifically — two spaces, the name, then an em-dash —
+    rather than by looking for the word anywhere. These prompts talk ABOUT the language in
+    their body text (the ordering rule mentions `foreach`; the predicate block is headed
+    "ensure shapes"), and counting prose as an offer would fail this test for a reason
+    that has nothing to do with what is offered.
+    """
+    return {m.group(1) for m in re.finditer(r"^\s{2}(\w+)\s*—", text, re.M)
+            if m.group(1) in config.OPS}
+
+
+def test_the_offer_never_exceeds_the_authority():
+    """EVERY surface that shows the model an op must show the SAME ops — the ones the
+    operator's intent actually permits.
+
+    This is `intent.violations()` moved from a post-hoc refusal into the offer, and the
+    reason to move it is that a refusal arrives too late to help. Under `ensure:` the
+    author was told in prose "do NOT create, launch, label, attach or delete anything" and
+    then handed a decoder with a `new` branch, a `foreach` branch and a `call` branch. When
+    the model took one — and prose is advisory, so it does — the program was authored in
+    full, walked, and thrown away with `exceeds_authority`. A whole authoring round spent
+    producing something the harness knew it would refuse before it asked.
+
+    Six builders read the op table to make something the model sees: two statement-schema
+    forms, two prompt listings, the per-op statement tools, and the bench's
+    constrained-decoding schema. Six independent readers of one table is exactly how this
+    language's four-way disagreements have happened, so the test holds ALL of them to one
+    answer rather than checking the one that was most recently edited.
+
+    BOTH DIRECTIONS ARE CHECKED, and the second matters as much as the first. Offering
+    more than the authority permits wastes a round; offering LESS makes a legal program
+    undecodable, and there is no error message for a construct the model was never shown.
+    """
+    from orchestrator.ai.planner.ir import intent as _intent, master, schema as _schema
+    from tests.bench.author_probe import _system
+
+    for want in (_intent.FETCH, _intent.ENSURE, _intent.ACHIEVE, None):
+        allowed = set(master.ops(want))
+        label = want or "no intent supplied"
+
+        # THE AGREEMENT: what the master offers is exactly what the enforcement permits.
+        # Asked of `violations()` rather than of `_PERMITS`, so the two cannot be kept in
+        # step by both reading one table while meaning different things by it. That is not
+        # hypothetical — this pairing is what caught `violations(p, None)` quietly falling
+        # back to FETCH's set while the offer treated None as no narrowing at all.
+        for op in config.OPS:
+            refused = bool(_intent.violations({"body": [{"op": op}]}, want))
+            offered = op in allowed
+            check(f"{label}: `{op}` offered={offered} matches refused={refused}",
+                  offered is not refused)
+
+        # THE SIX BUILDERS. Each is asked what it would show, and must name the same set.
+        flat = _schema._statement_flat(want)["properties"]["op"]["enum"]
+        check(f"{label}: flat statement schema offers exactly the permitted ops",
+              set(flat) == allowed)
+
+        oneof = {b["properties"]["op"]["const"]
+                 for b in _schema._statement_oneof(want)["oneOf"]}
+        check(f"{label}: oneOf statement schema offers exactly the permitted ops",
+              oneof == allowed)
+
+        item = (_schema.emit_program_tool(want)["function"]["parameters"]
+                ["properties"]["body"]["items"])
+        emitted = (set(item["properties"]["op"]["enum"]) if "properties" in item
+                   else {b["properties"]["op"]["const"] for b in item["oneOf"]})
+        check(f"{label}: emit_program_tool offers exactly the permitted ops",
+              emitted == allowed)
+
+        bench = {b["properties"]["op"]["const"]
+                 for b in program_schema(want)["$defs"]["stmt"]["oneOf"]}
+        check(f"{label}: the bench decoder offers exactly the permitted ops",
+              bench == allowed)
+
+        check(f"{label}: the ir system prompt LISTS exactly the permitted ops",
+              _ops_named_in(_schema.system_prompt(["create_vm"], want)) == allowed)
+
+        check(f"{label}: the bench system prompt LISTS exactly the permitted ops",
+              _ops_named_in(_system(want)) == allowed)
+
+        # The flattened per-statement surface is a SUBSET by construction — it predates
+        # fetch, achieve and if, and never offered them. It may still not offer anything
+        # the authority forbids, which is the half of the claim that is actually about it.
+        named = {t["function"]["name"][5:] for t in _schema.statement_tools(want)}
+        check(f"{label}: the statement tools offer nothing above the authority",
+              named <= allowed)
+
+
 def main():
     for fn in (test_every_predicate_shape_has_an_evaluator,
                test_every_predicate_shape_renders_legibly,
@@ -457,7 +546,8 @@ def main():
                test_bindable_names_are_exactly_readable_names,
                test_the_surface_spells_every_word_it_owns,
                test_the_two_selects_answer_the_same_question,
-               test_every_mutating_tool_says_what_done_means):
+               test_every_mutating_tool_says_what_done_means,
+               test_the_offer_never_exceeds_the_authority):
         print(f"\n── {fn.__name__}")
         fn()
     print(f"\n{_PASS}/{_PASS + _FAIL} passed")
