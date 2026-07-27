@@ -44,22 +44,65 @@ def _is_running(rec: Optional[Dict[str, Any]]) -> bool:
     return bool(rec) and "run" in str(rec.get("status", "")).lower()
 
 
-def _criterion_holds(criterion: str, name: Optional[str], vms: Dict[str, Dict[str, Any]]) -> bool:
-    """Does a success criterion hold for `name` against the live VM registry?
+def _tags(rec: Optional[Dict[str, Any]]) -> set:
+    """A VM's tags — labels ∪ flags, the same union `fleets()` groups by."""
+    return set((rec or {}).get("labels") or ()) | set((rec or {}).get("flags") or ())
 
-    The shared vocabulary (present / absent / running / stopped / restored) used by
-    BOTH the per-leaf verifier (verified-completion) and the goal verifier (the
-    contract root predicate). Unknown criteria pass — never block on the uncheckable.
+
+def _criterion_holds(criterion: str, name: Optional[str], vms: Dict[str, Dict[str, Any]],
+                     args: Optional[Dict[str, Any]] = None,
+                     networks: Optional[Dict[str, set]] = None) -> bool:
+    """Does a success criterion hold for `name` against the live registry?
+
+    The shared vocabulary used by BOTH the per-leaf verifier (verified-completion) and
+    the goal verifier (the contract root predicate). Unknown criteria pass — never block
+    on the uncheckable.
+
+    THE VOCABULARY IS THE LIMIT ON COVERAGE, which is why it grew. Nine of thirty-three
+    contract entries carried a `verify` because there was no word for what most tools do:
+    `add_label` sets a label, `add_vm_to_network` joins a network, and neither is
+    expressible as present/absent/running/stopped. A tool with no success definition is a
+    tool whose "done" means only that the call returned — the conflation this codebase
+    refuses everywhere else, and the design note's own position: p_world measures P(the
+    tool does what it CLAIMS), so a tool that claims nothing corrupts the estimate rather
+    than informing it.
+
+    `args` and `networks` are what the new words need: the label being set is an ARGUMENT,
+    and membership lives in the network compartment rather than on the VM record.
     """
+    args = args or {}
     if criterion == "present":  return name in vms
     if criterion == "absent":   return name not in vms
     if criterion == "running":  return _is_running(vms.get(name))
     if criterion == "stopped":  return name in vms and not _is_running(vms.get(name))
     if criterion == "restored": return name in vms
+    if criterion in ("labelled", "unlabelled"):
+        # UNREADABLE IS NOT FALSE. A VM the registry cannot show us is not a VM whose
+        # label is missing — it is one we cannot see, and the same rule governs the
+        # network criteria below and the `unknown` value of an observed attribute. Getting
+        # this wrong turns every registry gap into a failed leaf: the honesty rule firing
+        # on the absence of evidence rather than on evidence of absence.
+        label = args.get("label")
+        if not label or name not in vms:
+            return True
+        carried = label in _tags(vms.get(name))
+        return carried if criterion == "labelled" else not carried
+    if criterion in ("attached", "detached"):
+        # Membership is READ, not inferred. `networks` is None when the registry could
+        # not be read at all, and that is not evidence either way — an unreadable
+        # registry must never turn into "it did not happen", which is the same
+        # unknown-is-not-false rule the observed attributes are built on.
+        if networks is None:
+            return True
+        net = args.get("net_name") or args.get("network")
+        vm  = args.get("vm_name") or args.get("name")
+        joined = vm in networks.get(net, set())
+        return joined if criterion == "attached" else not joined
     return True
 
 
-def make_library_verifier(vms_getter: Callable[[], Dict[str, Dict[str, Any]]]):
+def make_library_verifier(vms_getter: Callable[[], Dict[str, Dict[str, Any]]],
+                          networks_getter=None):
     """A verify(criterion, tool, args, result) that checks the contract's success
     criterion against the live VM registry (`vms_getter() -> {name: {status,…}}`).
 
@@ -68,7 +111,8 @@ def make_library_verifier(vms_getter: Callable[[], Dict[str, Dict[str, Any]]]):
     """
     def verify(criterion: str, tool: str, args: Dict[str, Any], result: Any) -> bool:
         name = args.get("name") or args.get("new_name") or args.get("net_name")
-        return _criterion_holds(criterion, name, vms_getter() or {})
+        nets = networks_getter() if networks_getter else None
+        return _criterion_holds(criterion, name, vms_getter() or {}, args, nets)
     return verify
 
 

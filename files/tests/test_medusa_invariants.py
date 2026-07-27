@@ -382,6 +382,67 @@ def test_the_two_selects_answer_the_same_question():
               sorted(bench_select(q)) == sorted(prod_select(q)))
 
 
+def test_every_mutating_tool_says_what_done_means():
+    """A tool with no success definition reports `done` whenever the CALL RETURNED — an
+    unknown criterion passes, so silence is indistinguishable from success. That is the
+    conflation this system refuses everywhere else, and the design note's own position:
+    p_world measures P(the tool does what it CLAIMS), so a tool that claims nothing
+    corrupts the estimate rather than informing it.
+
+    Nine of thirty-three entries carried `verify` because the criterion vocabulary had no
+    word for what most tools do — present/absent/running/stopped cannot express "the label
+    is set". So the gap looked like neglect and was partly a missing vocabulary.
+
+    This does not demand a criterion for every tool. It demands that every MUTATING tool
+    either declares one or states, in `_no_verify_doc`, why it cannot have one — so the
+    gap is a position somebody took rather than a row nobody filled in.
+    """
+    from orchestrator.ai.agent.contract.core import _CONTRACT
+    from orchestrator.ai.planner.autonomous import _criterion_holds
+    tools = (_CONTRACT or {}).get("tools") or {}
+    try:
+        from executor.command_catalog import TOOL_SPECS
+        mutating = {t for t, spec in TOOL_SPECS.items()
+                    if (spec or {}).get("effect") or (spec or {}).get("rev") is not None}
+    except Exception:                                          # pragma: no cover
+        mutating = set()
+    for tool, attrs in sorted(tools.items()):
+        if mutating and tool not in mutating:
+            continue
+        if not attrs.get("risk"):
+            continue                       # read-only / unassessed: no claim to check
+        says = bool(attrs.get("verify")) or bool(attrs.get("_no_verify_doc"))
+        check(f"{tool}: says what done means (or why it cannot)", says)
+
+    # Every criterion a contract NAMES must be one the checker actually implements —
+    # otherwise it silently passes, which is worse than declaring nothing at all.
+    known = ("present", "absent", "running", "stopped", "restored",
+             "labelled", "unlabelled", "attached", "detached")
+    for tool, attrs in sorted(tools.items()):
+        c = attrs.get("verify")
+        if c:
+            check(f"{tool}: '{c}' is a criterion the verifier knows", c in known)
+    # ...and the checker must actually discriminate on each, or the word is decoration.
+    vms = {"web": {"status": "running", "labels": ["prod"], "flags": []}}
+    nets = {"core": {"web"}}
+    cases = [("present", "web", {}, True), ("absent", "web", {}, False),
+             ("running", "web", {}, True), ("stopped", "web", {}, False),
+             ("labelled", "web", {"label": "prod"}, True),
+             ("labelled", "web", {"label": "dev"}, False),
+             ("unlabelled", "web", {"label": "dev"}, True),
+             ("attached", "web", {"vm_name": "web", "net_name": "core"}, True),
+             ("attached", "web", {"vm_name": "web", "net_name": "dmz"}, False),
+             ("detached", "web", {"vm_name": "web", "net_name": "dmz"}, True)]
+    for criterion, name, args, expected in cases:
+        check(f"criterion {criterion!r} discriminates ({args or 'no args'})",
+              _criterion_holds(criterion, name, vms, args, nets) is expected)
+    # An UNREADABLE registry is not evidence of absence — the same unknown-is-not-false
+    # rule the observed attributes are built on.
+    check("an unreadable network registry never says 'it did not happen'",
+          _criterion_holds("attached", "web", vms,
+                           {"vm_name": "web", "net_name": "core"}, None) is True)
+
+
 def main():
     for fn in (test_every_predicate_shape_has_an_evaluator,
                test_every_predicate_shape_renders_legibly,
@@ -395,7 +456,8 @@ def main():
                test_every_observed_attribute_is_actually_learnable,
                test_bindable_names_are_exactly_readable_names,
                test_the_surface_spells_every_word_it_owns,
-               test_the_two_selects_answer_the_same_question):
+               test_the_two_selects_answer_the_same_question,
+               test_every_mutating_tool_says_what_done_means):
         print(f"\n── {fn.__name__}")
         fn()
     print(f"\n{_PASS}/{_PASS + _FAIL} passed")

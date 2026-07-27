@@ -153,7 +153,8 @@
           "blast": "entity",
           "commitment": 0.1
         },
-        "verb": "restore snapshot for VM"
+        "verb": "restore snapshot for VM",
+        "verify": "restored"
       },
       "snapshot_delete": {
         "risk": {
@@ -162,7 +163,8 @@
           "blast": "entity",
           "commitment": 0.0
         },
-        "verb": "delete snapshot of VM"
+        "verb": "delete snapshot of VM",
+        "_no_verify_doc": "same as snapshot_create, inverted."
       },
       "delete_network": {
         "risk": {
@@ -245,7 +247,8 @@
             "nat": "double",
             "bridge": "double"
           }
-        }
+        },
+        "_no_verify_doc": "same as resize_disk, and general: it can change any field, so its postcondition is whatever the caller changed."
       },
       "resize_disk": {
         "risk": {
@@ -254,7 +257,8 @@
           "blast": "entity",
           "commitment": 0.8
         },
-        "verb": "resize disk for VM"
+        "verb": "resize disk for VM",
+        "_no_verify_doc": "a config field changed: needs a per-VM config read and an arg->field mapping the criterion vocabulary has no word for."
       },
       "set_resource_limits": {
         "risk": {
@@ -263,10 +267,11 @@
           "blast": "entity",
           "commitment": 0.9
         },
-        "verb": "set resource limits for VM"
+        "verb": "set resource limits for VM",
+        "_no_verify_doc": "same as resize_disk — a config field, not a registry fact."
       },
       "run_guest_command": {
-        "_doc": "ARBITRARY CODE AS ROOT INSIDE A GUEST. Pinned `none` \u2014 zero confirmation \u2014 until 2026-07-27, while run_command (bubblewrapped: no network, workspace-only writes, NoNewPrivs) was pinned `normal` and additionally forbidden outright by the front-desk red line. The confinement was therefore INVERTED: the heavily defended door opened onto a padded cell, and the undefended one onto a full filesystem. Now `normal`, the same y/n run_command gets, and `field` shows the command being run so the confirmation says what it is confirming.",
+        "_doc": "ARBITRARY CODE AS ROOT INSIDE A GUEST. Pinned `none` — zero confirmation — until 2026-07-27, while run_command (bubblewrapped: no network, workspace-only writes, NoNewPrivs) was pinned `normal` and additionally forbidden outright by the front-desk red line. The confinement was therefore INVERTED: the heavily defended door opened onto a padded cell, and the undefended one onto a full filesystem. Now `normal`, the same y/n run_command gets, and `field` shows the command being run so the confirmation says what it is confirming.",
         "risk": {
           "reversible": false,
           "destructiveness": 0.4,
@@ -276,7 +281,8 @@
         "verb": "run guest command on VM",
         "field": "command",
         "pin": "normal",
-        "_flag": "Formula rates this 'normal' (arbitrary guest exec). Pinned 'none' to preserve today's behavior — top candidate to promote."
+        "_flag": "Formula rates this 'normal' (arbitrary guest exec). Pinned 'none' to preserve today's behavior — top candidate to promote.",
+        "_no_verify_doc": "the same, inside a guest — guest_probe is its verification twin."
       },
       "checkpoint": {
         "risk": {
@@ -285,7 +291,8 @@
           "blast": "fleet",
           "commitment": 0.1
         },
-        "verb": "save checkpoint"
+        "verb": "save checkpoint",
+        "_no_verify_doc": "the savepoint's existence is the executor's own record, and the engine already refuses to proceed when cp_ok is false — a second check here would ask the same question twice."
       },
       "rollback": {
         "risk": {
@@ -314,7 +321,8 @@
           "blast": "entity",
           "commitment": 0.0
         },
-        "verb": "label VM"
+        "verb": "label VM",
+        "verify": "labelled"
       },
       "add_vm_to_network": {
         "risk": {
@@ -323,7 +331,8 @@
           "blast": "entity",
           "commitment": 0.3
         },
-        "verb": "attach VM to network"
+        "verb": "attach VM to network",
+        "verify": "attached"
       },
       "run_command": {
         "risk": {
@@ -335,7 +344,8 @@
         "verb": "run code ON THE HOST (sandboxed: workspace-only, no network)",
         "field": "code",
         "pin": "normal",
-        "_flag": "Formula rates this 'name' (0.550). Pinned 'normal' by operator judgment 2026-07-26: a warning plus y/n is the right friction for host execution — typing a target name is meaningless here, since the target IS the code. `field: code` makes the confirmation display the code being run. Note the doorman forbids run_command outright (w:0 red line), so this tier only takes effect for an agent that deliberately grants it."
+        "_flag": "Formula rates this 'name' (0.550). Pinned 'normal' by operator judgment 2026-07-26: a warning plus y/n is the right friction for host execution — typing a target name is meaningless here, since the target IS the code. `field: code` makes the confirmation display the code being run. Note the doorman forbids run_command outright (w:0 red line), so this tier only takes effect for an agent that deliberately grants it.",
+        "_no_verify_doc": "arbitrary code: what 'done' means depends on what the caller asked for, so the caller must supply a local_probe post-condition. The exit code is not evidence."
       },
       "send_monitor_cmd": {
         "risk": {
@@ -345,7 +355,8 @@
           "commitment": 0.2
         },
         "verb": "send QEMU monitor command to VM",
-        "field": "cmd"
+        "field": "cmd",
+        "_no_verify_doc": "an arbitrary QEMU monitor command has no fixed effect to check."
       },
       "remove_template": {
         "risk": {
@@ -354,7 +365,8 @@
           "blast": "entity",
           "commitment": 0.0
         },
-        "verb": "delete template (removes its golden disk)"
+        "verb": "delete template (removes its golden disk)",
+        "_no_verify_doc": "deletes a golden disk: needs the template registry (list_templates), which the verifier does not read."
       },
       "fleet": {
         "risk": {
@@ -365,7 +377,8 @@
         },
         "verb": "broadcast fleet action",
         "field": "label",
-        "_flag": "Tier is action-conditional (fleet_actions), resolved BEFORE risk is read — so these facts do not gate anything. They exist for PRICING: a broadcast used to cost zero. REVERSIBLE deliberately, even though `fleet exec` is not: leaf_cost prices irreversibility at kappa (~one entity-unit), and marking the whole tool irreversible charged a read-only `fleet ping` 1.5 instead of 0.3 — enough to push it past the commit floor and BLOCK it (caught by test_epistemic_acceptance 2026-07-26). The dominant actions (ping/status/list) are reads and the destructive ones are gated separately. PROPER FIX, not yet built: make risk action-conditional the way the tier already is, so `fleet exec` prices as irreversible without charging every ping for it."
+        "_flag": "Tier is action-conditional (fleet_actions), resolved BEFORE risk is read — so these facts do not gate anything. They exist for PRICING: a broadcast used to cost zero. REVERSIBLE deliberately, even though `fleet exec` is not: leaf_cost prices irreversibility at kappa (~one entity-unit), and marking the whole tool irreversible charged a read-only `fleet ping` 1.5 instead of 0.3 — enough to push it past the commit floor and BLOCK it (caught by test_epistemic_acceptance 2026-07-26). The dominant actions (ping/status/list) are reads and the destructive ones are gated separately. PROPER FIX, not yet built: make risk action-conditional the way the tier already is, so `fleet exec` prices as irreversible without charging every ping for it.",
+        "_no_verify_doc": "ACTION-CONDITIONAL — ping, launch, stop and status do not share an end state, and the criterion vocabulary has no way to say 'it depends on the action'. Its ping already yields a finding (mesh(<label>)), which is the honest verification for that action."
       },
       "revert": {
         "risk": {
@@ -374,7 +387,8 @@
           "blast": "entity",
           "commitment": 0.0
         },
-        "verb": "undo the last action"
+        "verb": "undo the last action",
+        "verify": "restored"
       },
       "provision_guest_agent_offline": {
         "risk": {
@@ -383,7 +397,8 @@
           "blast": "entity",
           "commitment": 0.4
         },
-        "verb": "provision stealth guest agent offline"
+        "verb": "provision stealth guest agent offline",
+        "_no_verify_doc": "its real postcondition is that the agent ANSWERS, which is guest_ping's finding — reachable(<name>) — not a registry fact."
       },
       "mark_as_template": {
         "risk": {
@@ -392,7 +407,8 @@
           "blast": "entity",
           "commitment": 0.7
         },
-        "verb": "mark VM as template"
+        "verb": "mark VM as template",
+        "_no_verify_doc": "sets a config flag: needs a per-VM config read, not the registry summary the verifier holds."
       },
       "snapshot_create": {
         "risk": {
@@ -401,7 +417,8 @@
           "blast": "entity",
           "commitment": 0.5
         },
-        "verb": "create snapshot"
+        "verb": "create snapshot",
+        "_no_verify_doc": "needs a snapshot-registry read (snapshot_list); the verifier holds only VMs and networks."
       },
       "open_shell": {
         "risk": {
@@ -410,7 +427,8 @@
           "blast": "entity",
           "commitment": 0.1
         },
-        "verb": "open shell to VM"
+        "verb": "open shell to VM",
+        "_no_verify_doc": "grants interactive access; there is no end-state it brings about."
       },
       "open_display": {
         "risk": {
@@ -419,7 +437,8 @@
           "blast": "entity",
           "commitment": 0.1
         },
-        "verb": "open VM display"
+        "verb": "open VM display",
+        "_no_verify_doc": "opens a viewer; changes nothing to verify."
       },
       "generate_guest_agent_setup": {
         "risk": {
@@ -428,7 +447,8 @@
           "blast": "entity",
           "commitment": 0.1
         },
-        "verb": "generate guest-agent setup script"
+        "verb": "generate guest-agent setup script",
+        "_no_verify_doc": "produces a setup script; it brings about no end state in the lab to read back."
       },
       "create_profile": {
         "risk": {
@@ -438,7 +458,8 @@
           "commitment": 0.1
         },
         "verb": "save hardware profile",
-        "field": "profile_name"
+        "field": "profile_name",
+        "_no_verify_doc": "a profile is not a VM: needs a profile-registry read (list_profiles) the verifier does not have. Checkable the moment it does."
       },
       "remove_label": {
         "risk": {
@@ -447,7 +468,8 @@
           "blast": "entity",
           "commitment": 0.0
         },
-        "verb": "remove VM label"
+        "verb": "remove VM label",
+        "verify": "unlabelled"
       },
       "claim_finding": {
         "risk": {
@@ -456,7 +478,8 @@
           "blast": "none",
           "commitment": 0.0
         },
-        "verb": "record a claim"
+        "verb": "record a claim",
+        "_no_verify_doc": "the claim IS the assertion — it is verified by a human, via the claims path, not by a registry read."
       },
       "remove_vm_from_network": {
         "risk": {
@@ -466,7 +489,8 @@
           "commitment": 0.0
         },
         "verb": "detach VM from network",
-        "_flag": "Mirrors add_vm_to_network (0.120, tier none) — a detach is fully undoable now that both directions exist. Slight destructiveness over the attach because removing a NIC can break connectivity a plan depends on; no commitment because it RELEASES a resource rather than taking one."
+        "_flag": "Mirrors add_vm_to_network (0.120, tier none) — a detach is fully undoable now that both directions exist. Slight destructiveness over the attach because removing a NIC can break connectivity a plan depends on; no commitment because it RELEASES a resource rather than taking one.",
+        "verify": "detached"
       }
     },
     "forbidden": [],
@@ -498,6 +522,7 @@
         "kind": "rule",
         "text": "The Doorman is a supervised front-desk agent: it holds no offensive capability and surfaces every non-trivial action to the operator (disposition = human-confirm)."
       }
-    ]
+    ],
+    "_verify_doc": "WHAT 'DONE' MEANS, PER TOOL. Nine of thirty-three entries carried this and the rest were silent — not because those tools are unverifiable, but because the criterion vocabulary had no word for what they do (present/absent/running/stopped/restored cannot express 'the label is set'). Silence is the wrong default: an unknown criterion PASSES, so a tool with no success definition reports done whenever the call returned, which is the conflation this system refuses everywhere else. Where a tool genuinely has no generic postcondition it now says so in _no_verify_doc, so the gap is a stated position rather than an oversight — and those are exactly the tools whose caller must supply a probe."
   }
 }
