@@ -1,0 +1,338 @@
+#!/usr/bin/env python3
+"""
+test_medusa_invariants.py — the LANGUAGE checking itself.
+
+Medusa's one soundness rule is that a PROGRAM must vouch for itself: it needs a verdict,
+because a run that asserts nothing has established nothing. Nothing made the language's
+own parts vouch for agreeing with EACH OTHER — and that is where almost every defect in
+its history has lived. The operator's observation, 2026-07-27: *"so in the language traps
+problem is a missing ensure, which is interesting."* This file is that ENSURE.
+
+WHAT IT IS NOT. `test_medusa.py` runs example programs and checks they behave. This runs
+NO programs. It reads the manifest — the language's own statement of what it is — and
+holds every implementation to it. The two catch different things, and only this one would
+have caught the list below BEFORE a ladder run rather than after six of them:
+
+  * `disjoint` was DECLARED in the manifest, OFFERED by the schema, ACCEPTED by the
+    validator and PRINTED by the renderer — with no evaluator. It answered false in every
+    world, for weeks. Composites were in exactly that state a session earlier; they were
+    fixed one at a time and the invariant was never written down, so the next shape
+    repeated it.
+  * legal binding names were not readable names: `STORE red-net = NEW network` bound a
+    name `$red-net` cannot pronounce, and the author was told it never created something
+    it had created one line above.
+  * the schema offered `NOT` an array while the validator demanded an object and the
+    executor accepted either — three components, three answers, one construct.
+  * `status` was offered as free text, so the decoder invented `'not running'`, matched
+    nobody, ran zero calls and reported ok.
+  * the executor overrode the author's explicit `net_name`, creating `core_net` where the
+    program plainly said `core`.
+
+Every one is checkable from the manifest plus the code, deterministically, in
+milliseconds, with no model and no world.
+
+THE RULE THIS FILE ENFORCES: a language feature is not one construct, it is FOUR
+agreements — the validator accepts it, the executor runs it, the renderer shows it, and
+the schema offers it. Three out of four is a construct that exists and cannot be used, or
+worse, one that is used and quietly does nothing.
+
+Run:  PYTHONPATH=. python3 tests/test_medusa_invariants.py
+"""
+import os
+import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from orchestrator.ai.planner.findings import DEFAULT_SCHEMA
+from orchestrator.ai.planner.ir import config, derive, evaluate, refs, render, run, validate
+from orchestrator.ai.planner.ir.derive import _DERIVERS
+from tests.bench.author_probe import _seams, program_schema
+from tests.bench.sim_world import SimWorld
+
+_PASS = 0
+_FAIL = 0
+
+
+def check(label, cond):
+    global _PASS, _FAIL
+    if cond:
+        _PASS += 1
+        print(f"  ok   {label}")
+    else:
+        _FAIL += 1
+        print(f"  FAIL {label}")
+
+
+def _sample_predicate(shape: str):
+    """A minimal well-formed predicate of `shape`, built from the manifest's own row.
+
+    Built rather than listed, so a shape added to the JSON is exercised here without
+    anyone remembering to add it — which is the whole failure mode this file exists for.
+    """
+    spec = config.PREDICATES[shape]
+    pred = {"shape": shape}
+    operand, arity = spec["operand"], spec.get("arity")
+    if operand == "select":
+        pred["select"] = {"kind": "vm"}
+    elif operand == "sets":
+        pred["sets"] = ["$a", "$b"]
+    elif operand == "of":
+        if arity == "value":
+            pred["of"] = "$answer.alive"
+        elif arity == "one":
+            pred["of"] = {"shape": "count", "select": {"kind": "vm"}, "eq": 1}
+        else:
+            pred["of"] = [{"shape": "count", "select": {"kind": "vm"}, "eq": 1},
+                          {"shape": "count", "select": {"kind": "vm"}, "gte": 1}]
+    for comparator in (spec.get("comparators") or {}):
+        pred[comparator] = 1 if comparator != "eq" or arity != "value" else True
+        break
+    return pred
+
+
+# ── every predicate shape is answerable, showable, and says whether it can be closed ──
+def test_every_predicate_shape_has_an_evaluator():
+    """`disjoint` is why. Declared, offered, validated, rendered — and the seam fell
+    through to "unevaluated shape disjoint", which a postcondition then counted as FAILED.
+    So a correct statement of rung 6's goal could not hold in any world, and burned three
+    revision rounds saying so."""
+    w = SimWorld()
+    w.execute("create_vm", {"name": "a", "os_type": "linux"})
+    _, holds = _seams(w)
+    scope = {"a": ["a"], "b": ["x"], "answer": {"alive": True}}
+    for shape in config.PREDICATES:
+        _good, why = evaluate(_sample_predicate(shape), scope, holds)
+        check(f"{shape}: answered, not shrugged at",
+              "unevaluated" not in str(why).lower())
+
+
+def test_every_predicate_shape_renders_legibly():
+    """The renderer is the only thing a human reads before approving a program. A shape
+    it cannot print is a program nobody can check — and `REACH(SELECT vm) ? None` was a
+    LEGAL statement printed as gibberish."""
+    for shape in config.PREDICATES:
+        out = render({"body": [{"op": "ensure", "predicate": _sample_predicate(shape)}]})
+        check(f"{shape}: renders without a placeholder",
+              "?" not in out and "None" not in out and "unknown" not in out.lower())
+
+
+def test_every_predicate_shape_declares_whether_it_can_be_derived():
+    """A shape either has a deriver or says outright that it cannot have one. Without
+    this, a shape that silently cannot converge is indistinguishable from one nobody has
+    written a deriver for yet — and an ACHIEVE built on it never closes."""
+    for shape, spec in config.PREDICATES.items():
+        declared = spec.get("derivable") is False
+        has = shape in _DERIVERS
+        check(f"{shape}: {'declared underivable' if declared else 'has a deriver'}",
+              declared != has or (has and not declared))
+        if declared:
+            check(f"{shape}: says WHY it cannot be derived",
+                  bool(spec.get("_derivable_doc")))
+
+
+# ── every op the manifest declares is one the visitor and the renderer know ───────────
+# The manifest is the CONTRACT between the two, not a switch: adding a row does not make a
+# statement executable. This table states what each op observably does, so a new op fails
+# here until someone says what it is for.
+_OP_EFFECT = {
+    "new":     "issues a creator call",
+    "call":    "issues its tool",
+    "fetch":   "binds what it read",
+    "foreach": "issues a call per member",
+    "ensure":  "produces a verdict",
+    "achieve": "produces a verdict",
+    "if":      "runs one branch",
+}
+
+
+def test_every_op_is_accounted_for():
+    check("every op in the manifest has a stated effect",
+          set(config.OPS) == set(_OP_EFFECT))
+    for op in config.OPS:
+        out = render({"body": [{"op": op}]})
+        check(f"{op}: the renderer knows it", "<unknown op" not in out)
+
+
+def test_the_visitor_does_not_silently_ignore_a_statement():
+    """An op the visitor does not handle falls through and does NOTHING — no error, no
+    call, a green close over a statement that never ran. That is the false-success class
+    in the one place it would be hardest to notice."""
+    w = SimWorld()
+    sel, holds = _seams(w)
+    res = run({"body": [{"op": "call", "tool": "create_vm",
+                         "args": {"name": "x", "os_type": "linux"}}]},
+              w.execute, select=sel, holds=holds, consent=True)
+    check("a known op reaches the world", res["ok"] and len(w.calls) == 1)
+    # A statement whose op is not in the manifest must be REFUSED, never run past.
+    ok, _ = validate({"body": [{"op": "teleport", "tool": "x"}]})
+    check("an unknown op is refused by the validator", not ok)
+
+
+# ── the four-way agreement: manifest, validator, renderer, schema ─────────────────────
+def _select_schema():
+    for branch in program_schema()["$defs"]["stmt"]["oneOf"]:
+        props = branch.get("properties", {})
+        if "select" in props and props["select"].get("properties"):
+            return props["select"]["properties"]
+    return {}
+
+
+def test_every_queryable_attribute_is_offered_to_the_author():
+    """A construct the schema withholds may as well not exist. Measured repeatedly: the
+    carve-out was implemented and never offered, so the author invented `name: '!db'`;
+    `status` was offered untyped, so it invented `'not running'`. Both were scored as
+    model failures."""
+    offered = _select_schema()
+    for kind in config.KINDS:
+        for attr in config.queryable(kind):
+            if attr in (config.KINDS[kind].get("aliases") or {}):
+                continue                       # a synonym need not be advertised
+            check(f"{kind}.{attr} is offered in a select", attr in offered)
+    check("the carve-out is offered", "not" in offered)
+    check("membership is offered on the key",
+          "anyOf" in str(offered.get("name", {})) and "in" in str(offered.get("name", {})))
+    for group in ("any", "all"):
+        check(f"the {group} group is offered", group in offered)
+
+
+def test_every_closed_vocabulary_is_both_offered_and_policed():
+    """`status` is running or stopped. Offered as a bare string, the decoder invented a
+    third value, matched nobody, ran zero calls and reported ok."""
+    offered = _select_schema()
+    for kind in config.KINDS:
+        for attr in config.queryable(kind):
+            values = config.values_for(kind, attr)
+            if not values:
+                continue
+            spec = str(offered.get(attr, {}))
+            check(f"{kind}.{attr}: its values are offered as an enum",
+                  all(v in spec for v in values))
+            bad = validate({"body": [{"op": "ensure", "predicate": {
+                "shape": "count", "select": {"kind": kind, attr: "___nope___"},
+                "eq": 1}}]})
+            check(f"{kind}.{attr}: an invented value is policed", not bad[0])
+
+
+def test_every_predicate_shape_is_offered_to_the_author():
+    pred = program_schema()["$defs"]["pred"]
+    shapes = {b["properties"]["shape"]["const"] for b in pred["oneOf"]}
+    check("every declared shape has a schema branch", shapes == set(config.PREDICATES))
+
+
+# ── the manifest cannot name a tool or a fact that does not exist ─────────────────────
+def test_every_kind_names_real_tools():
+    try:
+        from executor.command_catalog import KNOWN_TOOLS
+    except ImportError:                                        # pragma: no cover
+        KNOWN_TOOLS = frozenset()
+    for kind, spec in config.KINDS.items():
+        for role in ("create", "list"):
+            tool = spec.get(role)
+            check(f"{kind}.{role} = {tool!r} is a real tool",
+                  not tool or not KNOWN_TOOLS or tool in KNOWN_TOOLS)
+        for name, creator in (spec.get("creators") or {}).items():
+            tool = creator.get("tool")
+            check(f"{kind}.creators.{name} = {tool!r} is a real tool",
+                  not tool or not KNOWN_TOOLS or tool in KNOWN_TOOLS)
+
+
+def test_every_observed_attribute_is_actually_learnable():
+    """An observed attribute reads `unknown` until something asks. If the tool that asks
+    does not exist, or does not record the fact, it reads unknown FOREVER — a query that
+    can never answer, which is the same false assurance as a check that can never pass."""
+    try:
+        from executor.command_catalog import KNOWN_TOOLS
+    except ImportError:                                        # pragma: no cover
+        KNOWN_TOOLS = frozenset()
+    for kind in config.KINDS:
+        for attr, spec in config.observed(kind).items():
+            by = spec.get("by")
+            check(f"{kind}.{attr}: learned by a real tool ({by})",
+                  not KNOWN_TOOLS or by in KNOWN_TOOLS)
+            check(f"{kind}.{attr}: that tool records a finding",
+                  by in DEFAULT_SCHEMA)
+            fact_template = spec.get("fact", "")
+            recorded = (DEFAULT_SCHEMA.get(by) or {}).get("fact")
+            check(f"{kind}.{attr}: under the SAME fact key the ledger writes",
+                  fact_template == recorded)
+            check(f"{kind}.{attr}: and the key formats for a member",
+                  config.fact_key(kind, attr, "probe_target") is not None)
+
+
+# ── names, sigils and the surface ─────────────────────────────────────────────────────
+def test_bindable_names_are_exactly_readable_names():
+    """`-` is excluded from a reference token so `$item-snap` composes a name. Nothing
+    stopped an author BINDING `red-net`, which `$red-net` then reads as `$red` plus text —
+    a name the language accepts and cannot pronounce."""
+    pattern = None
+    for branch in program_schema()["$defs"]["stmt"]["oneOf"]:
+        var = branch.get("properties", {}).get("var")
+        if isinstance(var, dict) and var.get("pattern"):
+            pattern = var["pattern"]
+            break
+    check("the schema constrains binding names", bool(pattern))
+    if pattern:
+        rx = re.compile(pattern)
+        for name in ("web", "red_net", "n1", "_x", "red-net", "2nd", "a.b", ""):
+            check(f"schema and refs agree on {name!r}",
+                  bool(rx.match(name)) == refs.is_referenceable(name))
+
+
+def test_the_surface_spells_every_word_it_owns():
+    """A word renamed in the surface table must be renamed everywhere it prints. It was a
+    dict in render.py once, so a comparator added to the JSON printed as `?`."""
+    # EVERY op that prints a keyword must own it here, so renaming is a data change.
+    # `call` is the one exception and a real one: an invocation has no keyword, it reads
+    # as tool(args).
+    for op in config.OPS:
+        if op == "call":
+            continue
+        check(f"{op} has a written form", op in config.SURFACE)
+    # The clause words the renderer prints are equally part of the surface — `fetch` had
+    # an entry the renderer ignored in favour of a literal, which is the same hole.
+    for word in ("where", "except", "include", "in", "count", "ifails", "async",
+                 "procedure", "import"):
+        check(f"the {word.upper()} clause is spelled in the surface table",
+              word in config.SURFACE)
+    # And renaming one must actually change the output — the property all of this is for.
+    import copy
+    from orchestrator.ai.planner.ir import config as _cfg
+    original = _cfg.SURFACE["ensure"]
+    try:
+        _cfg.SURFACE["ensure"] = "VERIFY"
+        out = render({"body": [{"op": "ensure", "predicate": {
+            "shape": "count", "select": {"kind": "vm"}, "eq": 1}}]})
+        check("renaming a surface word changes what prints", out.strip().startswith("VERIFY"))
+    finally:
+        _cfg.SURFACE["ensure"] = original
+    for shape, spec in config.PREDICATES.items():
+        if spec.get("source") == "composite":
+            check(f"{shape} has a combinator word",
+                  shape in (config.SURFACE.get("combinators") or {}))
+        for comparator in (spec.get("comparators") or {}):
+            check(f"{shape}.{comparator} has a symbol",
+                  bool(spec["comparators"][comparator]))
+
+
+def main():
+    for fn in (test_every_predicate_shape_has_an_evaluator,
+               test_every_predicate_shape_renders_legibly,
+               test_every_predicate_shape_declares_whether_it_can_be_derived,
+               test_every_op_is_accounted_for,
+               test_the_visitor_does_not_silently_ignore_a_statement,
+               test_every_queryable_attribute_is_offered_to_the_author,
+               test_every_closed_vocabulary_is_both_offered_and_policed,
+               test_every_predicate_shape_is_offered_to_the_author,
+               test_every_kind_names_real_tools,
+               test_every_observed_attribute_is_actually_learnable,
+               test_bindable_names_are_exactly_readable_names,
+               test_the_surface_spells_every_word_it_owns):
+        print(f"\n── {fn.__name__}")
+        fn()
+    print(f"\n{_PASS}/{_PASS + _FAIL} passed")
+    sys.exit(1 if _FAIL else 0)
+
+
+if __name__ == "__main__":
+    main()
