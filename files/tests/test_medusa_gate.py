@@ -40,7 +40,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.planner.ir import config, gate
+from orchestrator.ai.planner.ir import config, consent, gate
 
 _PASS = 0
 _FAIL = 0
@@ -66,7 +66,19 @@ SOUND = {"body": [
     {"op": "achieve", "predicate": {"shape": "count",
                                     "select": {"kind": "vm", "label": "prod"}, "gte": 1}}]}
 
-NO_VERDICT = {"body": [
+# BOTH surviving factors at once — the only route to a refusal now that no single factor
+# can reach the threshold. It operates on a machine the operator never mentioned AND binds
+# a set it never reads.
+BOTH_FAULTS = {"body": [
+    {"op": "new", "var": "spare", "kind": "vm", "args": {"os_type": "linux"}},
+    {"op": "call", "tool": "create_vm", "args": {"name": "web", "os_type": "linux"}},
+    {"op": "achieve", "predicate": {"shape": "count",
+                                    "select": {"kind": "vm"}, "gte": 1}}]}
+
+# ACTS AND VOUCHES FOR NOTHING, and the gate no longer has an opinion about it. consent.py
+# asks the operator y/n — decision 2 — and a gate that refused the same program would be
+# overriding a settled answer with a worse one. It did, and it cost the whole ladder.
+UNGROUNDED = {"body": [
     {"op": "call", "tool": "create_vm", "args": {"name": "core", "os_type": "linux"}},
     {"op": "call", "tool": "add_label", "args": {"name": "core", "label": "prod"}}]}
 
@@ -160,9 +172,7 @@ def test_each_factor_moves_the_score_and_says_why():
     """A factor that never fires is decoration; a factor that fires without a sentence is
     a suppression the operator cannot act on."""
     cases = [
-        ("no_verdict", NO_VERDICT, GOAL, "achieve"),
         ("goal_unnamed", ABOUT_SOMETHING_ELSE, GOAL, "achieve"),
-        ("intent_unmet", SOUND, "ensure: is there a vm called core labelled prod", "ensure"),
     ]
     for factor, prog, goal, want in cases:
         r = gate.score(prog, goal, want)
@@ -177,15 +187,66 @@ def test_each_factor_moves_the_score_and_says_why():
     check("`dead_binding` alone does not suppress", r["band"] == gate.PROCEED)
 
 
-def test_intent_is_consumed_and_never_sniffed():
-    """The same program scores differently under different intents, and the difference
-    comes ENTIRELY from what the operator said — decision 5, made mechanical."""
-    for want, expect_unmet in (("achieve", 0.0), ("ensure", 1.0), ("fetch", 1.0)):
-        r = gate.score(SOUND, GOAL, want)
-        check(f"under {want}: intent_unmet={expect_unmet}",
-              r["factors"]["intent_unmet"] == expect_unmet)
-    check("with no intent supplied, nothing is held against the program",
-          gate.score(SOUND, GOAL, None)["factors"]["intent_unmet"] == 0.0)
+def test_the_gate_has_no_opinion_about_a_missing_verdict():
+    """THE FACTOR THAT COST THE WHOLE LADDER, kept as a test so it cannot return.
+
+    A program that acts and vouches for nothing is unsound by the language's own rule —
+    and `consent.py` ALREADY computes exactly that and responds by ASKING the operator
+    y/n, which is decision 2 and was settled long before this gate existed. Scoring it
+    here did not add a second opinion; it overrode a settled one with a worse response.
+
+    It also double-counted. `no_verdict` means "no ensure AND no achieve"; `intent_unmet`
+    under an achieve meant "no achieve". For these programs that is ONE fault, and at
+    0.36 + 0.34 = 0.70 it cleared a 0.50 refuse threshold built to need SEVERAL. The
+    accumulation invariant was satisfied on paper and violated in substance — which is
+    why independence is checked by hand and not by arithmetic.
+
+    Measured: the full factor set took the ladder's literal column from 10/12 to 0/12.
+
+    AND IT WAS WRONG ON THE LANGUAGE'S TERMS TOO, per the operator: ENSURE is what a
+    program truly needs, FETCH grounds the world before it starts, and ACHIEVE is a
+    permutation of ENSURE used as a barrier — the run cannot pass this point unless X
+    exists. Plenty of correct programs have no ACHIEVE, so demanding one was never a
+    fault to score.
+    """
+    r = gate.score(UNGROUNDED, GOAL, "achieve")
+    check("a program that acts and asserts nothing still proceeds",
+          r["band"] == gate.PROCEED)
+    check("the gate has no `no_verdict` factor", "no_verdict" not in r["factors"])
+    check("the gate has no `intent_unmet` factor", "intent_unmet" not in r["factors"])
+    check("consent.py still catches it, which is whose job it is",
+          consent.question(UNGROUNDED) is not None)
+    # Under EVERY intent, not just achieve — the old factor changed its verdict with the
+    # intent, which is how one program scored three different ways for no structural
+    # reason.
+    for want in ("fetch", "ensure", "achieve", None):
+        check(f"…and under {want or 'no intent'} too",
+              gate.score(UNGROUNDED, GOAL, want)["band"] == gate.PROCEED)
+
+
+def test_every_surviving_factor_is_one_nothing_else_checks():
+    """THE RULE THAT WOULD HAVE PREVENTED ALL FOUR DELETIONS.
+
+    Four factors were deleted for duplicating a mechanism that already existed and already
+    answered better. The surviving two are the ones with no other owner: nothing else in
+    the system asks whether a program MENTIONS what the operator named, and nothing else
+    notices a binding that is never read.
+
+    Asserted by naming the owners explicitly. A new factor has to survive the same
+    question — who else already handles this, and do they answer better? — and writing the
+    list down is what makes that question unavoidable rather than remembered.
+    """
+    owned_elsewhere = {
+        "no_verdict":   "consent.py asks the operator y/n (decision 2)",
+        "intent_unmet": "the same fault as no_verdict, and not every program needs ACHIEVE",
+        "unclosable":   "derive() returning None already falls back to asking the author",
+        "inert":        "the declarative form is legal and derive() computes the calls",
+    }
+    factors = set(gate.score(SOUND, GOAL, "achieve")["factors"])
+    for name, owner in sorted(owned_elsewhere.items()):
+        check(f"`{name}` is NOT a gate factor — {owner}", name not in factors)
+    check("what is left is exactly the uncovered pair",
+          factors == {"goal_unnamed", "dead_binding"})
 
 
 def test_an_unnamed_goal_is_a_fraction_not_a_flag():
@@ -285,10 +346,10 @@ def test_the_loop_ends_four_distinguishable_ways():
     out, said = _loop(ABOUT_SOMETHING_ELSE, [])
     check("STALE: an author with no answer ends it too", out["ended"] == gate.STALE)
 
-    # WORSE — a correction that scores higher than what it replaced.
-    worse = {"body": [{"op": "call", "tool": "create_vm",
-                       "args": {"name": "web", "os_type": "linux"}}]}
-    out, said = _loop(ABOUT_SOMETHING_ELSE, [worse])
+    # WORSE — a correction that scores HIGHER than what it replaced. Now that the gate
+    # has two factors, degrading means picking up the second one while keeping the first:
+    # BOTH_FAULTS still operates on a machine nobody named AND adds an unread binding.
+    out, said = _loop(ABOUT_SOMETHING_ELSE, [BOTH_FAULTS])
     check("WORSE: a degrading correction stops the loop", out["ended"] == gate.WORSE)
     check("WORSE: and the BEST program seen is what is kept, not the last",
           out["program"] == ABOUT_SOMETHING_ELSE)
@@ -312,9 +373,7 @@ def test_every_termination_tells_the_operator_which_one_it_was():
     """The third message exists because 'it tried and still says no' is a different thing
     to hear than 'it says no'. It must name the termination, or all four look alike."""
     for ended, replies in ((gate.STALE, [ABOUT_SOMETHING_ELSE]),
-                           (gate.WORSE, [{"body": [{"op": "call", "tool": "create_vm",
-                                                    "args": {"name": "web",
-                                                             "os_type": "linux"}}]}])):
+                           (gate.WORSE, [BOTH_FAULTS])):
         out, said = _loop(ABOUT_SOMETHING_ELSE, replies)
         final = said[-1]
         check(f"{ended}: the last word is the give-up message",
@@ -334,7 +393,7 @@ def test_a_refusal_is_announced_and_never_re_asked():
         return SOUND
 
     said = []
-    out = gate.clarify(NO_VERDICT, GOAL, "achieve", reauthor, say=said.append)
+    out = gate.clarify(BOTH_FAULTS, GOAL, "achieve", reauthor, say=said.append)
     check("a refused program scores in the refuse band", out["band"] == gate.REFUSE)
     check("the author is never asked", asked == [])
     check("the operator is told once", len(said) == 1)
@@ -407,8 +466,7 @@ def test_no_constrainable_rule_lives_only_in_the_gate():
     """
     from orchestrator.ai.planner.ir import validate
 
-    examples = {"no_verdict": NO_VERDICT, "intent_unmet": SOUND,
-                "goal_unnamed": ABOUT_SOMETHING_ELSE, "dead_binding": DEAD_BINDING}
+    examples = {"goal_unnamed": ABOUT_SOMETHING_ELSE, "dead_binding": DEAD_BINDING}
     factors = config.GATE["factors"]
 
     check("every factor the gate scores is declared in the manifest",
@@ -452,8 +510,8 @@ def test_the_gate_is_actually_in_the_path_a_program_takes():
     run_program = make_run_program(_Lab(), None, known_names=set(), consent=True,
                                    intent="achieve", say=said.append)
 
-    # REFUSED: acts, asserts nothing, and states no ACHIEVE under an achieve intent.
-    out = run_program(NO_VERDICT, GOAL, call)
+    # REFUSED: operates on a machine the operator never named AND leaves a binding unread.
+    out = run_program(BOTH_FAULTS, GOAL, call)
     check("a refused program comes back as `invalid`", bool(out.get("invalid")))
     check("a refused program's statements never reach the world", executed == [])
     check("and the operator is told", any("Gate refused" in m for m in said))
@@ -486,7 +544,8 @@ def main():
                test_a_program_doing_less_is_not_a_program_doing_worse,
                test_an_underivable_achieve_is_a_legitimate_goal,
                test_each_factor_moves_the_score_and_says_why,
-               test_intent_is_consumed_and_never_sniffed,
+               test_the_gate_has_no_opinion_about_a_missing_verdict,
+               test_every_surviving_factor_is_one_nothing_else_checks,
                test_an_unnamed_goal_is_a_fraction_not_a_flag,
                test_a_proceeding_program_never_enters_the_loop,
                test_a_clarified_program_is_run_and_the_operator_hears_about_it,

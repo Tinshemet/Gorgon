@@ -26,28 +26,43 @@ bands:
               Re-ask, with the reasons, and TELL the operator it happened.
     REFUSE    too many things are wrong at once for re-asking to fix.
 
-REFUSE IS REACHED BY ACCUMULATION, NEVER BY A SINGLE FACTOR, and that took two corrections
-to get right — the SAME mistake twice, which is why it is written out at length. The design called the refuse band "the compiler case — illogical, refused
-outright", which is true and is already `validate.py`'s job: everything illogical on its
-own is rejected before a program ever reaches here. So a gate that refused on one factor
-would either duplicate a judgement upstream had already made, or make a new one on thinner
-evidence. The first factor drafted here — an ACHIEVE on a predicate declaring
-`derivable: false` — was exactly that mistake: `derive()` returning None is a DOCUMENTED
-FALLBACK to asking the author, not a dead end, so `ACHIEVE ALL(...)` is a legitimate goal
-that reaches its answer another way, and refusing it would have deleted a working
-capability for a reason no rewording could ever satisfy.
+THE GATE IS SMALL, AND IT GOT THAT WAY BY MEASUREMENT. It began with six factors and has
+two. Four were deleted, every one for the same reason: they were invented from first
+principles instead of from what the rest of the system leaves UNCOVERED, so each duplicated
+a mechanism that already existed and already had a better answer.
 
-`inert` — an achieve whose program contains no acting statement — was the same error in a
-different costume, and it survived one round of catching the first. Both penalised the
-DECLARATIVE form because derive() MIGHT not close it. Rung 13 is where that cost something
-measurable: in a world already satisfying the goal, the pure
-`ACHIEVE REACH(SELECT vm WHERE label='fleet') >= 5` is the RIGHT answer — derive computes
-the difference, finds none, does nothing — and the gate scored it 0.18 CLARIFY while
-scoring the program that duplicated five machines 0.00 PROCEED. Exactly backwards. The
-generalisation worth keeping: A PROGRAM DOING LESS IS NOT A PROGRAM DOING WORSE, and this
-language has a convergence engine built on precisely that.
+  unclosable     duplicated derive()'s documented fallback to asking the author.
+  inert          contradicted the declarative form derive() supports — and was the same
+                 error as unclosable, written a second time in this very file.
+  no_verdict     duplicated consent.py, which ASKS the operator y/n (decision 2). The gate
+                 turned a settled question into a refusal.
+  intent_unmet   was no_verdict counted twice. Under `achieve`, a program with no ACHIEVE
+                 IS a program with no verdict; at 0.36 + 0.34 = 0.70 one flaw crossed a
+                 0.50 threshold designed to need several.
 
-No weight in the manifest reaches the refuse threshold alone.
+WHAT IT COST, measured on the 13-rung ladder: the literal column went from 10/12 to 0/12
+and the paraphrase column from 8/13 to 2/13. It refused every program that worked. No
+deterministic suite could have found that, because every fixture in one is a program
+written to exercise a factor — a suite built from a factor list can only confirm the
+factor list.
+
+`intent_unmet` was also wrong on the language's own terms. The operator's correction, worth
+keeping verbatim in substance: ENSURE is the statement a program truly needs; FETCH grounds
+the world before it starts; ACHIEVE is a PERMUTATION of ENSURE used to make sure something
+is DONE — a barrier saying the run cannot pass this point unless X exists, so the rest of
+the program has what it depends on. Plenty of correct programs need no ACHIEVE at all, so
+its absence was never a fault to score.
+
+WHAT SURVIVES is only what nothing else in the system checks: whether the program mentions
+what the operator NAMED, and whether it bound something it never read. Both scored zero on
+all thirteen rungs, with no false alarms. A gate whose failure mode is throwing away
+correct work should fire rarely, and this one now does by construction.
+
+REFUSE IS REACHED BY ACCUMULATION, NEVER BY A SINGLE FACTOR — asserted arithmetically over
+the manifest, so a retuning cannot quietly hand one factor a veto. That invariant held
+through the disaster above and did not save it: two factors that are secretly ONE FAULT
+satisfy accumulation on paper while violating it in substance. Independence is the part
+that has to be checked by hand.
 
 INTENT IS CONSUMED, NEVER SNIFFED (decision 5). The gate never guesses whether the
 operator wanted a check or a command; it is told, and it scores the program against what
@@ -63,7 +78,7 @@ from __future__ import annotations
 import json
 from typing import Any, Callable, Dict, List, Optional
 
-from . import config, consent as _consent, intent as _intent, master, refs
+from . import config, consent as _consent, master, refs
 
 PROCEED, CLARIFY, REFUSE = "proceed", "clarify", "refuse"
 
@@ -83,34 +98,6 @@ STALE, WORSE, ATTEMPTS, TIMEOUT = "stale", "worse", "attempts", "timeout"
 
 
 # ── the factors, each computed from the IR and each in [0, 1] ─────────────────────────
-
-def _no_verdict(program: Any) -> float:
-    """Medusa's one soundness rule, scored instead of asserted.
-
-    `consent.unsound()` already computes this and already asks the operator a y/n about
-    it. The gate does not replace that — it folds the same fact into a score, so a program
-    that is unsound AND ignores the intent AND does nothing lands in refuse rather than
-    presenting three separate small questions.
-    """
-    return 1.0 if _consent.unsound(program) is not None else 0.0
-
-
-def _intent_unmet(comp: Dict[str, int], want: Optional[str]) -> float:
-    """Did the program produce the KIND of answer that was asked for?
-
-    Not "is it a good program" — whether it answers in the right currency. An `achieve`
-    with no ACHIEVE never states what done means; an `ensure` with no ENSURE returns no
-    verdict; a `fetch` that reads nothing returns no data. Zero when no intent was
-    supplied, because an unsupplied fact is not a failing.
-    """
-    if want == _intent.ACHIEVE:
-        return 0.0 if comp["achieve"] else 1.0
-    if want == _intent.ENSURE:
-        return 0.0 if comp["ensure"] else 1.0
-    if want == _intent.FETCH:
-        return 0.0 if comp["fetch"] else 1.0
-    return 0.0
-
 
 def _goal_unnamed(program: Any, goal: str) -> float:
     """The fraction of the operator's own identifiers the program never mentions.
@@ -180,14 +167,19 @@ def score(program: Any, goal: str = "", want: Optional[str] = None) -> Dict[str,
     Returns the FULL breakdown rather than a verdict, because two callers need different
     parts of it: the operator sees the reasons, and the clarify loop compares the score
     against the previous round to notice a correction that is making things worse.
+
+    `want` IS CURRENTLY READ BY NO FACTOR, and that is worth stating rather than quietly
+    dropping. It stays because intent is a fact the gate is TOLD (decision 5) and any
+    future factor must take it that way rather than sniff it. But both factors that used it
+    were deleted for being wrong, and `intent_unmet` was wrong twice over: it demanded an
+    ACHIEVE in every program, when ENSURE is the statement a program truly needs and
+    ACHIEVE is a permutation of it used as a barrier — "the run cannot pass this point
+    unless X exists". Plenty of correct programs have none.
     """
     from .validate import coerce_body
     stmts = _consent._walk(coerce_body(program) or [])
-    comp = _consent.composition(program)
 
     factors = {
-        "no_verdict":   _no_verdict(program),
-        "intent_unmet": _intent_unmet(comp, want),
         "goal_unnamed": _goal_unnamed(program, goal),
         "dead_binding": _dead_binding(stmts),
     }
@@ -203,11 +195,6 @@ def score(program: Any, goal: str = "", want: Optional[str] = None) -> Dict[str,
             "reasons": _reasons(factors, program, want)}
 
 
-def _article(want: Optional[str]) -> str:
-    """`an ensure`, `an achieve`, `a fetch` — the operator reads these sentences."""
-    return f"{'an' if str(want)[:1] in 'aeiou' else 'a'} {want}"
-
-
 def _reasons(factors: Dict[str, float], program: Any, want: Optional[str]) -> List[str]:
     """What to tell the operator, and what to hand back to the author.
 
@@ -221,15 +208,19 @@ def _reasons(factors: Dict[str, float], program: Any, want: Optional[str]) -> Li
     for name, value in sorted(factors.items(), key=lambda kv: -kv[1]):
         if value <= 0:
             continue
-        if name == "no_verdict":
-            out.append(_consent.unsound(program) or docs[name]["doc"])
-        elif name == "intent_unmet":
-            out.append(f"the operator asked for {_article(want)}, and no {str(want).upper()} "
-                       f"statement says what that answer is")
-        elif name == "goal_unnamed":
+        if name == "goal_unnamed":
             out.append(f"{round(value * 100)}% of the names the operator wrote appear "
                        f"nowhere in this program")
-        else:
+        elif name == "dead_binding":
+            out.append(f"{round(value * 100)}% of the names this program binds are never "
+                       f"read back")
+        else:                                                  # pragma: no cover
+            # A NEW FACTOR WITH NO SENTENCE FALLS BACK TO ITS MANIFEST DOC, and that is a
+            # placeholder, not a design. The manifest doc explains a factor to whoever
+            # maintains the gate; it is not addressed to the operator, and printing one
+            # produced the line "a smell rather than a fault — deliberately below the
+            # clarify threshold on its own" INSIDE A REFUSAL. Unreadable and
+            # self-contradicting. Write the operator's sentence above.
             out.append(docs[name]["doc"])
     return out
 
