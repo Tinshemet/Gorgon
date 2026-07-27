@@ -40,7 +40,18 @@ DEFAULT_SCHEMA: Dict[str, Dict[str, Any]] = {
     # like "make sure they all ping each other" has a checkable fact to accept against.
     # `when` gates the yield to the ping ACTION, so fleet create/add don't record a mesh.
     "fleet":      {"fact": "mesh({label})", "value": "all_reachable", "when": {"action": "ping"}},
-    "guest_ping": {"fact": "reachable({name})", "value": "success"},
+    # `alive`, NOT `success`. The real guest_ping (executor/api/_vm_guest.py:240) returns
+    # success:True on every path except a missing config — a stopped VM, a disabled agent,
+    # a missing PSK and a timed-out daemon ALL answer {"success": True, "alive": False},
+    # because the call ran and produced an answer. Reading `success` therefore recorded
+    # reachable(x)=True for machines that demonstrably did not respond, and `usable()` is
+    # a truthiness test, so that fact then closed goals, suppressed re-probing via
+    # anti-rediscovery, and repriced cost — three consumers learning the same falsehood.
+    # It is the exact conflation the codebase refuses everywhere else ("success means the
+    # command RAN, not that the goal is met"), landing in the one tool whose entire purpose
+    # is to produce a liveness verdict. `fleet` above already reads its VERDICT key
+    # (all_reachable) rather than success, which is why this one was the odd entry out.
+    "guest_ping": {"fact": "reachable({name})", "value": "alive"},
     # A model-PROPOSED, TYPED finding (see claim_types.json). The fact key and the
     # verify probe are derived from the claim's `type`, not a static template — so
     # yield_fact / finding_probe_spec special-case it below. This entry just tells

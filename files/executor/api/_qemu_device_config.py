@@ -8,6 +8,7 @@ import json
 import os
 import random
 import re
+import uuid          # _generate_mac needs it; lost in the 88a6df2 split, see below
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -109,7 +110,17 @@ class NetworkConfig:
     # Generates a MAC using a vendor-matched OUI when possible, otherwise any real OUI.
     # In: nothing → Out: sets self.mac
     def _generate_mac(self) -> None:
-        """Assign a stable, locally-administered MAC to this NIC if unset."""
+        """Assign a stable, locally-administered MAC to this NIC if unset.
+
+        `uuid` is imported at MODULE level (see the top of the file). It was not, from
+        88a6df2 — the qemu_config split — until 2026-07-27: the code moved here and its
+        import stayed behind, so every `NetworkConfig` built without an explicit MAC
+        raised NameError. That is the ORDINARY path: create_vm constructs the NIC first
+        and only assigns `mac` afterwards when the caller supplied `mac_address`, so VM
+        creation was broken outright for five days. No suite caught it because none of
+        the non-live suites ever builds a NIC — worth remembering when a refactor moves
+        code between modules, since nothing about the diff looks wrong.
+        """
         import random
         hint = (self.manufacturer_hint or "").lower()
         pool = next(
