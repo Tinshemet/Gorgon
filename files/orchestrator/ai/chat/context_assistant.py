@@ -201,8 +201,16 @@ def extract_slots(prompt: str) -> Dict[str, Optional[str]]:
                     found = candidate
                     break
             else:
-                # plain keyword
-                if p in lower:
+                # A PLAIN KEYWORD IS A WHOLE WORD. This was `p in lower`, a bare substring
+                # test, so `mac` matched inside `machine` — and "machine" is the most
+                # natural English word for a VM. Every goal using it was told
+                # `os_type=mac`, stamped "GUIDANCE (grounded, deterministic — trust it)".
+                # The assistant exists to stop the model inventing a field the user never
+                # mentioned, and it was inventing one itself, with more authority than the
+                # model could have claimed. Same class for `arch` in "architecture" and
+                # `mint` in "minting". Found 2026-07-27 by running the ladder's phrasings
+                # through it: "spin up a machine and call it alpha" -> os_type=mac.
+                if re.search(rf"\b{re.escape(p)}\b", lower):
                     found = p
             if found:
                 break
