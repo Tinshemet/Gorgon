@@ -7,6 +7,7 @@ unit. The stateless helpers, meta-tool schemas, and injected-dep fallbacks are
 imported from the sibling modules.
 """
 
+import json
 import re
 from typing import Any, Callable, Dict, List, Optional
 
@@ -841,7 +842,35 @@ def run_score(
                                     source=tool)
                 return result
 
-            outcome = run_program(args, node_goal, _call)
+            def _reauthor(_program, reasons):
+                """Ask the SAME model the same question, with the gate's objections.
+
+                The author is re-asked rather than repaired by the harness, because the
+                gate's objections are about what the program MEANS — a name the operator
+                gave and the program never mentions, a goal with nothing that states when
+                it is done — and none of those has a mechanical fix. `derive()` exists for
+                the ones that do.
+
+                Returns None when the model declines or answers with something that is not
+                a program, which `clarify()` reads as STALE: an author with no answer is
+                as stuck as one repeating itself, and pretending otherwise would spend the
+                remaining rounds discovering it again.
+                """
+                again = messages + [
+                    {"role": "assistant", "content": json.dumps(_program)},
+                    {"role": "user", "content":
+                     "That program was NOT run. Before anything happened, it was held "
+                     "back for these reasons:\n"
+                     + "\n".join(f"  - {r}" for r in reasons)
+                     + f"\n\nThe goal was: {node_goal}\n"
+                     "Write the whole program again, answering exactly those objections. "
+                     "Nothing has run — the world is untouched."}]
+                nm, na = _first_tool_call(call_model(again, [program_tool]))
+                if nm != program_tool.get("function", {}).get("name"):
+                    return None
+                return na
+
+            outcome = run_program(args, node_goal, _call, _reauthor)
             if not outcome or outcome.get("invalid"):
                 # An unusable program is CHEAP: fall back to a primitive, exactly as a
                 # non-progressing decomposition does. The regime being wrong costs one

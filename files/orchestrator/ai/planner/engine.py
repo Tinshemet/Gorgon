@@ -55,6 +55,13 @@ class Engine:
     # own guarded executor. It is handed IN rather than taken, so a program's statements
     # cannot reach the world by any path a leaf does not.
     program_tool:    Optional[Dict[str, Any]] = None
+    # `run_program` also takes a fourth argument, `reauthor` — the closure the engine
+    # builds to re-ask the SAME model with the schema gate's objections. It is keyword-
+    # optional rather than part of the type above because a caller with nobody to re-ask
+    # is a legitimate configuration: the gate then announces and proceeds instead of
+    # suppressing a program it has no way to improve. The gate's OPERATOR surface is
+    # injected where run_program is built, not carried here — a field the Engine never
+    # reads would be one more thing to keep in step for nothing.
     run_program:     Optional[Callable[[Dict, str, Callable], Dict]] = None
 
     @classmethod

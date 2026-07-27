@@ -207,7 +207,7 @@ def seams(library, findings=None):
 
 
 def make_run_program(library, findings=None, known_names=None, consent=True,
-                     intent=None):
+                     intent=None, say=None):
     """The `run_program` hook the Engine takes: (args, node_goal, call) -> outcome.
 
     `call` is the ENGINE'S guarded executor, handed in rather than taken. That is the
@@ -219,15 +219,32 @@ def make_run_program(library, findings=None, known_names=None, consent=True,
     Returns `{"invalid": True, "problems": [...]}` when the program does not validate. The
     caller falls back to a primitive on that, which is the doctrine regime_probe states:
     a wrong regime choice is cheap, because the path that works today is still there.
+
+    THE SCHEMA GATE SITS BETWEEN VALIDATE AND RUN, which is the only place it can: after
+    the program is well-formed and before anything happens. `say` is the operator's
+    surface and `reauthor` is the author's, both injected — the same pattern `consent` and
+    `referendum` already use — so one gate serves the planner and the chat and they differ
+    only in where the clarification happens.
     """
-    from .ir import render, run, validate
+    from .ir import gate as _gate, render, run, validate
 
     select, holds = seams(library, findings)
 
-    def run_program(args: Dict[str, Any], node_goal: str, call) -> Dict[str, Any]:
+    def run_program(args: Dict[str, Any], node_goal: str, call,
+                    reauthor=None) -> Dict[str, Any]:
         ok, problems = validate(args, known_names=known_names)
         if not ok:
             return {"invalid": True, "problems": problems}
+
+        args = _gated(args, node_goal, reauthor)
+        if args is None:
+            # A REFUSAL LANDS ON THE PATH THAT ALREADY EXISTS. `invalid` is what the
+            # engine falls back to a primitive on, and a gate refusal is the same kind of
+            # answer as a validation failure: this program is not the way to do it. Giving
+            # the refusal its own outcome would have meant a second fallback path doing
+            # the same thing.
+            return {"invalid": True, "problems": _last_reasons[0]}
+
         result = run(args, call, select=select, holds=holds,
                      known_names=known_names, consent=consent, intent=intent)
         # `asserted` is what the node needs to tell DONE from UNVERIFIED: a program that
@@ -239,5 +256,34 @@ def make_run_program(library, findings=None, known_names=None, consent=True,
             for st in (body or []))
         result["rendered"] = render(args)
         return result
+
+    _last_reasons = [[]]
+
+    def _gated(args, node_goal, reauthor):
+        """The gate's verdict as a program to run, or None to refuse.
+
+        NO REAUTHOR MEANS NO SUPPRESSION, and that asymmetry is deliberate. A caller with
+        nobody to re-ask can still act on a REFUSAL — refusing needs no second opinion —
+        but suppressing a CLARIFY it cannot fix would leave the operator with nothing at
+        all, in exchange for a program that still has to pass its own ENSURE before
+        anything is claimed. So the reasons are announced and the program runs. Being told
+        "this looked thin and I ran it anyway" is worth more than silence plus a dead end.
+        """
+        verdict = _gate.score(args, node_goal, intent)
+        _last_reasons[0] = verdict["reasons"] or ["the gate refused this program"]
+        if verdict["band"] == _gate.PROCEED:
+            return args
+        if reauthor is None:
+            if verdict["band"] == _gate.REFUSE:
+                _gate._tell(say, _gate.MESSAGES[_gate.REFUSE].format(
+                    reason="; ".join(_last_reasons[0]), score=verdict["score"]))
+                return None
+            _gate._tell(say, _gate.MESSAGES[_gate.CLARIFY].format(
+                reason="; ".join(_last_reasons[0]) + " [nobody to re-ask]",
+                score=verdict["score"]))
+            return args
+        out = _gate.clarify(args, node_goal, intent, reauthor, say=say)
+        _last_reasons[0] = out["reasons"] or _last_reasons[0]
+        return out["program"] if out["band"] == _gate.PROCEED else None
 
     return run_program

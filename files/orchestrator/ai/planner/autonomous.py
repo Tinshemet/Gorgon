@@ -1164,6 +1164,13 @@ def run_autonomous(
     agent_key: Optional[str] = None,
     mission=None,
     verbose: bool = False,
+    # THE SCHEMA GATE'S OPERATOR SURFACE. A program the gate suppresses is re-asked
+    # automatically, and a suppression nobody hears about is indistinguishable from a
+    # harness that simply understood the request. Injected rather than printed, so a CLI,
+    # the chat and a headless run each decide for themselves what "telling the operator"
+    # means. None is honest for an unattended run — the gate then still refuses, still
+    # re-asks, and only the announcement goes nowhere.
+    notify: Optional[Callable[[str], None]] = None,
 ) -> Dict[str, Any]:
     """Run `goal` autonomously with the active agent's contract. No human in the loop.
 
@@ -1453,7 +1460,8 @@ def run_autonomous(
         run_program=(_make_run_program(
             library, findings,
             known_names=(library.known_names() if hasattr(library, "known_names")
-                         else None))
+                         else None),
+            say=notify)
             if (use_programs and library is not None) else None),
 
     )   # criterion_of/legal_filter default to the active contract inside run_score

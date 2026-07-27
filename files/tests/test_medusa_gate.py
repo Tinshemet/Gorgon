@@ -395,6 +395,63 @@ def test_no_constrainable_rule_lives_only_in_the_gate():
               ok or not problems)
 
 
+def test_the_gate_is_actually_in_the_path_a_program_takes():
+    """WIRED, not merely written. Every part of this language that was built and left
+    unreached stayed broken for days — `disjoint` had no evaluator for weeks, composites
+    never evaluated at all — because nothing exercised the path end to end. So this runs a
+    program through `make_run_program`, the seam the planner actually calls, and checks
+    the gate is standing in it.
+
+    The other half of the claim is the one that would cost real work if it were wrong: a
+    program the gate refuses must NOT reach `call`. A gate that announced a refusal and
+    ran the program anyway would be worse than no gate — it would report a safety
+    behaviour it does not have.
+    """
+    from orchestrator.ai.planner.program import make_run_program
+
+    class _Lab:
+        vms = {}
+
+        def known_names(self):
+            return set()
+
+    executed, said = [], []
+
+    def call(tool, args):
+        executed.append(tool)
+        return {"success": True}
+
+    run_program = make_run_program(_Lab(), None, known_names=set(), consent=True,
+                                   intent="achieve", say=said.append)
+
+    # REFUSED: acts, asserts nothing, and states no ACHIEVE under an achieve intent.
+    out = run_program(NO_VERDICT, GOAL, call)
+    check("a refused program comes back as `invalid`", bool(out.get("invalid")))
+    check("a refused program's statements never reach the world", executed == [])
+    check("and the operator is told", any("Gate refused" in m for m in said))
+
+    # PROCEEDING: the same seam, a program with nothing against it.
+    executed.clear(), said.clear()
+    out = run_program(SOUND, GOAL, call)
+    check("a sound program is not held back", not out.get("invalid"))
+    check("and it actually ran", executed != [])
+    check("with nothing said to the operator", said == [])
+
+    # SUPPRESSED WITH NOBODY TO RE-ASK: announce and proceed. Suppressing a program the
+    # harness has no way to improve would leave the operator with nothing, in exchange for
+    # one that still has to pass its own ENSURE before anything is claimed.
+    executed.clear(), said.clear()
+    out = run_program(ABOUT_SOMETHING_ELSE, GOAL, call)
+    check("a clarify with no author to re-ask still runs", executed != [])
+    check("but says so", any("suppressed" in m and "nobody to re-ask" in m for m in said))
+
+    # SUPPRESSED WITH AN AUTHOR: the corrected program is the one that runs.
+    executed.clear(), said.clear()
+    out = run_program(ABOUT_SOMETHING_ELSE, GOAL, call, lambda p, r: SOUND)
+    check("the re-authored program is the one executed", "add_label" in executed)
+    check("and the operator saw the suppression", any("suppressed" in m for m in said))
+
+
 def main():
     for fn in (test_a_good_program_is_not_touched,
                test_no_single_factor_can_refuse,
@@ -409,7 +466,8 @@ def main():
                test_a_refusal_is_announced_and_never_re_asked,
                test_the_gate_survives_having_nobody_to_talk_to,
                test_the_gate_never_asks_a_model_anything,
-               test_no_constrainable_rule_lives_only_in_the_gate):
+               test_no_constrainable_rule_lives_only_in_the_gate,
+               test_the_gate_is_actually_in_the_path_a_program_takes):
         print(f"\n── {fn.__name__}")
         fn()
     print(f"\n{_PASS}/{_PASS + _FAIL} passed")
