@@ -17,6 +17,12 @@ So the properties worth testing are not "does the score look sensible". They are
     drafted for this gate did exactly that, scoring `ACHIEVE ALL(...)` as unclosable when
     `derive()` returning None is a documented fallback to asking the author. That would
     have deleted a working capability, permanently, for a reason no rewording could fix.
+  * A PROGRAM DOING LESS IS NOT A PROGRAM DOING WORSE. The same mistake was made twice:
+    `unclosable` and then `inert`, both penalising the DECLARATIVE form on the grounds
+    that derive() might not close it. Rung 13 priced it — in a world already satisfying
+    the goal the pure `ACHIEVE REACH(...) >= 5` is the RIGHT answer, and the gate scored
+    it CLARIFY at 0.18 while scoring the program that duplicated five machines PROCEED at
+    0.00. Exactly backwards, and only visible because the gate was pointed at a rung.
   * A GOOD PROGRAM PASSES UNTOUCHED. The cost of a false suppression is a wasted round
     and an operator watching their harness argue with itself.
   * THE LOOP TERMINATES, four ways, and each is DISTINGUISHABLE. "It ran out of tries"
@@ -113,6 +119,30 @@ def test_no_single_factor_can_refuse():
           config.GATE["thresholds"]["clarify"] < refuse)
 
 
+def test_a_program_doing_less_is_not_a_program_doing_worse():
+    """THE SECOND CORRECTION, and the one that had to be measured to be seen.
+
+    `unclosable` and `inert` were the same error twice: both penalised the DECLARATIVE
+    form — an ACHIEVE with nothing before it — because derive() might not close it. Rung
+    13 runs rung 4's goal against a world that ALREADY SATISFIES IT, and there the
+    declarative form is not merely legal, it is the only right answer: derive computes the
+    difference, finds none, and does nothing. The gate scored it CLARIFY while scoring a
+    program that duplicated five machines PROCEED.
+
+    Kept as a test rather than a comment because the reasoning that produced it is
+    seductive — "surely an achieve should DO something" — and it has now been written into
+    this gate twice."""
+    goal = ("create 5 vms, put them all in a network, give them all the 'fleet' label, "
+            "and make sure they all ping each other")
+    declarative = {"body": [{"op": "achieve", "predicate": {
+        "shape": "reach", "select": {"kind": "vm", "label": "fleet"}, "min": 5}}]}
+    r = gate.score(declarative, goal, "achieve")
+    check("the declarative form proceeds untouched", r["band"] == gate.PROCEED)
+    check("with nothing held against it", r["reasons"] == [])
+    check("no factor punishes a program for acting less",
+          "inert" not in r["factors"])
+
+
 def test_an_underivable_achieve_is_a_legitimate_goal():
     """THE CORRECTION, kept as a test so it cannot come back.
 
@@ -132,7 +162,6 @@ def test_each_factor_moves_the_score_and_says_why():
     cases = [
         ("no_verdict", NO_VERDICT, GOAL, "achieve"),
         ("goal_unnamed", ABOUT_SOMETHING_ELSE, GOAL, "achieve"),
-        ("inert", DECLARATIVE, GOAL, "achieve"),
         ("intent_unmet", SOUND, "ensure: is there a vm called core labelled prod", "ensure"),
     ]
     for factor, prog, goal, want in cases:
@@ -379,8 +408,7 @@ def test_no_constrainable_rule_lives_only_in_the_gate():
     from orchestrator.ai.planner.ir import validate
 
     examples = {"no_verdict": NO_VERDICT, "intent_unmet": SOUND,
-                "inert": DECLARATIVE, "goal_unnamed": ABOUT_SOMETHING_ELSE,
-                "dead_binding": DEAD_BINDING}
+                "goal_unnamed": ABOUT_SOMETHING_ELSE, "dead_binding": DEAD_BINDING}
     factors = config.GATE["factors"]
 
     check("every factor the gate scores is declared in the manifest",
@@ -455,6 +483,7 @@ def test_the_gate_is_actually_in_the_path_a_program_takes():
 def main():
     for fn in (test_a_good_program_is_not_touched,
                test_no_single_factor_can_refuse,
+               test_a_program_doing_less_is_not_a_program_doing_worse,
                test_an_underivable_achieve_is_a_legitimate_goal,
                test_each_factor_moves_the_score_and_says_why,
                test_intent_is_consumed_and_never_sniffed,

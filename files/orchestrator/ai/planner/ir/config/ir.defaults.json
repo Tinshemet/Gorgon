@@ -496,11 +496,10 @@
   "_gate_doc": "THE SCHEMA GATE. The master decides what MAY be emitted; the gate decides whether what WAS emitted should run. The split is structural rather than stylistic: a schema can constrain the form of a statement and cannot compel that a program SAYS something, so 'every identifier the operator named appears somewhere' is unexpressible as schema and has to be judged after authoring. Mechanically this is the contract's risk formula again — weighted factors, a score, threshold bands — with one correction that matters: the contract scores DECLARED facts about a tool, and the gate scores COMPUTED facts about a program. Every factor here is structural and readable off the IR. No factor asks a model whether a program looks right; that is the p_self firewall the reason gate already drew, and a gate that consults the author it is judging has judged nothing. Scoring rather than a boolean verdict, because a boolean cannot tell an improving correction from a degrading one, and 'getting worse' is one of the four ways the clarify loop terminates. REFUSE IS REACHED BY ACCUMULATION, NOT BY ANY SINGLE FACTOR, and that is deliberate: validate.py already refuses everything that is illogical on its own, so the gate's refuse band means 'too many things are wrong at once for re-asking to fix it' rather than repeating a judgement something upstream has already made. No weight here reaches the refuse threshold alone.",
   "gate": {
     "weights": {
-      "no_verdict": 0.3,
-      "intent_unmet": 0.28,
-      "inert": 0.18,
-      "goal_unnamed": 0.17,
-      "dead_binding": 0.07
+      "no_verdict": 0.36,
+      "intent_unmet": 0.34,
+      "goal_unnamed": 0.21,
+      "dead_binding": 0.09
     },
     "thresholds": {
       "refuse": 0.5,
@@ -514,10 +513,6 @@
       "intent_unmet": {
         "doc": "the program does not produce the KIND of answer the operator asked for: an achieve with no ACHIEVE, an ensure with no ENSURE, a fetch with no FETCH. Intent is consumed here, never sniffed (decision 5).",
         "why_not_schema": "Same shape as no_verdict — a whole-body property, not a per-statement one. The master DOES carry the constrainable half of intent: ops above the operator's rung are not offered at all. What is left here is the part a schema cannot state, which is that at least one statement of the right kind must be PRESENT."
-      },
-      "inert": {
-        "doc": "an achieve whose program contains no acting statement at all. The operator asked for it done and the program only looks. Not fatal alone — the declarative form is legal and derive() computes the calls — which is why it scores rather than refuses.",
-        "why_not_schema": "Presence again, and of a class of statements rather than a field: 'at least one acting statement somewhere'. It is also legitimately absent — the declarative ACHIEVE is a valid program — so even if it could be required, requiring it would be wrong."
       },
       "goal_unnamed": {
         "doc": "the fraction of identifiers the operator wrote that appear NOWHERE in the program. The MUST a schema cannot express, and the reason the gate exists separately from the master.",
@@ -545,6 +540,7 @@
     "_no_unclosable_doc": "An ACHIEVE on a predicate declaring `derivable: false` (not/all/any/is) was a factor here and was WRONG. derive() returning None is a documented fallback, not a dead end — 'the caller falls back to asking the model on None and stops on []' — so ACHIEVE ALL(...) is a legitimate goal that reaches its answer through the author rather than the deriver. Scoring it as unclosable would have refused a working capability, and refused it for a reason no rewording could satisfy.",
     "attempts": 3,
     "_attempts_doc": "How many times the clarify loop may re-ask before it refuses. The other three terminations — stale, worse, timeout — can end it sooner.",
-    "_why_not_schema_doc": "THE INVARIANT: no constrainable rule may live only in the gate. A rule a schema could enforce belongs to the master, where the decoder cannot violate it — catching it afterwards costs an authoring round to discover something that could have been impossible to write. So every factor here states why it is NOT expressible as a constraint, the same declare-or-say-why shape the tool `verify` coverage uses, and the suite asserts the field is present and that validate() ACCEPTS each factor's own example — a factor whose example is already rejected upstream is repeating a judgement rather than adding one."
+    "_why_not_schema_doc": "THE INVARIANT: no constrainable rule may live only in the gate. A rule a schema could enforce belongs to the master, where the decoder cannot violate it — catching it afterwards costs an authoring round to discover something that could have been impossible to write. So every factor here states why it is NOT expressible as a constraint, the same declare-or-say-why shape the tool `verify` coverage uses, and the suite asserts the field is present and that validate() ACCEPTS each factor's own example — a factor whose example is already rejected upstream is repeating a judgement rather than adding one.",
+    "_no_inert_doc": "`inert` — an achieve whose program contains no acting statement — was a factor here and was WRONG, for the SECOND time in the same shape. It is `unclosable` in a different costume: both penalised the DECLARATIVE form on the grounds that derive() might not close it. Measured against rung 13, the idempotent re-entry rung: the pure declarative `ACHIEVE REACH(SELECT vm WHERE label='fleet') >= 5` is the CORRECT answer in a world that already satisfies the goal — derive computes the difference, finds none, and does nothing — and the gate scored it 0.18 CLARIFY while scoring the program that duplicated five machines 0.00 PROCEED. Exactly backwards. The lesson generalises past this factor: a program doing LESS is not a program doing WORSE, and the language has a whole convergence engine built on that."
   }
 }

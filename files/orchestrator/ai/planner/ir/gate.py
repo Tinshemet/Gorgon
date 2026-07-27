@@ -26,8 +26,8 @@ bands:
               Re-ask, with the reasons, and TELL the operator it happened.
     REFUSE    too many things are wrong at once for re-asking to fix.
 
-REFUSE IS REACHED BY ACCUMULATION, NEVER BY A SINGLE FACTOR, and that took a correction to
-get right. The design called the refuse band "the compiler case — illogical, refused
+REFUSE IS REACHED BY ACCUMULATION, NEVER BY A SINGLE FACTOR, and that took two corrections
+to get right — the SAME mistake twice, which is why it is written out at length. The design called the refuse band "the compiler case — illogical, refused
 outright", which is true and is already `validate.py`'s job: everything illogical on its
 own is rejected before a program ever reaches here. So a gate that refused on one factor
 would either duplicate a judgement upstream had already made, or make a new one on thinner
@@ -35,8 +35,19 @@ evidence. The first factor drafted here — an ACHIEVE on a predicate declaring
 `derivable: false` — was exactly that mistake: `derive()` returning None is a DOCUMENTED
 FALLBACK to asking the author, not a dead end, so `ACHIEVE ALL(...)` is a legitimate goal
 that reaches its answer another way, and refusing it would have deleted a working
-capability for a reason no rewording could ever satisfy. No weight in the manifest reaches
-the refuse threshold alone.
+capability for a reason no rewording could ever satisfy.
+
+`inert` — an achieve whose program contains no acting statement — was the same error in a
+different costume, and it survived one round of catching the first. Both penalised the
+DECLARATIVE form because derive() MIGHT not close it. Rung 13 is where that cost something
+measurable: in a world already satisfying the goal, the pure
+`ACHIEVE REACH(SELECT vm WHERE label='fleet') >= 5` is the RIGHT answer — derive computes
+the difference, finds none, does nothing — and the gate scored it 0.18 CLARIFY while
+scoring the program that duplicated five machines 0.00 PROCEED. Exactly backwards. The
+generalisation worth keeping: A PROGRAM DOING LESS IS NOT A PROGRAM DOING WORSE, and this
+language has a convergence engine built on precisely that.
+
+No weight in the manifest reaches the refuse threshold alone.
 
 INTENT IS CONSUMED, NEVER SNIFFED (decision 5). The gate never guesses whether the
 operator wanted a check or a command; it is told, and it scores the program against what
@@ -99,20 +110,6 @@ def _intent_unmet(comp: Dict[str, int], want: Optional[str]) -> float:
     if want == _intent.FETCH:
         return 0.0 if comp["fetch"] else 1.0
     return 0.0
-
-
-def _inert(comp: Dict[str, int], want: Optional[str]) -> float:
-    """An `achieve` that only looks.
-
-    Distinct from `intent_unmet`, and the pair is worth keeping apart: a program can carry
-    a perfectly good ACHIEVE and no way to reach it, which is the declarative form and is
-    LEGAL — `derive` computes the calls. So this is not fatal on its own. It scores because
-    a declarative achieve depends entirely on the deriver being able to close that shape,
-    and a program that also fails elsewhere is more likely to be one nobody can close.
-    """
-    if want != _intent.ACHIEVE:
-        return 0.0
-    return 0.0 if comp["acts"] else 1.0
 
 
 def _goal_unnamed(program: Any, goal: str) -> float:
@@ -191,7 +188,6 @@ def score(program: Any, goal: str = "", want: Optional[str] = None) -> Dict[str,
     factors = {
         "no_verdict":   _no_verdict(program),
         "intent_unmet": _intent_unmet(comp, want),
-        "inert":        _inert(comp, want),
         "goal_unnamed": _goal_unnamed(program, goal),
         "dead_binding": _dead_binding(stmts),
     }
