@@ -906,6 +906,63 @@ def test_achieve_may_change_the_world_and_ensure_may_not():
     check("deriving twice from one world gives one answer", a == b)
 
 
+def test_new_is_for_what_does_not_exist_yet():
+    """THE MOST EXPENSIVE DEFECT IN THE LADDER, and it is world blindness.
+
+    Shown a lab holding five labelled machines and asked to USE five, the author writes
+    `NEW AMOUNT(5)` and ends with ten. The CURRENT STATE block is read as background
+    rather than as input. The prompt has said "read first, then act on the difference"
+    under `fetch` since the op existed and it does not land there — so the objection is
+    raised at the STATEMENT where the mistake is made, and it names the count.
+
+    The operator's rule, which is an order of operations rather than a prohibition: *"NEW
+    means creation of NEW objects. Only use when asked TO CREATE new objects, OR when
+    objects don't exist. If the user intent is NOT to create but rather use existing
+    resources, USE FETCH. If nothing comes back from said fetch then your fallback is
+    creation."*
+
+    NARROW BY CONSTRUCTION, because a rule that fires on honest programs gets ignored:
+    only a COUNTED creation, only of a kind the lab already holds, never a copy, and never
+    when the program read first. `from` names an existing resource, so copying one is
+    precisely the case where creation IS the request.
+    """
+    blind = {"body": [{"op": "new", "var": "vms", "kind": "vm", "amount": 5,
+                       "args": {"os_type": "linux"}}]}
+
+    ok, problems = validate(blind, census={"vm": 5})
+    check("a counted creation into a full lab is refused", not ok)
+    check("and the objection names what is already there",
+          any("already holds 5 vm" in p for p in problems))
+    check("it explains AMOUNT means MORE, not 'end up with'",
+          any("MORE" in p and "end up with" in p for p in problems))
+    check("and offers both routes — read the difference, or state the end state",
+          any("FETCH" in p and "ACHIEVE COUNT" in p for p in problems))
+
+    check("the same program in an EMPTY lab is fine", validate(blind, census={})[0])
+    check("reading first clears it",
+          validate({"body": [{"op": "fetch", "var": "have", "count": {"kind": "vm"}}]
+                            + blind["body"]}, census={"vm": 5})[0])
+    check("a COPY is untouched — `from` is the case where creating IS the request",
+          validate({"body": [{"op": "new", "var": "c", "kind": "vm", "amount": 3,
+                              "from": "golden"}]},
+                   census={"vm": 5}, known_names={"golden"})[0])
+    check("a single named creation is left to the duplicate rule",
+          validate({"body": [{"op": "new", "var": "b", "kind": "vm",
+                              "args": {"os_type": "linux"}}]}, census={"vm": 5})[0])
+    check("and with NO census the check cannot fire at all",
+          validate(blind)[0])
+
+    # THE CENSUS IS PER KIND. A lab full of networks says nothing about creating vms.
+    check("a full lab of another kind does not accuse this one",
+          validate(blind, census={"network": 9})[0])
+
+    # THE BENCH AND THE VALIDATOR MUST COUNT THE SAME THINGS, or the rule fires in one
+    # place and not the other.
+    w = _world()
+    check("the world's census is keyed by the manifest's kinds",
+          set(w.census()) <= set(config.KINDS) and w.census()["vm"] == 3)
+
+
 def test_every_few_shot_example_is_a_valid_program():
     """A worked example is the strongest teaching signal there is — the shots beat the
     prompt whenever they disagree, which is how rung 7 was taught the old single-word
@@ -1491,6 +1548,7 @@ def main():
                test_the_sanitiser_drops_only_what_could_never_run,
                test_the_sanitiser_reaches_the_reply_not_just_the_program,
                test_achieve_may_change_the_world_and_ensure_may_not,
+               test_new_is_for_what_does_not_exist_yet,
                test_every_few_shot_example_is_a_valid_program,
                test_the_grader_finds_a_verdict_nested_in_a_loop,
                test_the_loop_variable_pins_exactly_one_member,

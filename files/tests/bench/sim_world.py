@@ -42,6 +42,16 @@ class SimWorld:
         """Every resource that exists, for grounding a program's `FROM` before it runs."""
         return set(self.vms) | set(self.nets) | set(self.snapshots)
 
+    def census(self) -> Dict[str, int]:
+        """How many of each kind the lab holds — {kind: n}.
+
+        `names()` cannot answer "are there already five vms": it is a flat set, and the
+        question a counted creation has to be judged against is per KIND. Keyed by the
+        manifest's kind names so the validator can look a statement's `kind` up directly.
+        """
+        return {"vm": len(self.vms), "network": len(self.nets),
+                "snapshot": len(self.snapshots)}
+
     # ── the reach predicate (SSOT: the fleet tool AND the rung checker both use it) ──
     def members(self, label: str) -> List[str]:
         return sorted(n for n, v in self.vms.items() if label in v["labels"])

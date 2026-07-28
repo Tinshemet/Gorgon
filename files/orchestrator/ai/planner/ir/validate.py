@@ -67,7 +67,8 @@ def coerce_body(raw: Any) -> Optional[List[Any]]:
 
 def validate(program: Any, known_tools=None, known_names=None,
              bound: Optional[set] = None,
-             sets: Optional[set] = None) -> Tuple[bool, List[str]]:
+             sets: Optional[set] = None,
+             census: Optional[Dict[str, int]] = None) -> Tuple[bool, List[str]]:
     """(ok, problems).
 
     `bound` is what is already in scope — passed when validating a nested block, so the
@@ -92,6 +93,10 @@ def validate(program: Any, known_tools=None, known_names=None,
     which is what makes `IN $vms` iterate) and handed a LIST to a filter, which tried to
     hash it and took the whole 13-rung run down with a TypeError.
     """
+    # `census` is HOW MANY OF EACH KIND THE LAB ALREADY HOLDS — {kind: n}. Distinct from
+    # `known_names`, which is a flat list and cannot answer "are there already five vms".
+    # Optional, because well-formedness must be answerable without a world; supplied, it
+    # is what lets a counted creation be judged against what is already there.
     tools = _KNOWN_TOOLS if known_tools is None else known_tools
     body = coerce_body(program)
     if body is None:
@@ -406,6 +411,35 @@ def validate(program: Any, known_tools=None, known_names=None,
                     _, sub = validate({"body": block}, tools, known_names,
                                       bound | {config.LOOP_VAR}, sets)
                     problems += [f"{where} (foreach body) → {x}" for x in sub]
+        if op == "new" and census and st.get("amount") is not None and not st.get("from"):
+            # NEW IS FOR WHAT DOES NOT EXIST YET. The operator's order: create only when
+            # asked to create or when the thing is not there; otherwise FETCH, and fall
+            # back to creating only if the fetch comes back empty.
+            #
+            # THE MOST EXPENSIVE DEFECT IN THE LADDER. Shown a lab holding five labelled
+            # machines and asked to use five, the author writes `NEW AMOUNT(5)` and ends
+            # with ten — it reads CURRENT STATE as background rather than as input. The
+            # prompt has said "read first, then act on the difference" under `fetch` since
+            # the op existed and it does not land there, so the objection is raised HERE,
+            # at the statement, and names the count.
+            #
+            # NARROW BY CONSTRUCTION: only a COUNTED creation (`amount`), only of a kind
+            # the lab already holds, and never a copy (`from` names an existing resource,
+            # so copying one is exactly the case where creation IS the request). A named
+            # single creation is already covered by the duplicate-creation rule.
+            have = census.get(st.get("kind"), 0)
+            reads = any(k.get("op") == "fetch" for k in body[:i]
+                        if isinstance(k, dict))
+            if have and not reads:
+                problems.append(
+                    f"{where}: the lab already holds {have} {st.get('kind')}(s), and "
+                    f"AMOUNT makes that many MORE — it does not mean 'end up with' that "
+                    f"many. NEW is for what does not exist yet. If the goal is about "
+                    f"USING what is there, FETCH first and act on the difference "
+                    f"(AMOUNT: {{'minus': [n, '{config.SIGIL}have']}}); if the goal is "
+                    f"the END STATE, state it and let the harness close the gap "
+                    f"(ACHIEVE COUNT(...) >= n). Create outright only when the operator "
+                    f"asked to create, or when the fetch comes back empty.")
         elif op in ("ensure", "achieve"):
             problems += _check_predicate(st.get("predicate"), where, bound, everywhere, sets)
         elif op == "if":

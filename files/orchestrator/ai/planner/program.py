@@ -239,7 +239,14 @@ def make_run_program(library, findings=None, known_names=None, consent=True,
         # account rides on the result, because an operator reading `rendered` is reading
         # a program that differs from the one the author emitted, and has to be told.
         args, artifacts = _sanitize(args)
-        ok, problems = validate(args, known_names=known_names)
+        # THE CENSUS COMES FROM THE SAME `select` THE LANGUAGE USES. Counting the library
+        # directly here would be a second authority on "what is in the lab", and two
+        # readers of one truth is the defect this codebase keeps paying for. It is what
+        # lets the validator judge a counted creation against what already exists —
+        # `NEW AMOUNT(5)` in a lab already holding five means ten, not five.
+        from .ir import config as _cfg
+        census = {k: len(select({"kind": k})) for k in _cfg.KINDS}
+        ok, problems = validate(args, known_names=known_names, census=census)
         if not ok:
             return {"invalid": True, "problems": problems, "sanitized": artifacts}
 

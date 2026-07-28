@@ -532,7 +532,8 @@ def author(goal: str, model: str, temp: float, shots: bool, timeout: int = 600,
     _artifacts = _artifacts + _more
     if _artifacts:
         _SANITISED.extend(_artifacts)
-    ok, problems = validate(prog, known_names=known_names)
+    ok, problems = validate(prog, known_names=known_names,
+                            census=world.census() if world is not None else None)
     return prog, ([] if ok else problems)
 
 
@@ -652,7 +653,8 @@ def repair(goal, program, problems, model, temp, shots, known_names=None, timeou
     _artifacts = _artifacts + _more
     if _artifacts:
         _SANITISED.extend(_artifacts)
-    ok, probs = validate(prog, known_names=known_names)
+    ok, probs = validate(prog, known_names=known_names,
+                         census=world.census() if world is not None else None)
     return prog, ([] if ok else probs)
 
 
@@ -718,7 +720,8 @@ def revise(goal, program, world, why, model, temp, shots, timeout=600,
     _artifacts = _artifacts + _more
     if _artifacts:
         _SANITISED.extend(_artifacts)
-    ok, problems = validate(prog, known_names=known_names)
+    ok, problems = validate(prog, known_names=known_names,
+                            census=world.census() if world is not None else None)
     return prog, ([] if ok else problems)
 
 
