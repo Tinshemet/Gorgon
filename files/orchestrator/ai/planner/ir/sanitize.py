@@ -36,6 +36,7 @@ EARNED BY MEASUREMENT. See _sanitize_doc for the two candidates already refused 
 rule — the schema gate scored 0/12 by inventing factors instead, and this file exists
 downstream of that lesson.
 """
+import json
 from typing import Any, Dict, List, Optional, Tuple
 
 from . import config
@@ -110,6 +111,54 @@ def sanitize(program: Any) -> Tuple[Any, List[Dict[str, str]]]:
     out = dict(program)
     out["body"] = walk(program["body"], "")
     return out, removed
+
+
+def symptom_of(kind: str) -> Optional[str]:
+    """The layer whose health this kind's RATE reports on, if any.
+
+    Separate from `severity`, because they answer different questions and one field cannot
+    hold both. `severity` is "is it safe to remove" — `trailing_prose` is entirely safe,
+    it was never part of the program. `symptom_of` is "does its presence mean something
+    else is broken" — and prose after the closing brace is a SCHEMA VIOLATION, so its
+    presence says the constrained decoder is not holding. Cleaning it keeps the run
+    coherent while the rate says something underneath is failing. That is the operator's
+    screening framing exactly, and it is why the alarm needed a second kind before it
+    could ever fire.
+    """
+    return (kinds().get(kind) or {}).get("symptom_of")
+
+
+def sanitize_text(reply: str) -> Tuple[Any, List[Dict[str, str]]]:
+    """(program, removed) from a RAW MODEL REPLY — the artifact stage before parsing.
+
+    THE SANITISER'S REACH USED TO STOP ONE LAYER SHORT. It takes a parsed program, and
+    trailing prose kills the parse, so the one instrument whose job is removing model
+    residue could never see the most common residue there is. Measured: `lit:7` and
+    `lit:13`, six runs of six, each a COMPLETE schema-shaped object followed by a sentence
+    explaining the fix. `json.loads` requires the whole string be one value, so byte 815
+    discarded bytes 1-814 and the answer was recorded as though the model had said
+    nothing. Rung 11's discarded repair was valid and passed its rung in six calls.
+
+    `raw_decode` is the standard library's own answer: it reads ONE value and stops. What
+    follows is returned as an artifact rather than ignored — the rate is the evidence that
+    the decoder is failing, and a reader that silently tolerated prose would destroy it.
+
+    Raises whatever the decoder raises when there is no value at all: a reply that is not
+    JSON is a channel failure, not an artifact, and the caller must be able to tell those
+    apart.
+    """
+    text = reply.strip() if isinstance(reply, str) else reply
+    if not isinstance(text, str):
+        return text, []
+    program, end = json.JSONDecoder().raw_decode(text)
+    trailing = text[end:].strip()
+    if not trailing:
+        return program, []
+    kind = "trailing_prose"
+    return program, [{"kind": kind, "where": f"{len(trailing)} chars after the program",
+                      "severity": severity(kind), "symptom_of": symptom_of(kind),
+                      "why": (kinds().get(kind) or {}).get("why", ""),
+                      "text": trailing[:200]}]
 
 
 def account(removed: List[Dict[str, str]]) -> str:

@@ -38,6 +38,7 @@ from orchestrator.ai.planner.ir import schema as _ir_schema
 from orchestrator.ai.planner.ir.validate import _one_of_groups
 
 from orchestrator.ai.planner.ir.sanitize import kinds as _sanitize_kinds
+from orchestrator.ai.planner.ir.sanitize import sanitize_text as _sanitize_text
 from orchestrator.ai.planner.ir.sanitize import sanitize as _sanitize
 from .ladder import BENCH_MODEL
 from .mutate import MUTATIONS, apply as _mutate
@@ -66,6 +67,7 @@ def _decode_failure(err: str) -> str:
 # Every artifact removed this run. A pass that cleans without counting makes the
 # artifact rate unmeasurable, which is precisely how it would get worse unnoticed.
 _SANITISED = []
+from collections import Counter as _Counter
 _OLLAMA = "http://localhost:11434/api/chat"
 
 
@@ -516,13 +518,18 @@ def author(goal: str, model: str, temp: float, shots: bool, timeout: int = 600,
         r = urllib.request.urlopen(urllib.request.Request(
             _OLLAMA, json.dumps(req).encode(), {"Content-Type": "application/json"}),
             timeout=timeout)
-        prog = json.loads(json.loads(r.read())["message"]["content"])
+        # THE TEXT STAGE FIRST. The sanitiser's reach used to stop at a parsed program,
+        # so the most common residue there is — prose after the closing brace — killed the
+        # parse and the whole answer was discarded before the instrument could see it.
+        # `sanitize_text` reads ONE value and returns what follows as an artifact.
+        prog, _artifacts = _sanitize_text(json.loads(r.read())["message"]["content"])
     except Exception as e:
         return None, [f"{type(e).__name__}: {e}"]
-    # ARTIFACTS COME OFF BEFORE THE VERDICT, the same order production uses. The removals
-    # are stashed on the program rather than returned, so the three authoring loops keep
-    # their two-value signature and the caller still gets the account.
-    prog, _artifacts = _sanitize(prog)
+    # THEN THE PROGRAM STAGE, the same order production uses. The removals are stashed
+    # rather than returned, so the three authoring loops keep their two-value signature
+    # and the caller still gets the account.
+    prog, _more = _sanitize(prog)
+    _artifacts = _artifacts + _more
     if _artifacts:
         _SANITISED.extend(_artifacts)
     ok, problems = validate(prog, known_names=known_names)
@@ -631,13 +638,18 @@ def repair(goal, program, problems, model, temp, shots, known_names=None, timeou
         r = urllib.request.urlopen(urllib.request.Request(
             _OLLAMA, json.dumps(req).encode(), {"Content-Type": "application/json"}),
             timeout=timeout)
-        prog = json.loads(json.loads(r.read())["message"]["content"])
+        # THE TEXT STAGE FIRST. The sanitiser's reach used to stop at a parsed program,
+        # so the most common residue there is — prose after the closing brace — killed the
+        # parse and the whole answer was discarded before the instrument could see it.
+        # `sanitize_text` reads ONE value and returns what follows as an artifact.
+        prog, _artifacts = _sanitize_text(json.loads(r.read())["message"]["content"])
     except Exception as e:
         return None, [f"{type(e).__name__}: {e}"]
-    # ARTIFACTS COME OFF BEFORE THE VERDICT, the same order production uses. The removals
-    # are stashed on the program rather than returned, so the three authoring loops keep
-    # their two-value signature and the caller still gets the account.
-    prog, _artifacts = _sanitize(prog)
+    # THEN THE PROGRAM STAGE, the same order production uses. The removals are stashed
+    # rather than returned, so the three authoring loops keep their two-value signature
+    # and the caller still gets the account.
+    prog, _more = _sanitize(prog)
+    _artifacts = _artifacts + _more
     if _artifacts:
         _SANITISED.extend(_artifacts)
     ok, probs = validate(prog, known_names=known_names)
@@ -692,13 +704,18 @@ def revise(goal, program, world, why, model, temp, shots, timeout=600,
         r = urllib.request.urlopen(urllib.request.Request(
             _OLLAMA, json.dumps(req).encode(), {"Content-Type": "application/json"}),
             timeout=timeout)
-        prog = json.loads(json.loads(r.read())["message"]["content"])
+        # THE TEXT STAGE FIRST. The sanitiser's reach used to stop at a parsed program,
+        # so the most common residue there is — prose after the closing brace — killed the
+        # parse and the whole answer was discarded before the instrument could see it.
+        # `sanitize_text` reads ONE value and returns what follows as an artifact.
+        prog, _artifacts = _sanitize_text(json.loads(r.read())["message"]["content"])
     except Exception as e:
         return None, [f"{type(e).__name__}: {e}"]
-    # ARTIFACTS COME OFF BEFORE THE VERDICT, the same order production uses. The removals
-    # are stashed on the program rather than returned, so the three authoring loops keep
-    # their two-value signature and the caller still gets the account.
-    prog, _artifacts = _sanitize(prog)
+    # THEN THE PROGRAM STAGE, the same order production uses. The removals are stashed
+    # rather than returned, so the three authoring loops keep their two-value signature
+    # and the caller still gets the account.
+    prog, _more = _sanitize(prog)
+    _artifacts = _artifacts + _more
     if _artifacts:
         _SANITISED.extend(_artifacts)
     ok, problems = validate(prog, known_names=known_names)
@@ -1302,7 +1319,6 @@ def main(argv=None, sink=None) -> int:
     # silence is not. The severity line names what is NOT screened for, because reporting
     # only what was looked for reads as an all-clear the pass has not earned — the same
     # unknown-is-not-false rule the observed attributes are built on.
-    from collections import Counter as _Counter
     by_kind = _Counter(x["kind"] for x in _SANITISED)
     print(f"   ARTIFACTS REMOVED  : {len(_SANITISED)}"
           + (f"  ({', '.join(f'{k}×{n}' for k, n in by_kind.most_common())})"
@@ -1313,6 +1329,16 @@ def main(argv=None, sink=None) -> int:
     if unscreened:
         print(f"   NOT SCREENED FOR   : {', '.join(unscreened)} "
               f"— no kind carries that severity yet")
+    # THE SYMPTOM LINE — benign to clean, diagnostic in rate. `trailing_prose` is entirely
+    # safe to remove and its presence is a SCHEMA VIOLATION, so the run stays coherent
+    # BECAUSE the artifact was cleaned while the rate says the decoder is not holding.
+    # Reporting only the removal count would hide exactly that.
+    _sym = _Counter(_sanitize_kinds().get(x["kind"], {}).get("symptom_of")
+                    for x in _SANITISED)
+    _sym.pop(None, None)
+    for layer, n in _sym.most_common():
+        print(f"   SYMPTOM OF {layer.upper():8}: {n} removal(s) — cleaned safely, but "
+              f"their presence indicates the {layer} is not holding")
     # BOTH SIDES OF THE GATE'S LEDGER, always together. A gate reported only through the
     # pass count can suppress exactly as much as it saves and still read as neutral, so
     # what it fixed and what it refused are printed side by side with what it cost.

@@ -724,11 +724,74 @@ def test_the_sanitiser_drops_only_what_could_never_run():
     # A KIND IS EARNED. Two candidates were REFUSED on measurement rather than taste:
     # repeated_loop_same_set fired 6 times over 31 programs with 5 PASSING, and its
     # replacement repeated_identical_call never fired at all.
-    check("exactly one kind is defined", list(kinds()) == ["dead_if"])
+    # KINDS ARE EARNED ONE AT A TIME. `dead_if` came from rung 11; `trailing_prose` from
+    # lit:7 and lit:13 at six runs of six. Two candidates were REFUSED on measurement in
+    # between — repeated_loop_same_set fired 6 times over 31 programs with 5 PASSING, and
+    # its replacement repeated_identical_call never fired at all. The count is asserted so
+    # that adding a third has to come here and state its evidence.
+    check("exactly the two measured kinds are defined",
+          sorted(kinds()) == ["dead_if", "trailing_prose"])
     check("every kind carries its evidence",
           all(k.get("evidence") for k in kinds().values()))
     check("an unknown kind is unclassified, never assumed benign",
           severity("something_new") == "unclassified")
+
+
+def test_the_sanitiser_reaches_the_reply_not_just_the_program():
+    """THE INSTRUMENT'S REACH USED TO STOP ONE LAYER SHORT.
+
+    `sanitize()` takes a parsed program. Trailing prose kills the parse — so the one
+    instrument whose job is removing model residue could never see the most common residue
+    there is. Measured: lit:7 and lit:13, six runs of six, each a COMPLETE schema-shaped
+    object followed by a sentence explaining the fix. `json.loads` demands the whole string
+    be one value, so byte 815 discarded bytes 1-814 and the answer was recorded as though
+    the model had said nothing. Rung 11's discarded repair was valid and passed in 6 calls.
+
+    THIS KIND IS DIFFERENT FROM dead_if, and the difference is why `symptom_of` exists.
+    `dead_if` is legal JSON and legal schema, merely useless. Prose after the closing brace
+    is a SCHEMA VIOLATION — `type: object` has no production permitting it — so it is
+    entirely safe to REMOVE while its RATE says the constrained decoder is not holding.
+    Severity and symptom answer different questions and one field cannot hold both.
+    """
+    from orchestrator.ai.planner.ir.sanitize import (kinds, sanitize_text, severity,
+                                                     symptom_of)
+
+    body = '{"body": [{"op": "call", "tool": "list_vms", "args": {}}]}'
+    prose = "\n\nI fixed the NEW statement to include 'os_type' in its arguments."
+
+    prog, removed = sanitize_text(body + prose)
+    check("the program survives the prose", prog == json.loads(body))
+    check("and the prose is REMOVED, not ignored", len(removed) == 1)
+    check("named as its own kind", removed[0]["kind"] == "trailing_prose")
+    check("benign — it was never part of the program",
+          removed[0]["severity"] == "benign")
+    check("but flagged as a symptom of the CHANNEL",
+          removed[0]["symptom_of"] == "channel" == symptom_of("trailing_prose"))
+    check("and the text is kept as evidence, not discarded",
+          "os_type" in removed[0]["text"])
+
+    # A CLEAN REPLY IS UNTOUCHED, and reports nothing — a pass that invented work would
+    # make its own rate meaningless.
+    check("a clean reply yields no artifact", sanitize_text(body) == (json.loads(body), []))
+    check("leading whitespace is not an artifact",
+          sanitize_text("  \n" + body)[1] == [])
+
+    # A REPLY THAT IS NOT JSON AT ALL IS A CHANNEL FAILURE, NOT AN ARTIFACT. The caller has
+    # to be able to tell "the model answered and chattered" from "the model emitted
+    # garbage" — they have different owners, and collapsing them is what hid a correct
+    # repair inside a bucket labelled "no result" for a day.
+    for bad in ("not json at all", '{"body": [{"op":', ""):
+        try:
+            sanitize_text(bad)
+            check(f"non-JSON {bad[:12]!r} raises rather than being cleaned", False)
+        except Exception:
+            check(f"non-JSON {bad[:12]!r} raises rather than being cleaned", True)
+
+    # SEVERITY AND SYMPTOM ARE INDEPENDENT AXES.
+    check("dead_if is benign and symptom of nothing",
+          severity("dead_if") == "benign" and symptom_of("dead_if") is None)
+    check("both kinds still carry their evidence",
+          all(k.get("evidence") for k in kinds().values()))
 
 
 def test_every_few_shot_example_is_a_valid_program():
@@ -1314,6 +1377,7 @@ def main():
                test_not_accepts_the_shape_its_own_schema_asks_for,
                test_an_empty_then_is_told_it_is_an_unstated_inversion,
                test_the_sanitiser_drops_only_what_could_never_run,
+               test_the_sanitiser_reaches_the_reply_not_just_the_program,
                test_every_few_shot_example_is_a_valid_program,
                test_the_grader_finds_a_verdict_nested_in_a_loop,
                test_the_loop_variable_pins_exactly_one_member,

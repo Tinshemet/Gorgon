@@ -239,6 +239,39 @@ def test_one_event_with_two_owners_gets_two_codes():
           and _decode_failure("Expecting ':' delimiter") == "malformed")
 
 
+def test_a_partial_check_does_not_accuse_the_cells_it_skipped():
+    """`check -r 7 -r 13 -c lit` reported 26 regressions — the two it measured plus every
+    cell it never ran. The same fault as `record` overwriting the whole baseline, arriving
+    in the reader instead of the writer: a narrow command treating everything outside its
+    own scope as news.
+
+    Scope is what the invocation SET OUT to measure, taken from its arguments and never
+    from what came back — so a cell that was asked for and produced nothing is still
+    reported NOT MEASURED. Scoping by results instead would let a vanishing cell hide
+    behind a narrow run, and silence is the one thing a regression gate may not treat as
+    good news.
+    """
+    base = {"lit:7": cell(GOAL_UNMET=3), "lit:13": cell(GOAL_UNMET=3),
+            "lit:1": cell(PASS=3), "para:9": cell(PASS=3)}
+    now = {"lit:7": cell(PASS=3), "lit:13": cell(GOAL_UNMET=3)}
+    scope = {"lit:7", "lit:13"}
+
+    unscoped = kinds_of(diff(base, now))
+    check("without scope, the untouched cells are wrongly accused",
+          unscoped.get("lit:1") == "NOT MEASURED")
+
+    scoped = kinds_of(diff(base, now, scope))
+    check("with scope, cells outside it are silent", "lit:1" not in scoped
+          and "para:9" not in scoped)
+    check("and the cells inside it are still judged", scoped.get("lit:7") == "pass rate up")
+    check("a cell in scope that stayed put is silent", "lit:13" not in scoped)
+
+    # THE CASE SCOPING MUST NOT BREAK: asked for, and nothing came back.
+    vanished = kinds_of(diff(base, {"lit:7": cell(PASS=3)}, scope))
+    check("a cell that was asked for and vanished is STILL reported",
+          vanished.get("lit:13") == "NOT MEASURED")
+
+
 def test_the_report_states_its_own_n():
     """The fourth failure point is the person relaying the numbers. A table that omits how
     many runs produced it invites exactly the over-reading that happened repeatedly on
@@ -258,6 +291,7 @@ def main():
                test_a_cell_that_never_ran_is_not_a_cell_with_no_failures,
                test_over_budget_is_a_solved_rung_not_a_failure,
                test_one_event_with_two_owners_gets_two_codes,
+               test_a_partial_check_does_not_accuse_the_cells_it_skipped,
                test_a_new_reason_at_the_same_score_is_reported,
                test_appearing_and_vanishing_cells_are_both_reported,
                test_an_improvement_is_not_a_regression,

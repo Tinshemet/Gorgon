@@ -143,7 +143,7 @@ def flaky(cell):
     return 0 < passes_of(cell) < cell["n"]
 
 
-def diff(base, now):
+def diff(base, now, scope=None):
     """Cells that left the band their own history recorded.
 
     Two kinds of move, and they are different news. A PASS-RATE move is what a scoreboard
@@ -151,8 +151,17 @@ def diff(base, now):
     from GOAL_UNMET to BAD_JSON means the model stopped being the problem and the channel
     started, which a pass count cannot say.
     """
+    # `scope` is what THIS INVOCATION SET OUT TO MEASURE, derived from the arguments and
+    # never from what came back. A partial check reported the other 24 cells as
+    # regressions — the same fault as `record` overwriting the file, in the reader instead
+    # of the writer. Scoping by INTENT rather than by results keeps the case that matters:
+    # a cell that was asked for and produced nothing is still NOT MEASURED, so a silently
+    # vanishing cell cannot hide behind a narrow run.
+    keys = set(base) | set(now)
+    if scope is not None:
+        keys = {k for k in keys if k in scope}
     moves = []
-    for key in sorted(set(base) | set(now)):
+    for key in sorted(keys):
         b, a = base.get(key), now.get(key)
         if b is None:
             moves.append((key, "NEW CELL", "", dict(a["outcomes"])))
@@ -273,7 +282,11 @@ def main(argv=None) -> int:
         print("\n   NO BASELINE to check against — run `record` first")
         return 1
     base = json.load(open(BASELINE))["cells"]
-    moves = diff(base, cells)
+    scope = {f"{col}:{r}" for col in columns for r in rungs}
+    moves = diff(base, cells, scope)
+    skipped = len(set(base) - scope)
+    if skipped:
+        print(f"\n   ({skipped} baseline cell(s) outside this run's scope — not compared)")
     print()
     print("── REGRESSION CHECK")
     if not moves:
