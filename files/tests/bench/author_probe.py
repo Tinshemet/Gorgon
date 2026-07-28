@@ -825,7 +825,7 @@ def _seams(world):
     return select, holds
 
 
-def main(argv=None) -> int:
+def main(argv=None, sink=None) -> int:
     p = argparse.ArgumentParser(description="Constrained decoding + few-shot authoring")
     p.add_argument("-r", "--rung", type=int, action="append", help="default 4-7")
     # THE AUTHOR SEES THE LAB, and this is no longer opt-in. The docstring on _messages
@@ -906,6 +906,21 @@ def main(argv=None) -> int:
     # folding it into the ordinary miss count would hide one behind the other.
     crashed = 0
     for rung in rungs:
+        # ONE PIPELINE, TWO READERS. `sink` collects a structured outcome per cell so a
+        # regression gate can read WHY a cell failed without a second implementation of
+        # authoring, repair, revision and gating. A parallel harness would make 'the
+        # test' its own failure point, which is exactly what the reason codes exist to
+        # separate out.
+        cell = {"rung": rung.n, "name": rung.name,
+                "column": "para" if a.paraphrase else "lit",
+                "mutate": a.mutate, "outcome": None, "detail": None,
+                "calls": None, "artifacts": 0, "repair_rounds": 0,
+                "revisions": 0}
+        _n0 = len(_SANITISED)
+        def _land(outcome, detail=None, **kw):
+            if cell["outcome"] is None:      # FIRST verdict wins — the earliest stage
+                cell.update(outcome=outcome,  # that failed is the one to attribute to
+                            detail=detail, **kw)
         goal = (rung.paraphrase or rung.goal) if a.paraphrase else rung.goal
         unmutated = False
         if a.mutate:
@@ -938,6 +953,15 @@ def main(argv=None) -> int:
             # miss both times. Same distinction run_all.py already draws for suites:
             # NO-RESULT fails the run and is REPORTED as no-result, never as a failure.
             noresult += 1
+            # THE CHANNEL, NOT THE MODEL'S REASONING — and the two kinds are different
+            # bugs. `Extra data` is a valid program with prose after it, recoverable in
+            # principle; anything else is a decoder that emitted non-JSON under a schema
+            # that forbids it. Folding them together hid a correct rung-11 repair inside
+            # a bucket labelled "no result".
+            _e = problems[0]
+            _land("BAD_JSON:trailing_prose" if "Extra data" in _e else
+                  "NO_EMISSION" if "Expecting value: line 1 column 1" in _e else
+                  "BAD_JSON:malformed", _e)
             print(f"   [NO RESULT] {problems[0]} — not counted as a failure\n")
             continue
         if problems and a.revisions:
@@ -947,6 +971,11 @@ def main(argv=None) -> int:
                                                want=want,
                                                world=None if a.blind_author else world)
                 if fixed_prog is None:
+                    # THE DISTINCTION THAT WAS INVISIBLE. Rung 11's repair produced the
+                    # correct program and said so in prose; json.loads threw on the
+                    # trailing sentence and the fix was discarded. That read as a model
+                    # that could not act on an objection. It is a reader defect.
+                    _land("REPAIR_UNDELIVERED", (problems2 or [None])[0])
                     break
                 repairs += 1
                 print(f"          x{attempt + 1}| (rejected: {problems[0]})")
@@ -1007,11 +1036,20 @@ def main(argv=None) -> int:
                 # a harness declining to run its own author's program is a real outcome,
                 # not a missing measurement.
                 gate_refused += 1
+                _land("GATE_REFUSED", f"{verdict['band']} @ {verdict['score']:.2f}")
                 ok = False
                 gate_note = f" (GATE {verdict['band'].upper()} @ {verdict['score']:.2f})"
                 problems = list(verdict["reasons"])
 
         ok = ok and not problems
+        # STILL REJECTED AFTER EVERY ROUND. The objection reached the author and the
+        # author could not act on it — a REASONING outcome, and the detail carries the
+        # rule that refused it so a run can be read for whether the LANGUAGE is the thing
+        # being argued with.
+        if not ok:
+            _land("UNRECOVERED", (problems or [None])[0])
+        cell["repair_rounds"] = repairs
+        cell["artifacts"] = len(_SANITISED) - _n0
         valid += ok
         print(f"   [{'VALID' if ok else 'INVALID'}]{gate_note} "
               f"{len(prog.get('body', []))} statements")
@@ -1054,6 +1092,7 @@ def main(argv=None) -> int:
                           known_names=world.names(), consent=True, intent=want)
             except Exception as exc:
                 crashed += 1
+                _land("CRASHED", f"{type(exc).__name__}: {exc}")
                 print(f"          !! EXECUTOR CRASHED on a VALIDATED program: "
                       f"{type(exc).__name__}: {exc}")
                 print(f"          !! this rung fails; the column continues")
@@ -1192,6 +1231,25 @@ def main(argv=None) -> int:
                       f"goal={'HOLDS' if res['ok'] else 'unmet'}"
                       f"{'' if res['ok'] else ' (' + str(res.get('why','')) + ')'}")
             passed = bool(rung.check(world))
+            cell["revisions"] = rounds
+            cell["calls"] = len(world.calls)
+            if passed:
+                # OVER_BUDGET needs a VERIFIED baseline, not an observed one: a baseline
+                # learned from what the model did certifies whatever the model does.
+                # rung.best is declared, and several are stale in the loose direction, so
+                # this is reported and never counted as a failure until they are re-earned.
+                _land("OVER_BUDGET" if (rung.best and len(world.calls) > rung.best)
+                      else "PASS",
+                      f"{len(world.calls)} calls vs best {rung.best}" if rung.best else None)
+            elif res.get("ok"):
+                # THE HARNESS ACCUSING ITSELF. The program's own ENSURE/ACHIEVE vouched
+                # for the end state and the rung's checker disagrees. One of them is
+                # wrong, and which is not knowable from here — but a run that reports
+                # only the checker hides the possibility that the CHECKER is the defect,
+                # and that is one of the four things this taxonomy exists to separate.
+                _land("CHECKER_DISPUTE", res.get("why") or "program ok, checker false")
+            else:
+                _land("GOAL_UNMET", res.get("failed"))
             correct += passed
             if rounds:
                 revised += 1
@@ -1199,6 +1257,11 @@ def main(argv=None) -> int:
             print(f"          -> RUNG CHECKER: {'PASS' if passed else 'FAIL'}"
                   f"   world: {world.summary()}")
         print()
+
+        if cell["outcome"] is None:
+            _land("GOAL_UNMET", "not executed")
+        if sink is not None:
+            sink.append(cell)
 
     scored = len(rungs) - noresult
     print(f"── summary\n   structurally valid : {valid}/{len(rungs)}"
