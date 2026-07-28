@@ -32,15 +32,30 @@ plan and is idempotent, rather than picking differently each time.
 from typing import Any, Callable, Dict, List, Optional
 
 from . import config
+from .intent import ACHIEVE as _ACHIEVE
 
 
 def derive(predicate: Dict[str, Any], select: Callable[[Dict], List[str]],
-           scope: Optional[Dict[str, Any]] = None) -> Optional[List[Dict[str, Any]]]:
+           scope: Optional[Dict[str, Any]] = None,
+           intent: Optional[str] = None) -> Optional[List[Dict[str, Any]]]:
     """Statements that would make `predicate` hold, or None if it cannot be derived.
 
     None is a real answer and must stay distinguishable from []: "I cannot close this
     gap" is not "nothing needs doing". The caller falls back to asking the model on None
     and stops on [].
+
+    `intent` is what the OPERATOR asked for, and it is what decides whether the world may
+    be corrected DOWNWARD. ACHIEVE means MAKE SURE — the operator: *"creation and
+    modifications and even deletions are allowed in achieve, given correct intent... it CAN
+    CHANGE the world to meet the goal, that's the correction part of it."* So the gate is
+    the intent, never the sign of the difference. Absent (None) is conservative and derives
+    nothing destructive, because a caller that has not said what the operator wants has not
+    established that removal was asked for.
+
+    THIS IS NOT WHERE DELETION IS MADE SAFE. A derived call meets consent, the contract
+    tier and delete_vm's double confirmation on its way to the world exactly as an authored
+    one does. Refusing here duplicated a judgement that already has an owner and broke the
+    language's own promise that an ACHIEVE is a legal way to state a goal.
     """
     if not isinstance(predicate, dict):
         return None
@@ -49,7 +64,7 @@ def derive(predicate: Dict[str, Any], select: Callable[[Dict], List[str]],
     if spec is None:
         return None
     fn = _DERIVERS.get(shape)
-    return fn(predicate, select, scope or {}) if fn else None
+    return fn(predicate, select, scope or {}, intent) if fn else None
 
 
 # The name a derived creation binds. Fixed rather than minted, so a re-derivation of the
@@ -85,7 +100,7 @@ def _creator_args(kind: str) -> Optional[Dict[str, Any]]:
     return {a: defaults[a] for a in needed}
 
 
-def _derive_count(pred, select, scope) -> Optional[List[Dict[str, Any]]]:
+def _derive_count(pred, select, scope, intent=None) -> Optional[List[Dict[str, Any]]]:
     """COUNT(set) eq/gte/lte N — add or remove membership until the count is right.
 
     Membership here means a LABEL, which is the only count the manifest can currently
@@ -111,22 +126,24 @@ def _derive_count(pred, select, scope) -> Optional[List[Dict[str, Any]]]:
         if n > want:                       # too many
             if cmp_ == "gte":
                 return []
-            # CREATE, BUT DO NOT DELETE — the operator's asymmetry, and it follows from
-            # what ACHIEVE means rather than from caution. ACHIEVE says "MAKE SURE you
-            # exist", so bringing a missing thing into being IS the request being carried
-            # out. Removal is not the mirror of that: it is destructive, irreversible, and
-            # only ever correct when it is the INTENDED RESULT — which is a fact about
-            # what the operator asked for, and lives in intent.py where the words that
-            # declare it are already detected. Nothing in a bare COUNT says so, and a
-            # predicate that could delete by arithmetic would let "exactly 2" quietly
-            # destroy three machines.
+            # CORRECT DOWNWARD TOO, WHEN THE INTENT ALLOWS IT. ACHIEVE means MAKE
+            # SURE, and making sure is symmetric: too few is closed by creating, too many
+            # by removing. What decides whether removal is permitted is the OPERATOR'S
+            # INTENT — under `fetch` or `ensure` nothing may act at all, under `achieve`
+            # the world may be corrected. The sign of the difference decides nothing.
             #
-            # So the refusal here is a HANDOFF, not a dead end: the author is asked, and a
-            # program that deletes meets consent, the contract tier and double
-            # confirmation on the way to the world. Dropping a LABEL is not deleting a
-            # resource, so that path continues below.
+            # Dropping a LABEL is not removing a resource, so that path (below) needs no
+            # intent. Removing the resource itself does.
             if not label:
-                return None
+                if intent != _ACHIEVE:
+                    return None
+                tool = (config.KINDS.get(sel.get("kind", "vm")) or {}).get("delete")
+                if not tool:
+                    return None        # no destroyer declared — ask the author
+                key = (config.KINDS.get(sel.get("kind", "vm")) or {}).get("key", "name")
+                return [{"op": "foreach", "in": sorted(current)[:n - want],
+                         "call": {"tool": tool,
+                                  "args": {key: f"{config.SIGIL}{config.LOOP_VAR}"}}}]
             surplus = sorted(current)[:n - want]
             return [{"op": "foreach", "in": surplus,
                      "call": {"tool": "remove_label",
@@ -160,7 +177,7 @@ def _derive_count(pred, select, scope) -> Optional[List[Dict[str, Any]]]:
     return None
 
 
-def _derive_reach(pred, select, scope) -> Optional[List[Dict[str, Any]]]:
+def _derive_reach(pred, select, scope, intent=None) -> Optional[List[Dict[str, Any]]]:
     """REACH(set) >= N — put every member on one common network.
 
     Creates the network only if the program did not already bind one; otherwise it
@@ -191,7 +208,7 @@ def _derive_reach(pred, select, scope) -> Optional[List[Dict[str, Any]]]:
     return out
 
 
-def _derive_disjoint(pred, select, scope) -> Optional[List[Dict[str, Any]]]:
+def _derive_disjoint(pred, select, scope, intent=None) -> Optional[List[Dict[str, Any]]]:
     """DISJOINT(a, b) — cannot be closed without knowing which side should move.
 
     Detaching the overlap from either set satisfies the predicate and they are not

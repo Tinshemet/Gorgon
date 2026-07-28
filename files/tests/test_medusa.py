@@ -794,15 +794,28 @@ def test_the_sanitiser_reaches_the_reply_not_just_the_program():
           all(k.get("evidence") for k in kinds().values()))
 
 
-def test_a_count_gap_is_closed_by_creating_but_never_by_deleting():
-    """THE OPERATOR'S ASYMMETRY, and it is not squeamishness.
+def test_achieve_may_change_the_world_and_ensure_may_not():
+    """WHAT SEPARATES THE TWO WORDS, and it is the whole of it. The operator: *"ENSURE is
+    a sanity check, no world change. ACHIEVE is a world change."*
 
-    `derive()` closed a count gap by adding or removing LABELS and refused to create
-    anything — "creating them is a bigger decision than closing a gap, so leave it to the
-    model". That folded two very different acts under one refusal. The operator split
-    them: *"it's allowed to create resources, not delete"*, then sharpened it — *"it's not
-    allowed to delete unless given consent."* Adding what was asked for IS the request;
-    removing a resource is destructive, irreversible, and belongs to a person.
+    `derive()` closed a count gap by adding or removing LABELS and refused to touch
+    resources at all — "creating them is a bigger decision than closing a gap, so leave it
+    to the model". That was the wrong axis. ACHIEVE means MAKE SURE, and making sure is
+    SYMMETRIC: too few is closed by creating, too many by removing. The operator, arriving
+    at it in two steps: *"it's allowed to create resources, not delete"*, then *"creation
+    and modifications and even deletions are allowed in achieve, given correct intent...
+    it CAN CHANGE the world to meet the goal, that's the correction part of it."*
+
+    SO THE GATE IS THE INTENT, NEVER THE SIGN OF THE DIFFERENCE. Under `fetch` or `ensure`
+    nothing may act; under `achieve` the world may be corrected either way. An UNSTATED
+    intent stays conservative, because a caller that has not said what the operator wants
+    has not established that removal was asked for.
+
+    AND THIS IS NOT WHERE DELETION IS MADE SAFE — which is what I had it doing. A derived
+    call meets consent, the contract tier and delete_vm's double confirmation on its way to
+    the world exactly as an authored one does. Refusing here duplicated a judgement that
+    already has an owner, and broke the language's own promise that an ACHIEVE is a legal
+    way to state a goal and let the harness plan it.
 
     It also repairs a promise the prompt makes and the code did not keep: "a program that
     is nothing but an achieve is a legal way to state a goal and let the harness plan it"
@@ -850,12 +863,25 @@ def test_a_count_gap_is_closed_by_creating_but_never_by_deleting():
     check("existing resources are used before new ones are made",
           made and made[0]["amount"] == 2)
 
-    # DELETION IS STILL REFUSED. Too many, and no label to drop, means the only fix is
-    # destructive — so the author is asked rather than the harness acting.
+    # DOWNWARD IS SYMMETRIC, AND THE GATE IS INTENT — not the sign of the difference.
+    # The operator: "creation and modifications and even deletions are allowed in achieve,
+    # given correct intent... it CAN CHANGE the world to meet the goal, that's the
+    # correction part of it." Refusing here treated derive() as the safety mechanism,
+    # which it is not: a derived call meets consent, the contract tier and delete_vm's
+    # double confirmation exactly as an authored one does.
+    from orchestrator.ai.planner.ir import intent as _intent
     _w, sel5 = seams(["a", "b", "c", "d", "e"])
-    check("a count needing DELETION derives nothing",
-          _derive({"shape": "count", "select": {"kind": "vm"}, "eq": 2},
-                         sel5, {}) is None)
+    pred_down = {"shape": "count", "select": {"kind": "vm"}, "eq": 2}
+    out = _derive(pred_down, sel5, {}, _intent.ACHIEVE)
+    check("under ACHIEVE a surplus is corrected downward", out is not None)
+    check("by the kind's DECLARED destroyer, on the surplus only",
+          out[0]["call"]["tool"] == "delete_vm" and len(out[0]["in"]) == 3)
+    check("choosing deterministically, so a re-derivation is the same program",
+          out == _derive(pred_down, sel5, {}, _intent.ACHIEVE))
+    check("under ENSURE nothing may act, so it derives nothing",
+          _derive(pred_down, sel5, {}, _intent.ENSURE) is None)
+    check("and an UNSTATED intent is conservative — silence is not permission",
+          _derive(pred_down, sel5, {}) is None)
     # Dropping a LABEL is not deleting a resource, so that path is untouched.
     for n in ("a", "b", "c"):
         _w.execute("add_label", {"name": n, "label": "prod"})
@@ -1464,7 +1490,7 @@ def main():
                test_an_empty_then_is_told_it_is_an_unstated_inversion,
                test_the_sanitiser_drops_only_what_could_never_run,
                test_the_sanitiser_reaches_the_reply_not_just_the_program,
-               test_a_count_gap_is_closed_by_creating_but_never_by_deleting,
+               test_achieve_may_change_the_world_and_ensure_may_not,
                test_every_few_shot_example_is_a_valid_program,
                test_the_grader_finds_a_verdict_nested_in_a_loop,
                test_the_loop_variable_pins_exactly_one_member,

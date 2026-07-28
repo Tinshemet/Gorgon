@@ -1220,7 +1220,11 @@ def main(argv=None, sink=None) -> int:
                 # computing a diff would paper over the wrong assumption instead of
                 # rethinking it. That one is the model's to answer.
                 derived = (None if (a.no_derive or res.get("failed") != "unachieved")
-                           else derive(goal_pred, sel, res.get("scope")))
+                           # THE OPERATOR'S INTENT REACHES THE DERIVER. Without it
+                           # derive() is conservative and will not correct downward, so a
+                           # goal that needs removal silently fell back to asking the model
+                           # — the loop rung 7 was built to take off it.
+                           else derive(goal_pred, sel, res.get("scope"), want))
                 if derived:
                     fix, fix_problems = {"body": derived}, []
                     print(f"          d{rounds}| (derived)")
