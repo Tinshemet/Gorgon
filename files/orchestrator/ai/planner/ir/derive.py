@@ -52,6 +52,39 @@ def derive(predicate: Dict[str, Any], select: Callable[[Dict], List[str]],
     return fn(predicate, select, scope or {}) if fn else None
 
 
+# The name a derived creation binds. Fixed rather than minted, so a re-derivation of the
+# same gap produces the same program — the idempotence this module promises in its own
+# docstring.
+_MADE = "_derived"
+
+
+def _creator_args(kind: str) -> Optional[Dict[str, Any]]:
+    """What a DERIVED `NEW kind` passes to the creator, or None if it cannot be derived.
+
+    `NEW` supplies the resource's own name, so only the OTHER required arguments matter.
+    Each must be declared in the kind's `create_defaults`; a required argument with no
+    declaration returns None and the gap goes to the author. That boundary is the whole
+    point — a value in the manifest is the operator's declared intent, identical on every
+    derivation and visible to anyone reading it, where a value invented here would differ
+    per call and appear nowhere. See _create_defaults_doc.
+    """
+    try:
+        from executor.command_catalog import REQUIRED_FIELDS
+    except ImportError:                                    # pragma: no cover
+        REQUIRED_FIELDS = {}
+    spec = config.KINDS.get(kind) or {}
+    key = spec.get("key", "name")
+    defaults = spec.get("create_defaults") or {}
+    # ONLY the resource's OWN name is excluded — that is what NEW supplies. Excluding the
+    # literal "name" as well looked equivalent and is not: snapshot_create's `name` is the
+    # SOURCE vm, so a kind that genuinely cannot be derived reported that it could.
+    needed = [a for a in (REQUIRED_FIELDS.get(spec.get("create")) or [])
+              if a != key]
+    if any(a not in defaults for a in needed):
+        return None
+    return {a: defaults[a] for a in needed}
+
+
 def _derive_count(pred, select, scope) -> Optional[List[Dict[str, Any]]]:
     """COUNT(set) eq/gte/lte N — add or remove membership until the count is right.
 
@@ -63,8 +96,6 @@ def _derive_count(pred, select, scope) -> Optional[List[Dict[str, Any]]]:
     """
     sel = pred.get("select") or {}
     label = sel.get("label", sel.get("tag"))
-    if not label:
-        return None
     current = select(sel)
     n = len(current)
     for cmp_ in ("eq", "gte", "lte"):
@@ -77,25 +108,55 @@ def _derive_count(pred, select, scope) -> Optional[List[Dict[str, Any]]]:
             return []
         if cmp_ == "eq" and n == want:
             return []
-        if n > want:                       # too many: drop the surplus
+        if n > want:                       # too many
             if cmp_ == "gte":
                 return []
+            # CREATE, BUT DO NOT DELETE — the operator's asymmetry, and it follows from
+            # what ACHIEVE means rather than from caution. ACHIEVE says "MAKE SURE you
+            # exist", so bringing a missing thing into being IS the request being carried
+            # out. Removal is not the mirror of that: it is destructive, irreversible, and
+            # only ever correct when it is the INTENDED RESULT — which is a fact about
+            # what the operator asked for, and lives in intent.py where the words that
+            # declare it are already detected. Nothing in a bare COUNT says so, and a
+            # predicate that could delete by arithmetic would let "exactly 2" quietly
+            # destroy three machines.
+            #
+            # So the refusal here is a HANDOFF, not a dead end: the author is asked, and a
+            # program that deletes meets consent, the contract tier and double
+            # confirmation on the way to the world. Dropping a LABEL is not deleting a
+            # resource, so that path continues below.
+            if not label:
+                return None
             surplus = sorted(current)[:n - want]
             return [{"op": "foreach", "in": surplus,
                      "call": {"tool": "remove_label",
                               "args": {"name": "$item", "label": label}}}]
-        # too few: label candidates that do not carry it yet
+        # too few: use what exists, and CREATE the rest
         if cmp_ == "lte":
             return []
-        pool = [x for x in select({"kind": sel.get("kind", "vm")}) if x not in current]
+        kind = sel.get("kind", "vm")
+        pool = ([x for x in select({"kind": kind}) if x not in current]
+                if label else [])
         need = want - n
-        if len(pool) < need:
-            # Not enough existing resources to satisfy it. Creating them is a bigger
-            # decision than closing a gap, so leave it to the model.
-            return None
-        return [{"op": "foreach", "in": sorted(pool)[:need],
-                 "call": {"tool": "add_label",
-                          "args": {"name": "$item", "label": label}}}]
+        from_pool = min(need, len(pool))
+        to_create = need - from_pool
+        stmts: List[Dict[str, Any]] = []
+        if to_create:
+            args = _creator_args(kind)
+            if args is None:
+                return None            # a required argument nobody declared — ask the author
+            stmts.append({"op": "new", "var": _MADE, "kind": kind,
+                          "amount": to_create, "args": args})
+        if label:
+            if from_pool:
+                stmts.append({"op": "foreach", "in": sorted(pool)[:from_pool],
+                              "call": {"tool": "add_label",
+                                       "args": {"name": "$item", "label": label}}})
+            if to_create:
+                stmts.append({"op": "foreach", "in": f"{config.SIGIL}{_MADE}",
+                              "call": {"tool": "add_label",
+                                       "args": {"name": "$item", "label": label}}})
+        return stmts
     return None
 
 

@@ -204,7 +204,49 @@ def _s13(w):
 def _r13(w):
     """Still exactly five. Re-running a satisfied goal must not duplicate the work — the
     measured 5 -> 10 -> 15 cascade is what this rung exists to catch, and no earlier rung
-    ever runs against a world where the goal is already true."""
+    ever runs against a world where the goal is already true.
+
+    THE WORDING WAS REWRITTEN 2026-07-28, because the rung was scoring the wrong thing.
+
+    It used to carry rung 4's goal VERBATIM — "create 5 vms, ..." — with only the seeded
+    world telling the two apart. So one sentence had to mean "make five" on rung 4 and
+    "make none" on rung 13, and nothing in the prompt said which. The operator: *"the
+    prompt LITERALLY asks it to create another 5 vms, if it's supposed to fetch them you
+    need to tell it to fetch, not create."* That is right, and the benchmark undercut
+    itself: rung 7 already states an end-state goal ("make sure exactly 3 vms carry the
+    'prod' label"), so an idiom existed and this rung did not use it.
+
+    BOTH COLUMNS WERE MEASURING DIFFERENT TASKS, which is how the mistake stayed hidden:
+
+      literal    "create 5 vms"      -> NEW AMOUNT(5), ten machines, FAIL
+      paraphrase "spin up five ..."  -> read as launch_vm on vm1..vm5 read out of the
+                                        CURRENT STATE block, creates nothing, PASS 3/3
+
+    The paraphrase passed on a VOCABULARY ACCIDENT — "spin up" meaning start-an-existing-
+    machine — never once reasoning about re-entry. A column passing for a reason the rung
+    does not measure is worse than a column failing.
+
+    "TAKE 5 VMS" RATHER THAN "MAKE SURE THERE ARE EXACTLY 5". The obvious repair is the
+    end-state idiom, and it LEAKS: "make sure there are exactly 5" hands over the counting
+    that is the thing being tested, which is the same objection mutate.py already raises
+    against rung 7's paraphrase. `take` names the set without prescribing how to obtain
+    it, so creating five more is visibly not what was asked while nothing hints at
+    counting.
+
+    AND IT SURVIVES AN EMPTY LAB, which was my objection to it and was wrong. The
+    operator: *"if there weren't, the achieve would catch it and it should fix it by
+    creating 5 vms."* The ACHIEVE does catch it — an end-state goal over a lab that lacks
+    the machines comes back `unachieved`. The correction is only half automatic, and the
+    half that is not is worth knowing: `derive()` closes a count gap by adding or removing
+    LABELS and explicitly refuses to create resources ("creating them is a bigger decision
+    than closing a gap, so leave it to the model"). So the gap is closed by the REVISION
+    round asking the author, not by the harness. Which means the prompt's promise — "a
+    program that is nothing but an achieve is a legal way to state a goal and let the
+    harness plan it" — holds for labels and not for creation.
+
+    COST OF THE CHANGE, stated because it is real: the two rungs no longer share a
+    sentence, so "same words, different world" stops being available as a comparison.
+    """
     return len(w.vms) == 5 and w.reach("fleet", minimum=5)
 
 
@@ -266,10 +308,15 @@ RUNGS: List[Rung] = [
          "a resource type that is neither vm nor network — the manifest claim, measured",
          _s12,
          "make a restore point for each machine that is currently up"),
+    # NEITHER COLUMN MAY SAY create OR spin up — see _r13. The first forces the wrong
+    # answer; the second was silently read as launch_vm and passed without ever meeting
+    # the question. Both wordings now NAME the set rather than prescribe how to get it,
+    # and neither mentions a count, so the model is told what is wanted and nothing about
+    # how to check it.
     Rung(13, "idempotent-reentry",
-         "create 5 vms, put them all in a network, give them all the 'fleet' label, "
+         "take 5 vms, put them all in a network, give them all the 'fleet' label, "
          "and make sure they all ping each other", _r13,
          "the goal ALREADY holds — doing it again must change nothing", _s13,
-         "spin up five machines, wire them together on one private network, tag every one "
+         "use five machines, wire them together on one private network, tag every one "
          "of them 'fleet', and confirm each can reach the others"),
 ]

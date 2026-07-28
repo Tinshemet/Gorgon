@@ -794,6 +794,92 @@ def test_the_sanitiser_reaches_the_reply_not_just_the_program():
           all(k.get("evidence") for k in kinds().values()))
 
 
+def test_a_count_gap_is_closed_by_creating_but_never_by_deleting():
+    """THE OPERATOR'S ASYMMETRY, and it is not squeamishness.
+
+    `derive()` closed a count gap by adding or removing LABELS and refused to create
+    anything — "creating them is a bigger decision than closing a gap, so leave it to the
+    model". That folded two very different acts under one refusal. The operator split
+    them: *"it's allowed to create resources, not delete"*, then sharpened it — *"it's not
+    allowed to delete unless given consent."* Adding what was asked for IS the request;
+    removing a resource is destructive, irreversible, and belongs to a person.
+
+    It also repairs a promise the prompt makes and the code did not keep: "a program that
+    is nothing but an achieve is a legal way to state a goal and let the harness plan it"
+    was true for labels and false for existence, so an end-state goal against an empty lab
+    came back `unachieved` with nothing derived.
+
+    WHERE THE never-guess LINE FALLS. create_vm REQUIRES os_type, which no predicate
+    carries. Inventing one per call would be the schema-withholding defect in reverse —
+    the model wrote `status = 'not running'` precisely because nothing declared what
+    status could be. A value in `create_defaults` is not that: declared once, identical on
+    every derivation, and visible to anyone reading the manifest. The operator: *"or it is
+    the intended"*. A kind with a required argument nobody declared cannot be derived into
+    existence and the author is asked instead.
+    """
+    from orchestrator.ai.planner.ir.derive import derive as _derive
+    from orchestrator.ai.planner.ir.derive import _creator_args
+
+    def seams(vms=()):
+        w = SimWorld()                 # EMPTY — _world() seeds three, which is not the case
+        for name in vms:
+            w.execute("create_vm", {"name": name, "os_type": "linux"})
+        return w, _seams(w)[0]
+
+    # EMPTY LAB, bare existence count -> create the shortfall.
+    _w, sel = seams()
+    out = _derive({"shape": "count", "select": {"kind": "vm"}, "gte": 5}, sel, {})
+    check("an unmet existence count now derives", out is not None and len(out) == 1)
+    check("as a counted NEW of the right kind",
+          out[0]["op"] == "new" and out[0]["kind"] == "vm" and out[0]["amount"] == 5)
+    check("carrying the DECLARED creator argument, not an invented one",
+          out[0]["args"] == {"os_type": "linux"})
+
+    # A LABELLED count creates AND labels — creating a machine does not label it.
+    out = _derive({"shape": "count", "select": {"kind": "vm", "label": "fleet"},
+                          "gte": 5}, sel, {})
+    check("a labelled count creates and then labels", len(out) == 2)
+    check("and labels what it just made, by reference",
+          out[1]["op"] == "foreach" and out[1]["in"] == "$_derived")
+
+    # PARTIAL: three exist unlabelled, five wanted -> label 3, create 2.
+    _w, sel3 = seams(["a", "b", "c"])
+    out = _derive({"shape": "count", "select": {"kind": "vm", "label": "fleet"},
+                          "gte": 5}, sel3, {})
+    made = [st for st in out if st["op"] == "new"]
+    check("existing resources are used before new ones are made",
+          made and made[0]["amount"] == 2)
+
+    # DELETION IS STILL REFUSED. Too many, and no label to drop, means the only fix is
+    # destructive — so the author is asked rather than the harness acting.
+    _w, sel5 = seams(["a", "b", "c", "d", "e"])
+    check("a count needing DELETION derives nothing",
+          _derive({"shape": "count", "select": {"kind": "vm"}, "eq": 2},
+                         sel5, {}) is None)
+    # Dropping a LABEL is not deleting a resource, so that path is untouched.
+    for n in ("a", "b", "c"):
+        _w.execute("add_label", {"name": n, "label": "prod"})
+    out = _derive({"shape": "count", "select": {"kind": "vm", "label": "prod"},
+                          "eq": 1}, _seams(_w)[0], {})
+    check("but dropping a surplus LABEL still derives",
+          out and out[0]["call"]["tool"] == "remove_label")
+
+    # THE UNDECLARED CASE STAYS EXPLICIT.
+    check("a kind with a declared default can be derived",
+          _creator_args("vm") == {"os_type": "linux"})
+    check("a kind needing nothing extra derives with no args",
+          _creator_args("network") == {})
+    check("and an undeclared required argument refuses",
+          _creator_args("snapshot") is None)
+
+    # IDEMPOTENT: the same gap derives the same program, so a re-run is a no-op rather
+    # than a second creation — which is the promise this module's own docstring makes.
+    _w, sel0 = seams()
+    a = _derive({"shape": "count", "select": {"kind": "vm"}, "gte": 5}, sel0, {})
+    b = _derive({"shape": "count", "select": {"kind": "vm"}, "gte": 5}, sel0, {})
+    check("deriving twice from one world gives one answer", a == b)
+
+
 def test_every_few_shot_example_is_a_valid_program():
     """A worked example is the strongest teaching signal there is — the shots beat the
     prompt whenever they disagree, which is how rung 7 was taught the old single-word
@@ -1378,6 +1464,7 @@ def main():
                test_an_empty_then_is_told_it_is_an_unstated_inversion,
                test_the_sanitiser_drops_only_what_could_never_run,
                test_the_sanitiser_reaches_the_reply_not_just_the_program,
+               test_a_count_gap_is_closed_by_creating_but_never_by_deleting,
                test_every_few_shot_example_is_a_valid_program,
                test_the_grader_finds_a_verdict_nested_in_a_loop,
                test_the_loop_variable_pins_exactly_one_member,
