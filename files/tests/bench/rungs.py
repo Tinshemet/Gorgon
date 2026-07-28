@@ -269,10 +269,28 @@ RUNGS: List[Rung] = [
          "an unnamed set, three distributive ops over it, and an assurance clause", None,
          "spin up five machines, wire them together on one private network, tag every one of "
          "them 'fleet', and confirm each can reach the others",
-         # 5 creates + 1 net + 5 attaches + 5 labels + 1 ping. 17/done was MEASURED on
-         # 5813493 (grounding parity) and held through 20a7342; af24cd3 (the node-closure
-         # honesty audit) took it to 25/partial and later commits to 35.
-         minimum=17, best=17),
+         # RE-EARNED 2026-07-29 FROM A HAND-VERIFIED PROGRAM, which is the only honest
+         # source for a cost baseline — one learned from observed passing runs certifies
+         # whatever the model already does (rung 13's earned baseline came out 16, the
+         # exact wasteful program, against a verified best of 0-5).
+         #
+         # The old 17 was 5 creates + 1 net + 5 attaches + 5 labels + ONE ping, and that
+         # single ping is incoherent: it establishes reach for nobody. Two hand-written
+         # correct programs were priced instead:
+         #
+         #   16  create + net + label/attach + ACHIEVE REACH        passes the CHECKER
+         #   21  the same, plus a probe per member                  passes IN PRODUCTION
+         #
+         # THE 16-CALL PROGRAM IS PASSING ON A TECHNICALITY. The bench's reach asks only
+         # whether the members share a network; production's ALSO requires each to have
+         # been probed, so that program would report `reach is unestablished` against the
+         # real lab. Setting best=16 would flag every program that verifies its own work
+         # as over budget — the cost signal pressuring authors to DROP verification, in a
+         # system whose one rule is that unverified is not done.
+         #
+         # So `best` is the cheapest program correct in BOTH regimes, and `minimum` is the
+         # logical floor for the state change alone.
+         minimum=16, best=21),
     Rung(5, "filtered-collective", "launch every vm that is currently stopped", _r5,
          "act on the SUBSET matching a condition, not on everything", _s5,
          "start up any machine that isn't already running"),

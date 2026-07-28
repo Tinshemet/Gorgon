@@ -11,7 +11,9 @@
    "calls_min": 1,
    "artifacts": 0,
    "details": {
-    "PASS": "1 calls vs best 2"
+    "PASS": [
+     "1 calls vs best 2"
+    ]
    }
   },
   "lit:2": {
@@ -23,7 +25,9 @@
    "calls_min": 2,
    "artifacts": 0,
    "details": {
-    "PASS": "2 calls vs best 2"
+    "PASS": [
+     "2 calls vs best 2"
+    ]
    }
   },
   "lit:3": {
@@ -35,7 +39,9 @@
    "calls_min": 4,
    "artifacts": 0,
    "details": {
-    "PASS": "4 calls vs best 7"
+    "PASS": [
+     "4 calls vs best 7"
+    ]
    }
   },
   "lit:4": {
@@ -47,7 +53,9 @@
    "calls_min": 16,
    "artifacts": 0,
    "details": {
-    "PASS": "16 calls vs best 17"
+    "PASS": [
+     "16 calls vs best 21"
+    ]
    }
   },
   "lit:5": {
@@ -58,7 +66,9 @@
    "passes": 3,
    "calls_min": 2,
    "artifacts": 0,
-   "details": {}
+   "details": {
+    "PASS": []
+   }
   },
   "lit:6": {
    "n": 3,
@@ -69,41 +79,47 @@
    "calls_min": 17,
    "artifacts": 0,
    "details": {
-    "PASS": "17 calls vs best 30"
+    "PASS": [
+     "17 calls vs best 30"
+    ]
    }
   },
   "lit:7": {
    "n": 3,
    "outcomes": {
-    "REPAIR_UNDELIVERED:trailing_prose": 3
+    "PASS": 3
    },
-   "passes": 0,
-   "calls_min": null,
+   "passes": 3,
+   "calls_min": 6,
    "artifacts": 0,
    "details": {
-    "REPAIR_UNDELIVERED:trailing_prose": "JSONDecodeError: Extra data: line 3 column 1 (char 437)"
+    "PASS": []
    }
   },
   "lit:8": {
    "n": 3,
    "outcomes": {
-    "PASS": 3
+    "BAD_JSON:malformed": 3
    },
-   "passes": 3,
-   "calls_min": 7,
+   "passes": 0,
+   "calls_min": null,
    "artifacts": 0,
-   "details": {}
+   "details": {
+    "BAD_JSON:malformed": [
+     "JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 350 (char 349)"
+    ]
+   }
   },
   "lit:9": {
    "n": 3,
    "outcomes": {
-    "GOAL_UNMET": 3
+    "PASS": 3
    },
-   "passes": 0,
-   "calls_min": 0,
+   "passes": 3,
+   "calls_min": 8,
    "artifacts": 0,
    "details": {
-    "GOAL_UNMET": "unsatisfied"
+    "PASS": []
    }
   },
   "lit:10": {
@@ -114,7 +130,9 @@
    "passes": 3,
    "calls_min": 6,
    "artifacts": 0,
-   "details": {}
+   "details": {
+    "PASS": []
+   }
   },
   "lit:11": {
    "n": 3,
@@ -123,8 +141,10 @@
    },
    "passes": 3,
    "calls_min": 6,
-   "artifacts": 1,
-   "details": {}
+   "artifacts": 0,
+   "details": {
+    "PASS": []
+   }
   },
   "lit:12": {
    "n": 3,
@@ -134,18 +154,22 @@
    "passes": 3,
    "calls_min": 2,
    "artifacts": 0,
-   "details": {}
+   "details": {
+    "PASS": []
+   }
   },
   "lit:13": {
    "n": 3,
    "outcomes": {
-    "REPAIR_UNDELIVERED:trailing_prose": 3
+    "REPAIR_UNDELIVERED:empty": 3
    },
    "passes": 0,
    "calls_min": null,
-   "artifacts": 0,
+   "artifacts": 2,
    "details": {
-    "REPAIR_UNDELIVERED:trailing_prose": "JSONDecodeError: Extra data: line 3 column 1 (char 814)"
+    "REPAIR_UNDELIVERED:empty": [
+     "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+    ]
    }
   },
   "para:1": {
@@ -154,10 +178,12 @@
     "PASS": 3
    },
    "passes": 3,
-   "calls_min": 2,
+   "calls_min": 1,
    "artifacts": 0,
    "details": {
-    "PASS": "2 calls vs best 2"
+    "PASS": [
+     "1 calls vs best 2"
+    ]
    }
   },
   "para:2": {
@@ -169,7 +195,9 @@
    "calls_min": 2,
    "artifacts": 0,
    "details": {
-    "PASS": "2 calls vs best 2"
+    "PASS": [
+     "2 calls vs best 2"
+    ]
    }
   },
   "para:3": {
@@ -181,19 +209,23 @@
    "calls_min": 3,
    "artifacts": 0,
    "details": {
-    "PASS": "3 calls vs best 7"
+    "PASS": [
+     "3 calls vs best 7"
+    ]
    }
   },
   "para:4": {
    "n": 3,
    "outcomes": {
-    "OVER_BUDGET": 3
+    "PASS": 3
    },
    "passes": 3,
    "calls_min": 21,
    "artifacts": 0,
    "details": {
-    "OVER_BUDGET": "21 calls vs best 17"
+    "PASS": [
+     "21 calls vs best 21"
+    ]
    }
   },
   "para:5": {
@@ -204,7 +236,9 @@
    "passes": 3,
    "calls_min": 2,
    "artifacts": 0,
-   "details": {}
+   "details": {
+    "PASS": []
+   }
   },
   "para:6": {
    "n": 3,
@@ -215,7 +249,9 @@
    "calls_min": 17,
    "artifacts": 0,
    "details": {
-    "PASS": "17 calls vs best 30"
+    "PASS": [
+     "17 calls vs best 30"
+    ]
    }
   },
   "para:7": {
@@ -227,30 +263,38 @@
    "calls_min": 4,
    "artifacts": 0,
    "details": {
-    "GOAL_UNMET": "calls_failed"
+    "GOAL_UNMET": [
+     "unsatisfied"
+    ]
    }
   },
   "para:8": {
    "n": 3,
    "outcomes": {
-    "CHECKER_DISPUTE": 3
+    "UNRECOVERED": 3
    },
    "passes": 0,
-   "calls_min": 7,
+   "calls_min": null,
    "artifacts": 0,
    "details": {
-    "CHECKER_DISPUTE": "program ok, checker false"
+    "UNRECOVERED": [
+     "statement 4: select must name a kind"
+    ]
    }
   },
   "para:9": {
    "n": 3,
    "outcomes": {
-    "PASS": 3
+    "UNRECOVERED": 3
    },
-   "passes": 3,
-   "calls_min": 13,
+   "passes": 0,
+   "calls_min": null,
    "artifacts": 0,
-   "details": {}
+   "details": {
+    "UNRECOVERED": [
+     "statement 1 (foreach body) \u2192 statement 1: net_name=$item.networks[0] reads a field off $item, which is a NAME, not a call's result \u2014 only something bound by `graft` has fields. Select what you need instead, or graft the call whose answer you mean."
+    ]
+   }
   },
   "para:10": {
    "n": 3,
@@ -260,7 +304,9 @@
    "passes": 3,
    "calls_min": 9,
    "artifacts": 0,
-   "details": {}
+   "details": {
+    "PASS": []
+   }
   },
   "para:11": {
    "n": 3,
@@ -271,7 +317,9 @@
    "calls_min": null,
    "artifacts": 0,
    "details": {
-    "BAD_JSON:malformed": "JSONDecodeError: Expecting ',' delimiter: line 1 column 245 (char 244)"
+    "BAD_JSON:malformed": [
+     "JSONDecodeError: Expecting ',' delimiter: line 1 column 245 (char 244)"
+    ]
    }
   },
   "para:12": {
@@ -282,17 +330,23 @@
    "passes": 3,
    "calls_min": 2,
    "artifacts": 0,
-   "details": {}
+   "details": {
+    "PASS": []
+   }
   },
   "para:13": {
    "n": 3,
    "outcomes": {
-    "PASS": 3
+    "REPAIR_UNDELIVERED:empty": 3
    },
-   "passes": 3,
-   "calls_min": 16,
+   "passes": 0,
+   "calls_min": null,
    "artifacts": 0,
-   "details": {}
+   "details": {
+    "REPAIR_UNDELIVERED:empty": [
+     "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+    ]
+   }
   }
  }
 }
