@@ -46,6 +46,23 @@ from .sim_world import SimWorld
 
 _TOOLS = SimWorld.tools()
 
+def _decode_failure(err: str) -> str:
+    """Which KIND of non-reply this was — one classifier, shared by author and repair.
+
+    The three are different bugs wearing one exception. `Extra data` is a VALID program
+    with prose after it: the model answered correctly and a strict reader threw the answer
+    away, which is ours. An empty body is the model declining to emit. Anything else is a
+    decoder that produced non-JSON under a schema that forbids it, which is the channel.
+    Collapsing them hid a correct rung-11 repair inside a bucket labelled "no result" for
+    a day.
+    """
+    if "Extra data" in err:
+        return "trailing_prose"
+    if "Expecting value: line 1 column 1" in err:
+        return "empty"
+    return "malformed"
+
+
 # Every artifact removed this run. A pass that cleans without counting makes the
 # artifact rate unmeasurable, which is precisely how it would get worse unnoticed.
 _SANITISED = []
@@ -959,9 +976,8 @@ def main(argv=None, sink=None) -> int:
             # that forbids it. Folding them together hid a correct rung-11 repair inside
             # a bucket labelled "no result".
             _e = problems[0]
-            _land("BAD_JSON:trailing_prose" if "Extra data" in _e else
-                  "NO_EMISSION" if "Expecting value: line 1 column 1" in _e else
-                  "BAD_JSON:malformed", _e)
+            _kind = _decode_failure(_e)
+            _land("NO_EMISSION" if _kind == "empty" else f"BAD_JSON:{_kind}", _e)
             print(f"   [NO RESULT] {problems[0]} — not counted as a failure\n")
             if sink is not None:
                 sink.append(cell)      # SAME EXIT as every other path — see below
@@ -977,7 +993,12 @@ def main(argv=None, sink=None) -> int:
                     # correct program and said so in prose; json.loads threw on the
                     # trailing sentence and the fix was discarded. That read as a model
                     # that could not act on an objection. It is a reader defect.
-                    _land("REPAIR_UNDELIVERED", (problems2 or [None])[0])
+                    # SAME SPLIT ON THE REPAIR CHANNEL. `lit:13` is trailing prose —
+                    # a correct fix discarded by our reader — while `lit:7` is the model
+                    # emitting broken JSON. Identical code, opposite owners, and fixing
+                    # one would otherwise take credit for the other.
+                    _re = (problems2 or [""])[0]
+                    _land(f"REPAIR_UNDELIVERED:{_decode_failure(_re)}", _re)
                     break
                 repairs += 1
                 print(f"          x{attempt + 1}| (rejected: {problems[0]})")

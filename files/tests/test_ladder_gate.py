@@ -121,15 +121,20 @@ def test_every_outcome_names_the_layer_that_owns_it():
                            ("NO_EMISSION", "channel"),
                            ("BAD_JSON:trailing_prose", "channel"),
                            ("GATE_REFUSED", "language"),
-                           ("REPAIR_UNDELIVERED", "harness"), ("CRASHED", "harness"),
+                           ("REPAIR_UNDELIVERED:trailing_prose", "harness"),
+                           ("REPAIR_UNDELIVERED:malformed", "channel"),
+                           ("CRASHED", "harness"),
                            ("CHECKER_DISPUTE", "harness")):
         check(f"{code} -> {expected}", layer_of(code) == expected)
 
     # THE THREE THE HARNESS OWNS ARE THE POINT. Two of them exist because a real failure
     # was invisible without them, and the third lets the harness accuse itself.
     check("the harness can be blamed by its own gate",
-          {"REPAIR_UNDELIVERED", "CRASHED", "CHECKER_DISPUTE"}
+          {"REPAIR_UNDELIVERED:trailing_prose", "CRASHED", "CHECKER_DISPUTE"}
           <= {c for c, l in LAYER.items() if l == "harness"})
+    # THE UNSPLIT CODE MUST BE GONE. Leaving it defined would let an un-migrated writer
+    # keep emitting a verdict that names the wrong owner half the time.
+    check("the ambiguous code no longer exists", "REPAIR_UNDELIVERED" not in LAYER)
     check("an unknown code is UNATTRIBUTED, never filed under the model",
           layer_of("SOMETHING_NEW") == "UNATTRIBUTED")
 
@@ -200,6 +205,40 @@ def test_over_budget_is_a_solved_rung_not_a_failure():
           passes_of(stale) == 3)
 
 
+def test_one_event_with_two_owners_gets_two_codes():
+    """`lit:7` and `lit:13` both recorded REPAIR_UNDELIVERED and are different bugs.
+
+    lit:13 is `Extra data` — the model produced a CORRECT program and explained itself in
+    a trailing sentence, and a strict json.loads threw the answer away. Ours, one line.
+    lit:7 is malformed JSON from the decoder. Not ours, and probably not fixable.
+
+    Under one code, fixing the reader would have moved both cells and taken credit for a
+    channel defect it never touched. The split is what makes the two separately
+    measurable — which is the entire premise of attributing failures to a layer.
+    """
+    check("a repair lost to OUR reader is the harness",
+          layer_of("REPAIR_UNDELIVERED:trailing_prose") == "harness")
+    check("a repair lost to broken JSON is the channel",
+          layer_of("REPAIR_UNDELIVERED:malformed") == "channel")
+    check("and an empty repair reply is the channel too",
+          layer_of("REPAIR_UNDELIVERED:empty") == "channel")
+
+    # The two cells must now be able to move independently.
+    base = {"lit:7": cell(**{"REPAIR_UNDELIVERED:malformed": 3}),
+            "lit:13": cell(**{"REPAIR_UNDELIVERED:trailing_prose": 3})}
+    fixed_reader = {"lit:7": cell(**{"REPAIR_UNDELIVERED:malformed": 3}),
+                    "lit:13": cell(PASS=3)}
+    moves = kinds_of(diff(base, fixed_reader))
+    check("fixing the reader moves the cell it fixed", moves.get("lit:13") == "pass rate up")
+    check("and leaves the channel cell alone", "lit:7" not in moves)
+
+    from tests.bench.author_probe import _decode_failure
+    check("the classifier is shared, so both channels agree",
+          _decode_failure("JSONDecodeError: Extra data: line 3") == "trailing_prose"
+          and _decode_failure("Expecting value: line 1 column 1") == "empty"
+          and _decode_failure("Expecting ':' delimiter") == "malformed")
+
+
 def test_the_report_states_its_own_n():
     """The fourth failure point is the person relaying the numbers. A table that omits how
     many runs produced it invites exactly the over-reading that happened repeatedly on
@@ -218,6 +257,7 @@ def main():
     for fn in (test_a_flickering_cell_is_not_a_moved_cell,
                test_a_cell_that_never_ran_is_not_a_cell_with_no_failures,
                test_over_budget_is_a_solved_rung_not_a_failure,
+               test_one_event_with_two_owners_gets_two_codes,
                test_a_new_reason_at_the_same_score_is_reported,
                test_appearing_and_vanishing_cells_are_both_reported,
                test_an_improvement_is_not_a_regression,

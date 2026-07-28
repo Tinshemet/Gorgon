@@ -75,13 +75,13 @@
   "lit:7": {
    "n": 3,
    "outcomes": {
-    "REPAIR_UNDELIVERED": 3
+    "REPAIR_UNDELIVERED:trailing_prose": 3
    },
    "passes": 0,
    "calls_min": null,
    "artifacts": 0,
    "details": {
-    "REPAIR_UNDELIVERED": "JSONDecodeError: Expecting ':' delimiter: line 1 column 159 (char 158)"
+    "REPAIR_UNDELIVERED:trailing_prose": "JSONDecodeError: Extra data: line 3 column 1 (char 437)"
    }
   },
   "lit:8": {
@@ -139,13 +139,13 @@
   "lit:13": {
    "n": 3,
    "outcomes": {
-    "REPAIR_UNDELIVERED": 3
+    "REPAIR_UNDELIVERED:trailing_prose": 3
    },
    "passes": 0,
    "calls_min": null,
    "artifacts": 0,
    "details": {
-    "REPAIR_UNDELIVERED": "JSONDecodeError: Extra data: line 3 column 1 (char 814)"
+    "REPAIR_UNDELIVERED:trailing_prose": "JSONDecodeError: Extra data: line 3 column 1 (char 814)"
    }
   },
   "para:1": {

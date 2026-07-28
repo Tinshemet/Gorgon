@@ -65,7 +65,13 @@ LAYER = {
     "BAD_JSON:trailing_prose": "channel",
     "BAD_JSON:malformed": "channel",
     "GATE_REFUSED": "language",
-    "REPAIR_UNDELIVERED": "harness",
+    # THE SAME EVENT, TWO OWNERS. A repair lost to trailing prose is a correct answer our
+    # reader threw away; a repair lost to malformed JSON is the decoder failing. One is
+    # ours to fix in a line, the other is the channel — and under a single code, fixing
+    # the first would have taken credit for the second.
+    "REPAIR_UNDELIVERED:trailing_prose": "harness",
+    "REPAIR_UNDELIVERED:empty": "channel",
+    "REPAIR_UNDELIVERED:malformed": "channel",
     "CRASHED": "harness",
     "CHECKER_DISPUTE": "harness",
 }
@@ -117,8 +123,16 @@ def measure(rungs, columns, n, extra=()):
                 "passes": sum(n for c, n in outcomes.items() if c in SUCCESS),
                 "calls_min": min(calls) if calls else None,
                 "artifacts": sum(c.get("artifacts") or 0 for c in sink),
-                # A DETAIL PER CODE, kept so a moved cell can be read without re-running.
-                "details": {c["outcome"]: c["detail"] for c in sink if c.get("detail")},
+                # EVERY DISTINCT DETAIL PER CODE, not the last one. Keeping a single
+                # detail made `lit:7` read as a malformed-JSON failure because that was
+                # what the third run happened to say, and I classified the cell as a
+                # channel problem on it. Re-measured, all three runs were trailing prose —
+                # the harness. A summary that keeps one sample of three is how a cell gets
+                # attributed to the wrong layer, which is the one thing this file exists
+                # to get right.
+                "details": {code: sorted({c["detail"] for c in sink
+                                          if c["outcome"] == code and c.get("detail")})
+                            for code in outcomes},
             }
             print(f"  {key:9} {dict(outcomes)}", flush=True)
     return cells
@@ -213,6 +227,10 @@ def main(argv=None) -> int:
     p.add_argument("-r", "--rung", type=int, action="append")
     p.add_argument("-c", "--column", action="append", choices=["lit", "para"])
     p.add_argument("--mutate")
+    p.add_argument("--replace", action="store_true",
+                   help="rewrite the whole baseline instead of merging into it. Only for "
+                        "a deliberate reset — a partial record normally MERGES, so "
+                        "re-measuring one cell cannot drop the others.")
     a = p.parse_args(argv)
 
     if a.action == "show":
@@ -234,9 +252,21 @@ def main(argv=None) -> int:
     print(table(cells, f"THIS RUN (n={a.runs} per cell)"))
 
     if a.action == "record":
-        json.dump({"recorded": "manual", "runs_per_cell": a.runs, "cells": cells},
+        # MERGE, NEVER REPLACE. `record -r 7 -c lit` re-measures one cell; overwriting the
+        # file would silently drop the other 25, and the next `check` would report them all
+        # as NEW CELL — a baseline destroyed by the command meant to maintain it. Losing
+        # measurements is exactly what a regression gate cannot do, so replacing the whole
+        # file has to be asked for out loud.
+        kept = {}
+        if os.path.exists(BASELINE) and not a.replace:
+            kept = json.load(open(BASELINE)).get("cells", {})
+        merged = {**kept, **cells}
+        json.dump({"recorded": "manual", "runs_per_cell": a.runs, "cells": merged},
                   open(BASELINE, "w"), indent=1)
+        updated, carried = len(cells), len(merged) - len(cells)
         print(f"\n   baseline written: {BASELINE}")
+        print(f"   {updated} cell(s) re-measured, {carried} carried forward unchanged"
+              if carried else f"   {updated} cell(s) recorded")
         return 0
 
     if not os.path.exists(BASELINE):
