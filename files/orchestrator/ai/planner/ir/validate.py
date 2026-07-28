@@ -432,14 +432,9 @@ def validate(program: Any, known_tools=None, known_names=None,
                         if isinstance(k, dict))
             if have and not reads:
                 problems.append(
-                    f"{where}: the lab already holds {have} {st.get('kind')}(s), and "
-                    f"AMOUNT makes that many MORE — it does not mean 'end up with' that "
-                    f"many. NEW is for what does not exist yet. If the goal is about "
-                    f"USING what is there, FETCH first and act on the difference "
-                    f"(AMOUNT: {{'minus': [n, '{config.SIGIL}have']}}); if the goal is "
-                    f"the END STATE, state it and let the harness close the gap "
-                    f"(ACHIEVE COUNT(...) >= n). Create outright only when the operator "
-                    f"asked to create, or when the fetch comes back empty.")
+                    f"{where}: the lab already holds {have} {st.get('kind')}(s) — "
+                    f"AMOUNT makes {have} MORE, not {have} in total. FETCH first and "
+                    f"create the difference, or state the end state with ACHIEVE COUNT.")
         elif op in ("ensure", "achieve"):
             problems += _check_predicate(st.get("predicate"), where, bound, everywhere, sets)
         elif op == "if":

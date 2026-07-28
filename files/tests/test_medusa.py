@@ -933,8 +933,15 @@ def test_new_is_for_what_does_not_exist_yet():
     check("a counted creation into a full lab is refused", not ok)
     check("and the objection names what is already there",
           any("already holds 5 vm" in p for p in problems))
-    check("it explains AMOUNT means MORE, not 'end up with'",
-          any("MORE" in p and "end up with" in p for p in problems))
+    check("it explains AMOUNT means MORE, not a total",
+          any("MORE" in p and "in total" in p for p in problems))
+    # LENGTH IS PART OF THE CONTRACT HERE, not a style note. At ~370 characters this
+    # objection made the repair call return NOTHING — 6 replies of 6, empty — and at 163
+    # it came back 2 of 3. The probe's own header records the same effect from the other
+    # direction: "a richer prompt -> fewer calls". An objection the author cannot answer
+    # is worth less than no objection at all, because it costs the round as well.
+    check("and it stays short enough to be answerable",
+          all(len(p) < 200 for p in problems if "already holds" in p))
     check("and offers both routes — read the difference, or state the end state",
           any("FETCH" in p and "ACHIEVE COUNT" in p for p in problems))
 

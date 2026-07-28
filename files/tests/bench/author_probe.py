@@ -67,6 +67,14 @@ def _decode_failure(err: str) -> str:
 # Every artifact removed this run. A pass that cleans without counting makes the
 # artifact rate unmeasurable, which is precisely how it would get worse unnoticed.
 _SANITISED = []
+
+# THE CONTEXT THE PROBE ASKS FOR. It sent none, so every authoring, repair and revision
+# call ran at ollama's DEFAULT — measured at 4096 on this host — while the config declares
+# 8192 and ladder.py has always sent it. Two harnesses measuring the same model at
+# different context sizes is not a comparison, and a repair prompt already reaches ~2700
+# tokens before the program is written.
+from orchestrator.ai.chat.ollama_client import _OLLAMA as _OLLAMA_CFG
+_OLLAMA_CTX = _OLLAMA_CFG["num_ctx"]
 from collections import Counter as _Counter
 _OLLAMA = "http://localhost:11434/api/chat"
 
@@ -513,7 +521,7 @@ def author(goal: str, model: str, temp: float, shots: bool, timeout: int = 600,
            known_names=None, world=None, want=None):
     req = {"model": model, "stream": False,
            "format": program_schema(want, known_names),
-           "options": {"temperature": temp}, "messages": _messages(goal, shots, world, want)}
+           "options": {"temperature": temp, "num_ctx": _OLLAMA_CTX}, "messages": _messages(goal, shots, world, want)}
     try:
         r = urllib.request.urlopen(urllib.request.Request(
             _OLLAMA, json.dumps(req).encode(), {"Content-Type": "application/json"}),
@@ -634,7 +642,7 @@ def repair(goal, program, problems, model, temp, shots, known_names=None, timeou
                  "changing nothing else. Nothing has run yet — the world is untouched."})
     req = {"model": model, "stream": False,
            "format": program_schema(want, known_names),
-           "options": {"temperature": temp}, "messages": msgs}
+           "options": {"temperature": temp, "num_ctx": _OLLAMA_CTX}, "messages": msgs}
     try:
         r = urllib.request.urlopen(urllib.request.Request(
             _OLLAMA, json.dumps(req).encode(), {"Content-Type": "application/json"}),
@@ -701,7 +709,7 @@ def revise(goal, program, world, why, model, temp, shots, timeout=600,
                  "what your last program left behind."})
     req = {"model": model, "stream": False,
            "format": program_schema(want, known_names),
-           "options": {"temperature": temp}, "messages": msgs}
+           "options": {"temperature": temp, "num_ctx": _OLLAMA_CTX}, "messages": msgs}
     try:
         r = urllib.request.urlopen(urllib.request.Request(
             _OLLAMA, json.dumps(req).encode(), {"Content-Type": "application/json"}),
