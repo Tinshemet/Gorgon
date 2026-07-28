@@ -30,7 +30,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from tests.bench.ladder_gate import LAYER, diff, flaky, layer_of, table
+from tests.bench.ladder_gate import (LAYER, SUCCESS, diff, flaky, layer_of,
+                                     over_budget_of, passes_of, table)
 
 _PASS = 0
 _FAIL = 0
@@ -133,6 +134,72 @@ def test_every_outcome_names_the_layer_that_owns_it():
           layer_of("SOMETHING_NEW") == "UNATTRIBUTED")
 
 
+def test_a_cell_that_never_ran_is_not_a_cell_with_no_failures():
+    """CAUGHT BY THIS GATE, IN ITS OWN INSTRUMENTATION, on the first real baseline.
+
+    The probe `continue`s past the rest of the loop on a non-result, which skipped the
+    sink append — so a cell whose every reply was malformed JSON recorded as `{}` rather
+    than as BAD_JSON×3. Three channel failures, the exact class the taxonomy was built to
+    surface, reported as an empty cell. Silence reading as no-data instead of as a failure
+    is the shape this codebase keeps rediscovering, and here it was inside the instrument
+    meant to prevent it.
+
+    So an empty cell is a HARNESS FAULT, never a clean cell, and n=0 can never read as a
+    pass rate.
+    """
+    empty = {"lit:11": cell(n=0)}
+    check("an empty cell records no passes", empty["lit:11"]["passes"] == 0)
+    check("and is not flaky — flakiness needs runs", not flaky(empty["lit:11"]))
+    # A cell that recorded nothing must not silently match a baseline that recorded
+    # failures, or a channel collapse looks like the status quo.
+    base = {"lit:11": cell(PASS=1, GOAL_UNMET=2)}
+    moves = diff(base, empty)
+    check("an empty cell is named a HARNESS fault, not a score change",
+          kinds_of(moves).get("lit:11") == "NO RECORD (harness)")
+    check("and it does not crash the gate on a divide by zero", bool(moves))
+    out = table(empty, "T")
+    check("the table shows n=0 rather than an empty line", "0/0" in out)
+
+
+def test_over_budget_is_a_solved_rung_not_a_failure():
+    """A DISTORTION I INTRODUCED AND THE FIRST BASELINE EXPOSED. `para:4` printed 0/3 while
+    the rung's own checker had PASSED all three runs — the program achieved the goal and
+    merely cost 21 calls against a recorded best of 17. Scoring that as a miss reports a
+    solved rung as broken, which is the over-reporting this file exists to prevent, coming
+    from the instrument itself.
+
+    Cost is a SEPARATE AXIS and is reported rather than counted, for a reason that is not
+    squeamishness: `rung.best` is stale in the loose direction (rung 6 declares 30 where
+    the model achieves 17) and absent on 8 of 13 rungs. Failing a cell against a number
+    nobody has re-earned would be a gate enforcing a guess.
+    """
+    check("OVER_BUDGET counts as achieving the goal", "OVER_BUDGET" in SUCCESS)
+    c = cell(**{"OVER_BUDGET": 3})
+    check("a cell that always ran over budget still achieved it 3/3", passes_of(c) == 3)
+    check("and is not flaky — it never failed", not flaky(c))
+    check("the cost is carried separately", over_budget_of(c) == 3)
+
+    out = table({"para:4": c}, "T")
+    check("the table says GOAL ACHIEVED, not PASSES", "GOAL ACHIEVED 3/3" in out)
+    check("cost gets its own line", "over budget" in out)
+    check("and the line says the baselines are not trustworthy yet", "stale" in out)
+    check("an over-budget cell contributes no layer blame",
+          "failures by layer: none" in out)
+
+    # AND IT IS NOT A REGRESSION EITHER WAY. Going from PASS to OVER_BUDGET is a cost
+    # story, not a correctness one, and a gate that fails on it would be switched off.
+    check("PASS -> OVER_BUDGET is not a pass-rate regression",
+          not [m for m in diff({"para:4": cell(PASS=3)}, {"para:4": c})
+               if m[1] == "PASS RATE DOWN"])
+
+    # ONE DEFINITION OF A PASS. The stored `passes` field went stale the moment the
+    # definition changed, which is why every reader now derives it.
+    stale = {"n": 3, "outcomes": {"OVER_BUDGET": 3}, "passes": 0,
+             "calls_min": None, "artifacts": 0, "details": {}}
+    check("a stale stored `passes` is ignored in favour of the derived one",
+          passes_of(stale) == 3)
+
+
 def test_the_report_states_its_own_n():
     """The fourth failure point is the person relaying the numbers. A table that omits how
     many runs produced it invites exactly the over-reading that happened repeatedly on
@@ -149,6 +216,8 @@ def test_the_report_states_its_own_n():
 
 def main():
     for fn in (test_a_flickering_cell_is_not_a_moved_cell,
+               test_a_cell_that_never_ran_is_not_a_cell_with_no_failures,
+               test_over_budget_is_a_solved_rung_not_a_failure,
                test_a_new_reason_at_the_same_score_is_reported,
                test_appearing_and_vanishing_cells_are_both_reported,
                test_an_improvement_is_not_a_regression,

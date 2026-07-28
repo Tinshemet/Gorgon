@@ -1,0 +1,298 @@
+{
+ "recorded": "manual",
+ "runs_per_cell": 3,
+ "cells": {
+  "lit:1": {
+   "n": 3,
+   "outcomes": {
+    "PASS": 3
+   },
+   "passes": 3,
+   "calls_min": 1,
+   "artifacts": 0,
+   "details": {
+    "PASS": "1 calls vs best 2"
+   }
+  },
+  "lit:2": {
+   "n": 3,
+   "outcomes": {
+    "PASS": 3
+   },
+   "passes": 3,
+   "calls_min": 2,
+   "artifacts": 0,
+   "details": {
+    "PASS": "2 calls vs best 2"
+   }
+  },
+  "lit:3": {
+   "n": 3,
+   "outcomes": {
+    "PASS": 3
+   },
+   "passes": 3,
+   "calls_min": 4,
+   "artifacts": 0,
+   "details": {
+    "PASS": "4 calls vs best 7"
+   }
+  },
+  "lit:4": {
+   "n": 3,
+   "outcomes": {
+    "PASS": 3
+   },
+   "passes": 3,
+   "calls_min": 16,
+   "artifacts": 0,
+   "details": {
+    "PASS": "16 calls vs best 17"
+   }
+  },
+  "lit:5": {
+   "n": 3,
+   "outcomes": {
+    "PASS": 3
+   },
+   "passes": 3,
+   "calls_min": 2,
+   "artifacts": 0,
+   "details": {}
+  },
+  "lit:6": {
+   "n": 3,
+   "outcomes": {
+    "PASS": 3
+   },
+   "passes": 3,
+   "calls_min": 17,
+   "artifacts": 0,
+   "details": {
+    "PASS": "17 calls vs best 30"
+   }
+  },
+  "lit:7": {
+   "n": 3,
+   "outcomes": {
+    "REPAIR_UNDELIVERED": 3
+   },
+   "passes": 0,
+   "calls_min": null,
+   "artifacts": 0,
+   "details": {
+    "REPAIR_UNDELIVERED": "JSONDecodeError: Expecting ':' delimiter: line 1 column 159 (char 158)"
+   }
+  },
+  "lit:8": {
+   "n": 3,
+   "outcomes": {
+    "PASS": 3
+   },
+   "passes": 3,
+   "calls_min": 7,
+   "artifacts": 0,
+   "details": {}
+  },
+  "lit:9": {
+   "n": 3,
+   "outcomes": {
+    "GOAL_UNMET": 3
+   },
+   "passes": 0,
+   "calls_min": 0,
+   "artifacts": 0,
+   "details": {
+    "GOAL_UNMET": "unsatisfied"
+   }
+  },
+  "lit:10": {
+   "n": 3,
+   "outcomes": {
+    "PASS": 3
+   },
+   "passes": 3,
+   "calls_min": 6,
+   "artifacts": 0,
+   "details": {}
+  },
+  "lit:11": {
+   "n": 3,
+   "outcomes": {
+    "PASS": 3
+   },
+   "passes": 3,
+   "calls_min": 6,
+   "artifacts": 1,
+   "details": {}
+  },
+  "lit:12": {
+   "n": 3,
+   "outcomes": {
+    "PASS": 3
+   },
+   "passes": 3,
+   "calls_min": 2,
+   "artifacts": 0,
+   "details": {}
+  },
+  "lit:13": {
+   "n": 3,
+   "outcomes": {
+    "REPAIR_UNDELIVERED": 3
+   },
+   "passes": 0,
+   "calls_min": null,
+   "artifacts": 0,
+   "details": {
+    "REPAIR_UNDELIVERED": "JSONDecodeError: Extra data: line 3 column 1 (char 814)"
+   }
+  },
+  "para:1": {
+   "n": 3,
+   "outcomes": {
+    "PASS": 3
+   },
+   "passes": 3,
+   "calls_min": 2,
+   "artifacts": 0,
+   "details": {
+    "PASS": "2 calls vs best 2"
+   }
+  },
+  "para:2": {
+   "n": 3,
+   "outcomes": {
+    "PASS": 3
+   },
+   "passes": 3,
+   "calls_min": 2,
+   "artifacts": 0,
+   "details": {
+    "PASS": "2 calls vs best 2"
+   }
+  },
+  "para:3": {
+   "n": 3,
+   "outcomes": {
+    "PASS": 3
+   },
+   "passes": 3,
+   "calls_min": 3,
+   "artifacts": 0,
+   "details": {
+    "PASS": "3 calls vs best 7"
+   }
+  },
+  "para:4": {
+   "n": 3,
+   "outcomes": {
+    "OVER_BUDGET": 3
+   },
+   "passes": 3,
+   "calls_min": 21,
+   "artifacts": 0,
+   "details": {
+    "OVER_BUDGET": "21 calls vs best 17"
+   }
+  },
+  "para:5": {
+   "n": 3,
+   "outcomes": {
+    "PASS": 3
+   },
+   "passes": 3,
+   "calls_min": 2,
+   "artifacts": 0,
+   "details": {}
+  },
+  "para:6": {
+   "n": 3,
+   "outcomes": {
+    "PASS": 3
+   },
+   "passes": 3,
+   "calls_min": 17,
+   "artifacts": 0,
+   "details": {
+    "PASS": "17 calls vs best 30"
+   }
+  },
+  "para:7": {
+   "n": 3,
+   "outcomes": {
+    "GOAL_UNMET": 3
+   },
+   "passes": 0,
+   "calls_min": 4,
+   "artifacts": 0,
+   "details": {
+    "GOAL_UNMET": "calls_failed"
+   }
+  },
+  "para:8": {
+   "n": 3,
+   "outcomes": {
+    "CHECKER_DISPUTE": 3
+   },
+   "passes": 0,
+   "calls_min": 7,
+   "artifacts": 0,
+   "details": {
+    "CHECKER_DISPUTE": "program ok, checker false"
+   }
+  },
+  "para:9": {
+   "n": 3,
+   "outcomes": {
+    "PASS": 3
+   },
+   "passes": 3,
+   "calls_min": 13,
+   "artifacts": 0,
+   "details": {}
+  },
+  "para:10": {
+   "n": 3,
+   "outcomes": {
+    "PASS": 3
+   },
+   "passes": 3,
+   "calls_min": 9,
+   "artifacts": 0,
+   "details": {}
+  },
+  "para:11": {
+   "n": 3,
+   "outcomes": {
+    "BAD_JSON:malformed": 3
+   },
+   "passes": 0,
+   "calls_min": null,
+   "artifacts": 0,
+   "details": {
+    "BAD_JSON:malformed": "JSONDecodeError: Expecting ',' delimiter: line 1 column 245 (char 244)"
+   }
+  },
+  "para:12": {
+   "n": 3,
+   "outcomes": {
+    "PASS": 3
+   },
+   "passes": 3,
+   "calls_min": 2,
+   "artifacts": 0,
+   "details": {}
+  },
+  "para:13": {
+   "n": 3,
+   "outcomes": {
+    "PASS": 3
+   },
+   "passes": 3,
+   "calls_min": 16,
+   "artifacts": 0,
+   "details": {}
+  }
+ }
+}

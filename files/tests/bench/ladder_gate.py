@@ -71,8 +71,28 @@ LAYER = {
 }
 
 
+# WHAT COUNTS AS ACHIEVING THE GOAL. OVER_BUDGET means the rung's own checker PASSED and
+# the program simply cost more than its recorded best — scoring it as a miss reports a
+# solved rung as a failure, which is the over-reporting this whole file exists to stop.
+# Cost is a separate axis and gets its own line; it is not a pass/fail. It is also not yet
+# trustworthy: `rung.best` is stale in the loose direction and absent on 8 of 13 rungs, so
+# treating it as a failure would fail cells against a number nobody has re-earned.
+SUCCESS = {"PASS", "OVER_BUDGET"}
+
+
 def layer_of(code):
     return LAYER.get(code, "UNATTRIBUTED")
+
+
+def passes_of(cell):
+    """Runs that achieved the goal. ONE definition, so the table, the diff and the flaky
+    rule cannot disagree about what a pass is — which is exactly how a stored `passes`
+    field went stale the moment the definition changed."""
+    return sum(n for code, n in cell["outcomes"].items() if code in SUCCESS)
+
+
+def over_budget_of(cell):
+    return cell["outcomes"].get("OVER_BUDGET", 0)
 
 
 def measure(rungs, columns, n, extra=()):
@@ -94,7 +114,7 @@ def measure(rungs, columns, n, extra=()):
             cells[key] = {
                 "n": len(sink),
                 "outcomes": dict(outcomes),
-                "passes": outcomes.get("PASS", 0),
+                "passes": sum(n for c, n in outcomes.items() if c in SUCCESS),
                 "calls_min": min(calls) if calls else None,
                 "artifacts": sum(c.get("artifacts") or 0 for c in sink),
                 # A DETAIL PER CODE, kept so a moved cell can be read without re-running.
@@ -106,7 +126,7 @@ def measure(rungs, columns, n, extra=()):
 
 def flaky(cell):
     """A cell whose own history is not unanimous. Reported, never treated as a move."""
-    return 0 < cell["passes"] < cell["n"]
+    return 0 < passes_of(cell) < cell["n"]
 
 
 def diff(base, now):
@@ -126,21 +146,30 @@ def diff(base, now):
         if a is None:
             moves.append((key, "NOT MEASURED", dict(b["outcomes"]), ""))
             continue
-        bp, ap = b["passes"] / b["n"], a["passes"] / a["n"]
+        # A CELL THAT RECORDED NOTHING IS A HARNESS FAULT, never a clean cell. The
+        # probe used to `continue` past its own sink on a non-result, so a cell whose every
+        # reply was malformed JSON came back as {} — three channel failures reported as an
+        # empty line, and then a ZeroDivisionError here. Both directions are named rather
+        # than averaged: n=0 is an absence of evidence and cannot be divided into a rate.
+        if not a["n"] or not b["n"]:
+            moves.append((key, "NO RECORD (harness)",
+                          f"{passes_of(b)}/{b['n']}", f"{passes_of(a)}/{a['n']}"))
+            continue
+        bp, ap = passes_of(b) / b["n"], passes_of(a) / a["n"]
         # A flaky cell has to move by more than one run to count, or its own noise
         # reports itself as a regression every time.
         room = (1.0 / a["n"]) if flaky(b) else 0.0
         if ap < bp - room:
             moves.append((key, "PASS RATE DOWN",
-                          f"{b['passes']}/{b['n']}", f"{a['passes']}/{a['n']}"))
+                          f"{passes_of(b)}/{b['n']}", f"{passes_of(a)}/{a['n']}"))
         elif ap > bp + room:
             moves.append((key, "pass rate up",
-                          f"{b['passes']}/{b['n']}", f"{a['passes']}/{a['n']}"))
+                          f"{passes_of(b)}/{b['n']}", f"{passes_of(a)}/{a['n']}"))
         else:
-            fresh = set(a["outcomes"]) - set(b["outcomes"]) - {"PASS"}
+            fresh = set(a["outcomes"]) - set(b["outcomes"]) - SUCCESS
             if fresh:
                 moves.append((key, "NEW FAILURE REASON",
-                              ",".join(sorted(set(b["outcomes"]) - {"PASS"})) or "none",
+                              ",".join(sorted(set(b["outcomes"]) - SUCCESS)) or "none",
                               ",".join(sorted(fresh))))
     return moves
 
@@ -152,18 +181,26 @@ def table(cells, title):
     for key in sorted(cells, key=lambda k: (k.split(':')[0], int(k.split(':')[1]))):
         c = cells[key]
         marks = " ".join(f"{k}×{v}" for k, v in sorted(c["outcomes"].items()))
-        flag = "  ~flaky" if flaky(c) else ""
-        out.append(f"   {key:9} {c['n']:>2}  {c['passes']:>3}/{c['n']:<3}  {marks}{flag}")
+        flag = ("  !! NO RECORD — harness lost this cell" if not c["n"]
+                else "  ~flaky" if flaky(c) else "")
+        out.append(f"   {key:9} {c['n']:>2}  {passes_of(c):>3}/{c['n']:<3}  {marks}{flag}")
     by_layer = Counter()
     for c in cells.values():
         for code, k in c["outcomes"].items():
-            if code != "PASS":
+            if code not in SUCCESS:
                 by_layer[layer_of(code)] += k
     total_runs = sum(c["n"] for c in cells.values())
-    total_pass = sum(c["passes"] for c in cells.values())
-    out += ["", f"   RUNS {total_runs} · PASSES {total_pass}/{total_runs}",
+    total_pass = sum(passes_of(c) for c in cells.values())
+    over = sum(over_budget_of(c) for c in cells.values())
+    out += ["", f"   RUNS {total_runs} · GOAL ACHIEVED {total_pass}/{total_runs}",
             "   failures by layer: "
             + (", ".join(f"{l}={n}" for l, n in by_layer.most_common()) or "none")]
+    # COST IS A SEPARATE AXIS, and it is REPORTED rather than counted, because rung.best is
+    # stale in the loose direction and absent on 8 of 13 rungs. A baseline learned from
+    # observed passing runs would certify whatever the model already does.
+    out.append(f"   over budget (goal met, cost above `best`): {over}"
+               + ("  — `best` is stale/absent on most rungs; reported, not counted"
+                  if over else ""))
     out.append("   (every figure above is from this run; n is stated per cell)")
     return "\n".join(out)
 
@@ -215,7 +252,7 @@ def main(argv=None) -> int:
     for key, what, was, now in moves:
         print(f"   {key:9} {what:20} was {was!s:22} now {now!s}")
     bad = [m for m in moves if m[1] in ("PASS RATE DOWN", "NEW FAILURE REASON",
-                                        "NOT MEASURED")]
+                                        "NOT MEASURED", "NO RECORD (harness)")]
     print(f"\n   {len(bad)} regression(s), {len(moves) - len(bad)} improvement(s)")
     return 2 if bad else 0
 

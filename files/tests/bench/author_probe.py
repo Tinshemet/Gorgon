@@ -963,6 +963,8 @@ def main(argv=None, sink=None) -> int:
                   "NO_EMISSION" if "Expecting value: line 1 column 1" in _e else
                   "BAD_JSON:malformed", _e)
             print(f"   [NO RESULT] {problems[0]} — not counted as a failure\n")
+            if sink is not None:
+                sink.append(cell)      # SAME EXIT as every other path — see below
             continue
         if problems and a.revisions:
             for attempt in range(a.revisions):
