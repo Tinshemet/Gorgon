@@ -37,12 +37,18 @@ from orchestrator.ai.planner.ir import intent as _intent
 from orchestrator.ai.planner.ir import schema as _ir_schema
 from orchestrator.ai.planner.ir.validate import _one_of_groups
 
+from orchestrator.ai.planner.ir.sanitize import kinds as _sanitize_kinds
+from orchestrator.ai.planner.ir.sanitize import sanitize as _sanitize
 from .ladder import BENCH_MODEL
 from .mutate import MUTATIONS, apply as _mutate
 from .rungs import RUNGS
 from .sim_world import SimWorld
 
 _TOOLS = SimWorld.tools()
+
+# Every artifact removed this run. A pass that cleans without counting makes the
+# artifact rate unmeasurable, which is precisely how it would get worse unnoticed.
+_SANITISED = []
 _OLLAMA = "http://localhost:11434/api/chat"
 
 
@@ -496,6 +502,12 @@ def author(goal: str, model: str, temp: float, shots: bool, timeout: int = 600,
         prog = json.loads(json.loads(r.read())["message"]["content"])
     except Exception as e:
         return None, [f"{type(e).__name__}: {e}"]
+    # ARTIFACTS COME OFF BEFORE THE VERDICT, the same order production uses. The removals
+    # are stashed on the program rather than returned, so the three authoring loops keep
+    # their two-value signature and the caller still gets the account.
+    prog, _artifacts = _sanitize(prog)
+    if _artifacts:
+        _SANITISED.extend(_artifacts)
     ok, problems = validate(prog, known_names=known_names)
     return prog, ([] if ok else problems)
 
@@ -605,6 +617,12 @@ def repair(goal, program, problems, model, temp, shots, known_names=None, timeou
         prog = json.loads(json.loads(r.read())["message"]["content"])
     except Exception as e:
         return None, [f"{type(e).__name__}: {e}"]
+    # ARTIFACTS COME OFF BEFORE THE VERDICT, the same order production uses. The removals
+    # are stashed on the program rather than returned, so the three authoring loops keep
+    # their two-value signature and the caller still gets the account.
+    prog, _artifacts = _sanitize(prog)
+    if _artifacts:
+        _SANITISED.extend(_artifacts)
     ok, probs = validate(prog, known_names=known_names)
     return prog, ([] if ok else probs)
 
@@ -660,6 +678,12 @@ def revise(goal, program, world, why, model, temp, shots, timeout=600,
         prog = json.loads(json.loads(r.read())["message"]["content"])
     except Exception as e:
         return None, [f"{type(e).__name__}: {e}"]
+    # ARTIFACTS COME OFF BEFORE THE VERDICT, the same order production uses. The removals
+    # are stashed on the program rather than returned, so the three authoring loops keep
+    # their two-value signature and the caller still gets the account.
+    prog, _artifacts = _sanitize(prog)
+    if _artifacts:
+        _SANITISED.extend(_artifacts)
     ok, problems = validate(prog, known_names=known_names)
     return prog, ([] if ok else problems)
 
@@ -1186,6 +1210,23 @@ def main(argv=None) -> int:
             print(f"   needed revision    : {revised}  (of which recovered: {fixed})")
         if ungrounded:
             print(f"   NO GROUNDING       : {ungrounded}  (would need operator consent)")
+    # THE ARTIFACT RATE, ALWAYS PRINTED — including when it is zero. A sanitiser that
+    # cleans without counting makes its own workload invisible, and "it got quietly worse"
+    # is the failure this whole instrument exists to prevent. Zero is a measurement;
+    # silence is not. The severity line names what is NOT screened for, because reporting
+    # only what was looked for reads as an all-clear the pass has not earned — the same
+    # unknown-is-not-false rule the observed attributes are built on.
+    from collections import Counter as _Counter
+    by_kind = _Counter(x["kind"] for x in _SANITISED)
+    print(f"   ARTIFACTS REMOVED  : {len(_SANITISED)}"
+          + (f"  ({', '.join(f'{k}×{n}' for k, n in by_kind.most_common())})"
+             if by_kind else ""))
+    unscreened = [s for s in {"dangerous"}
+                  if not any(v.get("severity") == s
+                             for v in _sanitize_kinds().values())]
+    if unscreened:
+        print(f"   NOT SCREENED FOR   : {', '.join(unscreened)} "
+              f"— no kind carries that severity yet")
     # BOTH SIDES OF THE GATE'S LEDGER, always together. A gate reported only through the
     # pass count can suppress exactly as much as it saves and still read as neutral, so
     # what it fixed and what it refused are printed side by side with what it cost.

@@ -659,6 +659,78 @@ def test_an_empty_then_is_told_it_is_an_unstated_inversion():
           'st.get("then" if good else "else") or []' in inspect.getsource(_execute))
 
 
+def test_the_sanitiser_drops_only_what_could_never_run():
+    """Artifacts come off before the program is judged — and only artifacts.
+
+    The measured case is rung 11: `IF IS($answer.alive) = true { }` beside a second `if`
+    that does the work. That cond is byte-identical to the ONE `if` among the few-shot
+    examples, down to the variable, the field and the polarity, none of which appear in the
+    goal. It is the example reproduced with nothing that fits in it — one-example
+    generalisation, whose residue a compiler drops without comment.
+
+    Everything here guards the BOUNDARY rather than the feature, because the objection to
+    building this at all was that a cleaner could hide a reasoning fault, and the boundary
+    is the whole answer to that objection.
+    """
+    from orchestrator.ai.planner.ir.sanitize import sanitize, kinds, severity
+
+    stop = {"op": "call", "tool": "stop_vm", "args": {"name": "$item"}}
+    ping = {"op": "call", "tool": "guest_ping", "args": {"name": "$item"},
+            "graft": "answer"}
+    alive = {"shape": "is", "of": "$answer.alive", "eq": True}
+    dead_if = {"op": "if", "cond": alive, "then": []}
+    work_if = {"op": "if", "cond": {"shape": "is", "of": "$answer.alive", "eq": False},
+               "then": [stop]}
+
+    draft = {"body": [{"op": "foreach", "select": {"kind": "vm"},
+                       "do": [ping, dead_if, work_if]}]}
+    cleaned, removed = sanitize(draft)
+    check("the dead branch is dropped", len(removed) == 1)
+    check("and named by kind and severity",
+          removed[0]["kind"] == "dead_if" and removed[0]["severity"] == "benign")
+    check("the path is spelled the way validate spells it",
+          removed[0]["where"] == "statement 1 (foreach body) → statement 2")
+    check("what remains is the program that was always meant",
+          cleaned["body"][0]["do"] == [ping, work_if])
+    check("REJECTED BEFORE, VALID AFTER — the artifact was the only fault",
+          not validate(draft)[0] and validate(cleaned)[0])
+
+    # THE AUTHOR'S ORIGINAL IS EVIDENCE. The artifact rate is measured off the raw draft,
+    # so a pass that edited in place would destroy the thing it exists to count.
+    check("the draft is not mutated",
+          draft["body"][0]["do"] == [ping, dead_if, work_if])
+
+    # NEVER REWRITES A CHECK — the line between a compiler pass and a correction. An
+    # unstated inversion is a claim about what the program MEANS, so it stays for the
+    # validator to object to rather than being quietly edited into meaning it.
+    inversion = {"body": [{"op": "if", "cond": alive, "then": [], "else": [stop]}]}
+    out, removed2 = sanitize(inversion)
+    check("an if/else inversion is left exactly as written",
+          out == inversion and not removed2)
+    check("so the validator's objection still fires",
+          any("ONE decision" in p for p in validate(inversion)[1]))
+
+    # NEVER EMPTIES A BLOCK — otherwise a dead statement is traded for a validation error
+    # about a block the author did fill in.
+    lone = {"body": [{"op": "foreach", "select": {"kind": "vm"}, "do": [dead_if]}]}
+    out3, removed3 = sanitize(lone)
+    check("a block that would be emptied is left alone", out3 == lone and not removed3)
+
+    # A HEALTHY PROGRAM IS UNTOUCHED. Measured across a 31-program corpus: 21 valid
+    # programs, zero altered, zero outcomes changed.
+    healthy = {"body": [{"op": "foreach", "select": {"kind": "vm"}, "do": [ping, work_if]}]}
+    check("a valid program comes through byte-identical", sanitize(healthy) == (healthy, []))
+
+    # A KIND IS EARNED. Two candidates were REFUSED on measurement rather than taste:
+    # repeated_loop_same_set fired 6 times over 31 programs with 5 PASSING, and its
+    # replacement repeated_identical_call never fired at all.
+    check("exactly one kind is defined", list(kinds()) == ["dead_if"])
+    check("every kind carries its evidence",
+          all(k.get("evidence") for k in kinds().values()))
+    check("an unknown kind is unclassified, never assumed benign",
+          severity("something_new") == "unclassified")
+
+
 def test_every_few_shot_example_is_a_valid_program():
     """A worked example is the strongest teaching signal there is — the shots beat the
     prompt whenever they disagree, which is how rung 7 was taught the old single-word
@@ -1241,6 +1313,7 @@ def main():
                test_a_loop_inside_a_loop_is_refused,
                test_not_accepts_the_shape_its_own_schema_asks_for,
                test_an_empty_then_is_told_it_is_an_unstated_inversion,
+               test_the_sanitiser_drops_only_what_could_never_run,
                test_every_few_shot_example_is_a_valid_program,
                test_the_grader_finds_a_verdict_nested_in_a_loop,
                test_the_loop_variable_pins_exactly_one_member,

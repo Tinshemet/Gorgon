@@ -656,6 +656,52 @@ def test_no_model_facing_string_still_teaches_a_retired_rule():
           "difference" in _intent.instruction(_intent.ACHIEVE).lower())
 
 
+def test_every_path_that_accepts_an_authored_program_sanitises_it():
+    """FOUR CALL SITES, ONE PASS — and the fourth is how this breaks.
+
+    A pass wired into three of four places is the defect this file exists for, arriving
+    once more: six builders read config.OPS independently; the two selects answered the
+    same question differently; `disjoint` was declared, offered, validated and rendered
+    with no evaluator. Each was one component forgetting what the others knew.
+
+    A program reaches the world through exactly four doors — the bench's three authoring
+    loops and production's run_program. Sanitise at three of them and the bench measures a
+    cleaned program while production runs a dirty one, or the reverse, and the ladder
+    number silently stops describing the system. Enumerated rather than trusted.
+
+    The check is textual on purpose. It cannot prove the call is correctly PLACED, only
+    that the door knows the pass exists — but the failure being guarded against is a new
+    door added without one, which is exactly what a name-level check catches.
+    """
+    import re
+
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+    doors = [("tests/bench/author_probe.py", "author"),
+             ("tests/bench/author_probe.py", "repair"),
+             ("tests/bench/author_probe.py", "revise"),
+             ("orchestrator/ai/planner/program.py", "run_program")]
+    for path, fn in doors:
+        src = open(os.path.join(root, path)).read()
+        body = re.search(rf"\ndef {fn}\(.*?(?=\ndef |\Z)", src, re.S) or \
+            re.search(rf"\n    def {fn}\(.*?(?=\n    def |\n\ndef |\Z)", src, re.S)
+        check(f"{path}::{fn} sanitises before judging",
+              bool(body) and "_sanitize(" in body.group(0))
+
+    # AND IT IS ORDERED BEFORE THE VERDICT. Sanitising after validate would reject a
+    # program over a statement that could never have run — the artifact would cost the
+    # program its life and then be tidied off the corpse.
+    src = open(os.path.join(root, "orchestrator/ai/planner/program.py")).read()
+    body = re.search(r"\n    def run_program\(.*?(?=\n    def |\Z)", src, re.S).group(0)
+    check("production sanitises BEFORE it validates",
+          body.index("_sanitize(") < body.index("validate("))
+
+    # THE ACCOUNT REACHES THE OPERATOR. `rendered` is what a person reads, and after this
+    # pass it is not the program the author emitted. Altering what someone reads without
+    # telling them is the one way a cleaner becomes dishonest.
+    check("the removals ride out on the result", '"sanitized"' in body
+          or "'sanitized'" in body)
+
+
 def main():
     for fn in (test_every_predicate_shape_has_an_evaluator,
                test_every_predicate_shape_renders_legibly,
@@ -673,7 +719,8 @@ def main():
                test_every_mutating_tool_says_what_done_means,
                test_the_offer_never_exceeds_the_authority,
                test_a_copy_source_is_offered_only_from_what_exists,
-               test_no_model_facing_string_still_teaches_a_retired_rule):
+               test_no_model_facing_string_still_teaches_a_retired_rule,
+               test_every_path_that_accepts_an_authored_program_sanitises_it):
         print(f"\n── {fn.__name__}")
         fn()
     print(f"\n{_PASS}/{_PASS + _FAIL} passed")

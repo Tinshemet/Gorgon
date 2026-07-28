@@ -227,14 +227,21 @@ def make_run_program(library, findings=None, known_names=None, consent=True,
     only in where the clarification happens.
     """
     from .ir import gate as _gate, render, run, validate
+    from .ir.sanitize import sanitize as _sanitize
 
     select, holds = seams(library, findings)
 
     def run_program(args: Dict[str, Any], node_goal: str, call,
                     reauthor=None) -> Dict[str, Any]:
+        # ARTIFACTS COME OFF BEFORE ANYTHING JUDGES THE PROGRAM — before validate, so a
+        # program is not rejected over a statement that could never have run, and before
+        # the gate, so the gate scores what will actually execute. Never silently: the
+        # account rides on the result, because an operator reading `rendered` is reading
+        # a program that differs from the one the author emitted, and has to be told.
+        args, artifacts = _sanitize(args)
         ok, problems = validate(args, known_names=known_names)
         if not ok:
-            return {"invalid": True, "problems": problems}
+            return {"invalid": True, "problems": problems, "sanitized": artifacts}
 
         args = _gated(args, node_goal, reauthor)
         if args is None:
@@ -243,7 +250,8 @@ def make_run_program(library, findings=None, known_names=None, consent=True,
             # answer as a validation failure: this program is not the way to do it. Giving
             # the refusal its own outcome would have meant a second fallback path doing
             # the same thing.
-            return {"invalid": True, "problems": _last_reasons[0]}
+            return {"invalid": True, "problems": _last_reasons[0],
+                    "sanitized": artifacts}
 
         result = run(args, call, select=select, holds=holds,
                      known_names=known_names, consent=consent, intent=intent)
@@ -255,6 +263,7 @@ def make_run_program(library, findings=None, known_names=None, consent=True,
             isinstance(st, dict) and st.get("op") in ("ensure", "achieve")
             for st in (body or []))
         result["rendered"] = render(args)
+        result["sanitized"] = artifacts
         return result
 
     _last_reasons = [[]]
