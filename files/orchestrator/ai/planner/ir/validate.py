@@ -128,7 +128,14 @@ def validate(program: Any, known_tools=None, known_names=None,
         op = st.get("op")
         spec = config.OPS.get(op)
         if spec is None:
-            problems.append(f"{where}: unknown op {op!r} "
+            # A WORD IN THE WRONG PLACE IS NOT AN INVENTED WORD. Listing the legal ops is
+            # right when the author made a word up, and actively misleading when it
+            # reached for a real part of the language and misplaced it — `else` belongs to
+            # the `if` above, and "expected one of new, fetch, call…" sends the author
+            # hunting for a different construct. See config's _not_ops_doc.
+            hint = config.NOT_OPS.get(op)
+            problems.append(f"{where}: unknown op {op!r} — {hint}" if hint else
+                            f"{where}: unknown op {op!r} "
                             f"(expected one of {', '.join(config.OPS)})")
             continue
         # A NAME YOU CAN BIND IS A NAME YOU CAN READ — checked once, for every op that
@@ -408,7 +415,67 @@ def validate(program: Any, known_tools=None, known_names=None,
                 if kids is None:
                     continue
                 if not isinstance(kids, list) or not kids:
-                    problems.append(f"{where}: `{branch}` is a list of statements, got {kids!r}")
+                    # AN EMPTY `then` IS AN UNSTATED INVERSION, and saying only "got []"
+                    # is what let the repair loop guess. Measured on rung 11: the draft
+                    # was `then: []` with the real work in an `else`, the repair folded
+                    # that work up into `then` and left `cond` alone, and a correct intent
+                    # became a program that stopped the machines that DID answer. Naming
+                    # the identity gives the repair one obvious move instead of two, and
+                    # it is an identity rather than a rule so it can be re-derived.
+                    # ONE REASONING ERROR, THREE FORMS — and the objection has to correct
+                    # the REASONING, not edit the symptom. The author enumerates outcomes:
+                    # it asks "what happens when true? when false?" and reserves a slot for
+                    # each, then leaves one empty because nothing goes there. Measured on
+                    # rung 11, in three spellings of the identical thought:
+                    #
+                    #   then:[] + {"op":"else"} sibling     the original draft
+                    #   then:[] + else:[Y]                  the shape the schema offers
+                    #   IF X {} ; IF NOT(X) {Y}             after being taught to invert
+                    #
+                    # All three reduce to IF NOT(X) {Y}. Earlier wording here told the
+                    # author to move the body, or to delete the statement — both are EDITS,
+                    # and an edit answers the form rather than the habit, so the habit came
+                    # back wearing the next form. Worse, "invert it" with no body to move
+                    # got cargo-culted into `IF NOT(IS($answer.alive) = false) { }`.
+                    #
+                    # So the message states the principle: a check and its opposite are ONE
+                    # decision, and only the acting side is ever written. An outcome with
+                    # nothing to do does not need an empty statement, it needs no statement.
+                    if branch == "then" and isinstance(kids, list):
+                        work = st.get("else")
+                        head = (f"{where}: `then` is empty. A check and its opposite are "
+                                f"ONE decision, not two outcomes to fill in — nothing owes "
+                                f"every case a statement. Write only the side that ACTS.")
+                        if isinstance(work, list) and work:
+                            problems.append(
+                                f"{head} The work is sitting in `else`, so the condition "
+                                f"you actually mean is its opposite: state that one and "
+                                f"put the work in `then`, with no `else` at all. "
+                                f"IF X THEN {{}} ELSE {{Y}} and IF NOT(X) THEN {{Y}} are "
+                                f"the same program; only the second says what it means. "
+                                f"Where cond is IS(...), setting eq to false says it more "
+                                f"directly than wrapping it in NOT.")
+                        else:
+                            # NAME THE OTHER HALF WHEN IT IS VISIBLE. Generic advice here
+                            # reads as "you forgot to fill this in", which is the very
+                            # habit being corrected — and the author has usually already
+                            # written the real decision one line away.
+                            twin = _negated_sibling(st, body, i)
+                            problems.append(
+                                f"{head} Statement {twin} already checks the opposite and "
+                                f"does the work — that statement IS the decision, whole. "
+                                f"This one is not its other half; there is no other half "
+                                f"to write."
+                                if twin else
+                                f"{head} Nothing acts here in either direction, so there "
+                                f"is no decision being made. Either the work belongs in "
+                                f"`then` under a condition you have not stated yet, or "
+                                f"this statement should not exist.")
+                    else:
+                        problems.append(
+                            f"{where}: `{branch}` is a list of statements, got {kids!r}"
+                            + (" — an else that runs nothing is not a branch; drop the key."
+                               if branch == "else" and isinstance(kids, list) else ""))
                 else:
                     ok2, sub = validate({"body": kids}, tools, known_names, bound, sets)
                     problems += [f"{where} ({branch}) → {x}" for x in sub]
@@ -839,6 +906,43 @@ def _at_most_one(sel: Any) -> bool:
     if not named:
         return True                        # a literal name
     return named == [config.LOOP_VAR] and val == f"{config.SIGIL}{config.LOOP_VAR}"
+
+
+def _opposite(a: Any, b: Any) -> bool:
+    """Do these two checks test a thing and its negation?
+
+    Deliberately NARROW. It answers only the two spellings the author actually produces —
+    `NOT(p)` against `p`, and `IS(x) = true` against `IS(x) = false` — because this is used
+    to make an objection MORE specific, and an objection that names the wrong statement is
+    worse than one that names none. General predicate negation is not decidable here
+    anyway: two selects can be complements without saying so.
+    """
+    if not (isinstance(a, dict) and isinstance(b, dict)):
+        return False
+    for x, y in ((a, b), (b, a)):
+        if x.get("shape") == "not" and one_check(x.get("of")) == y:
+            return True
+    if a.get("shape") == b.get("shape") == "is" and a.get("of") == b.get("of"):
+        av, bv = a.get("eq"), b.get("eq")
+        if isinstance(av, bool) and isinstance(bv, bool):
+            return av is not bv
+    return False
+
+
+def _negated_sibling(st: Dict[str, Any], body: List[Any], i: int) -> Optional[str]:
+    """"statement N", if another IF in this block tests the opposite AND does the work.
+
+    The point is not to find a duplicate — it is to be able to say WHICH statement is the
+    real decision, so the author is told its empty twin was never needed rather than told
+    to fill something in. Only a sibling that ACTS counts: two empty ifs are not a
+    decision written in the wrong place, they are two statements saying nothing.
+    """
+    for j, other in enumerate(body):
+        if j == i or not isinstance(other, dict) or other.get("op") != "if":
+            continue
+        if other.get("then") and _opposite(st.get("cond"), other.get("cond")):
+            return f"{j + 1}"
+    return None
 
 
 def _check_predicate(pred: Any, where: str, bound: Optional[set] = None,

@@ -180,8 +180,19 @@ def instruction(intent: str) -> str:
     author is being handed a fact it had no way to derive, not steered toward a reading.
     """
     if intent == ACHIEVE:
-        return ("THIS IS A COMMAND. The operator wants it done. Do the work, open with "
-                "ENSURE if something must already be true, and close with ACHIEVE.")
+        # "DO THE WORK" WAS THE OLD READING OF ACHIEVE, and it survived the 62160da
+        # decision that replaced it. Once ACHIEVE is a MAKE — "make sure you exist" rather
+        # than "certify what I just did" — what the operator wants is the state, not the
+        # activity, and those differ precisely when the goal already holds. Rung 13 is that
+        # case and the line argued for the wrong side of it: shown five machines already
+        # labelled and networked, and told to "do the work", the author built five more.
+        # A command is still a command; what it commands is an END, and the harness closes
+        # whatever gap remains, so a gap of nothing is closed by doing nothing.
+        return ("THIS IS A COMMAND. The operator wants this TRUE — an END STATE, not an "
+                "activity. ACHIEVE is a MAKE: say what must be so and the harness closes "
+                "whatever gap is left. So act on the DIFFERENCE between the lab you were "
+                "shown and what was asked for: a goal that already holds needs no work "
+                "doing twice. Open with ENSURE if something must already be true.")
     if intent == ENSURE:
         return ("THIS IS A VERIFICATION, NOT A COMMAND. The operator wants a yes or no. "
                 "Use ENSURE, and FETCH if you need to read something first. Do NOT "

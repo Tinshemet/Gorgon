@@ -587,6 +587,75 @@ def test_a_copy_source_is_offered_only_from_what_exists():
           _field_schema("from", lab) == field)
 
 
+def test_no_model_facing_string_still_teaches_a_retired_rule():
+    """A DECISION HAS MORE READERS THAN THE PLACE IT WAS WRITTEN DOWN.
+
+    `62160da` settled that ACHIEVE is a MAKE and dropped both ordering rules from the
+    validator. It updated the two op docs and its own commit message claimed "the model is
+    told the same thing the validator now accepts". It was not. Two other strings kept
+    teaching the retired rules for a day:
+
+      prompt.grounding              "It goes LAST … nothing may act after ACHIEVE, and a
+                                     program has at most one"
+      intent.instruction(ACHIEVE)   "Do the work"
+
+    Both are shown to the author on EVERY call, so the assembled prompt contradicted itself
+    twenty lines apart — `achieve` promising "you may use SEVERAL, and work may follow
+    them" while `grounding` forbade exactly that. And "do the work" argued for the wrong
+    side of rung 13: shown five machines that already satisfied the goal and told to do the
+    work, the author built five more.
+
+    This is the schema master's lesson in another register. There the fault was SIX
+    builders reading `config.OPS` independently; here it is several strings restating one
+    semantic decision, with no check that they still agree. A structural invariant cannot
+    catch it — every string is well-formed. So the retired CLAIMS are named, and every
+    surface the model can see is swept for them. Retiring a rule means adding its wording
+    here, which is the cheapest possible way to make the next straggler fail a suite
+    instead of a benchmark.
+    """
+    from orchestrator.ai.planner.ir import intent as _intent
+
+    # Wording that the validator no longer enforces. Keep the phrases SHORT and
+    # distinctive: this is matched against prose, and a long quote stops matching the
+    # moment someone rewords half of it — which is the failure being guarded against.
+    RETIRED = {
+        "at most one": "one achieve per program — dropped in 62160da",
+        "nothing may act after": "nothing may act after achieve — dropped in 62160da",
+        "it goes last": "achieve goes last — dropped in 62160da",
+        "do the work": "the pre-MAKE reading of achieve — a goal that holds needs none",
+    }
+
+    # EVERY string the author can see, gathered from the surfaces that build the prompt
+    # rather than from a hand-kept list — a hand-kept list is the same defect one level up.
+    surfaces = {f"prompt.{k}": v for k, v in config.PROMPT.items()
+                if isinstance(v, str)}
+    surfaces.update({f"ops.{op}.doc": spec.get("doc", "")
+                     for op, spec in config.OPS.items()})
+    surfaces.update({f"predicates.{p}.doc": spec.get("doc", "")
+                     for p, spec in config.PREDICATES.items()})
+    surfaces.update({f"intent.instruction({w})": _intent.instruction(w)
+                     for w in (_intent.FETCH, _intent.ENSURE, _intent.ACHIEVE)})
+    surfaces.update({f"not_ops.{k}": v for k, v in config.NOT_OPS.items()})
+
+    check("there are model-facing strings to sweep", len(surfaces) > 15)
+    for name, text in sorted(surfaces.items()):
+        hits = [why for phrase, why in RETIRED.items() if phrase in text.lower()]
+        check(f"{name} teaches no retired rule"
+              + (f" — but says: {hits[0]}" if hits else ""), not hits)
+
+    # AND THE POSITIVE HALF. Sweeping for absence alone would pass a prompt that says
+    # nothing at all about ACHIEVE, which is not the state anyone wants either.
+    achieve_doc = config.OPS["achieve"]["doc"].lower()
+    check("the achieve doc still says several are allowed",
+          "several" in achieve_doc)
+    check("and that work may follow one",
+          "work may follow" in achieve_doc)
+    check("the achieve intent tells the author it is an END STATE",
+          "end state" in _intent.instruction(_intent.ACHIEVE).lower())
+    check("and that a satisfied goal needs no repeating",
+          "difference" in _intent.instruction(_intent.ACHIEVE).lower())
+
+
 def main():
     for fn in (test_every_predicate_shape_has_an_evaluator,
                test_every_predicate_shape_renders_legibly,
@@ -603,7 +672,8 @@ def main():
                test_the_two_selects_answer_the_same_question,
                test_every_mutating_tool_says_what_done_means,
                test_the_offer_never_exceeds_the_authority,
-               test_a_copy_source_is_offered_only_from_what_exists):
+               test_a_copy_source_is_offered_only_from_what_exists,
+               test_no_model_facing_string_still_teaches_a_retired_rule):
         print(f"\n── {fn.__name__}")
         fn()
     print(f"\n{_PASS}/{_PASS + _FAIL} passed")

@@ -53,6 +53,7 @@ SURFACE    = _c("surface")         # the written spelling of things the IR store
 FIELDS     = _c("fields")          # every statement field, described once
 
 OPS        = _c("ops")             # statement type -> {required, doc}
+NOT_OPS    = _c("not_ops")         # a word written as a statement that is not one -> where it belongs
 KINDS      = _c("kinds")           # THE RESOURCE MANIFEST: kind -> {package, create, list, key, attrs}
 PREDICATES = _c("predicates")      # shape -> {source, operand, comparators, doc}
 PROMPT     = _c("prompt")          # every string the model is shown

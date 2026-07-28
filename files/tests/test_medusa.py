@@ -546,6 +546,119 @@ def test_not_accepts_the_shape_its_own_schema_asks_for():
                                   "predicate": {"shape": "all", "of": [inner]}}]})[0])
 
 
+def test_an_empty_then_is_told_it_is_an_unstated_inversion():
+    """Rung 11, measured 2026-07-28. The author's first draft is the same in every
+    phrasing and its INTENT IS CORRECT — `if alive then {} else {stop}` reads "if it
+    answers do nothing, otherwise stop it", which is exactly the goal. It fails on SHAPE,
+    twice over: `then` is left empty, and `else` is written as a sibling STATEMENT.
+
+    Both objections used to say only what was malformed. "`then` is a list of statements,
+    got []" gave the repair loop nothing to go on, so it guessed — it folded the else body
+    up into `then` and left `cond` alone, and a correct intent became a program that
+    stopped the machines that DID answer. A repair that silently reverses what a program
+    means is worse than one that gives up, and the objection is the only thing standing
+    between the two.
+
+    So both messages name the ROUTE. The inversion is phrased as an IDENTITY rather than a
+    prohibition on purpose: a rule has to be remembered, an identity can be re-derived, and
+    it carries its own reason — an empty THEN means the condition you wrote is not the
+    condition you care about.
+    """
+    stop = {"op": "call", "tool": "stop_vm", "args": {"name": "$item"}}
+    cond = {"shape": "is", "of": "$answer.alive", "eq": True}
+
+    empty_then = {"body": [{"op": "if", "cond": cond, "then": [], "else": [stop]}]}
+    ok, problems = validate(empty_then)
+    check("an empty `then` is refused", not ok)
+    check("and the objection names the identity, not just the malformation",
+          any("IF NOT(X) THEN" in p for p in problems))
+    check("it also offers the shorthand for a boolean IS",
+          any("eq to false" in p for p in problems))
+
+    check("and every form is told the PRINCIPLE, not an edit",
+          all("ONE decision" in p and "only the side that ACTS" in p
+              for p in problems if "`then` is empty" in p))
+
+    # THE THIRD FORM, AND THE ONE THAT MATTERS MOST. Taught to invert, the author kept the
+    # habit and changed the spelling: `IF X {}` followed by `IF NOT(X) {work}` — one
+    # if/else written as two statements, with the empty positive branch kept as its "other
+    # half". Telling it to DELETE the empty one would be the same checklist thinking that
+    # produced it. The objection names the statement that IS the whole decision, so what
+    # the author learns is that the case never needed writing.
+    split = {"body": [
+        {"op": "call", "tool": "guest_ping", "args": {"name": "web"}, "graft": "answer"},
+        {"op": "if", "cond": cond, "then": []},
+        {"op": "if", "cond": {"shape": "is", "of": "$answer.alive", "eq": False},
+         "then": [{"op": "call", "tool": "stop_vm", "args": {"name": "web"}}]}]}
+    ok_s, problems_s = validate(split)
+    check("the split form is refused too", not ok_s)
+    check("and the objection NAMES the statement that is the real decision",
+          any("Statement 3 already checks the opposite" in p for p in problems_s))
+    check("and says there was never another half to write",
+          any("no other half" in p for p in problems_s))
+    check("it does NOT tell the author to delete anything",
+          not any("delete" in p.lower() for p in problems_s))
+
+    # A LONE EMPTY IF, with no twin anywhere, is a different sentence — there is no
+    # statement to point at, so pointing at one would be a false accusation.
+    hollow = {"body": [{"op": "if", "cond": cond, "then": []}]}
+    ok_h, problems_h = validate(hollow)
+    check("an if with no branches at all is refused too", not ok_h)
+    check("and is told no decision is being made, with no twin invented",
+          any("no decision being made" in p for p in problems_h)
+          and not any("already checks the opposite" in p for p in problems_h))
+
+    # TWO EMPTY IFS ARE NOT A MISPLACED DECISION. The twin only counts when it ACTS —
+    # otherwise the objection would name a statement that is just as empty as this one.
+    both_empty = {"body": [
+        {"op": "if", "cond": cond, "then": []},
+        {"op": "if", "cond": {"shape": "is", "of": "$answer.alive", "eq": False},
+         "then": []}]}
+    check("an empty twin is not offered as the real decision",
+          not any("already checks the opposite" in p
+                  for p in validate(both_empty)[1]))
+
+    # THE WORD IS REAL, THE PLACE IS WRONG. Listing the legal ops is the right answer to an
+    # invented word and the wrong one here: it sends the author hunting for a different
+    # construct instead of telling it where the one it already wants lives.
+    sibling = {"body": [{"op": "if", "cond": cond, "then": [stop]},
+                        {"op": "else", "do": [stop]}]}
+    ok2, problems2 = validate(sibling)
+    check("`else` as a statement of its own is refused", not ok2)
+    check("and is told it is a FIELD of the if above, not an op",
+          any("FIELD of the `if`" in p for p in problems2))
+    check("a genuinely invented op still gets the plain list of legal ones",
+          any("expected one of" in p
+              for p in validate({"body": [{"op": "elsif", "do": [stop]}]})[1]))
+
+    # BOTH LEGAL SPELLINGS OF THE INVERSION ALREADY WORK — the model is not missing the
+    # concept, only the shape. Given a synonym-mutated wording of this same goal it wrote
+    # `eq: false` unprompted and passed the rung.
+    def _loop(branch):
+        """Rung 11's own shape: probe each member, then branch on that member's answer."""
+        return {"body": [{"op": "foreach", "select": {"kind": "vm"}, "do": [
+            {"op": "call", "tool": "guest_ping", "args": {"name": "$item"},
+             "graft": "answer"}, branch]}]}
+
+    check("NOT(...) is a legal cond — it composes over every predicate",
+          validate(_loop({"op": "if", "cond": {"shape": "not", "of": cond},
+                          "then": [stop]}))[0])
+    check("and flipping eq says the same thing",
+          validate(_loop({"op": "if",
+                          "cond": {"shape": "is", "of": "$answer.alive", "eq": False},
+                          "then": [stop]}))[0])
+
+    # THE RUNTIME NEVER HAD THIS RESTRICTION. execute.py picks its branch with
+    # `_block(st.get("then" if good else "else") or [])`, so an empty branch simply runs
+    # nothing — only the schema and the validator forbid writing it. Same shape as the
+    # ACHIEVE ordering rules dropped in 62160da, and worth pinning so the next reader knows
+    # this is a TEACHING choice about what a program should SAY, not a capability gap.
+    import inspect
+    from orchestrator.ai.planner.ir import execute as _execute
+    check("the runtime tolerates an absent branch, so this is a language choice",
+          'st.get("then" if good else "else") or []' in inspect.getsource(_execute))
+
+
 def test_every_few_shot_example_is_a_valid_program():
     """A worked example is the strongest teaching signal there is — the shots beat the
     prompt whenever they disagree, which is how rung 7 was taught the old single-word
@@ -1127,6 +1240,7 @@ def main():
                test_the_objection_names_the_statement_not_the_tool,
                test_a_loop_inside_a_loop_is_refused,
                test_not_accepts_the_shape_its_own_schema_asks_for,
+               test_an_empty_then_is_told_it_is_an_unstated_inversion,
                test_every_few_shot_example_is_a_valid_program,
                test_the_grader_finds_a_verdict_nested_in_a_loop,
                test_the_loop_variable_pins_exactly_one_member,
