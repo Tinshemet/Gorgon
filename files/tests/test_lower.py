@@ -247,3 +247,139 @@ def test_a_tree_deeper_than_the_bound_is_REFUSED():
     emit, _ = _emitter({})
     with pytest.raises(lower.LoweringError, match="never bottoms out"):
         lower.lower_tree(deep, emit)
+
+
+# ── steps 04 + 05: fusion gates and whole-artifact review ───────────────────────────────
+from orchestrator.ai.planner import clause_ledger as _cl
+
+
+def _reconcile(led, body):
+    return _cl.unaccounted(_cl.reconcile(led, body))
+
+
+def test_review_catches_a_clause_that_appears_NOWHERE():
+    """THE THIRD ROW of the note's whole-granularity table, and the only one no local check
+    can see: every leaf valid, every fusion well-formed, and a demand of the goal missing.
+    This is a wrong DECOMPOSITION, so no amount of re-emitting leaves fixes it."""
+    goal = "put every vm on core, except db — db goes on dmz"
+    led = _cl.open_ledger(goal, [
+        {"text": "put every vm on core", "anchors": ["core"]},
+        {"text": "db goes on dmz", "anchors": ["db", "dmz"]}])
+    root = N("root", op="sequence", children=[
+        _leaf("all on core", "foreach",
+              {"op": "foreach", "select": {"kind": "vm"},
+               "call": {"tool": "add_vm_to_network", "args": {"net_name": "core"}}}),
+        _leaf("verdict", "ensure",
+              {"op": "ensure", "predicate": {"shape": "count",
+                                             "select": {"kind": "vm"}, "gte": 1}}),
+    ])
+    rep = lower.review(root, led, _reconcile)
+    assert len(rep["unaccounted"]) == 1
+    assert lower.revise_target(root, rep) == "decomposition", \
+        "a missing clause is a decomposition fault — re-emitting a leaf cannot invent a branch"
+
+
+def test_review_is_silent_on_a_tree_that_covers_the_goal():
+    goal = "put every vm on core, except db — db goes on dmz"
+    led = _cl.open_ledger(goal, [
+        {"text": "put every vm on core", "anchors": ["core"]},
+        {"text": "db goes on dmz", "anchors": ["db", "dmz"]}])
+    root = N("root", op="sequence", children=[
+        _leaf("all but db on core", "foreach",
+              {"op": "foreach", "select": {"kind": "vm", "not": {"name": "db"}},
+               "call": {"tool": "add_vm_to_network", "args": {"net_name": "core"}}}),
+        _leaf("db on dmz", "call",
+              {"op": "call", "tool": "add_vm_to_network",
+               "args": {"net_name": "dmz", "vm_name": "db"}}),
+        _leaf("verdict", "ensure",
+              {"op": "ensure", "predicate": {"shape": "count",
+                                             "select": {"kind": "vm"}, "gte": 1}}),
+    ])
+    rep = lower.review(root, led, _reconcile)
+    assert rep["unaccounted"] == [] and rep["grounded"]
+    assert lower.revise_target(root, rep) is None
+
+
+def test_an_ungrounded_program_is_sent_back():
+    """Medusa's one soundness rule at the whole-artifact level: a program that acts and
+    asserts nothing has established nothing."""
+    root = N("root", op="sequence", children=[_leaf("a", "new", NEW)])
+    rep = lower.review(root)
+    assert rep["grounded"] is False
+    assert lower.revise_target(root, rep) == "root"
+
+
+def test_repetition_is_GRADED_and_never_sent_back():
+    """*"Redundancy is wasteful, not wrong."* Treating it as a defect would push the design
+    toward fewer, larger decisions — the direction that RAISES p_self risk. It is reported
+    and must not gate."""
+    root = N("root", op="sequence", children=[
+        _leaf("a", "call", CALL), _leaf("b", "call", dict(CALL)),
+        _leaf("v", "ensure", {"op": "ensure",
+                              "predicate": {"shape": "count",
+                                            "select": {"kind": "vm"}, "gte": 1}}),
+    ])
+    rep = lower.review(root)
+    assert len(rep["repeated"]) == 1, "the duplicate is reported"
+    assert lower.revise_target(root, rep) is None, "and it does NOT send the tree back"
+
+
+def test_repeated_VERDICTS_are_not_counted_as_repetition():
+    """Asserting the same thing twice is cheap and often correct — a barrier before work and
+    a check after it are the same predicate on purpose."""
+    e = {"op": "ensure", "predicate": {"shape": "count", "select": {"kind": "vm"}, "gte": 1}}
+    root = N("root", op="sequence", children=[
+        _leaf("a", "ensure", e), _leaf("b", "ensure", dict(e))])
+    assert lower.review(root)["repeated"] == []
+
+
+def test_the_review_loop_is_BOUNDED():
+    """The note: a program that cannot satisfy its reviewer would be re-authored forever.
+
+    The rebuild here keeps CHANGING the findings (each round adds a statement) so the
+    no-progress guard never fires and only the ROUND BOUND can stop it. That separation
+    matters: a bound that is only ever reached because progress stalled is not a bound.
+    """
+    root = N("root", op="sequence", children=[_leaf("a", "new", NEW)])   # never grounded
+    tries = {"n": 0}
+    def rebuild(tree, target):
+        tries["n"] += 1
+        kids = [_leaf(f"a{i}", "new", dict(NEW)) for i in range(tries["n"] + 1)]
+        return N("root", op="sequence", children=kids)
+    out, rep = lower.review_loop(root, rebuild, rounds=2)
+    assert tries["n"] == 2, "stopped at the bound rather than looping forever"
+    assert rep["grounded"] is False
+
+
+def test_no_progress_fires_even_when_the_TREE_changed():
+    """Progress is measured by FINDINGS, not by the tree looking different. A rebuild that
+    reshuffles without fixing anything is the same wasted round as one that returns the
+    identical object — and the weaker guard would miss it."""
+    root = N("root", op="sequence", children=[_leaf("a", "new", NEW)])
+    tries = {"n": 0}
+    def rebuild(tree, target):
+        tries["n"] += 1
+        return N("root", op="sequence", children=[_leaf(f"renamed{tries['n']}", "new", dict(NEW))])
+    lower.review_loop(root, rebuild, rounds=5)
+    assert tries["n"] == 1, "different tree, identical findings — stopped after one"
+
+
+def test_the_review_loop_stops_on_NO_PROGRESS():
+    """A rebuild that returns the same tree, or the same findings, buys nothing — the
+    lesson `REPAIR_UNDELIVERED` already taught one layer down."""
+    root = N("root", op="sequence", children=[_leaf("a", "new", NEW)])
+    tries = {"n": 0}
+    def rebuild(tree, target):
+        tries["n"] += 1
+        return tree                      # identical
+    lower.review_loop(root, rebuild, rounds=5)
+    assert tries["n"] == 1, "one attempt, then stopped"
+
+
+def test_a_tree_the_reviewer_rejected_is_STILL_RETURNED():
+    """*"The reviewer must never be the only thing standing between a program and the world,
+    or a graded verdict quietly becomes a gate."* It returns the tree AND its findings; what
+    to do about them is the caller's decision."""
+    root = N("root", op="sequence", children=[_leaf("a", "new", NEW)])
+    out, rep = lower.review_loop(root, lambda t, w: None, rounds=2)
+    assert out is not None and rep["grounded"] is False

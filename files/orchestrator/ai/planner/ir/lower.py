@@ -40,7 +40,7 @@ step, and the note is explicit that PER-LEAF RETRY MUST SHIP WITH EMISSION rathe
 later — without it, splitting one draw into five multiplies exposure instead of containing
 it. This file must not tempt anyone into emitting without it.
 """
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from . import config, master, schema as _schema
 from .validate import validate
@@ -353,3 +353,132 @@ def lower_tree(root: dict, emit, want: Optional[str] = None, known: Optional[set
         return out
 
     return walk(root, set())
+
+
+# ── STEP 04: GATES AT EVERY FUSION ──────────────────────────────────────────────────────
+# The note's table is a RELOCATION list, not new work: *"the architecture mostly relocates
+# checks to the resolution where they answer a question they can actually answer."* The
+# validator already runs per leaf and per fused container (above). This adds the sanitiser
+# at the same two points, so residue is dropped at the level it was produced rather than
+# surviving into a finished artifact where its origin is lost.
+#
+# THE SANITISER STILL NEVER REWRITES. Same rule as everywhere else — it removes what
+# provably cannot run and COUNTS what it removed. A pass that cleaned without counting
+# would make the artifact rate unmeasurable, which is the failure this codebase keeps
+# rediscovering.
+
+def gate_fusion(stmts: List[dict], sanitize_fn=None) -> Tuple[List[dict], List[dict]]:
+    """(statements, removals) for one fusion. Deterministic; no model."""
+    if sanitize_fn is None:
+        return list(stmts), []
+    cleaned, removed = sanitize_fn({"body": list(stmts)})
+    return (cleaned.get("body") if isinstance(cleaned, dict) else cleaned), list(removed or [])
+
+
+# ── STEP 05: WHOLE-ARTIFACT REVIEW ──────────────────────────────────────────────────────
+# THE ONLY PLACE A WRONG ROOT IS VISIBLE. Per-node gates are necessary and not sufficient:
+# *"a wrong decomposition near the root is locally invisible — every child is a valid
+# statement, every fusion is well-formed, and the program is still wrong."*
+#
+# DELIBERATELY DETERMINISTIC. The note warns twice about this step, and both warnings point
+# the same way: *"the reviewer must never be the only thing standing between a program and
+# the world, or a graded verdict quietly becomes a gate"*, and per-node p_self is only
+# honest if *"the verdict at each node comes from something other than the model"*. A
+# model-graded review would be the second bad draw on both counts. So every finding below
+# is computed:
+#
+#   coverage    the CLAUSE LEDGER — demands recorded before authoring, reconciled after.
+#               Catches "a clause of the goal that appears nowhere", the third row of the
+#               note's whole-granularity table and the one no local check can see.
+#   repetition  identical statements in distant branches — "work done twice". A GRADE on a
+#               correct program, never a reason to refuse it: treating redundancy as a
+#               defect would push toward fewer, larger decisions, which is the direction
+#               that RAISES p_self risk.
+#   grounding   the one soundness rule — a program needs at least one VERDICT.
+#
+# It RETURNS A REPORT AND CHANGES NOTHING. Sending the tree back is the caller's decision,
+# and `revise_target` only names where.
+
+REVIEW_ROUNDS = 2      # the note requires an explicit bound: a program that cannot satisfy
+                       # its reviewer would otherwise be re-authored forever.
+
+
+def review(root: dict, ledger=None, reconcile_fn=None) -> Dict[str, Any]:
+    """Grade the assembled tree. Deterministic, no model, changes nothing."""
+    prog = assemble(root)
+    body = prog["body"]
+
+    flat: List[dict] = []
+    def walk(sts):
+        for s in sts:
+            flat.append(s)
+            for f in ("do", "then", "else"):
+                if isinstance(s.get(f), list):
+                    walk(s[f])
+    walk(body)
+
+    import json as _json
+    seen: Dict[str, int] = {}
+    for s in flat:
+        if s.get("op") in ("ensure", "achieve"):
+            continue          # asserting the same thing twice is cheap and often correct
+        k = _json.dumps({x: v for x, v in s.items()
+                         if x not in ("do", "then", "else")}, sort_keys=True)
+        seen[k] = seen.get(k, 0) + 1
+    repeated = [k for k, n in seen.items() if n > 1]
+
+    unaccounted = []
+    if ledger is not None and reconcile_fn is not None:
+        unaccounted = reconcile_fn(ledger, body)
+
+    return {
+        "grounded": any(s.get("op") in ("ensure", "achieve") for s in flat),
+        "unaccounted": unaccounted,
+        "repeated": repeated,
+        "statements": len(flat),
+    }
+
+
+def revise_target(root: dict, report: Dict[str, Any]) -> Optional[str]:
+    """WHERE to send the tree back, or None if nothing is wrong.
+
+    Ordered by what only that level can fix, and coverage comes FIRST: a missing clause is
+    a decomposition fault, and re-emitting a leaf cannot invent a branch that was never
+    planned. Repetition is NOT a target — it is a grade on a correct program, removable by
+    an optimisation pass that must stay downstream of correctness so "did fewer calls" can
+    never be confused with "was more right".
+    """
+    if report.get("unaccounted"):
+        return "decomposition"
+    if not report.get("grounded"):
+        return "root"
+    return None
+
+
+def review_loop(root: dict, rebuild, ledger=None, reconcile_fn=None,
+                rounds: int = REVIEW_ROUNDS, log=None) -> Tuple[dict, Dict[str, Any]]:
+    """Review, send back, review again — BOUNDED, with a no-progress guard.
+
+    `rebuild(root, target)` returns a new tree or None if it cannot. Returns the best tree
+    reached and its report; a tree the reviewer never accepted is returned ANYWAY, with its
+    findings, because the reviewer must not be the only thing between a program and the
+    world.
+    """
+    cur, rep = root, review(root, ledger, reconcile_fn)
+    for i in range(rounds):
+        target = revise_target(cur, rep)
+        if target is None:
+            return cur, rep
+        nxt = rebuild(cur, target)
+        if nxt is None or nxt == cur:
+            if log:
+                log(f"review round {i + 1}: no progress on {target} — stopping")
+            break
+        nrep = review(nxt, ledger, reconcile_fn)
+        if nrep == rep:
+            if log:
+                log(f"review round {i + 1}: same findings after rebuild — stopping")
+            cur = nxt
+            break
+        cur, rep = nxt, nrep
+    return cur, rep
