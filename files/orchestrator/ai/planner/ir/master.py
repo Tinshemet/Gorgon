@@ -283,10 +283,19 @@ def cardinality_of(sel) -> str:
     # that select requires.
     val = sel.get(key, sel.get(next((k for k in sel if aliases.get(k, k) == key), key)))
     if isinstance(val, dict) and "in" in val:
-        members = val["in"]
-        if isinstance(members, list):
-            return "singular" if len(members) == 1 else "set"
-        return "set"          # a bound $set — size unknown, so conservatively a set
+        # MEMBERSHIP IS A SET CONSTRUCTOR, AT EVERY LENGTH — including one.
+        #
+        # I first wrote this as `singular if len(members) == 1`, which contradicts the rule
+        # the whole module rests on. The operator caught it: *"name in [solo] is technically
+        # a set, even if it's singular — that was our issue. It should be treated with a
+        # foreach even if it's 1 member."* Right, and it is the same trap in a new costume:
+        # `len(...) == 1` IS a member count, and counting is exactly what by-construction
+        # replaces. A list of one is still a list; `EXCEPT` narrowing it to one member
+        # tomorrow does not change what the expression IS.
+        #
+        # Only SCALAR equality on the key is singular, because the key is unique by
+        # declaration and a scalar match can never yield two.
+        return "set"
     return "singular"
 
 

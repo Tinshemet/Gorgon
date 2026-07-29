@@ -219,6 +219,48 @@ def test_a_quantifier_narrows_the_schema_it_builds():
     check("narrowing actually removes branches", len(single) < len(full))
 
 
+def test_cardinality_is_by_construction_and_never_by_member_count():
+    """THE OPERATOR'S REQUIREMENT, 2026-07-29, stated as a test because it is the one thing
+    this whole mechanism can get subtly wrong: *"it needs to understand it's a key filter
+    and only use singular form while still understanding to use foreach even if a set has
+    only 1 member."*
+
+    A label matching exactly ONE machine today is still a SET EXPRESSION and keeps its
+    loop; a key filter is singular even in a lab holding a thousand machines. The test of
+    the property is that `cardinality_of` NEVER CONSULTS THE WORLD — it reads the select's
+    shape and nothing else — so member counts cannot leak into the answer. If it ever grew
+    a world argument, this is what would fail.
+    """
+    import inspect as _inspect
+    from orchestrator.ai.planner.ir import master as _master
+    sig = _inspect.signature(_master.cardinality_of)
+    check("cardinality_of takes ONLY a select — no world, no registry, no counts",
+          list(sig.parameters) == ["sel"])
+    check("a key filter is singular", _master.cardinality_of({"kind": "vm", "name": "db"})
+          == "singular")
+    check("a NON-key filter is a set however few match today",
+          _master.cardinality_of({"kind": "vm", "label": "prod"}) == "set")
+    check("a complement is a set — NOT ANY resolved",
+          _master.cardinality_of({"kind": "vm", "not": {"name": "db"}}) == "set")
+    # MEMBERSHIP IS A SET AT EVERY LENGTH. A one-element `in` list is the sharpest test of
+    # the whole rule, because it is where counting and construction disagree — and an
+    # earlier version answered `singular` there, which was a member count wearing a
+    # different hat.
+    check("membership over the key is a SET even at length 1",
+          _master.cardinality_of({"kind": "vm", "name": {"in": ["solo"]}}) == "set")
+    check("membership over the key is a set at length 2",
+          _master.cardinality_of({"kind": "vm", "name": {"in": ["a", "b"]}}) == "set")
+    check("a bound $set is a set (size not even knowable at authoring time)",
+          _master.cardinality_of({"kind": "vm", "name": {"in": "$vms"}}) == "set")
+    check("ONLY scalar equality on the key is singular",
+          _master.cardinality_of({"kind": "vm", "name": "db"}) == "singular")
+    # every kind's key, not just vm's — a new kind must not quietly fall through to `set`
+    for kind, spec in config.KINDS.items():
+        key = spec.get("key")
+        check(f"{kind}: a filter on its key ({key}) is singular",
+              _master.cardinality_of({"kind": kind, key: "x"}) == "singular")
+
+
 def test_the_visitor_does_not_silently_ignore_a_statement():
     """An op the visitor does not handle falls through and does NOTHING — no error, no
     call, a green close over a statement that never ran. That is the false-success class
