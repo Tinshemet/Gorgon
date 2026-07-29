@@ -98,12 +98,16 @@ def make_route(model: str, world: SimWorld, stats: Dict[str, int], log=None):
 # ── the emitter: ONE operator's schema per leaf ─────────────────────────────────────────
 def make_emit(model: str, world: SimWorld, want: str, stats: Dict[str, int], log=None):
     def emit(leaf: dict, schema: Dict[str, Any], objection: Optional[str] = None,
-             context: Optional[List[dict]] = None):
+             context: Optional[List[dict]] = None,
+             ancestry: Optional[List[str]] = None):
         stats["emit_calls"] += 1
         msgs = _messages(leaf["goal"], True, world, want)
         msgs[-1]["content"] += (
             f"\n\nWrite EXACTLY ONE statement, and it is a `{leaf['op']}`. "
             f"Nothing else — this is one step of a larger program.")
+        if ancestry:
+            msgs[-1]["content"] += (
+                "\n\nThis step is part of: " + " > ".join(a for a in ancestry if a))
         if context:
             from orchestrator.ai.planner.ir import render as _render
             msgs[-1]["content"] += (
@@ -160,7 +164,7 @@ def main(argv=None) -> int:
                 emit = make_emit(a.model, world, "achieve", stats, log)
                 tree = lower.decompose(goal, route, log=log)
                 tree = lower.lower_tree(tree, emit, want="achieve",
-                                        known=world.names(), log=log)
+                                        known=world.names(), log=log, route=route)
                 tree = lower.ground(tree, emit, goal, want="achieve",
                                     known=world.names(), log=log)
                 led = _cl.open_ledger(goal, rung.demands or [])

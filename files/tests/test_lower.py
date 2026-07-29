@@ -149,7 +149,7 @@ def _emitter(script):
     `script[goal]` is a list of what successive attempts return; an Exception instance is
     raised (a decode failure), None means the call came back empty."""
     calls = {"n": 0}
-    def emit(leaf, schema, objection=None, context=None):
+    def emit(leaf, schema, objection=None, context=None, ancestry=None):
         calls["n"] += 1
         seq = script.get(leaf["goal"])
         if not seq:
@@ -466,7 +466,7 @@ def test_a_leaf_is_shown_what_its_SIBLINGS_already_emitted():
     # a TOP-LEVEL call, so neither leaf retries and the indices are the emissions
     TOP = {"op": "call", "tool": "launch_vm", "args": {"name": "made"}}
     seen = []
-    def emit(leaf, schema, objection=None, context=None):
+    def emit(leaf, schema, objection=None, context=None, ancestry=None):
         seen.append((leaf["goal"], list(context or [])))
         return NEW if leaf["op"] == "new" else TOP
     root = N("root", op="sequence", children=[N("first", op="new"), N("second", op="call")])
@@ -481,7 +481,7 @@ def test_ground_adds_a_verdict_only_when_one_is_missing():
     one `new`, and there is no room inside one statement for a judgement about it."""
     V = {"op": "achieve", "predicate": {"shape": "count",
                                         "select": {"kind": "vm"}, "gte": 1}}
-    emit = lambda leaf, schema, objection=None, context=None: V
+    emit = lambda leaf, schema, objection=None, context=None, ancestry=None: V
     bare = N("root", op="sequence", children=[_leaf("a", "new", NEW)])
     out = lower.ground(bare, emit, "make a vm")
     assert lower.review(out)["grounded"], "an ungrounded tree gains a verdict"
@@ -492,7 +492,51 @@ def test_ground_adds_a_verdict_only_when_one_is_missing():
 def test_a_verdict_that_cannot_be_authored_leaves_the_tree_ALONE():
     """Inventing one would be the harness vouching for work it did not check. `run()`
     refusing an ungrounded program is the honest outcome."""
-    def emit(leaf, schema, objection=None, context=None):
+    def emit(leaf, schema, objection=None, context=None, ancestry=None):
         raise ValueError("no")
     bare = N("root", op="sequence", children=[_leaf("a", "new", NEW)])
     assert lower.ground(bare, emit, "g") is bare
+
+
+def test_a_leaf_sees_the_goals_it_sits_UNDER():
+    """Measured 2026-07-29: "put the red ones together" and "new vm1 with fleet label" are
+    unauthorable alone — the colour, the count and the label all live in the PARENT's
+    wording. Sibling context gives a leaf what is already DONE; ancestry gives it what it is
+    PART OF, and neither substitutes for the other."""
+    seen = []
+    def emit(leaf, schema, objection=None, context=None, ancestry=None):
+        seen.append(list(ancestry or []))
+        return NEW
+    root = N("make 3 red and 2 blue", op="sequence",
+             children=[N("the red ones", op="new")])
+    lower.lower_tree(root, emit)
+    assert seen[0] == ["make 3 red and 2 blue"]
+
+
+def test_a_leaf_that_will_not_emit_is_RE_ROUTED_as_a_decomposition():
+    """A leaf that cannot be emitted is EVIDENCE THE ROUTER WAS WRONG ABOUT ATOMICITY.
+    Measured: rungs 8 and 11 handed the WHOLE goal to one leaf — "put every vm on core,
+    except db, db goes on dmz" is plainly two statements and no retry makes it one.
+    Re-routing uses the channel that answers this at 10/10 instead of asking the decoder to
+    do the impossible again."""
+    TOP = {"op": "call", "tool": "launch_vm", "args": {"name": "made"}}
+    def emit(leaf, schema, objection=None, context=None, ancestry=None):
+        if leaf["goal"] == "do A and B":
+            return {"op": "call"}            # invalid, never emits
+        return NEW if leaf["op"] == "new" else TOP
+    route = _router({"do A and B": {"atomic": False, "op": "sequence",
+                                    "steps": ["do A", "do B"]},
+                     "do A": {"atomic": True, "op": "new"},
+                     "do B": {"atomic": True, "op": "call"}})
+    root = N("do A and B", op="call")
+    out = lower.lower_tree(root, emit, route=route)
+    assert [l["goal"] for l in lower.leaves(out)] == ["do A", "do B"]
+
+
+def test_re_routing_stops_when_the_router_INSISTS_it_is_atomic():
+    """No infinite recovery: if the router still says atomic, the original failure stands."""
+    def emit(leaf, schema, objection=None, context=None, ancestry=None):
+        return {"op": "call"}                # always invalid
+    route = _router({"g": {"atomic": True, "op": "call"}})
+    with pytest.raises(lower.LoweringError):
+        lower.lower_tree(N("g", op="call"), emit, route=route)

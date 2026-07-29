@@ -227,7 +227,8 @@ def emit_leaf(leaf: dict, emit, want: Optional[str] = None,
               retries: int = LEAF_RETRIES, log=None,
               bound: Optional[set] = None,
               body: Optional[List[dict]] = None,
-              context: Optional[List[dict]] = None) -> dict:
+              context: Optional[List[dict]] = None,
+              ancestry: Optional[List[str]] = None) -> dict:
     """Fill one leaf's `stmt`. Returns the leaf (mutated copy), or raises LoweringError.
 
     ORDER, and it is the reason-gate note's `sanitize -> repair -> ask` read backwards from
@@ -260,7 +261,7 @@ def emit_leaf(leaf: dict, emit, want: Optional[str] = None,
             # context-free in either sense, and lowering in true isolation asks the model to
             # name something it was never shown.
             stmt = emit(leaf, schema, attempts[-1] if attempts else None,
-                        list(context or []))
+                        list(context or []), list(ancestry or []))
         except Exception as exc:                 # a decode failure IS the expected case
             if log:
                 log(f"leaf {leaf.get('goal')!r} attempt {i + 1}: {type(exc).__name__}")
@@ -320,7 +321,7 @@ def emit_leaf(leaf: dict, emit, want: Optional[str] = None,
 
 
 def lower_tree(root: dict, emit, want: Optional[str] = None, known: Optional[set] = None,
-               derive_fn=None, max_depth: int = MAX_DEPTH, log=None) -> dict:
+               derive_fn=None, max_depth: int = MAX_DEPTH, log=None, route=None) -> dict:
     """Emit every leaf, bottom-up, and return a NEW tree with statements filled.
 
     Mutates nothing: review can send the tree back, and a second pass has to grade the same
@@ -334,10 +335,32 @@ def lower_tree(root: dict, emit, want: Optional[str] = None, known: Optional[set
 
     done_so_far: List[dict] = []          # every statement already emitted, in order
 
-    def walk(n: dict, bound: set) -> dict:
+    def walk(n: dict, bound: set, ancestry: List[str]) -> dict:
         if is_leaf(n):
-            out = emit_leaf(n, emit, want, known, derive_fn, log=log, bound=bound,
-                            context=done_so_far)
+            # A THIN SUB-GOAL MEANS NOTHING WITHOUT WHAT IT SITS UNDER. Measured: "put the
+            # red ones together" and "new vm1 with fleet label" are unauthorable alone —
+            # the colour, the count and the label all live in the PARENT's wording. Sibling
+            # context gave the leaf what was already DONE; ancestry gives it what it is
+            # PART OF, and neither substitutes for the other.
+            try:
+                out = emit_leaf(n, emit, want, known, derive_fn, log=log, bound=bound,
+                                context=done_so_far, ancestry=ancestry)
+            except LoweringError:
+                # A LEAF THAT CANNOT BE EMITTED IS EVIDENCE THE ROUTER WAS WRONG ABOUT
+                # ATOMICITY. Measured: rungs 8 and 11 handed the WHOLE goal to one leaf —
+                # "put every vm on core, except db, db goes on dmz" is plainly two
+                # statements, and no amount of retrying makes it one. Re-routing it is the
+                # honest recovery, and it uses the channel that answers this question at
+                # 10/10 rather than asking the decoder to do the impossible again.
+                if route is None or len(ancestry) + 1 >= max_depth:
+                    raise
+                if log:
+                    log(f"leaf would not emit — re-routing as a decomposition: "
+                        f"{n.get('goal')[:52]!r}")
+                sub = decompose(n["goal"], route, max_depth - len(ancestry), log)
+                if is_leaf(sub):
+                    raise          # the router still says atomic; nothing further to try
+                return walk(sub, bound, ancestry)
             if out.get("stmt"):
                 done_so_far.append(out["stmt"])
             return out
@@ -350,7 +373,7 @@ def lower_tree(root: dict, emit, want: Optional[str] = None, known: Optional[set
             inner.add(config.LOOP_VAR)     # `$item` exists for the body and only there
         kids = []
         for k in n["children"]:
-            done = walk(k, inner)
+            done = walk(k, inner, ancestry + [n.get("goal", "")])
             kids.append(done)
             # A SEQUENCE'S LATER CHILDREN SEE WHAT THE EARLIER ONES BOUND. `NEW` binds a
             # name the next statement reads, and lowering must not hide that from the
@@ -369,10 +392,11 @@ def lower_tree(root: dict, emit, want: Optional[str] = None, known: Optional[set
             for k in out["children"]:
                 fused += fuse(k)
             out = emit_leaf(out, emit, want, known, derive_fn, log=log,
-                            bound=bound, body=fused, context=done_so_far)
+                            bound=bound, body=fused, context=done_so_far,
+                            ancestry=ancestry)
         return out
 
-    return walk(root, set())
+    return walk(root, set(), [])
 
 
 # ── STEP 04: GATES AT EVERY FUSION ──────────────────────────────────────────────────────
