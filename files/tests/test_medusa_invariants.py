@@ -46,6 +46,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from orchestrator.ai.planner.findings import DEFAULT_SCHEMA
 from orchestrator.ai.planner.ir import config, derive, evaluate, refs, render, run, validate
+from orchestrator.ai.planner.ir import intent as intent_mod
 from orchestrator.ai.planner.ir.derive import _DERIVERS
 from tests.bench.author_probe import _seams, program_schema
 from tests.bench.sim_world import SimWorld
@@ -152,6 +153,21 @@ def test_every_op_is_accounted_for():
     for op in config.OPS:
         out = render({"body": [{"op": op}]})
         check(f"{op}: the renderer knows it", "<unknown op" not in out)
+
+
+def test_every_op_is_in_exactly_one_category():
+    """STRUCTURAL vs INTENT. A router asks the model for structure; intent comes from the
+    operator and `ir/intent.py` enforces it. An op in neither category would silently be
+    offered as a free choice again — which is the defect the split exists to fix — and an
+    op in BOTH would let a router ask for something already decided."""
+    cats = config.OP_CATEGORIES
+    seen = [op for group in cats.values() for op in group]
+    check("every op is categorised", set(seen) == set(config.OPS))
+    check("no op is in two categories", len(seen) == len(set(seen)))
+    # The intent category IS the intent ladder's three words — not a parallel list that
+    # can drift from it. `intent.py` is the authority; this asserts they agree.
+    check("the intent ops are exactly the three intents",
+          set(cats["intent"]) == {intent_mod.FETCH, intent_mod.ENSURE, intent_mod.ACHIEVE})
 
 
 def test_the_visitor_does_not_silently_ignore_a_statement():
