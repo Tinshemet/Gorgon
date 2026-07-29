@@ -1,0 +1,355 @@
+"""
+lower.py — STAGED LOWERING, step 01: node type, fusion rules, per-operator schemas.
+
+The design note (2026-07-28, artifact b44bcae5) in one line: *"decompose to one-operator
+leaves, emit per leaf, fuse upward — but grade the whole artifact before anything runs."*
+
+THIS FILE IS THE DETERMINISTIC HALF AND CALLS NO MODEL. It holds the node type, the fusion
+rules, and the schema generator that offers ONE operator instead of eleven. The build order
+puts it first precisely because it can be written and tested with no model in the loop:
+everything here is checkable in milliseconds, and the expensive, unreliable parts (routing,
+leaf emission) plug into it afterwards.
+
+## WHY ONE OPERATOR PER LEAF — and the correction the note needs
+
+The note claims a per-leaf schema *"removes the construct that has been producing malformed
+output"*. On 2026-07-28 that read as measured-FALSE: flattening the eleven-branch `oneOf`
+into a single object with `op` as an enum produced byte-identical failures at the same
+character positions.
+
+**THAT MEASUREMENT TESTED THE WRONG THING, and 2026-07-29 says so.** Flattening eleven
+branches is not the same as offering ONE. Measured that day:
+
+  * every constraint shape held 5/5 in isolation at ONE or TWO branches — top-level
+    `required`, nested `required`, nested `enum`, `required` inside array items, `$ref`,
+    and self-recursive `$ref`.
+  * under the real ELEVEN-branch schema the model emitted `{"op": "else": [...]}` — an op
+    NO BRANCH PERMITS, `else` being a field of `if` and never a statement — and the bytes
+    did not parse.
+
+So the mechanism is not that `oneOf` is malformed-prone; it is that GRAMMAR ENFORCEMENT
+DEGRADES WITH BRANCH COUNT. A leaf offered one operator's schema is one branch, which is
+the regime where enforcement was observed to hold. That is a stronger argument than the
+note makes, and it is what this step exists to test.
+
+## WHAT IS DELIBERATELY NOT HERE
+
+No routing (that is the atomicity router, measured separately at step 02 and already
+passing), no leaf emission, no retry, no gates, no whole-artifact review. Each is its own
+step, and the note is explicit that PER-LEAF RETRY MUST SHIP WITH EMISSION rather than
+later — without it, splitting one draw into five multiplies exposure instead of containing
+it. This file must not tempt anyone into emitting without it.
+"""
+from typing import Any, Dict, List, Optional
+
+from . import config, master, schema as _schema
+from .validate import validate
+
+# ── THE NODE ────────────────────────────────────────────────────────────────────────────
+# A dict rather than a class, deliberately: every other IR object in this package is a
+# plain dict over which `run`, `validate`, `derive` and `render` are pure functions, and a
+# node that could not be JSON-dumped could not be logged, cached or replayed.
+#
+#   goal      the sub-goal this node is responsible for, in the operator's own words
+#   op        the operator this node IS. A LEAF's op is what it emits; a BRANCH's op is
+#             what its children fuse INTO — the note's open question #3: *"a decomposing
+#             node has to name its own operator, not just its sub-goals — otherwise fusion
+#             has nothing to attach to."*
+#   children  sub-nodes; empty for a leaf
+#   stmt      the emitted statement, for a leaf. None until emission runs.
+#
+# `op` is REQUIRED ON BOTH KINDS and that is the load-bearing rule of this file.
+
+
+def node(goal: str, op: Optional[str] = None,
+         children: Optional[List[dict]] = None, stmt: Optional[dict] = None) -> dict:
+    """One node. A leaf has no children; a branch has children and must name its own op."""
+    return {"goal": goal, "op": op, "children": list(children or []), "stmt": stmt}
+
+
+def is_leaf(n: dict) -> bool:
+    return not n.get("children")
+
+
+def depth(n: dict) -> int:
+    """Deepest path from here. The note requires a depth bound — *"a goal that keeps
+    decomposing into itself never bottoms out"* — and a bound needs something to measure."""
+    kids = n.get("children") or []
+    return 1 + max((depth(k) for k in kids), default=0)
+
+
+def leaves(n: dict) -> List[dict]:
+    """Every leaf under this node, left to right — emission order."""
+    if is_leaf(n):
+        return [n]
+    out: List[dict] = []
+    for k in n["children"]:
+        out += leaves(k)
+    return out
+
+
+# ── FUSION ──────────────────────────────────────────────────────────────────────────────
+# HOW CHILDREN ATTACH IS A PROPERTY OF THE PARENT'S OPERATOR, and the manifest already
+# states which field each op puts a body in. Reading it from `ops` rather than hardcoding
+# keeps this from becoming the second place that knows the language's shape — the
+# six-builders problem this package has been bitten by repeatedly.
+#
+#   foreach -> children become its `do` block
+#   if      -> children become the `then` branch
+#   anything else -> a plain sequence; children concatenate and the parent contributes
+#                    its own statement first if it has one
+
+_BODY_FIELD = {"foreach": "do", "if": "then"}
+
+
+class FusionError(ValueError):
+    """A tree that cannot be assembled. Raised rather than returned because a caller that
+    ignored it would emit a program missing statements, which is the silent-loss class this
+    codebase refuses everywhere else."""
+
+
+def fuse(n: dict) -> List[dict]:
+    """The statements this node contributes, children folded in by the node's operator.
+
+    Returns a LIST because a plain sequence node contributes several. The root's list is
+    the program body.
+    """
+    if is_leaf(n):
+        if n.get("stmt") is None:
+            raise FusionError(f"leaf has no statement: {n.get('goal')!r}")
+        return [dict(n["stmt"])]
+
+    op = n.get("op")
+    if not op:
+        # THE NOTE'S OPEN QUESTION #3, enforced. A branch that never named its operator has
+        # nothing for its children to attach to, and the failure has to be loud: silently
+        # concatenating would turn a `foreach` the author meant into a flat sequence that
+        # runs once, which validates, executes, and does the wrong thing.
+        raise FusionError(
+            f"decomposing node named no operator: {n.get('goal')!r} — a branch must say "
+            f"what its children fuse INTO")
+
+    kids: List[dict] = []
+    for k in n["children"]:
+        kids += fuse(k)
+
+    field = _BODY_FIELD.get(op)
+    if field is None:
+        # A SEQUENCE. The node's own statement, if it emitted one, comes first — it is the
+        # setup its children depend on (`NEW` binding a name a later child reads).
+        own = [dict(n["stmt"])] if n.get("stmt") else []
+        return own + kids
+
+    # A CONTAINER. The parent's statement is the frame and the children are its body; the
+    # parent must have emitted something for there to be a frame at all.
+    if n.get("stmt") is None:
+        raise FusionError(
+            f"`{op}` node has children but no statement of its own: {n.get('goal')!r} — "
+            f"there is no frame to put them in")
+    frame = dict(n["stmt"])
+    frame[field] = kids
+    # `call` is foreach's one-statement shorthand and cannot coexist with `do`; a frame that
+    # arrived carrying one would silently drop the fused children.
+    if op == "foreach":
+        frame.pop("call", None)
+    return [frame]
+
+
+def assemble(root: dict) -> dict:
+    """The finished program. Inert — nothing has run, which is the whole point: the artifact
+    can be graded at every granularity before the world is touched."""
+    return {"body": fuse(root)}
+
+
+# ── PER-OPERATOR SCHEMA ─────────────────────────────────────────────────────────────────
+def leaf_schema(op: str, want: Optional[str] = None,
+                known: Optional[set] = None) -> Dict[str, Any]:
+    """The schema for a leaf that is known to be `op` — ONE branch, not eleven.
+
+    Built from the same manifest rows as the whole-program schema, so a leaf cannot be
+    offered a different language from a program. The narrowing is the only difference, and
+    it is the point: the decoder chooses FIELD VALUES, never a branch.
+
+    Raises on an op the intent does not permit, rather than quietly returning an empty
+    schema — a decoder handed nothing legal produces garbage, and it would look like a
+    model failure.
+    """
+    allowed = master.ops(want)
+    if op not in allowed:
+        raise ValueError(f"{op!r} is not offered under intent {want!r} "
+                         f"(allowed: {', '.join(allowed)})")
+    spec = config.OPS[op]
+    props: Dict[str, Any] = {
+        "op": {"type": "string", "const": op, "description": spec["doc"]}}
+    for f in spec["fields"]:
+        props[f] = _schema._field(f, known)
+    return {"type": "object", "properties": props,
+            "required": ["op"] + list(spec.get("required") or ())}
+
+
+# ── STEP 03: LEAF EMISSION, RETRY, FALLBACK ─────────────────────────────────────────────
+# THE MODEL CALL IS INJECTED, exactly as `run()` injects `select` and `holds`. The policy —
+# how many retries, what falls back to what, when to stop — is deterministic and lives
+# here; the unreliable part is a callable the caller supplies. So every rule below is
+# testable with a fake emitter in milliseconds, and only the emitter itself needs a model.
+#
+# PER-LEAF RETRY SHIPS HERE, NOT LATER. The design note is explicit and it is the one
+# condition on the whole design: *"Without it, splitting one draw into five multiplies
+# exposure instead of containing it, and the design is a regression."* At a measured ~8%
+# decode failure rate, five independent draws without retry is 0.92^5 ≈ 66% against today's
+# 92% for one. Retry is what converts "more decisions" into "less risk", and it is only
+# possible BECAUSE failure became local.
+
+MAX_DEPTH = 4          # the note requires a bound: "a goal that keeps decomposing into
+                       # itself never bottoms out". 4 covers every ladder shape seen.
+LEAF_RETRIES = 2       # attempts AFTER the first, per leaf.
+
+
+class LoweringError(RuntimeError):
+    """Emission could not produce a usable tree. Distinct from FusionError: that one means
+    the tree is malformed, this one means a leaf never arrived."""
+
+
+def _same(a, b) -> bool:
+    """Two statements that are indistinguishable. A retry returning byte-identical output
+    is the no-progress case, and burning the remaining budget on it is what
+    `REPAIR_UNDELIVERED` already taught — rung 9's repair 'returned the SAME program,
+    nothing further to try at this temperature'."""
+    import json as _json
+    try:
+        return _json.dumps(a, sort_keys=True) == _json.dumps(b, sort_keys=True)
+    except (TypeError, ValueError):
+        return a == b
+
+
+def emit_leaf(leaf: dict, emit, want: Optional[str] = None,
+              known: Optional[set] = None, derive_fn=None,
+              retries: int = LEAF_RETRIES, log=None,
+              bound: Optional[set] = None,
+              body: Optional[List[dict]] = None) -> dict:
+    """Fill one leaf's `stmt`. Returns the leaf (mutated copy), or raises LoweringError.
+
+    ORDER, and it is the reason-gate note's `sanitize -> repair -> ask` read backwards from
+    the cheap end: try the model, retry it on failure, and only then fall back to computing
+    the statement. Cheapest reliable thing last, because `derive()` can only answer for
+    SOME leaves and the model can attempt all of them.
+
+    A leaf that cannot be filled RAISES rather than returning an empty statement. A tree
+    assembled with a hole in it is a program missing a statement — it validates, it runs,
+    and it silently does less than the goal asked, which is the class this codebase refuses
+    everywhere else.
+    """
+    op = leaf.get("op")
+    if not op:
+        raise LoweringError(f"leaf names no operator: {leaf.get('goal')!r}")
+    schema = leaf_schema(op, want, known)
+    attempts, last = [], None
+    for i in range(retries + 1):
+        try:
+            stmt = emit(leaf, schema)
+        except Exception as exc:                 # a decode failure IS the expected case
+            if log:
+                log(f"leaf {leaf.get('goal')!r} attempt {i + 1}: {type(exc).__name__}")
+            continue
+        if stmt is None:
+            continue
+        if last is not None and _same(stmt, last):
+            # NO PROGRESS. The same draw again will not become a different one; stop
+            # spending the budget and let the fallback have it.
+            if log:
+                log(f"leaf {leaf.get('goal')!r}: retry returned the same statement — stopping")
+            break
+        last = stmt
+        # VALIDATE IN THE SCOPE THE LEAF WILL OCCUPY, not in isolation. The note's open
+        # question #4: *"a statement that binds a name others read cannot be lowered in
+        # complete isolation."* Hit on this file's first real test — a `call` inside a
+        # foreach legitimately says `$item`, and judged alone it reports "never created",
+        # so a correct leaf would be retried to exhaustion and then refused.
+        #
+        # `validate` already takes `bound` and already grants the loop variable inside a
+        # foreach body; lowering just has to SUPPLY what is in scope. Nothing new is
+        # invented here — the rule is the validator's own, applied one statement at a time.
+        # A CONTAINER IS VALIDATED FUSED, NOT BARE. Second finding of the same kind as the
+        # scope one, and found the same way: a bare `foreach` fails its own `one_of` rule
+        # because `call`/`do` only arrive at FUSION. Judged alone, a perfectly good frame is
+        # retried to exhaustion and refused. The note already puts container checks at the
+        # fusion — *"sanitizer, reason gate and schema gate run on each fusion"* — so the
+        # children (already emitted, the walk is bottom-up) go in before the verdict.
+        subject = dict(stmt)
+        field = _BODY_FIELD.get(stmt.get("op"))
+        if body is not None and field:
+            subject[field] = list(body)
+            subject.pop("call", None) if stmt.get("op") == "foreach" else None
+        ok, problems = validate({"body": [subject]}, bound=set(bound or ()))
+        if ok:
+            out = dict(leaf); out["stmt"] = stmt
+            return out
+        attempts.append(problems[0] if problems else "invalid")
+        if log:
+            log(f"leaf {leaf.get('goal')!r} attempt {i + 1} invalid: {attempts[-1]}")
+
+    # FALLBACK: compute what the model could not say. Only predicate-bearing leaves can be
+    # derived — `derive()` answers "what statements would make this predicate hold", so it
+    # has nothing to say about a `call` whose arguments nobody supplied. Being honest about
+    # that is better than a fallback that appears general and silently covers one case.
+    if derive_fn is not None and op in ("ensure", "achieve") and leaf.get("predicate"):
+        derived = derive_fn(leaf["predicate"])
+        if derived:
+            out = dict(leaf); out["stmt"] = derived[0]
+            if log:
+                log(f"leaf {leaf.get('goal')!r}: filled by derive()")
+            return out
+
+    raise LoweringError(
+        f"leaf {leaf.get('goal')!r} ({op}) produced no valid statement in "
+        f"{retries + 1} attempt(s)" + (f": {attempts[-1]}" if attempts else ""))
+
+
+def lower_tree(root: dict, emit, want: Optional[str] = None, known: Optional[set] = None,
+               derive_fn=None, max_depth: int = MAX_DEPTH, log=None) -> dict:
+    """Emit every leaf, bottom-up, and return a NEW tree with statements filled.
+
+    Mutates nothing: review can send the tree back, and a second pass has to grade the same
+    object the first one did.
+    """
+    d = depth(root)
+    if d > max_depth:
+        raise LoweringError(
+            f"tree is {d} deep, bound is {max_depth} — a decomposition that keeps going "
+            f"never bottoms out, so this is refused rather than followed")
+
+    def walk(n: dict, bound: set) -> dict:
+        if is_leaf(n):
+            return emit_leaf(n, emit, want, known, derive_fn, log=log, bound=bound)
+        out = dict(n)
+        # SCOPE THREADS DOWN, AND IT IS A COPY AT EVERY LEVEL — the same rule `validate`
+        # uses for nested blocks, which gives block scoping for free: a name bound inside a
+        # loop is not visible after it.
+        inner = set(bound)
+        if n.get("op") == "foreach":
+            inner.add(config.LOOP_VAR)     # `$item` exists for the body and only there
+        kids = []
+        for k in n["children"]:
+            done = walk(k, inner)
+            kids.append(done)
+            # A SEQUENCE'S LATER CHILDREN SEE WHAT THE EARLIER ONES BOUND. `NEW` binds a
+            # name the next statement reads, and lowering must not hide that from the
+            # validator or every dependent leaf is judged unbound.
+            var = (done.get("stmt") or {}).get("var")
+            if var and _BODY_FIELD.get(n.get("op")) is None:
+                inner.add(var)
+        out["children"] = kids
+        # A CONTAINER NEEDS ITS OWN FRAME. `foreach` and `if` put children inside a
+        # statement, so the branch itself is emitted too — as a leaf would be, against its
+        # own operator's schema. A plain sequence needs no frame and emits nothing.
+        if _BODY_FIELD.get(n.get("op")) and out.get("stmt") is None:
+            # The FRAME is emitted in the OUTER scope — a foreach's `select` cannot refer
+            # to the loop variable it is about to introduce.
+            fused: List[dict] = []
+            for k in out["children"]:
+                fused += fuse(k)
+            out = emit_leaf(out, emit, want, known, derive_fn, log=log,
+                            bound=bound, body=fused)
+        return out
+
+    return walk(root, set())
