@@ -85,7 +85,22 @@ def open_ledger(goal: str, demands: Sequence[Any]) -> Dict[str, Any]:
     THE RECORD PRECEDES THE PLAN. That inversion is the point, and it is the same one the
     creation ledger makes: you cannot notice something went missing from a list you built
     afterwards out of what survived.
+
+    ## AN ANCHOR MUST APPEAR IN THE GOAL, AND THIS IS ENFORCED HERE
+
+    Anchors not present in `goal` are DROPPED, so the ledger can only ever point at words
+    the operator actually used. Without that rule this becomes a second description of the
+    goal held by the harness — which is the "benchmark grading itself" the author probe
+    warns about in its own summary, and the line between telling an author WHAT IS MISSING
+    and telling it WHAT TO WRITE.
+
+    It also makes the same demand list safe across phrasings. Rung 10 is `launch all of
+    them` literally and `boot every copy` in paraphrase: the `launch` anchor holds for one
+    column and is dropped for the other, where the demand falls back to the pigeonhole
+    detector rather than matching on a word nobody said. A demand whose anchors are all
+    dropped is still COUNTED — that is what keeps the arithmetic honest.
     """
+    hay = (goal or "").lower()
     rows: List[Dict[str, Any]] = []
     for d in demands:
         if isinstance(d, str):
@@ -97,7 +112,9 @@ def open_ledger(goal: str, demands: Sequence[Any]) -> Dict[str, Any]:
             continue
         if not text:
             continue
-        rows.append({"text": text, "anchors": anchors,
+        kept = [a for a in anchors if a.lower() in hay]
+        rows.append({"text": text, "anchors": kept,
+                     "dropped": [a for a in anchors if a not in kept],
                      "status": UNVERIFIED, "why": None, "by": None})
     return {"goal": goal, "demands": rows}
 

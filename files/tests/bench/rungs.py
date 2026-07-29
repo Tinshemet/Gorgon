@@ -69,6 +69,24 @@ class Rung(NamedTuple):
     # separately from pass/fail for exactly that reason.
     minimum: Optional[int] = None
     best: Optional[int] = None
+    # WHAT THE GOAL ASKS FOR, clause by clause — the [clause ledger]'s record, opened
+    # before the author writes anything. Each is {"text", "anchors"}: `text` restates one
+    # demand in the goal's own terms, `anchors` are literal tokens the plan must mention.
+    #
+    # THIS IS NOT A SECOND DEFINITION OF THE GOAL, and the guard is mechanical rather than
+    # a promise: `open_ledger` DROPS any anchor that does not appear in the goal text being
+    # asked, so the ledger can only ever point at words the operator actually used. It says
+    # WHAT IS MISSING, never what to write. `test_rung_demands_are_honest` holds the line.
+    #
+    # WHY THEY EXIST, measured 2026-07-29: three rungs were answered by dropping a clause
+    # outright — rung 8 lost `except db`, rung 10 lost `and launch all of them`, rung 11
+    # lost `stop the ones that do not answer` — while the validator objected about
+    # something else entirely and both repair rounds went there. The operator: *"if clauses
+    # are gone, that's a LEDGER issue not a decomp issue."*
+    #
+    # A rung with none declared is not policed, which is deliberate: an empty list must
+    # mean "not asked", never "nothing was missing". Same three-valued rule as `alive`.
+    demands: Optional[List[dict]] = None
 
 
 def _vm(w: SimWorld, name: str, status: str = "stopped", labels=(), nets=()):
@@ -310,7 +328,24 @@ RUNGS: List[Rung] = [
          "put every vm on a network called core, except db — db goes on a network "
          "called dmz instead", _r8,
          "a general rule with one carve-out that must survive it", _s8,
-         "connect all the machines to a network named core, apart from db, which belongs on dmz"),
+         "connect all the machines to a network named core, apart from db, which belongs on dmz",
+         # THE ONLY RUNG WITH DEMANDS DECLARED, and the scope is deliberate. Clause loss
+         # was measured on the AUTHOR path here and only here: para:8's program, 3/3,
+         # never mentions `db` at all — it puts EVERY vm on core and then loops over
+         # app1/app2/app3 for dmz, which is the carve-out enumerated by hand and inverted.
+         # The validator objected `select must name a kind`, the least interesting of its
+         # three defects, and both repair rounds went there.
+         #
+         # The other clause losses seen on 2026-07-29 (rungs 10 and 11 dropping `and
+         # launch all of them` / `stop the ones that do not answer`) were measured on the
+         # ATOMICITY ROUTER, a different surface, and both rungs currently PASS here. So
+         # declaring demands for them would be reasoning by analogy onto a passing cell —
+         # the invented-rather-than-earned mistake the sanitiser's own doc refuses, where
+         # a wrong demand costs a false objection on a rung that works.
+         demands=[
+             {"text": "put every vm on a network called core", "anchors": ["core"]},
+             {"text": "db goes on a network called dmz", "anchors": ["db", "dmz"]},
+         ]),
     Rung(9, "diagnosis", "make sure n1, n2 and n3 can all ping each other", _r9,
          "the goal names an end-state; find WHICH member breaks it", _s9,
          "n1, n2 and n3 should all be able to reach one another — sort out whatever is stopping that"),

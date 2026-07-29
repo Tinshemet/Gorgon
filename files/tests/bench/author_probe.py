@@ -33,6 +33,7 @@ import urllib.request
 
 from orchestrator.ai.planner.ir import (config, consent, derive, evaluate, gate,
                                        master, observe, refs, render, run, validate)
+from orchestrator.ai.planner import clause_ledger
 from orchestrator.ai.planner.ir import intent as _intent
 from orchestrator.ai.planner.ir import schema as _ir_schema
 from orchestrator.ai.planner.ir.validate import _one_of_groups
@@ -991,6 +992,29 @@ def main(argv=None, sink=None) -> int:
         prog, problems = author(goal, a.model, a.temp, shots,
                                 known_names=world.names(),
                                 world=None if a.blind_author else world, want=want)
+        # THE CLAUSE LEDGER JOINS THE OBJECTIONS. The validator answers "is this a legal
+        # program"; the ledger answers "does it still contain everything the goal asked
+        # for". Those are different questions and only the first was ever being put to the
+        # author — so para:8 spent both repair rounds on `select must name a kind` while
+        # the demand it had actually dropped (`db`) went unmentioned, 3/3.
+        #
+        # IT ONLY EVER ADDS. A ledger objection never suppresses a validator one, because
+        # a program can be both illegal and incomplete and the author needs to see both —
+        # the same argument `_both_objections` already makes for goal-shortfall versus
+        # rejected-call: one names the symptom, the other the cause.
+        #
+        # UNVERIFIED IS NOT REPORTED, only UNACCOUNTED. Telling an author about a demand
+        # nothing could check would be noise it cannot act on, and would make the
+        # objection budget carry uncertainty instead of complaints.
+        if prog is not None and rung.demands:
+            _led = clause_ledger.reconcile(
+                clause_ledger.open_ledger(goal, rung.demands), prog.get("body") or [])
+            _missing = clause_ledger.unaccounted(_led)
+            if _missing:
+                problems = list(problems or []) + [
+                    f"the goal asks for {m['text']!r} and nothing in the program does it "
+                    f"({m['why']})" for m in _missing]
+                print(f"          [ledger] {len(_missing)} demand(s) unaccounted for")
         if prog is None:
             # A NON-RESULT IS NOT A FAILURE. A model call that timed out says nothing
             # about the language, and folding it into the score quietly deflates every
