@@ -246,7 +246,13 @@ def emit_leaf(leaf: dict, emit, want: Optional[str] = None,
     attempts, last = [], None
     for i in range(retries + 1):
         try:
-            stmt = emit(leaf, schema)
+            # THE OBJECTION GOES BACK IN, and without it retry is worthless. Measured on
+            # this file's first real run: a `new` leaf omitted `os_type`, the retry re-sent
+            # IDENTICAL input, temp 0 returned the IDENTICAL statement, and the no-progress
+            # guard killed a leaf the model could have fixed. The whole-program path already
+            # knew this — `repair()` feeds the validator's complaint back — and a per-leaf
+            # retry that does not is just a second draw at the same odds.
+            stmt = emit(leaf, schema, attempts[-1] if attempts else None)
         except Exception as exc:                 # a decode failure IS the expected case
             if log:
                 log(f"leaf {leaf.get('goal')!r} attempt {i + 1}: {type(exc).__name__}")
@@ -482,3 +488,68 @@ def review_loop(root: dict, rebuild, ledger=None, reconcile_fn=None,
             break
         cur, rep = nxt, nrep
     return cur, rep
+
+
+# ── THE DECOMPOSER — drive the router recursively until every leaf is one operator ──────
+# The last piece: everything above assumes a tree, and nothing built one. The router itself
+# is measured (step 02, 10/10 on the cells that carry information, and it names a parent
+# operator 11/11) — this only has to DRIVE it, bound it, and refuse the shapes that would
+# not terminate.
+#
+# ROUTE IS INJECTED, like `emit`. It takes a goal and returns either
+#   {"atomic": True,  "op": "call"}                      a leaf, and which operator
+#   {"atomic": False, "op": "foreach", "steps": [...]}   a branch, its operator, its sub-goals
+# and the caller supplies whatever makes that call. Nothing here knows about a model.
+
+class DecompositionError(RuntimeError):
+    """A goal that cannot be turned into a tree."""
+
+
+def decompose(goal: str, route, max_depth: int = MAX_DEPTH, log=None,
+              _depth: int = 1, _seen: Optional[set] = None) -> dict:
+    """A tree of nodes from one goal. Leaves carry an op and no statement yet.
+
+    THREE WAYS THIS REFUSES, and each is a shape that would otherwise not terminate or
+    would produce a tree fusion cannot assemble:
+
+      * DEPTH. The note: *"a goal that keeps decomposing into itself never bottoms out."*
+      * A SUB-GOAL IDENTICAL TO ITS PARENT. The commonest non-termination in practice — the
+        router restates the goal instead of splitting it, and the next call restates it
+        again. Cheaper to catch here than to discover at the depth bound.
+      * A BRANCH THAT NAMED NO OPERATOR. The note's open question #3. Refusing at
+        decomposition means the failure is attributed to the router, where it happened,
+        rather than surfacing later as a FusionError with no idea which call produced it.
+    """
+    seen = set(_seen or ())
+    if _depth > max_depth:
+        raise DecompositionError(
+            f"decomposition passed depth {max_depth} at {goal!r} — refused rather than "
+            f"followed, because a goal that keeps decomposing into itself never bottoms out")
+
+    answer = route(goal) or {}
+    op = answer.get("op")
+    if answer.get("atomic"):
+        if not op:
+            raise DecompositionError(f"router called {goal!r} atomic but named no operator")
+        return node(goal, op=op)
+
+    steps = [s for s in (answer.get("steps") or []) if isinstance(s, str) and s.strip()]
+    if not steps:
+        raise DecompositionError(f"router split {goal!r} into no sub-goals")
+    if not op:
+        raise DecompositionError(
+            f"router split {goal!r} without naming its own operator — fusion would have "
+            f"nothing to attach the children to")
+
+    kids = []
+    for s in steps:
+        if s.strip() == goal.strip() or s.strip() in seen:
+            # The router restated the goal instead of splitting it. Treating the restatement
+            # as a LEAF is the honest recovery: it is one sub-goal, and the operator the
+            # parent named is the best available guess at what it is.
+            if log:
+                log(f"sub-goal repeats its parent, taking it as a leaf: {s!r}")
+            kids.append(node(s, op=op))
+            continue
+        kids.append(decompose(s, route, max_depth, log, _depth + 1, seen | {goal.strip()}))
+    return node(goal, op=op, children=kids)

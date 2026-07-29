@@ -149,7 +149,7 @@ def _emitter(script):
     `script[goal]` is a list of what successive attempts return; an Exception instance is
     raised (a decode failure), None means the call came back empty."""
     calls = {"n": 0}
-    def emit(leaf, schema):
+    def emit(leaf, schema, objection=None):
         calls["n"] += 1
         seq = script.get(leaf["goal"])
         if not seq:
@@ -383,3 +383,59 @@ def test_a_tree_the_reviewer_rejected_is_STILL_RETURNED():
     root = N("root", op="sequence", children=[_leaf("a", "new", NEW)])
     out, rep = lower.review_loop(root, lambda t, w: None, rounds=2)
     assert out is not None and rep["grounded"] is False
+
+
+# ── the decomposer ──────────────────────────────────────────────────────────────────────
+def _router(table):
+    def route(goal):
+        if goal not in table:
+            raise AssertionError(f"unrouted goal {goal!r}")
+        return table[goal]
+    return route
+
+
+def test_decompose_builds_the_notes_worked_example():
+    route = _router({
+        "create 5 vms and add them to a network":
+            {"atomic": False, "op": "sequence",
+             "steps": ["create 5 vms", "add them to a network"]},
+        "create 5 vms": {"atomic": True, "op": "new"},
+        "add them to a network":
+            {"atomic": False, "op": "foreach", "steps": ["add to the network"]},
+        "add to the network": {"atomic": True, "op": "call"},
+    })
+    root = lower.decompose("create 5 vms and add them to a network", route)
+    assert [l["goal"] for l in lower.leaves(root)] == ["create 5 vms", "add to the network"]
+    assert root["children"][1]["op"] == "foreach", "the branch names its own operator"
+    assert lower.depth(root) == 3
+
+
+def test_a_branch_that_names_no_operator_is_REFUSED_at_decomposition():
+    """The note's open question #3, caught where it happened. Letting it through would
+    surface later as a FusionError with no idea which routing call produced it."""
+    route = _router({"g": {"atomic": False, "op": None, "steps": ["a"]}})
+    with pytest.raises(lower.DecompositionError, match="without naming its own operator"):
+        lower.decompose("g", route)
+
+
+def test_a_sub_goal_that_REPEATS_its_parent_becomes_a_leaf():
+    """The commonest non-termination in practice: the router restates the goal instead of
+    splitting it. Taking the restatement as a leaf terminates and keeps the parent's
+    operator, rather than recursing to the depth bound to discover the same thing."""
+    route = _router({"do the thing": {"atomic": False, "op": "call",
+                                      "steps": ["do the thing"]}})
+    root = lower.decompose("do the thing", route)
+    assert lower.is_leaf(root["children"][0]) and root["children"][0]["op"] == "call"
+
+
+def test_runaway_decomposition_is_REFUSED():
+    route = _router({f"g{i}": {"atomic": False, "op": "sequence", "steps": [f"g{i+1}"]}
+                     for i in range(12)})
+    with pytest.raises(lower.DecompositionError, match="never bottoms out"):
+        lower.decompose("g0", route, max_depth=3)
+
+
+def test_an_atomic_answer_with_no_operator_is_REFUSED():
+    route = _router({"g": {"atomic": True}})
+    with pytest.raises(lower.DecompositionError, match="named no operator"):
+        lower.decompose("g", route)
