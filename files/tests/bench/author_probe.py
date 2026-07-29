@@ -27,6 +27,7 @@ Run:  PYTHONPATH=. python3 -m tests.bench.author_probe
       PYTHONPATH=. python3 -m tests.bench.author_probe -p           # paraphrase column
 """
 import argparse
+import os
 import json
 import sys
 import urllib.request
@@ -35,6 +36,7 @@ from orchestrator.ai.planner.ir import (config, consent, derive, evaluate, gate,
                                        master, observe, refs, render, run, validate)
 from orchestrator.ai.planner import clause_ledger
 from orchestrator.ai.planner.ir import intent as _intent
+from orchestrator.ai.planner.score import _first_tool_call
 from orchestrator.ai.planner.ir import schema as _ir_schema
 from orchestrator.ai.planner.ir.validate import _one_of_groups
 
@@ -518,10 +520,56 @@ def _messages(goal: str, shots: bool, world=None, want=None):
     return msgs
 
 
+# THE QUANTIFIER ROUTER, in front of authoring. Off unless MEDUSA_ROUTE=1, because it
+# costs an extra model call per authoring call and its value is unproven on this path.
+#
+# MEASURED BEFORE WIRING (`quantifier_probe`, n=3): the router answers 15/16 on hand-cut
+# clauses. And routing every ladder GOAL first showed the first quantifier table would have
+# STARVED FOUR RUNGS — that check cost one call per rung instead of a 25-minute sweep, and
+# the table was corrected before anything ran.
+#
+# WHAT THIS CANNOT DO, stated so the result is not over-read: the quantifier is a per-CLAUSE
+# property and this narrows a per-PROGRAM schema. Rung 8 carries three clauses (all / not /
+# single) and routes as `not`, which licenses everything — so this cannot fix rung 8. Only
+# `single` goals narrow at all, and they narrow by exactly one op: `foreach`. The value
+# appears with per-leaf emission (staged lowering); this is the seam that will feed it.
+_ROUTE = os.environ.get("MEDUSA_ROUTE") == "1"
+
+
+def _route_quantifier(goal: str, model: str, timeout: int = 120):
+    """all/any/single/not for a goal, or None if the router did not answer. NEVER raises:
+    a router that fails must leave authoring exactly as it was, not take the cell down."""
+    from .quantifier_probe import _tool as _q_tool, _system as _q_system, _recover as _q_rec
+    try:
+        req = {"model": model, "stream": False, "tools": [_q_tool()],
+               "options": {"temperature": 0.0, "num_ctx": _OLLAMA_CTX},
+               "messages": [{"role": "system", "content": _q_system()},
+                            {"role": "user", "content": goal}]}
+        r = urllib.request.urlopen(urllib.request.Request(
+            _OLLAMA, json.dumps(req).encode(), {"Content-Type": "application/json"}),
+            timeout=timeout)
+        reply = json.loads(r.read())
+        name, args = _first_tool_call(reply)
+        q = (args or {}).get("quantifier") if name == "quantify" else None
+        return q or _q_rec(reply)
+    except Exception as exc:
+        # NEVER SILENT. A bare swallow here hid a NameError for the whole first wiring
+        # attempt — `_first_tool_call` was used and never imported, the router returned
+        # None every time, and authoring carried on looking exactly as if the flag were
+        # off. A fallback that cannot be distinguished from "nothing to do" is the
+        # false-success class this project refuses everywhere else.
+        print(f"          [route] UNAVAILABLE ({type(exc).__name__}: {exc}) "
+              f"— authoring unnarrowed")
+        return None
+
+
 def author(goal: str, model: str, temp: float, shots: bool, timeout: int = 600,
            known_names=None, world=None, want=None):
+    quantifier = _route_quantifier(goal, model) if _ROUTE else None
+    if quantifier:
+        print(f"          [route] {quantifier}")
     req = {"model": model, "stream": False,
-           "format": program_schema(want, known_names),
+           "format": program_schema(want, known_names, quantifier=quantifier),
            "options": {"temperature": temp, "num_ctx": _OLLAMA_CTX}, "messages": _messages(goal, shots, world, want)}
     try:
         r = urllib.request.urlopen(urllib.request.Request(

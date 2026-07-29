@@ -53,6 +53,10 @@ SURFACE    = _c("surface")         # the written spelling of things the IR store
 FIELDS     = _c("fields")          # every statement field, described once
 
 OPS        = _c("ops")             # statement type -> {required, doc}
+CARDINALITY = _c("cardinality")   # singular|set -> {deny, doc}: derivable from a kind's
+                                  # `key`; decides call-vs-foreach, no model needed
+SHAPES      = _c("shapes")        # all|any|not -> {filtered, doc}: what goes INSIDE the
+                                  # select. Orthogonal to cardinality.
 QUANTIFIERS = _c("quantifiers")    # all/any/single/not -> {ops, doc}: how many things a
                                    # clause is about, and what that licenses
 OP_CATEGORIES = _c("op_categories")  # "structural" (a decomposition CHOOSES these) vs

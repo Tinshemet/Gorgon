@@ -338,6 +338,7 @@ def validate(program: Any, known_tools=None, known_names=None,
         elif op == "foreach":
             if st.get("select") is not None:
                 problems += _check_select(st.get("select"), where, sets)
+                problems += _check_cardinality(st, where)
             src = st.get("in")
             if isinstance(src, list):
                 # A literal set — the members are named outright. This is what a
@@ -603,6 +604,39 @@ def _all_bindings(body: Any) -> set:
     return out
 
 
+def _check_cardinality(st, where: str) -> List[str]:
+    """A FOREACH over a select that can only ever match ONE object.
+
+    The operator's group argument, 2026-07-29, and it is the rule rung 8 breaks: singular,
+    `any` and `all` are three sets, and how you ACT follows from which you hold. A key
+    filter is singular BY CONSTRUCTION — `name = 'db'` can never match two — so it wants a
+    plain call naming it, not a loop. And the test is construction, never today's count:
+    *"a label that is filtered might only be singling out one object now but it's
+    technically a set with currently 1 member."* So `label = 'prod'` stays a set and keeps
+    its loop even on a day it matches one machine.
+
+    THIS IS THE OTHER HALF OF rung 8's DEFECT. Statement 4 is `FOREACH $item IN SELECT ?
+    WHERE name = 'db'` — a loop over one object, which is what let the missing `kind` exist
+    at all. Named here, the author is told the thing that is actually wrong instead of
+    `select must name a kind`, which is a symptom and sent two repair rounds to the wrong
+    place.
+
+    ADVISORY BY DESIGN — it appends an objection, it does not rewrite. Turning the loop into
+    a call would change what the program SAYS, which is the line the sanitiser refuses to
+    cross for exactly this reason.
+    """
+    from . import master
+    sel = st.get("select")
+    if not isinstance(sel, dict):
+        return []
+    if master.cardinality_of(sel) != "singular":
+        return []
+    kind = sel.get("kind")
+    key = (config.KINDS.get(kind) or {}).get("key") or "name"
+    return [f"{where}: this selects ONE {kind} by its {key}, so a loop over it is a loop of "
+            f"one — write the action as a single call naming it instead of a foreach"]
+
+
 # Ops that change the world — the same set consent.py counts, for the same reason.
 _ACTS = {"new", "call", "foreach"}
 
@@ -631,6 +665,16 @@ def _check_select(sel: Any, where: str, sets: Optional[set] = None) -> List[str]
     if "not" in sel:
         if not isinstance(sel["not"], dict) or not sel["not"]:
             out.append(f"{where}: `not` takes the filters to EXCLUDE, e.g. {{'name':'db'}}")
+        # NOT OVER AN UNFILTERED WHOLE IS THE EMPTY SET. The operator's group argument,
+        # 2026-07-29: a filter is definitionally subtractive, so it can only ever produce
+        # `any` or a key-identified singular — never `all`. Which makes `NOT all` "none",
+        # and a statement that can do no work should not validate. Detectable here and
+        # nowhere else: it runs cleanly, loops zero times and reports success, which is the
+        # exact shape `status = 'not running'` had (matched nobody, ran zero calls, said
+        # ok) and the shape `disjoint` had for weeks. Silence is the failure mode.
+        elif set(sel["not"]) == {"kind"} or sel["not"].get("kind") and len(sel["not"]) == 1:
+            out.append(f"{where}: excluding a whole KIND leaves nothing — "
+                       f"`not` names the members to leave out, not the kind itself")
         else:
             out += _check_select({"kind": kind, **sel["not"]}, where, sets)
     # GROUPS: `any` is OR, `all` an explicit AND. Each branch is a filter set in its own

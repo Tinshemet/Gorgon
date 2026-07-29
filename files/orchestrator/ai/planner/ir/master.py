@@ -248,3 +248,59 @@ def constraints(want: Optional[str] = None, goal: str = "",
                           if config.values_for(kind, attr)}
                    for kind in config.KINDS},
     }
+
+
+def cardinality_of(sel) -> str:
+    """`singular` or `set` for a select — DERIVED from the manifest, never asked.
+
+    The operator's rule, 2026-07-29: a filter on the kind's KEY can never match two, so it
+    is singular BY CONSTRUCTION. Anything else is a set expression, even when it happens to
+    hold one member today — *"a label that is filtered might only be singling out one object
+    now but it's technically a set with currently 1 member."*
+
+    A COMPLEMENT IS A SET. `not` carves members out of a whole, and the complement of a
+    filter is itself a filter, so a select carrying `not` is a set whatever else it says.
+    That is what dissolves `NOT ANY`, the case the four-way enum could not answer.
+
+    An unrecognised or absent kind answers `set`, which is the conservative direction: a set
+    denies `call`, so the worst case offers a loop where one was not needed, rather than
+    denying the loop a real set requires.
+    """
+    if not isinstance(sel, dict):
+        return "set"
+    kind = sel.get("kind")
+    spec = config.KINDS.get(kind) or {}
+    key = spec.get("key")
+    if not key or "not" in sel or "any" in sel or "all" in sel:
+        return "set"
+    aliases = spec.get("aliases") or {}
+    named = {aliases.get(k, k) for k in sel if k != "kind"}
+    if named != {key}:
+        return "set"
+    # A KEY FILTER IS NOT AUTOMATICALLY ONE OBJECT. `name = {"in": ["a","b"]}` is membership
+    # over the key and names TWO — singular only when the list holds exactly one. Missing
+    # this answered `singular` for a two-member select, which would have denied the FOREACH
+    # that select requires.
+    val = sel.get(key, sel.get(next((k for k in sel if aliases.get(k, k) == key), key)))
+    if isinstance(val, dict) and "in" in val:
+        members = val["in"]
+        if isinstance(members, list):
+            return "singular" if len(members) == 1 else "set"
+        return "set"          # a bound $set — size unknown, so conservatively a set
+    return "singular"
+
+
+def ops_for_cardinality(want=None, cardinality=None):
+    """The ops offered once cardinality is known — the SYMMETRIC narrowing.
+
+    singular denies `foreach` (no looping over one object); `set` denies the bare `call`
+    (a single invocation cannot address a set). Both directions matter: offering `foreach`
+    for one object is rung 8's statement 4, and offering a bare `call` for a set is the
+    same error inverted.
+    """
+    out = ops(want)
+    spec = config.CARDINALITY.get(cardinality) if cardinality else None
+    if spec:
+        denied = set(spec.get("deny") or ())
+        out = [op for op in out if op not in denied]
+    return out
