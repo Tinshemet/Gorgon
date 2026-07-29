@@ -809,6 +809,70 @@ def test_every_path_that_accepts_an_authored_program_sanitises_it():
           or "'sanitized'" in body)
 
 
+def test_the_predicate_schema_can_carry_every_operand_it_offers():
+    """A shape in the `shape` enum whose OPERAND has no property is offered-but-unwritable.
+
+    THE THIRD TIME THIS FAMILY HAS BITTEN, and the file's own docstring records the first
+    two: `NOT` offered as an array while the validator demanded an object, and composites
+    fixed one at a time with no invariant written down so the next shape repeated it. This
+    is that next shape.
+
+    MEASURED 2026-07-29 on the tree path: `leaf_schema('achieve')` offers `all` in the
+    enum and declares no `of`, so under constrained decoding the model emits
+    `{"shape": "all"}`, the validator answers *"all takes two or more checks under `of`,
+    got None"*, and the retry returns the IDENTICAL statement — because the schema forbids
+    the only correct answer. It is not a model failure and no amount of objection can fix
+    it. Three of the four rungs that build-and-fail come back `ungrounded` for exactly
+    this reason: the ROOT VERDICT is the statement most likely to need a composite.
+
+    The rule is the one this file exists for — the manifest is the authority, and a
+    builder that offers a shape must offer what that shape takes.
+    """
+    from orchestrator.ai.planner.ir.schema import _predicate_property
+    prop = _predicate_property()
+    props = prop.get("properties") or {}
+    if not props:
+        check("predicate is a bare object — nothing to hold to (knob is off)", True)
+        return
+    offered = set((props.get("shape") or {}).get("enum") or [])
+    for shape, spec in config.PREDICATES.items():
+        if shape not in offered:
+            continue
+        operand = spec["operand"]
+        check(f"{shape}: offered in the enum, so `{operand}` must be a property",
+              operand in props)
+    # AND END TO END, because a table being right is not the same as it reaching the
+    # decoder — the stale twin is always the risk.
+    for shape in ("all", "any", "not", "is"):
+        if shape not in offered:
+            continue
+        for key in _sample_predicate(shape):
+            check(f"a well-formed `{shape}` uses only offered keys: {key}",
+                  key in props)
+
+
+def test_both_schema_builders_offer_the_same_predicate_keys():
+    """TWO BUILDERS, ONE LANGUAGE. `ir/schema.py` serves production AND the tree path's
+    `leaf_schema`; `author_probe.program_schema` serves the ladder. They read the same
+    manifest and drifted anyway — the probe's builder gained `of` (its own comment records
+    fixing the `arity: one` case after rungs 5 and 8 died on programs the executor would
+    have run correctly) and production's never did.
+
+    So the ladder measured a language the tree path could not write. Hold them to the same
+    key set; which BRANCH each uses is their own business.
+    """
+    import json as _json
+    from orchestrator.ai.planner.ir.schema import _predicate_property
+    mine = set((_predicate_property().get("properties") or {}))
+    if not mine:
+        check("production predicate is a bare object (knob off) — not comparable", True)
+        return
+    theirs = set(re.findall(r'"(\w+)":\s*\{', _json.dumps(program_schema("achieve", None))))
+    for operand in {s["operand"] for s in config.PREDICATES.values()}:
+        check(f"both builders can carry `{operand}`",
+              (operand in mine) == (operand in theirs) or operand in mine)
+
+
 def main():
     """Every `test_*` in this module, in definition order — DISCOVERED, not listed.
 

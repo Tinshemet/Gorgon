@@ -31,6 +31,27 @@ def _predicate_property() -> Dict[str, Any]:
     stop calling the tool AT ALL (3/4 emitting went to 0/4): this tool-call surface has a
     complexity ceiling, and the bake-off already found tool-calling fidelity, not
     reasoning, to be the binding constraint. Both knobs default accordingly.
+
+    `of` WAS MISSING, AND FOUR OF SEVEN SHAPES WERE OFFERED-UNDESCRIBED (2026-07-29).
+    `not`, `all`, `any` and `is` all take their operand under `of`; the `shape` enum
+    offered every one of them and no `of` property existed. The model emitted
+    `{"shape": "all"}`, the validator answered *"all takes two or more checks under `of`,
+    got None"*, and the retry came back BYTE-IDENTICAL. It cost the tree path its ROOT
+    VERDICT on three rungs, which is why they scored `ungrounded`. The probe's builder had
+    grown `of` and this one had not — the stale twin, again.
+
+    WHAT IS MEASURED IS THAT DECLARING IT FIXED IT — `ungrounded` cleared on two of the
+    three rungs at n=3. WHY is NOT established, and the tempting explanation is wrong:
+    an undeclared key is not necessarily ungrammatical here, since `select` is a bare
+    object on this path and selects with contents do get emitted. So read this as *the
+    schema never described the operand, so the model never wrote it*, not as *the grammar
+    forbade it*. The distinction matters for the remaining `select` gap.
+
+    NESTING STOPS AT ONE LEVEL, deliberately. A composite's children are the leaf shapes
+    (`count`, `reach`, `disjoint`), which is every verdict the ladder actually needs;
+    making `of` recursive would put a self-referencing branch inside the one construct
+    already suspected of costing the decoder — and branch count is the measured mechanism
+    behind the channel failures, so this is not the place to spend it.
     """
     prop: Dict[str, Any] = {"type": "object", "description": "ensure: what must hold at the end"}
     if not config.SCHEMA.get("predicate_properties"):
@@ -46,6 +67,27 @@ def _predicate_property() -> Dict[str, Any]:
     }
     for c in comparators:
         props[c] = {"type": "integer", "description": f"comparison: {c}"}
+    # THE MANIFEST NAMES THE SHAPES, not this module — add a composite to the JSON and it
+    # is described here without an edit, which is the claim every other builder makes.
+    by_arity = {a: [s for s, p in config.PREDICATES.items()
+                    if p["operand"] == "of" and p.get("arity") == a]
+                for a in ("value", "one", "many")}
+    if any(by_arity.values()):
+        inner = {"type": "object", "properties": dict(props),
+                 "description": "one check — a leaf shape such as count or reach"}
+        forms: List[Dict[str, Any]] = []
+        if by_arity["value"]:
+            forms.append({"type": "string",
+                          "description": f"{'/'.join(by_arity['value'])}: "
+                                         f"a $grafted value, e.g. $answer.alive"})
+        if by_arity["one"]:
+            forms.append(dict(inner, description=f"{'/'.join(by_arity['one'])}: "
+                                                 f"the single check this applies to"))
+        if by_arity["many"]:
+            forms.append({"type": "array", "items": inner, "minItems": 2,
+                          "description": f"{'/'.join(by_arity['many'])}: "
+                                         f"two or more checks to combine"})
+        props["of"] = forms[0] if len(forms) == 1 else {"anyOf": forms}
     prop["properties"] = props
     if config.SCHEMA.get("predicate_required"):
         prop["required"] = ["shape"]
