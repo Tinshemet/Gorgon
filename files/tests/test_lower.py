@@ -149,7 +149,7 @@ def _emitter(script):
     `script[goal]` is a list of what successive attempts return; an Exception instance is
     raised (a decode failure), None means the call came back empty."""
     calls = {"n": 0}
-    def emit(leaf, schema, objection=None):
+    def emit(leaf, schema, objection=None, context=None):
         calls["n"] += 1
         seq = script.get(leaf["goal"])
         if not seq:
@@ -457,3 +457,42 @@ def test_a_node_that_decomposes_into_ITSELF_collapses_to_one_leaf():
     root = lower.decompose("launch every stopped vm", route)
     assert lower.is_leaf(root) and root["op"] == "foreach"
     assert lower.depth(root) == 1, "one node, not a foreach nested in a foreach"
+
+
+def test_a_leaf_is_shown_what_its_SIBLINGS_already_emitted():
+    """The note's open question #4 at the SEMANTIC level. Measured 2026-07-29: "put the red
+    ones together" and "launch the last vm" mean nothing alone, because their referent is a
+    sibling's decision. Scope threading fixed the BINDING half; this is the other half."""
+    # a TOP-LEVEL call, so neither leaf retries and the indices are the emissions
+    TOP = {"op": "call", "tool": "launch_vm", "args": {"name": "made"}}
+    seen = []
+    def emit(leaf, schema, objection=None, context=None):
+        seen.append((leaf["goal"], list(context or [])))
+        return NEW if leaf["op"] == "new" else TOP
+    root = N("root", op="sequence", children=[N("first", op="new"), N("second", op="call")])
+    lower.lower_tree(root, emit)
+    assert len(seen) == 2, "no retries — one emission per leaf"
+    assert seen[0][1] == [], "the first leaf has no siblings yet"
+    assert seen[1][1] == [NEW], "the second is shown what the first decided"
+
+
+def test_ground_adds_a_verdict_only_when_one_is_missing():
+    """Medusa's one soundness rule at the root. A leaf cannot supply it — rung 1 really is
+    one `new`, and there is no room inside one statement for a judgement about it."""
+    V = {"op": "achieve", "predicate": {"shape": "count",
+                                        "select": {"kind": "vm"}, "gte": 1}}
+    emit = lambda leaf, schema, objection=None, context=None: V
+    bare = N("root", op="sequence", children=[_leaf("a", "new", NEW)])
+    out = lower.ground(bare, emit, "make a vm")
+    assert lower.review(out)["grounded"], "an ungrounded tree gains a verdict"
+    already = N("root", op="sequence", children=[_leaf("v", "achieve", V)])
+    assert lower.ground(already, emit, "g") is already, "a grounded tree is untouched"
+
+
+def test_a_verdict_that_cannot_be_authored_leaves_the_tree_ALONE():
+    """Inventing one would be the harness vouching for work it did not check. `run()`
+    refusing an ungrounded program is the honest outcome."""
+    def emit(leaf, schema, objection=None, context=None):
+        raise ValueError("no")
+    bare = N("root", op="sequence", children=[_leaf("a", "new", NEW)])
+    assert lower.ground(bare, emit, "g") is bare

@@ -97,12 +97,18 @@ def make_route(model: str, world: SimWorld, stats: Dict[str, int], log=None):
 
 # ── the emitter: ONE operator's schema per leaf ─────────────────────────────────────────
 def make_emit(model: str, world: SimWorld, want: str, stats: Dict[str, int], log=None):
-    def emit(leaf: dict, schema: Dict[str, Any], objection: Optional[str] = None):
+    def emit(leaf: dict, schema: Dict[str, Any], objection: Optional[str] = None,
+             context: Optional[List[dict]] = None):
         stats["emit_calls"] += 1
         msgs = _messages(leaf["goal"], True, world, want)
         msgs[-1]["content"] += (
             f"\n\nWrite EXACTLY ONE statement, and it is a `{leaf['op']}`. "
             f"Nothing else — this is one step of a larger program.")
+        if context:
+            from orchestrator.ai.planner.ir import render as _render
+            msgs[-1]["content"] += (
+                "\n\nThe program so far (do NOT repeat these — yours is the NEXT "
+                "statement):\n" + _render({"body": list(context)}))
         if objection:
             msgs[-1]["content"] += (
                 f"\n\nYour last attempt was REJECTED: {objection}\nFix exactly that.")
@@ -155,6 +161,8 @@ def main(argv=None) -> int:
                 tree = lower.decompose(goal, route, log=log)
                 tree = lower.lower_tree(tree, emit, want="achieve",
                                         known=world.names(), log=log)
+                tree = lower.ground(tree, emit, goal, want="achieve",
+                                    known=world.names(), log=log)
                 led = _cl.open_ledger(goal, rung.demands or [])
                 report = lower.review(
                     tree, led if rung.demands else None,

@@ -226,7 +226,8 @@ def emit_leaf(leaf: dict, emit, want: Optional[str] = None,
               known: Optional[set] = None, derive_fn=None,
               retries: int = LEAF_RETRIES, log=None,
               bound: Optional[set] = None,
-              body: Optional[List[dict]] = None) -> dict:
+              body: Optional[List[dict]] = None,
+              context: Optional[List[dict]] = None) -> dict:
     """Fill one leaf's `stmt`. Returns the leaf (mutated copy), or raises LoweringError.
 
     ORDER, and it is the reason-gate note's `sanitize -> repair -> ask` read backwards from
@@ -252,7 +253,14 @@ def emit_leaf(leaf: dict, emit, want: Optional[str] = None,
             # guard killed a leaf the model could have fixed. The whole-program path already
             # knew this — `repair()` feeds the validator's complaint back — and a per-leaf
             # retry that does not is just a second draw at the same odds.
-            stmt = emit(leaf, schema, attempts[-1] if attempts else None)
+            # SIBLING CONTEXT. The note's open question #4 at the SEMANTIC level, and
+            # measured: "put the red ones together" and "launch the last vm" mean nothing
+            # alone, because their referent is a SIBLING's decision. Scope threading fixed
+            # the BINDING half (`$item` resolves); this is the other half — a leaf is not
+            # context-free in either sense, and lowering in true isolation asks the model to
+            # name something it was never shown.
+            stmt = emit(leaf, schema, attempts[-1] if attempts else None,
+                        list(context or []))
         except Exception as exc:                 # a decode failure IS the expected case
             if log:
                 log(f"leaf {leaf.get('goal')!r} attempt {i + 1}: {type(exc).__name__}")
@@ -324,9 +332,15 @@ def lower_tree(root: dict, emit, want: Optional[str] = None, known: Optional[set
             f"tree is {d} deep, bound is {max_depth} — a decomposition that keeps going "
             f"never bottoms out, so this is refused rather than followed")
 
+    done_so_far: List[dict] = []          # every statement already emitted, in order
+
     def walk(n: dict, bound: set) -> dict:
         if is_leaf(n):
-            return emit_leaf(n, emit, want, known, derive_fn, log=log, bound=bound)
+            out = emit_leaf(n, emit, want, known, derive_fn, log=log, bound=bound,
+                            context=done_so_far)
+            if out.get("stmt"):
+                done_so_far.append(out["stmt"])
+            return out
         out = dict(n)
         # SCOPE THREADS DOWN, AND IT IS A COPY AT EVERY LEVEL — the same rule `validate`
         # uses for nested blocks, which gives block scoping for free: a name bound inside a
@@ -355,7 +369,7 @@ def lower_tree(root: dict, emit, want: Optional[str] = None, known: Optional[set
             for k in out["children"]:
                 fused += fuse(k)
             out = emit_leaf(out, emit, want, known, derive_fn, log=log,
-                            bound=bound, body=fused)
+                            bound=bound, body=fused, context=done_so_far)
         return out
 
     return walk(root, set())
@@ -566,3 +580,39 @@ def decompose(goal: str, route, max_depth: int = MAX_DEPTH, log=None,
             continue
         kids.append(decompose(s, route, max_depth, log, _depth + 1, seen | {goal.strip()}))
     return node(goal, op=op, children=kids)
+
+
+def ground(root: dict, emit, goal: str, want: Optional[str] = None,
+           known: Optional[set] = None, log=None) -> dict:
+    """Give an ungrounded tree a VERDICT, as one more leaf at the root.
+
+    Medusa's one soundness rule: a program that acts and asserts nothing has established
+    nothing, and `run()` refuses to execute it. The whole-program author writes a verdict
+    because it sees the whole goal; A LEAF CANNOT — rung 1 really is one `new`, and there is
+    no room inside one statement for a judgement about it.
+
+    So the verdict is authored ONCE, at the root, against the ORIGINAL goal rather than any
+    sub-goal — it is the only place the whole thing is visible. `review` already reports the
+    gap and `revise_target` already answers "root"; this is what acts on it.
+
+    Returns the tree unchanged when it is already grounded, and unchanged again if the
+    verdict cannot be emitted: a program with no verdict is refused later by `run()`, which
+    is the honest outcome, and inventing one here would be the harness vouching for work it
+    did not check.
+    """
+    if review(root)["grounded"]:
+        return root
+    verdict = node(f"state what must hold at the end: {goal}", op="achieve")
+    try:
+        filled = emit_leaf(verdict, emit, want, known, log=log)
+    except LoweringError as exc:
+        if log:
+            log(f"could not author a verdict: {exc}")
+        return root
+    out = dict(root)
+    if _BODY_FIELD.get(root.get("op")) or is_leaf(root):
+        # A container or a lone leaf cannot take a sibling, so it becomes the first child
+        # of a sequence that also holds the verdict.
+        return node(root.get("goal", goal), op="sequence", children=[root, filled])
+    out["children"] = list(root["children"]) + [filled]
+    return out
