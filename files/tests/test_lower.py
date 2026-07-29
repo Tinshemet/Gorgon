@@ -459,6 +459,69 @@ def test_a_node_that_decomposes_into_ITSELF_collapses_to_one_leaf():
     assert lower.depth(root) == 1, "one node, not a foreach nested in a foreach"
 
 
+def test_a_LONE_sub_goal_may_not_LOWER_the_intent():
+    """RUNG 7, MEASURED 2026-07-29, and it cost the rung every run.
+
+    The router read "make sure exactly 3 vms carry the 'prod' label" correctly as an
+    `achieve`, then handed back ONE sub-goal with the intent word swapped — "ENSURE
+    exactly 3 vms carry the 'prod' label" — which routed `ensure` on its own merits. The
+    program that came out was `ENSURE COUNT(SELECT vm WHERE label = 'prod') = 3;`: valid,
+    grounded, nothing unaccounted, and it CHECKS where the operator asked it to ACT.
+
+    Three things had to line up and all three are the point. Fusion treats an intent
+    parent with children as a plain SEQUENCE, so the `achieve` contributed nothing. The
+    child's ENSURE then satisfied the groundedness check, so `ground()` declined to add
+    the verdict that would have made it act. And the existing self-restatement guard is
+    byte-exact, so one reworded word walked past it.
+
+    INTENT IS SUPPLIED, NOT INFERRED — that is intent.py's whole argument, and it names
+    this very sentence as the example nothing in the words can settle. A restatement is
+    not new information about what the operator wanted.
+    """
+    route = _router({
+        "make sure exactly 3 vms carry the 'prod' label":
+            {"atomic": False, "op": "achieve",
+             "steps": ["ensure exactly 3 vms carry the 'prod' label"]},
+        "ensure exactly 3 vms carry the 'prod' label": {"atomic": True, "op": "ensure"},
+    })
+    root = lower.decompose("make sure exactly 3 vms carry the 'prod' label", route)
+    assert root["children"][0]["op"] == "achieve", "a restatement cannot demote the intent"
+
+
+def test_a_LONE_sub_goal_MAY_still_correct_a_STRUCTURAL_operator():
+    """THE COUNTER-EXAMPLE, and it is why the rule above is about intent and not arity.
+
+    Rung 10, same run: 'launch the last new vm' routed `new` — wrong, launching is a
+    call — and its lone restatement 'launch the last vm' routed `call`, which is RIGHT.
+    Collapsing every one-step answer to the parent's operator would have thrown that
+    correction away and kept the `new`.
+
+    So a restatement may fix HOW, never lower WHAT FOR.
+    """
+    route = _router({
+        "launch the last new vm":
+            {"atomic": False, "op": "new", "steps": ["launch the last vm"]},
+        "launch the last vm": {"atomic": True, "op": "call"},
+    })
+    root = lower.decompose("launch the last new vm", route)
+    assert root["children"][0]["op"] == "call", "structure may still be corrected"
+
+
+def test_a_LONE_sub_goal_may_RAISE_the_intent():
+    """Only lowering is refused. If the router looks at one sub-goal and decides it needs
+    MORE authority than the parent named, that is information rather than drift — and
+    `intent.violations()` is the thing that refuses reaching above the operator's rung,
+    which is a decision with an owner. Silently capping it here would duplicate that
+    judgement in a place with no consent behind it."""
+    route = _router({
+        "check the fleet is right":
+            {"atomic": False, "op": "ensure", "steps": ["make the fleet right"]},
+        "make the fleet right": {"atomic": True, "op": "achieve"},
+    })
+    root = lower.decompose("check the fleet is right", route)
+    assert root["children"][0]["op"] == "achieve", "raising is left to intent.violations()"
+
+
 def test_a_leaf_is_shown_what_its_SIBLINGS_already_emitted():
     """The note's open question #4 at the SEMANTIC level. Measured 2026-07-29: "put the red
     ones together" and "launch the last vm" mean nothing alone, because their referent is a

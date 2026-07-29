@@ -539,6 +539,47 @@ def review_loop(root: dict, rebuild, ledger=None, reconcile_fn=None,
 #   {"atomic": False, "op": "foreach", "steps": [...]}   a branch, its operator, its sub-goals
 # and the caller supplies whatever makes that call. Nothing here knows about a model.
 
+def _intent_rank(op: Optional[str]) -> Optional[int]:
+    """How much authority an intent op carries, or None if it is not an intent op.
+
+    DERIVED FROM `intent.py`'s OWN LADDER, never from the order of a JSON list — the
+    manifest groups the three words, it does not rank them, and a rank read off list order
+    would be a second statement of the ladder free to disagree with the first.
+    """
+    from . import intent as _intent
+    permits = _intent._PERMITS
+    if op not in permits:
+        return None
+    allowed = permits[op]
+    return len(config.OPS) + 1 if allowed is None else len(allowed)
+
+
+def _keep_intent(parent_op: Optional[str], kid: dict, log=None) -> dict:
+    """A LONE SUB-GOAL IS A RESTATEMENT, AND A RESTATEMENT MAY NOT LOWER THE INTENT.
+
+    MEASURED on rung 7, 2026-07-29, where it cost the rung every run: "make sure exactly 3
+    vms carry the 'prod' label" routed `achieve`, came back as the single sub-goal "ENSURE
+    exactly 3 vms carry the 'prod' label", and that routed `ensure`. The program checked
+    where the operator asked it to act — valid, grounded, and inert.
+
+    WHY THE RULE IS ABOUT INTENT AND NOT ABOUT ARITY. The obvious fix is to call any
+    one-step answer atomic and keep the parent's operator, and it is wrong: in the same run
+    'launch the last new vm' routed `new`, its lone restatement 'launch the last vm' routed
+    `call`, and `call` is RIGHT. A restatement may fix HOW; it may not lower WHAT FOR.
+
+    ONLY LOWERING IS REFUSED. A sub-goal that asks for MORE authority is information, and
+    refusing it here would duplicate `intent.violations()` — which owns that judgement and
+    has the operator's consent behind it — in a place that has neither.
+    """
+    mine, theirs = _intent_rank(parent_op), _intent_rank(kid.get("op"))
+    if mine is None or theirs is None or theirs >= mine:
+        return kid
+    if log:
+        log(f"lone sub-goal lowered `{parent_op}` to `{kid.get('op')}` — "
+            f"keeping `{parent_op}`: {str(kid.get('goal'))[:50]!r}")
+    return dict(kid, op=parent_op)
+
+
 class DecompositionError(RuntimeError):
     """A goal that cannot be turned into a tree."""
 
@@ -603,6 +644,8 @@ def decompose(goal: str, route, max_depth: int = MAX_DEPTH, log=None,
             kids.append(node(s, op=op))
             continue
         kids.append(decompose(s, route, max_depth, log, _depth + 1, seen | {goal.strip()}))
+    if len(kids) == 1:
+        kids[0] = _keep_intent(op, kids[0], log)
     return node(goal, op=op, children=kids)
 
 
