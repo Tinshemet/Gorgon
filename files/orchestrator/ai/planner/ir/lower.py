@@ -536,6 +536,19 @@ def decompose(goal: str, route, max_depth: int = MAX_DEPTH, log=None,
     steps = [s for s in (answer.get("steps") or []) if isinstance(s, str) and s.strip()]
     if not steps:
         raise DecompositionError(f"router split {goal!r} into no sub-goals")
+    # A NODE THAT DECOMPOSES INTO EXACTLY ITSELF IS ATOMIC. The router says "not atomic"
+    # and then lists the goal back verbatim — the commonest thing it actually does when a
+    # goal is one statement it does not want to commit to.
+    #
+    # MEASURED, and the first version of this guard CAUSED the failure it was meant to
+    # prevent: taking the restatement as a CHILD carrying the parent's operator produced a
+    # `foreach` inside a `foreach`, which the language forbids (one loop variable), and
+    # rungs 5, 11 and 12 died on it. A parent and its only child cannot both be the same
+    # container. Collapsing to one leaf is what the router's answer actually means.
+    if all(s.strip() == goal.strip() for s in steps):
+        if log:
+            log(f"decomposes into itself — taking as atomic `{op}`: {goal[:50]!r}")
+        return node(goal, op=op)
     if not op:
         raise DecompositionError(
             f"router split {goal!r} without naming its own operator — fusion would have "

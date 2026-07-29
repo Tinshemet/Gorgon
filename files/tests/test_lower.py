@@ -418,14 +418,19 @@ def test_a_branch_that_names_no_operator_is_REFUSED_at_decomposition():
         lower.decompose("g", route)
 
 
-def test_a_sub_goal_that_REPEATS_its_parent_becomes_a_leaf():
+def test_a_sub_goal_that_REPEATS_its_parent_is_absorbed_not_nested():
     """The commonest non-termination in practice: the router restates the goal instead of
-    splitting it. Taking the restatement as a leaf terminates and keeps the parent's
-    operator, rather than recursing to the depth bound to discover the same thing."""
+    splitting it.
+
+    THIS TEST USED TO ASSERT THE BUG. It required the restatement to become a CHILD keeping
+    the parent's operator — which put a `foreach` inside a `foreach`, forbidden because the
+    language has one loop variable, and killed rungs 5, 11 and 12 end to end. The correct
+    reading is that a node decomposing into exactly itself IS atomic, so it collapses to a
+    single leaf and the parent never exists to nest anything in."""
     route = _router({"do the thing": {"atomic": False, "op": "call",
                                       "steps": ["do the thing"]}})
     root = lower.decompose("do the thing", route)
-    assert lower.is_leaf(root["children"][0]) and root["children"][0]["op"] == "call"
+    assert lower.is_leaf(root) and root["op"] == "call" and lower.depth(root) == 1
 
 
 def test_runaway_decomposition_is_REFUSED():
@@ -439,3 +444,16 @@ def test_an_atomic_answer_with_no_operator_is_REFUSED():
     route = _router({"g": {"atomic": True}})
     with pytest.raises(lower.DecompositionError, match="named no operator"):
         lower.decompose("g", route)
+
+
+def test_a_node_that_decomposes_into_ITSELF_collapses_to_one_leaf():
+    """MEASURED 2026-07-29: the first version of this guard made a CHILD carrying the
+    parent's operator, so a `foreach` parent got a `foreach` child — which the language
+    forbids, one loop variable — and rungs 5, 11 and 12 died on a bug the guard introduced.
+    A parent and its only child cannot both be the same container."""
+    route = _router({"launch every stopped vm":
+                     {"atomic": False, "op": "foreach",
+                      "steps": ["launch every stopped vm"]}})
+    root = lower.decompose("launch every stopped vm", route)
+    assert lower.is_leaf(root) and root["op"] == "foreach"
+    assert lower.depth(root) == 1, "one node, not a foreach nested in a foreach"
