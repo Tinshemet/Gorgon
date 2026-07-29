@@ -39,6 +39,11 @@ from .ladder import BENCH_MODEL
 from .rungs import RUNGS
 from .sim_world import SimWorld
 
+# THE INTENT THIS PROBE AUTHORS UNDER, in one place. It was written out four times and
+# then omitted from the two `run()` calls that most needed it — the authority the operator
+# granted has to reach the EXECUTOR, not only the author.
+WANT = "achieve"
+
 _STRUCTURAL = list(config.OP_CATEGORIES["structural"])
 _ALL_OPS = list(config.OPS.keys())
 
@@ -133,6 +138,28 @@ def make_emit(model: str, world: SimWorld, want: str, stats: Dict[str, int], log
     return emit
 
 
+def _goal_predicate(prog: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """The predicate that stands for the whole program, or None.
+
+    THE SAME RULE `author_probe` ARRIVED AT, and both halves of it were learned by being
+    broken. An `achieve` outranks an `ensure` because it is the goal rather than a check
+    along the way, and the LAST `ensure` wins because a precondition at the top of a
+    program is not what the program was FOR.
+
+    LOOP-LOCAL PREDICATES ARE EXCLUDED. One mentioning the loop variable is a
+    per-iteration check and cannot stand for the program — taking one as the standing goal
+    is how a rung came to be graded against `COUNT(SELECT vm WHERE name = '$item') = 1`.
+    """
+    from orchestrator.ai.planner.ir import consent as _consent
+    member = f"{config.SIGIL}{config.LOOP_VAR}"
+    candidates = [st for st in _consent._walk(prog.get("body", []))
+                  if st.get("predicate") is not None
+                  and member not in json.dumps(st["predicate"])]
+    return (next((st["predicate"] for st in candidates if st.get("op") == "achieve"), None)
+            or next((st["predicate"] for st in reversed(candidates)
+                     if st.get("op") == "ensure"), None))
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="Staged lowering, end to end")
     p.add_argument("-r", "--rung", type=int, action="append")
@@ -161,11 +188,11 @@ def main(argv=None) -> int:
             stats = {k: 0 for k in totals}
             try:
                 route = make_route(a.model, world, stats, log)
-                emit = make_emit(a.model, world, "achieve", stats, log)
+                emit = make_emit(a.model, world, WANT, stats, log)
                 tree = lower.decompose(goal, route, log=log)
-                tree = lower.lower_tree(tree, emit, want="achieve",
+                tree = lower.lower_tree(tree, emit, want=WANT,
                                         known=world.names(), log=log, route=route)
-                tree = lower.ground(tree, emit, goal, want="achieve",
+                tree = lower.ground(tree, emit, goal, want=WANT,
                                     known=world.names(), log=log)
                 led = _cl.open_ledger(goal, rung.demands or [])
                 report = lower.review(
@@ -186,10 +213,49 @@ def main(argv=None) -> int:
             checker = None
             if ok:
                 sel, holds = _seams(world)
+                res = {}
                 try:
-                    _run(prog, world.execute, select=sel, holds=holds)
+                    # THE SAME ARGUMENTS THE WHOLE-PROGRAM PROBE PASSES, and the omission
+                    # was not cosmetic. Without `consent=True` an UNGROUNDED program is
+                    # refused BEFORE ITS FIRST CALL — so every rung that failed to author a
+                    # root verdict executed nothing whatsoever, and its `checker=FAIL` said
+                    # only that the world was untouched. The tree path was being graded
+                    # under a stricter execution gate than the baseline it is compared to.
+                    res = _run(prog, world.execute, select=sel, holds=holds,
+                               known_names=world.names(), consent=True, intent=WANT) or {}
                 except Exception:
                     pass
+                # CONVERGENCE — the step this probe was MISSING, and its absence meant the
+                # tree path could not pass a convergence rung no matter what it wrote.
+                #
+                # `run()` does not close a gap on its own, by design: a failing `achieve`
+                # comes back `unachieved` and the CALLER computes the difference, because
+                # the model provably cannot (execute.py records the 6->5->7->5 oscillation
+                # with state and objection in hand). `author_probe` has taken this step all
+                # along; this probe imported `derive` and never called it, so it was
+                # grading the tree against a WEAKER harness than the baseline it is
+                # compared to. Rung 7 emitted the correct `ACHIEVE COUNT(...) = 3` and
+                # still scored 0/3 with nobody to add the third label.
+                #
+                # ONLY FOR `unachieved`. `unsatisfied` means a ground check was false — the
+                # program assumed something untrue about the world, and computing a diff
+                # would paper over the wrong assumption instead of rethinking it.
+                if res.get("failed") == "unachieved":
+                    pred = _goal_predicate(prog)
+                    derived = _derive(pred, sel, res.get("scope"), WANT) if pred else None
+                    if derived:
+                        if log:
+                            log(f"derived {len(derived)} statement(s) to close the goal")
+                        try:
+                            # A DERIVED CORRECTION CARRIES NO VERDICT BY CONSTRUCTION — it
+                            # is the difference, not a program — so it needs the same
+                            # granted consent the whole-program probe gives it. Asking the
+                            # deriver to vouch for itself is the second bad draw in another
+                            # costume.
+                            _run({"body": derived}, world.execute, select=sel, holds=holds,
+                                 known_names=world.names(), consent=True, intent=WANT)
+                        except Exception:
+                            pass
                 checker = rung.check(world)
                 passed += 1 if checker else 0
             flags = []

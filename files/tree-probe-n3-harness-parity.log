@@ -1,0 +1,50 @@
+tree probe · model=llama3.1:8b · n=3
+
+   rung  1  leaves=2 calls=1r+3e badjson=0  VALID  checker=PASS
+   rung  1  leaves=2 calls=1r+3e badjson=0  VALID  checker=PASS
+   rung  1  leaves=2 calls=1r+3e badjson=0  VALID  checker=PASS
+   rung  2  leaves=3 calls=3r+3e badjson=0  VALID  checker=PASS
+   rung  2  leaves=3 calls=3r+3e badjson=0  VALID  checker=PASS
+   rung  2  leaves=3 calls=3r+3e badjson=0  VALID  checker=PASS
+   rung  3  leaves=4 calls=4r+4e badjson=0  VALID  checker=FAIL
+   rung  3  leaves=4 calls=4r+4e badjson=0  VALID  checker=FAIL
+   rung  3  leaves=4 calls=4r+4e badjson=0  VALID  checker=FAIL
+   rung  4  BUILD FAILED  LoweringError: leaf 'connect each node to every other node' (foreach) produced no valid statement in 3 
+   rung  4  BUILD FAILED  LoweringError: leaf 'connect each node to every other node' (foreach) produced no valid statement in 3 
+   rung  4  BUILD FAILED  LoweringError: leaf 'connect each node to every other node' (foreach) produced no valid statement in 3 
+   rung  5  leaves=2 calls=1r+2e badjson=0  VALID  checker=PASS
+   rung  5  leaves=2 calls=1r+2e badjson=0  VALID  checker=PASS
+   rung  5  leaves=2 calls=1r+2e badjson=0  VALID  checker=PASS
+   rung  6  leaves=9 calls=14r+10e badjson=0  VALID  checker=FAIL
+   rung  6  leaves=9 calls=14r+10e badjson=0  VALID  checker=FAIL
+   rung  6  leaves=9 calls=14r+10e badjson=0  VALID  checker=FAIL
+   rung  7  leaves=1 calls=2r+1e badjson=0  VALID  checker=PASS
+   rung  7  leaves=1 calls=2r+1e badjson=0  VALID  checker=PASS
+   rung  7  leaves=1 calls=2r+1e badjson=0  VALID  checker=PASS
+   rung  8  BUILD FAILED  LoweringError: leaf 'put every vm on a network called core, except db — db goes on a network called dmz
+   rung  8  BUILD FAILED  LoweringError: leaf 'put every vm on a network called core, except db — db goes on a network called dmz
+   rung  8  BUILD FAILED  LoweringError: leaf 'put every vm on a network called core, except db — db goes on a network called dmz
+   rung  9  leaves=4 calls=4r+4e badjson=0  VALID  checker=PASS
+   rung  9  leaves=4 calls=4r+4e badjson=0  VALID  checker=PASS
+   rung  9  leaves=4 calls=4r+4e badjson=0  VALID  checker=PASS
+   rung 10  BUILD FAILED  LoweringError: leaf 'launch the other new vm' (new) produced no valid statement in 3 attempt(s): statem
+   rung 10  BUILD FAILED  LoweringError: leaf 'launch the other new vm' (new) produced no valid statement in 3 attempt(s): statem
+   rung 10  BUILD FAILED  LoweringError: leaf 'launch the other new vm' (new) produced no valid statement in 3 attempt(s): statem
+   rung 11  BUILD FAILED  LoweringError: leaf 'ping every vm and stop the ones that do not answer' (foreach) produced no valid st
+   rung 11  BUILD FAILED  LoweringError: leaf 'ping every vm and stop the ones that do not answer' (foreach) produced no valid st
+   rung 11  BUILD FAILED  LoweringError: leaf 'ping every vm and stop the ones that do not answer' (foreach) produced no valid st
+   rung 12  leaves=2 calls=1r+2e badjson=0  VALID  checker=PASS
+   rung 12  leaves=2 calls=1r+2e badjson=0  VALID  checker=PASS
+   rung 12  leaves=2 calls=1r+2e badjson=0  VALID  checker=PASS
+   rung 13  BUILD FAILED  LoweringError: leaf "take 5 vms, put them all in a network, give them all the 'fleet' label, and make s
+   rung 13  BUILD FAILED  LoweringError: leaf 'new vm1 with fleet label' (new) produced no valid statement in 3 attempt(s): state
+   rung 13  BUILD FAILED  LoweringError: leaf 'new vm1 with fleet label' (new) produced no valid statement in 3 attempt(s): state
+
+── summary · harness=tree_probe · model=llama3.1:8b · n=3
+   CHECKER PASS       : 18/39
+   routing calls      : 189   (channel failures: 0)
+   leaf emissions     : 166
+   LEAF DECODE FAILS  : 0   <- the branch-count claim lives or dies here
+
+   Baseline for comparison: whole-program authoring, 57/78 goal achieved,
+   12 of 21 failures in the channel, on an ELEVEN-branch oneOf.
