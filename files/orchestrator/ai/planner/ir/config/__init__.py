@@ -53,6 +53,8 @@ SURFACE    = _c("surface")         # the written spelling of things the IR store
 FIELDS     = _c("fields")          # every statement field, described once
 
 OPS        = _c("ops")             # statement type -> {required, doc}
+QUANTIFIERS = _c("quantifiers")    # all/any/single/not -> {ops, doc}: how many things a
+                                   # clause is about, and what that licenses
 OP_CATEGORIES = _c("op_categories")  # "structural" (a decomposition CHOOSES these) vs
                                      # "intent" (fetch/ensure/achieve — supplied by the
                                      # operator's intent, never the author's to guess)

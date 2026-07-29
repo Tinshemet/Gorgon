@@ -170,6 +170,55 @@ def test_every_op_is_in_exactly_one_category():
           set(cats["intent"]) == {intent_mod.FETCH, intent_mod.ENSURE, intent_mod.ACHIEVE})
 
 
+def test_single_licenses_call_and_never_foreach():
+    """THE POINT OF WIRING `single` AT ALL, stated as the guarantee it actually gives.
+
+    I first wrote this as "a `single` schema offers NO select anywhere" and the invariant
+    caught it: `single` licenses `fetch`, and *fetch the vm named db* legitimately needs a
+    select to identify one object. Removing selects wholesale would break a real statement
+    to fix a different one.
+
+    THE TRUE GUARANTEE IS NARROWER AND IS STILL THE FIX: no `foreach`. Rung 8's statement 4
+    is a LOOP over a select of one — `FOREACH $item IN SELECT ? WHERE name = 'db'` — and it
+    is the loop, not the select, that is wrong for a clause about one identified object.
+    Deny `foreach` and the statement can only be the `call` that was right all along.
+    """
+    licensed = set(config.QUANTIFIERS["single"]["ops"])
+    check("single licenses `call`", "call" in licensed)
+    check("single does NOT license `foreach` — no looping over a set of one",
+          "foreach" not in licensed)
+    check("every set-shaped quantifier DOES license `foreach`",
+          all("foreach" in set(config.QUANTIFIERS[q]["ops"])
+              for q in ("all", "any", "not")))
+
+
+def test_every_quantifier_licenses_only_real_ops_and_at_least_one():
+    """A quantifier naming an op the language does not have would narrow the schema to
+    something unbuildable; one licensing NOTHING would silently offer an empty menu, which
+    reads to the model as "no legal statement" and is how a construct goes quietly dead."""
+    for name, spec in config.QUANTIFIERS.items():
+        licensed = spec.get("ops") or []
+        check(f"{name}: licenses at least one op", bool(licensed))
+        for op in licensed:
+            check(f"{name}: {op} is a real op", op in config.OPS)
+        check(f"{name}: states what it means", bool(spec.get("doc")))
+
+
+def test_a_quantifier_narrows_the_schema_it_builds():
+    """END TO END, because the table being right is not the same as it reaching the model.
+    `master.ops` reads the manifest, `program_schema` reads `master.ops`, and the thing
+    that matters is the SCHEMA — six builders read config independently and the stale twin
+    is always the risk."""
+    import json as _json
+    full = _json.dumps(program_schema("achieve", None))
+    single = _json.dumps(program_schema("achieve", None, quantifier="single"))
+    check("the full schema offers foreach", '"const": "foreach"' in full)
+    check("a `single` schema does NOT offer foreach",
+          '"const": "foreach"' not in single)
+    check("a `single` schema still offers call", '"const": "call"' in single)
+    check("narrowing actually removes branches", len(single) < len(full))
+
+
 def test_the_visitor_does_not_silently_ignore_a_statement():
     """An op the visitor does not handle falls through and does NOTHING — no error, no
     call, a green close over a statement that never ran. That is the false-success class
@@ -719,27 +768,26 @@ def test_every_path_that_accepts_an_authored_program_sanitises_it():
 
 
 def main():
-    for fn in (test_every_predicate_shape_has_an_evaluator,
-               test_every_predicate_shape_renders_legibly,
-               test_every_predicate_shape_declares_whether_it_can_be_derived,
-               test_every_op_is_accounted_for,
-               test_the_visitor_does_not_silently_ignore_a_statement,
-               test_every_queryable_attribute_is_offered_to_the_author,
-               test_every_closed_vocabulary_is_both_offered_and_policed,
-               test_every_predicate_shape_is_offered_to_the_author,
-               test_every_kind_names_real_tools,
-               test_every_observed_attribute_is_actually_learnable,
-               test_bindable_names_are_exactly_readable_names,
-               test_the_surface_spells_every_word_it_owns,
-               test_the_two_selects_answer_the_same_question,
-               test_every_mutating_tool_says_what_done_means,
-               test_the_offer_never_exceeds_the_authority,
-               test_a_copy_source_is_offered_only_from_what_exists,
-               test_no_model_facing_string_still_teaches_a_retired_rule,
-               test_every_path_that_accepts_an_authored_program_sanitises_it):
+    """Every `test_*` in this module, in definition order — DISCOVERED, not listed.
+
+    THE LIST WAS THE BUG. It was hand-maintained, and on 2026-07-29 two invariants were
+    added and neither ran: absent from the list here, and under pytest `check()` only
+    PRINTS, so they could not fail there either. An invariant that silently never executes
+    is worse than no invariant, because the file reads as though the property is guarded.
+
+    That is this codebase's oldest failure mode in a new place — *a suite that stopped
+    being mentioned stopped being run* — and `run_all.py` exists because of it. Discovery
+    removes the step a human has to remember.
+    """
+    import inspect as _inspect
+    _mod = sys.modules[__name__]
+    _found = [v for k, v in vars(_mod).items()
+              if k.startswith("test_") and callable(v)]
+    _found.sort(key=lambda f: f.__code__.co_firstlineno)
+    for fn in _found:
         print(f"\n── {fn.__name__}")
         fn()
-    print(f"\n{_PASS}/{_PASS + _FAIL} passed")
+    print(f"\n{_PASS}/{_PASS + _FAIL} passed  ({len(_found)} invariants)")
     sys.exit(1 if _FAIL else 0)
 
 

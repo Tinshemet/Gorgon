@@ -162,6 +162,48 @@
     }
   },
   "_op_categories_doc": "THE SEVEN OPS ARE TWO KINDS OF THING, and until 2026-07-29 nothing said so where it mattered. STRUCTURAL ops arrange work — they are what a decomposition CHOOSES, and getting one wrong is a reasoning error. INTENT ops are fetch/ensure/achieve, and they are NOT the author's to choose: `intent` above already states that what the operator wants back is theirs to say, and ir/intent.py ENFORCES it before the first call. The one soundness rule draws the same line from the other side — FETCH answers with data, actions answer with nothing, and ENSURE and ACHIEVE are the only statements producing a judgement. So the split was already doctrine in two places and absent from the one table the model is shown. MEASURED, and this is why it exists: the atomicity router named the right operator on 4 of 10 atomic cells across both columns, and TWO OF THE THREE ERRORS WERE `ensure` WHERE `achieve` WAS RIGHT — rungs 7 and 9, identically, in both columns. That is CHECK-versus-MAKE, the pair decision 3 settled, and it is a choice the author was never authorised to make. Offering all seven as one flat enum asked the model to guess something the harness already knows, which is the schema-withholding failure this codebase keeps re-finding: audit what the model was OFFERED before calling a low score a model ceiling. A router asks for STRUCTURE; intent is supplied, never guessed.",
+  "_quantifiers_doc": "HOW MANY THINGS A CLAUSE IS ABOUT, and which statements that licenses. The operator's proposal 2026-07-29: *\"maybe we first filter commands based on the all/any/single/not, so it can't pick commands that are not correct.\"* It is the same move `master.ops` already makes for INTENT — offering only the permitted branches makes a wrong program UNREPRESENTABLE instead of rejected — with the quantifier as the discriminator. MEASURED before building, `quantifier_probe`, n=3, 16 clauses, ground truth declared first: 15/16 against a floor of 4/16, every cell unanimous, `single` 4/4 and `not` 4/4. THE DECIDING PAIR IS 8/8: 'db goes on a network called dmz' -> single and 'apart from db, which belongs on dmz' -> not, the SAME OBJECT with opposite answers, and exactly the two clauses rung 8 gets wrong while authoring. So the knowledge is present and the AUTHORING CONTEXT loses it — which is the case for routing before emitting rather than teaching harder. The carve-out prose hint, tried the same day, measured 0/26 on the ladder. THE `any` VS `not` BOUNDARY IS A NAMED WHOLE: 'every vm except db' names a whole and subtracts a member (not); 'the ones that do not answer' names no whole and a condition picks the members (any), because A NEGATIVE CONDITION IS STILL A CONDITION. That is also how Medusa spells them — `any` is a filter in the select, `not` is the carve-out key. Sharpening this wording took the probe 14/16 -> 15/16, and the one remaining miss is the model dropping the condition in 'every RUNNING vm', not a taxonomy fault. WHAT `single` BUYS, and it is why this is wired first: a clause about one identified object licenses `call` ALONE, so there is no `select` in the schema and rung 8's `statement 4: select must name a kind` becomes unrepresentable rather than rejected-then-repaired — and the repair loop is what turned that nearly-correct program into an inverted one.",
+  "quantifiers": {
+    "all": {
+      "ops": [
+        "foreach",
+        "ensure",
+        "achieve",
+        "fetch"
+      ],
+      "doc": "every member of the kind, with NO condition — 'all the machines', 'every vm'"
+    },
+    "any": {
+      "ops": [
+        "foreach",
+        "ensure",
+        "achieve",
+        "fetch",
+        "if"
+      ],
+      "doc": "the members matching a CONDITION — 'every vm that is stopped'. The condition may be negative ('the ones that do not answer') and it is STILL a condition, because nothing is subtracted from a named whole"
+    },
+    "single": {
+      "ops": [
+        "call",
+        "new",
+        "ensure",
+        "achieve",
+        "fetch",
+        "if"
+      ],
+      "doc": "ONE identified object, named — 'the vm called web', 'db'. NO `foreach`: a rule about one object is a plain call naming it, never a loop over a set of one"
+    },
+    "not": {
+      "ops": [
+        "foreach",
+        "ensure",
+        "achieve",
+        "fetch"
+      ],
+      "doc": "a named WHOLE, MINUS named members — 'every vm except db'. There must be a whole to subtract from; without one it is a condition, not an exclusion"
+    }
+  },
   "op_categories": {
     "structural": [
       "new",

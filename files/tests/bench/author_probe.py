@@ -273,7 +273,7 @@ def _pred_spec():
     return {"oneOf": branches}
 
 
-def program_schema(want: str = None, known=None):
+def program_schema(want: str = None, known=None, quantifier: str = None):
     """The full schema, assembled from the manifest so it cannot fall behind the language.
 
     Statement branches come from `ops`, their fields from the field catalogue, predicates
@@ -290,7 +290,7 @@ def program_schema(want: str = None, known=None):
     constraint.
     """
     branches = []
-    for op in master.ops(want):
+    for op in master.ops(want, quantifier):
         spec = config.OPS[op]
         props = {"op": {"type": "string", "const": op, "description": spec["doc"]}}
         for f in spec["fields"]:

@@ -42,8 +42,24 @@ from typing import Any, Dict, List, Optional
 from . import config, intent as _intent
 
 
-def ops(want: Optional[str] = None) -> List[str]:
-    """The ops that may be offered under the operator's intent.
+def ops(want: Optional[str] = None, quantifier: Optional[str] = None) -> List[str]:
+    """The ops that may be offered under the operator's intent, and how many things the
+    clause is about.
+
+    TWO NARROWINGS, SAME MECHANISM, DIFFERENT OWNERS. `want` is the INTENT and belongs to
+    the operator (decision 5). `quantifier` is a property of the CLAUSE — all/any/single/
+    not — and is answered by a router, measured at 15/16 before this was built
+    (`quantifier_probe`). Both make a wrong program unrepresentable instead of rejected;
+    neither invents a rule the language did not already have.
+
+    WHY `single` MATTERS MOST, and why it was wired first: a clause about one identified
+    object licenses `call` and not `foreach`, so the offered schema contains NO `select` at
+    all. Rung 8's `statement 4: select must name a kind` then cannot be written — where
+    today it is written, rejected, and handed to a repair loop that turned a nearly-correct
+    program into an inverted one. The manifest owns the table; this only reads it.
+
+    Absent means absent: `None` narrows nothing, because an unsupplied fact must never
+    become a silent restriction. Two supplied narrowings INTERSECT.
 
     THE FIRST THING MOVED FROM DESCRIPTION TO CONSTRAINT, and it is a relocation rather
     than a new rule. `intent.violations()` already refuses a program that reaches above its
@@ -57,9 +73,12 @@ def ops(want: Optional[str] = None) -> List[str]:
     an absent fact must not become a silent restriction.
     """
     allowed = _intent._PERMITS.get(want) if want else None
-    if allowed is None:
-        return list(config.OPS)
-    return [op for op in config.OPS if op in allowed]
+    out = list(config.OPS) if allowed is None else [op for op in config.OPS if op in allowed]
+    spec = config.QUANTIFIERS.get(quantifier) if quantifier else None
+    if spec:
+        licensed = set(spec.get("ops") or ())
+        out = [op for op in out if op in licensed]
+    return out
 
 
 def identifiers(goal: str = "", known: Optional[set] = None,

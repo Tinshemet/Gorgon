@@ -46,11 +46,25 @@ from orchestrator.ai.planner.score import _first_tool_call
 from .ladder import BENCH_MODEL, make_call_model
 
 # ── THE FOUR, and what each licenses ────────────────────────────────────────────────────
+# SHARPENED 2026-07-29 after the first run. `any` and `not` were the only confusions, and
+# one was the TAXONOMY's fault, not the model's: "stop the ones that do not answer" came
+# back `not`, which is defensible — the clause contains a negation — because the original
+# wording separated them by *feel* rather than by a test.
+#
+# THE DISCRIMINATOR IS WHETHER A WHOLE IS NAMED TO SUBTRACT FROM.
+#   "the ones that do not answer"  -> no whole; a CONDITION picks the members  -> any
+#   "every vm EXCEPT db"           -> a whole (every vm) minus a named member  -> not
+# A NEGATIVE CONDITION IS STILL A CONDITION. That is also exactly how Medusa spells them:
+# `any` is a filter in the select, `not` is the carve-out key. A router cannot be graded
+# against a distinction its own vocabulary does not draw.
 QUANTIFIERS = {
-    "all": "every member of the kind, with no condition — 'all the machines'",
-    "any": "the members matching a condition — 'every vm that is stopped'",
-    "single": "one identified object, named — 'the vm called web'",
-    "not": "everything EXCEPT something — 'all of them apart from db'",
+    "all": "every member of the kind, with NO condition — 'all the machines', 'every vm'",
+    "any": ("the members matching a CONDITION — 'every vm that is stopped'. The condition "
+            "may be negative ('the ones that do not answer') and it is STILL a condition, "
+            "because nothing is being subtracted from a named whole"),
+    "single": "ONE identified object, named — 'the vm called web', 'db'",
+    "not": ("a named WHOLE, MINUS named members — 'every vm except db'. There must be a "
+            "whole to subtract from; without one it is a condition, not an exclusion"),
 }
 
 # ── GROUND TRUTH — written before any model ran ─────────────────────────────────────────
@@ -137,7 +151,10 @@ def _system() -> str:
         "calling `quantify` exactly once.\n"
         "A clause naming ONE object is `single`, however many other things the goal "
         "mentions — do not inherit the count from the rest of the goal.\n"
-        "A clause that EXCLUDES something is `not`, even though it is about many.\n"
+        "TO TELL `any` FROM `not`, ASK WHETHER A WHOLE IS NAMED TO SUBTRACT FROM. "
+        "'every vm except db' names a whole and removes a member — `not`. 'the ones that "
+        "do not answer' names no whole; a condition picks the members — `any`, and a "
+        "NEGATIVE condition is still a condition.\n"
         "Do not explain outside the call."
     )
 
