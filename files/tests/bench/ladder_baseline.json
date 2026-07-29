@@ -90,7 +90,7 @@
     "PASS": 3
    },
    "passes": 3,
-   "calls_min": 6,
+   "calls_min": 5,
    "artifacts": 0,
    "details": {
     "PASS": []
@@ -128,7 +128,7 @@
     "PASS": 3
    },
    "passes": 3,
-   "calls_min": 6,
+   "calls_min": 9,
    "artifacts": 0,
    "details": {
     "PASS": []
@@ -141,7 +141,7 @@
    },
    "passes": 3,
    "calls_min": 6,
-   "artifacts": 0,
+   "artifacts": 2,
    "details": {
     "PASS": []
    }
@@ -161,12 +161,16 @@
   "lit:13": {
    "n": 3,
    "outcomes": {
-    "REPAIR_UNDELIVERED:empty": 3
+    "REPAIR_UNDELIVERED:malformed": 1,
+    "REPAIR_UNDELIVERED:empty": 2
    },
    "passes": 0,
    "calls_min": null,
-   "artifacts": 2,
+   "artifacts": 0,
    "details": {
+    "REPAIR_UNDELIVERED:malformed": [
+     "JSONDecodeError: Expecting ',' delimiter: line 1 column 595 (char 594)"
+    ],
     "REPAIR_UNDELIVERED:empty": [
      "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
     ]
@@ -257,15 +261,13 @@
   "para:7": {
    "n": 3,
    "outcomes": {
-    "GOAL_UNMET": 3
+    "PASS": 3
    },
-   "passes": 0,
-   "calls_min": 4,
+   "passes": 3,
+   "calls_min": 3,
    "artifacts": 0,
    "details": {
-    "GOAL_UNMET": [
-     "unsatisfied"
-    ]
+    "PASS": []
    }
   },
   "para:8": {
@@ -285,15 +287,13 @@
   "para:9": {
    "n": 3,
    "outcomes": {
-    "UNRECOVERED": 3
+    "PASS": 3
    },
-   "passes": 0,
-   "calls_min": null,
+   "passes": 3,
+   "calls_min": 10,
    "artifacts": 0,
    "details": {
-    "UNRECOVERED": [
-     "statement 1 (foreach body) \u2192 statement 1: net_name=$item.networks[0] reads a field off $item, which is a NAME, not a call's result \u2014 only something bound by `graft` has fields. Select what you need instead, or graft the call whose answer you mean."
-    ]
+    "PASS": []
    }
   },
   "para:10": {
@@ -341,7 +341,7 @@
    },
    "passes": 0,
    "calls_min": null,
-   "artifacts": 0,
+   "artifacts": 2,
    "details": {
     "REPAIR_UNDELIVERED:empty": [
      "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
