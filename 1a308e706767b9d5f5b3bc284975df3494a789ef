@@ -1,0 +1,11 @@
+CORRECTION (2026-07-30): the objection-length finding in this message DID NOT REPRODUCE.
+
+The message states as measured fact that objection LENGTH caused REPAIR_UNDELIVERED:empty
+— 370 chars returning nothing 6/6, 163 chars bringing 2 of 3 back. The next n=3 on the
+same build with the same short objection came back 0/3 with the same failure.
+
+So an n=1 reading was committed as a finding, on the same day that error was being
+corrected elsewhere. Shortening the objection is not worse; it is not established either.
+The num_ctx half of this commit is unaffected.
+
+See ladder-is-not-a-feedback-loop: temp 0 is not deterministic, and no diagnosis from n=1.
