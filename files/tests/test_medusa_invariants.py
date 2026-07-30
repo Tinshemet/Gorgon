@@ -1029,6 +1029,38 @@ def test_ONE_authority_per_fact_in_the_program_regime():
     bad, _ = holds({"shape": "disjoint", "sets": [["app1", "db"], ["db"]]}, {})
     check("and it detects an overlap", bad is False)
 
+    # A5. REACH IS A FINDING, NOT A STATE — the bench used to ask only whether the members
+    # shared a network, so a program that networked five machines and probed none passed a
+    # reach rung here and would come back `reach is unestablished` against the real lab.
+    # That is what made rung 4's 16-call program look cheaper than the 21-call one that
+    # verifies its own work, and a cost signal built on it points the optimisation at
+    # dropping verification.
+    w2 = SimWorld()
+    for n in ("m1", "m2"):
+        w2.execute("create_vm", {"name": n, "os_type": "linux"})
+    w2.execute("create_network", {"net_name": "core"})
+    for n in ("m1", "m2"):
+        w2.execute("add_vm_to_network", {"net_name": "core", "vm_name": n})
+    _, holds2 = _seams_mod.seams(w2)
+    reach = {"shape": "reach", "select": {"kind": "vm"}, "min": 2}
+    unprobed, why = holds2(reach, {})
+    check(f"networked but UNPROBED does not hold ({why[:44]})", unprobed is False)
+    for n in ("m1", "m2"):
+        w2.execute("guest_ping", {"name": n})
+    check("once every member has answered, it holds", holds2(reach, {})[0] is True)
+
+    w3 = SimWorld()
+    for n in ("m1", "m2"):
+        w3.execute("create_vm", {"name": n, "os_type": "linux"})
+    _, holds3 = _seams_mod.seams(w3)
+    for n in ("m1", "m2"):
+        w3.execute("guest_ping", {"name": n})
+    # The other direction, and it is the divergence found while fixing this one: production
+    # checks liveness and ignores topology entirely. The bench demands both, so it can only
+    # ever be pessimistic rather than certifying something the real lab would refuse.
+    check("probed but sharing no network does not hold either",
+          holds3(reach, {})[0] is False)
+
 
 def main():
     """Every `test_*` in this module, in definition order — DISCOVERED, not listed.

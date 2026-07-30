@@ -120,15 +120,42 @@ def seams(world):
             # set — looked up the label None and found nobody. A predicate that ignores
             # its own operand's filters answers a different question than it was asked.
             #
-            # A5 IS OPEN HERE, DELIBERATELY AND ON THE RECORD: production ALSO requires
-            # each member to have been PROBED, so a program can satisfy this and still be
-            # `reach is unestablished` against the real lab. That divergence is what made
-            # rung 4's 16-call program look cheapest. It is not fixed by moving the code.
+            # A5, CLOSED 2026-07-30 BY TIGHTENING RATHER THAN BY ANNOTATING. The bench asked
+            # only whether the members share a network. Production asks something else
+            # entirely: every member must have been PROBED and must have ANSWERED, because
+            # reachability is a FINDING and never an inference from a tool's success flag —
+            # unverified is not done. So a program could pass a reach rung here and come
+            # back `reach is unestablished` against the real lab, and that loophole is
+            # exactly what made rung 4's 16-call program look cheapest than the 21-call one
+            # that probes.
+            #
+            # THE TWO SEAMS DIVERGED IN TWO DIRECTIONS, NOT ONE, and the second was found
+            # while fixing the first: production ignores network topology completely. So
+            # this now asks for BOTH — the floor, a shared network, and a live answer from
+            # every member — which is strictly stronger than either side was. A bench that
+            # is stricter than production can only produce pessimistic rungs; one that is
+            # weaker silently certifies programs the real lab would refuse.
+            #
+            # Whether production SHOULD ignore topology is a separate question and is not
+            # decided here.
             members = select(pred.get("select") or {})
             floor = int(pred.get("min", 2))
-            shared = world.common_networks(members) if members else set()
-            good = len(members) >= floor and bool(shared)
-            return good, f"reach over {len(members)} member(s), floor {floor} -> {good}"
+            if len(members) < floor:
+                return False, f"reach over {len(members)} member(s), floor {floor}"
+            unknown = [m for m in members
+                       if observe.value(world.findings, "vm", "alive", m)
+                       == observe.unknown()]
+            if unknown:
+                return False, (f"reach is unestablished: {len(unknown)} of {len(members)} "
+                               f"have not been probed ({', '.join(sorted(unknown)[:3])})")
+            dead = [m for m in members
+                    if observe.value(world.findings, "vm", "alive", m) == observe.FALSE]
+            if dead:
+                return False, f"no answer from {', '.join(sorted(dead))}"
+            if not world.common_networks(members):
+                return False, (f"all {len(members)} answered, but they share no network — "
+                               f"reach here also means a path between them")
+            return True, f"all {len(members)} member(s) answered and share a network"
         if shape == "disjoint":
             # DECLARED SINCE DAY ONE, NEVER EVALUABLE. The manifest lists it, the schema
             # offers it, the validator accepts it and the renderer prints it — and this

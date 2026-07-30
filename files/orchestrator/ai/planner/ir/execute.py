@@ -146,11 +146,28 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
     # program written under one that contains an acting statement is refused outright —
     # before grounding, because "did you authorise this at all" precedes "did you check
     # your work". See intent.py: the operator decides, and it is enforced, not advised.
+    promoted = None
     if intent is not None:
         exceeded = _intent.violations(program, intent)
         if exceeded:
             return {"ok": False, "failed": "exceeds_authority", "problems": exceeded,
                     "why": exceeded[0], "scope": {}, "calls": []}
+        # AND THE OTHER DIRECTION, which is not the same shape. Reaching ABOVE the granted
+        # rung is a trespass and is refused; sitting BELOW it is a program that cannot
+        # finish the job it was asked to do, and refusing that only costs a round.
+        #
+        # MEASURED 2026-07-30: granted ACHIEVE the author writes ENSURE for the standing
+        # goal — a CHECK where it was licensed to CORRECT — and the whole convergence path
+        # then becomes unreachable, because a failed non-achieve reports `unsatisfied` and
+        # the deriver fires only for `unachieved`. Rung 7 shows it with nothing else
+        # varying: the literal says "make sure", ACHIEVE's own phrase, and passes 3/3; the
+        # paraphrase says "there should end up being" and fails 3/3.
+        #
+        # HERE rather than in each caller, because two probes and production would
+        # otherwise each need their own copy — the stale-twin defect, invited. It runs
+        # AFTER validation, so the promoted op is not a way to smuggle in a program the
+        # validator would have refused.
+        program, promoted = _intent.promote(program, intent)
 
     # GROUNDING. A program that changes the world and never checks it needs the
     # operator's word first — see consent.py. Refused BEFORE the first call, because a
@@ -406,19 +423,31 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
             _block(st["ifails"])
         return None
 
+    def _said(res: Dict[str, Any]) -> Dict[str, Any]:
+        """Every result past the promotion point says whether one happened.
+
+        The operator chose promotion over objection, so what RUNS is not always what was
+        authored. A rewrite nobody reports is indistinguishable from the author having
+        written it that way, and the next person debugging an ACHIEVE they never wrote would
+        have nothing to go on.
+        """
+        return {**res, "promoted": promoted} if promoted else res
+
     for st in body:
         bad = _one(st)
         if bad is not None:
-            return bad
+            return _said(bad)
     op = None
 
     if failures and not asserted:
         # Nothing vouched for the end state and calls failed: there is no basis for a
         # green close. With an ENSURE present its verdict stands — a failure it tolerated
         # is one that did not matter.
-        return {"ok": False, "failed": "calls_failed", "scope": scope, "calls": calls,
-                "failures": failures,
-                "why": f"{len(failures)} call(s) failed and no ensure checked the result: "
-                       + "; ".join(f"{f['tool']}: {f['error']}" for f in failures[:3])}
-    return {"ok": True, "scope": scope, "calls": calls, "failed": None,
-            "failures": failures}
+        return _said({"ok": False, "failed": "calls_failed", "scope": scope,
+                      "calls": calls, "failures": failures,
+                      "why": f"{len(failures)} call(s) failed and no ensure checked the "
+                             f"result: "
+                             + "; ".join(f"{f['tool']}: {f['error']}"
+                                         for f in failures[:3])})
+    return _said({"ok": True, "scope": scope, "calls": calls, "failed": None,
+                  "failures": failures})
