@@ -68,7 +68,7 @@
         "var",
         "kind"
       ],
-      "doc": "create a resource and bind a name to it. NEW ISSUES THE CREATION ITSELF — it calls create_vm / create_network for you, so NEVER write a separate creator call beside it. Fields: var, kind, amount (optional, default 1), args (optional — anything else the creator takes), `from` (optional — create by COPYING the named resource instead of making a fresh one). NEW MEANS CREATING SOMETHING THAT DOES NOT EXIST YET. Use it only when the operator asked you to CREATE, or when what is needed is not there. When they want you to USE what the lab already holds, FETCH it — and if the fetch comes back empty, THEN create. Creation is the fallback, never the first move. `AMOUNT(n)` makes n MORE, so in a lab that already holds some it does not mean 'end up with n'.",
+      "doc": "create a resource and bind a name to it. NEW ISSUES THE CREATION ITSELF — it calls create_vm / create_network for you. Fields: var, kind, amount (optional, default 1), args (optional — anything else the creator takes), `from` (optional — create by COPYING the named resource instead of making a fresh one).",
       "fields": [
         "var",
         "kind",
@@ -161,7 +161,7 @@
         "then",
         "else"
       ],
-      "doc": "branch on a check. Fields: cond (a check), then (statements), else (optional statements). `else` is a FIELD of this statement, never a statement of its own — there is no `else` op. NEVER leave `then` empty — not to reach an `else`, and not as the other half of a second IF that checks the opposite. A CHECK AND ITS OPPOSITE ARE ONE DECISION, NOT TWO OUTCOMES TO FILL IN: write only the side that ACTS, and leave the other unwritten. A case with nothing to do needs no statement at all, empty or otherwise. So state the condition under which something DOES happen: IF X THEN {} ELSE {Y} and IF NOT(X) THEN {Y} are the same program, and only the second says what it means. Where the check is IS(...), flipping eq to false says it more directly than wrapping it in NOT."
+      "doc": "branch on a check. Fields: cond (a check), then (statements), else (optional statements)."
     }
   },
   "_op_categories_doc": "THE SEVEN OPS ARE TWO KINDS OF THING, and until 2026-07-29 nothing said so where it mattered. STRUCTURAL ops arrange work — they are what a decomposition CHOOSES, and getting one wrong is a reasoning error. INTENT ops are fetch/ensure/achieve, and they are NOT the author's to choose: `intent` above already states that what the operator wants back is theirs to say, and ir/intent.py ENFORCES it before the first call. The one soundness rule draws the same line from the other side — FETCH answers with data, actions answer with nothing, and ENSURE and ACHIEVE are the only statements producing a judgement. So the split was already doctrine in two places and absent from the one table the model is shown. MEASURED, and this is why it exists: the atomicity router named the right operator on 4 of 10 atomic cells across both columns, and TWO OF THE THREE ERRORS WERE `ensure` WHERE `achieve` WAS RIGHT — rungs 7 and 9, identically, in both columns. That is CHECK-versus-MAKE, the pair decision 3 settled, and it is a choice the author was never authorised to make. Offering all seven as one flat enum asked the model to guess something the harness already knows, which is the schema-withholding failure this codebase keeps re-finding: audit what the model was OFFERED before calling a low score a model ceiling. A router asks for STRUCTURE; intent is supplied, never guessed.",

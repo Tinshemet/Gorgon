@@ -60,14 +60,14 @@
    "n": 3,
    "goal": "create 5 vms, put them all in a network, give them all the 'fleet' label, and make sure they all ping each other",
    "outcomes": {
-    "PASS": 3
+    "OVER_BUDGET": 3
    },
    "passes": 3,
-   "calls_min": 16,
+   "calls_min": 27,
    "artifacts": 0,
    "details": {
-    "PASS": [
-     "16 calls vs best 21"
+    "OVER_BUDGET": [
+     "27 calls vs best 21"
     ]
    }
   },
@@ -243,14 +243,14 @@
    "n": 3,
    "goal": "spin up five machines, wire them together on one private network, tag every one of them 'fleet', and confirm each can reach the others",
    "outcomes": {
-    "PASS": 3
+    "OVER_BUDGET": 3
    },
    "passes": 3,
-   "calls_min": 21,
+   "calls_min": 31,
    "artifacts": 0,
    "details": {
-    "PASS": [
-     "21 calls vs best 21"
+    "OVER_BUDGET": [
+     "31 calls vs best 21"
     ]
    }
   },
@@ -286,15 +286,13 @@
    "n": 3,
    "goal": "there should end up being precisely three machines tagged prod, no more and no fewer",
    "outcomes": {
-    "GOAL_UNMET": 3
+    "PASS": 3
    },
-   "passes": 0,
-   "calls_min": 4,
+   "passes": 3,
+   "calls_min": 5,
    "artifacts": 0,
    "details": {
-    "GOAL_UNMET": [
-     "unsatisfied"
-    ]
+    "PASS": []
    }
   },
   "para:8": {

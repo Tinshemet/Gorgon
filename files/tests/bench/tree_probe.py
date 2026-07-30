@@ -36,6 +36,7 @@ from orchestrator.ai.planner.ir import derive as _derive
 from orchestrator.ai.planner.ir import run as _run
 
 from . import env_stamp, pinned
+from orchestrator.ai.planner.ir import execute as _ir_execute
 from . import route_rule as _route_rule
 from .author_probe import _OLLAMA, _OLLAMA_CTX, _messages
 from .seams import seams as _seams
@@ -269,15 +270,25 @@ def main(argv=None) -> int:
                     pred = _goal_predicate(prog)
                     derived = _derive(pred, sel, res.get("scope"), WANT) if pred else None
                     if derived:
+                        # AND THE WORK THAT NEVER RAN, exactly as the whole-program probe
+                        # does it. A failed predicate abandons every statement after it, so
+                        # replaying only the correction leaves that work undone while the
+                        # predicate reports the goal as held. This probe ran
+                        # `{"body": derived}` for a few hours after the whole-program path
+                        # stopped doing so — a stale twin opened in the same session that
+                        # closed three others, which is how ordinary the defect is.
+                        fix = _ir_execute.follow_up(res, derived)
+                        tail = len(res.get("remaining") or [])
                         if log:
-                            log(f"derived {len(derived)} statement(s) to close the goal")
+                            log(f"derived {len(derived)} statement(s) to close the goal"
+                                + (f", plus {tail} that never ran" if tail else ""))
                         try:
                             # A DERIVED CORRECTION CARRIES NO VERDICT BY CONSTRUCTION — it
                             # is the difference, not a program — so it needs the same
                             # granted consent the whole-program probe gives it. Asking the
                             # deriver to vouch for itself is the second bad draw in another
                             # costume.
-                            _run({"body": derived}, world.execute, select=sel, holds=holds,
+                            _run(fix, world.execute, select=sel, holds=holds,
                                  known_names=world.names(), consent=True, intent=WANT)
                         except Exception:
                             pass
