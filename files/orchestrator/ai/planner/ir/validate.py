@@ -541,6 +541,7 @@ def validate(program: Any, known_tools=None, known_names=None,
     # cannot pass this point unless the thing is true. Only the validator forbade it. So
     # this is a restriction being removed, not a feature being added.
     problems += _check_precondition_is_not_the_goal(body)
+    problems += _check_used_before_created(body, known_names)
     return (not problems), problems
 
 
@@ -1137,3 +1138,112 @@ def kinds_used(body: List[Any]) -> List[str]:
             if k and k not in seen:
                 seen.append(k)
     return seen
+
+
+def _created_here(st: Any) -> List[str]:
+    """The literal resource names this ONE statement brings into existence.
+
+    Two ways a program creates something, and both have to count or the check reports a
+    use-before-create for a name that was in fact created: `new`, whose name may be given
+    outright in its args, and a direct call to a creator tool, whose name lives in the
+    argument the manifest names. Read off `_creator_tools()` so a kind added to the
+    manifest is covered with no edit here.
+    """
+    if not isinstance(st, dict):
+        return []
+    out: List[str] = []
+    if st.get("op") == "new":
+        kind = config.KINDS.get(st.get("kind")) or {}
+        key = kind.get("key", "name")
+        given = (st.get("args") or {}).get(key)
+        if isinstance(given, str) and not given.startswith(config.SIGIL):
+            out.append(given)
+    # BOTH SHAPES. A `call` statement carries `tool`/`args` itself; a `foreach` carries
+    # them under `call`, one per member. Reading only the nested form missed every plain
+    # call, which is the commoner half.
+    for holder in (st, st.get("call") if isinstance(st.get("call"), dict) else None):
+        if not holder:
+            continue
+        made = _creator_tools().get(holder.get("tool"))
+        if made:
+            _kind, key = made
+            given = (holder.get("args") or {}).get(key)
+            if isinstance(given, str) and not given.startswith(config.SIGIL):
+                out.append(given)
+    return out
+
+
+def _check_used_before_created(body: Any, known_names: Optional[set]) -> List[str]:
+    """A statement that names a resource this program only creates LATER.
+
+    RUNG 3, measured 2026-07-30. The author wrote, in this order:
+
+        STORE lab = NEW network;
+        add_vm_to_network(net_name: $lab, vm_name: web);
+        STORE web = NEW vm(name: web, os_type: linux);
+
+    It VALIDATED — three statements, no complaint — and then failed at run time with
+    "no VM named web". The reference ordering rules already cover `$refs`, which is why
+    `$lab` is safe here; a LITERAL name had nothing checking it, because in general a bare
+    name may perfectly well refer to something the lab already holds.
+
+    What makes this decidable is the pair of facts together: the name is NOT in the world
+    (`known_names`), and this same program creates it further down. Neither alone is a
+    defect — a literal naming an existing machine is ordinary, and creating something late
+    is fine if nothing used it earlier. Both at once can only be the statements being in
+    the wrong order.
+
+    NAMES ONLY, deliberately. Deciding which ARGUMENT of a tool refers to a resource would
+    need an arg-to-kind vocabulary that does not exist and that this language keeps trying
+    to delete; matching on the name itself needs nothing but the program. The cost of the
+    looser test is a false positive when a literal string coincidentally equals a
+    later-created name, and the price of that is one repair round.
+    """
+    from .consent import _walk as _consent_walk
+    stmts = list(_consent_walk(body))
+    creations: Dict[str, int] = {}
+    for i, st in enumerate(stmts):
+        for name in _created_here(st):
+            creations.setdefault(name, i)
+    if not creations:
+        return []
+    have = {str(n) for n in (known_names or ())}
+    problems: List[str] = []
+    for i, st in enumerate(stmts):
+        made = set(_created_here(st))
+        for word in _literals(st):
+            at = creations.get(word)
+            if at is None or at <= i or word in have or word in made:
+                continue
+            problems.append(
+                f"statement {i + 1}: names {word!r}, which this program does not create "
+                f"until statement {at + 1} and the lab does not already hold — move the "
+                f"creation before the statement that uses it")
+    return problems
+
+
+def _literals(st: Any) -> set:
+    """Every bare string value in one statement, references excluded.
+
+    A `$reference` is already policed by the binding rules, and a name carrying the sigil
+    is a different question — this looks only at plain words, which is where the ordering
+    defect hides.
+    """
+    out: set = set()
+
+    def walk(x: Any) -> None:
+        if isinstance(x, str):
+            if x and not x.startswith(config.SIGIL):
+                out.add(x)
+        elif isinstance(x, dict):
+            for v in x.values():
+                walk(v)
+        elif isinstance(x, (list, tuple)):
+            for v in x:
+                walk(v)
+
+    for key, value in (st or {}).items() if isinstance(st, dict) else ():
+        if key in ("op", "kind", "var"):
+            continue                     # structure, not a reference to a resource
+        walk(value)
+    return out

@@ -348,6 +348,44 @@ def test_a_standing_goal_below_its_granted_authority_is_raised():
           intent.promote(loop_local, intent.ACHIEVE) == (loop_local, None))
 
 
+def test_a_statement_may_not_name_what_the_program_creates_later():
+    """RUNG 3, measured 2026-07-30. The author wrote, in this order:
+
+        STORE lab = NEW network;
+        add_vm_to_network(net_name: $lab, vm_name: web);
+        STORE web = NEW vm(name: web, os_type: linux);
+
+    Three statements, VALID, no complaint — and then "no VM named web" at run time. The
+    `$ref` rules already cover `$lab`; a LITERAL name had nothing checking it, because a
+    bare name may perfectly well refer to something the lab already holds.
+
+    What makes it decidable is the PAIR of facts: the name is not in the world AND this
+    same program creates it further down. Neither alone is a defect — naming an existing
+    machine is ordinary, and creating something late is fine if nothing used it earlier.
+    """
+    ordered = [{"op": "new", "var": "lab", "kind": "network"},
+               {"op": "new", "var": "web", "kind": "vm",
+                "args": {"name": "web", "os_type": "linux"}},
+               {"op": "call", "tool": "add_vm_to_network",
+                "args": {"net_name": "$lab", "vm_name": "web"}}]
+    backwards = [ordered[0], ordered[2], ordered[1]]
+
+    ok, problems = validate({"body": backwards}, known_names=set())
+    late = [p for p in problems if "until statement" in p]
+    check("using a name the program creates later is refused", bool(late))
+    check("and the objection says WHERE the creation is, so it can be moved",
+          late and "statement 3" in late[0])
+    check("the same statements in the right order validate",
+          validate({"body": ordered}, known_names=set())[0] is True)
+
+    # A bare name is ordinary language for something that already exists — the check must
+    # not fire on it, or every program that touches the lab it was given gets rejected.
+    standing = {"body": [{"op": "call", "tool": "add_vm_to_network",
+                          "args": {"net_name": "core", "vm_name": "web"}}]}
+    check("naming a machine the lab ALREADY holds is left alone",
+          validate(standing, known_names={"web", "core"})[0] is True)
+
+
 def test_a_repair_may_not_answer_an_objection_by_deleting_the_logic():
     """Rung 11, measured 2026-07-30. The author wrote an `else` as its own statement; the
     objection said so correctly and asked for it to be RESTRUCTURED. The repair came back
