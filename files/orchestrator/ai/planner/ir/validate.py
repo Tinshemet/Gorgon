@@ -1222,28 +1222,51 @@ def _check_used_before_created(body: Any, known_names: Optional[set]) -> List[st
     return problems
 
 
-def _literals(st: Any) -> set:
-    """Every bare string value in one statement, references excluded.
+def _value_attributes() -> set:
+    """Attribute names that carry a VALUE rather than identify a resource.
 
-    A `$reference` is already policed by the binding rules, and a name carrying the sigil
-    is a different question — this looks only at plain words, which is where the ordering
-    defect hides.
+    Every kind's `attrs` and `aliases`, MINUS every kind's `key`. The subtraction is the
+    whole point: `name` and `net_name` are attributes AND identities, so they must stay —
+    `add_vm_to_network(net_name: core)` really does name a network. What comes out is
+    `label`, `tag`, `status`, `os_type` and friends, which name nothing.
+
+    RUNG 6 IS WHY. `add_label(name: $item, label: red)` and, seven statements later,
+    `NEW network(net_name: red)`. Matching bare strings saw one `red` and reported the
+    label as a use-before-create of the network. A label and a resource are not in the same
+    namespace, and the manifest already says which is which.
+    """
+    keys = {spec.get("key") for spec in config.KINDS.values() if spec.get("key")}
+    out: set = set()
+    for spec in config.KINDS.values():
+        out |= {a for a in (spec.get("attrs") or [])}
+        out |= set((spec.get("aliases") or {}).keys())
+    return out - keys
+
+
+def _literals(st: Any) -> set:
+    """Every bare string value in one statement that could NAME a resource.
+
+    A `$reference` is already policed by the binding rules. A value sitting under an
+    attribute key is a value, not a name — see `_value_attributes`. What is left is the
+    place an ordering defect can actually hide.
     """
     out: set = set()
+    skip = _value_attributes()
 
     def walk(x: Any) -> None:
         if isinstance(x, str):
             if x and not x.startswith(config.SIGIL):
                 out.add(x)
         elif isinstance(x, dict):
-            for v in x.values():
-                walk(v)
+            for k, v in x.items():
+                if k not in skip:
+                    walk(v)
         elif isinstance(x, (list, tuple)):
             for v in x:
                 walk(v)
 
     for key, value in (st or {}).items() if isinstance(st, dict) else ():
-        if key in ("op", "kind", "var"):
-            continue                     # structure, not a reference to a resource
+        if key in ("op", "kind", "var") or key in skip:
+            continue                     # structure, or a value rather than a name
         walk(value)
     return out
