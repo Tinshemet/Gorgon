@@ -98,3 +98,37 @@ def offered() -> Dict[str, List[str]]:
     agreements drift apart.
     """
     return {kind: sorted(methods(kind)) for kind in config.KINDS if methods(kind)}
+
+
+def wanted(fragment: str, offered: Optional[List[str]] = None,
+           whole: bool = True) -> bool:
+    """Is this prompt fragment worth sending to a call that can emit `offered`?
+
+    THE BLINDER, as data. `config.PROMPT_WHEN` tags each fragment with the ops it is about
+    (`needs`) and whether it only makes sense for a WHOLE program (`whole`). A fragment with
+    no tag is unconditional, so an untagged manifest behaves exactly as before.
+
+    IT IS NOT ONLY ABOUT SIZE, and the case that proves it is `shape`: *"A GOOD PROGRAM USES
+    ALL THREE ... Reach for all three unless the operator asked for less."* Staged lowering
+    appends *"Write EXACTLY ONE statement, and it is a `call`"* to that same prompt. The
+    author is told to reach for three operators it has no branch for, in the sentence before
+    being told to write one. That is a CONTRADICTION being sent 153 times a run, not a
+    rounding error — and `ordering` ("order matters") says nothing at all to a single
+    statement.
+
+    So blinders remove instructions that are ACTIVELY WRONG for the call being made. The
+    measured cost of getting this backwards is on record: one construct described but not
+    offered took the ladder from 64/78 to 48/78, with model-layer failures going 1 -> 12.
+
+    One reader, because the two prompt builders must agree about what a tag means or the
+    tags become a third vocabulary — which is the thing this language keeps deleting.
+    """
+    rule = (config.PROMPT_WHEN or {}).get(fragment)
+    if not rule:
+        return True
+    if rule.get("whole") and not whole:
+        return False
+    needs = rule.get("needs")
+    if needs and offered is not None and not (set(needs) & set(offered)):
+        return False
+    return True

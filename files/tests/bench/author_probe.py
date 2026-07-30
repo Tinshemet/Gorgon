@@ -50,6 +50,7 @@ from .ladder import BENCH_MODEL
 from .mutate import MUTATIONS, apply as _mutate
 from .rungs import RUNGS
 from orchestrator.ai.planner.ir import execute as _ir_execute
+from orchestrator.ai.planner.ir import methods as _methods_mod
 from .sim_world import SimWorld
 # THE SEAMS LIVE IN `seams.py` — one authority. They were defined here and, in a
 # weaker form, a second time in `run_program`, where the missing `not`/`in`/`any`/
@@ -348,6 +349,14 @@ def _tool_lines() -> str:
     return "\n".join(out)
 
 
+
+def _blinded(names, offered, whole):
+    """The prompt fragments worth sending, joined. `ir.methods.wanted` owns the rule, so
+    the bench and production builders cannot read the same tag two ways."""
+    out = [config.PROMPT[n] for n in names if _methods_mod.wanted(n, offered, whole)]
+    return ("\n".join(out) + "\n\n") if out else ""
+
+
 def _system(want: str = None, ops: Sequence[str] = None) -> str:
     """The author's standing instructions.
 
@@ -374,9 +383,14 @@ def _system(want: str = None, ops: Sequence[str] = None) -> str:
     # already decided it, so narrowing costs no extra call. Intersected with the
     # master, never replacing it, so a blinder can only narrow and can never offer an
     # op the operator's intent forbids.
+    # `ops` is rebound below to the joined doc text, so capture the blinder first.
+    # `_whole` is False exactly when this call was narrowed to fewer ops than the intent
+    # allows — i.e. a single leaf — which is what decides the whole-program-only fragments.
+    _blind = None if ops is None else set(ops)
     _offer = master.ops(want)
-    if ops is not None:
-        _offer = [o for o in _offer if o in set(ops)]
+    if _blind is not None:
+        _offer = [o for o in _offer if o in _blind]
+    _whole = _blind is None or len(_offer) > 1
     ops = "\n".join(f"  {op:8}— {config.OPS[op]['doc']}" for op in _offer)
     try:
         from executor.command_catalog import REQUIRED_FIELDS
@@ -414,10 +428,8 @@ def _system(want: str = None, ops: Sequence[str] = None) -> str:
             f"Resource kinds:\n{kinds}\n\n"
             f"ENSURE predicates — the ONLY things a postcondition may be built from. A "
             f"predicate is a check, never a loop or a call:\n{preds}\n\n"
-            f"{config.PROMPT['reference']}\n{config.PROMPT['ordering']}\n"
-            f"{config.PROMPT['grounding']}\n\n"
-            f"{config.PROMPT['shape']}\n\n"
-            f"Tools, with the arguments each one REQUIRES:\n{_tool_lines()}\n\n"
+            + _blinded(("reference", "ordering", "grounding", "shape"), _offer, _whole)
+            + f"Tools, with the arguments each one REQUIRES:\n{_tool_lines()}\n\n"
             f"NEW supplies the resource's own name; pass everything else the creator "
             f"needs in args, e.g. NEW vm(os_type: linux)."
             + (f"\n\n{_intent.instruction(want)}" if want else ""))

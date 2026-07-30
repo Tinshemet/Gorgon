@@ -67,6 +67,10 @@ SANITIZE   = _c("sanitize")        # artifact kinds the sanitiser removes -> {se
 KINDS      = _c("kinds")           # THE RESOURCE MANIFEST: kind -> {package, create, list, key, attrs}
 PREDICATES = _c("predicates")      # shape -> {source, operand, comparators, doc}
 PROMPT     = _c("prompt")          # every string the model is shown
+# WHEN each fragment is worth sending — `needs` (any of these ops offered) and
+# `whole` (only when authoring a whole program). A fragment with no entry is
+# unconditional, so silence keeps today's behaviour.
+PROMPT_WHEN = _c("prompt_when")
 SCHEMA     = _c("schema")          # tool-schema knobs
 AUTHORING  = _c("authoring")       # "program" (one tool) or "statements" (one per op)
 INTENT     = _c("intent")          # how the OPERATOR says check-vs-bring-about (ir/intent.py)
