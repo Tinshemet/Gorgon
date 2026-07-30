@@ -19,6 +19,7 @@ so an absent fact never becomes a silent restriction.
 from typing import Any, Dict, List, Optional, Sequence
 
 from . import config, master
+from . import methods as _methods
 
 
 def select_spec(depth: int = 1) -> Dict[str, Any]:
@@ -157,6 +158,24 @@ def _predicate_property() -> Dict[str, Any]:
                           "description": f"{'/'.join(by_arity['many'])}: "
                                          f"two or more checks to combine"})
         props["of"] = forms[0] if len(forms) == 1 else {"anyOf": forms}
+    # THE RECEIVER, so a method can actually be WRITTEN. A construct the schema never
+    # describes is one the model never emits — measured on `of`, whose absence cost the
+    # tree path its root verdict on three rungs while every other layer accepted it fine.
+    # Medusa classes would have landed in exactly that state: manifest, validator,
+    # renderer and executor all agreeing about `$lab.reach()`, and no way to say it.
+    #
+    # Described from the manifest's own `receivers`, so a kind or method added to the JSON
+    # is offered here without an edit.
+    _owned = _methods.offered()
+    if _owned:
+        _spellings = "; ".join(f"a {k} answers {', '.join(ms)}"
+                               for k, ms in _owned.items())
+        props["on"] = {"type": "string", "pattern": r"^\$[A-Za-z_][A-Za-z0-9_]*$",
+                       "description": ("ask this check OF one thing you bound, instead of "
+                                       "over a select: {\"shape\":\"reach\",\"on\":\"$lab\"}"
+                                       " is $lab.reach(). " + _spellings +
+                                       ". A machine answers for itself; a network answers "
+                                       "for all of its members.")}
     prop["properties"] = props
     if config.SCHEMA.get("predicate_required"):
         prop["required"] = ["shape"]
@@ -370,6 +389,17 @@ def system_prompt(tools, want: Optional[str] = None,
         example = (f'{{"shape":"{name}","{operand}":["$a","$b"]}}' if operand == "sets"
                    else f'{{"shape":"{name}","select":{{"kind":"vm","tag":"x"}},"{comps.split("/")[0]}":N}}')
         lines.append(f"    {example}   — {spec['doc']}")
+    # METHODS, or the schema offers a construct nothing tells the author about. That is the
+    # `of` defect exactly — described nowhere, so never written, while every other layer
+    # accepted it. Listed from the manifest, so a method added to the JSON is described
+    # here with no edit.
+    for kind, names in _methods.offered().items():
+        for name in names:
+            # `"on": "$the_network"` and not `"$network"`: a placeholder that looks like a
+            # real variable gets COPIED. The doc beside it carries the worked spelling.
+            lines.append(f"    a {kind} answers {name}(): "
+                         f"{{\"shape\":\"{name}\",\"on\":\"$the_{kind}_you_bound\"}}"
+                         f"   — {_methods.doc(kind, name)}")
     lines += ["", p["reference"], p["ordering"], "",
               f"{p['tools_header']} {', '.join(tools)}.", p["tools_footer"]]
     # THE OPERATOR'S INTENT, AND PRODUCTION WAS NOT BEING TOLD IT. `intent.instruction`
