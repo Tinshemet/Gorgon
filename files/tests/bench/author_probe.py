@@ -50,7 +50,6 @@ from .ladder import BENCH_MODEL
 from .mutate import MUTATIONS, apply as _mutate
 from .rungs import RUNGS
 from orchestrator.ai.planner.ir import execute as _ir_execute
-from orchestrator.ai.planner.ir import methods as _methods_mod
 from .sim_world import SimWorld
 # THE SEAMS LIVE IN `seams.py` — one authority. They were defined here and, in a
 # weaker form, a second time in `run_program`, where the missing `not`/`in`/`any`/
@@ -353,7 +352,7 @@ def _tool_lines() -> str:
 def _blinded(names, offered, whole):
     """The prompt fragments worth sending, joined. `ir.methods.wanted` owns the rule, so
     the bench and production builders cannot read the same tag two ways."""
-    out = [config.PROMPT[n] for n in names if _methods_mod.wanted(n, offered, whole)]
+    out = [config.PROMPT[n] for n in names if config.wanted(n, offered, whole)]
     return ("\n".join(out) + "\n\n") if out else ""
 
 

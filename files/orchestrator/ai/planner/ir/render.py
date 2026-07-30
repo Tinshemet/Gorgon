@@ -242,14 +242,6 @@ def _pred(p) -> str:
     spec = config.PREDICATES.get(shape)
     if spec is None:
         return f"<unknown check {shape!r}>"
-    # A METHOD reads as one — `$lab.reach()` — because that is the whole point of asking it
-    # of an object: the receiver is visible, so a reader never has to work out which
-    # machines a check covers. Printed before the operand branches below, since a method
-    # has a receiver INSTEAD of a query.
-    if p.get("on") is not None:
-        used = next((c for c in (spec.get("comparators") or {}) if c in p), None)
-        tail = f" {spec['comparators'][used]} {p[used]}" if used else ""
-        return f"{p['on']}.{shape}(){tail}"
     # NOT / AND / OR all take parentheses, so a reader never has to know precedence —
     # there is none to know. AND(a, b) reads the way NOT(a) does.
     if spec.get("arity") == "value":

@@ -317,14 +317,7 @@
         "server",
         "host",
         "resource"
-      ],
-      "methods": {
-        "reach": {
-          "answers": "verdict",
-          "doc": "can this machine be pinged. Asked OF one machine: `$web.reach()`.",
-          "source": "findings"
-        }
-      }
+      ]
     },
     "network": {
       "package": "core",
@@ -346,14 +339,7 @@
       "nouns": [
         "net",
         "subnet"
-      ],
-      "methods": {
-        "reach": {
-          "answers": "verdict",
-          "doc": "are all of this network's members connected to it and answering. Asked OF one network: `$lab.reach()`.",
-          "source": "findings"
-        }
-      }
+      ]
     },
     "snapshot": {
       "package": "core",

@@ -21,7 +21,7 @@ The production pair in `planner/program.py` is deliberately NOT unified with thi
 reads different sources. What must not drift is the QUESTION the two answer, and
 `test_medusa_invariants` holds them to that directly, query by query.
 """
-from orchestrator.ai.planner.ir import config, methods as _methods, observe, refs
+from orchestrator.ai.planner.ir import config, observe, refs
 
 
 def seams(world):
@@ -105,61 +105,7 @@ def seams(world):
                 if _matches(n, vm, sel, scope)
                 and not (carve and _matches(n, vm, carve, scope))]
 
-    def _class_of(name):
-        """Which class a bound name belongs to, asked of the world rather than guessed."""
-        if name in world.nets:
-            return "network"
-        if name in world.vms:
-            return "vm"
-        return None
-
-    def _method(pred, scope):
-        """A predicate asked OF an instance — dispatched on the receiver's class.
-
-        THIS IS THE SPLIT #38 DISSOLVED INTO. One `reach` was doing two jobs, so two
-        correct implementations could disagree: production answered per-member liveness,
-        the bench answered shared-topology. They are two METHODS, and which one runs is
-        decided by what you asked.
-
-            $web.reach()    can this machine be pinged
-            $lab.reach()    are all this network's members connected AND answering
-        """
-        who = refs.resolve(pred["on"], scope or {})
-        if isinstance(who, str) and refs.names(who):
-            return False, f"{pred['on']} is not bound, so there is nothing to ask"
-        name = who if isinstance(who, str) else None
-        if name is None:
-            return False, f"{pred['on']} holds a set; a method is asked of ONE thing"
-        kind = _class_of(name)
-        if kind is None:
-            return False, f"there is no vm or network named {name!r}"
-        if not _methods.has(kind, pred.get("shape")):
-            return False, (f"a {kind} has no {pred.get('shape')}() — it answers "
-                           f"{', '.join(sorted(_methods.methods(kind))) or 'nothing'}")
-        if kind == "vm":
-            # A MACHINE'S OWN REACH IS ITS LIVENESS, read from the findings ledger and
-            # never inferred from a tool's success flag — unverified is not done.
-            state = observe.value(world.findings, "vm", "alive", name)
-            if state == observe.unknown():
-                return False, f"{name} has not been probed, so its reach is unestablished"
-            return state != observe.FALSE, f"{name} {'answered' if state != observe.FALSE else 'did not answer'}"
-        members = sorted(n for n, vm in world.vms.items() if name in vm.get("nets", set()))
-        if not members:
-            return False, f"network {name} has no members, so nothing reaches anything"
-        unknown = [m for m in members
-                   if observe.value(world.findings, "vm", "alive", m) == observe.unknown()]
-        if unknown:
-            return False, (f"{len(unknown)} of {len(members)} on {name} have not been "
-                           f"probed ({', '.join(unknown[:3])})")
-        dead = [m for m in members
-                if observe.value(world.findings, "vm", "alive", m) == observe.FALSE]
-        if dead:
-            return False, f"no answer from {', '.join(dead)} on {name}"
-        return True, f"all {len(members)} member(s) of {name} answered"
-
     def holds(pred, scope):
-        if _methods.is_method_call(pred):
-            return _method(pred, scope)
         shape = pred.get("shape")
         if shape == "count":
             n = len(select(pred.get("select") or {}))

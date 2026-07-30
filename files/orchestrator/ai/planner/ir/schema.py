@@ -19,7 +19,6 @@ so an absent fact never becomes a silent restriction.
 from typing import Any, Dict, List, Optional, Sequence
 
 from . import config, master
-from . import methods as _methods
 
 
 def select_spec(depth: int = 1) -> Dict[str, Any]:
