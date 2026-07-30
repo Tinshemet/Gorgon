@@ -341,24 +341,15 @@ def main():
 
     THE LIST WAS THE BUG, and it bit here on 2026-07-30 exactly as it had bitten
     `test_medusa_invariants` the day before: three checks were added for the goal
-    comparison and none of them ran, because the hand-maintained tuple below did not
-    mention them. The file reported 55/55 and looked green.
+    comparison and none of them ran, because the hand-maintained tuple did not mention
+    them. The file reported 55/55 and looked green.
 
     That is this suite's OWN rule turned on itself — *a cell that stopped being measured
-    must never read as a cell that stopped failing* — and it is the codebase's oldest
-    failure mode, the one `run_all.py` exists for. Discovery removes the step a human has
-    to remember.
+    must never read as a cell that stopped failing*. The loop lives in `tests/_suite.py`
+    now, once, because pasting it per file is what let it happen a third time.
     """
-    import inspect as _inspect  # noqa: F401
-    _mod = sys.modules[__name__]
-    _found = [v for k, v in vars(_mod).items()
-              if k.startswith("test_") and callable(v)]
-    _found.sort(key=lambda f: f.__code__.co_firstlineno)
-    for fn in _found:
-        print(f"\n── {fn.__name__}")
-        fn()
-    print(f"\n{_PASS}/{_PASS + _FAIL} passed  ({len(_found)} tests)")
-    sys.exit(1 if _FAIL else 0)
+    from tests import _suite
+    sys.exit(_suite.run(sys.modules[__name__]))
 
 
 if __name__ == "__main__":

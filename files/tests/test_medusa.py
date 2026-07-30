@@ -297,6 +297,57 @@ def test_intent_is_enforced_before_anything_runs():
           intent.resolve("do something vague") == intent.FETCH)
 
 
+def test_a_standing_goal_below_its_granted_authority_is_raised():
+    """The mirror of the check above. `violations` refuses a program reaching ABOVE its
+    rung; `promote` lifts one sitting BELOW it, and only the standing goal.
+
+    MEASURED CAUSE, 2026-07-30: granted ACHIEVE the model writes ENSURE for the goal — a
+    CHECK where it was licensed to CORRECT. `execute` reports a failed non-achieve as
+    `unsatisfied`, the deriver fires only for `unachieved`, so the convergence path is
+    unreachable and the cell fails every run. That is para:7.
+    """
+    goal_pred = {"shape": "count", "select": {"kind": "vm", "label": "prod"}, "eq": 3}
+    checked = {"body": [{"op": "ensure", "predicate": goal_pred}]}
+
+    promoted, note = intent.promote(checked, intent.ACHIEVE)
+    check("granted ACHIEVE, a standing ENSURE is raised to ACHIEVE",
+          promoted["body"][0]["op"] == intent.ACHIEVE)
+    check("and the rewrite is REPORTED, not silent", bool(note))
+    check("the authored program is left untouched",
+          checked["body"][0]["op"] == intent.ENSURE)
+
+    check("granted only ENSURE, nothing is raised — that would be the trespass",
+          intent.promote(checked, intent.ENSURE) == (checked, None))
+    check("granted only FETCH either",
+          intent.promote(checked, intent.FETCH) == (checked, None))
+
+    # A PRECONDITION IS NOT THE GOAL. Promoting every check would license acting on
+    # something the author meant only to verify — inferring intent from wording again.
+    with_pre = {"body": [{"op": "ensure", "predicate": {"shape": "count",
+                                                        "select": {"kind": "vm"}, "gte": 1}},
+                         {"op": "achieve", "predicate": goal_pred}]}
+    before = json.dumps(with_pre)
+    check("a mid-program ensure beside a real goal is left alone",
+          intent.promote(with_pre, intent.ACHIEVE)[1] is None
+          and json.dumps(with_pre) == before)
+
+    # The standing goal is the rule's other half, and both halves cost a rung to learn.
+    check("an achieve outranks an ensure wherever it sits",
+          intent.standing_goal(with_pre)["op"] == intent.ACHIEVE)
+    last_wins = {"body": [{"op": "ensure", "predicate": {"shape": "count",
+                                                         "select": {"kind": "vm"}, "gte": 1}},
+                          {"op": "ensure", "predicate": goal_pred}]}
+    check("among ensures the LAST wins — a precondition is not what a program was for",
+          intent.standing_goal(last_wins)["predicate"] is goal_pred)
+    loop_local = {"body": [{"op": "foreach", "in": "$vms", "then": [
+        {"op": "ensure", "predicate": {"shape": "count",
+                                       "select": {"kind": "vm", "name": "$item"}, "eq": 1}}]}]}
+    check("a loop-local predicate cannot stand for the program",
+          intent.standing_goal(loop_local) is None)
+    check("and so it is not promoted either",
+          intent.promote(loop_local, intent.ACHIEVE) == (loop_local, None))
+
+
 def test_an_ungrounded_program_asks_first():
     w = _world()
     acting = {"body": [{"op": "new", "var": "x", "kind": "vm",
@@ -1529,54 +1580,17 @@ def test_render_never_raises_on_malformed_input():
 
 
 def main():
-    for fn in (test_guest_ping_records_the_answer,
-               test_observed_is_three_valued,
-               test_fact_key_uses_the_kinds_key,
-               test_queryable_is_one_authority,
-               test_validator_accepts_and_polices_observed,
-               test_the_loop_probes_the_ledger_remembers_the_query_reads,
-               test_a_program_that_never_probes_cannot_close_green,
-               test_observed_survives_the_carve_out,
-               test_ensure_verdict_stands_over_a_tolerated_failure,
-               test_composites_evaluate,
-               test_graft_binds_per_iteration_and_does_not_outlive_the_loop,
-               test_intent_is_enforced_before_anything_runs,
-               test_an_ungrounded_program_asks_first,
-               test_derivation_closes_a_countable_gap,
-               test_amount_creates_the_shortfall_and_never_a_negative,
-               test_a_set_cannot_sit_where_one_value_belongs,
-               test_the_seam_does_not_raise_on_a_non_scalar_filter,
-               test_the_authors_own_name_wins_over_the_minted_one,
-               test_an_attribute_with_a_closed_vocabulary_is_policed,
-               test_the_objection_names_the_statement_not_the_tool,
-               test_a_loop_inside_a_loop_is_refused,
-               test_not_accepts_the_shape_its_own_schema_asks_for,
-               test_an_empty_then_is_told_it_is_an_unstated_inversion,
-               test_the_sanitiser_drops_only_what_could_never_run,
-               test_the_sanitiser_reaches_the_reply_not_just_the_program,
-               test_achieve_may_change_the_world_and_ensure_may_not,
-               test_new_is_for_what_does_not_exist_yet,
-               test_every_few_shot_example_is_a_valid_program,
-               test_the_grader_finds_a_verdict_nested_in_a_loop,
-               test_the_loop_variable_pins_exactly_one_member,
-               test_is_on_the_loop_member_is_refused,
-               test_new_args_are_reference_checked_like_a_calls,
-               test_the_operators_intent_reaches_the_runtime,
-               test_a_name_you_can_bind_is_a_name_you_can_read,
-               test_new_vouches_for_what_it_made,
-               test_mutations_preserve_the_goal,
-               test_creating_the_same_thing_twice_is_refused,
-               test_a_dotted_path_needs_a_grafted_result,
-               test_a_legal_predicate_renders_legibly,
-               test_the_repair_budget_carries_distinct_objections,
-               test_a_select_can_name_its_members,
-               test_the_harness_can_close_a_named_member_goal,
-               test_the_goal_cannot_be_its_own_precondition,
-               test_render_never_raises_on_malformed_input):
-        print(f"\n── {fn.__name__}")
-        fn()
-    print(f"\n{_PASS}/{_PASS + _FAIL} passed")
-    sys.exit(1 if _FAIL else 0)
+    """Every `test_*` in this module, in definition order — DISCOVERED, not listed.
+
+    THE LIST WAS THE BUG, and it bit here on 2026-07-30 for the third time in three days,
+    after being fixed twice by pasting a discovery loop into one file. A test added for the
+    intent promotion never ran, and this suite reported the SAME 415/415 it had reported
+    before that test existed. An unchanged total is the only symptom there is.
+
+    So the loop lives in `tests/_suite.py` now, once. See its docstring for all three.
+    """
+    from tests import _suite
+    sys.exit(_suite.run(sys.modules[__name__]))
 
 
 if __name__ == "__main__":

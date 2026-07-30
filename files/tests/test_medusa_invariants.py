@@ -1038,20 +1038,11 @@ def main():
     PRINTS, so they could not fail there either. An invariant that silently never executes
     is worse than no invariant, because the file reads as though the property is guarded.
 
-    That is this codebase's oldest failure mode in a new place — *a suite that stopped
-    being mentioned stopped being run* — and `run_all.py` exists because of it. Discovery
-    removes the step a human has to remember.
+    The loop itself then became the bug — pasted into a second suite, then needed in a
+    third. It lives in `tests/_suite.py` now, once.
     """
-    import inspect as _inspect
-    _mod = sys.modules[__name__]
-    _found = [v for k, v in vars(_mod).items()
-              if k.startswith("test_") and callable(v)]
-    _found.sort(key=lambda f: f.__code__.co_firstlineno)
-    for fn in _found:
-        print(f"\n── {fn.__name__}")
-        fn()
-    print(f"\n{_PASS}/{_PASS + _FAIL} passed  ({len(_found)} invariants)")
-    sys.exit(1 if _FAIL else 0)
+    from tests import _suite
+    sys.exit(_suite.run(sys.modules[__name__], "invariants"))
 
 
 if __name__ == "__main__":
