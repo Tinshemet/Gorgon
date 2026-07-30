@@ -902,6 +902,62 @@ def test_both_paths_offer_the_SAME_select():
           bool(pred["properties"]["select"].get("properties", {}).get("kind")))
 
 
+def test_the_quantifier_narrows_BOTH_paths_not_just_the_bench():
+    """E2. `master.ops` grew a `quantifier` argument and only `author_probe` passed it, so
+    the best discriminator measured — 15/16, against the atomicity router's 4/10 — narrowed
+    nothing on production or the tree path. Every surface now takes it, and this holds them
+    together the way `test_both_paths_offer_the_SAME_select` holds the select.
+    """
+    from orchestrator.ai.planner.ir import config as _c
+    from orchestrator.ai.planner.ir import lower as _lower
+    from orchestrator.ai.planner.ir import master as _m
+    from orchestrator.ai.planner.ir import schema as _s
+
+    # THE ONE NARROWING THE MANIFEST ACTUALLY DECLARES. `all`, `any` and `not` license
+    # every op, so `single` is the whole of the op-level payoff — see the note below.
+    check("single denies foreach at the master",
+          "foreach" not in _m.ops("achieve", "single")
+          and "foreach" in _m.ops("achieve"))
+
+    offered = _s.emit_program_tool("achieve", quantifier="single")
+    item = offered["function"]["parameters"]["properties"]["body"]["items"]
+    ops_in_schema = (set(item["properties"]["op"]["enum"]) if "properties" in item
+                     else {b["properties"]["op"]["const"] for b in item["oneOf"]})
+    check("and the production tool schema cannot express it either",
+          "foreach" not in ops_in_schema)
+
+    # THE PROMPT MUST NARROW WITH THE SCHEMA. Describing an op the decoder cannot emit is
+    # the four-way disagreement in miniature, and it spends the model's reasoning on a
+    # construct it will never produce.
+    prompt = _s.system_prompt([], "achieve", quantifier="single")
+    check("the prompt does not describe an op the schema withholds",
+          not any(line.strip().startswith("foreach") for line in prompt.splitlines()))
+
+    # AND IT REACHES THE LEAF DECODER, which is the surface where a quantifier is most at
+    # home: a leaf IS one clause, and the quantifier is a property of a clause.
+    check("a leaf may still be a call under single",
+          bool(_lower.leaf_schema("call", "achieve", quantifier="single")))
+    try:
+        _lower.leaf_schema("foreach", "achieve", quantifier="single")
+        check("a foreach leaf is refused under single", False)
+    except ValueError as e:
+        check("a foreach leaf is refused under single, and the message names why",
+              "single" in str(e))
+
+    # ABSENT MEANS ABSENT. An unsupplied fact must never become a silent restriction.
+    check("no quantifier narrows nothing",
+          _m.ops("achieve", None) == _m.ops("achieve"))
+
+    # WHAT IS NOT EXPRESSIBLE HERE, recorded so nobody reads E6's three claims as shipped.
+    # ALL-EXCEPT wanting `not` on the foreach, and NOT forcing a one-branch IF, are
+    # FIELD-level constraints; `master.ops` narrows OPS. Two thirds of the claimed payoff
+    # needs a mechanism that does not exist yet.
+    for q in ("all", "any", "not"):
+        check(f"{q} narrows no ops today, and the manifest is where that is declared",
+              set(_m.ops("achieve", q)) == set(_m.ops("achieve"))
+              and set(_c.QUANTIFIERS[q]["ops"]) >= set(_m.ops("achieve")))
+
+
 def main():
     """Every `test_*` in this module, in definition order — DISCOVERED, not listed.
 

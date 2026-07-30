@@ -202,7 +202,8 @@ def _from_field(doc: str, known: Optional[set]) -> Dict[str, Any]:
             "description": doc + f" It must already exist — one of: {', '.join(names)}."}
 
 
-def _statement_flat(want: Optional[str] = None, known: Optional[set] = None) -> Dict[str, Any]:
+def _statement_flat(want: Optional[str] = None, known: Optional[set] = None,
+                    quantifier: Optional[str] = None) -> Dict[str, Any]:
     """One object, every field optional, only `op` required.
 
     Simple for the model to call and structurally useless: a `new` and an `ensure` are
@@ -211,13 +212,14 @@ def _statement_flat(want: Optional[str] = None, known: Optional[set] = None) -> 
     statements with no `op`. Kept as a knob because it is the SIMPLEST schema, and
     simplicity is what emission turned out to be sensitive to.
     """
-    props = {"op": {"type": "string", "enum": master.ops(want)}}
+    props = {"op": {"type": "string", "enum": master.ops(want, quantifier)}}
     for name in config.FIELDS:
         props[name] = _field(name, known)
     return {"type": "object", "properties": props, "required": ["op"]}
 
 
-def _statement_oneof(want: Optional[str] = None, known: Optional[set] = None) -> Dict[str, Any]:
+def _statement_oneof(want: Optional[str] = None, known: Optional[set] = None,
+                     quantifier: Optional[str] = None) -> Dict[str, Any]:
     """One branch per op, so a statement's type determines its fields.
 
     `op` is a const per branch, which both forces the discriminator to be present and
@@ -225,7 +227,7 @@ def _statement_oneof(want: Optional[str] = None, known: Optional[set] = None) ->
     so the two cannot describe different languages.
     """
     branches = []
-    for op in master.ops(want):
+    for op in master.ops(want, quantifier):
         spec = config.OPS[op]
         props = {"op": {"type": "string", "const": op, "description": spec["doc"]}}
         for name in spec["fields"]:
@@ -235,11 +237,18 @@ def _statement_oneof(want: Optional[str] = None, known: Optional[set] = None) ->
     return {"oneOf": branches}
 
 
-def emit_program_tool(want: Optional[str] = None, known: Optional[set] = None) -> Dict[str, Any]:
-    """The tool schema, assembled from the manifest and narrowed by the master."""
+def emit_program_tool(want: Optional[str] = None, known: Optional[set] = None,
+                      quantifier: Optional[str] = None) -> Dict[str, Any]:
+    """The tool schema, assembled from the manifest and narrowed by the master.
+
+    `quantifier` narrows the SAME way `want` does and for the same reason — it makes a
+    wrong program unrepresentable rather than rejected. It reached only the bench's
+    builder until 2026-07-30, so the best discriminator measured (15/16, against the
+    atomicity router's 4/10) narrowed nothing on the path production actually uses.
+    """
     form = config.SCHEMA.get("statement_form", "oneof")
-    item = (_statement_oneof(want, known) if form == "oneof"
-            else _statement_flat(want, known))
+    item = (_statement_oneof(want, known, quantifier) if form == "oneof"
+            else _statement_flat(want, known, quantifier))
     return {
         "type": "function",
         "function": {
@@ -258,7 +267,8 @@ def emit_program_tool(want: Optional[str] = None, known: Optional[set] = None) -
     }
 
 
-def system_prompt(tools, want: Optional[str] = None) -> str:
+def system_prompt(tools, want: Optional[str] = None,
+                  quantifier: Optional[str] = None) -> str:
     """What the model needs to know to write a program — ops, kinds, predicates, tools.
 
     Assembled from the manifest so the prompt cannot drift from what validate() accepts:
@@ -269,7 +279,9 @@ def system_prompt(tools, want: Optional[str] = None) -> str:
     """
     p = config.PROMPT
     lines = [p["intro"], "", p["statements_header"]]
-    for op in master.ops(want):
+    # NARROWED WITH THE SCHEMA, never apart from it. A prompt describing `new` while the
+    # decoder cannot emit it is the four-way disagreement in miniature.
+    for op in master.ops(want, quantifier):
         lines.append(f"  {op:8}— {config.OPS[op]['doc']}")
     lines += ["", "  " + p["select_hint"], "",
               "  ensure shapes (each names its `shape` and takes its operand under "
@@ -344,7 +356,8 @@ _STATEMENT_TOOLS = {
 }
 
 
-def statement_tools(want: Optional[str] = None) -> List[Dict[str, Any]]:
+def statement_tools(want: Optional[str] = None,
+                    quantifier: Optional[str] = None) -> List[Dict[str, Any]]:
     """One tool per op — flat, scalar, and small enough to actually get called.
 
     NOTE THE GAP, which narrowing by intent is what made visible: `_STATEMENT_TOOLS` above
@@ -354,7 +367,7 @@ def statement_tools(want: Optional[str] = None) -> List[Dict[str, Any]]:
     statements are permitted". Papering over it by handing back the unnarrowed set would
     offer `new` to an operator who asked to be told something.
     """
-    offered = set(master.ops(want))
+    offered = set(master.ops(want, quantifier))
     out = []
     for op, spec in _STATEMENT_TOOLS.items():
         if op not in offered:

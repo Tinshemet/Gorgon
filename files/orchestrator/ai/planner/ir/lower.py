@@ -163,7 +163,8 @@ def assemble(root: dict) -> dict:
 
 # ── PER-OPERATOR SCHEMA ─────────────────────────────────────────────────────────────────
 def leaf_schema(op: str, want: Optional[str] = None,
-                known: Optional[set] = None) -> Dict[str, Any]:
+                known: Optional[set] = None,
+                quantifier: Optional[str] = None) -> Dict[str, Any]:
     """The schema for a leaf that is known to be `op` — ONE branch, not eleven.
 
     Built from the same manifest rows as the whole-program schema, so a leaf cannot be
@@ -173,11 +174,18 @@ def leaf_schema(op: str, want: Optional[str] = None,
     Raises on an op the intent does not permit, rather than quietly returning an empty
     schema — a decoder handed nothing legal produces garbage, and it would look like a
     model failure.
+
+    `quantifier` narrows the same way `want` does, and on a LEAF it is a better fit than
+    anywhere else: a leaf is one clause, and the quantifier is a property OF a clause —
+    which is exactly the mismatch E3 records for the whole-program path, where one answer
+    has to cover a goal with several clauses in it. When the router refuses a leaf's op
+    the error now names both narrowings, because "not offered under intent achieve" is a
+    misleading thing to print when it was the quantifier that excluded it.
     """
-    allowed = master.ops(want)
+    allowed = master.ops(want, quantifier)
     if op not in allowed:
         raise ValueError(f"{op!r} is not offered under intent {want!r} "
-                         f"(allowed: {', '.join(allowed)})")
+                         f"quantifier {quantifier!r} (allowed: {', '.join(allowed)})")
     spec = config.OPS[op]
     props: Dict[str, Any] = {
         "op": {"type": "string", "const": op, "description": spec["doc"]}}
