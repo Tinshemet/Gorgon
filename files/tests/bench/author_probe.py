@@ -90,69 +90,20 @@ def _call_spec():
 
 
 def _select_spec(depth: int = 1):
-    """A select: the kind, plus whichever attributes that kind declares queryable, plus
-    the `not` carve-out.
+    """DELEGATED to `ir/schema.select_spec` since 2026-07-29 — this is now one line.
 
-    `not` was implemented in the validator and never offered here, so rung 8 — "every vm
-    except db" — could not be said. The author invented `name: '!db'`, a syntax that does
-    not exist, and was marked down for it. That is the recurring shape of every defect in
-    this probe: the language had the construct, the schema withheld it, and the model got
-    the blame. Depth-limited because a carve-out inside a carve-out is a double negative
-    nobody should write.
+    It lived here, and ONLY here, for its whole life. `ir/schema.py` serves production and
+    `lower.leaf_schema`, and on both of them `select` stayed the bare object the field
+    catalogue declares — so the tree path could not write a select that named anything
+    while this probe wrote them perfectly well, and rung 4 died on *"reach needs
+    `select`"* three times over. The reasoning, and the four defects that shaped it, moved
+    with the code.
+
+    `from` was already delegated in this direction, for the reason given at its call site:
+    the two surfaces cannot be allowed to answer differently. An invariant now holds them
+    to it rather than trusting that nobody edits one copy.
     """
-    props = {"kind": {"type": "string", "enum": list(config.KINDS)}}
-    # EVERY ATTRIBUTE WITH A CLOSED VOCABULARY IS OFFERED AS AN ENUM, so the decoder
-    # cannot invent a value. It did, repeatedly, and each time it looked like a model
-    # failure: `status = 'not running'` matched nobody and ran zero calls (rung 5), and
-    # `label = 'up'` was reached for because nothing said what `status` could be (rung
-    # 12). `values_for` covers registry attributes and observed ones alike, so a new
-    # constrained attribute is offered here by adding a manifest row and nothing else.
-    for kind, k in config.KINDS.items():
-        observed = config.observed(kind)
-        for attr in list(k["attrs"]) + list(observed):
-            if attr in props:
-                continue
-            spec = {"type": "string"}
-            values = config.values_for(kind, attr)
-            if values:
-                spec["enum"] = values
-            obs = observed.get(attr)
-            if obs:
-                # Observed attributes say where their answer comes from, because the
-                # third value is only usable if the author knows what fills it in.
-                spec["description"] = (
-                    f"{obs.get('doc', attr)} '{config.OBSERVED_UNKNOWN}' means nothing "
-                    f"has asked yet — call {obs.get('by', 'a probe')} first.")
-            props[attr] = spec
-    # MEMBERSHIP, offered on every attribute. Without it a PREDICATE can never speak
-    # about particular machines — `foreach` has `IN [a, b]` and a predicate takes a select
-    # and nothing else — so "make sure n1, n2 and n3 can all ping each other" had no
-    # expression, and the author invented four different syntaxes for it across one day.
-    for attr in [a for a in props if a != "kind"]:
-        scalar = props[attr]
-        props[attr] = {"anyOf": [
-            scalar,
-            {"type": "object",
-             "properties": {"in": {"anyOf": [
-                 {"type": "array", "items": {"type": "string"}, "minItems": 1},
-                 {"type": "string", "description": "a $set bound by fetch"}]}},
-             "required": ["in"],
-             "description": f"{attr} is ANY of these — written INCLUDE {attr} = [a, b, c]"}]}
-    if depth > 0:
-        inner = {a: v for a, v in props.items() if a != "kind"}
-        props["not"] = {"type": "object", "properties": inner,
-                        "minProperties": 1,
-                        "description": "EXCLUDE members matching these filters, e.g. "
-                                       "{\"name\": \"db\"} for 'every vm except db'"}
-        # GROUPS: OR and an explicit AND over whole filter sets. Depth-limited for the
-        # same reason the carve-out is — a group inside a group inside a group is not a
-        # query anyone should have to read.
-        for group, word in (("any", "OR"), ("all", "AND")):
-            props[group] = {"type": "array", "minItems": 2,
-                            "items": {"type": "object", "properties": inner,
-                                      "minProperties": 1},
-                            "description": f"filter sets combined with {word}"}
-    return {"type": "object", "properties": props, "required": ["kind"]}
+    return _ir_schema.select_spec(depth)
 
 
 def _field_schema(name: str, known=None):

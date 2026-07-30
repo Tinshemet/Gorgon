@@ -873,6 +873,35 @@ def test_both_schema_builders_offer_the_same_predicate_keys():
               (operand in mine) == (operand in theirs) or operand in mine)
 
 
+def test_both_paths_offer_the_SAME_select():
+    """ONE `select`, or the two paths are two languages.
+
+    It lived in `author_probe` alone for its whole life, so the whole-program probe could
+    write `every vm except db` and the tree path — which builds leaves from `ir/schema.py`
+    — got the bare object the field catalogue declares and could not name a set at all.
+    Rung 4 died on *"reach needs `select`"* three times over while the ladder, using the
+    other builder, wrote selects perfectly well.
+
+    Delegation is what fixes it; this is what KEEPS it fixed. `from` was already shared in
+    this direction and nothing held the two to it — which is exactly how `select` drifted
+    without anyone noticing.
+    """
+    import json as _json
+    from orchestrator.ai.planner.ir import schema as _ir_schema
+    from tests.bench.author_probe import _select_spec
+    check("the probe's select IS the ir schema's select",
+          _json.dumps(_select_spec(), sort_keys=True)
+          == _json.dumps(_ir_schema.select_spec(), sort_keys=True))
+    # AND IT REACHES THE LEAF DECODER, which is the surface that was actually starved.
+    from orchestrator.ai.planner.ir import lower as _lower
+    sel = _lower.leaf_schema("foreach", "achieve")["properties"]["select"]
+    check("a foreach leaf can name a kind", bool(sel.get("properties", {}).get("kind")))
+    check("a foreach leaf can write the carve-out", "not" in sel.get("properties", {}))
+    pred = _lower.leaf_schema("ensure", "achieve")["properties"]["predicate"]
+    check("an ensure leaf's predicate can name a kind",
+          bool(pred["properties"]["select"].get("properties", {}).get("kind")))
+
+
 def main():
     """Every `test_*` in this module, in definition order — DISCOVERED, not listed.
 

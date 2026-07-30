@@ -21,6 +21,75 @@ from typing import Any, Dict, List, Optional
 from . import config, master
 
 
+def select_spec(depth: int = 1) -> Dict[str, Any]:
+    """A select: the kind, whichever attributes that kind declares queryable, membership,
+    the `not` carve-out, and the `any`/`all` groups.
+
+    MOVED HERE FROM `author_probe` 2026-07-29, because it was only ever offered on ONE of
+    the two paths. `ir/schema.py` serves production AND `lower.leaf_schema`, and on both of
+    them `select` was the bare object the field catalogue declares — no kind, no
+    attributes, no enums, no carve-out. So the tree path could not write a select that
+    named anything, and rung 4 died three times on *"reach needs `select` — the set to
+    measure"* while the whole-program probe wrote selects perfectly well.
+
+    `from` was already delegated the other way, with the reason stated: *"shared with the
+    ir schema so the two surfaces cannot answer differently."* This is that seam widened.
+
+    The history it carries, all of it earned the same way — the language HAD the construct
+    and the schema withheld it, and the model got the blame:
+
+      * `not` was implemented in the validator and never offered, so "every vm except db"
+        could not be said; the author invented `name: '!db'` and was marked down for it.
+      * closed vocabularies are ENUMS or the decoder invents values — `status = 'not
+        running'` matched nobody and ran zero calls; `label = 'up'` was reached for
+        because nothing said what `status` could be.
+      * membership is offered on every attribute, or a predicate can never speak about
+        particular machines and the author invents four syntaxes for it in one day.
+
+    Depth-limited: a carve-out inside a carve-out is a double negative nobody should write.
+    """
+    props: Dict[str, Any] = {"kind": {"type": "string", "enum": list(config.KINDS)}}
+    for kind, k in config.KINDS.items():
+        observed = config.observed(kind)
+        for attr in list(k["attrs"]) + list(observed):
+            if attr in props:
+                continue
+            spec: Dict[str, Any] = {"type": "string"}
+            values = config.values_for(kind, attr)
+            if values:
+                spec["enum"] = values
+            obs = observed.get(attr)
+            if obs:
+                # An observed attribute says where its answer comes from, because the
+                # third value is only usable if the author knows what fills it in.
+                spec["description"] = (
+                    f"{obs.get('doc', attr)} '{config.OBSERVED_UNKNOWN}' means nothing "
+                    f"has asked yet — call {obs.get('by', 'a probe')} first.")
+            props[attr] = spec
+    for attr in [a for a in props if a != "kind"]:
+        scalar = props[attr]
+        props[attr] = {"anyOf": [
+            scalar,
+            {"type": "object",
+             "properties": {"in": {"anyOf": [
+                 {"type": "array", "items": {"type": "string"}, "minItems": 1},
+                 {"type": "string", "description": "a $set bound by fetch"}]}},
+             "required": ["in"],
+             "description": f"{attr} is ANY of these — written INCLUDE {attr} = [a, b, c]"}]}
+    if depth > 0:
+        inner = {a: v for a, v in props.items() if a != "kind"}
+        props["not"] = {"type": "object", "properties": inner,
+                        "minProperties": 1,
+                        "description": "EXCLUDE members matching these filters, e.g. "
+                                       "{\"name\": \"db\"} for 'every vm except db'"}
+        for group, word in (("any", "OR"), ("all", "AND")):
+            props[group] = {"type": "array", "minItems": 2,
+                            "items": {"type": "object", "properties": inner,
+                                      "minProperties": 1},
+                            "description": f"filter sets combined with {word}"}
+    return {"type": "object", "properties": props, "required": ["kind"]}
+
+
 def _predicate_property() -> Dict[str, Any]:
     """The `predicate` field's schema.
 
@@ -60,8 +129,8 @@ def _predicate_property() -> Dict[str, Any]:
     props: Dict[str, Any] = {
         "shape":  {"type": "string", "enum": list(config.PREDICATES),
                    "description": "which check"},
-        "select": {"type": "object",
-                   "description": "the set to measure — same form as foreach's select"},
+        "select": dict(select_spec(),
+                       description="the set to measure — same form as foreach's select"),
         "sets":   {"type": "array", "items": {"type": "string"},
                    "description": "disjoint: the sets to compare"},
     }
@@ -110,6 +179,10 @@ def _field(name: str, known: Optional[set] = None) -> Dict[str, Any]:
         return _predicate_property()
     if name == "from":
         return _from_field(doc, known)
+    if name in ("select", "count"):
+        # `count` is a select in COUNTING POSITION — same query, different answer — so it
+        # takes the same schema. Without it `FETCH COUNT(...)` cannot be said at all.
+        return dict(select_spec(), description=doc)
     return {**spec, "description": doc}
 
 
