@@ -30,8 +30,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from tests.bench.ladder_gate import (LAYER, SUCCESS, diff, flaky, layer_of,
-                                     over_budget_of, passes_of, table)
+from tests.bench.ladder_gate import (LAYER, SUCCESS, diff, flaky, goal_asked,
+                                     layer_of, over_budget_of, passes_of, table)
 
 _PASS = 0
 _FAIL = 0
@@ -47,8 +47,12 @@ def check(label, cond):
         print(f"  FAIL {label}")
 
 
-def cell(n=3, **outcomes):
-    return {"n": n, "outcomes": dict(outcomes), "passes": outcomes.get("PASS", 0),
+def cell(n=3, goal="a goal", **outcomes):
+    """A measured cell. `goal` carries the question the cell was asked, because a real one
+    does now — a fixture without it would exercise the pre-goal path forever and the tests
+    below would stop testing the comparison they are named for."""
+    return {"n": n, "goal": goal, "outcomes": dict(outcomes),
+            "passes": outcomes.get("PASS", 0),
             "calls_min": None, "artifacts": 0, "details": {}}
 
 
@@ -164,6 +168,52 @@ def test_a_cell_that_never_ran_is_not_a_cell_with_no_failures():
     check("and it does not crash the gate on a divide by zero", bool(moves))
     out = table(empty, "T")
     check("the table shows n=0 rather than an empty line", "0/0" in out)
+
+
+def test_a_REWORDED_rung_is_void_not_regressed():
+    """A2. Without this, rewording a rung reads as PASS RATE DOWN forever — and C4, E5 and
+    F1 all imply rewording, so the gate would have started lying the first time any of them
+    landed. A cell measured on a different question has not been shown to have regressed;
+    reporting a move with a number attached would be a false accusation, which is worse
+    than silence.
+    """
+    base = {"lit:8": cell(goal="put every vm on core, except db", PASS=3)}
+    now = {"lit:8": cell(goal="every vm goes on core; db goes on dmz", GOAL_UNMET=3)}
+    moves = diff(base, now)
+    check("a 3/3 -> 0/3 drop under a NEW question is not a regression",
+          kinds_of(moves)["lit:8"] == "GOAL CHANGED — baseline void")
+    check("and the reader is shown which words moved",
+          any("except db" in str(w) for _k, _t, w, _n in moves))
+    same = diff(base, {"lit:8": cell(goal="put every vm on core, except db", GOAL_UNMET=3)})
+    check("the SAME question dropping 3/3 -> 0/3 is still a real move",
+          kinds_of(same)["lit:8"] == "PASS RATE DOWN")
+
+
+def test_a_baseline_with_no_goal_says_so_rather_than_matching():
+    """The twenty-six cells recorded before today carry no goal. Treating absence as
+    agreement is the unstated premise passing for a met one — the same trap `env_stamp`
+    closes for conditions, one level in."""
+    base = {"lit:1": {"n": 3, "outcomes": {"PASS": 3}, "passes": 3,
+                      "calls_min": None, "artifacts": 0, "details": {}}}
+    moves = diff(base, {"lit:1": cell(goal="anything at all", PASS=3)})
+    check("an unrecorded goal is named, not assumed equal",
+          kinds_of(moves)["lit:1"] == "GOAL UNRECORDED")
+
+
+def test_the_goal_recorded_is_the_goal_ASKED():
+    """`author_probe` takes `rung.paraphrase or rung.goal` under -p. If the gate recorded
+    the raw `paraphrase` instead, every rung without one would look like a different
+    question in the para column than in the lit column — when it is the same sentence."""
+    from tests.bench.rungs import RUNGS
+    bare = [r for r in RUNGS if not r.paraphrase]
+    for r in bare:
+        check(f"rung {r.n} has no paraphrase, so both columns ask its literal goal",
+              goal_asked(r, "para") == goal_asked(r, "lit") == r.goal)
+    worded = [r for r in RUNGS if r.paraphrase][0]
+    check("a rung WITH a paraphrase asks it in the para column",
+          goal_asked(worded, "para") == worded.paraphrase)
+    check("and its literal column is untouched",
+          goal_asked(worded, "lit") == worded.goal)
 
 
 def test_over_budget_is_a_solved_rung_not_a_failure():
@@ -287,19 +337,27 @@ def test_the_report_states_its_own_n():
 
 
 def main():
-    for fn in (test_a_flickering_cell_is_not_a_moved_cell,
-               test_a_cell_that_never_ran_is_not_a_cell_with_no_failures,
-               test_over_budget_is_a_solved_rung_not_a_failure,
-               test_one_event_with_two_owners_gets_two_codes,
-               test_a_partial_check_does_not_accuse_the_cells_it_skipped,
-               test_a_new_reason_at_the_same_score_is_reported,
-               test_appearing_and_vanishing_cells_are_both_reported,
-               test_an_improvement_is_not_a_regression,
-               test_every_outcome_names_the_layer_that_owns_it,
-               test_the_report_states_its_own_n):
+    """Every `test_*` in this module, in definition order — DISCOVERED, not listed.
+
+    THE LIST WAS THE BUG, and it bit here on 2026-07-30 exactly as it had bitten
+    `test_medusa_invariants` the day before: three checks were added for the goal
+    comparison and none of them ran, because the hand-maintained tuple below did not
+    mention them. The file reported 55/55 and looked green.
+
+    That is this suite's OWN rule turned on itself — *a cell that stopped being measured
+    must never read as a cell that stopped failing* — and it is the codebase's oldest
+    failure mode, the one `run_all.py` exists for. Discovery removes the step a human has
+    to remember.
+    """
+    import inspect as _inspect  # noqa: F401
+    _mod = sys.modules[__name__]
+    _found = [v for k, v in vars(_mod).items()
+              if k.startswith("test_") and callable(v)]
+    _found.sort(key=lambda f: f.__code__.co_firstlineno)
+    for fn in _found:
         print(f"\n── {fn.__name__}")
         fn()
-    print(f"\n{_PASS}/{_PASS + _FAIL} passed")
+    print(f"\n{_PASS}/{_PASS + _FAIL} passed  ({len(_found)} tests)")
     sys.exit(1 if _FAIL else 0)
 
 

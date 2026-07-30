@@ -102,9 +102,22 @@ def over_budget_of(cell):
     return cell["outcomes"].get("OVER_BUDGET", 0)
 
 
+def goal_asked(rung, column):
+    """The exact sentence a cell was measured on.
+
+    ONE definition, taken the same way `author_probe` takes it (`rung.paraphrase or
+    rung.goal` under -p), so the baseline cannot record a question different from the one
+    that was asked. The `or` matters: a rung with no paraphrase is measured on its literal
+    goal in BOTH columns, and recording the None would make the two columns look like
+    different questions when they are the same one.
+    """
+    return (rung.paraphrase or rung.goal) if column == "para" else rung.goal
+
+
 def measure(rungs, columns, n, extra=()):
     """Run each cell `n` times. Returns {"lit:4": {"outcomes": {...}, "n": 3, ...}}."""
     from . import author_probe
+    by_n = {r.n: r for r in RUNGS}
     cells = {}
     for column in columns:
         for rung in rungs:
@@ -120,6 +133,11 @@ def measure(rungs, columns, n, extra=()):
             calls = [c["calls"] for c in sink if c.get("calls") is not None]
             cells[key] = {
                 "n": len(sink),
+                # THE QUESTION, stored beside the answer. Without it a rewording reads as
+                # PASS RATE DOWN forever, and C4, E5 and F1 all imply rewording. The TEXT
+                # rather than a hash of it: the file is 26 cells, and a reader diffing a
+                # baseline wants to see WHICH words moved, which a digest cannot say.
+                "goal": goal_asked(by_n[rung], column),
                 "outcomes": dict(outcomes),
                 "passes": sum(n for c, n in outcomes.items() if c in SUCCESS),
                 "calls_min": min(calls) if calls else None,
@@ -169,6 +187,19 @@ def diff(base, now, scope=None):
             continue
         if a is None:
             moves.append((key, "NOT MEASURED", dict(b["outcomes"]), ""))
+            continue
+        # A DIFFERENT QUESTION IS NOT A REGRESSION. Reword a rung and its pass rate moves
+        # for a reason the rate cannot express, so the cell is reported as VOID and its
+        # numbers are not compared at all — reporting a move here would be a false
+        # accusation with a number attached, which is worse than silence. A baseline
+        # predating this field says so explicitly rather than passing for a match.
+        if "goal" not in b:
+            moves.append((key, "GOAL UNRECORDED", "baseline predates the goal field",
+                          "not compared"))
+            continue
+        if b["goal"] != a.get("goal"):
+            moves.append((key, "GOAL CHANGED — baseline void",
+                          b["goal"][:60], (a.get("goal") or "")[:60]))
             continue
         # A CELL THAT RECORDED NOTHING IS A HARNESS FAULT, never a clean cell. The
         # probe used to `continue` past its own sink on a non-result, so a cell whose every
