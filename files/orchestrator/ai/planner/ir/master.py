@@ -81,6 +81,35 @@ def ops(want: Optional[str] = None, quantifier: Optional[str] = None) -> List[st
     return out
 
 
+def kind_nouns(kind: Optional[str] = None) -> set:
+    """Every English noun that names a kind — THE one lexicon, read from the manifest.
+
+    Any reader that has to recognise a kind IN PROSE needs this: the paraphrase column
+    exists precisely because the same capability is asked for in different words, and "set
+    up three machines" is "create 3 vms". Plurals are derived here rather than listed, so
+    the manifest states each noun once.
+
+    ADDED 2026-07-30 BECAUSE IT HAD ALREADY GONE WRONG. Two shape-based routers —
+    `quantifier_rule` and `route_rule` — each hardcoded their own synonym set in Python,
+    and within a day one knew `host` and `resource` while the other did not. That is the
+    stale-twin defect the schema builders have paid for three times (`of`, `select`,
+    NOT-as-array) turning up in a new place, and the fix is the same one: the manifest owns
+    the table and everything else reads it.
+    """
+    out = set()
+    for name, spec in config.KINDS.items():
+        if kind and name != kind:
+            continue
+        for word in [name] + list(spec.get("nouns") or ()):
+            word = word.lower()
+            out.add(word)
+            # Just enough English to avoid `boxs`. Deliberately not a pluraliser: the
+            # manifest states the singular, and a reader needing an irregular plural
+            # should declare it as its own noun rather than grow a rule here.
+            out.add(word + "es" if word.endswith(("s", "x", "z", "ch", "sh")) else word + "s")
+    return out
+
+
 def identifiers(goal: str = "", known: Optional[set] = None,
                 minted: Optional[set] = None) -> List[str]:
     """Names a program may legitimately refer to — the UNION, never a restriction.

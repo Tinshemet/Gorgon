@@ -38,7 +38,7 @@ from __future__ import annotations
 import re
 from typing import List, Optional, Sequence, Tuple
 
-from orchestrator.ai.planner.ir import config
+from orchestrator.ai.planner.ir import master
 
 # Bringing something into existence. VERBS ONLY, and that restriction is the rule's whole
 # point. My first version also listed the ADJECTIVE `new`, and it answered `new` for "launch
@@ -62,15 +62,9 @@ ACTION = ("put", "move", "launch", "start", "stop", "shut down", "ping", "label"
           "archive", "boot", "check")
 
 
-def kind_words() -> set:
-    """Every noun that names a declared kind, plus the plain-English words the ladder's
-    paraphrases use for the same things. From the manifest, so a new kind is recognised by
-    adding a row and nothing else."""
-    out = {"machine", "machines", "box", "boxes", "node", "nodes", "server", "servers"}
-    for kind in config.KINDS:
-        out.add(kind.lower())
-        out.add(kind.lower() + "s")
-    return out
+# ONE LEXICON, from the manifest via `master` — see its docstring for why this is not a
+# local set. `quantifier_rule` asks the same question and must get the same answer.
+kind_words = master.kind_nouns
 
 
 def _created_names(done: Sequence[str]) -> set:

@@ -306,7 +306,15 @@
       "create_defaults": {
         "os_type": "linux"
       },
-      "delete": "delete_vm"
+      "delete": "delete_vm",
+      "nouns": [
+        "machine",
+        "box",
+        "node",
+        "server",
+        "host",
+        "resource"
+      ]
     },
     "network": {
       "package": "core",
@@ -324,7 +332,11 @@
         "create": {
           "tool": "create_network"
         }
-      }
+      },
+      "nouns": [
+        "net",
+        "subnet"
+      ]
     },
     "snapshot": {
       "package": "core",
@@ -339,7 +351,11 @@
         "create": {
           "tool": "snapshot_create"
         }
-      }
+      },
+      "nouns": [
+        "restore point",
+        "checkpoint"
+      ]
     }
   },
   "_predicates_doc": "What ENSURE can assert. `comparators` maps each comparator to the SYMBOL it renders as, so adding one is a data change — it used to be a dict in render.py, which meant a new comparator printed as `?`. EVERY shape carries its operand under `select` — the same key foreach uses — and names itself under `shape`. That regularity was measured, not chosen: an earlier form keyed the shape and operand together ({count: <select>, eq: N}) and llama3.1 put the NUMBER where the SET belongs on every attempt, while getting foreach's select right in the same programs. `source` records WHERE the truth comes from: `registry` is current state; `findings` is the probe ledger, because reachability is not registry state and is deliberately never inferred from a tool's success flag. `not`/`all`/`any` are COMPOSITE: their operand is other predicates rather than a set, which is why `source` is neither registry nor findings — they read whatever their children read. All three take parentheses in the written form, so a reader never has to know operator precedence, because there is none. `is` reads a GRAFTED RESULT rather than the world — IS($answer.reachable) = false. It is the only shape whose source is neither the registry nor findings, and it exists because rung 11's condition is a call's answer: which machines are unreachable is knowable only by asking.",
@@ -657,5 +673,6 @@
       "filtered": true,
       "doc": "a named whole MINUS named members — there must be a whole to subtract from"
     }
-  }
+  },
+  "_nouns_doc": "THE ENGLISH NOUNS A KIND ANSWERS TO, declared beside it. The ladder's paraphrase column exists because the same capability is asked for in different words — 'set up three machines' is 'create 3 vms' — so any reader that has to recognise a kind IN PROSE needs this list, and it must be ONE list. Added 2026-07-30 after two shape-based routers (quantifier_rule, route_rule) each hardcoded their own copy in Python and had already diverged the same day: one knew 'host' and 'resource', the other did not. That is the stale-twin defect this project has paid for three times in the schema builders (`of`, `select`, NOT-as-array), reappearing in a new place. The key is singular; plurals are derived, never listed. `resource` is deliberately filed under `vm` because that is how the ladder's own decompositions use it — 'move resource to new network' means a machine."
 }

@@ -42,7 +42,7 @@ from __future__ import annotations
 import re
 from typing import List, Optional, Tuple
 
-from orchestrator.ai.planner.ir import config
+from orchestrator.ai.planner.ir import master
 
 # A whole is named and members subtracted. `but not` is included because it is the spoken
 # form of the same move; `without` is NOT — "a network without a name" is a description.
@@ -57,19 +57,11 @@ DETERMINERS = {"the", "a", "an", "of", "its", "their", "our", "my", "them", "tho
 RELATIVE = re.compile(r"^(that|which|who)\s+(is|are|was|were|do|does|not|isn't|aren't|"
                       r"doesn't|don't)\b")
 
-# The nouns that name something the world holds. Built from the manifest so a new kind is
-# recognised by adding a manifest row, plus the plain-English words the ladder's own
-# paraphrases use for the same things.
-_SYNONYMS = {"machine", "machines", "box", "boxes", "node", "nodes",
-             "resource", "resources", "server", "servers", "host", "hosts"}
-
-
-def kind_nouns() -> set:
-    out = set(_SYNONYMS)
-    for kind in config.KINDS:
-        out.add(kind.lower())
-        out.add(kind.lower() + "s")
-    return out
+# THE NOUNS THAT NAME A KIND come from `master`, which reads them from the manifest. This
+# module used to carry its own set, and `route_rule` carried a second one that had already
+# diverged — one knew `host` and `resource`, the other did not, on the day both were
+# written. One lexicon or two routers eventually answer differently about the same word.
+kind_nouns = master.kind_nouns
 
 
 def _words(text: str) -> List[str]:
