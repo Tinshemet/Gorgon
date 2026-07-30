@@ -48,7 +48,6 @@ from .ladder import BENCH_MODEL
 from .mutate import MUTATIONS, apply as _mutate
 from .rungs import RUNGS
 from orchestrator.ai.planner.ir import execute as _ir_execute
-from orchestrator.ai.planner.ir import revision as _revision
 from .sim_world import SimWorld
 # THE SEAMS LIVE IN `seams.py` — one authority. They were defined here and, in a
 # weaker form, a second time in `run_program`, where the missing `not`/`in`/`any`/
@@ -902,18 +901,6 @@ def main(argv=None, sink=None) -> int:
                     break
                 repairs += 1
                 print(f"          x{attempt + 1}| (rejected: {problems[0]})")
-                # A REPAIR MAY NOT ANSWER THE OBJECTION BY DELETING THE LOGIC. Rung 11's
-                # repair dropped the condition entirely and stopped every machine instead
-                # of only the silent ones — legal, valid, and further from the goal than
-                # the program it replaced. Reported as an ADDITIONAL objection rather than
-                # a rejection, so the loop simply tries again knowing what it lost; the
-                # worst case is one more round, which is calls, and calls are the cheap
-                # side of this trade.
-                _lost = _revision.lost_guard(prog, fixed_prog)
-                if _lost:
-                    problems2 = list(problems2 or []) + [_lost]
-                    print(f"          x{attempt + 1}| repair DROPPED the condition — "
-                          f"objecting rather than accepting it")
                 # AN IDENTICAL REPAIR CANNOT MAKE PROGRESS. At temp 0 the same program
                 # plus the same objection deterministically yields the same program — so
                 # a second identical round is a 600-second model call spent re-deriving
