@@ -490,7 +490,30 @@ _ROUTE = os.environ.get("MEDUSA_ROUTE") == "1"
 
 def _route_quantifier(goal: str, model: str, timeout: int = 120):
     """all/any/single/not for a goal, or None if the router did not answer. NEVER raises:
-    a router that fails must leave authoring exactly as it was, not take the cell down."""
+    a router that fails must leave authoring exactly as it was, not take the cell down.
+
+    THE DETERMINISTIC RULE ANSWERS FIRST, and only what it can. `quantifier_rule` reads the
+    SHAPE of the clause — an exclusion marker, or a universal quantifier with or without a
+    modifier on its head noun — and returns None for everything else. Measured 2026-07-30:
+
+        tuning corpus    model alone 15/16 · rule+model 16/16 · 9 of 16 calls saved
+        HELD-OUT corpus  model alone  8/10 · rule+model 10/10 · 7 of 10 calls saved
+
+    The held-out ten were written and committed BEFORE the rule was tuned, and the rule
+    fired 7 times with 0 wrong on clauses it had never seen. It fixed exactly the two the
+    model got wrong, and both were the same shape: a filter written as an ADJECTIVE
+    ("restart every stopped machine", "archive every red vm"), where the model reads the
+    adjective as part of the kind. The relative-clause form it already handled.
+
+    So this is cheaper AND more accurate, which is not the usual trade. It is safe in the
+    direction that matters because the rule declines rather than guesses — a wrong
+    deterministic answer would narrow the schema and make a correct program
+    unrepresentable, and there is no such answer in 26 scored clauses.
+    """
+    from . import quantifier_rule
+    by_shape = quantifier_rule.classify(goal)
+    if by_shape is not None:
+        return by_shape
     from .quantifier_probe import _tool as _q_tool, _system as _q_system, _recover as _q_rec
     try:
         req = {"model": model, "stream": False, "tools": [_q_tool()],
