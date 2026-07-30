@@ -34,6 +34,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from . import config, refs
 from . import master
+from . import methods as _methods
 
 try:
     from executor.command_catalog import (KNOWN_TOOLS as _KNOWN_TOOLS,
@@ -1034,6 +1035,28 @@ def _check_predicate(pred: Any, where: str, bound: Optional[set] = None,
         return [f"{where}: predicate shape must be one of "
                 f"{', '.join(config.PREDICATES)}, got {shape!r}"]
     out, operand = [], spec["operand"]
+    # ── A METHOD CALL: the predicate is asked OF an instance, not over a query ──────────
+    # `$lab.reach()` supplies a RECEIVER instead of an operand, and which class the
+    # receiver belongs to decides what the method means — a machine answers a ping, a
+    # network has all its members connected. Checked here so the two are never confused:
+    # asking a method of a class that does not declare it is the scope error the whole
+    # split exists to make unrepresentable.
+    if pred.get("on") is not None:
+        allowed = _methods.receivers(shape)
+        if not allowed:
+            return [f"{where}: {shape} is not a method — it takes {operand}, not a "
+                    f"receiver. Methods today: "
+                    + "; ".join(f"{k}.{m}()" for k, ms in _methods.offered().items()
+                                for m in ms)]
+        who = pred["on"]
+        if not (isinstance(who, str) and who.startswith(config.SIGIL)):
+            return [f"{where}: {shape} is asked OF something you bound, e.g. "
+                    f"{config.SIGIL}lab.{shape}() — got {who!r}"]
+        name = who[len(config.SIGIL):]
+        if bound is not None and name not in bound:
+            return [f"{where}: {config.SIGIL}{name} is never created or fetched, so there "
+                    f"is nothing to ask {shape}() of"]
+        return out
     value = pred.get(operand)
     if spec.get("arity") == "value":
         # IS($answer.reachable) = false — reads a grafted result, not the world.

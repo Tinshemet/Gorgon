@@ -57,7 +57,8 @@ def _render_help() -> None:
         "  -tf <vm>                       Show a fingerprint report for a VM\n"
         "  login \\[username]               Log in (creates the first operator if none exist)\n"
         "  logout                         End this box's login session\n"
-        "  operator add|list|remove       Manage operator accounts (requires login)\n\n"
+        "  operator add|list|remove       Manage operator accounts (requires login)\n"
+        "  operator passwd <username>     Reset a forgotten password (local host only)\n\n"
         "[bold cyan]Flags[/bold cyan]\n"
         "  -v   verbose / raw output      -cu  custom mode      -cs  clear session first"
     )

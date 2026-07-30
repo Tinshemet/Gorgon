@@ -348,6 +348,62 @@ def test_a_standing_goal_below_its_granted_authority_is_raised():
           intent.promote(loop_local, intent.ACHIEVE) == (loop_local, None))
 
 
+def test_a_method_means_what_its_CLASS_says_it_means():
+    """MEDUSA CLASSES, groundwork. `reach` was ONE predicate doing TWO jobs, which is how
+    two correct implementations came to disagree: production answered per-member liveness,
+    the bench answered shared topology, and #38 asked which was right. Neither — they are
+    two methods, and the receiver decides.
+
+        $web.reach()    can this machine be pinged
+        $lab.reach()    are all this network's members connected AND answering
+
+    Split by receiver, "REACH of what?" cannot be asked wrongly, because the scope IS the
+    receiver. That is the argument for classes in one line.
+    """
+    from orchestrator.ai.planner.ir import methods
+
+    check("both classes declare the method, from the manifest",
+          methods.has("vm", "reach") and methods.has("network", "reach"))
+    check("a kind that does not answer it says so", not methods.has("snapshot", "reach"))
+    check("and the predicate declares who may receive it",
+          sorted(methods.receivers("reach")) == ["network", "vm"])
+    check("a predicate with no receivers is not a method",
+          methods.receivers("count") == [])
+
+    w = SimWorld()
+    for n in ("a", "b"):
+        w.execute("create_vm", {"name": n, "os_type": "linux"})
+    w.execute("create_network", {"net_name": "lab"})
+    for n in ("a", "b"):
+        w.execute("add_vm_to_network", {"net_name": "lab", "vm_name": n})
+    _sel, holds = _seams(w)
+    scope = {"lab": "lab", "web": "a"}
+    net, vm = {"shape": "reach", "on": "$lab"}, {"shape": "reach", "on": "$web"}
+
+    # UNPROBED IS NOT DEAD AND NOT ALIVE — decision 6, and it holds for both classes.
+    check("an unprobed network does not reach", holds(net, scope)[0] is False)
+    check("an unprobed machine does not reach", holds(vm, scope)[0] is False)
+    for n in ("a", "b"):
+        w.execute("guest_ping", {"name": n})
+    check("once every member answered, the NETWORK reaches", holds(net, scope)[0] is True)
+    check("and the MACHINE reaches on its own answer", holds(vm, scope)[0] is True)
+
+    # The two really are different questions: a machine on no network still answers.
+    lone = SimWorld()
+    lone.execute("create_vm", {"name": "solo", "os_type": "linux"})
+    _s, holds2 = _seams(lone)
+    lone.execute("guest_ping", {"name": "solo"})
+    check("a machine on NO network still reaches — that is vm.reach()",
+          holds2({"shape": "reach", "on": "$x"}, {"x": "solo"})[0] is True)
+
+    check("the renderer shows the receiver", "$lab.reach()" in render(
+        {"body": [{"op": "ensure", "predicate": net}]}))
+    ok, problems = validate({"body": [{"op": "ensure", "predicate": net}]},
+                            known_names=set())
+    check("asking a method of something never bound is refused",
+          not ok and "never created" in problems[0])
+
+
 def test_a_statement_may_not_name_what_the_program_creates_later():
     """RUNG 3, measured 2026-07-30. The author wrote, in this order:
 

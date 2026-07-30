@@ -317,7 +317,14 @@
         "server",
         "host",
         "resource"
-      ]
+      ],
+      "methods": {
+        "reach": {
+          "answers": "verdict",
+          "doc": "can this machine be pinged. Asked OF one machine: `$web.reach()`.",
+          "source": "findings"
+        }
+      }
     },
     "network": {
       "package": "core",
@@ -339,7 +346,14 @@
       "nouns": [
         "net",
         "subnet"
-      ]
+      ],
+      "methods": {
+        "reach": {
+          "answers": "verdict",
+          "doc": "are all of this network's members connected to it and answering. Asked OF one network: `$lab.reach()`.",
+          "source": "findings"
+        }
+      }
     },
     "snapshot": {
       "package": "core",
@@ -380,7 +394,11 @@
         "min": ">="
       },
       "comparators_optional": true,
-      "doc": "the members can reach each other; add min: N for 'at least N of them'"
+      "doc": "the members can reach each other; add min: N for 'at least N of them'. May also be asked OF an instance — `{\"shape\":\"reach\",\"on\":\"$lab\"}` — which means that object's own reach: a machine answers a ping, a network has all its members connected.",
+      "receivers": [
+        "vm",
+        "network"
+      ]
     },
     "disjoint": {
       "source": "registry",

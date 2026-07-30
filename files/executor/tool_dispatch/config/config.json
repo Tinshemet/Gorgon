@@ -16,10 +16,11 @@
     "arm9",
     "arm11"
   ],
+  "_network_mode_doc": "ISOLATED BY DEFAULT, and this is the copy that actually decides it. The 2026-07-27 operator decision was written into executor/api/config.json's network_config_defaults.mode (see its _network_default_doc), but create_vm reads network_mode from HERE — so the decision never took effect on the tool path, and every agent-created VM got `-netdev user` (QEMU slirp = outbound internet) for three days while the api-side config claimed otherwise. That is the exact hole the decision was made to close. Two defaults for one fact is the defect; until they are consolidated, THESE TWO VALUES MUST BE CHANGED TOGETHER. Reaching NAT or bridge is a deliberate, separately-confirmed act: pass network_mode explicitly.",
   "create_vm_defaults": {
     "disk_size_gb": 60,
     "disk_format": "qcow2",
-    "network_mode": "nat",
+    "network_mode": "none",
     "bridge": "virbr0",
     "stealth_slirp_subnet": "192.168.1.0/24"
   },

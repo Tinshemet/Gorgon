@@ -257,6 +257,7 @@
     "kali",
     "parrot",
     "tails",
+    "tsurugi",
     "centos",
     "rocky",
     "alma",
@@ -881,6 +882,7 @@
       "kali",
       "parrot",
       "tails",
+      "tsurugi",
       "centos",
       "rocky",
       "alma"

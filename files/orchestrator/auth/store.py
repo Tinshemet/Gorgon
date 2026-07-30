@@ -99,6 +99,54 @@ def create_operator(username: str, password: str) -> Dict[str, Any]:
     return {"success": True}
 
 
+def reset_password(username: str, new_password: str) -> Dict[str, Any]:
+    """Set a new password for an existing operator, forgetting the old one.
+
+    THE RECOVERY PATH FOR A FORGOTTEN PASSWORD. Without this the store could
+    create and delete credentials but never rotate one, and a forgotten password
+    was an unrecoverable lockout for the common single-operator install:
+    delete_operator refuses to remove the last account (by design — see its
+    docstring), so there was no delete-and-recreate escape either. The only way
+    back in was hand-editing operators.json, i.e. reimplementing scrypt by hand
+    against constants in a different package.
+
+    DELIBERATELY DOES NOT REQUIRE THE OLD PASSWORD. The authority here is
+    filesystem ownership: operators.json is 0600 and anyone who can call this
+    can already rewrite the file directly, so demanding the forgotten secret
+    would add no security and remove the only recovery route. That makes this a
+    LOCAL, HOST-SIDE operation and nothing else — it must never be surfaced as
+    an HTTP endpoint or an AI/agent tool, or it becomes a remote
+    account-takeover primitive that needs no credential. Keep it on the admin
+    CLI path (`gorgon operator passwd`), where the caller already has the shell
+    access that makes it moot.
+
+    Issues a FRESH random salt rather than reusing the stored one, so the new
+    hash shares no derivation input with the old.
+
+    Args:
+        username:     Existing operator to re-credential.
+        new_password: The replacement secret. Never logged or echoed.
+
+    Returns:
+        ``{"success": True}`` or ``{"success": False, "error": str}`` when no
+        such operator exists (rotating a credential must not create one — that
+        would turn a typo'd username into a silent new account).
+
+    Example::
+        >>> reset_password("Tinshemet", "new-secret")
+        {"success": True}
+    """
+    data = _load()
+    if username not in data:
+        return {"success": False, "error": f"Operator '{username}' not found."}
+    salt = secrets.token_bytes(16)
+    data[username]["password_hash"] = _hash_password(new_password, salt)
+    data[username]["salt"]          = salt.hex()
+    data[username]["password_reset"] = datetime.now(timezone.utc).isoformat()
+    _save(data)
+    return {"success": True}
+
+
 def verify_password(username: str, password: str) -> bool:
     """Return True if password matches the stored hash for username."""
     data  = _load()
