@@ -14,14 +14,24 @@ THE DISTINCTION, from the manifest's own definitions:
 FIVE ARE BUILT TO BREAK A LEADING-VERB RULE, because that is the rule anyone writes first
 and it is the one the tuning corpus rewards:
 
-  * "create a snapshot of web"     — CREATE, but snapshotting is a tool call on an existing
-                                     vm. The creation verb is a decoy.
+  * "add a second disk to web"     — ADD sounds like creation, and `disk` is not a kind.
   * "take a copy of golden"        — TAKE, but it brings a new vm into existence.
   * "set up a network called dmz"  — SET UP is a creation verb the tuning corpus never uses,
                                      and 'set up' missing from one regex already cost this
                                      project a rung (see rungs.py on --paraphrase).
-  * "add a second disk to web"     — ADD, which sounds like creation and is a call on a vm.
   * "build the lab network"        — BUILD, creation, phrased as though the thing is known.
+
+ONE KEY WAS CORRECTED AFTER SCORING, 2026-07-30, and it is recorded here rather than
+quietly changed. I committed "create a snapshot of web" as `call`, on the stated reasoning
+that snapshotting is a tool call on an existing vm. THE MANIFEST DECLARES `snapshot` A KIND
+— config.KINDS is ['vm', 'network', 'snapshot'] — so `NEW snapshot(...)` brings an instance
+of a declared kind into existence and `new` is correct. I asserted a manifest fact without
+reading the manifest, which is the same habit that produced two other corrections today.
+
+The clause STAYS, with the right answer. The rule scored 13/14 against the key as
+committed and 14/14 against the corrected one; both numbers are reported in the commit,
+because a key edited after seeing a result has to justify itself independently — and this
+one does: anyone reading config.KINDS would key it `new` without knowing a rule exists.
 
 The rest are ordinary cases in both directions so a constant answer cannot score: always
 `call` gets 7/14, always `new` gets 7/14.
@@ -35,8 +45,6 @@ from typing import List, Tuple
 # (goal, want, parent goal, what earlier steps already did)
 HOLDOUT: List[Tuple[str, str, str, List[str]]] = [
     # ── call: acting on something already there ────────────────────────────────────────
-    ("create a snapshot of web", "call",
-     "snapshot every vm in the lab", ["create a vm named web"]),
     ("add a second disk to web", "call",
      "give web more storage", ["create a vm named web"]),
     ("start it", "call",
@@ -50,6 +58,10 @@ HOLDOUT: List[Tuple[str, str, str, List[str]]] = [
      "stop everything that is running", ["create a vm named vm3"]),
     ("wire the machines together on one network", "call",
      "take 5 vms and wire them together", ["create a network called fleet"]),
+
+    # CORRECTED KEY — see the note above: `snapshot` is a declared kind, so this is a NEW.
+    ("create a snapshot of web", "new",
+     "snapshot every vm in the lab", ["create a vm named web"]),
 
     # ── new: bringing an object into existence ─────────────────────────────────────────
     ("take a copy of golden", "new",
