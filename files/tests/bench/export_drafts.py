@@ -27,6 +27,7 @@ from typing import List, Optional, Tuple
 
 from orchestrator.ai.planner.ir import render, validate
 
+from . import pinned
 from .author_probe import _OLLAMA, _OLLAMA_CTX, _messages, program_schema
 from .ladder import BENCH_MODEL
 from .rungs import RUNGS
@@ -51,7 +52,7 @@ def draft(rung, paraphrase: bool, model: str, timeout: int = 300) -> Tuple[Optio
     goal = (rung.paraphrase or rung.goal) if paraphrase else rung.goal
     req = {"model": model, "stream": False,
            "format": program_schema("achieve", world.names()),
-           "options": {"temperature": 0.0, "num_ctx": _OLLAMA_CTX},
+           "keep_alive": pinned.KEEP_ALIVE, "options": pinned.options(),
            "messages": _messages(goal, True, world, "achieve")}
     r = urllib.request.urlopen(urllib.request.Request(
         _OLLAMA, json.dumps(req).encode(), {"Content-Type": "application/json"}),

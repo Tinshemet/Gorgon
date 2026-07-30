@@ -49,6 +49,7 @@ import os
 import sys
 from collections import Counter
 
+from . import env_stamp
 from .rungs import RUNGS
 
 BASELINE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ladder_baseline.json")
@@ -270,7 +271,10 @@ def main(argv=None) -> int:
         if os.path.exists(BASELINE) and not a.replace:
             kept = json.load(open(BASELINE)).get("cells", {})
         merged = {**kept, **cells}
-        json.dump({"recorded": "manual", "runs_per_cell": a.runs, "cells": merged},
+        json.dump({"recorded": "manual", "runs_per_cell": a.runs,
+                   # THE CONDITIONS, beside the numbers they produced. A baseline stores a
+                   # premise, not only a verdict — same argument as the goal-hash.
+                   "env": env_stamp.stamp(a.model), "cells": merged},
                   open(BASELINE, "w"), indent=1)
         updated, carried = len(cells), len(merged) - len(cells)
         print(f"\n   baseline written: {BASELINE}")
@@ -281,7 +285,18 @@ def main(argv=None) -> int:
     if not os.path.exists(BASELINE):
         print("\n   NO BASELINE to check against — run `record` first")
         return 1
-    base = json.load(open(BASELINE))["cells"]
+    saved = json.load(open(BASELINE))
+    base = saved["cells"]
+    # CONDITIONS FIRST, because a cell that moved under different conditions has not been
+    # shown to have regressed. Reported, never fatal: the gate still runs and still prints
+    # its moves, but a reader now knows whether the two columns are comparable at all.
+    # Found the hard way on 2026-07-30 — a rung went 0/3 to 3/3 on byte-identical code and
+    # nothing in either log said what the runs had in common.
+    changed = env_stamp.differs(saved.get("env"), env_stamp.stamp(a.model))
+    if changed:
+        print("\n── CONDITIONS CHANGED SINCE THE BASELINE — moves below may not be regressions")
+        for line in changed:
+            print(f"   {line}")
     scope = {f"{col}:{r}" for col in columns for r in rungs}
     moves = diff(base, cells, scope)
     skipped = len(set(base) - scope)

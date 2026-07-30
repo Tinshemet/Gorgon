@@ -34,6 +34,7 @@ BENCH_MODEL = _OLLAMA["model"]
 from orchestrator.ai.planner.autonomous import run_autonomous, make_tool_selector
 from orchestrator.ai.tools import TOOLS
 
+from . import pinned
 from .rungs import RUNGS
 from .sim_world import SimWorld
 
@@ -43,7 +44,7 @@ def make_call_model(model: str, temperature: float, timeout: int):
     def call_model(messages: List[Dict], tools: List[Dict] = None) -> Dict:
         payload = {"model": model, "messages": messages,
                    "tools": TOOLS if tools is None else tools, "stream": False,
-                   "options": {"temperature": temperature, "num_ctx": _OLLAMA["num_ctx"]}}
+                   "keep_alive": pinned.KEEP_ALIVE, "options": pinned.options(temperature)}
         resp = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=timeout)
         resp.raise_for_status()
         return resp.json()

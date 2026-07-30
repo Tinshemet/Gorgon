@@ -34,6 +34,7 @@ from orchestrator.ai.planner.ir import config, lower, render, validate
 from orchestrator.ai.planner.ir import derive as _derive
 from orchestrator.ai.planner.ir import run as _run
 
+from . import env_stamp, pinned
 from .author_probe import _OLLAMA, _OLLAMA_CTX, _seams, _messages
 from .ladder import BENCH_MODEL
 from .rungs import RUNGS
@@ -81,7 +82,7 @@ def make_route(model: str, world: SimWorld, stats: Dict[str, int], log=None):
     def route(goal: str):
         stats["route_calls"] += 1
         reply = _post({"model": model, "stream": False, "tools": [_route_tool()],
-                       "options": {"temperature": 0.0, "num_ctx": _OLLAMA_CTX},
+                       "keep_alive": pinned.KEEP_ALIVE, "options": pinned.options(),
                        "messages": [
                            {"role": "system", "content":
                             "You are given a goal. Call `route` exactly once."},
@@ -122,7 +123,7 @@ def make_emit(model: str, world: SimWorld, want: str, stats: Dict[str, int], log
             msgs[-1]["content"] += (
                 f"\n\nYour last attempt was REJECTED: {objection}\nFix exactly that.")
         reply = _post({"model": model, "stream": False, "format": schema,
-                       "options": {"temperature": 0.0, "num_ctx": _OLLAMA_CTX},
+                       "keep_alive": pinned.KEEP_ALIVE, "options": pinned.options(),
                        "messages": msgs})
         raw = (reply.get("message") or {}).get("content") or ""
         try:
@@ -172,7 +173,10 @@ def main(argv=None) -> int:
     rungs = [r for r in RUNGS if not a.rung or r.n in a.rung]
     log = (lambda m: print(f"      {m}")) if a.verbose else None
     print(f"tree probe · model={a.model} · n={a.repeats}"
-          f"{' · PARAPHRASE' if a.paraphrase else ''}\n")
+          f"{' · PARAPHRASE' if a.paraphrase else ''}")
+    # THE CONDITIONS, in the log that records the numbers. Two runs of this probe once
+    # disagreed 0/3 against 5/5 on identical code and neither log said what it ran under.
+    print(f"   under: {env_stamp.describe(env_stamp.stamp(a.model))}\n")
 
     passed = attempted = 0
     totals = {"route_calls": 0, "emit_calls": 0, "leaf_bad_json": 0, "route_channel": 0}

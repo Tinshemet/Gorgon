@@ -43,6 +43,7 @@ from orchestrator.ai.planner.ir.validate import _one_of_groups
 from orchestrator.ai.planner.ir.sanitize import kinds as _sanitize_kinds
 from orchestrator.ai.planner.ir.sanitize import sanitize_text as _sanitize_text
 from orchestrator.ai.planner.ir.sanitize import sanitize as _sanitize
+from . import pinned
 from .ladder import BENCH_MODEL
 from .mutate import MUTATIONS, apply as _mutate
 from .rungs import RUNGS
@@ -493,7 +494,7 @@ def _route_quantifier(goal: str, model: str, timeout: int = 120):
     from .quantifier_probe import _tool as _q_tool, _system as _q_system, _recover as _q_rec
     try:
         req = {"model": model, "stream": False, "tools": [_q_tool()],
-               "options": {"temperature": 0.0, "num_ctx": _OLLAMA_CTX},
+               "keep_alive": pinned.KEEP_ALIVE, "options": pinned.options(),
                "messages": [{"role": "system", "content": _q_system()},
                             {"role": "user", "content": goal}]}
         r = urllib.request.urlopen(urllib.request.Request(
@@ -521,7 +522,7 @@ def author(goal: str, model: str, temp: float, shots: bool, timeout: int = 600,
         print(f"          [route] {quantifier}")
     req = {"model": model, "stream": False,
            "format": program_schema(want, known_names, quantifier=quantifier),
-           "options": {"temperature": temp, "num_ctx": _OLLAMA_CTX}, "messages": _messages(goal, shots, world, want)}
+           "keep_alive": pinned.KEEP_ALIVE, "options": pinned.options(temp), "messages": _messages(goal, shots, world, want)}
     try:
         r = urllib.request.urlopen(urllib.request.Request(
             _OLLAMA, json.dumps(req).encode(), {"Content-Type": "application/json"}),
@@ -642,7 +643,7 @@ def repair(goal, program, problems, model, temp, shots, known_names=None, timeou
                  "changing nothing else. Nothing has run yet — the world is untouched."})
     req = {"model": model, "stream": False,
            "format": program_schema(want, known_names),
-           "options": {"temperature": temp, "num_ctx": _OLLAMA_CTX}, "messages": msgs}
+           "keep_alive": pinned.KEEP_ALIVE, "options": pinned.options(temp), "messages": msgs}
     try:
         r = urllib.request.urlopen(urllib.request.Request(
             _OLLAMA, json.dumps(req).encode(), {"Content-Type": "application/json"}),
@@ -709,7 +710,7 @@ def revise(goal, program, world, why, model, temp, shots, timeout=600,
                  "what your last program left behind."})
     req = {"model": model, "stream": False,
            "format": program_schema(want, known_names),
-           "options": {"temperature": temp, "num_ctx": _OLLAMA_CTX}, "messages": msgs}
+           "keep_alive": pinned.KEEP_ALIVE, "options": pinned.options(temp), "messages": msgs}
     try:
         r = urllib.request.urlopen(urllib.request.Request(
             _OLLAMA, json.dumps(req).encode(), {"Content-Type": "application/json"}),

@@ -52,6 +52,7 @@ import sys
 
 from orchestrator.ai.planner.ir import config
 
+from . import pinned
 from .author_probe import _OLLAMA_CTX, _TOOLS
 from .ladder import BENCH_MODEL
 from .tree_probe import _ALL_OPS, _post
@@ -127,7 +128,7 @@ def route(goal, model, parent=None, done=None, siblings=False, name_tools=False)
                     + "\n".join(f"  - {d}" for d in done)
                     + "\nSo anything they produced ALREADY EXISTS.")
     reply = _post({"model": model, "stream": False, "tools": [_menu(name_tools)],
-                   "options": {"temperature": 0.0, "num_ctx": _OLLAMA_CTX},
+                   "keep_alive": pinned.KEEP_ALIVE, "options": pinned.options(),
                    "messages": [{"role": "system", "content":
                                  "You are given a goal. Call `route` exactly once."},
                                 {"role": "user", "content": content}]})
