@@ -394,11 +394,7 @@
         "min": ">="
       },
       "comparators_optional": true,
-      "doc": "the members can reach each other; add min: N for 'at least N of them'. May also be asked OF an instance — `{\"shape\":\"reach\",\"on\":\"$lab\"}` — which means that object's own reach: a machine answers a ping, a network has all its members connected.",
-      "receivers": [
-        "vm",
-        "network"
-      ]
+      "doc": "the members can reach each other; add min: N for 'at least N of them'"
     },
     "disjoint": {
       "source": "registry",

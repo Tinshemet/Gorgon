@@ -365,10 +365,12 @@ def test_a_method_means_what_its_CLASS_says_it_means():
     check("both classes declare the method, from the manifest",
           methods.has("vm", "reach") and methods.has("network", "reach"))
     check("a kind that does not answer it says so", not methods.has("snapshot", "reach"))
-    check("and the predicate declares who may receive it",
-          sorted(methods.receivers("reach")) == ["network", "vm"])
-    check("a predicate with no receivers is not a method",
-          methods.receivers("count") == [])
+    # WITHDRAWN FROM THE OFFERING 2026-07-31, deliberately and on measurement: putting `on`
+    # in the predicate schema cost 16 runs (64/78 -> 48/78) and offering it PROPERLY
+    # recovered nothing — the whole-program prompt has no headroom. The dispatch below is
+    # kept because the SEMANTICS are right; only the surface was wrong.
+    check("no predicate advertises a receiver while classes are withdrawn",
+          methods.receivers("reach") == [] and methods.receivers("count") == [])
 
     w = SimWorld()
     for n in ("a", "b"):
@@ -396,12 +398,12 @@ def test_a_method_means_what_its_CLASS_says_it_means():
     check("a machine on NO network still reaches — that is vm.reach()",
           holds2({"shape": "reach", "on": "$x"}, {"x": "solo"})[0] is True)
 
-    check("the renderer shows the receiver", "$lab.reach()" in render(
-        {"body": [{"op": "ensure", "predicate": net}]}))
+    check("the renderer still shows the receiver, so a stored program stays legible",
+          "$lab.reach()" in render({"body": [{"op": "ensure", "predicate": net}]}))
     ok, problems = validate({"body": [{"op": "ensure", "predicate": net}]},
                             known_names=set())
-    check("asking a method of something never bound is refused",
-          not ok and "never created" in problems[0])
+    check("and the validator refuses a method nothing advertises",
+          not ok and "not a method" in problems[0])
 
 
 def test_a_statement_may_not_name_what_the_program_creates_later():
