@@ -26,6 +26,8 @@ Run:  PYTHONPATH=. python3 -m tests.bench.author_probe
       PYTHONPATH=. python3 -m tests.bench.author_probe --no-shots   # ablate few-shot
       PYTHONPATH=. python3 -m tests.bench.author_probe -p           # paraphrase column
 """
+from typing import Sequence
+
 import argparse
 import os
 import json
@@ -346,7 +348,7 @@ def _tool_lines() -> str:
     return "\n".join(out)
 
 
-def _system(want: str = None) -> str:
+def _system(want: str = None, ops: Sequence[str] = None) -> str:
     """The author's standing instructions.
 
     `want` is the OPERATOR'S INTENT — fetch, ensure or achieve — and supplying it is not
@@ -368,7 +370,14 @@ def _system(want: str = None) -> str:
     # an `ensure:` and then refusing to decode it is the disagreement in miniature: the
     # model reasons its way to a construct it has no branch for, and the failure surfaces
     # as a malformed program rather than as the authority refusal it actually is.
-    ops = "\n".join(f"  {op:8}— {config.OPS[op]['doc']}" for op in master.ops(want))
+    # BLINDERS. `ops` is what THIS call can emit — on the staged path the decomposer
+    # already decided it, so narrowing costs no extra call. Intersected with the
+    # master, never replacing it, so a blinder can only narrow and can never offer an
+    # op the operator's intent forbids.
+    _offer = master.ops(want)
+    if ops is not None:
+        _offer = [o for o in _offer if o in set(ops)]
+    ops = "\n".join(f"  {op:8}— {config.OPS[op]['doc']}" for op in _offer)
     try:
         from executor.command_catalog import REQUIRED_FIELDS
     except ImportError:                                    # pragma: no cover
@@ -414,7 +423,7 @@ def _system(want: str = None) -> str:
             + (f"\n\n{_intent.instruction(want)}" if want else ""))
 
 
-def _messages(goal: str, shots: bool, world=None, want=None):
+def _messages(goal: str, shots: bool, world=None, want=None, ops=None):
     """The author's prompt. `world` is optional and was, for a long time, absent.
 
     That absence was an ASYMMETRY with no justification: revise() has always been handed
@@ -423,7 +432,7 @@ def _messages(goal: str, shots: bool, world=None, want=None):
     idempotence at all. It was measuring whether a model can guess what it has not been
     shown. No operator writes a procedure without knowing what is in their lab.
     """
-    msgs = [{"role": "system", "content": _system(want)}]
+    msgs = [{"role": "system", "content": _system(want, ops)}]
     if shots:
         for g, prog in SHOTS:
             msgs.append({"role": "user", "content": g})

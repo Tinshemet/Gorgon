@@ -52,6 +52,10 @@ WANT = "achieve"
 # The deterministic new-vs-call override. ON by default; 0 gives the control arm.
 _ROUTE_RULE = os.environ.get("MEDUSA_ROUTE_RULE", "1") != "0"
 
+# Narrow each leaf's PROMPT to its own operator. 0 gives the control arm —
+# a wiring that cannot be turned off cannot be measured.
+_BLINDERS = os.environ.get("MEDUSA_BLINDERS", "1") != "0"
+
 _STRUCTURAL = list(config.OP_CATEGORIES["structural"])
 _ALL_OPS = list(config.OPS.keys())
 
@@ -131,7 +135,13 @@ def make_emit(model: str, world: SimWorld, want: str, stats: Dict[str, int], log
              context: Optional[List[dict]] = None,
              ancestry: Optional[List[str]] = None):
         stats["emit_calls"] += 1
-        msgs = _messages(leaf["goal"], True, world, want)
+        # BLINDERS, and the staged path is where they are free: the decomposer has
+        # ALREADY decided this leaf's operator, so the prompt can describe that one
+        # and nothing else. Measured 2026-07-30, a `call` leaf received a 642-char
+        # schema and a 7287-char prompt covering all seven operators — eleven times
+        # the context it could use, six operators it had no branch for.
+        msgs = _messages(leaf["goal"], True, world, want,
+                         ops=[leaf["op"]] if _BLINDERS and leaf.get("op") else None)
         msgs[-1]["content"] += (
             f"\n\nWrite EXACTLY ONE statement, and it is a `{leaf['op']}`. "
             f"Nothing else — this is one step of a larger program.")

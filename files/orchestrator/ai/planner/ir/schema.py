@@ -365,7 +365,8 @@ def emit_program_tool(want: Optional[str] = None, known: Optional[set] = None,
 
 
 def system_prompt(tools, want: Optional[str] = None,
-                  quantifier: Optional[str] = None) -> str:
+                  quantifier: Optional[str] = None,
+                  ops: Optional[Sequence[str]] = None) -> str:
     """What the model needs to know to write a program — ops, kinds, predicates, tools.
 
     Assembled from the manifest so the prompt cannot drift from what validate() accepts:
@@ -373,12 +374,37 @@ def system_prompt(tools, want: Optional[str] = None,
     the schema is — a prompt that describes `new` while the decoder cannot emit it is the
     four-way disagreement in miniature, and the model spends its reasoning on a construct
     it will never be able to produce.
+
+    BLINDERS — `ops` narrows the listing to what THIS CALL can actually emit.
+
+    The argument is the one above, taken the rest of the way. Staged lowering already
+    narrows the SCHEMA to a single operator (`lower.leaf_schema`), and measured
+    2026-07-30 the two had drifted badly apart: a leaf that could only be a `call` got a
+    642-character schema and a 7287-character prompt describing all seven operators and
+    every predicate. Eleven times more context than the call could use, and six operators
+    it had no branch for.
+
+    The decomposer has ALREADY decided the leaf's operator, so this costs no extra model
+    call and no guess — the same fact that makes the schema narrow makes the prompt narrow.
+    The operator's framing: blinders on a racehorse.
+
+    `None` narrows nothing, so a caller that does not know stays exactly as it was — the
+    same rule `want=None` follows, and for the same reason: an absent fact must never
+    become a silent restriction.
     """
     p = config.PROMPT
     lines = [p["intro"], "", p["statements_header"]]
     # NARROWED WITH THE SCHEMA, never apart from it. A prompt describing `new` while the
     # decoder cannot emit it is the four-way disagreement in miniature.
-    for op in master.ops(want, quantifier):
+    #
+    # `ops` is the BLINDER: what this particular call can emit, which the caller already
+    # knows on the staged path. Intersected with the master rather than replacing it, so a
+    # blinder can only ever narrow — it must not smuggle in an op the operator's intent
+    # forbids, which is the one way this could become a hole instead of a saving.
+    _offer = master.ops(want, quantifier)
+    if ops is not None:
+        _offer = [op for op in _offer if op in set(ops)]
+    for op in _offer:
         lines.append(f"  {op:8}— {config.OPS[op]['doc']}")
     lines += ["", "  " + p["select_hint"], "",
               "  ensure shapes (each names its `shape` and takes its operand under "
