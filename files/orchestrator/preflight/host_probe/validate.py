@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 from orchestrator.executor_client import (
     get_ovmf as _get_ovmf, get_capabilities as check_system_capabilities, get_all_profiles,
 )
-from .net import custom_mode, net_enabled, _net_get, _net_head
+from .net import custom_mode, net_enabled, _net_get
 from .qemu import _get_qemu_machine_types, _get_qemu_cpu_models, _is_arm_cpu, _is_x86_cpu
 from .product import _lookup_product
 from .config import _THRESHOLDS, _MS_WINDOWS_ISO_PAGE, _ARM_CPU_PREFIXES

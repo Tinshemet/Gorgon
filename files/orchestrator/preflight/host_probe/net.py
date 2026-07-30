@@ -68,30 +68,5 @@ def _net_get(url: str, headers: Dict = None) -> Optional[Dict]:
 
 # Checks if a URL exists via HEAD request; returns False on failure.
 # In: str url → Out: bool
-def _net_head(url: str) -> bool:
-    """Check if a URL exists via HEAD request.
-
-    Args:
-        url: URL to probe with HTTP HEAD.
-
-    Returns:
-        ``True`` if the server returned a 2xx response; ``False`` on any
-        error or when networking is disabled.
-
-    Example::
-
-        _net_head("https://example.com/file.iso")
-        # → True if the file exists, False if 404 or unreachable
-    """
-    if not _NET_ENABLED:
-        return False
-    try:
-        req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": _CFG["user_agent"]})
-        with urllib.request.urlopen(req, timeout=_NET_TIMEOUT):
-            return True
-    except Exception:
-        return False
-
-
 # Queries the local QEMU binary for all supported machine types (result is cached).
 # In: str binary → Out: set

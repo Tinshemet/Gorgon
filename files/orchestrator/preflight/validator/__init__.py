@@ -22,7 +22,7 @@ from .base import ALL_CHECKS
 from .context import (
     _PREFLIGHT_TOOLS, _triage, set_custom_mode, _validate_profile_for_host,
     _validate_with_internet, _stealth_infer_from_product, _get_qemu_machine_types,
-    _get_qemu_cpu_models, _is_arm_cpu, _is_x86_cpu, _net_get, _net_head,
+    _get_qemu_cpu_models, _is_arm_cpu, _is_x86_cpu, _net_get,
 )
 from .stealth import _validate_stealth_args
 from .create_vm import _preflight_create_vm

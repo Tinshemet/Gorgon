@@ -28,7 +28,7 @@ from orchestrator.ai.chat.ollama_client import OLLAMA_URL, OLLAMA_MODEL, TOOLS, 
 from orchestrator.ai.chat.context_assistant import check_context
 from orchestrator.preflight.validator import (
     _get_qemu_machine_types, _get_qemu_cpu_models,
-    _is_arm_cpu, _is_x86_cpu, _net_get, _net_head,
+    _is_arm_cpu, _is_x86_cpu, _net_get,
 )
 from orchestrator.sanitizer.sanitizer import (
     VALID_AUDIO_TYPES, VALID_NETWORK_MODES, VALID_OS_TYPES,
