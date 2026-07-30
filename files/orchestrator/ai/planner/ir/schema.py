@@ -16,7 +16,7 @@ request may be shown, and the two are different questions. `want=None` narrows n
 so an absent fact never becomes a silent restriction.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from . import config, master
 
@@ -163,26 +163,85 @@ def _predicate_property() -> Dict[str, Any]:
     return prop
 
 
-def _field(name: str, known: Optional[set] = None) -> Dict[str, Any]:
-    """One field's JSON-Schema fragment, from the catalogue.
+# HOW A NESTED THING IS REFERRED TO — the ONE respect in which the two surfaces genuinely
+# differ. Constrained decoding names a `$defs` entry; a tool-call schema has no `$defs` to
+# point at and must inline. Everything else about a field is the same fact on both, which
+# is why they are now one builder.
+#
+# THEY HAD DRIFTED BADLY AND IN ONE DIRECTION, exactly as H2 records. Before 2026-07-30 this
+# module's `_field` knew nothing of `amount`'s minus form, `call`'s tool enum, block arrays
+# and their minItems, `cond`, the var/graft name pattern, or `in` — SIX constructs the
+# bench's builder had grown and production had not. Each was earned by a measured failure
+# there and none of them reached the path production and the tree actually use.
+DEFS = {"stmt": "#/$defs/stmt", "pred": "#/$defs/pred"}
 
-    `enum_from` points at another manifest table, so `kind`'s enum tracks the resource
-    manifest — add a kind and the enum follows with no edit here. `known` is the lab, and
-    the master decides what it narrows.
+
+def _field(name: str, known: Optional[set] = None,
+           refs: Optional[Dict[str, str]] = None,
+           tools: Optional[Sequence[str]] = None) -> Dict[str, Any]:
+    """One field's JSON-Schema fragment, from the catalogue. ONE BUILDER, two surfaces.
+
+    `refs` names the `$defs` entries for nested statements and predicates. Passing it gives
+    the constrained-decoding form; omitting it inlines, which is what a tool-call schema
+    needs. That parameter is the whole of the difference between the two builders that this
+    codebase has paid for three times (`of`, `select`, NOT-as-array).
     """
     spec = dict(config.FIELDS[name])
     doc = spec.pop("doc", "")
     src = spec.pop("enum_from", None)
-    if src:
-        spec["enum"] = list(getattr(config, src.upper()))
-    if name == "predicate":
-        return _predicate_property()
+
     if name == "from":
+        # THE ONE IDENTIFIER SLOT THAT IS GENUINELY CLOSED — you cannot copy what does not
+        # exist. The validator always said so and could only say it afterwards.
         return _from_field(doc, known)
     if name in ("select", "count"):
-        # `count` is a select in COUNTING POSITION — same query, different answer — so it
-        # takes the same schema. Without it `FETCH COUNT(...)` cannot be said at all.
+        # `count` is a select in COUNTING POSITION — same query, different answer. Without
+        # it `FETCH COUNT(...)` cannot be said at all.
         return dict(select_spec(), description=doc)
+    if name in ("cond", "predicate"):
+        return {"$ref": refs["pred"]} if refs else _predicate_property()
+    if name in ("then", "else", "ifails", "do"):
+        # minItems, so the decoder cannot emit an EMPTY branch. It did: rung 11 wrote a
+        # correct `IF ... = false { stop_vm }` and preceded it with a dead `IF ... = true
+        # { }`, which the validator rejected and which sank an otherwise right program.
+        item = {"$ref": refs["stmt"]} if refs else {"type": "object"}
+        return {"type": "array", "items": item, "minItems": 1, "description": doc}
+    if name == "call":
+        # THE TOOL LIST IS INJECTED, not read from the manifest, and that is not an
+        # oversight: the bench enumerates its SimWorld's tools while production enumerates
+        # the live registry. Absent means an open string rather than an empty enum — an
+        # empty one would offer the decoder nothing legal and read as a model failure.
+        tool = ({"type": "string", "enum": list(tools)} if tools
+                else {"type": "string", "description": "which tool"})
+        return {"type": "object",
+                "properties": {"tool": tool, "args": {"type": "object"}},
+                "required": ["tool", "args"]}
+    if name == "amount":
+        return {"anyOf": [
+            {"type": "integer", "minimum": 0},
+            {"type": "string", "description": "a $parameter"},
+            {"type": "object", "properties": {
+                "minus": {"type": "array", "minItems": 2, "maxItems": 2,
+                          "description": "[target, \"$have\"] — create only the shortfall"}},
+             "required": ["minus"]}],
+            "description": doc}
+    if name == "in":
+        return {"anyOf": [{"type": "string"},
+                          {"type": "array", "items": {"type": "string"}}],
+                "description": doc}
+    if name in ("var", "graft"):
+        # CONSTRAIN THE DECODER, don't diagnose afterwards. `-` cannot appear in a binding
+        # name because it composes names ($item-snap); rung 6's paraphrase bound `red-net`
+        # in all three samples and then could not read it back.
+        return {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                "description": doc + " Letters, digits and underscores only — a name with "
+                                     "'-' cannot be referred to."}
+    if src:
+        return {"type": "string", "enum": list(getattr(config, src.upper())),
+                "description": doc}
+    if "enum" in spec or not isinstance(spec.get("type"), str):
+        t = spec.get("type")
+        spec["type"] = t if isinstance(t, str) else "string"
     return {**spec, "description": doc}
 
 

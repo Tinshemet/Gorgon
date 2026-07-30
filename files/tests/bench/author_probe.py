@@ -108,66 +108,20 @@ def _select_spec(depth: int = 1):
 
 
 def _field_schema(name: str, known=None):
-    """One field's schema, from the manifest's field catalogue.
+    """DELEGATED to `ir/schema._field` since 2026-07-30 (H2) — this is now one line.
 
-    Built rather than written out. This schema WAS hand-maintained and had already
-    drifted: it still said `count` after the rename to `amount`, and knew nothing of
-    `from`, `graft`, `if` or `ifails` — so the model could not reach constructs that
-    exist. A probe that withholds half the language measures the wrong thing and reports
-    it as a model failure.
+    It was the RICHER of the two builders for its whole life, and that was the defect. Six
+    constructs lived only here — `amount`'s minus form, `call`'s tool enum, block arrays and
+    their minItems, `cond`, the var/graft name pattern, `in` — each earned by a measured
+    failure in this probe, and none of them ever reached `ir/schema.py`, which serves
+    production AND `lower.leaf_schema`. So the ladder measured a language the other two
+    surfaces could not write, which is H2 stated as a consequence rather than a worry.
+
+    Two things differ between the surfaces and both are now PARAMETERS rather than forks:
+    `refs` (constrained decoding names a `$defs` entry; a tool-call schema inlines) and
+    `tools` (this probe enumerates its SimWorld, production the live registry).
     """
-    spec = dict(config.FIELDS.get(name) or {"type": "string"})
-    doc = spec.pop("doc", "")
-    src = spec.pop("enum_from", None)
-    if name == "from":
-        # THE ONE IDENTIFIER SLOT THAT IS GENUINELY CLOSED — you cannot copy what does not
-        # exist. The validator has always said so and could only say it afterwards; the
-        # master says it to the decoder. `_from_field` is shared with the ir schema so the
-        # two surfaces cannot answer differently.
-        return _ir_schema._from_field(doc, known)
-    if name in ("select", "count"):
-        # `count` is a select in counting position — same query, different answer. Giving
-        # it the select schema is what lets the author say FETCH COUNT(...) at all.
-        return _select_spec()
-    if name == "amount":
-        return {"anyOf": [
-            {"type": "integer", "minimum": 0},
-            {"type": "string", "description": "a $parameter"},
-            {"type": "object", "properties": {
-                "minus": {"type": "array", "minItems": 2, "maxItems": 2,
-                          "description": "[target, \"$have\"] — create only the shortfall"}},
-             "required": ["minus"]}],
-            "description": doc}
-    if name == "call":
-        return _call_spec()
-    if name in ("then", "else", "ifails", "do"):
-        # minItems, so the decoder cannot emit an EMPTY branch. It did: rung 11 wrote a
-        # perfectly correct `IF ... = false { stop_vm }` and preceded it with a dead
-        # `IF ... = true { }`, which the validator rejected and which sank an otherwise
-        # right program. Constraints belong where the decoder sees them; discovering an
-        # empty block afterwards only lets you complain about it.
-        return {"type": "array", "items": {"$ref": "#/$defs/stmt"},
-                "minItems": 1, "description": doc}
-    if name in ("cond", "predicate"):
-        return {"$ref": "#/$defs/pred"}
-    if name == "in":
-        return {"anyOf": [{"type": "string"},
-                          {"type": "array", "items": {"type": "string"}}],
-                "description": doc}
-    if name in ("var", "graft"):
-        # CONSTRAIN THE DECODER, don't diagnose afterwards. A binding name has to be one
-        # a reference can pronounce, and `-` cannot appear in one because it composes
-        # names ($item-snap). Rung 6's paraphrase bound `red-net` in all three samples and
-        # then could not read it back. A constraint the decoder sees cannot be violated;
-        # a constraint only the validator knows costs a repair round to discover.
-        return {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
-                "description": doc + " Letters, digits and underscores only — a name with "
-                                     "'-' cannot be referred to."}
-    if src:
-        return {"type": "string", "enum": list(getattr(config, src.upper())),
-                "description": doc}
-    t = spec.get("type")
-    return {"type": t if isinstance(t, str) else "string", "description": doc}
+    return _ir_schema._field(name, known, refs=_ir_schema.DEFS, tools=list(_TOOLS))
 
 
 def _pred_spec():
