@@ -63,6 +63,20 @@ def _dead(st: Any) -> Optional[str]:
     return "dead_if"
 
 
+def _orphan_else(stmts: Any, i: int) -> bool:
+    """Is the statement at `i` an `else` written as a statement of its own?
+
+    `else` is a FIELD, so this is never legal — but it is a shape the author actually
+    produces, and while it stands it makes the `if` before it load-bearing rather than
+    dead. Read here rather than assumed, because the two halves are only related by
+    adjacency.
+    """
+    if not isinstance(stmts, list) or i >= len(stmts):
+        return False
+    nxt = stmts[i]
+    return isinstance(nxt, dict) and nxt.get("op") == "else"
+
+
 def kinds() -> Dict[str, Dict[str, str]]:
     """The manifest's artifact table."""
     return config.SANITIZE.get("kinds") or {}
@@ -90,6 +104,24 @@ def sanitize(program: Any) -> Tuple[Any, List[Dict[str, str]]]:
         for i, st in enumerate(stmts):
             where = f"{path}statement {i + 1}"
             kind = _dead(st)
+            # AN EMPTY `if` FOLLOWED BY AN ORPHANED `else` IS NOT RESIDUE — it is half of
+            # one statement, and removing it destroys the other half's only context.
+            #
+            # MEASURED ON RUNG 11, 2026-07-30, and every step in the chain looked correct
+            # on its own. The author writes `IF cond THEN {}` and then `else` as a
+            # statement of its own. `_dead` fires, rightly by its own rule: both branches
+            # are empty. The `else` is now orphaned, and the validator tells the author
+            # "`else` is a FIELD of the `if` above it" — naming a statement THIS PASS JUST
+            # DELETED. The repair, asked to attach work to something that no longer
+            # exists, drops the condition altogether and stops every machine in the lab
+            # instead of only the silent ones.
+            #
+            # Keeping it costs nothing and changes nothing else: the validator then raises
+            # its own empty-`then` objection, which is accurate, actionable, and already
+            # says what to write instead. This pass REMOVES WHAT CANNOT RUN; a statement
+            # whose removal breaks the next one was never that.
+            if kind == "dead_if" and _orphan_else(stmts, i + 1):
+                kind = None
             if kind:
                 dropped.append((where, kind))
                 continue

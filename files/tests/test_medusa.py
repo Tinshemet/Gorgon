@@ -348,6 +348,45 @@ def test_a_standing_goal_below_its_granted_authority_is_raised():
           intent.promote(loop_local, intent.ACHIEVE) == (loop_local, None))
 
 
+def test_a_repair_may_not_answer_an_objection_by_deleting_the_logic():
+    """Rung 11, measured 2026-07-30. The author wrote an `else` as its own statement; the
+    objection said so correctly and asked for it to be RESTRUCTURED. The repair came back
+    with the condition gone, stopping every machine instead of only the silent ones —
+    legal, valid, and further from the goal than the program it replaced.
+
+    THE TEST IS "ZERO GUARDS LEFT", not "fewer than before": restructuring legitimately
+    changes how many `if`s exist (two branches become one `IF NOT`), so a count comparison
+    would fire on correct repairs. Losing the last one cannot be a restructuring.
+
+    AND A FILTERED SELECT COUNTS. Acting on only some members needs no `if` at all —
+    demanding one would grade the SHAPE we expected rather than the result.
+    """
+    from orchestrator.ai.planner.ir import revision
+
+    guarded = {"body": [{"op": "foreach", "in": "$vms", "then": [
+        {"op": "if", "cond": {"shape": "is", "of": "$answer.alive", "eq": False},
+         "then": [{"op": "call",
+                   "call": {"tool": "stop_vm", "args": {"name": "$item"}}}]}]}]}
+    dropped = {"body": [{"op": "foreach", "select": {"kind": "vm"},
+                         "call": {"tool": "stop_vm", "args": {"name": "$item"}}}]}
+    narrowed = {"body": [{"op": "foreach", "select": {"kind": "vm", "alive": "false"},
+                          "call": {"tool": "stop_vm", "args": {"name": "$item"}}}]}
+    unguarded = {"body": [{"op": "call",
+                           "call": {"tool": "launch_vm", "args": {"name": "a"}}}]}
+
+    complaint = revision.lost_guard(guarded, dropped)
+    check("a repair that drops the last condition is objected to", bool(complaint))
+    check("and the objection says what to do instead, not just what is wrong",
+          "IF NOT" in complaint and "WHERE" in complaint)
+    check("narrowing the set instead of branching is accepted",
+          revision.lost_guard(guarded, narrowed) is None)
+    check("a program that never had a guard is not asked to invent one",
+          revision.lost_guard(unguarded, dropped) is None)
+    check("keeping the guard passes", revision.lost_guard(guarded, guarded) is None)
+    check("a bare `foreach` over a kind is not a guard — it acts on everything",
+          revision.guards(dropped) == [])
+
+
 def test_a_failed_predicate_does_not_silently_swallow_the_rest_of_the_program():
     """A failed predicate returns from `run`, abandoning every statement after it — and
     nothing said so, while `derive` then closed the predicate's gap and reported the goal
