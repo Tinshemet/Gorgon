@@ -165,23 +165,16 @@ def make_emit(model: str, world: SimWorld, want: str, stats: Dict[str, int], log
 def _goal_predicate(prog: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """The predicate that stands for the whole program, or None.
 
-    THE SAME RULE `author_probe` ARRIVED AT, and both halves of it were learned by being
-    broken. An `achieve` outranks an `ensure` because it is the goal rather than a check
-    along the way, and the LAST `ensure` wins because a precondition at the top of a
-    program is not what the program was FOR.
-
-    LOOP-LOCAL PREDICATES ARE EXCLUDED. One mentioning the loop variable is a
-    per-iteration check and cannot stand for the program — taking one as the standing goal
-    is how a rung came to be graded against `COUNT(SELECT vm WHERE name = '$item') = 1`.
+    THE RULE ITSELF NOW LIVES IN `intent.standing_goal` — it was written here and a second
+    time in `author_probe`, and this docstring used to say as much ("the same rule
+    author_probe arrived at") without either copy being the authority. Both halves of it
+    were learned by being broken: an `achieve` outranks an `ensure`, the LAST `ensure`
+    wins, and loop-local predicates are excluded because taking one as the standing goal is
+    how a rung came to be graded against `COUNT(SELECT vm WHERE name = '$item') = 1`.
     """
-    from orchestrator.ai.planner.ir import consent as _consent
-    member = f"{config.SIGIL}{config.LOOP_VAR}"
-    candidates = [st for st in _consent._walk(prog.get("body", []))
-                  if st.get("predicate") is not None
-                  and member not in json.dumps(st["predicate"])]
-    return (next((st["predicate"] for st in candidates if st.get("op") == "achieve"), None)
-            or next((st["predicate"] for st in reversed(candidates)
-                     if st.get("op") == "ensure"), None))
+    from orchestrator.ai.planner.ir import intent as _int
+    st = _int.standing_goal(prog)
+    return st["predicate"] if st else None
 
 
 def main(argv=None) -> int:

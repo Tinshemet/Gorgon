@@ -173,6 +173,83 @@ def violations(program: Any, intent: str) -> List[str]:
     return out
 
 
+def standing_goal(program: Any) -> Optional[Dict[str, Any]]:
+    """The one statement that stands for the whole program, or None.
+
+    ONE AUTHORITY for a rule that had already been written twice — `tree_probe`'s
+    `_goal_predicate` and an inline block in `author_probe`, whose own comment admits it is
+    "the same rule author_probe arrived at". Both halves of it were learned by being broken,
+    and both breakages cost a rung:
+
+      * AN `achieve` OUTRANKS AN `ensure`, because it is the goal rather than a check along
+        the way; among ensures the LAST wins, because a precondition at the top of a program
+        is not what the program was FOR.
+      * LOOP-LOCAL PREDICATES ARE EXCLUDED. Searching only the top level made a program
+        whose one verdict sat inside a loop have no standing goal at all, so every revision
+        "passed" against nothing (rung 9 reported `goal=HOLDS` while the checker said FAIL).
+        Walking nested blocks fixed that and broke rung 11 the other way: an in-loop
+        `ENSURE COUNT(SELECT vm WHERE name = '$item') = 1` was taken as the standing goal,
+        and outside its loop `$item` resolves to nothing, so no correction could satisfy it.
+        The rule that covers both: the standing goal must be re-evaluable in the OUTER
+        scope.
+
+    Returns the STATEMENT, not the predicate, because a caller that wants to change the op
+    needs the statement — `standing_goal(p)["predicate"]` is the predicate.
+    """
+    import json as _json
+
+    from .consent import _walk
+    from .validate import coerce_body
+    member = f"{config.SIGIL}{config.LOOP_VAR}"
+    candidates = [st for st in _walk(coerce_body(program) or [])
+                  if st.get("predicate") is not None
+                  and member not in _json.dumps(st["predicate"])]
+    return (next((st for st in candidates if st.get("op") == ACHIEVE), None)
+            or next((st for st in reversed(candidates) if st.get("op") == ENSURE), None))
+
+
+def promote(program: Any, intent: str) -> tuple:
+    """Raise a standing goal that sits BELOW the authority it was granted.
+
+    THE MIRROR OF `violations`. That function refuses a program reaching ABOVE its rung;
+    this one lifts a program sitting below it, and the second case is not symmetrical with
+    the first — reaching above is a trespass, sitting below is a program that cannot finish
+    the job it was asked to do.
+
+    WHY IT IS NEEDED, measured 2026-07-30. Granted ACHIEVE, the model writes ENSURE for the
+    standing goal: a CHECK where it was licensed to CORRECT. The convergence machinery then
+    never runs, because `execute` reports a failed non-achieve as `unsatisfied` and the
+    deriver fires only for `unachieved` — deliberately, since `unsatisfied` means the
+    program assumed something untrue and a diff would paper over it. So the whole
+    correction path is unreachable, and the cell fails every time. Rung 7 shows it cleanly:
+    the literal says "make sure", ACHIEVE's own phrase, and passes 3/3; the paraphrase says
+    "there should end up being" and fails 3/3 on identical machinery.
+
+    ONLY THE STANDING GOAL. A mid-program `ensure` is a legitimate precondition, and
+    promoting every check would license acting on assumptions the author meant only to
+    verify — the same mistake as inferring intent from wording, one level down.
+
+    RETURNS A NEW PROGRAM AND A NOTE, and never mutates the argument. The operator chose
+    promotion over objection, so what RUNS is not what was authored; the note is how that
+    stays auditable instead of silent. A rewrite nobody records is indistinguishable from
+    the author having written it, which is the one thing that would make this hard to debug
+    later.
+    """
+    if intent != ACHIEVE:
+        return program, None
+    st = standing_goal(program)
+    if st is None or st.get("op") != ENSURE:
+        return program, None
+    import copy as _copy
+    fresh = _copy.deepcopy(program)
+    target = standing_goal(fresh)
+    if target is None or target.get("op") != ENSURE:
+        return program, None          # the copy disagreed — change nothing
+    target["op"] = ACHIEVE
+    return fresh, ("standing goal promoted ENSURE -> ACHIEVE: granted authority to "
+                   "CORRECT, authored only a CHECK")
+
+
 def instruction(intent: str) -> str:
     """What to tell the author, once a human has settled it.
 

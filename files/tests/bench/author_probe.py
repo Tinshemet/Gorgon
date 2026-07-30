@@ -1054,15 +1054,13 @@ def main(argv=None, sink=None) -> int:
             # The rule that covers both: the standing goal must be re-evaluable in the
             # program's OUTER scope. A predicate mentioning the loop variable is a
             # per-iteration check and cannot stand for the program.
-            member = f"{config.SIGIL}{config.LOOP_VAR}"
-            candidates = [st for st in consent._walk(prog.get("body", []))
-                          if st.get("predicate") is not None
-                          and member not in json.dumps(st["predicate"])]
-            goal_pred = next((st["predicate"] for st in candidates
-                              if st.get("op") == "achieve"), None)
-            if goal_pred is None:
-                goal_pred = next((st["predicate"] for st in reversed(candidates)
-                                  if st.get("op") == "ensure"), None)
+            # ONE AUTHORITY, in `intent.standing_goal`. This rule was written out here and
+            # again in `tree_probe`, whose docstring says so — and it is exactly the kind of
+            # fact the 07-30 sweep found diverging four times in a day. The reasoning above
+            # is kept because it is why the rule has the shape it does; the implementation
+            # is not kept twice.
+            _standing = _intent.standing_goal(prog)
+            goal_pred = _standing["predicate"] if _standing else None
 
             def _goal_holds():
                 # `evaluate`, not the raw leaf reader. Calling `holds` directly here lost
