@@ -20,10 +20,16 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from . import master
+
 # Ops that CHANGE the world. `ensure` and `if` are excluded because neither acts on its
 # own: an `if` is only as consequential as the block it runs, and that block's own
 # statements are counted when the walk reaches them.
-_ACTING = {"new", "call", "foreach"}
+#
+# FROM THE MANIFEST since 2026-07-30. This set and `validate._ACTS` were the same three
+# words written twice in modules that cannot see each other, and the fact is load-bearing
+# in both — Medusa's soundness rule and the consent prompt.
+_ACTING = master.acting_ops()
 
 # Where a statement can carry more statements. Read from the field catalogue rather than
 # listed here, so a construct added to the manifest is walked without an edit — the same

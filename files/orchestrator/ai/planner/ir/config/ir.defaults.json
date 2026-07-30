@@ -76,7 +76,8 @@
         "args",
         "from",
         "ifails"
-      ]
+      ],
+      "acts": true
     },
     "fetch": {
       "required": [
@@ -106,7 +107,8 @@
         "args",
         "graft",
         "ifails"
-      ]
+      ],
+      "acts": true
     },
     "foreach": {
       "required": [],
@@ -128,7 +130,8 @@
         "do",
         "async",
         "ifails"
-      ]
+      ],
+      "acts": true
     },
     "ensure": {
       "required": [
@@ -674,5 +677,6 @@
       "doc": "a named whole MINUS named members — there must be a whole to subtract from"
     }
   },
-  "_nouns_doc": "THE ENGLISH NOUNS A KIND ANSWERS TO, declared beside it. The ladder's paraphrase column exists because the same capability is asked for in different words — 'set up three machines' is 'create 3 vms' — so any reader that has to recognise a kind IN PROSE needs this list, and it must be ONE list. Added 2026-07-30 after two shape-based routers (quantifier_rule, route_rule) each hardcoded their own copy in Python and had already diverged the same day: one knew 'host' and 'resource', the other did not. That is the stale-twin defect this project has paid for three times in the schema builders (`of`, `select`, NOT-as-array), reappearing in a new place. The key is singular; plurals are derived, never listed. `resource` is deliberately filed under `vm` because that is how the ladder's own decompositions use it — 'move resource to new network' means a machine."
+  "_nouns_doc": "THE ENGLISH NOUNS A KIND ANSWERS TO, declared beside it. The ladder's paraphrase column exists because the same capability is asked for in different words — 'set up three machines' is 'create 3 vms' — so any reader that has to recognise a kind IN PROSE needs this list, and it must be ONE list. Added 2026-07-30 after two shape-based routers (quantifier_rule, route_rule) each hardcoded their own copy in Python and had already diverged the same day: one knew 'host' and 'resource', the other did not. That is the stale-twin defect this project has paid for three times in the schema builders (`of`, `select`, NOT-as-array), reappearing in a new place. The key is singular; plurals are derived, never listed. `resource` is deliberately filed under `vm` because that is how the ladder's own decompositions use it — 'move resource to new network' means a machine.",
+  "_acts_doc": "WHICH OPS TOUCH THE WORLD. Declared per op because two modules had derived it independently and identically — `consent._ACTING` and `validate._ACTS` were the same three words written twice, and neither could see the other. It carries real weight: Medusa's one soundness rule is that a program which ACTS and asserts nothing has established nothing, and consent is asked for exactly when a statement acts. An op added to the language with no row here silently becomes harmless to both."
 }

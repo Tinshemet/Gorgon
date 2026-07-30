@@ -33,6 +33,7 @@ import json
 from typing import Any, Dict, List, Optional, Tuple
 
 from . import config, refs
+from . import master
 
 try:
     from executor.command_catalog import (KNOWN_TOOLS as _KNOWN_TOOLS,
@@ -638,7 +639,7 @@ def _check_cardinality(st, where: str) -> List[str]:
 
 
 # Ops that change the world — the same set consent.py counts, for the same reason.
-_ACTS = {"new", "call", "foreach"}
+_ACTS = master.acting_ops()     # from the manifest — see master.acting_ops
 
 
 def _check_select(sel: Any, where: str, sets: Optional[set] = None) -> List[str]:

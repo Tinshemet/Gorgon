@@ -81,6 +81,18 @@ def ops(want: Optional[str] = None, quantifier: Optional[str] = None) -> List[st
     return out
 
 
+def acting_ops() -> set:
+    """The ops that TOUCH THE WORLD, from the manifest.
+
+    `consent._ACTING` and `validate._ACTS` were byte-identical sets declared in two modules
+    that cannot see each other, and the fact is load-bearing in both: Medusa's one soundness
+    rule is that a program which acts and asserts nothing has established nothing, and
+    consent is asked for exactly when a statement acts. An op added to the language without
+    a row would have become silently harmless to both readers.
+    """
+    return {op for op, spec in config.OPS.items() if spec.get("acts")}
+
+
 def kind_nouns(kind: Optional[str] = None) -> set:
     """Every English noun that names a kind — THE one lexicon, read from the manifest.
 

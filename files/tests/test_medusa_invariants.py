@@ -958,6 +958,47 @@ def test_the_quantifier_narrows_BOTH_paths_not_just_the_bench():
               and set(_c.QUANTIFIERS[q]["ops"]) >= set(_m.ops("achieve")))
 
 
+def test_ONE_authority_per_fact_in_the_program_regime():
+    """The stale-twin defect, guarded at the source instead of case by case.
+
+    Three times the schema builders drifted (`of`, `select`, NOT-as-array) and each cost a
+    rung. On 2026-07-30 it happened twice more in a single day, in NEW code: two shape
+    routers each hardcoded the kind nouns and had already diverged, and `consent._ACTING`
+    and `validate._ACTS` turned out to be the same three words written in two modules that
+    cannot see each other. Both facts now live in the manifest with one reader.
+
+    This does not stop a third copy being written. It does stop a third copy from silently
+    DISAGREEING, which is the part that costs rungs.
+    """
+    import importlib as _il
+
+    from orchestrator.ai.planner.ir import config as _c
+    from orchestrator.ai.planner.ir import consent as _consent
+    from orchestrator.ai.planner.ir import master as _m
+    # THE MODULE, not the re-export. `ir/__init__` exports `validate` as a FUNCTION, so the
+    # plain import binds the callable and `_v._ACTS` raises — reading something adjacent to
+    # what actually holds the fact, which is the habit this whole test exists to catch.
+    _v = _il.import_module("orchestrator.ai.planner.ir.validate")
+
+    check("acting ops are declared in the manifest, not in code",
+          _m.acting_ops() == {op for op, spec in _c.OPS.items() if spec.get("acts")})
+    check("consent and validate read the SAME acting set",
+          _consent._ACTING == _v._ACTS == _m.acting_ops())
+    check("and it is not empty — an unset manifest flag would silently disarm both",
+          bool(_m.acting_ops()))
+
+    # THE KIND LEXICON. Every reader that recognises a kind in prose asks one function.
+    from tests.bench import quantifier_rule as _qr
+    from tests.bench import route_rule as _rr
+    check("both shape routers share one kind lexicon",
+          _qr.kind_nouns is _rr.kind_words is _m.kind_nouns)
+    check("every declared kind is in it",
+          all(k.lower() in _m.kind_nouns() for k in _c.KINDS))
+    check("and the nouns come from the manifest, not from python",
+          "machine" in _m.kind_nouns()
+          and "machine" in (_c.KINDS["vm"].get("nouns") or []))
+
+
 def main():
     """Every `test_*` in this module, in definition order — DISCOVERED, not listed.
 
