@@ -37,7 +37,8 @@ from orchestrator.ai.planner.ir import run as _run
 
 from . import env_stamp, pinned
 from . import route_rule as _route_rule
-from .author_probe import _OLLAMA, _OLLAMA_CTX, _seams, _messages
+from .author_probe import _OLLAMA, _OLLAMA_CTX, _messages
+from .seams import seams as _seams
 from .ladder import BENCH_MODEL
 from .rungs import RUNGS
 from .sim_world import SimWorld
@@ -201,7 +202,12 @@ def main(argv=None) -> int:
     print(f"   under: {env_stamp.describe(env_stamp.stamp(a.model))}\n")
 
     passed = attempted = 0
-    totals = {"route_calls": 0, "emit_calls": 0, "leaf_bad_json": 0, "route_channel": 0}
+    # `rule_overrides` BELONGS HERE, not only in `stats`. Per-rung counters are summed by
+    # iterating `totals`, so a key the rule invented mid-run was dropped at every rung
+    # boundary and never reached the summary — the run could not report how often the
+    # thing being measured actually fired.
+    totals = {"route_calls": 0, "emit_calls": 0, "leaf_bad_json": 0, "route_channel": 0,
+              "rule_overrides": 0}
 
     for rung in rungs:
         goal = (rung.paraphrase or rung.goal) if a.paraphrase else rung.goal
@@ -310,6 +316,8 @@ def main(argv=None) -> int:
     print(f"   leaf emissions     : {totals['emit_calls']}")
     print(f"   LEAF DECODE FAILS  : {totals['leaf_bad_json']}"
           f"   <- the branch-count claim lives or dies here")
+    print(f"   rule overrides     : {totals['rule_overrides']}"
+          f"   (new-vs-call rule {'ON' if _ROUTE_RULE else 'OFF — control arm'})")
     print(f"\n   Baseline for comparison: whole-program authoring, 57/78 goal achieved,")
     print(f"   12 of 21 failures in the channel, on an ELEVEN-branch oneOf.")
     return 0

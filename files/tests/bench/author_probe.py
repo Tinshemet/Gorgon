@@ -48,6 +48,12 @@ from .ladder import BENCH_MODEL
 from .mutate import MUTATIONS, apply as _mutate
 from .rungs import RUNGS
 from .sim_world import SimWorld
+# THE SEAMS LIVE IN `seams.py` — one authority. They were defined here and, in a
+# weaker form, a second time in `run_program`, where the missing `not`/`in`/`any`/
+# `all` meant a carve-out was silently ignored and `disjoint` was never evaluated.
+# Imported under the old private name so every call site here, and the re-export
+# `tree_probe` relies on, keep working.
+from .seams import seams as _seams
 
 _TOOLS = SimWorld.tools()
 
@@ -709,143 +715,6 @@ def revise(goal, program, world, why, model, temp, shots, timeout=600,
     ok, problems = validate(prog, known_names=known_names,
                             census=world.census() if world is not None else None)
     return prog, ([] if ok else problems)
-
-
-def _seams(world):
-    """Registry query + predicate evaluation, backed by the sim — the same two seams the
-    orchestrator fills with the Active Library and the findings ledger."""
-    def select(sel, scope=None):
-        kind = sel.get("kind")
-        alias = (config.KINDS.get(kind) or {}).get("aliases") or {}
-
-        def _matches(name, vm, filters, scope=None):
-            """One member against one set of filters. The SAME function answers both the
-            include and the exclude side, so a carve-out cannot drift from the selection
-            it carves out of — the exact bug that made `iso_lab` match `id=iso_lab2` in
-            the network attach, arriving in a second place."""
-            # GROUPS FIRST — `any` is OR, `all` an explicit AND, each branch a filter
-            # set answered by this same function, so a group can never mean something the
-            # flat form does not.
-            for group, combine in (("any", any), ("all", all)):
-                kids = filters.get(group)
-                if isinstance(kids, list) and kids:
-                    if not combine(_matches(name, vm, k, scope) for k in kids):
-                        return False
-            f = {alias.get(k, k): v for k, v in filters.items()
-                 if k not in ("not", "any", "all")}
-            # MEMBERSHIP — the attribute is ANY of these. Resolved through the same refs
-            # the rest of the language uses, so a bound set works beside a literal list.
-            for attr in list(f):
-                spec = f[attr]
-                if isinstance(spec, dict) and "in" in spec:
-                    want = spec["in"]
-                    if isinstance(want, str):
-                        want = refs.resolve(want, scope or {})
-                    want = want if isinstance(want, (list, tuple, set)) else [want]
-                    got = (name if attr == "name" else vm.get(attr))
-                    if attr == "label":
-                        carried = vm["labels"] | vm.get("flags", set())
-                        if not (carried & set(want)):
-                            return False
-                    elif attr == "network":
-                        if not (vm.get("nets", set()) & set(want)):
-                            return False
-                    elif got not in want:
-                        return False
-                    f.pop(attr)
-            # A NON-SCALAR FILTER CANNOT MATCH, and must not raise. The validator now
-            # refuses `label = '$vms'` where $vms holds a set, but a value can still
-            # arrive non-scalar at run time — a parameter supplied at invocation is not
-            # knowable statically. Before this, `f["label"] not in {...}` hit a list, and
-            # an unhashable type took down a 13-rung run at rung 9 with a TypeError
-            # instead of failing one program. A seam that crashes destroys the
-            # measurement around it, which is the same reason render.py may not raise.
-            if any(isinstance(v, (list, dict, set, tuple)) for v in f.values()):
-                return False
-            # OBSERVED attributes are read out of the findings ledger, never off the
-            # record — that is the whole of decision 6. Delegated to `observe.matches` so
-            # the rule that `unknown` matches neither `true` nor `false` lives in one
-            # place: a seam that reimplemented it would be free to get it wrong, and the
-            # way it gets it wrong is by treating unprobed as dead.
-            for attr, wanted in f.items():
-                if observe.matches(world.findings, kind or "vm", attr, name, wanted) is False:
-                    return False
-            if "label" in f and f["label"] not in (vm["labels"] | vm.get("flags", set())):
-                return False
-            if "status" in f and vm["status"] != f["status"]:
-                return False
-            if "name" in f and name != f["name"]:
-                return False
-            if "os_type" in f and vm.get("os_type") != f["os_type"]:
-                return False
-            # Membership, not equality: a machine sits on a SET of networks. Written as
-            # equality (`network = 'core'`) because that is how the operator says it —
-            # "is it on core" — and the query language should not make a reader learn
-            # which attributes happen to be multi-valued.
-            if "network" in f and f["network"] not in vm.get("nets", set()):
-                return False
-            return True
-
-        if kind == "network":
-            return sorted(world.nets)
-        carve = sel.get("not") or {}
-        return [n for n, vm in sorted(world.vms.items())
-                if _matches(n, vm, sel, scope)
-                and not (carve and _matches(n, vm, carve, scope))]
-
-    def holds(pred, scope):
-        shape = pred.get("shape")
-        if shape == "count":
-            n = len(select(pred.get("select") or {}))
-            for c, op in (("eq", "=="), ("gte", ">="), ("lte", "<=")):
-                if c in pred:
-                    good = {"==": n == pred[c], ">=": n >= pred[c], "<=": n <= pred[c]}[op]
-                    return good, f"count is {n}, wanted {op} {pred[c]}"
-            return False, "no comparator"
-        if shape == "reach":
-            # Members come from the SAME select() the rest of the language uses. Reading
-            # only `tag` meant REACH(SELECT vm) — no filter, every vm, a perfectly legal
-            # set — looked up the label None and found nobody. A predicate that ignores
-            # its own operand's filters answers a different question than it was asked.
-            members = select(pred.get("select") or {})
-            floor = int(pred.get("min", 2))
-            shared = world.common_networks(members) if members else set()
-            good = len(members) >= floor and bool(shared)
-            return good, f"reach over {len(members)} member(s), floor {floor} -> {good}"
-        if shape == "disjoint":
-            # DECLARED SINCE DAY ONE, NEVER EVALUABLE. The manifest lists it, the schema
-            # offers it, the validator accepts it and the renderer prints it — and this
-            # seam fell through to "unevaluated shape disjoint", which a postcondition
-            # then counts as FAILED. So `ACHIEVE DISJOINT($reds, $blues)` — a correct
-            # statement of rung 6's goal — could not hold in any world, and burned three
-            # revision rounds saying so. Exactly the shape of the composite-predicate bug
-            # found earlier, in a third predicate, because nothing asserts that every
-            # declared shape has an evaluator.
-            #
-            # Its operand is `sets`: names of sets the program bound, not a query. Each
-            # resolves through the same refs the rest of the language uses, so a set built
-            # by `new` (a list) and one bound by `fetch` both work.
-            raw = pred.get("sets") or []
-            resolved, unknown = [], []
-            for ref in raw:
-                val = refs.resolve(ref, scope) if isinstance(ref, str) else ref
-                if isinstance(val, str) and refs.names(val):
-                    unknown.append(ref)          # never bound — still a $token
-                    continue
-                resolved.append({val} if isinstance(val, str) else set(val or ()))
-            if unknown or len(resolved) < 2:
-                return False, (f"disjoint needs two or more bound sets; "
-                               f"{', '.join(unknown) or 'too few'} not in scope")
-            overlap = set()
-            for i, a in enumerate(resolved):
-                for b in resolved[i + 1:]:
-                    overlap |= (a & b)
-            return (not overlap), (f"disjoint over {len(resolved)} sets -> "
-                                   + ("no shared member"
-                                      if not overlap else
-                                      f"shared: {', '.join(sorted(overlap))}"))
-        return False, f"unevaluated shape {shape}"
-    return select, holds
 
 
 def main(argv=None, sink=None) -> int:

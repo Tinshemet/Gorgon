@@ -998,6 +998,37 @@ def test_ONE_authority_per_fact_in_the_program_regime():
           "machine" in _m.kind_nouns()
           and "machine" in (_c.KINDS["vm"].get("nouns") or []))
 
+    # THE SIM-BACKED SEAMS. There were two, and the second was strictly weaker: it filtered
+    # on label/status/name only, so `not`/`in`/`any`/`all` were silently DROPPED — a program
+    # saying "every vm except db" got every vm and the seam reported success — and its
+    # `holds` answered `disjoint` with "not evaluated in the bench", which is the shape rung
+    # 8 ends on. Identity is the strongest form of this guard: two names for one function
+    # cannot drift, where two functions with a comment asking them to agree always do.
+    from tests.bench import author_probe as _ap
+    from tests.bench import run_program as _rp
+    from tests.bench import seams as _seams_mod
+    from tests.bench import tree_probe as _tp
+    check("every sim-backed seam is the ONE authority in seams.py",
+          _ap._seams is _rp.seams is _tp._seams is _seams_mod.seams)
+
+    # And it answers the shapes the weak twin dropped. Behavioural, not structural: the
+    # identity check above would still pass if the authority itself lost these.
+    w = SimWorld()
+    for n in ("app1", "db"):
+        w.execute("create_vm", {"name": n, "os_type": "linux"})
+    w.execute("create_network", {"net_name": "core"})
+    sel, holds = _seams_mod.seams(w)
+    check("the carve-out is honoured, not ignored",
+          sel({"kind": "vm", "not": {"name": "db"}}) == ["app1"])
+    check("membership is answered",
+          sel({"kind": "vm", "name": {"in": ["db"]}}) == ["db"])
+    check("an `any` group is answered",
+          sel({"kind": "vm", "any": [{"name": "app1"}, {"name": "db"}]}) == ["app1", "db"])
+    good, why = holds({"shape": "disjoint", "sets": [["app1"], ["db"]]}, {})
+    check(f"disjoint is EVALUATED, not deferred ({why})", good is True)
+    bad, _ = holds({"shape": "disjoint", "sets": [["app1", "db"], ["db"]]}, {})
+    check("and it detects an overlap", bad is False)
+
 
 def main():
     """Every `test_*` in this module, in definition order — DISCOVERED, not listed.

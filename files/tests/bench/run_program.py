@@ -6,6 +6,11 @@ injected seams differ: `execute` is the sim's instead of the gated execute_tool,
 `select` reads the sim's registry instead of the Active Library, and `holds` reads the
 sim's reach() instead of the findings ledger. Nothing about the language changes.
 
+`select` and `holds` come from `seams.py`, which is their one authority. This module used
+to define its own weaker pair — no `not`/`in`/`any`/`all` and no `disjoint` evaluator — so
+a carve-out was silently ignored here while the copy in `author_probe` answered it
+correctly. Two sim-backed seams is one too many.
+
 Run:  PYTHONPATH=. python3 -m tests.bench.run_program            # X=5
       PYTHONPATH=. python3 -m tests.bench.run_program -x 3
 """
@@ -15,6 +20,7 @@ import sys
 
 from orchestrator.ai.planner.ir import render, run, validate
 
+from .seams import seams
 from .sim_world import SimWorld
 
 # THE PROGRAM. "create X vms, label them 'test', put them on a network, make sure they
@@ -48,60 +54,6 @@ PROGRAM = {
                        "min": "$X"}},
     ],
 }
-
-
-def seams(world: SimWorld):
-    """The three injected seams, backed by the sim.
-
-    `holds` is where finding #2 shows: `count` is answered from the registry, but `reach`
-    is answered by the world's reach() — a probe result, not state. In the orchestrator
-    those are the Active Library and the findings ledger respectively. An ENSURE that
-    could only read the registry could not express this program's last line.
-    """
-    def select(sel):
-        # Canonicalise aliases first — a program may say `tag` or `label` and mean the
-        # same attribute; the manifest owns which spellings are equivalent.
-        from orchestrator.ai.planner.ir import config as _ic
-        kind = sel.get("kind")
-        alias = (_ic.KINDS.get(kind) or {}).get("aliases") or {}
-        sel = {alias.get(k, k): v for k, v in sel.items()}
-        if kind == "network":
-            return sorted(world.nets)
-        out = []
-        for name, vm in sorted(world.vms.items()):
-            if "label" in sel and sel["label"] not in (vm["labels"] | vm.get("flags", set())):
-                continue
-            if "status" in sel and vm["status"] != sel["status"]:
-                continue
-            if "name" in sel and name != sel["name"]:
-                continue
-            out.append(name)
-        return out
-
-    def holds(pred, scope):
-        shape = pred.get("shape")
-        if shape == "count":
-            n = len(select(pred["select"]))
-            for cmp_, want in (("eq", "=="), ("gte", ">="), ("lte", "<=")):
-                if cmp_ in pred:
-                    good = eval(f"{n} {want} {int(pred[cmp_])}")   # bench only
-                    return good, f"count is {n}, wanted {want} {pred[cmp_]}"
-            return False, "no comparator"
-        if shape == "reach":
-            # Members come from the SAME select() the rest of the language uses. Reading
-            # only `tag` meant REACH(SELECT vm) — no filter, every vm, a perfectly legal
-            # set — looked up the label None and found nobody. A predicate that ignores
-            # its own operand's filters answers a different question than it was asked.
-            members = select(pred.get("select") or {})
-            floor = int(pred.get("min", 2))
-            shared = world.common_networks(members) if members else set()
-            good = len(members) >= floor and bool(shared)
-            return good, f"reach over {len(members)} member(s), floor {floor} -> {good}"
-        if shape == "disjoint":
-            return False, "disjoint not evaluated in the bench"
-        return False, f"unknown shape {shape}"
-
-    return select, holds
 
 
 def main(argv=None) -> int:
