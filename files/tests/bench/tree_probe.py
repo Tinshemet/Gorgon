@@ -25,6 +25,7 @@ Run:  PYTHONPATH=. python3 -m tests.bench.tree_probe -n 1
 """
 import argparse
 import json
+import os
 import sys
 import urllib.request
 from typing import Any, Dict, List, Optional
@@ -35,6 +36,7 @@ from orchestrator.ai.planner.ir import derive as _derive
 from orchestrator.ai.planner.ir import run as _run
 
 from . import env_stamp, pinned
+from . import route_rule as _route_rule
 from .author_probe import _OLLAMA, _OLLAMA_CTX, _seams, _messages
 from .ladder import BENCH_MODEL
 from .rungs import RUNGS
@@ -44,6 +46,9 @@ from .sim_world import SimWorld
 # then omitted from the two `run()` calls that most needed it — the authority the operator
 # granted has to reach the EXECUTOR, not only the author.
 WANT = "achieve"
+
+# The deterministic new-vs-call override. ON by default; 0 gives the control arm.
+_ROUTE_RULE = os.environ.get("MEDUSA_ROUTE_RULE", "1") != "0"
 
 _STRUCTURAL = list(config.OP_CATEGORIES["structural"])
 _ALL_OPS = list(config.OPS.keys())
@@ -92,6 +97,23 @@ def make_route(model: str, world: SimWorld, stats: Dict[str, int], log=None):
             args = (tc.get("function") or {}).get("arguments") or {}
             if isinstance(args, str):
                 args = json.loads(args)
+            # THE DETERMINISTIC new-vs-call RULE OVERRIDES AN ATOMIC ANSWER. The router
+            # names the right operator 4/10 and every error that costs a rung is one
+            # shape — `new` for a goal acting on something already there. `route_rule`
+            # scored 7/7 on the tuning corpus and 14/14 on clauses committed before it
+            # existed, and it DECLINES rather than guessing, so it can only ever move an
+            # answer it has positive evidence about.
+            #
+            # ONLY ON AN ATOMIC NODE, because the rule classifies a single statement; a
+            # node that decomposes is a container and its op means something else.
+            # Off with MEDUSA_ROUTE_RULE=0, which is the control arm.
+            if _ROUTE_RULE and args.get("atomic") and args.get("op") in ("new", "call"):
+                by_shape = _route_rule.classify(goal)
+                if by_shape and by_shape != args["op"]:
+                    stats["rule_overrides"] = stats.get("rule_overrides", 0) + 1
+                    if log:
+                        log(f"  rule: {args['op']} -> {by_shape} (shape)")
+                    args["op"] = by_shape
             if log:
                 log(f"route {goal[:44]!r} -> atomic={args.get('atomic')} "
                     f"op={args.get('op')} steps={len(args.get('steps') or [])}")
