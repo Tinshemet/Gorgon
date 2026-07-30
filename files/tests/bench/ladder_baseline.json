@@ -1,9 +1,19 @@
 {
  "recorded": "manual",
  "runs_per_cell": 3,
+ "env": {
+  "model": "llama3.1:8b",
+  "digest": "46e0c10c039e",
+  "quantization": "Q4_K_M",
+  "parameters": "8.0B",
+  "num_ctx": 8192,
+  "offload": "71% GPU by bytes",
+  "runtime": "ollama 0.30.7"
+ },
  "cells": {
   "lit:1": {
    "n": 3,
+   "goal": "create a vm named alpha",
    "outcomes": {
     "PASS": 3
    },
@@ -18,6 +28,7 @@
   },
   "lit:2": {
    "n": 3,
+   "goal": "create a vm named beta and then launch it",
    "outcomes": {
     "PASS": 3
    },
@@ -32,6 +43,7 @@
   },
   "lit:3": {
    "n": 3,
+   "goal": "create a network called lab and a vm named web, then put web on lab",
    "outcomes": {
     "PASS": 3
    },
@@ -46,6 +58,7 @@
   },
   "lit:4": {
    "n": 3,
+   "goal": "create 5 vms, put them all in a network, give them all the 'fleet' label, and make sure they all ping each other",
    "outcomes": {
     "PASS": 3
    },
@@ -60,6 +73,7 @@
   },
   "lit:5": {
    "n": 3,
+   "goal": "launch every vm that is currently stopped",
    "outcomes": {
     "PASS": 3
    },
@@ -72,6 +86,7 @@
   },
   "lit:6": {
    "n": 3,
+   "goal": "create 3 vms labelled 'red' and 2 vms labelled 'blue', put the red ones together on their own network, and put the blue ones on a different network",
    "outcomes": {
     "PASS": 3
    },
@@ -86,6 +101,7 @@
   },
   "lit:7": {
    "n": 3,
+   "goal": "make sure exactly 3 vms carry the 'prod' label",
    "outcomes": {
     "PASS": 3
    },
@@ -98,6 +114,7 @@
   },
   "lit:8": {
    "n": 3,
+   "goal": "put every vm on a network called core, except db \u2014 db goes on a network called dmz instead",
    "outcomes": {
     "BAD_JSON:malformed": 3
    },
@@ -112,6 +129,7 @@
   },
   "lit:9": {
    "n": 3,
+   "goal": "make sure n1, n2 and n3 can all ping each other",
    "outcomes": {
     "PASS": 3
    },
@@ -124,6 +142,7 @@
   },
   "lit:10": {
    "n": 3,
+   "goal": "clone golden into 3 new vms and launch all of them",
    "outcomes": {
     "PASS": 3
    },
@@ -136,6 +155,7 @@
   },
   "lit:11": {
    "n": 3,
+   "goal": "ping every vm and stop the ones that do not answer",
    "outcomes": {
     "PASS": 3
    },
@@ -148,6 +168,7 @@
   },
   "lit:12": {
    "n": 3,
+   "goal": "take a snapshot of every running vm",
    "outcomes": {
     "PASS": 3
    },
@@ -160,6 +181,7 @@
   },
   "lit:13": {
    "n": 3,
+   "goal": "take 5 vms, put them all in a network, give them all the 'fleet' label, and make sure they all ping each other",
    "outcomes": {
     "REPAIR_UNDELIVERED:empty": 3
    },
@@ -174,6 +196,7 @@
   },
   "para:1": {
    "n": 3,
+   "goal": "spin up a machine and call it alpha",
    "outcomes": {
     "PASS": 3
    },
@@ -188,6 +211,7 @@
   },
   "para:2": {
    "n": 3,
+   "goal": "make a box called beta, then start it up",
    "outcomes": {
     "PASS": 3
    },
@@ -202,6 +226,7 @@
   },
   "para:3": {
    "n": 3,
+   "goal": "set up an isolated network named lab, provision a machine called web, and connect web to it",
    "outcomes": {
     "PASS": 3
    },
@@ -216,6 +241,7 @@
   },
   "para:4": {
    "n": 3,
+   "goal": "spin up five machines, wire them together on one private network, tag every one of them 'fleet', and confirm each can reach the others",
    "outcomes": {
     "PASS": 3
    },
@@ -230,6 +256,7 @@
   },
   "para:5": {
    "n": 3,
+   "goal": "start up any machine that isn't already running",
    "outcomes": {
     "PASS": 3
    },
@@ -242,6 +269,7 @@
   },
   "para:6": {
    "n": 3,
+   "goal": "set up three machines tagged 'red' and two tagged 'blue'; the red group must share one private network, and the blue group a separate one",
    "outcomes": {
     "PASS": 3
    },
@@ -256,6 +284,7 @@
   },
   "para:7": {
    "n": 3,
+   "goal": "there should end up being precisely three machines tagged prod, no more and no fewer",
    "outcomes": {
     "GOAL_UNMET": 3
    },
@@ -270,6 +299,7 @@
   },
   "para:8": {
    "n": 3,
+   "goal": "connect all the machines to a network named core, apart from db, which belongs on dmz",
    "outcomes": {
     "UNRECOVERED": 3
    },
@@ -284,6 +314,7 @@
   },
   "para:9": {
    "n": 3,
+   "goal": "n1, n2 and n3 should all be able to reach one another \u2014 sort out whatever is stopping that",
    "outcomes": {
     "UNRECOVERED": 3
    },
@@ -298,6 +329,7 @@
   },
   "para:10": {
    "n": 3,
+   "goal": "take a copy of golden three times over and boot every copy",
    "outcomes": {
     "PASS": 3
    },
@@ -310,6 +342,7 @@
   },
   "para:11": {
    "n": 3,
+   "goal": "check which machines respond and shut down whichever ones don't",
    "outcomes": {
     "BAD_JSON:malformed": 3
    },
@@ -324,6 +357,7 @@
   },
   "para:12": {
    "n": 3,
+   "goal": "make a restore point for each machine that is currently up",
    "outcomes": {
     "PASS": 3
    },
@@ -336,6 +370,7 @@
   },
   "para:13": {
    "n": 3,
+   "goal": "use five machines, wire them together on one private network, tag every one of them 'fleet', and confirm each can reach the others",
    "outcomes": {
     "REPAIR_UNDELIVERED:empty": 3
    },

@@ -336,6 +336,46 @@ def test_the_report_states_its_own_n():
           "from this run" in out)
 
 
+def test_recording_a_baseline_actually_writes_one():
+    """THE WRITE PATH HAD NEVER RUN. Both `record` and `check` stamped the conditions with
+    `env_stamp.stamp(a.model)`, and this parser never declared `model` — so both raised
+    AttributeError. `record` raised AFTER measuring all 26 cells: 13 minutes of model calls,
+    a complete table printed to the log, and nothing written to disk. Every check since has
+    reported the goal and env as unrecorded because the code that records them could not
+    reach the file.
+
+    A test that exercises the whole subcommand with `measure` stubbed out. The measurement is
+    the slow part and is covered elsewhere; the SERIALISATION is what was broken, and what
+    nothing looked at.
+    """
+    import json
+    import tempfile
+
+    from tests.bench import ladder_gate as lg
+
+    fake = {"lit:4": {"n": 3, "goal": "create 5 vms", "outcomes": {"PASS": 3}, "passes": 3,
+                      "calls_min": 21, "artifacts": 0, "details": {"PASS": []}}}
+    real_measure, real_baseline = lg.measure, lg.BASELINE
+    with tempfile.TemporaryDirectory() as tmp:
+        lg.BASELINE = os.path.join(tmp, "b.json")
+        lg.measure = lambda *a, **k: dict(fake)
+        try:
+            rc = lg.main(["record", "-n", "3", "-r", "4", "-c", "lit"])
+            check("record exits 0 instead of raising", rc == 0)
+            check("and the file exists", os.path.exists(lg.BASELINE))
+            saved = json.load(open(lg.BASELINE))
+            check("the CONDITIONS are stored beside the numbers", bool(saved.get("env")))
+            check("the env names the model actually measured",
+                  saved["env"].get("model") == lg.BENCH_MODEL)
+            check("the GOAL TEXT is stored per cell",
+                  saved["cells"]["lit:4"].get("goal") == "create 5 vms")
+            # And `check` must survive the same call it used to die on.
+            rc = lg.main(["check", "-n", "3", "-r", "4", "-c", "lit"])
+            check("check runs against it without raising", rc in (0, 1))
+        finally:
+            lg.measure, lg.BASELINE = real_measure, real_baseline
+
+
 def main():
     """Every `test_*` in this module, in definition order — DISCOVERED, not listed.
 

@@ -50,6 +50,7 @@ import sys
 from collections import Counter
 
 from . import env_stamp
+from .ladder import BENCH_MODEL
 from .rungs import RUNGS
 
 BASELINE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ladder_baseline.json")
@@ -268,6 +269,14 @@ def main(argv=None) -> int:
     p.add_argument("-r", "--rung", type=int, action="append")
     p.add_argument("-c", "--column", action="append", choices=["lit", "para"])
     p.add_argument("--mutate")
+    # THE MODEL, AND IT WAS MISSING. `record` and `check` both stamp the conditions with
+    # `env_stamp.stamp(a.model)` — an attribute this parser never declared, so BOTH
+    # subcommands raised AttributeError. `record` raised AFTER measuring all 26 cells, which
+    # is the worst possible place: the run cost its full 13 minutes, printed a complete
+    # table, and wrote nothing. The env feature had never once executed on this path.
+    p.add_argument("-m", "--model", default=BENCH_MODEL,
+                   help="the model to measure AND to stamp — one flag, so a baseline cannot "
+                        "name conditions the run did not use")
     p.add_argument("--replace", action="store_true",
                    help="rewrite the whole baseline instead of merging into it. Only for "
                         "a deliberate reset — a partial record normally MERGES, so "
@@ -284,7 +293,11 @@ def main(argv=None) -> int:
 
     rungs = a.rung or [r.n for r in RUNGS]
     columns = a.column or ["lit", "para"]
-    extra = ["--mutate", a.mutate] if a.mutate else []
+    # FORWARDED, not merely stamped. `measure` passes `extra` through to the probe, which
+    # otherwise falls back to its own default — so `-m other-model` would have measured
+    # BENCH_MODEL while recording `other-model` as the conditions. A baseline that names a
+    # model it did not run is worse than one that names none.
+    extra = (["--mutate", a.mutate] if a.mutate else []) + ["-m", a.model]
     if a.runs < 2:
         print("!! n=1 — this measures a sample, NOT a regression. Cells flip on their own.")
     print(f"measuring {len(rungs)} rung(s) × {len(columns)} column(s) × n={a.runs}\n")
