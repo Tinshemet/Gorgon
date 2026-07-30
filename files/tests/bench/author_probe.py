@@ -47,6 +47,7 @@ from . import pinned
 from .ladder import BENCH_MODEL
 from .mutate import MUTATIONS, apply as _mutate
 from .rungs import RUNGS
+from orchestrator.ai.planner.ir import execute as _ir_execute
 from .sim_world import SimWorld
 # THE SEAMS LIVE IN `seams.py` — one authority. They were defined here and, in a
 # weaker form, a second time in `run_program`, where the missing `not`/`in`/`any`/
@@ -1105,8 +1106,18 @@ def main(argv=None, sink=None) -> int:
                            # — the loop rung 7 was built to take off it.
                            else derive(goal_pred, sel, res.get("scope"), want))
                 if derived:
-                    fix, fix_problems = {"body": derived}, []
-                    print(f"          d{rounds}| (derived)")
+                    # THE FIX, THEN THE WORK THAT NEVER RAN. A failed predicate returns
+                    # from `run` and abandons every statement after it, so replaying only
+                    # the correction leaves that work undone while the predicate reports
+                    # the goal as held. para:4 is the case: `ACHIEVE REACH(...)` sat before
+                    # the `add_label(... fleet)` loop, the ACHIEVE failed on the probe
+                    # requirement, the tagging never happened, and the derived fix closed
+                    # the predicate over an untagged fleet. `follow_up` appends the
+                    # abandoned tail, resolved against the scope the aborted run held.
+                    fix, fix_problems = _ir_execute.follow_up(res, derived), []
+                    tail = len(res.get("remaining") or [])
+                    print(f"          d{rounds}| (derived"
+                          + (f" + {tail} statement(s) that never ran)" if tail else ")"))
                 elif derived == []:
                     print(f"          -> revision {rounds}: predicate already satisfied")
                     break

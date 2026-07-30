@@ -372,6 +372,23 @@ def system_prompt(tools, want: Optional[str] = None,
         lines.append(f"    {example}   — {spec['doc']}")
     lines += ["", p["reference"], p["ordering"], "",
               f"{p['tools_header']} {', '.join(tools)}.", p["tools_footer"]]
+    # THE OPERATOR'S INTENT, AND PRODUCTION WAS NOT BEING TOLD IT. `intent.instruction`
+    # had exactly ONE caller in the whole codebase — the bench author — so the fact
+    # decision 5 says the author CANNOT DERIVE reached production's runtime (`violations`,
+    # and now `promote`) and never reached production's AUTHOR.
+    #
+    # That is the ladder measuring a prompt strictly richer than the shipped one, and it
+    # over-states production rather than under-stating it: every recorded cell was authored
+    # by a model told "THIS IS A COMMAND ... act on the DIFFERENCE", while the real
+    # orchestrator asked for the same program without that sentence. `test_medusa` already
+    # holds that the intent must reach the RUNTIME — written because `grep intent
+    # tests/bench/` came back empty — and this is the same defect on the other side.
+    #
+    # Appended here rather than by each caller, so a second caller cannot forget it, which
+    # is exactly how it came to be missing in the first place.
+    if want:
+        from . import intent as _intent
+        lines += ["", _intent.instruction(want)]
     return "\n".join(lines)
 
 

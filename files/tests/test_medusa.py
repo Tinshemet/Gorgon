@@ -348,6 +348,58 @@ def test_a_standing_goal_below_its_granted_authority_is_raised():
           intent.promote(loop_local, intent.ACHIEVE) == (loop_local, None))
 
 
+def test_a_failed_predicate_does_not_silently_swallow_the_rest_of_the_program():
+    """A failed predicate returns from `run`, abandoning every statement after it — and
+    nothing said so, while `derive` then closed the predicate's gap and reported the goal
+    held. A green verdict over an unfinished program.
+
+    FOUND BY A BENCHMARK, NOT BY A TEST, which is the point of writing this one. para:4:
+    the author put `ACHIEVE REACH(...)` at statement 5 and the `add_label(... fleet)` loop
+    at statement 6. Tightening `reach` to require probes made statement 5 fail, so the
+    tagging never ran, the derived fix probed and declared success, and only the rung's own
+    checker noticed the fleet was untagged.
+
+    Costing extra calls to finish the work is the right trade: the calls take seconds and
+    the thing they automate takes minutes.
+    """
+    w = SimWorld()          # a clean lab: nothing labelled, nothing probed
+    prog = {"body": [
+        {"op": "new", "var": "machines", "kind": "vm", "amount": 3,
+         "args": {"os_type": "linux"}},
+        {"op": "new", "var": "net", "kind": "network"},
+        {"op": "foreach", "in": "$machines",
+         "call": {"tool": "add_vm_to_network",
+                  "args": {"net_name": "$net", "vm_name": "$item"}}},
+        {"op": "achieve",
+         "predicate": {"shape": "reach", "select": {"kind": "vm"}, "min": 3}},
+        {"op": "foreach", "in": "$machines",
+         "call": {"tool": "add_label", "args": {"name": "$item", "label": "fleet"}}},
+    ]}
+    sel, holds = _seams(w)
+    res = run(prog, w.execute, select=sel, holds=holds, known_names=w.names(),
+              consent=True, intent=intent.ACHIEVE)
+    check("the predicate fails because nobody probed", res.get("failed") == "unachieved")
+    check("and the abandoned tail is REPORTED, not dropped in silence",
+          len(res.get("remaining") or []) == 1)
+    check("the tagging genuinely did not happen", w.members("fleet") == [])
+
+    from orchestrator.ai.planner.ir import execute as _ex
+    fixed = derive(prog["body"][3]["predicate"], sel, res.get("scope"), intent.ACHIEVE)
+    body = _ex.follow_up(res, fixed or [])
+    check("the follow-up carries the correction AND the tail", len(body["body"]) == 3)
+    # The tail is resolved against the scope the aborted run held — `params` cannot express
+    # a bound set, since every declarable type is a scalar.
+    check("the tail's set reference is resolved to its members, not left dangling",
+          body["body"][-1]["in"] == ["machines1", "machines2", "machines3"])
+    res2 = run(body, w.execute, select=sel, holds=holds, known_names=w.names(),
+               consent=True, intent=intent.ACHIEVE)
+    check("the follow-up runs clean", res2.get("ok") is True)
+    check("the work that was skipped has now happened",
+          sorted(w.members("fleet")) == ["machines1", "machines2", "machines3"])
+    check("and the goal it failed on now holds",
+          holds({"shape": "reach", "select": {"kind": "vm"}, "min": 3}, {})[0] is True)
+
+
 def test_an_ungrounded_program_asks_first():
     w = _world()
     acting = {"body": [{"op": "new", "var": "x", "kind": "vm",

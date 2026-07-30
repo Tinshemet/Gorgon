@@ -122,6 +122,34 @@ def evaluate(pred: Dict, scope: Dict, leaf: Optional[Callable]) -> Tuple[bool, s
     return leaf(pred, scope)
 
 
+def follow_up(result: Dict[str, Any],
+              correction: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """The body to run after a correction: the fix, then the work that never ran.
+
+    A correction closes the gap the PREDICATE named. It does not finish the program — the
+    statements after the failed one were abandoned, and replaying only the correction
+    leaves that work undone while the predicate now reports the goal as held. A green
+    verdict over an unfinished program is the false-success class this system refuses
+    everywhere else. Rung 4: the author put `ACHIEVE REACH(...)` before the
+    `add_label(... fleet)` loop, the ACHIEVE failed, the tagging never happened, and the
+    derived fix said the goal held.
+
+    THE TAIL IS RESOLVED AGAINST THE SCOPE THE ABORTED RUN HELD, not carried as params.
+    `FOREACH $item IN $machines` means nothing once `$machines` is gone, and `params`
+    cannot express it — the declarable types are scalars, with no list among them. So the
+    bound values are substituted in, exactly as `derive` already writes its corrections
+    (`FOREACH $item IN [machines1, machines2, ...]`). `refs.resolve` leaves `$item` alone,
+    because the loop variable is bound per iteration and is not the scope's to supply.
+
+    One function because there are two correction paths — the whole-program probe and the
+    tree probe — and two copies of this reasoning is how the seams and the standing-goal
+    rule each came to have a stale twin.
+    """
+    remaining = [refs.resolve(st, result.get("scope") or {})
+                 for st in (result.get("remaining") or [])]
+    return {"body": list(correction) + remaining}
+
+
 def run(program: Any, execute: Callable[[str, Dict], Any], *,
         select: Optional[Callable[[Dict], List[str]]] = None,
         holds: Optional[Callable[[Dict, Dict], Tuple[bool, str]]] = None,
@@ -433,10 +461,24 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
         """
         return {**res, "promoted": promoted} if promoted else res
 
-    for st in body:
+    for i, st in enumerate(body):
         bad = _one(st)
         if bad is not None:
-            return _said(bad)
+            # WHAT NEVER RAN, reported rather than silently dropped. A failed predicate
+            # returns from here, so every statement after it is abandoned — and nothing
+            # said so. Rung 4 is the case that exposed it: the author put
+            # `ACHIEVE REACH(...)` at statement 5 and the `add_label(... fleet)` loop at
+            # statement 6, the ACHIEVE failed, and the tagging never happened. `derive`
+            # then closed the PREDICATE's gap and reported the goal held, because it
+            # computes the difference for one predicate and cannot know a tail was lost.
+            # The world ended networked, probed and untagged, and the only thing that
+            # noticed was the rung's own checker.
+            #
+            # TOP LEVEL ONLY, and that is a real limit rather than an oversight: a
+            # statement abandoned inside a `foreach` or an `if` branch is not resumable by
+            # replaying a suffix of the body, because its loop variable and its branch
+            # condition are gone. Those are reported as unfinished, not silently resumed.
+            return _said({**bad, "remaining": list(body[i + 1:])})
     op = None
 
     if failures and not asserted:

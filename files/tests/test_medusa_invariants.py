@@ -762,6 +762,21 @@ def test_no_model_facing_string_still_teaches_a_retired_rule():
     check("and that a satisfied goal needs no repeating",
           "difference" in _intent.instruction(_intent.ACHIEVE).lower())
 
+    # AND IT MUST REACH THE PRODUCTION AUTHOR, not only the bench one. `intent.instruction`
+    # had exactly one caller in the codebase — tests/bench/author_probe.py — so the one fact
+    # decision 5 says the author cannot derive reached production's RUNTIME and never its
+    # PROMPT. Every ladder cell was therefore authored under a strictly richer prompt than
+    # the orchestrator ships, which over-states production rather than under-stating it.
+    # test_medusa already holds that the intent reaches the runtime; this is the other side.
+    from orchestrator.ai.planner.ir import schema as _sch
+    for w in (_intent.FETCH, _intent.ENSURE, _intent.ACHIEVE):
+        built = _sch.system_prompt(["create_vm"], want=w)
+        check(f"the production prompt carries the {w} instruction",
+              _intent.instruction(w) in built)
+    check("and says nothing about intent when none was supplied — silence is not a guess",
+          all(_intent.instruction(w) not in _sch.system_prompt(["create_vm"])
+              for w in (_intent.FETCH, _intent.ENSURE, _intent.ACHIEVE)))
+
 
 def test_every_path_that_accepts_an_authored_program_sanitises_it():
     """FOUR CALL SITES, ONE PASS — and the fourth is how this breaks.
