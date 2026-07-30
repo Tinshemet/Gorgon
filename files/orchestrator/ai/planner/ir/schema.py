@@ -285,6 +285,10 @@ def _statement_oneof(want: Optional[str] = None, known: Optional[set] = None,
     tells the model which fields go with it. Built from the same rows as the flat form,
     so the two cannot describe different languages.
     """
+    import itertools
+
+    from .validate import _one_of_groups
+
     branches = []
     for op in master.ops(want, quantifier):
         spec = config.OPS[op]
@@ -292,7 +296,22 @@ def _statement_oneof(want: Optional[str] = None, known: Optional[set] = None,
         for name in spec["fields"]:
             props[name] = _field(name, known)
         required = ["op"] + [f for f in spec["required"]]
-        branches.append({"type": "object", "properties": props, "required": required})
+        # EITHER/OR HAS TO REACH THE DECODER, not only the validator. This surface used to
+        # emit ONE branch per op with every alternative optional, so a `foreach` could
+        # carry `select` AND `in`, or neither, and mean nothing — the bench's builder
+        # learned that the hard way (`FOREACH $item IN None`, five times in one program)
+        # and this one never did. One branch per COMBINATION, each dropping the
+        # alternatives it did not take, using the same `_one_of_groups` the validator reads
+        # so the two cannot disagree about the manifest.
+        groups = _one_of_groups(spec)
+        if not groups:
+            branches.append({"type": "object", "properties": props, "required": required})
+            continue
+        alternatives = {f for g in groups for f in g}
+        for combo in itertools.product(*groups):
+            sub = {k: v for k, v in props.items() if k not in alternatives - set(combo)}
+            branches.append({"type": "object", "properties": sub,
+                             "required": required + list(combo)})
     return {"oneOf": branches}
 
 
