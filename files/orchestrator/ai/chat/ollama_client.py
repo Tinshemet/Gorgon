@@ -92,6 +92,53 @@ def _build_system_prompt() -> str:
     return prompt
 
 
+def context_floor() -> Dict[str, int]:
+    """What every turn costs BEFORE the operator has typed anything.
+
+    The system prompt and the tool schemas are re-sent on every single call, so they are a
+    floor, not a budget. Returned as numbers rather than printed so the CLI, the HTTP
+    server and a test can all ask the same question and get the same answer.
+    """
+    sp = len(_build_system_prompt())
+    ts = len(json.dumps(TOOLS))
+    return {"system_chars": sp, "tools_chars": ts, "tools": len(TOOLS),
+            # chars/4 UNDER-estimates JSON, which tokenises worse than prose because of
+            # the punctuation — so a floor computed this way is optimistic, and the real
+            # count from `prompt_eval_count` is the one to trust.
+            "est_tokens": (sp + ts) // 4, "num_ctx": _OLLAMA["num_ctx"]}
+
+
+def _warn_if_truncated(reply: Dict, payload: Dict) -> Dict:
+    """Say so when the prompt did not fit. Ollama will not.
+
+    FOUND 2026-07-31, reported as "the AI only answered in one word and ignored commands".
+    53 tool schemas are ~7.8k tokens and the system prompt ~1.4k against a `num_ctx` of
+    8192, so the payload OVERFLOWED BEFORE THE FIRST MESSAGE. Measured on the real API:
+    `prompt_eval_count` came back 8191 of 8192 and the reply was the single word "Hello".
+
+    Ollama does not error on this. It silently drops from the front of the context — the
+    system prompt and part of the tool definitions — which is exactly why the two symptoms
+    arrive together: the model loses its instructions AND the tools it was told to call,
+    and has no room left to generate. It reads as a stupid model rather than a full buffer.
+
+    THE CHECK IS ON `prompt_eval_count`, THE SERVER'S OWN COUNT, not our estimate. Today's
+    other bug hid for weeks behind an estimate of what we thought we sent; a number the
+    server reports back cannot drift from what it actually did.
+    """
+    used, limit = reply.get("prompt_eval_count") or 0, _OLLAMA["num_ctx"]
+    if used and used >= limit * 0.98:
+        floor = context_floor()
+        console.print(
+            f"[error]CONTEXT OVERFLOW — the prompt did not fit and was silently "
+            f"truncated.[/error]\n"
+            f"  used {used} of num_ctx {limit} tokens before generating anything\n"
+            f"  floor: {floor['tools']} tool schemas (~{floor['tools_chars']//4} est. tokens) "
+            f"+ system prompt (~{floor['system_chars']//4} est.)\n"
+            f"  → replies will be short and tool calls will be dropped. Narrow the tool set "
+            f"for this turn, or raise num_ctx in orchestrator/ai/chat/config.json.")
+    return reply
+
+
 # POSTs the full chat payload (with tools) to the Ollama API and returns the parsed JSON response.
 # In: List[dict] messages → Out: dict response
 def _call_ollama(messages: List[Dict], tools: List[Dict] = None) -> Dict:
@@ -110,7 +157,7 @@ def _call_ollama(messages: List[Dict], tools: List[Dict] = None) -> Dict:
     try:
         resp = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=_OLLAMA["timeout"])
         resp.raise_for_status()
-        return resp.json()
+        return _warn_if_truncated(resp.json(), payload)
     except requests.ConnectionError:
         console.print(
             f"[error]Cannot connect to Ollama at {OLLAMA_URL}[/error]\n"
