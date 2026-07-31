@@ -178,6 +178,32 @@ def test_it_stops_instead_of_improvising():
             check(f"{label}: raises Unsolvable", True)
 
 
+def test_the_same_request_against_the_same_world_writes_the_same_program():
+    """DETERMINISM, and it is the property everything else rests on.
+
+    #28 recorded rung 6 flipping BUILD FAILED -> BUILD OK on byte-identical code. That was
+    the TREE path, which calls a model — and `pinned.py` already states in its own comment
+    that "temperature 0 is deterministic" is a false assumption. So it was never a bug to
+    chase; it was the documented behaviour of a model-driven path.
+
+    The writer makes it structurally impossible. Same goals, same world, same program, every
+    time — which is what lets a failing case be reproduced from a seed, what makes the fuzz
+    corpus meaningful, and what allows a destructive plan to be reviewed before it runs. A
+    writer that varied would take all three away at once.
+    """
+    print("[determinism] the same request writes the same program")
+    import json as _json
+    for n in sorted(GOALS):
+        rung = next(r for r in RUNGS if r.n == n)
+        seen = set()
+        for _ in range(4):
+            world = SimWorld()
+            if rung.setup:
+                rung.setup(world)
+            seen.add(_json.dumps(cover(GOALS[n], world), sort_keys=True))
+        check(f"rung {n:>2}: one program over four runs", len(seen) == 1)
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "ghost writer"))
