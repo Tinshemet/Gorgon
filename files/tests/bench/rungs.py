@@ -193,9 +193,19 @@ def _r11(w):
 
     Which VMs are unreachable is NOT a queryable attribute — the world knows, the
     registry does not, so no SELECT can find them. The program must ping and act on the
-    ANSWER. Stopping everything fails, and so does stopping nothing."""
-    return (all(w.vms[n]["status"] == "stopped" for n in ("beta", "delta"))
-            and all(w.vms[n]["status"] == "running" for n in ("alpha", "gamma")))
+    ANSWER. Stopping everything fails, and so does stopping nothing.
+
+    A MISSING MACHINE IS A FAILED RUNG, NOT A CRASH. This indexed `w.vms[n]` directly, so a
+    program that DELETED a machine raised KeyError out of the checker and took the whole run
+    down with it — 2026-08-01, at cell 64 of 78, destroying a measurement that had been
+    running for an hour. It is the same defect `author_probe` records against the executor
+    ("a crashing program fails its own rung and nothing else; it used to take the whole
+    column with it"), arriving in the one place nobody had hardened: the grader itself. A
+    checker that can crash can erase the evidence of what it was grading."""
+    def status(n):
+        return (w.vms.get(n) or {}).get("status")
+    return (all(status(n) == "stopped" for n in ("beta", "delta"))
+            and all(status(n) == "running" for n in ("alpha", "gamma")))
 
 
 # ── 12: a second resource kind ────────────────────────────────────────────────

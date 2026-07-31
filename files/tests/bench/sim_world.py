@@ -58,7 +58,11 @@ class SimWorld:
 
     def common_networks(self, names: List[str]) -> Set[str]:
         """The networks EVERY named VM is on — non-empty ⇔ they can reach each other."""
-        if not names:
+        # A MISSING MACHINE SHARES NO NETWORK — it does not raise. Indexing `self.vms[n]`
+        # directly meant a program that deleted a member crashed the CHECKER that was
+        # grading it, and a crashing grader erases the evidence of what it graded. Found
+        # 2026-08-01 when rung 11 took down a 78-cell run at cell 64.
+        if not names or any(n not in self.vms for n in names):
             return set()
         common = set(self.vms[names[0]]["nets"])
         for n in names[1:]:
