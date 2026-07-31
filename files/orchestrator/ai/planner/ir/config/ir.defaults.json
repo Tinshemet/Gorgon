@@ -1,716 +1,739 @@
 {
-  "_doc": "MEDUSA — the Gorgon procedure language, AS DATA. Named for one of the gorgons, because the platform is Gorgon and this is one of its own. Nothing here is a language feature written in code: the ops, the resource kinds, the predicate shapes and every string the model is shown all live in this manifest. That is the extensibility test the design note sets — adding a resource kind, a predicate or a tool must touch ZERO language code. ir.json holds a deployment's overrides and wins on merge.",
-  "language": {
-    "name": "Medusa",
-    "of": "Gorgon",
-    "version": "0.1",
-    "extension": ".med"
+ "_doc": "MEDUSA — the Gorgon procedure language, AS DATA. Named for one of the gorgons, because the platform is Gorgon and this is one of its own. Nothing here is a language feature written in code: the ops, the resource kinds, the predicate shapes and every string the model is shown all live in this manifest. That is the extensibility test the design note sets — adding a resource kind, a predicate or a tool must touch ZERO language code. ir.json holds a deployment's overrides and wins on merge.",
+ "language": {
+  "name": "Medusa",
+  "of": "Gorgon",
+  "version": "0.1",
+  "extension": ".med"
+ },
+ "sigil": "$",
+ "loop_var": "item",
+ "_params_doc": "Parameter types a procedure may declare, TYPE FIRST: (INT X, STRING name). Parameters are AUTHORED, not derived — unlike `imports`, which the harness computes: only the author knows which values are meant to vary per invocation. `sql` is how the type is written; `py` is what a supplied value is checked against. DURATION and BYTES exist because this domain keeps needing them and a bare int loses the unit — a routine says EVERY 1h, a disk check says 20GB, and 'is 3600 seconds or an hour?' is the kind of ambiguity that only shows up in production.",
+ "param_types": {
+  "int": {
+   "sql": "INT",
+   "py": "int",
+   "doc": "whole number"
   },
-  "sigil": "$",
-  "loop_var": "item",
-  "_params_doc": "Parameter types a procedure may declare, TYPE FIRST: (INT X, STRING name). Parameters are AUTHORED, not derived — unlike `imports`, which the harness computes: only the author knows which values are meant to vary per invocation. `sql` is how the type is written; `py` is what a supplied value is checked against. DURATION and BYTES exist because this domain keeps needing them and a bare int loses the unit — a routine says EVERY 1h, a disk check says 20GB, and 'is 3600 seconds or an hour?' is the kind of ambiguity that only shows up in production.",
-  "param_types": {
-    "int": {
-      "sql": "INT",
-      "py": "int",
-      "doc": "whole number"
-    },
-    "double": {
-      "sql": "DOUBLE",
-      "py": "float",
-      "doc": "fractional number"
-    },
-    "bool": {
-      "sql": "BOOL",
-      "py": "bool",
-      "doc": "true or false"
-    },
-    "char": {
-      "sql": "CHAR",
-      "py": "str",
-      "doc": "a single character"
-    },
-    "string": {
-      "sql": "STRING",
-      "py": "str",
-      "doc": "text"
-    },
-    "date": {
-      "sql": "DATE",
-      "py": "str",
-      "doc": "a calendar day, YYYY-MM-DD"
-    },
-    "time": {
-      "sql": "TIME",
-      "py": "str",
-      "doc": "a time of day, HH:MM[:SS]"
-    },
-    "datetime": {
-      "sql": "DATETIME",
-      "py": "str",
-      "doc": "a day and a time, ISO-8601"
-    },
-    "duration": {
-      "sql": "DURATION",
-      "py": "str",
-      "doc": "a span — 30s, 15m, 1h, 7d. What a ROUTINE's schedule and a timeout are"
-    },
-    "bytes": {
-      "sql": "BYTES",
-      "py": "str",
-      "doc": "a size — 512MB, 20GB. Disk and memory, with the unit kept"
-    }
+  "double": {
+   "sql": "DOUBLE",
+   "py": "float",
+   "doc": "fractional number"
   },
-  "_ops_doc": "The statement types. `one_of` means exactly one of those fields must be present — foreach names its set EITHER by querying state (`select`) OR by referring to a set already bound (`in`). Those are different things and conflating them was a real gap: `new` with a count binds a SET, and until `in` existed there was no way to act on it before its members had an attribute to query by. \"Create X vms and label them\" was inexpressible. `required` is what validate() insists on; `doc` is what the model is shown. Adding an op here does NOT make it executable — the visitor must learn it too — so this table is the contract between the two, not a switch. `in` accepts a LITERAL LIST as well as a bound reference, because a correction usually acts on specific things the last attempt left behind — the model reached for exactly that on rung 7, naming three VMs it had read off current state, and the language had no way to say it. `new` carries `args` because a resource is rarely just a name: create_vm alone accepts 47 arguments and REQUIRES os_type. Without them `new` could not build a real VM at all — it passed only because the bench world is lenient about missing required fields, which is exactly the kind of gap a simulator hides.",
-  "ops": {
-    "new": {
-      "required": [
-        "var",
-        "kind"
-      ],
-      "doc": "create a resource and bind a name to it. NEW ISSUES THE CREATION ITSELF — it calls create_vm / create_network for you. Fields: var, kind, amount (optional, default 1), args (optional — anything else the creator takes), `from` (optional — create by COPYING the named resource instead of making a fresh one).",
-      "fields": [
-        "var",
-        "kind",
-        "amount",
-        "args",
-        "from",
-        "ifails"
-      ],
-      "acts": true
-    },
-    "fetch": {
-      "required": [
-        "var"
-      ],
-      "one_of": [
-        [
-          "select",
-          "count"
-        ]
-      ],
-      "fields": [
-        "var",
-        "select",
-        "count"
-      ],
-      "doc": "READ the world and bind what you find. `count` binds HOW MANY match (a number); `select` binds the matching names (a set). This is the only way to write one program that is correct whatever the lab already holds — read first, then act on the difference."
-    },
-    "call": {
-      "required": [
-        "tool",
-        "args"
-      ],
-      "doc": "invoke one tool. Fields: tool, args.",
-      "fields": [
-        "tool",
-        "args",
-        "graft",
-        "ifails"
-      ],
-      "acts": true
-    },
-    "foreach": {
-      "required": [],
-      "one_of": [
-        [
-          "select",
-          "in"
-        ],
-        [
-          "call",
-          "do"
-        ]
-      ],
-      "doc": "apply statements to every member of a set. Name the set with `select` (a query over current state), or with `in` — either a set you bound (\"$vms\") or a literal list of names ([\"one\",\"two\"]). The body is `do`, a list of statements, or `call` as the shorthand when the body is a single call. Inside the body $item is the current member.",
-      "fields": [
-        "select",
-        "in",
-        "call",
-        "do",
-        "async",
-        "ifails"
-      ],
-      "acts": true
-    },
-    "ensure": {
-      "required": [
-        "predicate"
-      ],
-      "doc": "A SANITY CHECK: is this so, right here? Evaluated where it is written and it changes nothing — if it fails the program stops and the plan is rethought, because it was built on something false. The difference from ACHIEVE is CHECK versus MAKE: ensure asks 'do you exist', achieve says 'make sure you exist'.",
-      "fields": [
-        "predicate"
-      ]
-    },
-    "achieve": {
-      "required": [
-        "predicate"
-      ],
-      "fields": [
-        "predicate"
-      ],
-      "doc": "MAKE SURE of something: it must be true from this point on, and if it is not, the harness computes the difference and closes it. Use it wherever the rest of the program DEPENDS on something being so — a network must exist before anything attaches to it — and the run cannot pass that point until it does. You may use SEVERAL, and work may follow them. A program that is nothing but an achieve is a legal way to state a goal and let the harness plan it."
-    },
-    "if": {
-      "required": [
-        "cond",
-        "then"
-      ],
-      "fields": [
-        "cond",
-        "then",
-        "else"
-      ],
-      "doc": "branch on a check. Fields: cond (a check), then (statements), else (optional statements)."
-    }
+  "bool": {
+   "sql": "BOOL",
+   "py": "bool",
+   "doc": "true or false"
   },
-  "_op_categories_doc": "THE SEVEN OPS ARE TWO KINDS OF THING, and until 2026-07-29 nothing said so where it mattered. STRUCTURAL ops arrange work — they are what a decomposition CHOOSES, and getting one wrong is a reasoning error. INTENT ops are fetch/ensure/achieve, and they are NOT the author's to choose: `intent` above already states that what the operator wants back is theirs to say, and ir/intent.py ENFORCES it before the first call. The one soundness rule draws the same line from the other side — FETCH answers with data, actions answer with nothing, and ENSURE and ACHIEVE are the only statements producing a judgement. So the split was already doctrine in two places and absent from the one table the model is shown. MEASURED, and this is why it exists: the atomicity router named the right operator on 4 of 10 atomic cells across both columns, and TWO OF THE THREE ERRORS WERE `ensure` WHERE `achieve` WAS RIGHT — rungs 7 and 9, identically, in both columns. That is CHECK-versus-MAKE, the pair decision 3 settled, and it is a choice the author was never authorised to make. Offering all seven as one flat enum asked the model to guess something the harness already knows, which is the schema-withholding failure this codebase keeps re-finding: audit what the model was OFFERED before calling a low score a model ceiling. A router asks for STRUCTURE; intent is supplied, never guessed.",
-  "_quantifiers_doc": "HOW MANY THINGS A CLAUSE IS ABOUT, and which statements that licenses. The operator's proposal 2026-07-29: *\"maybe we first filter commands based on the all/any/single/not, so it can't pick commands that are not correct.\"* It is the same move `master.ops` already makes for INTENT — offering only the permitted branches makes a wrong program UNREPRESENTABLE instead of rejected — with the quantifier as the discriminator. MEASURED before building, `quantifier_probe`, n=3, 16 clauses, ground truth declared first: 15/16 against a floor of 4/16, every cell unanimous, `single` 4/4 and `not` 4/4. THE DECIDING PAIR IS 8/8: 'db goes on a network called dmz' -> single and 'apart from db, which belongs on dmz' -> not, the SAME OBJECT with opposite answers, and exactly the two clauses rung 8 gets wrong while authoring. So the knowledge is present and the AUTHORING CONTEXT loses it — which is the case for routing before emitting rather than teaching harder. The carve-out prose hint, tried the same day, measured 0/26 on the ladder. THE `any` VS `not` BOUNDARY IS A NAMED WHOLE: 'every vm except db' names a whole and subtracts a member (not); 'the ones that do not answer' names no whole and a condition picks the members (any), because A NEGATIVE CONDITION IS STILL A CONDITION. That is also how Medusa spells them — `any` is a filter in the select, `not` is the carve-out key. Sharpening this wording took the probe 14/16 -> 15/16, and the one remaining miss is the model dropping the condition in 'every RUNNING vm', not a taxonomy fault. WHAT `single` BUYS, and it is why this is wired first: a clause about one identified object licenses `call` ALONE, so there is no `select` in the schema and rung 8's `statement 4: select must name a kind` becomes unrepresentable rather than rejected-then-repaired — and the repair loop is what turned that nearly-correct program into an inverted one.",
-  "_quantifiers_correction_doc": "CORRECTED 2026-07-29, BEFORE ANY LADDER RUN, and the check that caught it cost one model call per rung instead of a 25-minute sweep. The first table licensed only set-shaped ops per quantifier, and routing each ladder goal showed it would STARVE FOUR RUNGS — 4, 6 and 10 lose `new`, and 8 loses `call` AND `new` — three of which currently PASS. The fault was mine, not the router's: CREATION AND INVOCATION ARE ORTHOGONAL TO CARDINALITY. 'create 5 vms' is an `all` clause that plainly needs `new`. The quantifier constrains only HOW A SET IS NAMED, so the one real constraint it carries is the one the invariant asserts: `single` denies `foreach`, because a rule about one identified object is a call naming it and never a loop over a set of one. Everything else in the first table was reasoned out rather than measured — the same mistake the schema gate made at 0/12, caught this time before it shipped.",
-  "quantifiers": {
-    "all": {
-      "ops": [
-        "new",
-        "fetch",
-        "call",
-        "foreach",
-        "ensure",
-        "achieve",
-        "if"
-      ],
-      "doc": "every member of the kind, with NO condition — 'all the machines', 'every vm'"
-    },
-    "any": {
-      "ops": [
-        "new",
-        "fetch",
-        "call",
-        "foreach",
-        "ensure",
-        "achieve",
-        "if"
-      ],
-      "doc": "the members matching a CONDITION — 'every vm that is stopped'. The condition may be negative ('the ones that do not answer') and it is STILL a condition, because nothing is subtracted from a named whole"
-    },
-    "single": {
-      "ops": [
-        "new",
-        "fetch",
-        "call",
-        "ensure",
-        "achieve",
-        "if"
-      ],
-      "doc": "ONE identified object, named — 'the vm called web', 'db'. NO `foreach`: a rule about one object is a plain call naming it, never a loop over a set of one"
-    },
-    "not": {
-      "ops": [
-        "new",
-        "fetch",
-        "call",
-        "foreach",
-        "ensure",
-        "achieve",
-        "if"
-      ],
-      "doc": "a named WHOLE, MINUS named members — 'every vm except db'. There must be a whole to subtract from; without one it is a condition, not an exclusion"
-    }
+  "char": {
+   "sql": "CHAR",
+   "py": "str",
+   "doc": "a single character"
   },
-  "op_categories": {
-    "structural": [
-      "new",
-      "call",
-      "foreach",
-      "if"
-    ],
-    "intent": [
-      "fetch",
-      "ensure",
-      "achieve"
-    ]
+  "string": {
+   "sql": "STRING",
+   "py": "str",
+   "doc": "text"
   },
-  "_sanitize_doc": "ARTIFACTS — residue in an authored program that provably does nothing, dropped before the program is judged, and COUNTED so the rate is a number rather than something a reader notices. A pass that only cleans makes the artifact rate unmeasurable, and 'it got quietly worse' is a failure this codebase keeps finding: a suite that stopped being mentioned stopped being run; a tool declaring no criterion reported done whenever the call returned. Cleaning without counting is that shape again. SEVERITY IS THREE-VALUED, and that is load-bearing: a screener reporting zero DANGEROUS while owning no dangerous detector is not reporting a clean result, it is reporting an unasked question — the distinction decision 6 draws between alive=false and alive=unknown, applied to the instrument's own coverage. KINDS ARE EARNED BY MEASUREMENT, NEVER INVENTED. The schema gate scored 0/12 because six factors were reasoned out from first principles and four duplicated machinery that already existed and answered better. So this ships with exactly one row, and a candidate is admitted only after it is observed in a corpus. Two candidates have already been REFUSED on that rule: `repeated_loop_same_set` fired six times across 31 programs with five of them PASSING, because one loop per operation over one set is the natural spelling and not a fault; and `repeated_identical_call`, its replacement, never fired at all. WHAT IT MAY NOT DO: it never rewrites a condition. `IF X {} ELSE {Y}` is left exactly as written so the validator's objection still fires, because turning it into `IF NOT(X) THEN {Y}` changes what the program SAYS, and a program should say what it means rather than be edited into meaning it. SECOND KIND, AND THE FIRST WITH A `symptom_of`. `trailing_prose` is benign to REMOVE — it was never part of the program — but unlike `dead_if` it is a SCHEMA VIOLATION: `type: object` has no production permitting a byte after the closing brace, so its presence is evidence the constrained decoder is not holding. That splits two questions a single severity cannot answer: is it safe to clean (yes) and is its rate telling us something is broken elsewhere (yes). The operator's framing, and the reason the alarm exists: the results stay coherent BECAUSE the artifact is cleaned, while the rate says something underneath is failing and something else is keeping it in check. A kind carrying `symptom_of` is reported against that layer without being counted as a failure of it.",
-  "sanitize": {
-    "kinds": {
-      "dead_if": {
-        "severity": "benign",
-        "why": "an IF with no branch that acts — the run cannot reach anything through it",
-        "evidence": "rung 11, every phrasing, 2026-07-28. The cond is byte-identical to the ONE `if` among the few-shot examples — same variable `answer`, same field `alive`, same `= true` polarity, none of which appear in the goal. The goal's work belongs to the opposite case so it will not fit in the copy, and a second `if` is appended to hold it; the empty branch is the template with nothing that fits in it. MEASURED: flipping the example's polarity removes it outright, and removing the example leaves the model unable to emit a parseable `if` at all, so its competence with the construct is entirely example-bound. Residue of one-example generalisation is what a compiler drops without comment — which is why this is benign and not a reasoning fault to report."
-      },
-      "trailing_prose": {
-        "severity": "benign",
-        "symptom_of": "channel",
-        "why": "prose after the program's closing brace — not part of the program, and evidence the decoder is not honouring the schema",
-        "evidence": "MEASURED 2026-07-28: lit:7 and lit:13, 6 runs of 6, each a COMPLETE and schema-shaped object followed by a sentence explaining the fix ('I fixed the NEW statement to include os_type...'). The reader called json.loads on the whole reply, so byte 815 discarded bytes 1-814 and repair() returned None — a produced answer thrown away, recorded as if the model had said nothing. Rung 11's discarded repair was VALID and passed its rung in six calls."
-      }
-    }
+  "date": {
+   "sql": "DATE",
+   "py": "str",
+   "doc": "a calendar day, YYYY-MM-DD"
   },
-  "_not_ops_doc": "WORDS THE AUTHOR WRITES AS A STATEMENT THAT ARE NOT ONE. An unknown op is normally answered by listing the legal ones, which is the right answer when the author invented a word — and the wrong one when it reached for a real part of the language and put it in the wrong place. `else` is that case, measured on rung 11 (see _if_inversion_doc): it belongs to the `if` above it, so 'expected one of new, fetch, call...' sends the author looking for a different construct instead of telling it where the one it wants actually lives. Keyed by the mistaken word so the correction is DATA and stays beside the vocabulary it corrects; a word absent from here still gets the plain list.",
-  "not_ops": {
-    "else": "`else` is a FIELD of the `if` above it, not a statement of its own. Put those statements in that if's `else`. Better still, if its `then` is empty, do not use `else` at all: IF X THEN {} ELSE {Y} is the same program as IF NOT(X) THEN {Y}."
+  "time": {
+   "sql": "TIME",
+   "py": "str",
+   "doc": "a time of day, HH:MM[:SS]"
   },
-  "_if_inversion_doc": "MEASURED 2026-07-28, rung 11, and it is the reason this doc says more than the field list. The author's FIRST DRAFT is the same in every phrasing and its INTENT IS CORRECT — `{op:if, cond:IS($answer.alive)=true, then:[]}` followed by `{op:else, do:[stop_vm]}`, which reads 'if it answers do nothing, otherwise stop it'. That is precisely the goal. Two separate misconceptions wreck it, and only one of them is about logic. (1) `else` is written as a SIBLING STATEMENT rather than a field, which is not a legal op at all. (2) `then` is left EMPTY, which the schema forbids via minItems and the validator rejects — and under a oneOf grammar a blocked token does not backtrack, it degenerates, so on one wording the whole reply came back as unparseable JSON and was scored as no-result. On the other wording the repair loop folded the else body up into `then` WITHOUT touching cond, turning a correct intent into a program that stops exactly the machines that DID answer. So the observed failure was manufactured downstream of a sound plan. The model is not missing the concept: given a synonym-mutated wording of the same goal it wrote IS($answer.alive) = false unprompted and passed. It is missing the SHAPE. Note the runtime never had this restriction — execute.py picks its branch with `_block(st.get('then' if good else 'else') or [])`, so an empty branch would simply run nothing; only the schema and the validator forbid writing it. Same finding as the ACHIEVE ordering rules dropped in 62160da. The inversion is stated as an IDENTITY rather than a prohibition on purpose: a rule has to be remembered, an identity can be re-derived, and it also explains WHY — an empty THEN means the condition you wrote is not the condition you care about.",
-  "_filters_doc": "WHAT A SELECT'S FILTERS MAY SAY. Three forms, and the third and fourth were added 2026-07-27 because the author kept reaching for them and being marked wrong. (1) EQUALITY — {attr: value} — the member's attribute is exactly this. Sibling keys are ANDed, which is the common case and stays implicit. (2) THE CARVE-OUT — {not: {filters}} — every member EXCEPT those matching, written EXCEPT. It has existed since rung 8 and it is what makes the next one necessary: a select could already NAME a member, but only to exclude it. (3) MEMBERSHIP — {attr: {in: [...]}} or {attr: {in: '$set'}} — the attribute is ANY of these, written INCLUDE attr = [a, b, c] to mirror EXCEPT. This is the one predicates could not live without: `foreach` can walk a literal list (IN [n1, n2]) but a PREDICATE takes a select and nothing else, so before this a check could never be about particular machines — and rung 9's goal is literally 'make sure n1, n2 and n3 can all ping each other'. Accepting a bound set as well as a literal is what makes 'the five I just created' checkable. Note EQUALITY still refuses a set reference: `label = $vms` was rung 9's actual mistake, putting the members where a shared attribute belongs, and membership is now the right way to say what it was reaching for. (4) GROUPS — {any: [f, f]} and {all: [f, f]} — nested filter sets, written (a OR b) and (a AND b). Deliberately the SAME WORDS the predicate combinators use (not/all/any -> NOT/AND/OR), because one concept with two vocabularies is the thing this language exists to delete. ALL FOUR STAY DATA: a filter can still be inverted by derive.py, which is why a lambda was refused here — an opaque boolean cannot be turned back into the actions that would satisfy it, and rung 7 closes in one call precisely because a predicate can.",
-  "_attr_values_doc": "ATTRIBUTES WITH A CLOSED SET OF VALUES, declared so the author is TOLD them. `status` is running or stopped and nothing else (executor/api/_vm_monitoring.py:155 is the authority), but the schema offered it as a bare string, so the decoder was free to invent one — and did: rung 5 wrote `SELECT vm WHERE status = 'not running'`, which matches nobody, ran zero calls and reported ok. Rung 12 reached for `label = 'up'` for 'each machine that is currently up' for the same reason: not knowing what status can be, it invented a label. Neither is a model failure; both are the schema withholding something the world already knows, which is the single most repeated defect in this language's history. An attribute listed here is offered as an ENUM to the author and policed by the validator; one absent from here is open text (a name, a label — sets nobody can enumerate in advance). Same role `observed_values` plays for observed attributes, which is why config.values_for() answers for both and neither caller has to know which kind it is asking about.",
-  "_observed_doc": "OBSERVED ATTRIBUTES — decision 6, settled 2026-07-27. The question was what may escape a FOREACH iteration, so that a fleet-wide judgement can be built out of per-member call results ('ping every machine, and if any failed to answer, stop the rollout'). The answer chosen: NOTHING escapes. The loop probes, the FINDINGS LEDGER remembers, and a later SELECT reads it back — so the language gains no accumulator, no new op and no second data type. Its one data type stays 'a set of names'. The precedent was already load-bearing: the `reach` predicate reads the findings ledger rather than the registry, precisely because reachability is DISCOVERED by a probe and never inferred from a tool's success flag. An observed attribute generalises that one predicate into the query form. Each row names the FACT template the ledger stores it under and the tool that writes it (`by`), which is the same yield-schema orchestrator/ai/planner/findings.py already keeps — one authority, read from two directions: the tool call writes the fact, the query reads it. The template is formatted with the kind's KEY bound to the member, so `reachable({name})` asks about vm `web` as `reachable(web)`. THREE-VALUED, AND THIS IS THE LOAD-BEARING PART: an observed attribute is 'true', 'false', or 'unknown', and UNKNOWN IS NOT A MATCH FOR EITHER OTHER VALUE. A machine nobody probed is not alive and is not dead — it is unasked. Collapsing unknown into false would let `SELECT vm WHERE alive = 'false'` mean 'everything I never looked at', which is the false-success class this whole layer exists to refuse, arriving through a query instead of a closure. Making it sayable is what keeps a goal honest: `COUNT(SELECT vm WHERE label='fleet' AND alive='unknown') = 0` asserts that every member was actually asked, which is the clause that stops a program from closing green having probed nothing at all.",
-  "observed_values": [
-    "true",
-    "false",
-    "unknown"
-  ],
-  "observed_unknown": "unknown",
-  "_kinds_doc": "THE RESOURCE MANIFEST (design note 580d54ac §07). One row per resource type, naming its creator tool, its lister, the argument that carries its key, and the attributes legal in a SELECT ... WHERE. This one table feeds NEW (which creator), SELECT (which lister, which attributes) and ENSURE (which predicates typecheck). A new resource type — a container, a conductor's own object — is ONE ROW here and no code. `package` is the module it belongs to; it is what the derived `imports` header is computed from, and the intended endpoint is one package per git submodule. ATTRS MUST MATCH THE VOCABULARY THE TOOLS USE. `add_label(name, label)` sets it, so a program selecting on it writes `label` — listing the attribute as `tag` made the model wrong for being consistent with the tool. One concept, one name. `aliases` carries the harness's internal synonyms so existing readers keep working. The KEY is queryable too: selecting a resource by its name is the most obvious query there is, and omitting it rejected `SELECT vm WHERE name = ...` out of hand. A select may carry `not`, whose value is another select's filters — that is what a carve-out needs: 'every vm EXCEPT db' cannot be written by any positive filter, because the thing excluded is named rather than described. `creators` lets a kind be made more than one way — a machine can be built fresh or CLONED, and with a single creator 'clone golden three times' was unsayable. Which creator runs is chosen by whether `from` is present, so the language gains no keyword for it.",
-  "kinds": {
-    "vm": {
-      "package": "core",
-      "create": "create_vm",
-      "list": "list_vms",
-      "key": "name",
-      "attrs": [
-        "name",
-        "status",
-        "label",
-        "os_type",
-        "network"
-      ],
-      "aliases": {
-        "tag": "label",
-        "labels": "label",
-        "os": "os_type",
-        "net": "network",
-        "net_name": "network",
-        "on": "network"
-      },
-      "attr_values": {
-        "status": [
-          "running",
-          "stopped"
-        ]
-      },
-      "observed": {
-        "alive": {
-          "fact": "reachable({name})",
-          "by": "guest_ping",
-          "doc": "whether the machine answers its guest agent. LEARNED BY ASKING, never inferred — probe it first or it reads 'unknown'."
-        }
-      },
-      "creators": {
-        "create": {
-          "tool": "create_vm",
-          "doc": "a fresh machine"
-        },
-        "clone": {
-          "tool": "clone_vm",
-          "key": "new_name",
-          "from": "source_name",
-          "doc": "a copy of an existing machine"
-        }
-      },
-      "create_defaults": {
-        "os_type": "linux"
-      },
-      "delete": "delete_vm",
-      "nouns": [
-        "machine",
-        "box",
-        "node",
-        "server",
-        "host",
-        "resource"
-      ]
-    },
-    "network": {
-      "package": "core",
-      "create": "create_network",
-      "list": "list_networks",
-      "key": "net_name",
-      "attrs": [
-        "net_name",
-        "members"
-      ],
-      "aliases": {
-        "name": "net_name"
-      },
-      "creators": {
-        "create": {
-          "tool": "create_network"
-        }
-      },
-      "nouns": [
-        "net",
-        "subnet"
-      ]
-    },
-    "snapshot": {
-      "package": "core",
-      "create": "snapshot_create",
-      "list": "snapshot_list",
-      "key": "snap_name",
-      "attrs": [
-        "snap_name",
-        "vm"
-      ],
-      "creators": {
-        "create": {
-          "tool": "snapshot_create"
-        }
-      },
-      "nouns": [
-        "restore point",
-        "checkpoint"
-      ]
-    }
+  "datetime": {
+   "sql": "DATETIME",
+   "py": "str",
+   "doc": "a day and a time, ISO-8601"
   },
-  "_predicates_doc": "What ENSURE can assert. `comparators` maps each comparator to the SYMBOL it renders as, so adding one is a data change — it used to be a dict in render.py, which meant a new comparator printed as `?`. EVERY shape carries its operand under `select` — the same key foreach uses — and names itself under `shape`. That regularity was measured, not chosen: an earlier form keyed the shape and operand together ({count: <select>, eq: N}) and llama3.1 put the NUMBER where the SET belongs on every attempt, while getting foreach's select right in the same programs. `source` records WHERE the truth comes from: `registry` is current state; `findings` is the probe ledger, because reachability is not registry state and is deliberately never inferred from a tool's success flag. `not`/`all`/`any` are COMPOSITE: their operand is other predicates rather than a set, which is why `source` is neither registry nor findings — they read whatever their children read. All three take parentheses in the written form, so a reader never has to know operator precedence, because there is none. `is` reads a GRAFTED RESULT rather than the world — IS($answer.reachable) = false. It is the only shape whose source is neither the registry nor findings, and it exists because rung 11's condition is a call's answer: which machines are unreachable is knowable only by asking.",
-  "predicates": {
-    "count": {
-      "source": "registry",
-      "operand": "select",
-      "comparators": {
-        "eq": "=",
-        "gte": ">=",
-        "lte": "<="
-      },
-      "doc": "how many members match"
-    },
-    "reach": {
-      "source": "findings",
-      "operand": "select",
-      "comparators": {
-        "min": ">="
-      },
-      "comparators_optional": true,
-      "doc": "the members can reach each other; add min: N for 'at least N of them'"
-    },
-    "disjoint": {
-      "source": "registry",
-      "operand": "sets",
-      "comparators": {},
-      "doc": "the named sets share no member"
-    },
-    "not": {
-      "source": "composite",
-      "operand": "of",
-      "arity": "one",
-      "comparators": {},
-      "doc": "the opposite of another check",
-      "derivable": false,
-      "_derivable_doc": "the opposite of a check does not name a state to bring about — satisfying NOT(x) means any world where x is false, and choosing one is a decision, not a computation"
-    },
-    "all": {
-      "source": "composite",
-      "operand": "of",
-      "arity": "many",
-      "comparators": {},
-      "doc": "every one of these checks holds",
-      "derivable": false,
-      "_derivable_doc": "a composite is only as derivable as its children, and combining their plans is a scheduling problem this layer deliberately does not have"
-    },
-    "any": {
-      "source": "composite",
-      "operand": "of",
-      "arity": "many",
-      "comparators": {},
-      "doc": "at least one of these checks holds",
-      "derivable": false,
-      "_derivable_doc": "satisfying ONE of several checks means picking which — that is the operator's call, not arithmetic"
-    },
-    "is": {
-      "source": "graft",
-      "operand": "of",
-      "arity": "value",
-      "comparators": {
-        "eq": "="
-      },
-      "doc": "a value from a grafted result equals this",
-      "derivable": false,
-      "_derivable_doc": "reads a call's RESULT. No sequence of actions makes a past answer different"
-    }
+  "duration": {
+   "sql": "DURATION",
+   "py": "str",
+   "doc": "a span — 30s, 15m, 1h, 7d. What a ROUTINE's schedule and a timeout are"
   },
-  "_prompt_doc": "Every string the model is shown. Held as data so the wording can be tuned without editing code, and so a change to it is visible in a diff as a change to the LANGUAGE rather than buried in a Python literal.",
-  "prompt": {
-    "intro": "You turn an operator's request into a PROGRAM — an ordered list of statements that, run top to bottom, achieves it.",
-    "statements_header": "Statements:",
-    "reference": "Refer to anything you created with a $ prefix: {\"net_name\":\"$net\"}.",
-    "ordering": "Order matters — a foreach over {\"tag\":\"red\"} only finds VMs already labelled.",
-    "select_hint": "select describes the set, e.g. {\"kind\":\"vm\",\"status\":\"stopped\"} or {\"kind\":\"vm\",\"tag\":\"red\"}. Inside a foreach, the member is $item.",
-    "tools_header": "Tools available:",
-    "tools_footer": "Use ONLY those tool names.",
-    "tool_description": "Express the operator's goal as a PROGRAM: an ordered list of statements. Use `new` to create a resource and give it a name you can refer to later (set count to make several at once). Use `call` to invoke one tool. Use `foreach` to apply ONE call to every member of a set you describe with `select`. Use `ensure` to state something that must be TRUE at the end — that is a check, not an action.",
-    "retry_no_program": "You did not return a program. Call emit_program with a `body` array of statements.",
-    "retry_rejected": "That program was rejected:",
-    "retry_fix": "Fix exactly those problems and call emit_program again.",
-    "grounding": "ENSURE vs ACHIEVE — CHECK versus MAKE. ACHIEVE is a MAKE: a state that must be true from that point on, and if it is not, the harness computes the difference and closes it. Write one wherever the rest of the program depends on something being so; you may write SEVERAL, and work may follow them. ENSURE is a CHECK: something that must ALREADY be true, used FIRST to confirm the lab is as you assume, and it changes nothing.",
-    "shape": "A GOOD PROGRAM USES ALL THREE, and they do different jobs.\n  FETCH   gets your initial ground — what is actually in this lab right now, before you assume anything. Read first.\n  ENSURE  grounds you — states what must be true, so the plan rests on fact and not on a guess about the world.\n  ACHIEVE is the muscle — the end state you are being asked to bring about, and the only thing that says what done means.\nReach for all three unless the operator asked for less. A program that only acts has vouched for nothing; a program that only checks changes nothing."
-  },
-  "_schema_doc": "Knobs for the tool schema handed to the model, each carrying the measurement behind it. `statement_form`: 'oneof' is the CORRECT schema — one branch per op, so a statement's type determines its fields and `op` cannot be omitted — and it is set to 'flat' anyway, because oneof drops emission to 0/4. Flat gives the model no structural cue (qwen2.5:14b returned six of nine statements with no `op`), but it at least gets called. Same story as `predicate_required`: adding a nested required took llama3.1 from 3/4 emitting to 0/4. The pattern across every experiment is that this tool-call surface trades guidance against fidelity, and fidelity is the binding constraint. Note what DOES work reliably: decompose{steps:[string]} — an array of STRINGS. Emission collapses on an array of structured objects, which is the strongest hint about where to go next. Change these only with a measurement; tests/bench/ir_probe.py is how.",
-  "schema": {
-    "statement_form": "flat",
-    "predicate_properties": true,
-    "predicate_required": false
-  },
-  "_fields_doc": "Every field a statement may carry, described ONCE. `enum_from` points at another manifest table so the enum tracks it — add a resource kind and `kind`'s enum follows with no edit here. Ops below list which fields they use; both schema forms are built from these rows, so they cannot describe different languages. `amount` is how many a `new` creates, and is deliberately NOT called `count`: `count` is also a PREDICATE shape (how many members match), and one word meaning two things is the kind of collision that only hurts once procedures have been written in it.",
-  "fields": {
-    "var": {
-      "type": "string",
-      "doc": "the name to bind"
-    },
-    "kind": {
-      "type": "string",
-      "enum_from": "kinds",
-      "doc": "the resource type"
-    },
-    "amount": {
-      "type": "integer",
-      "doc": "how many to create. A number, a $parameter, or {\"minus\": [N, \"$have\"]} to create only the shortfall. Zero is legal and creates nothing."
-    },
-    "tool": {
-      "type": "string",
-      "doc": "the tool to invoke"
-    },
-    "args": {
-      "type": "object",
-      "doc": "the tool's arguments"
-    },
-    "select": {
-      "type": "object",
-      "doc": "a set described by a query over current state"
-    },
-    "in": {
-      "type": [
-        "string",
-        "array"
-      ],
-      "doc": "a set you already bound (\"$vms\"), or a literal list of names"
-    },
-    "call": {
-      "type": "object",
-      "doc": "the call to apply to each member"
-    },
-    "predicate": {
-      "type": "object",
-      "doc": "what must hold at the end"
-    },
-    "from": {
-      "type": "string",
-      "doc": "OMIT unless the goal says to copy/clone an existing resource. Names that existing resource — never a label, never a new name. The copy IS the creation: do not also call the clone tool"
-    },
-    "graft": {
-      "type": "string",
-      "doc": "bind what this call returned, under this name"
-    },
-    "ifails": {
-      "type": "array",
-      "doc": "statements to run if this one fails"
-    },
-    "async": {
-      "type": "boolean",
-      "doc": "start it and do not wait"
-    },
-    "cond": {
-      "type": "object",
-      "doc": "if: the check to branch on"
-    },
-    "then": {
-      "type": "array",
-      "doc": "if: statements when the check holds"
-    },
-    "else": {
-      "type": "array",
-      "doc": "if: statements when it does not"
-    },
-    "do": {
-      "type": "array",
-      "doc": "the statements to run for each member; $item is the current one"
-    },
-    "count": {
-      "type": "object",
-      "doc": "the query to count — same form as a select"
-    }
-  },
-  "_authoring_doc": "HOW the model is asked to write a program. 'program' offers one emit_program tool taking the whole body as an array of statement objects. 'statements' offers ONE TOOL PER OP, each a flat object of scalars, and the harness assembles the program from the calls. The second exists because of a consistent measurement: decompose{steps:[string]} — an array of STRINGS — works reliably every day, while an array of structured OBJECTS collapses, and collapses harder the more structure is declared (oneOf and a nested required both took emission to 0/4). A statement tool asks for exactly the shape the model produces all day when it calls create_vm(name=alpha): two or three scalar arguments. Nested objects are flattened for the same reason — select{kind,label} becomes select_kind/select_attr/select_value.",
-  "authoring": "statements",
-  "_surface_doc": "How the written form spells things the stored form keeps as plain values. Wrappers are OPTIONAL where a bare value is unambiguous and REQUIRED where it is not: AMOUNT(5) reads as a count rather than an argument that happens to be a number, and matches COUNT(...) on the predicate side. NOT/AND/OR all take parentheses so a reader never has to know precedence — there is none to know. VAL(X) is the long form of $X; inside a loop $ is the one to use, because $item is what the body is full of.",
-  "surface": {
-    "bind": "STORE",
-    "amount": "AMOUNT",
-    "value": "VAL",
-    "sigil": "$",
-    "combinators": {
-      "not": "NOT",
-      "all": "AND",
-      "any": "OR"
-    },
-    "achieve": "ACHIEVE",
-    "fetch": "FETCH",
-    "new": "NEW",
-    "foreach": "FOREACH",
-    "in": "IN",
-    "ensure": "ENSURE",
-    "if": "IF",
-    "else": "ELSE",
-    "where": "WHERE",
-    "except": "EXCEPT",
-    "include": "INCLUDE",
-    "ifails": "IFAILS",
-    "async": "ASYNC",
-    "count": "COUNT",
-    "procedure": "PROCEDURE",
-    "import": "IMPORT",
-    "_doc": "`call` is deliberately absent: an invocation has no keyword, it reads as tool(args). Everything else the renderer prints is here, so renaming a word is a data change and the stored form never moves."
-  },
-  "intent": {
-    "_doc": "What the operator wants BACK — data, a verdict, or the thing done — is theirs to say, not the author's to infer. The three intents are the three words: FETCH retrieves, ENSURE verifies, ACHIEVE commands. Authority nests (fetch < ensure < achieve) and is ENFORCED, see ir/intent.py. These markers are deliberately FEW: a marker set, not a vocabulary trying to parse English. A sentence using none is asked about, not guessed at.",
-    "markers": {
-      "fetch": [
-        "how many",
-        "list",
-        "which",
-        "show me",
-        "what is",
-        "what are",
-        "tell me the"
-      ],
-      "ensure": [
-        "check",
-        "verify",
-        "confirm",
-        "is there",
-        "are there",
-        "do we have",
-        "tell me whether",
-        "has not been"
-      ],
-      "achieve": [
-        "get",
-        "bring",
-        "create",
-        "build",
-        "make it",
-        "set up",
-        "end with",
-        "there should be",
-        "spin up",
-        "provision",
-        "wire up",
-        "delete",
-        "launch",
-        "stop",
-        "clone"
-      ]
-    },
-    "default": "fetch"
-  },
-  "_derivable_doc": "EVERY PREDICATE SHAPE MUST SAY WHETHER THE HARNESS CAN CLOSE IT. A shape either has a deriver in ir/derive.py or declares derivable:false with a reason. tests/test_medusa_invariants.py holds this: the alternative is a shape that silently cannot converge, which is how `disjoint` sat DECLARED, OFFERED, VALIDATED and RENDERED for weeks with no evaluator at all — always false, in every world, and nothing said so.",
-  "_gate_doc": "THE SCHEMA GATE. The master decides what MAY be emitted; the gate decides whether what WAS emitted should run. The split is structural rather than stylistic: a schema can constrain the form of a statement and cannot compel that a program SAYS something, so 'every identifier the operator named appears somewhere' is unexpressible as schema and has to be judged after authoring. Mechanically this is the contract's risk formula again — weighted factors, a score, threshold bands — with one correction that matters: the contract scores DECLARED facts about a tool, and the gate scores COMPUTED facts about a program. Every factor here is structural and readable off the IR. No factor asks a model whether a program looks right; that is the p_self firewall the reason gate already drew, and a gate that consults the author it is judging has judged nothing. Scoring rather than a boolean verdict, because a boolean cannot tell an improving correction from a degrading one, and 'getting worse' is one of the four ways the clarify loop terminates. REFUSE IS REACHED BY ACCUMULATION, NOT BY ANY SINGLE FACTOR, and that is deliberate: validate.py already refuses everything that is illogical on its own, so the gate's refuse band means 'too many things are wrong at once for re-asking to fix it' rather than repeating a judgement something upstream has already made. No weight here reaches the refuse threshold alone.",
-  "gate": {
-    "weights": {
-      "goal_unnamed": 0.75,
-      "dead_binding": 0.25
-    },
-    "thresholds": {
-      "refuse": 0.8,
-      "clarify": 0.3
-    },
-    "factors": {
-      "goal_unnamed": {
-        "doc": "the fraction of identifiers the operator wrote that appear NOWHERE in the program. The MUST a schema cannot express, and the reason the gate exists separately from the master.",
-        "why_not_schema": "The canonical case, and the reason the gate exists apart from the master. A schema can constrain what a name may BE — `from` is enumerated from the lab for exactly that reason — and cannot compel that a particular name APPEARS. 'Mention core somewhere' is not expressible as a constraint on any single value."
-      },
-      "dead_binding": {
-        "doc": "the fraction of bound names never read back. A smell rather than a fault — deliberately below the clarify threshold on its own, because a program can legitimately bind something it does not use.",
-        "why_not_schema": "A relationship between two statements that may be arbitrarily far apart: a binding here, a reference there. A schema validates each statement against its branch with no knowledge of the others, so a cross-statement relationship is structurally out of reach. The one constrainable PART of this — that a bound name must be pronounceable — is already a schema pattern on `var` and `graft`, and is not repeated here."
-      }
-    },
-    "naming_cues": [
-      "called",
-      "call it",
-      "named",
-      "name it",
-      "name them",
-      "call them",
-      "labelled",
-      "labeled",
-      "label them",
-      "label it",
-      "tagged"
-    ],
-    "_naming_cues_doc": "The forms in which an operator SAYS a name, for master.named(). Deliberately few — a cue set, not a vocabulary trying to parse English — and the same shape as the intent markers. Precision matters far more than recall here: a name this misses costs nothing (the factor stays at zero), and a name it wrongly finds suppresses a correct program. The other two forms need no cues: a quoted word, and a token carrying a digit, underscore or hyphen, which English words do not.",
-    "_no_unclosable_doc": "An ACHIEVE on a predicate declaring `derivable: false` (not/all/any/is) was a factor here and was WRONG. derive() returning None is a documented fallback, not a dead end — 'the caller falls back to asking the model on None and stops on []' — so ACHIEVE ALL(...) is a legitimate goal that reaches its answer through the author rather than the deriver. Scoring it as unclosable would have refused a working capability, and refused it for a reason no rewording could satisfy.",
-    "attempts": 3,
-    "_attempts_doc": "How many times the clarify loop may re-ask before it refuses. The other three terminations — stale, worse, timeout — can end it sooner.",
-    "_why_not_schema_doc": "THE INVARIANT: no constrainable rule may live only in the gate. A rule a schema could enforce belongs to the master, where the decoder cannot violate it — catching it afterwards costs an authoring round to discover something that could have been impossible to write. So every factor here states why it is NOT expressible as a constraint, the same declare-or-say-why shape the tool `verify` coverage uses, and the suite asserts the field is present and that validate() ACCEPTS each factor's own example — a factor whose example is already rejected upstream is repeating a judgement rather than adding one.",
-    "_no_inert_doc": "`inert` — an achieve whose program contains no acting statement — was a factor here and was WRONG, for the SECOND time in the same shape. It is `unclosable` in a different costume: both penalised the DECLARATIVE form on the grounds that derive() might not close it. Measured against rung 13, the idempotent re-entry rung: the pure declarative `ACHIEVE REACH(SELECT vm WHERE label='fleet') >= 5` is the CORRECT answer in a world that already satisfies the goal — derive computes the difference, finds none, and does nothing — and the gate scored it 0.18 CLARIFY while scoring the program that duplicated five machines 0.00 PROCEED. Exactly backwards. The lesson generalises past this factor: a program doing LESS is not a program doing WORSE, and the language has a whole convergence engine built on that.",
-    "_deleted_factors_doc": "FOUR FACTORS WERE DELETED, and the reason is the same one every time: they were invented from first principles instead of from what the rest of the system leaves uncovered, so each duplicated a mechanism that already existed AND already had a better answer. `unclosable` duplicated derive()'s documented fallback. `inert` contradicted the declarative form derive() supports. `no_verdict` duplicated consent.py, which ASKS the operator y/n — decision 2 — and the gate turned that settled question into a refusal. `intent_unmet` was the SAME FAULT as no_verdict counted a second time: under `achieve`, a program with no ACHIEVE statement is exactly a program with no verdict, and at 0.36 + 0.34 = 0.70 one flaw crossed a 0.50 refuse threshold designed to need SEVERAL. MEASURED, and this is why the gate is now small: on the 13-rung ladder the full factor set took the literal column from 10/12 to 0/12 and the paraphrase column from 8/13 to 2/13. It refused every program that worked. `intent_unmet` was also wrong on the language's own terms, per the operator: ENSURE is the statement a program truly needs; FETCH grounds the world before it starts; ACHIEVE is a PERMUTATION of ENSURE used to make sure something is done — a barrier saying the run cannot pass this point unless X exists. Not every program needs one, so requiring one was never a fault to score. WHAT SURVIVES is only what nothing else checks: whether the program mentions what the operator NAMED, and whether it bound something it never read. Both scored zero on all thirteen rungs with no false alarms."
-  },
-  "_achieve_semantics_doc": "SETTLED BY THE OPERATOR 2026-07-27, replacing the earlier reading of ACHIEVE as 'the one goal, certified at the end'. ENSURE asks 'do you exist'; ACHIEVE says 'MAKE SURE you exist' — a MAKE, not a CHECK. Two rules were dropped from validate.py as a consequence: 'one achieve per program' (philosophically a wash once achieve means make-sure-of-this — a program can need several) and 'nothing may act after achieve' (in the operator's words, wishful thinking that is not based in what we are seeing). Neither was ever a runtime constraint: execute.py has always checked each ACHIEVE in order and returned on the first failure, which IS the barrier — the run cannot pass this point unless the thing is true. Only the validator forbade it, so this removed a restriction rather than adding a feature. ENSURE remains the CONCEPT the correction loop is built on; ACHIEVE is what programs will actually contain more of.",
-  "_create_defaults_doc": "WHAT A DERIVED CREATION SUPPLIES for a creator argument nobody named. `derive()` can close a count gap by CREATING, and create_vm REQUIRES os_type — which the predicate does not carry and the harness cannot infer. Inventing one per call would be the schema-withholding defect in reverse: the model invented `status = 'not running'` precisely because nothing declared what status could be. THIS IS NOT THAT. A value written here once is the operator's declared intent, visible in the manifest and the same on every derivation, where a guess is different each time and appears nowhere. A kind whose creator requires an argument with NO entry here cannot be derived into existence, and derive() returns None so the author is asked instead — the gap stays explicit rather than being filled in with something plausible. This is only for DERIVED creation: an authored NEW must still say what it wants.",
-  "_destroyer_doc": "THE TOOL THAT REMOVES A RESOURCE, declared per kind beside `create`. ACHIEVE means MAKE SURE — the operator: 'creation and modifications and even deletions are allowed in achieve, given correct intent... it CAN CHANGE the world to meet the goal, that's the correction part of it.' So a count gap is closed in EITHER direction, and the thing that decides whether removal is permitted is the operator's INTENT, not the sign of the difference. Under `fetch` or `ensure` nothing may act at all; under `achieve` the world may be corrected. Refusing to derive a deletion was treating derive() as the safety mechanism, which it is not — a derived call meets consent, the contract tier and delete_vm's double confirmation on its way to the world exactly as an authored one does, and duplicating that judgement here only broke the language's own promise that an ACHIEVE is a legal way to state a goal. A kind with NO destroyer declared cannot be derived downward and the author is asked, the same boundary `create_defaults` draws upward.",
-  "_new_vs_fetch_doc": "THE ORDER, in the operator's words: 'NEW means creation of NEW objects. Only use when asked TO CREATE new objects, OR when objects don't exist. If the user intent is NOT to create but rather use existing resources, USE FETCH. If nothing comes back from said fetch then your fallback is creation.' MEASURED, and this is the single most expensive defect in the ladder: shown a lab holding five labelled machines and asked to use five, the author writes NEW AMOUNT(5) and ends with ten. It is world blind — the CURRENT STATE block is read as background rather than as input. The prompt has said 'read first, then act on the difference' under `fetch` all along and it does not land there, which is why the rule is stated on `new` itself, where the mistake is made, and enforced by an objection naming the census.",
-  "_cardinality_doc": "CARDINALITY BY CONSTRUCTION, which is NOT how many members match today. The operator, 2026-07-29: *\"a label that is filtered might only be singling out one object now but it's technically a set with currently 1 member.\"* That is the whole distinction. `name = 'db'` can NEVER match two, because `name` is the kind's KEY; `label = 'prod'` is a SET EXPRESSION even on a day when one machine carries the label. Counting members is the trap — ask instead whether the expression could ever match more than one. IT IS DERIVABLE, NOT JUDGED: every kind already declares its `key`, so a filter on that attribute is singular and a filter on anything else is a set. No model call is needed for this half. AND IT RESOLVES `NOT ANY`, which is where the first taxonomy broke: the complement of a filtered set is ITSELF a filtered set, so NOT-of-a-filter is a SET even when it currently holds one member. The four-way all/any/single/not enum conflated two orthogonal questions — `single` was answering CARDINALITY and `not` was answering SHAPE — which is why goal-level narrowing did nothing: `not` licensed everything because as a SHAPE it should. THE ACTION FOLLOWS FROM CARDINALITY ALONE: singular is a call naming the object and never a loop over a set of one; a set is a FOREACH and never a bare call.",
-  "cardinality": {
-    "singular": {
-      "deny": [
-        "foreach"
-      ],
-      "doc": "exactly ONE object, by construction — a filter on the kind's key. Act on it with a plain call naming it; a loop over a set of one is never right"
-    },
-    "set": {
-      "deny": [
-        "call"
-      ],
-      "doc": "one or more members, and possibly none — any filter that is not on the key, including the COMPLEMENT of a filter. Act on it with FOREACH; a bare call cannot address a set, however few members it holds today"
-    }
-  },
-  "_shape_doc": "THE SET'S SHAPE — orthogonal to cardinality, and separated from it 2026-07-29. Shape says what goes INSIDE the select; cardinality says whether you loop at all. `all` is unfiltered, `any` is filtered, `not` is a named whole minus members. A FILTER IS DEFINITIONALLY SUBTRACTIVE, so filtering can only ever produce `any` or a key-identified singular — never `all`. Hence `not` over `all` is the EMPTY set and is refused: a statement that can do no work should not validate, which is the lesson `disjoint` taught by sitting declared-and-never-evaluated, answering false in every world for weeks.",
-  "shapes": {
-    "all": {
-      "filtered": false,
-      "doc": "every member of the kind, no condition"
-    },
-    "any": {
-      "filtered": true,
-      "doc": "the members matching a condition; a NEGATIVE condition is still a condition"
-    },
-    "not": {
-      "filtered": true,
-      "doc": "a named whole MINUS named members — there must be a whole to subtract from"
-    }
-  },
-  "_nouns_doc": "THE ENGLISH NOUNS A KIND ANSWERS TO, declared beside it. The ladder's paraphrase column exists because the same capability is asked for in different words — 'set up three machines' is 'create 3 vms' — so any reader that has to recognise a kind IN PROSE needs this list, and it must be ONE list. Added 2026-07-30 after two shape-based routers (quantifier_rule, route_rule) each hardcoded their own copy in Python and had already diverged the same day: one knew 'host' and 'resource', the other did not. That is the stale-twin defect this project has paid for three times in the schema builders (`of`, `select`, NOT-as-array), reappearing in a new place. The key is singular; plurals are derived, never listed. `resource` is deliberately filed under `vm` because that is how the ladder's own decompositions use it — 'move resource to new network' means a machine.",
-  "_acts_doc": "WHICH OPS TOUCH THE WORLD. Declared per op because two modules had derived it independently and identically — `consent._ACTING` and `validate._ACTS` were the same three words written twice, and neither could see the other. It carries real weight: Medusa's one soundness rule is that a program which ACTS and asserts nothing has established nothing, and consent is asked for exactly when a statement acts. An op added to the language with no row here silently becomes harmless to both.",
-  "prompt_when": {
-    "shape": {
-      "needs": [
-        "fetch",
-        "ensure",
-        "achieve"
-      ],
-      "whole": true
-    },
-    "grounding": {
-      "needs": [
-        "ensure",
-        "achieve"
-      ]
-    },
-    "ordering": {
-      "needs": [
-        "foreach"
-      ],
-      "whole": true
-    },
-    "select_hint": {
-      "needs": [
-        "foreach",
-        "fetch"
-      ]
-    },
-    "reference": {
-      "needs": [
-        "new",
-        "fetch"
-      ]
-    }
+  "bytes": {
+   "sql": "BYTES",
+   "py": "str",
+   "doc": "a size — 512MB, 20GB. Disk and memory, with the unit kept"
   }
+ },
+ "_ops_doc": "The statement types. `one_of` means exactly one of those fields must be present — foreach names its set EITHER by querying state (`select`) OR by referring to a set already bound (`in`). Those are different things and conflating them was a real gap: `new` with a count binds a SET, and until `in` existed there was no way to act on it before its members had an attribute to query by. \"Create X vms and label them\" was inexpressible. `required` is what validate() insists on; `doc` is what the model is shown. Adding an op here does NOT make it executable — the visitor must learn it too — so this table is the contract between the two, not a switch. `in` accepts a LITERAL LIST as well as a bound reference, because a correction usually acts on specific things the last attempt left behind — the model reached for exactly that on rung 7, naming three VMs it had read off current state, and the language had no way to say it. `new` carries `args` because a resource is rarely just a name: create_vm alone accepts 47 arguments and REQUIRES os_type. Without them `new` could not build a real VM at all — it passed only because the bench world is lenient about missing required fields, which is exactly the kind of gap a simulator hides.",
+ "ops": {
+  "new": {
+   "required": [
+    "var",
+    "kind"
+   ],
+   "doc": "create a resource and bind a name to it. NEW ISSUES THE CREATION ITSELF — it calls create_vm / create_network for you. Fields: var, kind, amount (optional, default 1), args (optional — anything else the creator takes), `from` (optional — create by COPYING the named resource instead of making a fresh one).",
+   "fields": [
+    "var",
+    "kind",
+    "amount",
+    "args",
+    "from",
+    "ifails"
+   ],
+   "acts": true
+  },
+  "fetch": {
+   "required": [
+    "var"
+   ],
+   "one_of": [
+    [
+     "select",
+     "count"
+    ]
+   ],
+   "fields": [
+    "var",
+    "select",
+    "count"
+   ],
+   "doc": "READ the world and bind what you find. `count` binds HOW MANY match (a number); `select` binds the matching names (a set). This is the only way to write one program that is correct whatever the lab already holds — read first, then act on the difference."
+  },
+  "call": {
+   "required": [
+    "tool",
+    "args"
+   ],
+   "doc": "invoke one tool. Fields: tool, args.",
+   "fields": [
+    "tool",
+    "args",
+    "graft",
+    "ifails"
+   ],
+   "acts": true
+  },
+  "foreach": {
+   "required": [],
+   "one_of": [
+    [
+     "select",
+     "in"
+    ],
+    [
+     "call",
+     "do"
+    ]
+   ],
+   "doc": "apply statements to every member of a set. Name the set with `select` (a query over current state), or with `in` — either a set you bound (\"$vms\") or a literal list of names ([\"one\",\"two\"]). The body is `do`, a list of statements, or `call` as the shorthand when the body is a single call. Inside the body $item is the current member.",
+   "fields": [
+    "select",
+    "in",
+    "call",
+    "do",
+    "async",
+    "ifails"
+   ],
+   "acts": true
+  },
+  "ensure": {
+   "required": [
+    "predicate"
+   ],
+   "doc": "A SANITY CHECK: is this so, right here? Evaluated where it is written and it changes nothing — if it fails the program stops and the plan is rethought, because it was built on something false. The difference from ACHIEVE is CHECK versus MAKE: ensure asks 'do you exist', achieve says 'make sure you exist'.",
+   "fields": [
+    "predicate"
+   ]
+  },
+  "achieve": {
+   "required": [
+    "predicate"
+   ],
+   "fields": [
+    "predicate"
+   ],
+   "doc": "MAKE SURE of something: it must be true from this point on, and if it is not, the harness computes the difference and closes it. Use it wherever the rest of the program DEPENDS on something being so — a network must exist before anything attaches to it — and the run cannot pass that point until it does. You may use SEVERAL, and work may follow them. A program that is nothing but an achieve is a legal way to state a goal and let the harness plan it."
+  },
+  "if": {
+   "required": [
+    "cond",
+    "then"
+   ],
+   "fields": [
+    "cond",
+    "then",
+    "else"
+   ],
+   "doc": "branch on a check. Fields: cond (a check), then (statements), else (optional statements)."
+  }
+ },
+ "_op_categories_doc": "THE SEVEN OPS ARE TWO KINDS OF THING, and until 2026-07-29 nothing said so where it mattered. STRUCTURAL ops arrange work — they are what a decomposition CHOOSES, and getting one wrong is a reasoning error. INTENT ops are fetch/ensure/achieve, and they are NOT the author's to choose: `intent` above already states that what the operator wants back is theirs to say, and ir/intent.py ENFORCES it before the first call. The one soundness rule draws the same line from the other side — FETCH answers with data, actions answer with nothing, and ENSURE and ACHIEVE are the only statements producing a judgement. So the split was already doctrine in two places and absent from the one table the model is shown. MEASURED, and this is why it exists: the atomicity router named the right operator on 4 of 10 atomic cells across both columns, and TWO OF THE THREE ERRORS WERE `ensure` WHERE `achieve` WAS RIGHT — rungs 7 and 9, identically, in both columns. That is CHECK-versus-MAKE, the pair decision 3 settled, and it is a choice the author was never authorised to make. Offering all seven as one flat enum asked the model to guess something the harness already knows, which is the schema-withholding failure this codebase keeps re-finding: audit what the model was OFFERED before calling a low score a model ceiling. A router asks for STRUCTURE; intent is supplied, never guessed.",
+ "_quantifiers_doc": "HOW MANY THINGS A CLAUSE IS ABOUT, and which statements that licenses. The operator's proposal 2026-07-29: *\"maybe we first filter commands based on the all/any/single/not, so it can't pick commands that are not correct.\"* It is the same move `master.ops` already makes for INTENT — offering only the permitted branches makes a wrong program UNREPRESENTABLE instead of rejected — with the quantifier as the discriminator. MEASURED before building, `quantifier_probe`, n=3, 16 clauses, ground truth declared first: 15/16 against a floor of 4/16, every cell unanimous, `single` 4/4 and `not` 4/4. THE DECIDING PAIR IS 8/8: 'db goes on a network called dmz' -> single and 'apart from db, which belongs on dmz' -> not, the SAME OBJECT with opposite answers, and exactly the two clauses rung 8 gets wrong while authoring. So the knowledge is present and the AUTHORING CONTEXT loses it — which is the case for routing before emitting rather than teaching harder. The carve-out prose hint, tried the same day, measured 0/26 on the ladder. THE `any` VS `not` BOUNDARY IS A NAMED WHOLE: 'every vm except db' names a whole and subtracts a member (not); 'the ones that do not answer' names no whole and a condition picks the members (any), because A NEGATIVE CONDITION IS STILL A CONDITION. That is also how Medusa spells them — `any` is a filter in the select, `not` is the carve-out key. Sharpening this wording took the probe 14/16 -> 15/16, and the one remaining miss is the model dropping the condition in 'every RUNNING vm', not a taxonomy fault. WHAT `single` BUYS, and it is why this is wired first: a clause about one identified object licenses `call` ALONE, so there is no `select` in the schema and rung 8's `statement 4: select must name a kind` becomes unrepresentable rather than rejected-then-repaired — and the repair loop is what turned that nearly-correct program into an inverted one.",
+ "_quantifiers_correction_doc": "CORRECTED 2026-07-29, BEFORE ANY LADDER RUN, and the check that caught it cost one model call per rung instead of a 25-minute sweep. The first table licensed only set-shaped ops per quantifier, and routing each ladder goal showed it would STARVE FOUR RUNGS — 4, 6 and 10 lose `new`, and 8 loses `call` AND `new` — three of which currently PASS. The fault was mine, not the router's: CREATION AND INVOCATION ARE ORTHOGONAL TO CARDINALITY. 'create 5 vms' is an `all` clause that plainly needs `new`. The quantifier constrains only HOW A SET IS NAMED, so the one real constraint it carries is the one the invariant asserts: `single` denies `foreach`, because a rule about one identified object is a call naming it and never a loop over a set of one. Everything else in the first table was reasoned out rather than measured — the same mistake the schema gate made at 0/12, caught this time before it shipped.",
+ "quantifiers": {
+  "all": {
+   "ops": [
+    "new",
+    "fetch",
+    "call",
+    "foreach",
+    "ensure",
+    "achieve",
+    "if"
+   ],
+   "doc": "every member of the kind, with NO condition — 'all the machines', 'every vm'"
+  },
+  "any": {
+   "ops": [
+    "new",
+    "fetch",
+    "call",
+    "foreach",
+    "ensure",
+    "achieve",
+    "if"
+   ],
+   "doc": "the members matching a CONDITION — 'every vm that is stopped'. The condition may be negative ('the ones that do not answer') and it is STILL a condition, because nothing is subtracted from a named whole"
+  },
+  "single": {
+   "ops": [
+    "new",
+    "fetch",
+    "call",
+    "ensure",
+    "achieve",
+    "if"
+   ],
+   "doc": "ONE identified object, named — 'the vm called web', 'db'. NO `foreach`: a rule about one object is a plain call naming it, never a loop over a set of one"
+  },
+  "not": {
+   "ops": [
+    "new",
+    "fetch",
+    "call",
+    "foreach",
+    "ensure",
+    "achieve",
+    "if"
+   ],
+   "doc": "a named WHOLE, MINUS named members — 'every vm except db'. There must be a whole to subtract from; without one it is a condition, not an exclusion"
+  }
+ },
+ "op_categories": {
+  "structural": [
+   "new",
+   "call",
+   "foreach",
+   "if"
+  ],
+  "intent": [
+   "fetch",
+   "ensure",
+   "achieve"
+  ]
+ },
+ "_sanitize_doc": "ARTIFACTS — residue in an authored program that provably does nothing, dropped before the program is judged, and COUNTED so the rate is a number rather than something a reader notices. A pass that only cleans makes the artifact rate unmeasurable, and 'it got quietly worse' is a failure this codebase keeps finding: a suite that stopped being mentioned stopped being run; a tool declaring no criterion reported done whenever the call returned. Cleaning without counting is that shape again. SEVERITY IS THREE-VALUED, and that is load-bearing: a screener reporting zero DANGEROUS while owning no dangerous detector is not reporting a clean result, it is reporting an unasked question — the distinction decision 6 draws between alive=false and alive=unknown, applied to the instrument's own coverage. KINDS ARE EARNED BY MEASUREMENT, NEVER INVENTED. The schema gate scored 0/12 because six factors were reasoned out from first principles and four duplicated machinery that already existed and answered better. So this ships with exactly one row, and a candidate is admitted only after it is observed in a corpus. Two candidates have already been REFUSED on that rule: `repeated_loop_same_set` fired six times across 31 programs with five of them PASSING, because one loop per operation over one set is the natural spelling and not a fault; and `repeated_identical_call`, its replacement, never fired at all. WHAT IT MAY NOT DO: it never rewrites a condition. `IF X {} ELSE {Y}` is left exactly as written so the validator's objection still fires, because turning it into `IF NOT(X) THEN {Y}` changes what the program SAYS, and a program should say what it means rather than be edited into meaning it. SECOND KIND, AND THE FIRST WITH A `symptom_of`. `trailing_prose` is benign to REMOVE — it was never part of the program — but unlike `dead_if` it is a SCHEMA VIOLATION: `type: object` has no production permitting a byte after the closing brace, so its presence is evidence the constrained decoder is not holding. That splits two questions a single severity cannot answer: is it safe to clean (yes) and is its rate telling us something is broken elsewhere (yes). The operator's framing, and the reason the alarm exists: the results stay coherent BECAUSE the artifact is cleaned, while the rate says something underneath is failing and something else is keeping it in check. A kind carrying `symptom_of` is reported against that layer without being counted as a failure of it.",
+ "sanitize": {
+  "kinds": {
+   "dead_if": {
+    "severity": "benign",
+    "why": "an IF with no branch that acts — the run cannot reach anything through it",
+    "evidence": "rung 11, every phrasing, 2026-07-28. The cond is byte-identical to the ONE `if` among the few-shot examples — same variable `answer`, same field `alive`, same `= true` polarity, none of which appear in the goal. The goal's work belongs to the opposite case so it will not fit in the copy, and a second `if` is appended to hold it; the empty branch is the template with nothing that fits in it. MEASURED: flipping the example's polarity removes it outright, and removing the example leaves the model unable to emit a parseable `if` at all, so its competence with the construct is entirely example-bound. Residue of one-example generalisation is what a compiler drops without comment — which is why this is benign and not a reasoning fault to report."
+   },
+   "trailing_prose": {
+    "severity": "benign",
+    "symptom_of": "channel",
+    "why": "prose after the program's closing brace — not part of the program, and evidence the decoder is not honouring the schema",
+    "evidence": "MEASURED 2026-07-28: lit:7 and lit:13, 6 runs of 6, each a COMPLETE and schema-shaped object followed by a sentence explaining the fix ('I fixed the NEW statement to include os_type...'). The reader called json.loads on the whole reply, so byte 815 discarded bytes 1-814 and repair() returned None — a produced answer thrown away, recorded as if the model had said nothing. Rung 11's discarded repair was VALID and passed its rung in six calls."
+   }
+  }
+ },
+ "_not_ops_doc": "WORDS THE AUTHOR WRITES AS A STATEMENT THAT ARE NOT ONE. An unknown op is normally answered by listing the legal ones, which is the right answer when the author invented a word — and the wrong one when it reached for a real part of the language and put it in the wrong place. `else` is that case, measured on rung 11 (see _if_inversion_doc): it belongs to the `if` above it, so 'expected one of new, fetch, call...' sends the author looking for a different construct instead of telling it where the one it wants actually lives. Keyed by the mistaken word so the correction is DATA and stays beside the vocabulary it corrects; a word absent from here still gets the plain list.",
+ "not_ops": {
+  "else": "`else` is a FIELD of the `if` above it, not a statement of its own. Put those statements in that if's `else`. Better still, if its `then` is empty, do not use `else` at all: IF X THEN {} ELSE {Y} is the same program as IF NOT(X) THEN {Y}."
+ },
+ "_if_inversion_doc": "MEASURED 2026-07-28, rung 11, and it is the reason this doc says more than the field list. The author's FIRST DRAFT is the same in every phrasing and its INTENT IS CORRECT — `{op:if, cond:IS($answer.alive)=true, then:[]}` followed by `{op:else, do:[stop_vm]}`, which reads 'if it answers do nothing, otherwise stop it'. That is precisely the goal. Two separate misconceptions wreck it, and only one of them is about logic. (1) `else` is written as a SIBLING STATEMENT rather than a field, which is not a legal op at all. (2) `then` is left EMPTY, which the schema forbids via minItems and the validator rejects — and under a oneOf grammar a blocked token does not backtrack, it degenerates, so on one wording the whole reply came back as unparseable JSON and was scored as no-result. On the other wording the repair loop folded the else body up into `then` WITHOUT touching cond, turning a correct intent into a program that stops exactly the machines that DID answer. So the observed failure was manufactured downstream of a sound plan. The model is not missing the concept: given a synonym-mutated wording of the same goal it wrote IS($answer.alive) = false unprompted and passed. It is missing the SHAPE. Note the runtime never had this restriction — execute.py picks its branch with `_block(st.get('then' if good else 'else') or [])`, so an empty branch would simply run nothing; only the schema and the validator forbid writing it. Same finding as the ACHIEVE ordering rules dropped in 62160da. The inversion is stated as an IDENTITY rather than a prohibition on purpose: a rule has to be remembered, an identity can be re-derived, and it also explains WHY — an empty THEN means the condition you wrote is not the condition you care about.",
+ "_filters_doc": "WHAT A SELECT'S FILTERS MAY SAY. Three forms, and the third and fourth were added 2026-07-27 because the author kept reaching for them and being marked wrong. (1) EQUALITY — {attr: value} — the member's attribute is exactly this. Sibling keys are ANDed, which is the common case and stays implicit. (2) THE CARVE-OUT — {not: {filters}} — every member EXCEPT those matching, written EXCEPT. It has existed since rung 8 and it is what makes the next one necessary: a select could already NAME a member, but only to exclude it. (3) MEMBERSHIP — {attr: {in: [...]}} or {attr: {in: '$set'}} — the attribute is ANY of these, written INCLUDE attr = [a, b, c] to mirror EXCEPT. This is the one predicates could not live without: `foreach` can walk a literal list (IN [n1, n2]) but a PREDICATE takes a select and nothing else, so before this a check could never be about particular machines — and rung 9's goal is literally 'make sure n1, n2 and n3 can all ping each other'. Accepting a bound set as well as a literal is what makes 'the five I just created' checkable. Note EQUALITY still refuses a set reference: `label = $vms` was rung 9's actual mistake, putting the members where a shared attribute belongs, and membership is now the right way to say what it was reaching for. (4) GROUPS — {any: [f, f]} and {all: [f, f]} — nested filter sets, written (a OR b) and (a AND b). Deliberately the SAME WORDS the predicate combinators use (not/all/any -> NOT/AND/OR), because one concept with two vocabularies is the thing this language exists to delete. ALL FOUR STAY DATA: a filter can still be inverted by derive.py, which is why a lambda was refused here — an opaque boolean cannot be turned back into the actions that would satisfy it, and rung 7 closes in one call precisely because a predicate can.",
+ "_attr_values_doc": "ATTRIBUTES WITH A CLOSED SET OF VALUES, declared so the author is TOLD them. `status` is running or stopped and nothing else (executor/api/_vm_monitoring.py:155 is the authority), but the schema offered it as a bare string, so the decoder was free to invent one — and did: rung 5 wrote `SELECT vm WHERE status = 'not running'`, which matches nobody, ran zero calls and reported ok. Rung 12 reached for `label = 'up'` for 'each machine that is currently up' for the same reason: not knowing what status can be, it invented a label. Neither is a model failure; both are the schema withholding something the world already knows, which is the single most repeated defect in this language's history. An attribute listed here is offered as an ENUM to the author and policed by the validator; one absent from here is open text (a name, a label — sets nobody can enumerate in advance). Same role `observed_values` plays for observed attributes, which is why config.values_for() answers for both and neither caller has to know which kind it is asking about.",
+ "_observed_doc": "OBSERVED ATTRIBUTES — decision 6, settled 2026-07-27. The question was what may escape a FOREACH iteration, so that a fleet-wide judgement can be built out of per-member call results ('ping every machine, and if any failed to answer, stop the rollout'). The answer chosen: NOTHING escapes. The loop probes, the FINDINGS LEDGER remembers, and a later SELECT reads it back — so the language gains no accumulator, no new op and no second data type. Its one data type stays 'a set of names'. The precedent was already load-bearing: the `reach` predicate reads the findings ledger rather than the registry, precisely because reachability is DISCOVERED by a probe and never inferred from a tool's success flag. An observed attribute generalises that one predicate into the query form. Each row names the FACT template the ledger stores it under and the tool that writes it (`by`), which is the same yield-schema orchestrator/ai/planner/findings.py already keeps — one authority, read from two directions: the tool call writes the fact, the query reads it. The template is formatted with the kind's KEY bound to the member, so `reachable({name})` asks about vm `web` as `reachable(web)`. THREE-VALUED, AND THIS IS THE LOAD-BEARING PART: an observed attribute is 'true', 'false', or 'unknown', and UNKNOWN IS NOT A MATCH FOR EITHER OTHER VALUE. A machine nobody probed is not alive and is not dead — it is unasked. Collapsing unknown into false would let `SELECT vm WHERE alive = 'false'` mean 'everything I never looked at', which is the false-success class this whole layer exists to refuse, arriving through a query instead of a closure. Making it sayable is what keeps a goal honest: `COUNT(SELECT vm WHERE label='fleet' AND alive='unknown') = 0` asserts that every member was actually asked, which is the clause that stops a program from closing green having probed nothing at all.",
+ "observed_values": [
+  "true",
+  "false",
+  "unknown"
+ ],
+ "observed_unknown": "unknown",
+ "_kinds_doc": "THE RESOURCE MANIFEST (design note 580d54ac §07). One row per resource type, naming its creator tool, its lister, the argument that carries its key, and the attributes legal in a SELECT ... WHERE. This one table feeds NEW (which creator), SELECT (which lister, which attributes) and ENSURE (which predicates typecheck). A new resource type — a container, a conductor's own object — is ONE ROW here and no code. `package` is the module it belongs to; it is what the derived `imports` header is computed from, and the intended endpoint is one package per git submodule. ATTRS MUST MATCH THE VOCABULARY THE TOOLS USE. `add_label(name, label)` sets it, so a program selecting on it writes `label` — listing the attribute as `tag` made the model wrong for being consistent with the tool. One concept, one name. `aliases` carries the harness's internal synonyms so existing readers keep working. The KEY is queryable too: selecting a resource by its name is the most obvious query there is, and omitting it rejected `SELECT vm WHERE name = ...` out of hand. A select may carry `not`, whose value is another select's filters — that is what a carve-out needs: 'every vm EXCEPT db' cannot be written by any positive filter, because the thing excluded is named rather than described. `creators` lets a kind be made more than one way — a machine can be built fresh or CLONED, and with a single creator 'clone golden three times' was unsayable. Which creator runs is chosen by whether `from` is present, so the language gains no keyword for it.",
+ "kinds": {
+  "vm": {
+   "package": "core",
+   "create": "create_vm",
+   "list": "list_vms",
+   "key": "name",
+   "attrs": [
+    "name",
+    "status",
+    "label",
+    "os_type",
+    "network"
+   ],
+   "aliases": {
+    "tag": "label",
+    "labels": "label",
+    "os": "os_type",
+    "net": "network",
+    "net_name": "network",
+    "on": "network"
+   },
+   "attr_values": {
+    "status": [
+     "running",
+     "stopped"
+    ]
+   },
+   "observed": {
+    "alive": {
+     "fact": "reachable({name})",
+     "by": "guest_ping",
+     "doc": "whether the machine answers its guest agent. LEARNED BY ASKING, never inferred — probe it first or it reads 'unknown'."
+    }
+   },
+   "creators": {
+    "create": {
+     "tool": "create_vm",
+     "doc": "a fresh machine"
+    },
+    "clone": {
+     "tool": "clone_vm",
+     "key": "new_name",
+     "from": "source_name",
+     "doc": "a copy of an existing machine"
+    }
+   },
+   "create_defaults": {
+    "os_type": "linux"
+   },
+   "delete": "delete_vm",
+   "nouns": [
+    "machine",
+    "box",
+    "node",
+    "server",
+    "host",
+    "resource"
+   ],
+   "setters": {
+    "add_label": {
+     "attr": "label",
+     "member_arg": "name",
+     "value_arg": "label"
+    },
+    "add_vm_to_network": {
+     "attr": "network",
+     "member_arg": "vm_name",
+     "value_arg": "net_name"
+    },
+    "stop_vm": {
+     "attr": "status",
+     "member_arg": "name",
+     "value": "stopped"
+    },
+    "launch_vm": {
+     "attr": "status",
+     "member_arg": "name",
+     "value": "running"
+    }
+   }
+  },
+  "network": {
+   "package": "core",
+   "create": "create_network",
+   "list": "list_networks",
+   "key": "net_name",
+   "attrs": [
+    "net_name",
+    "members"
+   ],
+   "aliases": {
+    "name": "net_name"
+   },
+   "creators": {
+    "create": {
+     "tool": "create_network"
+    }
+   },
+   "nouns": [
+    "net",
+    "subnet"
+   ]
+  },
+  "snapshot": {
+   "package": "core",
+   "create": "snapshot_create",
+   "list": "snapshot_list",
+   "key": "snap_name",
+   "attrs": [
+    "snap_name",
+    "vm"
+   ],
+   "creators": {
+    "create": {
+     "tool": "snapshot_create"
+    }
+   },
+   "nouns": [
+    "restore point",
+    "checkpoint"
+   ]
+  }
+ },
+ "_predicates_doc": "What ENSURE can assert. `comparators` maps each comparator to the SYMBOL it renders as, so adding one is a data change — it used to be a dict in render.py, which meant a new comparator printed as `?`. EVERY shape carries its operand under `select` — the same key foreach uses — and names itself under `shape`. That regularity was measured, not chosen: an earlier form keyed the shape and operand together ({count: <select>, eq: N}) and llama3.1 put the NUMBER where the SET belongs on every attempt, while getting foreach's select right in the same programs. `source` records WHERE the truth comes from: `registry` is current state; `findings` is the probe ledger, because reachability is not registry state and is deliberately never inferred from a tool's success flag. `not`/`all`/`any` are COMPOSITE: their operand is other predicates rather than a set, which is why `source` is neither registry nor findings — they read whatever their children read. All three take parentheses in the written form, so a reader never has to know operator precedence, because there is none. `is` reads a GRAFTED RESULT rather than the world — IS($answer.reachable) = false. It is the only shape whose source is neither the registry nor findings, and it exists because rung 11's condition is a call's answer: which machines are unreachable is knowable only by asking.",
+ "predicates": {
+  "count": {
+   "source": "registry",
+   "operand": "select",
+   "comparators": {
+    "eq": "=",
+    "gte": ">=",
+    "lte": "<="
+   },
+   "doc": "how many members match"
+  },
+  "reach": {
+   "source": "findings",
+   "operand": "select",
+   "comparators": {
+    "min": ">="
+   },
+   "comparators_optional": true,
+   "doc": "the members can reach each other; add min: N for 'at least N of them'"
+  },
+  "disjoint": {
+   "source": "registry",
+   "operand": "sets",
+   "comparators": {},
+   "doc": "the named sets share no member"
+  },
+  "not": {
+   "source": "composite",
+   "operand": "of",
+   "arity": "one",
+   "comparators": {},
+   "doc": "the opposite of another check",
+   "derivable": false,
+   "_derivable_doc": "the opposite of a check does not name a state to bring about — satisfying NOT(x) means any world where x is false, and choosing one is a decision, not a computation"
+  },
+  "all": {
+   "source": "composite",
+   "operand": "of",
+   "arity": "many",
+   "comparators": {},
+   "doc": "every one of these checks holds",
+   "derivable": false,
+   "_derivable_doc": "a composite is only as derivable as its children, and combining their plans is a scheduling problem this layer deliberately does not have"
+  },
+  "any": {
+   "source": "composite",
+   "operand": "of",
+   "arity": "many",
+   "comparators": {},
+   "doc": "at least one of these checks holds",
+   "derivable": false,
+   "_derivable_doc": "satisfying ONE of several checks means picking which — that is the operator's call, not arithmetic"
+  },
+  "is": {
+   "source": "graft",
+   "operand": "of",
+   "arity": "value",
+   "comparators": {
+    "eq": "="
+   },
+   "doc": "a value from a grafted result equals this",
+   "derivable": false,
+   "_derivable_doc": "reads a call's RESULT. No sequence of actions makes a past answer different"
+  }
+ },
+ "_prompt_doc": "Every string the model is shown. Held as data so the wording can be tuned without editing code, and so a change to it is visible in a diff as a change to the LANGUAGE rather than buried in a Python literal.",
+ "prompt": {
+  "intro": "You turn an operator's request into a PROGRAM — an ordered list of statements that, run top to bottom, achieves it.",
+  "statements_header": "Statements:",
+  "reference": "Refer to anything you created with a $ prefix: {\"net_name\":\"$net\"}.",
+  "ordering": "Order matters — a foreach over {\"tag\":\"red\"} only finds VMs already labelled.",
+  "select_hint": "select describes the set, e.g. {\"kind\":\"vm\",\"status\":\"stopped\"} or {\"kind\":\"vm\",\"tag\":\"red\"}. Inside a foreach, the member is $item.",
+  "tools_header": "Tools available:",
+  "tools_footer": "Use ONLY those tool names.",
+  "tool_description": "Express the operator's goal as a PROGRAM: an ordered list of statements. Use `new` to create a resource and give it a name you can refer to later (set count to make several at once). Use `call` to invoke one tool. Use `foreach` to apply ONE call to every member of a set you describe with `select`. Use `ensure` to state something that must be TRUE at the end — that is a check, not an action.",
+  "retry_no_program": "You did not return a program. Call emit_program with a `body` array of statements.",
+  "retry_rejected": "That program was rejected:",
+  "retry_fix": "Fix exactly those problems and call emit_program again.",
+  "grounding": "ENSURE vs ACHIEVE — CHECK versus MAKE. ACHIEVE is a MAKE: a state that must be true from that point on, and if it is not, the harness computes the difference and closes it. Write one wherever the rest of the program depends on something being so; you may write SEVERAL, and work may follow them. ENSURE is a CHECK: something that must ALREADY be true, used FIRST to confirm the lab is as you assume, and it changes nothing.",
+  "shape": "A GOOD PROGRAM USES ALL THREE, and they do different jobs.\n  FETCH   gets your initial ground — what is actually in this lab right now, before you assume anything. Read first.\n  ENSURE  grounds you — states what must be true, so the plan rests on fact and not on a guess about the world.\n  ACHIEVE is the muscle — the end state you are being asked to bring about, and the only thing that says what done means.\nReach for all three unless the operator asked for less. A program that only acts has vouched for nothing; a program that only checks changes nothing."
+ },
+ "_schema_doc": "Knobs for the tool schema handed to the model, each carrying the measurement behind it. `statement_form`: 'oneof' is the CORRECT schema — one branch per op, so a statement's type determines its fields and `op` cannot be omitted — and it is set to 'flat' anyway, because oneof drops emission to 0/4. Flat gives the model no structural cue (qwen2.5:14b returned six of nine statements with no `op`), but it at least gets called. Same story as `predicate_required`: adding a nested required took llama3.1 from 3/4 emitting to 0/4. The pattern across every experiment is that this tool-call surface trades guidance against fidelity, and fidelity is the binding constraint. Note what DOES work reliably: decompose{steps:[string]} — an array of STRINGS. Emission collapses on an array of structured objects, which is the strongest hint about where to go next. Change these only with a measurement; tests/bench/ir_probe.py is how.",
+ "schema": {
+  "statement_form": "flat",
+  "predicate_properties": true,
+  "predicate_required": false
+ },
+ "_fields_doc": "Every field a statement may carry, described ONCE. `enum_from` points at another manifest table so the enum tracks it — add a resource kind and `kind`'s enum follows with no edit here. Ops below list which fields they use; both schema forms are built from these rows, so they cannot describe different languages. `amount` is how many a `new` creates, and is deliberately NOT called `count`: `count` is also a PREDICATE shape (how many members match), and one word meaning two things is the kind of collision that only hurts once procedures have been written in it.",
+ "fields": {
+  "var": {
+   "type": "string",
+   "doc": "the name to bind"
+  },
+  "kind": {
+   "type": "string",
+   "enum_from": "kinds",
+   "doc": "the resource type"
+  },
+  "amount": {
+   "type": "integer",
+   "doc": "how many to create. A number, a $parameter, or {\"minus\": [N, \"$have\"]} to create only the shortfall. Zero is legal and creates nothing."
+  },
+  "tool": {
+   "type": "string",
+   "doc": "the tool to invoke"
+  },
+  "args": {
+   "type": "object",
+   "doc": "the tool's arguments"
+  },
+  "select": {
+   "type": "object",
+   "doc": "a set described by a query over current state"
+  },
+  "in": {
+   "type": [
+    "string",
+    "array"
+   ],
+   "doc": "a set you already bound (\"$vms\"), or a literal list of names"
+  },
+  "call": {
+   "type": "object",
+   "doc": "the call to apply to each member"
+  },
+  "predicate": {
+   "type": "object",
+   "doc": "what must hold at the end"
+  },
+  "from": {
+   "type": "string",
+   "doc": "OMIT unless the goal says to copy/clone an existing resource. Names that existing resource — never a label, never a new name. The copy IS the creation: do not also call the clone tool"
+  },
+  "graft": {
+   "type": "string",
+   "doc": "bind what this call returned, under this name"
+  },
+  "ifails": {
+   "type": "array",
+   "doc": "statements to run if this one fails"
+  },
+  "async": {
+   "type": "boolean",
+   "doc": "start it and do not wait"
+  },
+  "cond": {
+   "type": "object",
+   "doc": "if: the check to branch on"
+  },
+  "then": {
+   "type": "array",
+   "doc": "if: statements when the check holds"
+  },
+  "else": {
+   "type": "array",
+   "doc": "if: statements when it does not"
+  },
+  "do": {
+   "type": "array",
+   "doc": "the statements to run for each member; $item is the current one"
+  },
+  "count": {
+   "type": "object",
+   "doc": "the query to count — same form as a select"
+  }
+ },
+ "_authoring_doc": "HOW the model is asked to write a program. 'program' offers one emit_program tool taking the whole body as an array of statement objects. 'statements' offers ONE TOOL PER OP, each a flat object of scalars, and the harness assembles the program from the calls. The second exists because of a consistent measurement: decompose{steps:[string]} — an array of STRINGS — works reliably every day, while an array of structured OBJECTS collapses, and collapses harder the more structure is declared (oneOf and a nested required both took emission to 0/4). A statement tool asks for exactly the shape the model produces all day when it calls create_vm(name=alpha): two or three scalar arguments. Nested objects are flattened for the same reason — select{kind,label} becomes select_kind/select_attr/select_value.",
+ "authoring": "statements",
+ "_surface_doc": "How the written form spells things the stored form keeps as plain values. Wrappers are OPTIONAL where a bare value is unambiguous and REQUIRED where it is not: AMOUNT(5) reads as a count rather than an argument that happens to be a number, and matches COUNT(...) on the predicate side. NOT/AND/OR all take parentheses so a reader never has to know precedence — there is none to know. VAL(X) is the long form of $X; inside a loop $ is the one to use, because $item is what the body is full of.",
+ "surface": {
+  "bind": "STORE",
+  "amount": "AMOUNT",
+  "value": "VAL",
+  "sigil": "$",
+  "combinators": {
+   "not": "NOT",
+   "all": "AND",
+   "any": "OR"
+  },
+  "achieve": "ACHIEVE",
+  "fetch": "FETCH",
+  "new": "NEW",
+  "foreach": "FOREACH",
+  "in": "IN",
+  "ensure": "ENSURE",
+  "if": "IF",
+  "else": "ELSE",
+  "where": "WHERE",
+  "except": "EXCEPT",
+  "include": "INCLUDE",
+  "ifails": "IFAILS",
+  "async": "ASYNC",
+  "count": "COUNT",
+  "procedure": "PROCEDURE",
+  "import": "IMPORT",
+  "_doc": "`call` is deliberately absent: an invocation has no keyword, it reads as tool(args). Everything else the renderer prints is here, so renaming a word is a data change and the stored form never moves."
+ },
+ "intent": {
+  "_doc": "What the operator wants BACK — data, a verdict, or the thing done — is theirs to say, not the author's to infer. The three intents are the three words: FETCH retrieves, ENSURE verifies, ACHIEVE commands. Authority nests (fetch < ensure < achieve) and is ENFORCED, see ir/intent.py. These markers are deliberately FEW: a marker set, not a vocabulary trying to parse English. A sentence using none is asked about, not guessed at.",
+  "markers": {
+   "fetch": [
+    "how many",
+    "list",
+    "which",
+    "show me",
+    "what is",
+    "what are",
+    "tell me the"
+   ],
+   "ensure": [
+    "check",
+    "verify",
+    "confirm",
+    "is there",
+    "are there",
+    "do we have",
+    "tell me whether",
+    "has not been"
+   ],
+   "achieve": [
+    "get",
+    "bring",
+    "create",
+    "build",
+    "make it",
+    "set up",
+    "end with",
+    "there should be",
+    "spin up",
+    "provision",
+    "wire up",
+    "delete",
+    "launch",
+    "stop",
+    "clone"
+   ]
+  },
+  "default": "fetch"
+ },
+ "_derivable_doc": "EVERY PREDICATE SHAPE MUST SAY WHETHER THE HARNESS CAN CLOSE IT. A shape either has a deriver in ir/derive.py or declares derivable:false with a reason. tests/test_medusa_invariants.py holds this: the alternative is a shape that silently cannot converge, which is how `disjoint` sat DECLARED, OFFERED, VALIDATED and RENDERED for weeks with no evaluator at all — always false, in every world, and nothing said so.",
+ "_gate_doc": "THE SCHEMA GATE. The master decides what MAY be emitted; the gate decides whether what WAS emitted should run. The split is structural rather than stylistic: a schema can constrain the form of a statement and cannot compel that a program SAYS something, so 'every identifier the operator named appears somewhere' is unexpressible as schema and has to be judged after authoring. Mechanically this is the contract's risk formula again — weighted factors, a score, threshold bands — with one correction that matters: the contract scores DECLARED facts about a tool, and the gate scores COMPUTED facts about a program. Every factor here is structural and readable off the IR. No factor asks a model whether a program looks right; that is the p_self firewall the reason gate already drew, and a gate that consults the author it is judging has judged nothing. Scoring rather than a boolean verdict, because a boolean cannot tell an improving correction from a degrading one, and 'getting worse' is one of the four ways the clarify loop terminates. REFUSE IS REACHED BY ACCUMULATION, NOT BY ANY SINGLE FACTOR, and that is deliberate: validate.py already refuses everything that is illogical on its own, so the gate's refuse band means 'too many things are wrong at once for re-asking to fix it' rather than repeating a judgement something upstream has already made. No weight here reaches the refuse threshold alone.",
+ "gate": {
+  "weights": {
+   "goal_unnamed": 0.75,
+   "dead_binding": 0.25
+  },
+  "thresholds": {
+   "refuse": 0.8,
+   "clarify": 0.3
+  },
+  "factors": {
+   "goal_unnamed": {
+    "doc": "the fraction of identifiers the operator wrote that appear NOWHERE in the program. The MUST a schema cannot express, and the reason the gate exists separately from the master.",
+    "why_not_schema": "The canonical case, and the reason the gate exists apart from the master. A schema can constrain what a name may BE — `from` is enumerated from the lab for exactly that reason — and cannot compel that a particular name APPEARS. 'Mention core somewhere' is not expressible as a constraint on any single value."
+   },
+   "dead_binding": {
+    "doc": "the fraction of bound names never read back. A smell rather than a fault — deliberately below the clarify threshold on its own, because a program can legitimately bind something it does not use.",
+    "why_not_schema": "A relationship between two statements that may be arbitrarily far apart: a binding here, a reference there. A schema validates each statement against its branch with no knowledge of the others, so a cross-statement relationship is structurally out of reach. The one constrainable PART of this — that a bound name must be pronounceable — is already a schema pattern on `var` and `graft`, and is not repeated here."
+   }
+  },
+  "naming_cues": [
+   "called",
+   "call it",
+   "named",
+   "name it",
+   "name them",
+   "call them",
+   "labelled",
+   "labeled",
+   "label them",
+   "label it",
+   "tagged"
+  ],
+  "_naming_cues_doc": "The forms in which an operator SAYS a name, for master.named(). Deliberately few — a cue set, not a vocabulary trying to parse English — and the same shape as the intent markers. Precision matters far more than recall here: a name this misses costs nothing (the factor stays at zero), and a name it wrongly finds suppresses a correct program. The other two forms need no cues: a quoted word, and a token carrying a digit, underscore or hyphen, which English words do not.",
+  "_no_unclosable_doc": "An ACHIEVE on a predicate declaring `derivable: false` (not/all/any/is) was a factor here and was WRONG. derive() returning None is a documented fallback, not a dead end — 'the caller falls back to asking the model on None and stops on []' — so ACHIEVE ALL(...) is a legitimate goal that reaches its answer through the author rather than the deriver. Scoring it as unclosable would have refused a working capability, and refused it for a reason no rewording could satisfy.",
+  "attempts": 3,
+  "_attempts_doc": "How many times the clarify loop may re-ask before it refuses. The other three terminations — stale, worse, timeout — can end it sooner.",
+  "_why_not_schema_doc": "THE INVARIANT: no constrainable rule may live only in the gate. A rule a schema could enforce belongs to the master, where the decoder cannot violate it — catching it afterwards costs an authoring round to discover something that could have been impossible to write. So every factor here states why it is NOT expressible as a constraint, the same declare-or-say-why shape the tool `verify` coverage uses, and the suite asserts the field is present and that validate() ACCEPTS each factor's own example — a factor whose example is already rejected upstream is repeating a judgement rather than adding one.",
+  "_no_inert_doc": "`inert` — an achieve whose program contains no acting statement — was a factor here and was WRONG, for the SECOND time in the same shape. It is `unclosable` in a different costume: both penalised the DECLARATIVE form on the grounds that derive() might not close it. Measured against rung 13, the idempotent re-entry rung: the pure declarative `ACHIEVE REACH(SELECT vm WHERE label='fleet') >= 5` is the CORRECT answer in a world that already satisfies the goal — derive computes the difference, finds none, and does nothing — and the gate scored it 0.18 CLARIFY while scoring the program that duplicated five machines 0.00 PROCEED. Exactly backwards. The lesson generalises past this factor: a program doing LESS is not a program doing WORSE, and the language has a whole convergence engine built on that.",
+  "_deleted_factors_doc": "FOUR FACTORS WERE DELETED, and the reason is the same one every time: they were invented from first principles instead of from what the rest of the system leaves uncovered, so each duplicated a mechanism that already existed AND already had a better answer. `unclosable` duplicated derive()'s documented fallback. `inert` contradicted the declarative form derive() supports. `no_verdict` duplicated consent.py, which ASKS the operator y/n — decision 2 — and the gate turned that settled question into a refusal. `intent_unmet` was the SAME FAULT as no_verdict counted a second time: under `achieve`, a program with no ACHIEVE statement is exactly a program with no verdict, and at 0.36 + 0.34 = 0.70 one flaw crossed a 0.50 refuse threshold designed to need SEVERAL. MEASURED, and this is why the gate is now small: on the 13-rung ladder the full factor set took the literal column from 10/12 to 0/12 and the paraphrase column from 8/13 to 2/13. It refused every program that worked. `intent_unmet` was also wrong on the language's own terms, per the operator: ENSURE is the statement a program truly needs; FETCH grounds the world before it starts; ACHIEVE is a PERMUTATION of ENSURE used to make sure something is done — a barrier saying the run cannot pass this point unless X exists. Not every program needs one, so requiring one was never a fault to score. WHAT SURVIVES is only what nothing else checks: whether the program mentions what the operator NAMED, and whether it bound something it never read. Both scored zero on all thirteen rungs with no false alarms."
+ },
+ "_achieve_semantics_doc": "SETTLED BY THE OPERATOR 2026-07-27, replacing the earlier reading of ACHIEVE as 'the one goal, certified at the end'. ENSURE asks 'do you exist'; ACHIEVE says 'MAKE SURE you exist' — a MAKE, not a CHECK. Two rules were dropped from validate.py as a consequence: 'one achieve per program' (philosophically a wash once achieve means make-sure-of-this — a program can need several) and 'nothing may act after achieve' (in the operator's words, wishful thinking that is not based in what we are seeing). Neither was ever a runtime constraint: execute.py has always checked each ACHIEVE in order and returned on the first failure, which IS the barrier — the run cannot pass this point unless the thing is true. Only the validator forbade it, so this removed a restriction rather than adding a feature. ENSURE remains the CONCEPT the correction loop is built on; ACHIEVE is what programs will actually contain more of.",
+ "_create_defaults_doc": "WHAT A DERIVED CREATION SUPPLIES for a creator argument nobody named. `derive()` can close a count gap by CREATING, and create_vm REQUIRES os_type — which the predicate does not carry and the harness cannot infer. Inventing one per call would be the schema-withholding defect in reverse: the model invented `status = 'not running'` precisely because nothing declared what status could be. THIS IS NOT THAT. A value written here once is the operator's declared intent, visible in the manifest and the same on every derivation, where a guess is different each time and appears nowhere. A kind whose creator requires an argument with NO entry here cannot be derived into existence, and derive() returns None so the author is asked instead — the gap stays explicit rather than being filled in with something plausible. This is only for DERIVED creation: an authored NEW must still say what it wants.",
+ "_destroyer_doc": "THE TOOL THAT REMOVES A RESOURCE, declared per kind beside `create`. ACHIEVE means MAKE SURE — the operator: 'creation and modifications and even deletions are allowed in achieve, given correct intent... it CAN CHANGE the world to meet the goal, that's the correction part of it.' So a count gap is closed in EITHER direction, and the thing that decides whether removal is permitted is the operator's INTENT, not the sign of the difference. Under `fetch` or `ensure` nothing may act at all; under `achieve` the world may be corrected. Refusing to derive a deletion was treating derive() as the safety mechanism, which it is not — a derived call meets consent, the contract tier and delete_vm's double confirmation on its way to the world exactly as an authored one does, and duplicating that judgement here only broke the language's own promise that an ACHIEVE is a legal way to state a goal. A kind with NO destroyer declared cannot be derived downward and the author is asked, the same boundary `create_defaults` draws upward.",
+ "_new_vs_fetch_doc": "THE ORDER, in the operator's words: 'NEW means creation of NEW objects. Only use when asked TO CREATE new objects, OR when objects don't exist. If the user intent is NOT to create but rather use existing resources, USE FETCH. If nothing comes back from said fetch then your fallback is creation.' MEASURED, and this is the single most expensive defect in the ladder: shown a lab holding five labelled machines and asked to use five, the author writes NEW AMOUNT(5) and ends with ten. It is world blind — the CURRENT STATE block is read as background rather than as input. The prompt has said 'read first, then act on the difference' under `fetch` all along and it does not land there, which is why the rule is stated on `new` itself, where the mistake is made, and enforced by an objection naming the census.",
+ "_cardinality_doc": "CARDINALITY BY CONSTRUCTION, which is NOT how many members match today. The operator, 2026-07-29: *\"a label that is filtered might only be singling out one object now but it's technically a set with currently 1 member.\"* That is the whole distinction. `name = 'db'` can NEVER match two, because `name` is the kind's KEY; `label = 'prod'` is a SET EXPRESSION even on a day when one machine carries the label. Counting members is the trap — ask instead whether the expression could ever match more than one. IT IS DERIVABLE, NOT JUDGED: every kind already declares its `key`, so a filter on that attribute is singular and a filter on anything else is a set. No model call is needed for this half. AND IT RESOLVES `NOT ANY`, which is where the first taxonomy broke: the complement of a filtered set is ITSELF a filtered set, so NOT-of-a-filter is a SET even when it currently holds one member. The four-way all/any/single/not enum conflated two orthogonal questions — `single` was answering CARDINALITY and `not` was answering SHAPE — which is why goal-level narrowing did nothing: `not` licensed everything because as a SHAPE it should. THE ACTION FOLLOWS FROM CARDINALITY ALONE: singular is a call naming the object and never a loop over a set of one; a set is a FOREACH and never a bare call.",
+ "cardinality": {
+  "singular": {
+   "deny": [
+    "foreach"
+   ],
+   "doc": "exactly ONE object, by construction — a filter on the kind's key. Act on it with a plain call naming it; a loop over a set of one is never right"
+  },
+  "set": {
+   "deny": [
+    "call"
+   ],
+   "doc": "one or more members, and possibly none — any filter that is not on the key, including the COMPLEMENT of a filter. Act on it with FOREACH; a bare call cannot address a set, however few members it holds today"
+  }
+ },
+ "_shape_doc": "THE SET'S SHAPE — orthogonal to cardinality, and separated from it 2026-07-29. Shape says what goes INSIDE the select; cardinality says whether you loop at all. `all` is unfiltered, `any` is filtered, `not` is a named whole minus members. A FILTER IS DEFINITIONALLY SUBTRACTIVE, so filtering can only ever produce `any` or a key-identified singular — never `all`. Hence `not` over `all` is the EMPTY set and is refused: a statement that can do no work should not validate, which is the lesson `disjoint` taught by sitting declared-and-never-evaluated, answering false in every world for weeks.",
+ "shapes": {
+  "all": {
+   "filtered": false,
+   "doc": "every member of the kind, no condition"
+  },
+  "any": {
+   "filtered": true,
+   "doc": "the members matching a condition; a NEGATIVE condition is still a condition"
+  },
+  "not": {
+   "filtered": true,
+   "doc": "a named whole MINUS named members — there must be a whole to subtract from"
+  }
+ },
+ "_nouns_doc": "THE ENGLISH NOUNS A KIND ANSWERS TO, declared beside it. The ladder's paraphrase column exists because the same capability is asked for in different words — 'set up three machines' is 'create 3 vms' — so any reader that has to recognise a kind IN PROSE needs this list, and it must be ONE list. Added 2026-07-30 after two shape-based routers (quantifier_rule, route_rule) each hardcoded their own copy in Python and had already diverged the same day: one knew 'host' and 'resource', the other did not. That is the stale-twin defect this project has paid for three times in the schema builders (`of`, `select`, NOT-as-array), reappearing in a new place. The key is singular; plurals are derived, never listed. `resource` is deliberately filed under `vm` because that is how the ladder's own decompositions use it — 'move resource to new network' means a machine.",
+ "_acts_doc": "WHICH OPS TOUCH THE WORLD. Declared per op because two modules had derived it independently and identically — `consent._ACTING` and `validate._ACTS` were the same three words written twice, and neither could see the other. It carries real weight: Medusa's one soundness rule is that a program which ACTS and asserts nothing has established nothing, and consent is asked for exactly when a statement acts. An op added to the language with no row here silently becomes harmless to both.",
+ "prompt_when": {
+  "shape": {
+   "needs": [
+    "fetch",
+    "ensure",
+    "achieve"
+   ],
+   "whole": true
+  },
+  "grounding": {
+   "needs": [
+    "ensure",
+    "achieve"
+   ]
+  },
+  "ordering": {
+   "needs": [
+    "foreach"
+   ],
+   "whole": true
+  },
+  "select_hint": {
+   "needs": [
+    "foreach",
+    "fetch"
+   ]
+  },
+  "reference": {
+   "needs": [
+    "new",
+    "fetch"
+   ]
+  }
+ },
+ "_setters_doc": "WHAT A TOOL MAKES TRUE — the one fact a tile needs that nothing else in this manifest already carries. `create`/`delete`/`key` per kind already say what a CREATOR does, so a creator's postcondition is DERIVED, never written here. What was missing is the setters: which ATTRIBUTE a tool writes, on WHICH member, to WHAT value. With that, `effects.postcondition(tool, args)` returns a Medusa predicate in the same language goals are written in — which is what lets a deterministic writer chain tools without a model. `value_arg` takes the value from that argument; `value` is a literal and must appear in the kind's attr_values when the attribute has an enumeration."
 }
