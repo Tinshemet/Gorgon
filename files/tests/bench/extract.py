@@ -134,6 +134,8 @@ when it is done. You do NOT write any program, choose any tool, or decide any or
 something else does all of that.
 
 Break the request into goals. Each goal is one thing that must be true at the end.
+MOST REQUESTS CONTAIN SEVERAL. "Create a vm named beta and then launch it" is TWO goals —
+beta exists, and beta is running. Return one goal for every thing the operator asked for.
 
   count    HOW MANY members must exist at    "create a vm named alpha" -> count 1,
            the end. Naming one thing is a      select vm where name=alpha
