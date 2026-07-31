@@ -169,6 +169,50 @@ def invert(pred: Dict[str, Any]) -> Optional[tuple]:
     return None
 
 
+def setter_for(kind: str, attr: str, value: Any) -> Optional[tuple]:
+    """The tool that writes `attr = value` on a member of `kind`, or None.
+
+    Split out of `invert` because a SET goal needs the same lookup without a member to bind
+    it to — "make every stopped machine running" picks the tool once and applies it many
+    times.
+    """
+    spec = (config.KINDS or {}).get(kind) or {}
+    for tool, s in (spec.get("setters") or {}).items():
+        if s["attr"] != attr:
+            continue
+        if "value_arg" in s:
+            return (tool, s["member_arg"], s["value_arg"], None)
+        if s.get("value") == value:
+            return (tool, s["member_arg"], None, s["value"])
+    return None
+
+
+def complement(kind: str, attr: str, value: Any) -> Optional[Any]:
+    """The other value `attr` can take, when there is exactly one. Otherwise None.
+
+    "No machine may be stopped" is only actionable if the writer knows what a machine should
+    be INSTEAD, and `attr_values` answers that when the attribute is a two-state one. With
+    three or more it is genuinely ambiguous — the goal did not say which — and returning
+    None makes the solver stop and say so rather than pick. That is
+    [[gorgon-deterministic-rules]]: compute, and decline when unsure.
+    """
+    enum = ((config.KINDS or {}).get(kind) or {}).get("attr_values", {}).get(attr)
+    others = [v for v in (enum or ()) if v != value]
+    return others[0] if len(others) == 1 else None
+
+
+def probe_for(kind: str, fact: str) -> Optional[str]:
+    """The tool that ESTABLISHES an observed fact — from `kinds.<k>.observed`.
+
+    Reachability is a FINDING, never an inference from a tool's success flag (decision 6,
+    and A5 tightened the bench's `reach` on exactly this). So a goal that speaks about an
+    observed attribute has a precondition nothing else can supply: somebody has to ask. The
+    manifest already records who — `observed.alive.by` — so this is read, not declared twice.
+    """
+    obs = ((config.KINDS or {}).get(kind) or {}).get("observed", {}).get(fact) or {}
+    return obs.get("by")
+
+
 def declared() -> Dict[str, str]:
     """Every tool that carries a postcondition, mapped to its kind — for drift tests."""
     out: Dict[str, str] = {}
