@@ -36,6 +36,10 @@ _ACTION_WORDS = set(_CFG["action_words"])
 # State/read-query words — folded into the "wants a tool" trigger so factual
 # questions get grounded in a tool call instead of answered from memory.
 _STATE_QUERY_WORDS = set(_CFG.get("state_query_words", []))
+# THE SAME TEXTS THE REPL USES, read from the SAME config rather than imported across —
+# these two modules import each other and a cross-import would close the cycle. The config
+# is the authority; both paths are readers.
+_NUDGES       = _CFG["nudges"]
 _OS_KEYWORDS  = set(_CFG["os_keywords_gate"])
 # Fleet actions needing a y/n, derived from the Doorman contract (single source —
 # the fleet test asserts this matches chat_turn's copy).
@@ -131,11 +135,11 @@ def process_message(
             text = msg.get("content", "").strip()
             if not text and _loop_iter < _LOOP_MAX - 1:
                 messages.pop()
-                messages.append({"role": "user", "content": "_INTERNAL_ Your last response was empty. Please call the appropriate tool or provide a text response now."})
+                messages.append({"role": "user", "content": _NUDGES["empty"]})
                 continue
             if _user_wants_action and not _tools_called_this_turn and _loop_iter < _LOOP_MAX - 1:
                 messages.pop()
-                messages.append({"role": "user", "content": "_INTERNAL_ You responded with text but did not call any tool. You cannot perform actions by text alone — you MUST call the appropriate tool. Call the tool now."})
+                messages.append({"role": "user", "content": _NUDGES["text_only"]})
                 continue
             # THE SAME CHECK AS THE REPL, from the same module. A failed tool call is not
             # an answer, and these two paths have drifted before (#26) — a display rule

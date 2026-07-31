@@ -231,5 +231,11 @@
     "critical_consec": 6,
     "warn_consec": 3
   },
-  "model": "llama3.1:8b"
+  "model": "llama3.1:8b",
+  "_nudges_doc": "Mid-turn corrections injected as `_INTERNAL_` user messages. They live here because they are PROMPT CONTENT and there are two prompt paths (the REPL and the HTTP chat) that had already drifted: one named example tools and the other did not, which means they were steering the model differently. Anything measured on one path would not have held on the other, and nothing would have said so.",
+  "nudges": {
+    "empty": "_INTERNAL_ Your last response was empty. Please call the appropriate tool or provide a text response now.",
+    "text_only": "_INTERNAL_ You responded with text but did not call any tool. You cannot perform actions by text alone \u2014 you MUST call the appropriate tool (e.g. create_vm, launch_vm, list_vms). Call the tool now.",
+    "loop_limit": "_INTERNAL_ You were cut off by the tool loop limit. Continue the task from where you stopped."
+  }
 }

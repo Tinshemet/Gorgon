@@ -24,8 +24,8 @@ from .session import (
     save_session, get_loop_max, get_verbose,
 )
 from .shortcuts import handle_command   # the REPL shortcut dispatcher (list/system/drift/…)
-from shared.display import console
-from orchestrator.ai.chat import malformed as _malformed, print_banner
+from shared.display import console, print_banner
+from . import malformed as _malformed
 from ..active_library     import LIBRARY
 from .ollama_client      import OLLAMA_MODEL, OLLAMA_URL, _call_ollama
 from .context_assistant  import check_context, extract_slots, proactive_prep
@@ -54,6 +54,8 @@ _ACTION_WORDS   = set(_CFG["action_words"])
 _STATE_QUERY_WORDS = set(_CFG.get("state_query_words", []))
 _OS_KEYWORDS    = set(_CFG["os_keywords_gate"])
 _RENDERS_OUTPUT = set(_CFG.get("rendered_tools", []))
+# ONE TEXT PER NUDGE, shared with the HTTP path. See `_nudges_doc` in config.json.
+_NUDGES         = _CFG["nudges"]
 
 
 # ── Chat loop ──────────────────────────────────────────────────────────────────
@@ -242,10 +244,7 @@ def chat_loop(verbose: bool = False) -> None:
                     messages.pop()
                     messages.append({
                         "role":    "user",
-                        "content": (
-                            "_INTERNAL_ Your last response was empty. "
-                            "Please call the appropriate tool or provide a text response now."
-                        ),
+                        "content": _NUDGES["empty"],
                     })
                     continue
                 # If the model gave a text-only response for an action request
@@ -257,12 +256,7 @@ def chat_loop(verbose: bool = False) -> None:
                     messages.pop()
                     messages.append({
                         "role":    "user",
-                        "content": (
-                            "_INTERNAL_ You responded with text but did not call any tool. "
-                            "You cannot perform actions by text alone — you MUST call "
-                            "the appropriate tool (e.g. create_vm, launch_vm, list_vms). "
-                            "Call the tool now."
-                        ),
+                        "content": _NUDGES["text_only"],
                     })
                     continue
                 if text:
