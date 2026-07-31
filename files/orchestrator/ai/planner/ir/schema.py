@@ -173,7 +173,7 @@ def _predicate_property() -> Dict[str, Any]:
 # and their minItems, `cond`, the var/graft name pattern, or `in` — SIX constructs the
 # bench's builder had grown and production had not. Each was earned by a measured failure
 # there and none of them reached the path production and the tree actually use.
-DEFS = {"stmt": "#/$defs/stmt", "pred": "#/$defs/pred"}
+DEFS = {"stmt": "#/$defs/stmt", "pred": "#/$defs/pred", "sel": "#/$defs/sel"}
 
 
 def _field(name: str, known: Optional[set] = None,
@@ -198,6 +198,16 @@ def _field(name: str, known: Optional[set] = None,
         # `count` is a select in COUNTING POSITION — same query, different answer. Without
         # it `FETCH COUNT(...)` cannot be said at all.
         #
+        # REFERENCED where a caller has `$defs`, INLINED where it does not — the same
+        # parameterisation `pred` and `stmt` already use. A select is 14.7KB and appears in
+        # `fetch`, in `foreach`, and inside every predicate that takes one, so inlining made
+        # the whole-program schema 130,502 characters. The grammar is IDENTICAL either way.
+        #
+        # Measured inert on 2026-07-31 and reverted — but that measurement was taken while
+        # the schema was NOT BEING ENFORCED, so it said nothing. Now that a grammar is
+        # actually compiled from this, size is a real variable again.
+        if refs and refs.get("sel"):
+            return {"$ref": refs["sel"]}
         return dict(select_spec(), description=doc)
     if name in ("cond", "predicate"):
         return {"$ref": refs["pred"]} if refs else _predicate_property()

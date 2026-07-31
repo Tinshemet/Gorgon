@@ -149,7 +149,7 @@ def _pred_spec():
         props = {"shape": {"type": "string", "const": shape,
                            "description": spec["doc"]}}
         if operand == "select":
-            props["select"] = _select_spec()
+            props["select"] = {"$ref": "#/$defs/sel"}
         elif operand == "sets":
             props["sets"] = {"type": "array", "items": {"type": "string"},
                              "minItems": 2,
@@ -270,7 +270,9 @@ def program_schema(want: str = None, known=None, quantifier: str = None):
         props_top = {"body": {"type": "array", "items": {"$ref": "#/$defs/stmt"}}}
         required = ["body"]
     return {
-        "$defs": {"stmt": {"oneOf": branches}, "pred": _pred_spec()},
+        "$defs": {"stmt": {"oneOf": branches}, "pred": _pred_spec(),
+                  # ONE `select`, referenced rather than inlined six times.
+                  "sel": _select_spec()},
         "type": "object",
         "properties": props_top,
         "required": required,

@@ -278,10 +278,31 @@ def test_the_visitor_does_not_silently_ignore_a_statement():
 
 # ── the four-way agreement: manifest, validator, renderer, schema ─────────────────────
 def _select_schema():
-    for branch in program_schema()["$defs"]["stmt"]["oneOf"]:
-        props = branch.get("properties", {})
-        if "select" in props and props["select"].get("properties"):
-            return props["select"]["properties"]
+    """The attributes a `select` offers the author — FOLLOWING `$ref`.
+
+    A select is 14.7KB and appears in `fetch`, in `foreach`, and inside every predicate
+    that takes one, so the schema hoists it into `$defs` and references it. This helper
+    read `properties` directly and therefore saw nothing once that happened — reporting
+    every attribute as UNOFFERED when all of them were offered, one indirection away.
+
+    The property this file guards is "the author can say it", and a `$ref` says it. What
+    would be a real failure is the attribute being absent from the definition itself.
+    """
+    schema = program_schema()
+    defs = schema.get("$defs", {})
+
+    def resolve(node):
+        seen = 0
+        while isinstance(node, dict) and "$ref" in node and seen < 8:
+            key = node["$ref"].rsplit("/", 1)[-1]
+            node = defs.get(key, {})
+            seen += 1
+        return node if isinstance(node, dict) else {}
+
+    for branch in defs.get("stmt", {}).get("oneOf", []):
+        target = resolve(branch.get("properties", {}).get("select", {}))
+        if target.get("properties"):
+            return target["properties"]
     return {}
 
 
