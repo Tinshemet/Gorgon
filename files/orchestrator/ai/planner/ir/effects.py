@@ -28,9 +28,15 @@ from typing import Any, Dict, Optional
 from . import config
 
 
-def _kind_of(tool: str) -> Optional[str]:
+def _K(kinds):
+    """The manifest in force. A TARGET is a manifest plus a world that can read and act;
+    everything else here is domain-free and always was."""
+    return kinds if kinds is not None else (config.KINDS or {})
+
+
+def _kind_of(tool: str, kinds=None) -> Optional[str]:
     """Which kind this tool acts on, from the manifest alone."""
-    for kind, spec in (config.KINDS or {}).items():
+    for kind, spec in _K(kinds).items():
         if tool == spec.get("create") or tool == spec.get("delete"):
             return kind
         if tool in (spec.get("setters") or {}):
@@ -44,7 +50,7 @@ def _exists(kind: str, key_attr: str, value: Any, count: int = 1) -> Dict[str, A
     return {"shape": "count", "select": {"kind": kind, key_attr: value}, "eq": count}
 
 
-def postcondition(tool: str, args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def postcondition(tool: str, args: Dict[str, Any], kinds=None) -> Optional[Dict[str, Any]]:
     """The predicate that must hold after `tool` succeeds, or None if unknown.
 
     NONE MEANS UNKNOWN AND MUST STAY THAT WAY — the writer treats an unknown postcondition as
@@ -53,10 +59,10 @@ def postcondition(tool: str, args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     precisely the "unverified is not done" rule the language is built on, broken from the
     inside.
     """
-    kind = _kind_of(tool)
+    kind = _kind_of(tool, kinds)
     if not kind:
         return None
-    spec = (config.KINDS or {}).get(kind) or {}
+    spec = _K(kinds).get(kind) or {}
     key = spec.get("key")
 
     setter = (spec.get("setters") or {}).get(tool)
@@ -91,7 +97,7 @@ def postcondition(tool: str, args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return None
 
 
-def precondition(tool: str, args: Dict[str, Any]) -> list:
+def precondition(tool: str, args: Dict[str, Any], kinds=None) -> list:
     """What must ALREADY be true for `tool` to succeed. Derived, never declared.
 
     A setter acts on a member, so that member must exist; and where the value it writes is
@@ -104,8 +110,8 @@ def precondition(tool: str, args: Dict[str, Any]) -> list:
     told: `add_vm_to_network` requires `lab` to exist, so the tile that creates `lab` is
     placed first because the dependency says so, not because a model remembered a sentence.
     """
-    kind = _kind_of(tool)
-    spec = (config.KINDS or {}).get(kind) or {}
+    kind = _kind_of(tool, kinds)
+    spec = _K(kinds).get(kind) or {}
     setter = (spec.get("setters") or {}).get(tool)
     if not setter:
         return []
@@ -115,14 +121,14 @@ def precondition(tool: str, args: Dict[str, Any]) -> list:
         out.append(_exists(kind, spec["key"], member))
     ref_kind = setter.get("refs")
     if ref_kind and "value_arg" in setter:
-        ref_spec = (config.KINDS or {}).get(ref_kind) or {}
+        ref_spec = _K(kinds).get(ref_kind) or {}
         value = args.get(setter["value_arg"])
         if value is not None and ref_spec.get("key"):
             out.append(_exists(ref_kind, ref_spec["key"], value))
     return out
 
 
-def invert(pred: Dict[str, Any]) -> Optional[tuple]:
+def invert(pred: Dict[str, Any], kinds=None) -> Optional[tuple]:
     """Given a predicate, the tool that MAKES IT TRUE, and with what arguments.
 
     The tile-selection step, and it needs no search: for the `count` shapes these tiles
@@ -138,7 +144,7 @@ def invert(pred: Dict[str, Any]) -> Optional[tuple]:
         return None
     sel = pred.get("select") or {}
     kind = sel.get("kind")
-    spec = (config.KINDS or {}).get(kind) or {}
+    spec = _K(kinds).get(kind) or {}
     key = spec.get("key")
     if not key or key not in sel:
         return None                       # no named member — a set-level goal, not a tile
@@ -196,7 +202,7 @@ def invert(pred: Dict[str, Any]) -> Optional[tuple]:
         return (spec["create"], args)
 
 
-def forbids(tool: str, args: Dict[str, Any]) -> list:
+def forbids(tool: str, args: Dict[str, Any], kinds=None) -> list:
     """What must NOT already be true for `tool` to be placeable. Never satisfiable by acting.
 
     A creator cannot run on a name that already exists, and that is a different kind of
@@ -211,8 +217,8 @@ def forbids(tool: str, args: Dict[str, Any]) -> list:
     os_type=windows)` — a call the world would reject, for a goal nothing can reach, because
     no tool CHANGES os_type after birth.
     """
-    kind = _kind_of(tool)
-    spec = (config.KINDS or {}).get(kind) or {}
+    kind = _kind_of(tool, kinds)
+    spec = _K(kinds).get(kind) or {}
     key = spec.get("key")
     if not key or tool != spec.get("create") or args.get(key) is None:
         return []
@@ -229,14 +235,14 @@ def forbids(tool: str, args: Dict[str, Any]) -> list:
     return None
 
 
-def setter_for(kind: str, attr: str, value: Any) -> Optional[tuple]:
+def setter_for(kind: str, attr: str, value: Any, kinds=None) -> Optional[tuple]:
     """The tool that writes `attr = value` on a member of `kind`, or None.
 
     Split out of `invert` because a SET goal needs the same lookup without a member to bind
     it to — "make every stopped machine running" picks the tool once and applies it many
     times.
     """
-    spec = (config.KINDS or {}).get(kind) or {}
+    spec = _K(kinds).get(kind) or {}
     for tool, s in (spec.get("setters") or {}).items():
         if s["attr"] != attr:
             continue
@@ -247,7 +253,7 @@ def setter_for(kind: str, attr: str, value: Any) -> Optional[tuple]:
     return None
 
 
-def complement(kind: str, attr: str, value: Any) -> Optional[Any]:
+def complement(kind: str, attr: str, value: Any, kinds=None) -> Optional[Any]:
     """The other value `attr` can take, when there is exactly one. Otherwise None.
 
     "No machine may be stopped" is only actionable if the writer knows what a machine should
@@ -256,12 +262,12 @@ def complement(kind: str, attr: str, value: Any) -> Optional[Any]:
     None makes the solver stop and say so rather than pick. That is
     [[gorgon-deterministic-rules]]: compute, and decline when unsure.
     """
-    enum = ((config.KINDS or {}).get(kind) or {}).get("attr_values", {}).get(attr)
+    enum = (_K(kinds).get(kind) or {}).get("attr_values", {}).get(attr)
     others = [v for v in (enum or ()) if v != value]
     return others[0] if len(others) == 1 else None
 
 
-def probe_for(kind: str, fact: str) -> Optional[str]:
+def probe_for(kind: str, fact: str, kinds=None) -> Optional[str]:
     """The tool that ESTABLISHES an observed fact — from `kinds.<k>.observed`.
 
     Reachability is a FINDING, never an inference from a tool's success flag (decision 6,
@@ -269,14 +275,14 @@ def probe_for(kind: str, fact: str) -> Optional[str]:
     observed attribute has a precondition nothing else can supply: somebody has to ask. The
     manifest already records who — `observed.alive.by` — so this is read, not declared twice.
     """
-    obs = ((config.KINDS or {}).get(kind) or {}).get("observed", {}).get(fact) or {}
+    obs = (_K(kinds).get(kind) or {}).get("observed", {}).get(fact) or {}
     return obs.get("by")
 
 
-def declared() -> Dict[str, str]:
+def declared(kinds=None) -> Dict[str, str]:
     """Every tool that carries a postcondition, mapped to its kind — for drift tests."""
     out: Dict[str, str] = {}
-    for kind, spec in (config.KINDS or {}).items():
+    for kind, spec in _K(kinds).items():
         for t in (spec.get("setters") or {}):
             out[t] = kind
         for c in (spec.get("creators") or {}).values():

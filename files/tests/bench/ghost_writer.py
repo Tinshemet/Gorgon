@@ -32,6 +32,11 @@ from orchestrator.ai.planner.ir import effects
 
 from .seams import seams
 
+
+def _kinds(world):
+    """The manifest this world is described by, or the default target's."""
+    return getattr(world, "kinds", None)
+
 Call = Tuple[str, Dict[str, Any]]
 
 
@@ -90,7 +95,7 @@ def _lower(goal: Dict[str, Any], select, world) -> List[Dict[str, Any]]:
     if "every" in goal:
         sel = dict(goal["every"])
         kind = sel.get("kind")
-        spec = (effects.config.KINDS or {}).get(kind) or {}
+        spec = effects._K(_kinds(world)).get(kind) or {}
         key = spec.get("key")
         if not key:
             return []
@@ -104,7 +109,7 @@ def _lower(goal: Dict[str, Any], select, world) -> List[Dict[str, Any]]:
     if "observe" in goal:
         sel = dict(goal["observe"])
         kind = sel.get("kind")
-        spec = (effects.config.KINDS or {}).get(kind) or {}
+        spec = effects._K(_kinds(world)).get(kind) or {}
         key, probe = spec.get("key"), effects.probe_for(kind, goal.get("fact", "alive"))
         if not key or not probe:
             return []
@@ -118,7 +123,7 @@ def _lower(goal: Dict[str, Any], select, world) -> List[Dict[str, Any]]:
         src = dict(goal["per"])
         skind = src.get("kind")
         made = goal["make"]
-        mspec = (effects.config.KINDS or {}).get(made) or {}
+        mspec = effects._K(_kinds(world)).get(made) or {}
         mkey = mspec.get("key")
         if not mkey:
             return []
@@ -133,7 +138,7 @@ def _lower(goal: Dict[str, Any], select, world) -> List[Dict[str, Any]]:
     shape = goal.get("shape")
     sel = dict(goal.get("select") or {})
     kind = sel.get("kind")
-    spec = (effects.config.KINDS or {}).get(kind) or {}
+    spec = effects._K(_kinds(world)).get(kind) or {}
     key = spec.get("key")
     if not key:
         return []
@@ -143,24 +148,32 @@ def _lower(goal: Dict[str, Any], select, world) -> List[Dict[str, Any]]:
     # network, precisely because production and the bench had drifted on this. So the
     # lowering has to satisfy both: put them together, then ask.
     if shape == "reach":
-        probe = effects.probe_for(kind, "alive")
+        probe = effects.probe_for(kind, "alive", _kinds(world))
         if not probe:
             return []
         members = select(sel)
         subs: List[Dict[str, Any]] = []
-        if not world.common_networks(members):
+        # WHAT CONNECTS MEMBERS IS A MANIFEST FACT, not the word "network". The setter whose
+        # value `refs` another kind is the connective one, whatever it happens to be called.
+        link = next((s_ for s_ in (spec.get("setters") or {}).values()
+                     if s_.get("refs")), None)
+        connector = link["attr"] if link else None
+        ref_kind = link["refs"] if link else None
+        if connector and not world.common_networks(members):
             # PREFER A NETWORK THEY MOSTLY ALREADY SHARE. Rung 9 is the case: two of three
             # sit on `mesh0` and one does not, and the work is finding WHICH is wrong. A
             # writer that created a fresh network and moved all three would pass the
             # checker while doing three times the work and discarding what was already
             # right. Ties break on the name so the same world yields the same program.
             tally: Dict[str, int] = {}
-            for m in members:
-                for n in world.vms.get(m, {}).get("nets", ()):
-                    tally[n] = tally.get(n, 0) + 1
+            for cand in select({"kind": ref_kind}):
+                n_on = len([m for m in members
+                            if m in select({"kind": kind, connector: cand})])
+                if n_on:
+                    tally[cand] = n_on
             net = (max(sorted(tally), key=lambda n: tally[n]) if tally
-                   else _fresh_names("net", 1, set(world.nets))[0])
-            subs.append({"every": dict(sel), "must": {"network": net}})
+                   else _fresh_names(ref_kind, 1, set(select({"kind": ref_kind})))[0])
+            subs.append({"every": dict(sel), "must": {connector: net}})
         subs += [{"_call": (probe, {key: m})} for m in select(sel)]
         return subs
 
@@ -176,7 +189,7 @@ def _lower(goal: Dict[str, Any], select, world) -> List[Dict[str, Any]]:
     # more, because the goal genuinely did not say which. Declining beats picking.
     if want == 0 and len(filters) == 1:
         attr, bad = next(iter(filters.items()))
-        good = effects.complement(kind, attr, bad)
+        good = effects.complement(kind, attr, bad, _kinds(world))
         if good is None:
             return []
         return [{"shape": "count", "select": {"kind": kind, key: m, attr: good}, "eq": 1}
@@ -231,12 +244,18 @@ def _lower(goal: Dict[str, Any], select, world) -> List[Dict[str, Any]]:
         deficit -= len(subs)
     plain = {k: v for k, v in filters.items() if k != "not"}
     for name in _fresh_names(kind, deficit, set(select({"kind": kind}))):
-        subs.append({"shape": "count", "select": {"kind": kind, key: name}, "eq": 1})
-        # A created member still has to satisfy the filters the goal asked for — minus the
+        # ONE SUB-GOAL, NOT TWO — carrying the filters the goal asked for, minus the
         # carve-out, which scoped the SET and says nothing once a member is named.
-        if plain:
-            subs.append({"shape": "count",
-                         "select": {"kind": kind, key: name, **plain}, "eq": 1})
+        #
+        # It used to emit a bare creation and THEN the attributes, which works only while
+        # every attribute has a setter. VMs do: labels and networks are added after the
+        # fact. A KITCHEN does not — an ingredient's dish is what the ingredient IS, fixed
+        # when it is added — so the second sub-goal arrived at a member that already existed
+        # and no tool could change. Asking for the whole thing at once lets `invert` decide:
+        # a setter where one exists (and its precondition creates the member first), the
+        # creator with arguments where none does.
+        subs.append({"shape": "count",
+                     "select": {"kind": kind, key: name, **plain}, "eq": 1})
     return subs
 
 
@@ -293,7 +312,7 @@ def _achieve(goal, scratch, plan, trace, depth):
     if depth > 12:
         raise Unsolvable("lowering too deep — a goal probably depends on itself")
     say = (lambda m: trace.append("  " * depth + m)) if trace is not None else lambda m: None
-    sel, holds = seams(scratch)
+    sel, holds = getattr(scratch, 'seams', None) or seams(scratch)
 
     # A LOWERING RULE MAY EMIT A BARE CALL. `reach` needs each member probed, and a probe
     # asserts nothing about the registry — it writes a FINDING. There is no predicate for
@@ -323,7 +342,7 @@ def _achieve(goal, scratch, plan, trace, depth):
         say(f"{_short(goal)} — ALREADY HOLDS ({why})")
         return
 
-    tile = effects.invert(goal)
+    tile = effects.invert(goal, _kinds(scratch))
     if tile:
         tool, args = tile
         say(f"{_short(goal)} — not yet -> {tool}")
@@ -331,13 +350,13 @@ def _achieve(goal, scratch, plan, trace, depth):
         # already be true, and the writer's only legal responses are to proceed or to give
         # up — never to act. Treating it as a goal would let "x must not exist" be satisfied
         # by deleting x, destroying a machine to make room for one it was asked to create.
-        for no in effects.forbids(tool, args):
+        for no in effects.forbids(tool, args, _kinds(scratch)):
             held, why = holds(no, {})
             if not held:
                 raise Unsolvable(
                     f"{tool} cannot be placed here ({why}) — and nothing may act to "
                     f"change that: {goal}")
-        for need in effects.precondition(tool, args):
+        for need in effects.precondition(tool, args, _kinds(scratch)):
             _achieve(need, scratch, plan, trace, depth + 1)
         if (tool, args) not in plan:
             plan.append((tool, args))
@@ -375,7 +394,7 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None) -> Dic
     if scratch is not None:
         for tool, args in plan:
             scratch.execute(tool, args)
-    select = seams(scratch)[0] if scratch is not None else (lambda s, scope=None: [])
+    select = (getattr(scratch, 'seams', None) or seams(scratch))[0] if scratch is not None else (lambda s, scope=None: [])
     body = [{"op": "call", "tool": t, "args": a} for t, a in plan]
     # GROUNDED THROUGH `_ground`, because a goal and a WITNESS are not the same object. An
     # `every` component is not a predicate the language can evaluate; its witness is a count
