@@ -18,7 +18,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from orchestrator.ai.engines import (Channel, MedusaEngine, Orchestrator, Registry,
-                                     Session, WebCrawlEngine, describe, stub)
+                                     Session, describe, stub)
+from orchestrator.ai.packages import WebCrawlPackage
 from orchestrator.ai.engines.session import INTENT_REGIME, rank
 from orchestrator.ai.planner.ir import config
 from tests.bench.generic_world import World
@@ -93,7 +94,12 @@ def test_the_router_sees_one_line_per_engine():
     print("[context] the router's view is O(1) in engines")
     reg = _kitchen()
     one = len(reg.menu())
-    reg.mount(WebCrawlEngine())
+
+    class Second(MedusaEngine):
+        name = "scheduler"
+        description = "run work on a timetable"
+
+    reg.mount(Second(World(KITCHEN)))
     two = len(reg.menu())
     check("a second engine adds one line", 0 < two - one < 200)
     check("and the menu holds no tools, kinds or schemas",
@@ -103,21 +109,34 @@ def test_the_router_sees_one_line_per_engine():
 def test_nobody_claiming_is_an_answer_not_a_crash():
     """"Nothing mounted can do that" is useful; failing three steps later is not."""
     print("[honesty] an unclaimed request is reported")
+    # A NARROW ENGINE, because Medusa deliberately claims everything — it is the general
+    # engine, so with it mounted UNCLAIMED is nearly unreachable and that is correct. The
+    # outcome exists for a system whose engines are all specialists.
+    class Narrow(MedusaEngine):
+        name = "scheduler"
+        description = "run work on a timetable"
+
+        def claims(self, request):
+            return "schedule" in request.lower()
+
     reg = Registry()
-    reg.mount(WebCrawlEngine())
+    reg.mount(Narrow(World(KITCHEN), packages=(WebCrawlPackage(),)))
     orch = Orchestrator(reg, Channel())
     r = orch.handle("defragment the mainframe")
     check("outcome is UNCLAIMED", r["outcome"] == "UNCLAIMED")
-    check("and it says what IS mounted", r["mounted"] == ["webcrawl"])
+    check("and it says what IS mounted", r["mounted"] == ["scheduler"])
 
     # A GUEST ENGINE IS NEVER A DESTINATION, even when it plainly claims the words. The
     # orchestrator reaches Medusa and QEMU; a crawler is something a PROGRAM calls once it
     # has a machine. Routing to it directly would put a capability that parses untrusted
     # input one step from the host.
+    # THE PACKAGE PLAINLY CLAIMS THESE WORDS and is still not a destination. It is offered
+    # as something a program could call, once it has somewhere to run it.
     r2 = orch.handle("crawl example.com")
-    check("a guest engine is not routed to, however well it claims",
+    check("a package is not routed to, however well it claims",
           r2["outcome"] == "UNCLAIMED")
-    check("but it IS offered as a capability", r2["capabilities"] == ["webcrawl"])
+    check("but it IS offered as a callable capability",
+          r2["capabilities"] == ["webcrawl"])
 
 
 def test_an_untranslated_request_names_the_front_seam():
@@ -200,7 +219,8 @@ def test_a_new_engine_is_essentially_an_api():
     # CALLED, NOT ROUTED TO. A guest capability is what a Medusa program reaches for once it
     # has a machine — `CALL web_crawler_search(vm: $temp)` — so this exercises it the way it
     # is actually reached, rather than through a door the orchestrator deliberately closed.
-    r = WebCrawlEngine().run(goals)
+    pkg = WebCrawlPackage()
+    r = MedusaEngine(pkg.world()).run(goals)
     check("the crawl completes", r["ok"] is True)
     check("it is grounded", r.get("grounded") is True)
     rendered = r.get("rendered", "")
@@ -218,36 +238,31 @@ def test_a_new_engine_is_essentially_an_api():
                    "finish_crawl", "assign_runner", "abandon_crawl"})
 
 
-def test_only_two_engines_may_touch_the_host():
-    """THE SAFETY BOUNDARY. Everything else runs inside a machine.
+def test_the_host_boundary_is_structural_not_a_check():
+    """ENGINES RUN THE HOST. PACKAGES RUN INSIDE ONE. A package is simply not mountable.
 
-    Gorgon's whole risk posture is that work happens in VMs — isolated, disposable, and
-    fingerprinted the way the operator wants. So only Medusa (the system's own language) and
-    QEMU (which makes the machines) may run on the host; a crawler that reaches the internet
-    and parses whatever comes back is the precise definition of a capability that must not.
-
-    ENFORCED AT MOUNT, not at call time, so a misconfigured engine is refused before it is
-    listening rather than failing safely on its first request. And the ALLOWLIST IS BY NAME:
-    an engine declaring `runs_on = "host"` about itself would be a capability granting itself
-    the host, which is the one thing this exists to prevent.
+    An earlier version carried `runs_on = "host" | "guest"` and had the registry refuse a
+    guest that claimed the host. It worked — and it made safety a CHECK: forgettable,
+    subclassable, true on one path and not another. A package has no `run`, so a capability
+    that reaches the internet cannot get the host because it is not the kind of object that
+    has one. There is nothing to enforce.
     """
-    print("[safety] the host boundary")
+    print("[safety] engines run the host; packages run inside one")
     reg = Registry()
-    check("the crawler mounts as a guest", WebCrawlEngine().runs_on == "guest")
-    reg.mount(WebCrawlEngine())
-
-    class Rogue(WebCrawlEngine):
-        name = "rogue"
-        runs_on = "host"
-
     try:
-        reg.mount(Rogue())
-        check("an engine may not grant itself the host", False)
+        reg.mount(WebCrawlPackage())
+        check("a package cannot be mounted", False)
     except ValueError as e:
-        check("an engine may not grant itself the host", "only" in str(e))
-        check("and the refusal says who may", "medusa" in str(e) and "qemu" in str(e))
+        check("a package cannot be mounted", "PACKAGE" in str(e))
+        check("and the refusal explains the distinction", "LOADED" in str(e))
+    check("a package has no run()", not hasattr(WebCrawlPackage(), "run"))
+    check("and no intents to route on", not hasattr(WebCrawlPackage(), "intents"))
 
-    check("medusa is a host engine", MedusaEngine(World(KITCHEN)).runs_on == "host")
+    # LOADED, and then its kinds are plannable by the engine that loaded it.
+    engine = MedusaEngine(World(KITCHEN), packages=(WebCrawlPackage(),))
+    check("a loaded package's kinds join the engine's manifest",
+          {"dish", "crawl", "page"} <= set(engine.manifest))
+    check("and the engine still owns its own", "dish" in engine.manifest)
 
 
 def test_an_engine_borrows_hands_without_knowing_whose():
@@ -259,7 +274,8 @@ def test_an_engine_borrows_hands_without_knowing_whose():
         seen.append(tool)
         return {"success": True}
 
-    engine = WebCrawlEngine(execute=borrowed)
+    pkg = WebCrawlPackage()
+    engine = MedusaEngine(pkg.world(), execute=borrowed)
     engine.run([{"shape": "count", "select": {"kind": "crawl", "crawl_name": "s"}, "eq": 1}])
     check("the injected executor was used", "start_crawl" in seen)
 

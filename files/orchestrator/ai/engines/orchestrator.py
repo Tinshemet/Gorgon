@@ -67,7 +67,7 @@ class Orchestrator:
             return {"outcome": "UNCLAIMED", "engine": None, "regime": None,
                     "why": "no mounted host engine claims this request",
                     "mounted": [e.name for e in self.registry.engines],
-                    "capabilities": [e.name for e in self.registry.capabilities()]}
+                    "capabilities": [p.name for p in self.registry.capabilities()]}
 
         chosen = self._route(request, self.registry.menu(), claimants)
         engine = self.registry.get(chosen) if chosen else None

@@ -1,30 +1,35 @@
-"""webcrawl.py — a MOCK engine, and the proof that a new engine is essentially an API.
+"""webcrawl.py — a MOCK PACKAGE, and the proof that a new capability is essentially an API.
 
-Written to answer one question: what does it actually take to mount a capability Gorgon has
-never had? The answer is a manifest, an adapter, and no changes anywhere else — this file
-imports nothing from the planner and the planner imports nothing from it.
+A PACKAGE, NOT AN ENGINE, and the distinction is the safety property. Engines run the HOST —
+Medusa, the executor, and whatever else the host genuinely needs. Packages run INSIDE a world
+engine: crawling, vision, scanning. A crawler reaches the internet and parses whatever comes
+back, which is the precise definition of a capability that must not have the host — and here
+it cannot, not because a check refuses it but because a package is not a mountable thing.
+There is no method by which it could be routed to.
 
-IT IS DELIBERATELY THE HARD CASE, not the easy one. A crawler that ran locally would prove
-only that a second manifest parses. This one BORROWS ANOTHER ENGINE'S MEMBERS: the crawling
-happens inside virtual machines, through their guest agents, which is how one would really
-build it — the machines are already isolated, already disposable, already fingerprinted the
-way an operator wants them. So the mount contract has to survive an engine whose world is its
-own but whose HANDS belong to somebody else.
+Written to answer one question: what does it take to add a capability Gorgon has never had?
+A manifest fragment and no changes anywhere else. This file imports nothing from the planner
+and the planner imports nothing from it.
 
-WHAT MAKES THAT WORK is that `execute` is injected. The crawl engine names the tools it needs
-and someone else decides what running them means: here a stub, in production the QEMU
-engine's guarded executor with `run_guest_command`. The engine never learns which, which is
-the same property that let the ghost writer be proven with hand-written goals.
+IT IS DELIBERATELY THE HARD CASE. A crawler that ran locally would prove only that a second
+manifest parses. This one runs inside virtual machines through their guest agents, which is
+how one would really build it — the machines are already isolated, already disposable,
+already fingerprinted the way an operator wants them. So the contract has to survive a
+capability whose kinds are its own but whose HANDS belong to somebody else.
 
-MOCK MEANS THE BACKEND IS FAKE, NOT THE INTERFACE. Everything above the `execute` line is
-exactly what a real crawl engine would ship.
+WHAT MAKES THAT WORK is that execution is the ENGINE'S. The package names the tools it needs
+and the loading engine decides what running them means: here a stub, in production the QEMU
+engine's guarded executor with `run_guest_command`. The package never learns which, and never
+holds an executor of its own — one door, not two.
+
+MOCK MEANS THE BACKEND IS FAKE, NOT THE INTERFACE. Everything except `CrawlWorld.execute` is
+exactly what a real crawl package would ship.
 """
 from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional
 
-from .base import Engine
-from .medusa import MedusaEngine
+from .base import Package
 
 # THE ENTIRE REGISTRATION. Two kinds, five tools, and the postconditions are DERIVED — the
 # writer works out that a crawl must exist before a page can belong to it, that a page is
@@ -105,20 +110,21 @@ class CrawlWorld:
         return proxy.execute(tool, args)
 
 
-class WebCrawlEngine(MedusaEngine):
+class WebCrawlPackage(Package):
     """Crawl the web from inside disposable machines."""
 
     name = "webcrawl"
     description = ("crawl or scrape web pages from inside a virtual machine, and record "
                    "which pages answered")
-    intents = ("fetch", "ensure", "achieve")
-    # GUEST, AND THIS IS THE POINT OF THE EXAMPLE. A crawler reaches the internet and parses
-    # whatever comes back, which is the precise definition of a capability that must not have
-    # the host. It gets a machine, and its hands belong to whoever made that machine.
-    runs_on = "guest"
+    runs_in = "guest"
 
-    def __init__(self, execute: Optional[Callable] = None):
-        super().__init__(CrawlWorld(execute))
+    @property
+    def manifest(self) -> Dict[str, Any]:
+        return MANIFEST
+
+    def world(self, execute: Optional[Callable] = None) -> "CrawlWorld":
+        """A world to plan against. Handed to an engine, which owns execution."""
+        return CrawlWorld(execute)
 
     def claims(self, request: str) -> bool:
         words = {w.strip(".,!?;:'\"").lower() for w in request.split()}

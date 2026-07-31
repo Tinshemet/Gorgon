@@ -23,28 +23,20 @@ class Registry:
     def __init__(self):
         self._mounted: Dict[str, Engine] = {}
 
-    HOST_ENGINES = frozenset({"medusa", "qemu"})
-
     def mount(self, engine: Engine) -> Engine:
         if not getattr(engine, "name", None):
             raise ValueError("an engine must have a name")
         if engine.name in self._mounted:
             raise ValueError(f"{engine.name} is already mounted")
 
-        # THE HOST BOUNDARY, ENFORCED AT MOUNT TIME. Only Gorgon's own language and the thing
-        # that makes machines may touch the host; everything else runs inside a VM. Checking
-        # here rather than at call time means a misconfigured engine cannot be mounted at
-        # all — a capability that reaches the internet does not get to fail safely on its
-        # first request, it gets refused before it is listening.
-        #
-        # The NAME is the allowlist, deliberately, not a flag the engine sets about itself.
-        # An engine declaring `runs_on = "host"` would be a capability granting itself the
-        # host, which is the one thing this boundary exists to prevent.
-        if getattr(engine, "runs_on", "guest") == "host" and engine.name not in self.HOST_ENGINES:
+        # A PACKAGE IS NOT MOUNTABLE, and this is the last line of that boundary rather
+        # than the whole of it. Engines run the host; packages run inside a world engine and
+        # have no `run` at all, so the ordinary way of getting this wrong — handing a
+        # crawler to `mount` — fails here with a sentence rather than silently listening.
+        if not hasattr(engine, "run"):
             raise ValueError(
-                f"{engine.name} claims the host, and only {sorted(self.HOST_ENGINES)} may. "
-                f"A guest engine's hands are injected by the host engine that made its "
-                f"machine.")
+                f"{engine.name} has no `run` — it looks like a PACKAGE. Packages are LOADED "
+                f"by a world engine and run inside it; only engines are mounted.")
 
         self._mounted[engine.name] = engine
         return engine
@@ -62,7 +54,7 @@ class Registry:
         return [self._mounted[n] for n in sorted(self._mounted)]
 
     def claimants(self, request: str) -> List[Engine]:
-        """Every HOST engine that thinks it could answer. Guest engines are never routed to.
+        """Every engine that thinks it could answer.
 
         THE CORRECTION OF 2026-08-01, and it matters: the orchestrator does not reach a
         crawler, a vision engine or a kitchen. It reaches MEDUSA and QEMU — the executor
@@ -79,19 +71,20 @@ class Registry:
         the claimant list means the shortest path to running one always goes through a
         machine.
         """
-        return [e for e in self.engines
-                if getattr(e, "runs_on", "guest") == "host" and e.claims(request)]
+        return [e for e in self.engines if e.claims(request)]
 
-    def capabilities(self, request: str = "") -> List[Engine]:
-        """Guest engines a Medusa program could CALL — offered, never routed to.
+    def capabilities(self, request: str = "") -> List:
+        """PACKAGES a program could call — offered, never routed to.
 
-        Separate from `claimants` on purpose. These are the tools a program may reach for
-        once it has a machine to run them in, which is a different question from who serves
-        the request.
+        A different question from who serves the request. These are what a Medusa program has
+        the vocabulary to reach for once it has somewhere to run them.
         """
-        return [e for e in self.engines
-                if getattr(e, "runs_on", "guest") != "host"
-                and (not request or e.claims(request))]
+        out = []
+        for e in self.engines:
+            for pkg in getattr(e, "packages", ()) or ():
+                if not request or pkg.claims(request):
+                    out.append(pkg)
+        return out
 
     def menu(self) -> str:
         """The router's entire context. One line per engine."""

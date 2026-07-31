@@ -69,7 +69,6 @@ class QemuEngine(MedusaEngine):
     description = ("create, launch, stop, network, label and snapshot virtual machines "
                    "in the lab")
     intents = ("fetch", "ensure", "achieve")
-    runs_on = "host"      # machines have to come from somewhere
 
     def __init__(self, library, execute, findings=None):
         super().__init__(LabWorld(library, execute, findings))

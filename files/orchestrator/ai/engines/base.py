@@ -1,9 +1,20 @@
 """base.py — what an ENGINE is. The mount contract, and nothing more.
 
-An engine is a capability the orchestrator can route to: the executor drives machines,
-Medusa writes and runs Gorgon's own programs, an OpenCV engine would answer questions about
-footage. The orchestrator does not know what any of them do — it knows who is mounted, who
-claims a request, and what to do when one asks for help.
+AN ENGINE RUNS THE HOST. Medusa writes and runs Gorgon's own programs; the executor drives
+machines; you can build your own — an FSMO-style role, a scheduler, whatever the host
+genuinely needs. Engines are MOUNTED and the orchestrator routes to them.
+
+A PACKAGE IS THE OTHER THING (see `ai/packages/`): a capability that runs INSIDE a world
+engine — crawling, vision, scanning. Packages are LOADED, never mounted, never routed to.
+
+THE BOUNDARY IS STRUCTURAL RATHER THAN CHECKED, and that is the whole point. An earlier
+version had engines carry `runs_on = "host" | "guest"` and the registry refuse a guest
+claiming the host. It worked, and it made safety a CHECK — forgettable, subclassable, true on
+one path and not another. A package simply has no mount method, so a capability that reaches
+the internet cannot get the host because it is not the kind of object that has one.
+
+The orchestrator does not know what any engine does — it knows who is mounted, who claims a
+request, and what to do when one asks for help.
 
 NOT `planner/engine.py`. That is the POLICY BUNDLE the score engine threads (gate, verify,
 watchdog, killswitch); it is a bag of dependencies, not a mounted capability. Two different
@@ -34,26 +45,18 @@ class Engine:
     # for a model choosing between four options, not for a developer: say what requests it
     # can answer, in the words an operator would use.
     description: str = ""
-    # WHERE THIS ENGINE IS ALLOWED TO RUN — and it is a SAFETY BOUNDARY, not a deployment
-    # note. Only two engines may touch the host: `medusa`, which is Gorgon's own language,
-    # and `qemu`, which is how machines come to exist. Everything else — a crawler, a vision
-    # engine, a scraper — runs INSIDE a virtual machine, because a capability that reaches
-    # the internet or parses untrusted input is exactly the capability that must not have the
-    # host. The machines are already isolated, already disposable, already fingerprinted the
-    # way the operator wants them.
-    #
-    # A guest engine therefore never owns its own hands. Its `execute` is injected and comes
-    # from the host engine that made the machine, so its work reaches the world through the
-    # same gauntlet a VM operation does — one door, not two.
-    runs_on: str = "guest"
-
     # Which intents this engine can serve. An engine that only ANSWERS declares `fetch`; one
     # that acts declares `achieve`. The router uses it to pick a REGIME, not just an engine.
     intents: Tuple[str, ...] = ("fetch",)
 
+    # Packages this engine has loaded. Their kinds join the engine's manifest and their
+    # tools become callable by a program the engine runs — with execution staying the
+    # ENGINE'S, so a package never holds hands of its own.
+    packages: Tuple = ()
+
     @property
     def manifest(self) -> Dict[str, Any]:
-        """The kinds this engine deals in. `{}` means it has no world to plan over."""
+        """The kinds this engine deals in, its packages' included."""
         return {}
 
     def world(self):

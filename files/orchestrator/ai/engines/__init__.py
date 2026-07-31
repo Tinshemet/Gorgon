@@ -12,6 +12,5 @@ from .channel import Answer, Channel, stub  # noqa: F401
 from .medusa import MedusaEngine            # noqa: F401
 from .orchestrator import Orchestrator      # noqa: F401
 from .qemu import LabWorld, QemuEngine      # noqa: F401
-from .webcrawl import WebCrawlEngine        # noqa: F401
 from .registry import Registry              # noqa: F401
 from .session import INTENT_REGIME, REGIMES, Session, rank  # noqa: F401

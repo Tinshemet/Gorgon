@@ -34,9 +34,8 @@ class MedusaEngine(Engine):
     description = ("write and run a Gorgon program — plan several steps against the lab, "
                    "in order, and check the result")
     intents = ("fetch", "ensure", "achieve")
-    runs_on = "host"      # Gorgon's own language — the one engine that IS the system
 
-    def __init__(self, world, execute=None):
+    def __init__(self, world, execute=None, packages=()):
         """`world` carries `kinds`, `seams` and `execute` — the mount contract, nothing else.
 
         `execute` may be supplied separately when the world reads state but something else
@@ -46,6 +45,11 @@ class MedusaEngine(Engine):
         """
         self._world = world
         self._execute = execute or world.execute
+        # PACKAGES ARE LOADED, NOT MOUNTED. Their kinds join this engine's manifest so a
+        # program can plan over them, and their tools become callable — but EXECUTION STAYS
+        # HERE. A package that held its own executor would be a second door into the world,
+        # and the point of the engine layer is that there is one.
+        self.packages = tuple(packages)
         # A world whose kinds are NOT the default manifest needs the override below. Asking
         # once, here, keeps the default target — the actual Gorgon lab — on the untouched
         # path it has always used.
@@ -53,7 +57,10 @@ class MedusaEngine(Engine):
 
     @property
     def manifest(self) -> Dict[str, Any]:
-        return getattr(self._world, "kinds", {}) or {}
+        """This engine's kinds, plus every loaded package's — merged, collisions refused."""
+        from ..packages.base import merge
+        return merge(getattr(self._world, "kinds", {}) or {},
+                     *(p.manifest for p in self.packages))
 
     def world(self):
         return self._world
