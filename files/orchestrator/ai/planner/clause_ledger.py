@@ -74,6 +74,111 @@ BY_PIGEONHOLE = "pigeonhole"
 BY_ANCHOR = "anchor"
 
 
+# Words that join two demands. Deliberately short: over-splitting costs a false warning,
+# under-splitting costs a missed one, and a false warning is the cheaper mistake to have.
+_JOINERS = (" and then ", ", and ", " and ", ", then ", " then ", "; ", ", ")
+
+
+def enumerate_clauses(goal: str) -> List[Dict[str, Any]]:
+    """Demands read off the goal TEXT, so every goal has them without anyone writing them.
+
+    WHY THIS IS SAFE HERE AND WAS NOT SAFE IN THE DECOMPOSER. Splitting prose to BUILD is
+    what wrecked staged lowering (#55): a fragment handed to an author has lost its referents,
+    and "shut down whichever ones don't" cannot be written by anyone. Splitting prose to
+    COUNT loses nothing that matters — a miscounted clause produces a WARNING, never a
+    program. Same operation, two costs, three orders of magnitude apart.
+
+    IT ALSO SETTLES WHY THIS LEDGER WAS DORMANT. Twelve of thirteen rungs had no demands
+    because hand-writing them is reasoning by analogy onto a passing cell — the "benchmark
+    grading itself" line `rungs.py` draws in its own comment. Demands derived from the
+    operator's words are not a second description of the goal; they ARE the goal, cut where
+    it joins itself.
+
+    Anchors are the clause's content words, and `open_ledger` drops any that the goal does
+    not literally contain — so this can only ever point at words the operator used.
+
+    ## WHAT THIS IS NOT YET GOOD FOR, MEASURED 2026-08-01
+
+    Enumerating demands works. RECONCILING them against a program the GHOST WRITER produced
+    does not: 24 of 26 known-COMPLETE plans are reported incomplete.
+
+    The cause is structural, not a tuning problem. `reconcile` requires every declared anchor
+    to appear in the plan, and a plan written from components renders `create_vm(name: alpha)`
+    — TOOL NAMES and VALUES. The operator's words "named", "spin up", "provision", "wire
+    together" appear nowhere, because a verb describes an action while a program names a
+    tool. Lexical overlap worked when a MODEL wrote the program (it echoes the request back);
+    it fails when CODE writes one, and no amount of excluding more words fixes that. Trying
+    is the stop-list arms race the reporter refused this same day.
+
+    THE FIX IS DECLARATION, NOT INFERENCE, and it is the third time that answer has come up
+    today: have the EXTRACTOR say which clause each goal came from. Then reconciliation is an
+    exact set difference with no matching at all — a clause with no goal pointing at it is
+    unaccounted, provably. That needs a schema field and a re-measurement, so it is written
+    down here rather than half-built.
+    """
+    text = (goal or "").strip()
+    if not text:
+        return []
+    parts, rest = [], text.lower()
+    while True:
+        cut = min(((rest.find(j), j) for j in _JOINERS if rest.find(j) >= 0),
+                  default=(-1, ""))
+        if cut[0] < 0:
+            parts.append(rest)
+            break
+        parts.append(rest[:cut[0]])
+        rest = rest[cut[0] + len(cut[1]):]
+    out: List[Dict[str, Any]] = []
+    for piece in parts:
+        piece = piece.strip(" .,;")
+        if not piece:
+            continue
+        # ANCHOR ON NAMES AND NUMBERS, NEVER ON VERBS — and this is the whole reason the
+        # first attempt flagged 26 of 26 complete plans as incomplete.
+        #
+        # `reconcile` requires EVERY declared anchor to appear in the plan. A plan written
+        # from components renders `create_vm(name: alpha)`: it carries TOOL NAMES and VALUES,
+        # and never the operator's verb — "named", "spin", "provision" appear nowhere. A verb
+        # describes an action; a program names a tool. A NAME, by contrast, is the same word
+        # in the request and in the plan, which is exactly what makes it an anchor.
+        #
+        # The verb list is `action_words` from the chat config — already data, already the
+        # vocabulary this system uses for "the operator is asking for an action". A second
+        # list here would be the third-lexicon defect twice in one week.
+        words = [w.strip(".,!?;:'\"") for w in piece.split()]
+        anchors = [w for w in words
+                   if len(w) > 2 and w not in _NOT_ANCHORS and w not in _verbs()]
+        out.append({"text": piece, "anchors": anchors[:3]})
+    return out
+
+
+_NOT_ANCHORS = {"them", "they", "that", "this", "these", "those", "there", "with", "from",
+                "into", "also", "sure", "should", "must", "will", "have", "want", "the",
+                "each", "every", "some", "only", "just", "very", "much", "more", "most",
+                "all", "any", "one", "its", "it", "and", "but", "for", "not", "own",
+                "can", "are", "was", "were", "been", "over", "onto", "same", "other",
+                "another", "which", "who", "what", "when", "then", "than", "already",
+                "currently", "still", "also", "able", "they", "their", "each"}
+
+
+def _verbs() -> set:
+    """The action verbs, from the chat config — read, never re-listed."""
+    global _VERBS
+    if _VERBS is None:
+        import json as _json
+        import os as _os
+        here = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        try:
+            cfg = _json.load(open(_os.path.join(here, "chat", "config.json")))
+            _VERBS = set(cfg.get("action_words") or ()) | set(cfg.get("state_query_words") or ())
+        except Exception:
+            _VERBS = set()
+    return _VERBS
+
+
+_VERBS = None
+
+
 def open_ledger(goal: str, demands: Sequence[Any]) -> Dict[str, Any]:
     """Record what the goal asked for, BEFORE anything is planned.
 

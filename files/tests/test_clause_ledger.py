@@ -232,3 +232,33 @@ def test_a_goal_with_one_demand_and_one_statement_is_never_flagged():
                          "call": {"tool": "launch_vm", "args": {"name": "$item"}}}])
     assert cl.unaccounted(led) == []
     assert cl.verdict(led) == "clear"
+
+
+def test_demands_can_be_derived_from_the_goal_text():
+    """Twelve of thirteen rungs had no demands, because hand-writing them is reasoning by
+    analogy onto a passing cell — the line `rungs.py` draws in its own comment.
+
+    Deriving them from the operator's own words is not a second description of the goal; it
+    IS the goal, cut where it joins itself.
+
+    AND SPLITTING PROSE IS SAFE HERE, where it was not in the decomposer (#55). A fragment
+    handed to an AUTHOR has lost its referents and cannot be written; a fragment handed to a
+    COUNTER loses nothing, because a miscounted clause is a warning and never a program.
+    Same operation, two costs, orders of magnitude apart.
+    """
+    enum = cl.enumerate_clauses
+
+    two = enum("create a vm named beta and then launch it")
+    assert len(two) == 2
+    assert "beta" in two[0]["text"]
+
+    assert len(enum("create a vm named alpha")) == 1
+    assert enum("") == []
+
+    # ANCHORS ARE NAMES, NEVER VERBS. A verb describes an action; a program NAMES A TOOL, so
+    # `create_vm(name: alpha)` carries "alpha" and never "named". Anchoring on a verb
+    # guarantees a false miss — measured 2026-08-01 as 26 of 26 complete plans reported
+    # incomplete.
+    anchors = set(enum("create a vm named alpha")[0]["anchors"])
+    assert "alpha" in anchors
+    assert not ({"create", "make", "launch", "spin"} & anchors)
