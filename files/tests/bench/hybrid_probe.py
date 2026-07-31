@@ -67,21 +67,34 @@ def tree_from_draft(draft: Any, goal: str = "", log=None) -> dict:
     FLAT, not nested. A program IS a sequence; the tree regime's depth exists to break a
     goal down, and there is nothing left to break down once a draft has done it.
     """
+    def as_node(st):
+        """One draft statement as a leaf, specified by its IR — NOT by its rendering.
+
+        THIS WAS THE FIRST VERSION'S REAL DEFECT, and it took two wrong guesses to find.
+        The leaf goal was the statement as RENDERED, and `render.py` says in its own
+        docstring what that is: *"one direction only ... nothing parses it back."* It is a
+        human view and it is lossy on purpose. Two ways that bit:
+
+          * AMBIGUOUS — `FOREACH $item IN SELECT vm` is printed for BOTH `{"in": "$x"}` and
+            `{"select": {...}}`, so the emitter could not tell which field to write and
+            answered `in: "SELECT {name} FROM {vm}"`, rejected three times running.
+          * LOSSY ON BAD INPUT — a draft carrying an invalid predicate renders as the
+            placeholder `<unknown check 'in'>`, and the emitter was asked to reproduce a
+            statement containing a hole.
+
+        The IR is the precise form and the model already emits IR — that is the whole
+        premise of this language. So the leaf is handed the JSON, and its job is to write
+        the same statement properly against one operator's schema.
+        """
+        return lower.node(
+            "write this exact step, correcting anything malformed in it: "
+            + json.dumps(st, separators=(",", ":")),
+            op=st["op"])
+
     body = coerce_body(draft) or []
-    kids = []
-    for st in body:
-        if not isinstance(st, dict) or not st.get("op"):
-            continue
-        text = render({"body": [st]}).strip()
-        # PHRASED AS A STEP TO REPRODUCE, not as a goal to interpret. Handed the bare
-        # rendered line, the emitter REINTERPRETED it: rung 1's "create a vm named alpha"
-        # came back `NEW vm FROM $alpha`, a clone, because the text merely MENTIONED alpha.
-        # The draft already decided what this statement is; the emitter's job is to write
-        # it correctly, not to decide again.
-        kids.append(lower.node(f"write this exact step: {text}", op=st["op"]))
+    kids = [as_node(st) for st in body if isinstance(st, dict) and st.get("op")]
     if log:
-        log(f"draft gave {len(kids)} statement(s): "
-            + ", ".join(k["op"] for k in kids))
+        log(f"draft gave {len(kids)} statement(s): " + ", ".join(k["op"] for k in kids))
     # THE ROOT CARRIES THE REAL GOAL, so `lower_tree` passes it down as ancestry and each
     # leaf knows what the program as a whole is for. Without it a leaf sees one rendered
     # line and nothing else.
