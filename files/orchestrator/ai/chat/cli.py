@@ -24,7 +24,8 @@ from .session import (
     save_session, get_loop_max, get_verbose,
 )
 from .shortcuts import handle_command   # the REPL shortcut dispatcher (list/system/drift/…)
-from shared.display import console, print_banner
+from shared.display import console
+from orchestrator.ai.chat import malformed as _malformed, print_banner
 from ..active_library     import LIBRARY
 from .ollama_client      import OLLAMA_MODEL, OLLAMA_URL, _call_ollama
 from .context_assistant  import check_context, extract_slots, proactive_prep
@@ -265,7 +266,18 @@ def chat_loop(verbose: bool = False) -> None:
                     })
                     continue
                 if text:
-                    console.print(f"\n[bold green]Assistant:[/bold green] {text}\n")
+                    # A FAILED TOOL CALL IS NOT AN ANSWER. A model that means to act and
+                    # gets the mechanics wrong emits the ATTEMPT as text, and printing it
+                    # as an assistant message hands the operator something that is not
+                    # true and not actionable — observed 2026-07-31 as
+                    # `CallCheck("Which VMs are running?", options=[...])`, with invented
+                    # machine names. One authority, shared with the HTTP path.
+                    _bad = _malformed.looks_like_tool_call(text)
+                    if _bad:
+                        console.print(f"\n[warn]{_malformed.explain(_bad, text, verbose)}"
+                                      f"[/warn]\n")
+                    else:
+                        console.print(f"\n[bold green]Assistant:[/bold green] {text}\n")
                 break
 
             state.tools_called = True

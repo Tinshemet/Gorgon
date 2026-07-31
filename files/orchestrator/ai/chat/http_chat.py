@@ -11,6 +11,8 @@ it never imports from cli — the edge is one-directional (cli -> http_chat).
 """
 
 import json
+
+from orchestrator.ai.chat import malformed as _malformed
 import os
 
 from orchestrator.sanitizer.sanitizer import OS_TYPE_ALIASES
@@ -135,7 +137,14 @@ def process_message(
                 messages.pop()
                 messages.append({"role": "user", "content": "_INTERNAL_ You responded with text but did not call any tool. You cannot perform actions by text alone — you MUST call the appropriate tool. Call the tool now."})
                 continue
-            return {"text": text, "messages": messages, "tool_results": _tool_results, "needs_input": None}
+            # THE SAME CHECK AS THE REPL, from the same module. A failed tool call is not
+            # an answer, and these two paths have drifted before (#26) — a display rule
+            # written twice is one that will differ by the end of the month.
+            _bad = _malformed.looks_like_tool_call(text)
+            if _bad:
+                text = _malformed.explain(_bad, text)
+            return {"text": text, "messages": messages, "tool_results": _tool_results,
+                    "needs_input": None, "malformed": _bad}
 
         _tools_called_this_turn = True
         _op_cancelled = False
