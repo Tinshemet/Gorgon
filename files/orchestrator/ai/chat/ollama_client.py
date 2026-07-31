@@ -108,6 +108,80 @@ def context_floor() -> Dict[str, int]:
             "est_tokens": (sp + ts) // 4, "num_ctx": _OLLAMA["num_ctx"]}
 
 
+def _fit_tools(system: str, messages: List[Dict], tools: List[Dict]) -> List[Dict]:
+    """Offer every tool that FITS, and say which ones did not.
+
+    NARROWING BY BUDGET, NOT BY GUESS — and that distinction is the whole design, because
+    narrowing by guess is already on record as harmful. `context_assistant.narrow_tools`
+    picks the tools it thinks the turn needs, and 2026-07-17 measured it degrading
+    llama3.1: offering 4 instead of 46 made "create X same OS as test1" hallucinate the
+    os_type 4/4 runs where the full set resolved it 4/4. The fuller tool context anchors a
+    weak model.
+
+    THAT RESULT IS RESPECTED HERE RATHER THAN OVERTURNED. This never drops a tool while
+    there is room for it, so the 4-tool regime that failed cannot recur; the typical
+    outcome is 45+ of 53 rather than a handful. What it refuses to do is send a payload
+    that cannot fit, because the alternative is not "the full tool set" — it is a payload
+    ollama TRUNCATES from the front, silently, taking the system prompt and half the tool
+    definitions with it. The choice on this hardware was never narrow-vs-full. It was
+    narrow-vs-truncated, and nobody had measured that one.
+
+    WHY THE REGISTRY OUTGREW THE WINDOW WITHOUT ANYONE NOTICING: the 2026-07-17 test ran
+    against 46 tools. There are 53 now. Nothing recomputed the floor when a tool was added,
+    so the failure arrived by accretion — which is exactly why this is a computed budget
+    and not a tuned constant.
+
+    ORDER IS RELEVANCE, and it only decides who is dropped when something must be. Hinted
+    and core tools rank first (the same deterministic signals `proactive_prep` already
+    uses — no new vocabulary, the thing this codebase keeps deleting), then registry order,
+    which is stable so the same turn drops the same tools.
+    """
+    limit = _OLLAMA["num_ctx"]
+    # Reserve room to GENERATE. A payload that exactly fills the window leaves the model
+    # no tokens to answer with, which is its own version of the same bug — and the
+    # measured symptom was a one-word reply, not an empty one.
+    reserve = int(_CFG.get("chat", {}).get("generation_reserve_tokens", 1024))
+    spent = (len(system) + len(json.dumps(messages))) // 4
+    budget = limit - spent - reserve
+    if budget <= 0:
+        # The history alone has overrun the window. Dropping tools cannot fix that, so say
+        # so rather than silently offering none and looking like a model that forgot how
+        # to act. `max_history` is the lever here, not the tool set.
+        console.print(f"[error]The conversation alone fills num_ctx ({spent} of {limit} "
+                      f"tokens). Clear the session — no tool set can fit.[/error]")
+        return []
+
+    def rank(t):
+        name = (t.get("function") or {}).get("name", "")
+        return (0 if name in _hinted else 1, 0 if name in _core else 1)
+
+    _hinted, _core = set(), set()
+    try:
+        from .context_assistant import scan_tool_hints, _NARROW_CORE_TOOLS
+        last = next((m.get("content", "") for m in reversed(messages)
+                     if m.get("role") == "user"), "")
+        _hinted, _core = set(scan_tool_hints(last) or ()), set(_NARROW_CORE_TOOLS)
+    except Exception:
+        pass                                  # ranking is an optimisation, never a gate
+
+    kept, dropped, used = [], [], 0
+    for t in sorted(tools, key=rank):
+        cost = len(json.dumps(t)) // 4
+        if used + cost <= budget:
+            kept.append(t)
+            used += cost
+        else:
+            dropped.append((t.get("function") or {}).get("name", "?"))
+    if dropped:
+        # NO SILENT CAPS. A run that quietly offers 40 of 53 tools reads as "the model
+        # chose not to use it" when the truth is it was never told the tool existed.
+        console.print(f"[warn]{len(dropped)} of {len(tools)} tools withheld to fit "
+                      f"num_ctx ({used}+{spent}+{reserve} of {limit} tokens): "
+                      f"{', '.join(sorted(dropped)[:6])}"
+                      f"{'…' if len(dropped) > 6 else ''}[/warn]")
+    return kept
+
+
 def _warn_if_truncated(reply: Dict, payload: Dict) -> Dict:
     """Say so when the prompt did not fit. Ollama will not.
 
@@ -147,10 +221,21 @@ def _call_ollama(messages: List[Dict], tools: List[Dict] = None) -> Dict:
     `tools` overrides the offered tool set (used for round-0 tool-narrowing);
     None = the full TOOLS list.
     """
+    system = _build_system_prompt()
+    offered = TOOLS if tools is None else tools
+    # THE AGENT'S OWN CONTRACT, applied to the ARRAY and not just to the prose. The
+    # whitelist and blacklist governed the system prompt (`_run_command_available`) while
+    # the tools array was sent whole, so a blacklisting agent still had its forbidden
+    # tools offered to the model — relying on refusal at execution time to catch what
+    # should never have been on the menu. Governance first, then the budget.
+    kit = set(default_toolkit() or ())
+    offered = [t for t in offered
+               if (lambda n: (not kit or n in kit) and not is_forbidden(n))(
+                   (t.get("function") or {}).get("name", ""))]
     payload = {
         "model":    OLLAMA_MODEL,
-        "messages": [{"role": "system", "content": _build_system_prompt()}] + messages,
-        "tools":    TOOLS if tools is None else tools,
+        "messages": [{"role": "system", "content": system}] + messages,
+        "tools":    _fit_tools(system, messages, offered),
         "stream":   False,
         "options":  {"temperature": _OLLAMA["temperature"], "num_ctx": _OLLAMA["num_ctx"]},
     }
