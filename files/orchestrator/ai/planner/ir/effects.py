@@ -91,6 +91,84 @@ def postcondition(tool: str, args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return None
 
 
+def precondition(tool: str, args: Dict[str, Any]) -> list:
+    """What must ALREADY be true for `tool` to succeed. Derived, never declared.
+
+    A setter acts on a member, so that member must exist; and where the value it writes is
+    the KEY OF ANOTHER KIND (`refs`), that entity must exist too. Both fall out of the
+    manifest — no second table to keep in step with the first.
+
+    THIS IS WHERE ORDER COMES FROM, and it is worth being explicit that nothing else
+    supplies it. The prompt currently spends 77 characters telling the model "order matters —
+    a foreach over {tag:red} only finds VMs already labelled". A writer does not need to be
+    told: `add_vm_to_network` requires `lab` to exist, so the tile that creates `lab` is
+    placed first because the dependency says so, not because a model remembered a sentence.
+    """
+    kind = _kind_of(tool)
+    spec = (config.KINDS or {}).get(kind) or {}
+    setter = (spec.get("setters") or {}).get(tool)
+    if not setter:
+        return []
+    out = []
+    member = args.get(setter.get("member_arg"))
+    if member is not None and spec.get("key"):
+        out.append(_exists(kind, spec["key"], member))
+    ref_kind = setter.get("refs")
+    if ref_kind and "value_arg" in setter:
+        ref_spec = (config.KINDS or {}).get(ref_kind) or {}
+        value = args.get(setter["value_arg"])
+        if value is not None and ref_spec.get("key"):
+            out.append(_exists(ref_kind, ref_spec["key"], value))
+    return out
+
+
+def invert(pred: Dict[str, Any]) -> Optional[tuple]:
+    """Given a predicate, the tool that MAKES IT TRUE, and with what arguments.
+
+    The tile-selection step, and it needs no search: for the `count` shapes these tiles
+    produce, the mapping is a direct inversion of `postcondition`. A select carrying only
+    the kind's key names a member that must EXIST, which is the creator's job; one carrying
+    the key AND an attribute names an attribute that must be SET, which is a setter's; a
+    count of zero is the deleter's.
+
+    Returns None when no tile makes it true — the honest answer, and the one that tells a
+    writer to decompose rather than to invent a step.
+    """
+    if not isinstance(pred, dict) or pred.get("shape") != "count":
+        return None
+    sel = pred.get("select") or {}
+    kind = sel.get("kind")
+    spec = (config.KINDS or {}).get(kind) or {}
+    key = spec.get("key")
+    if not key or key not in sel:
+        return None                       # no named member — a set-level goal, not a tile
+    member = sel[key]
+    rest = {k: v for k, v in sel.items() if k not in ("kind", key)}
+
+    if pred.get("eq") == 0 and not rest:
+        return (spec["delete"], {key: member}) if spec.get("delete") else None
+    if pred.get("eq") != 1:
+        return None                       # counts other than 0/1 are derive()'s territory
+    if not rest:
+        creator = spec.get("create")
+        if not creator:
+            return None
+        args = dict((spec.get("create_defaults") or {}))
+        args[key] = member
+        return (creator, args)
+    if len(rest) != 1:
+        return None                       # two attributes at once is two tiles, not one
+    attr, value = next(iter(rest.items()))
+    for tool, s in (spec.get("setters") or {}).items():
+        if s["attr"] != attr:
+            continue
+        if "value_arg" in s:
+            return (tool, {s["member_arg"]: member, s["value_arg"]: value})
+        if s.get("value") == value:
+            return (tool, {s["member_arg"]: member})
+    return None
+
+
 def declared() -> Dict[str, str]:
     """Every tool that carries a postcondition, mapped to its kind — for drift tests."""
     out: Dict[str, str] = {}

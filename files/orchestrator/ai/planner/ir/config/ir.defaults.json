@@ -327,7 +327,8 @@
     "add_vm_to_network": {
      "attr": "network",
      "member_arg": "vm_name",
-     "value_arg": "net_name"
+     "value_arg": "net_name",
+     "refs": "network"
     },
     "stop_vm": {
      "attr": "status",
