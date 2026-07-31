@@ -269,6 +269,14 @@ def main(argv=None) -> int:
     p.add_argument("-r", "--rung", type=int, action="append")
     p.add_argument("-c", "--column", action="append", choices=["lit", "para"])
     p.add_argument("--mutate")
+    # D1'S LAST UNTESTED CANDIDATE, exposed so it can be run against the recorded baseline.
+    # The eight few-shot examples are 32% of the author's prompt (2308 of 7113 chars), and
+    # 2026-07-30 established that this prompt is at its limit — ONE added sentence moved
+    # five cells from 3/3 to 0/3. Ruled out already: reply size, the eleven-branch oneOf,
+    # num_ctx, objection length, and the quantifier router (measured: every FAILING cell
+    # routes not/any/all, which license all seven ops, so it narrows nothing that matters).
+    p.add_argument("--no-shots", action="store_true",
+                   help="ablate the few-shot examples — isolates what they contribute")
     # THE MODEL, AND IT WAS MISSING. `record` and `check` both stamp the conditions with
     # `env_stamp.stamp(a.model)` — an attribute this parser never declared, so BOTH
     # subcommands raised AttributeError. `record` raised AFTER measuring all 26 cells, which
@@ -298,6 +306,8 @@ def main(argv=None) -> int:
     # BENCH_MODEL while recording `other-model` as the conditions. A baseline that names a
     # model it did not run is worse than one that names none.
     extra = (["--mutate", a.mutate] if a.mutate else []) + ["-m", a.model]
+    if a.no_shots:
+        extra.append("--no-shots")
     if a.runs < 2:
         print("!! n=1 — this measures a sample, NOT a regression. Cells flip on their own.")
     print(f"measuring {len(rungs)} rung(s) × {len(columns)} column(s) × n={a.runs}\n")
