@@ -1044,6 +1044,10 @@ def main(argv=None, sink=None) -> int:
             # because "how many rungs write a program that vouches for nothing" is worth
             # knowing. Silently auto-consenting would hide the very thing the gate exists
             # to surface.
+            #
+            # AND SINCE 2026-07-31 IT IS ALSO SCORED — see the pass decision below. Saying
+            # it was not enough: para:8 and para:11 printed this line and passed 3/3
+            # anyway, so the ladder rewarded acting blind exactly as much as verifying.
             if consent.question(prog):
                 ungrounded += 1
                 print(f"          ?| NO GROUNDING: {consent.survey(prog)['acts']} acting "
@@ -1068,6 +1072,11 @@ def main(argv=None, sink=None) -> int:
             # Deliberately CAUGHT AND NAMED rather than suppressed: an executor that
             # raises on a validated program is a real defect, and the run says so loudly
             # while continuing.
+            # THE PROGRAM THAT ACTUALLY RAN, tracked because grounding is now scored and a
+            # repair can add the ENSURE the first draft omitted (or drop one it had).
+            # Judging the first draft would score a program that is not the one whose
+            # effects the checker is looking at.
+            ran_prog = prog
             try:
                 res = run(prog, world.execute, select=sel, holds=holds,
                           known_names=world.names(), consent=True, intent=want)
@@ -1213,6 +1222,7 @@ def main(argv=None, sink=None) -> int:
                     break
                 res = run(fix, world.execute, select=sel, holds=holds,
                              known_names=world.names(), consent=True, intent=want)
+                ran_prog = fix
                 for line in render(fix).splitlines():
                     print(f"          r{rounds}| {line}")
                 # Re-assert the GOAL, not the fix's own opinion of itself.
@@ -1226,7 +1236,31 @@ def main(argv=None, sink=None) -> int:
             passed = bool(rung.check(world))
             cell["revisions"] = rounds
             cell["calls"] = len(world.calls)
-            if passed:
+            # GROUNDING IS SCORED, operator's decision 2026-07-31. A program that changed
+            # the world and asserts nothing about the result does not pass, even when the
+            # rung's checker likes the world it left behind — because liking the end state
+            # is exactly what the program failed to establish for itself.
+            #
+            # WHY IT OUTRANKS THE CHECKER'S VERDICT. `rung.check` reads the SIM, which the
+            # real orchestrator does not have. An ungrounded program that passes here is a
+            # program that would reach production with no idea whether it worked, and the
+            # bench would have certified it. That is the one failure mode the ladder must
+            # not be able to bless.
+            #
+            # IT OUTRANKS OVER_BUDGET TOO: cost is a reported axis and not a pass/fail,
+            # while this is a correctness property, so it must not be masked by one.
+            #
+            # THE HONEST CAVEAT, kept next to the code that acts on it: the author prompt
+            # does not currently demand grounding, so a cell failing here is being scored
+            # against a rule it was never told. Whether one prompt sentence recovers these
+            # cells is a MEASUREMENT to run, not a thing to assume — and if it does, the
+            # failure was ours (`language`) and not the model's.
+            if passed and consent.question(ran_prog):
+                passed = False
+                _land("UNGROUNDED",
+                      f"{consent.survey(ran_prog)['acts']} acting statement(s), no "
+                      f"ENSURE/ACHIEVE — the program vouches for nothing")
+            elif passed:
                 # OVER_BUDGET needs a VERIFIED baseline, not an observed one: a baseline
                 # learned from what the model did certifies whatever the model does.
                 # rung.best is declared, and several are stale in the loose direction, so

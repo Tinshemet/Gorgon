@@ -26,6 +26,7 @@ outcome here names which one owns it:
     channel    NO_EMISSION · BAD_JSON:trailing_prose · BAD_JSON:malformed
     language   GATE_REFUSED · (UNRECOVERED's detail carries the rule that refused)
     harness    REPAIR_UNDELIVERED · CRASHED · CHECKER_DISPUTE
+    grounding  UNGROUNDED
 
 Two of those exist because a real failure was invisible without them.
 REPAIR_UNDELIVERED: rung 11's repair produced the correct program and explained itself in
@@ -76,6 +77,23 @@ LAYER = {
     "REPAIR_UNDELIVERED:malformed": "channel",
     "CRASHED": "harness",
     "CHECKER_DISPUTE": "harness",
+    # ITS OWN LAYER, because none of the other four owns it. The program is well-formed,
+    # the model reasoned to a world the checker accepts, the channel delivered and the
+    # harness ran it — and the program still vouches for nothing. Measured 2026-07-31:
+    # para:8 and para:11 both passed 3/3 while printing "no ENSURE, operator would be
+    # asked here", so a program that acted blind scored exactly as one that verified.
+    #
+    # THAT CONTRADICTS THE LANGUAGE'S OWN CLAIM ABOUT ITSELF. Decision 6 says observed
+    # attributes come out of the findings ledger and are never inferred, and A5 tightened
+    # the bench's `reach` on the rule that unverified is not done. The ladder was not
+    # holding programs to the property the language is built around, and skipping ENSURE
+    # was a free lane: never punished, always cheaper.
+    #
+    # READ THE COST HONESTLY. The author prompt does NOT currently demand grounding, so
+    # cells failing here are being scored against a rule they were never told. That is
+    # the [[gorgon-schema-withholding]] trap, and the follow-up is a MEASUREMENT — does
+    # one prompt sentence recover them — not an assumption either way.
+    "UNGROUNDED": "grounding",
 }
 
 

@@ -128,8 +128,21 @@ def test_every_outcome_names_the_layer_that_owns_it():
                            ("REPAIR_UNDELIVERED:trailing_prose", "harness"),
                            ("REPAIR_UNDELIVERED:malformed", "channel"),
                            ("CRASHED", "harness"),
-                           ("CHECKER_DISPUTE", "harness")):
+                           ("CHECKER_DISPUTE", "harness"),
+                           ("UNGROUNDED", "grounding")):
         check(f"{code} -> {expected}", layer_of(code) == expected)
+
+    # UNGROUNDED IS NOT A SUCCESS, and this is the assertion the operator's 2026-07-31
+    # decision actually rests on. It sat in the report as a printed note for weeks while
+    # para:8 and para:11 passed 3/3 having asserted nothing, so a test that only checked
+    # the layer would have passed throughout the period the property was unenforced.
+    check("an ungrounded program does not count as achieving the goal",
+          "UNGROUNDED" not in SUCCESS)
+    # ...and it gets a layer of its OWN. Filing it under `model` would have said the model
+    # failed to reason, when the reasoning reached a world the checker accepts; filing it
+    # under `harness` would have said the bench broke. Neither is what happened.
+    check("grounding is nobody else's layer",
+          {c for c, l in LAYER.items() if l == "grounding"} == {"UNGROUNDED"})
 
     # THE THREE THE HARNESS OWNS ARE THE POINT. Two of them exist because a real failure
     # was invisible without them, and the third lets the harness accuse itself.

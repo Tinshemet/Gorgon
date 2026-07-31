@@ -1108,6 +1108,48 @@ def test_ONE_authority_per_fact_in_the_program_regime():
           holds3(reach, {})[0] is False)
 
 
+def test_an_ungrounded_program_is_detected_on_the_exact_shape_that_passed():
+    """A program that ACTS and asserts nothing must be caught — pinned to the real program.
+
+    MEASURED 2026-07-31: this is para:8's program, verbatim, and it passed the rung 3/3
+    while printing "no ENSURE — operator would be asked here". Grounding was reported and
+    not scored, so acting blind cost nothing.
+
+    THE SHAPE IS THE TEST, not a synthetic stand-in. Today's lesson was that a mechanism
+    can be wired, documented and believed while never firing (`pattern: ^\\$` disabled
+    constrained decoding for months). A test built from a hand-written example proves the
+    checker works on examples; one built from the program that actually slipped through
+    proves it works on the thing that slipped through.
+
+    Note what makes it ungrounded: the enumerated FOREACH is not the defect here — that is
+    its own finding — and the program does reach a world the rung's checker accepts. It
+    fails because nothing in it ever asks whether it worked.
+    """
+    from orchestrator.ai.planner.ir import consent as _consent
+    para8 = {"body": [
+        {"op": "new", "kind": "network", "args": {"net_name": "core"}, "store": "core_net"},
+        {"op": "foreach", "in": ["app1", "app2", "app3"], "body": [
+            {"op": "call", "tool": "add_vm_to_network",
+             "args": {"net_name": "core", "vm_name": "$item"}}]},
+        {"op": "new", "kind": "network", "args": {"net_name": "dmz"}, "store": "dmz_net"},
+        {"op": "call", "tool": "add_vm_to_network",
+         "args": {"net_name": "dmz", "vm_name": "db"}},
+    ]}
+    survey = _consent.survey(para8)
+    check("the acting statements are counted THROUGH the loop body",
+          survey["acts"] >= 4)
+    check("it is not grounded", survey["grounded"] is False)
+    check("so the operator would be asked", bool(_consent.question(para8)))
+
+    # AND THE CONVERSE, or the check would be satisfied by something that always fires.
+    # One ENSURE anywhere grounds the program — that is `survey`'s stated rule, and a
+    # test that only proves the alarm rings proves nothing about when it stays silent.
+    grounded = {"body": para8["body"] + [
+        {"op": "ensure", "predicate": {"shape": "count", "select": {"kind": "vm"}, "eq": 4}}]}
+    check("adding one ENSURE grounds it", _consent.survey(grounded)["grounded"] is True)
+    check("and the operator is not asked", _consent.question(grounded) is None)
+
+
 def main():
     """Every `test_*` in this module, in definition order — DISCOVERED, not listed.
 
