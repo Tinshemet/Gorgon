@@ -232,11 +232,48 @@ def program_schema(want: str = None, known=None, quantifier: str = None):
         else:
             branches.append({"type": "object", "properties": props,
                              "required": ["op"] + list(spec["required"])})
+    # A PLACE TO LOOK BEFORE WRITING, and it comes FIRST on purpose.
+    #
+    # The schema had ONE property — `body` — so the decoder forced statement 1 before the
+    # model had emitted a single token about the lab it was given. That is the documented
+    # failure mode of constrained decoding: format restriction costs 10-30% of reasoning
+    # accuracy, and the mechanism is ORDERING — the model is made to produce answer fields
+    # before it can finish reasoning ("Let Me Speak Freely?", arXiv 2408.02442; the
+    # structured-output survey at arXiv 2501.10868 recommends reasoning fields BEFORE
+    # conclusion fields for exactly this reason).
+    #
+    # RUNG 13 IS THAT FAILURE IN ONE LINE. The lab already holds five machines, the goal
+    # says "TAKE 5 vms" — reworded 2026-07-28 so neither column says create — and the model
+    # writes `NEW AMOUNT(5) vm` anyway. The validator objects precisely ("the lab already
+    # holds 5 vm(s) — AMOUNT makes 5 MORE") and TWO repair rounds return the same program.
+    # It is not refusing the correction; it never had anywhere to notice the lab at all.
+    #
+    # Property ORDER is the whole mechanism, so this is not cosmetic: JSON is generated in
+    # order, so a field declared first is written first, and the tokens spent on it are
+    # available to everything after.
+    # OFF BY DEFAULT so the enforcement fix is measured alone. This field was added while
+    # the grammar was dead and never once emitted; now that `from`'s pattern is gone it
+    # would arrive in the same run, and two changes in one measurement attribute to
+    # neither. MEDUSA_READING=1 is its own arm.
+    if os.environ.get("MEDUSA_READING") == "1":
+        props_top = {
+            "reading": {
+                "type": "string",
+                "description": ("FIRST, one short sentence: what does the lab ALREADY hold "
+                                "that this goal asks for? Name what exists so you do not "
+                                "make it a second time. If nothing relevant exists, say so."),
+            },
+            "body": {"type": "array", "items": {"$ref": "#/$defs/stmt"}},
+        }
+        required = ["reading", "body"]
+    else:
+        props_top = {"body": {"type": "array", "items": {"$ref": "#/$defs/stmt"}}}
+        required = ["body"]
     return {
         "$defs": {"stmt": {"oneOf": branches}, "pred": _pred_spec()},
         "type": "object",
-        "properties": {"body": {"type": "array", "items": {"$ref": "#/$defs/stmt"}}},
-        "required": ["body"],
+        "properties": props_top,
+        "required": required,
     }
 
 

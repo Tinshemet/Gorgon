@@ -661,8 +661,18 @@ def test_a_copy_source_is_offered_only_from_what_exists():
     field = _schema._field("from", lab)
     offered = next((b["enum"] for b in field["anyOf"] if "enum" in b), [])
     check("the copy source is enumerated from the lab", set(offered) == lab)
+    # THE PROPERTY, NOT THE IMPLEMENTATION. This asserted `any("pattern" in b ...)`, and
+    # that exact pattern — `^\\$`, "starts with a sigil" — was measured on 2026-07-31 to
+    # SILENTLY DISABLE constrained decoding for the whole authoring path: ollama's
+    # schema-to-grammar conversion fails on an escaped dollar, returns HTTP 200, and
+    # generates unconstrained. So the field now offers a bare string beside the enum, and
+    # what must stay true is that a `$name` is still SAYABLE — which is what this rung
+    # always meant. The $-prefix is policed by `validate` via `refs.names()`, where it was
+    # always actually enforced.
     check("a $reference is still expressible",
-          any("pattern" in b for b in field["anyOf"]))
+          any("enum" not in b and b.get("type") == "string" for b in field["anyOf"]))
+    check("and no schema pattern anchors on the sigil — it kills enforcement",
+          not any(config.SIGIL in str(b.get("pattern", "")) for b in field["anyOf"]))
 
     # The two must answer the same about every candidate — the real ones, a label that is
     # not a machine, and a bound reference.

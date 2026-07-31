@@ -197,6 +197,7 @@ def _field(name: str, known: Optional[set] = None,
     if name in ("select", "count"):
         # `count` is a select in COUNTING POSITION — same query, different answer. Without
         # it `FETCH COUNT(...)` cannot be said at all.
+        #
         return dict(select_spec(), description=doc)
     if name in ("cond", "predicate"):
         return {"$ref": refs["pred"]} if refs else _predicate_property()
@@ -256,9 +257,32 @@ def _from_field(doc: str, known: Optional[set]) -> Dict[str, Any]:
     names = master.sources(known)
     if not names:
         return {"type": "string", "description": doc}
+    # NO `pattern` HERE, AND THE REASON IS NOT STYLE — it silently disabled constrained
+    # decoding for the ENTIRE whole-program authoring path.
+    #
+    # This branch used to be {"type": "string", "pattern": "^\\$"} — "starts with $", for
+    # `NEW vm FROM $golden`. Measured 2026-07-31: ollama's schema-to-grammar conversion
+    # fails on a pattern containing an ESCAPED DOLLAR, and fails SILENTLY — HTTP 200, no
+    # error, and the model generates completely unconstrained. `^[a-z]+$` converts fine, so
+    # it is the escaped `\$` specifically, not patterns in general.
+    #
+    # HOW BADLY THIS MATTERED. With the program schema attached, "Say hello in one word."
+    # returned `Hello!`. Every JSON program this path has ever produced came from the
+    # model IMITATING THE FEW-SHOT EXAMPLES, not from a grammar — which is why ablating
+    # those examples took the ladder from 64/78 to 13/78 with NO_EMISSION everywhere. It
+    # also explains the tree path's zero decode failures across 404 emissions: a leaf
+    # schema has no `from` field, so it was the only surface actually being enforced.
+    #
+    # D1 spent weeks on this: reply size, the eleven-branch oneOf, num_ctx, objection
+    # length and the quantifier router were each ruled out. All of them were tuning a
+    # constraint that was not running.
+    #
+    # A bare string is enforced (measured), and the $-prefix is still policed where it was
+    # always actually policed — `validate` checks it with `refs.names()`.
     return {"anyOf": [{"type": "string", "enum": names},
-                      {"type": "string", "pattern": f"^\\{config.SIGIL}"}],
-            "description": doc + f" It must already exist — one of: {', '.join(names)}."}
+                      {"type": "string"}],
+            "description": doc + f" It must already exist — one of: {', '.join(names)}. "
+                                 f"Or {config.SIGIL}name to copy something bound earlier."}
 
 
 def _statement_flat(want: Optional[str] = None, known: Optional[set] = None,
