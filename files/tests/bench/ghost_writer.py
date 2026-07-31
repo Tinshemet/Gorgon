@@ -182,7 +182,29 @@ def _lower(goal: Dict[str, Any], select, world) -> List[Dict[str, Any]]:
         return [{"shape": "count", "select": {"kind": kind, key: m, attr: good}, "eq": 1}
                 for m in members]
 
-    if want is None or want <= len(members):
+    if want is None:
+        return []
+
+    if want < len(members):
+        # TOO MANY MATCH. Which members go is a DETERMINISTIC SLICE off the end of a sorted
+        # list, so the same request against the same world always removes the same ones —
+        # the property that makes a destructive program reviewable before it runs.
+        #
+        # REMOVING A VALUE AND DELETING A MEMBER ARE NOT THE SAME ACT. Taking `prod` off a
+        # machine is reversible and cheap; deleting the machine is neither. Where the goal
+        # names an attribute, the attribute is what is surrendered — the writer never
+        # destroys a member to satisfy a claim that was only ever about a label.
+        surplus = members[want:]
+        if len(filters) == 1 and "not" not in filters:
+            attr, value = next(iter(filters.items()))
+            return [{"shape": "count", "select": {"kind": kind, key: m, attr: value},
+                     "eq": 0} for m in surplus]
+        if not filters:
+            return [{"shape": "count", "select": {"kind": kind, key: m}, "eq": 0}
+                    for m in surplus]
+        return []
+
+    if want == len(members):
         return []
 
     # NOT ENOUGH MEMBERS MATCH. Two ways to close the gap, and the order matters: convert
@@ -254,9 +276,17 @@ def cover(goals: List[Dict[str, Any]], world, trace: List[str] = None) -> List[C
     """The calls that make every goal hold, in an order that runs."""
     scratch = copy.deepcopy(world)
     plan: List[Call] = []
-    for goal in goals:
-        _achieve(goal, scratch, plan, trace, 0)
-    return plan
+    for _round in range(4):
+        before = len(plan)
+        for goal in goals:
+            _achieve(goal, scratch, plan, trace, 0)
+        if len(plan) == before:
+            return plan
+        if trace is not None:
+            trace.append(f"— goals interacted; re-covering (round {_round + 2})")
+    # Four passes without settling means a goal is undoing another's work, which no amount
+    # of further looping fixes and which the writer must not paper over by stopping quietly.
+    raise Unsolvable("goals do not settle — they may be pulling against each other")
 
 
 def _achieve(goal, scratch, plan, trace, depth):

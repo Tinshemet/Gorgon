@@ -145,8 +145,19 @@ def invert(pred: Dict[str, Any]) -> Optional[tuple]:
     member = sel[key]
     rest = {k: v for k, v in sel.items() if k not in ("kind", key)}
 
-    if pred.get("eq") == 0 and not rest:
-        return (spec["delete"], {key: member}) if spec.get("delete") else None
+    if pred.get("eq") == 0:
+        if not rest:
+            return (spec["delete"], {key: member}) if spec.get("delete") else None
+        # "THIS MEMBER MUST NOT CARRY THIS VALUE" — the unsetter, and the reason it is a
+        # separate table from `setters`: taking a label off is not writing a different label,
+        # and a writer that reached for `add_label` to satisfy a removal would add noise
+        # while the count stayed wrong.
+        if len(rest) == 1:
+            attr, value = next(iter(rest.items()))
+            for tool, u in (spec.get("unsetters") or {}).items():
+                if u["attr"] == attr and "value_arg" in u:
+                    return (tool, {u["member_arg"]: member, u["value_arg"]: value})
+        return None
     if pred.get("eq") != 1:
         return None                       # counts other than 0/1 are derive()'s territory
     if not rest:

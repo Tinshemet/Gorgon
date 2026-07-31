@@ -340,6 +340,18 @@
      "member_arg": "name",
      "value": "running"
     }
+   },
+   "unsetters": {
+    "remove_label": {
+     "attr": "label",
+     "member_arg": "name",
+     "value_arg": "label"
+    },
+    "remove_vm_from_network": {
+     "attr": "network",
+     "member_arg": "vm_name",
+     "value_arg": "net_name"
+    }
    }
   },
   "network": {
