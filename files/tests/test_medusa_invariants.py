@@ -1150,6 +1150,60 @@ def test_an_ungrounded_program_is_detected_on_the_exact_shape_that_passed():
     check("and the operator is not asked", _consent.question(grounded) is None)
 
 
+def test_a_witness_that_cannot_fail_does_not_ground_a_program():
+    """rung 11's program, verbatim — the one that inverted its condition and self-vouched.
+
+    MEASURED 2026-07-31, 3/3: the goal is "stop the ones that do NOT answer", the program
+    stops the ones that DO, and it carries an ENSURE asserting that the member it is
+    iterating exists. The rung's checker said FAIL, the ENSURE said PASS, and the ladder
+    recorded CHECKER_DISPUTE — a `harness` verdict — because the taxonomy assumes a
+    program's witness could have failed.
+
+    THE CONVERSE MATTERS MORE THAN THE ALARM HERE. A vacuity rule that over-fires accuses
+    correct programs, so the second half of this test is the real guard: the same predicate
+    OUTSIDE a loop is a legitimate assertion about a named machine, and a count over an
+    attribute the program changed must stay grounding.
+    """
+    from orchestrator.ai.planner.ir import consent as _consent
+    exists = {"shape": "count", "select": {"kind": "vm", "name": "$item"}, "eq": 1}
+    rung11 = {"body": [{"op": "foreach", "select": {"kind": "vm"}, "do": [
+        {"op": "call", "tool": "guest_ping", "args": {"name": "$item"}, "store": "answer"},
+        {"op": "if", "predicate": {"shape": "is", "of": "$answer.alive", "eq": True},
+         "then": [
+            {"op": "ensure", "predicate": exists},
+            {"op": "call", "tool": "stop_vm", "args": {"name": "$item"}}]}]}]}
+    s = _consent.survey(rung11)
+    check("the ENSURE is counted as an assertion", s["asserts"] == 1)
+    check("but it is recognised as vacuous", s["vacuous"] == 1)
+    check("so the program is NOT grounded", s["grounded"] is False)
+    check("and the operator is asked", bool(_consent.question(rung11)))
+
+    # DECLINE WHEN UNSURE — the same shape outside a loop names a specific machine, which
+    # is an ordinary claim about the world and could perfectly well be false.
+    outside = {"body": [{"op": "call", "tool": "stop_vm", "args": {"name": "db"}},
+                        {"op": "ensure", "predicate": {"shape": "count",
+                         "select": {"kind": "vm", "name": "db"}, "eq": 1}}]}
+    check("the same predicate outside a loop is a real assertion",
+          _consent.survey(outside)["vacuous"] == 0)
+    check("so that program IS grounded", _consent.survey(outside)["grounded"] is True)
+
+    # A REAL assertion inside a loop must survive too, or the rule would punish the very
+    # habit it exists to encourage.
+    real = {"body": [{"op": "foreach", "select": {"kind": "vm"}, "do": [
+        {"op": "call", "tool": "add_label", "args": {"name": "$item", "label": "fleet"}},
+        {"op": "ensure", "predicate": {"shape": "count",
+         "select": {"kind": "vm", "label": "fleet"}, "eq": 4}}]}]}
+    check("a count on an attribute the program CHANGED still grounds it",
+          _consent.survey(real)["grounded"] is True)
+    # ...and neither does a non-count shape get judged at all: `reach` and `disjoint` are
+    # left alone deliberately, because a rule that guesses about them would invent faults.
+    reach = {"body": [{"op": "foreach", "select": {"kind": "vm"}, "do": [
+        {"op": "call", "tool": "add_vm_to_network",
+         "args": {"net_name": "core", "vm_name": "$item"}},
+        {"op": "ensure", "predicate": {"shape": "reach", "select": {"kind": "vm"}}}]}]}
+    check("REACH is never called vacuous", _consent.survey(reach)["vacuous"] == 0)
+
+
 def main():
     """Every `test_*` in this module, in definition order — DISCOVERED, not listed.
 

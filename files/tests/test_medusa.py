@@ -455,8 +455,12 @@ def test_an_ungrounded_program_asks_first():
     q = consent.question(acting) or ""
     check("the question names the missing VERDICT", "VERDICT" in q)
     check("and offers both words that could supply one", "ENSURE" in q and "ACHIEVE" in q)
+    # FIELDS, NOT THE WHOLE DICT. This asserted dict equality and broke when `survey` grew
+    # a `vacuous` count — a test failing because a NEW fact was reported, not because an
+    # old one changed. The property here is the three numbers that decide the question.
+    s = consent.survey(acting)
     check("the survey counts the acting statements that prompted it",
-          consent.survey(acting) == {"acts": 1, "asserts": 0, "grounded": False})
+          (s["acts"], s["asserts"], s["grounded"]) == (1, 0, False))
 
 
 def test_derivation_closes_a_countable_gap():

@@ -1268,6 +1268,16 @@ def main(argv=None, sink=None) -> int:
                 _land("OVER_BUDGET" if (rung.best and len(world.calls) > rung.best)
                       else "PASS",
                       f"{len(world.calls)} calls vs best {rung.best}" if rung.best else None)
+            elif res.get("ok") and consent.survey(ran_prog)["vacuous"]:
+                # NOT A DISPUTE — THERE IS NOTHING TO WEIGH. A dispute means two verdicts
+                # disagree and we cannot tell which is wrong from here. That reasoning
+                # assumes the program's witness could have failed. When every assertion it
+                # carries holds however the program behaves, the checker is simply right,
+                # and calling it a dispute files a MODEL error under `harness` — reading
+                # as "the bench might be at fault" on a program that inverted its own
+                # condition. rung 11, 3/3, is exactly this.
+                _land("VACUOUS_WITNESS",
+                      (consent.survey(ran_prog)["why_vacuous"] or [""])[0])
             elif res.get("ok"):
                 # THE HARNESS ACCUSING ITSELF. The program's own ENSURE/ACHIEVE vouched
                 # for the end state and the rung's checker disagrees. One of them is

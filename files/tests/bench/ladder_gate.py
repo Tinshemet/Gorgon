@@ -94,6 +94,12 @@ LAYER = {
     # the [[gorgon-schema-withholding]] trap, and the follow-up is a MEASUREMENT — does
     # one prompt sentence recover them — not an assumption either way.
     "UNGROUNDED": "grounding",
+    # THE MODEL'S, NOT THE HARNESS'S. This is the case CHECKER_DISPUTE used to absorb: the
+    # program's witness "passed" and the checker failed, but the witness could not have
+    # failed, so there were never two verdicts to weigh. rung 11 inverted its own condition
+    # and asserted that the member it was iterating existed — a genuine reasoning error
+    # that read for a day as a possible bench defect.
+    "VACUOUS_WITNESS": "model",
 }
 
 
