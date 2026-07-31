@@ -34,6 +34,19 @@ class Engine:
     # for a model choosing between four options, not for a developer: say what requests it
     # can answer, in the words an operator would use.
     description: str = ""
+    # WHERE THIS ENGINE IS ALLOWED TO RUN — and it is a SAFETY BOUNDARY, not a deployment
+    # note. Only two engines may touch the host: `medusa`, which is Gorgon's own language,
+    # and `qemu`, which is how machines come to exist. Everything else — a crawler, a vision
+    # engine, a scraper — runs INSIDE a virtual machine, because a capability that reaches
+    # the internet or parses untrusted input is exactly the capability that must not have the
+    # host. The machines are already isolated, already disposable, already fingerprinted the
+    # way the operator wants them.
+    #
+    # A guest engine therefore never owns its own hands. Its `execute` is injected and comes
+    # from the host engine that made the machine, so its work reaches the world through the
+    # same gauntlet a VM operation does — one door, not two.
+    runs_on: str = "guest"
+
     # Which intents this engine can serve. An engine that only ANSWERS declares `fetch`; one
     # that acts declares `achieve`. The router uses it to pick a REGIME, not just an engine.
     intents: Tuple[str, ...] = ("fetch",)

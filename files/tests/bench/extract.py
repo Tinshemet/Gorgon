@@ -135,10 +135,15 @@ something else does all of that.
 
 Break the request into goals. Each goal is one thing that must be true at the end.
 
-  count    a number of members must match     "3 vms labelled prod"  -> count, amount 3
+  count    HOW MANY members must exist at    "create a vm named alpha" -> count 1,
+           the end. Naming one thing is a      select vm where name=alpha
+           count of one.                       "3 vms labelled prod"     -> count 3
+  every    every member of a set GAINS A       "put them all on network lab"
+           PROPERTY it may not have yet.        -> every, attr network, value lab
+           Never to name a thing: a name is
+           what a thing IS, not something
+           it is given.
   reach    members must reach each other      "make sure they can all ping each other"
-  every    every member of a set gets a       "put them all on network lab"
-           property                            -> every, attr network, value lab
   per      one new thing per member           "snapshot every running vm"
                                                -> per, make snapshot, link vm
   observe  ask each member something          "ping every vm" -> observe, fact alive
@@ -191,20 +196,66 @@ def to_goals(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
         shape, sel = g.get("goal"), _to_select(g.get("select") or {})
         if not sel.get("kind"):
             continue
-        if shape == "count" and g.get("amount") is not None:
-            out.append({"shape": "count", "select": sel, "eq": int(g["amount"])})
+        if shape == "count":
+            # A MISSING NUMBER MEANS ONE. "Create a vm named alpha" is a count of one and the
+            # prompt now says so in those words, so the model omits `amount` as obvious —
+            # and the goal was being DISCARDED over it. Defaulting is not a guess about
+            # meaning; it is the reading the sentence already had.
+            eq = 1 if g.get("amount") is None else int(g["amount"])
+            # THE CONSTRAINT IN THE WRONG SLOT. It came back as `value: "name=alpha"` at the
+            # goal level rather than in `select.where` — the right MEANING in the wrong
+            # FIELD, which is a slot error and repairable. What is never repaired is a wrong
+            # meaning: that goes back as a failure.
+            stray = g.get("value")
+            if stray and "=" in str(stray) and len(sel) == 1:
+                a, _, v = str(stray).partition("=")
+                spec = (config.KINDS or {}).get(sel.get("kind")) or {}
+                a = (spec.get("aliases") or {}).get(a.strip(), a.strip())
+                if a in set(spec.get("attrs") or ()):
+                    sel = {**sel, a: _coerce(v.strip())}
+            elif g.get("attr") and g.get("value") is not None and len(sel) == 1:
+                spec = (config.KINDS or {}).get(sel.get("kind")) or {}
+                a = (spec.get("aliases") or {}).get(g["attr"], g["attr"])
+                if a in set(spec.get("attrs") or ()):
+                    sel = {**sel, a: _coerce(g["value"])}
+            out.append({"shape": "count", "select": sel, "eq": eq})
         elif shape == "reach":
             out.append({"shape": "reach", "select": sel,
                         "min": int(g.get("amount") or 2)})
         elif shape == "every" and g.get("attr") and g.get("value") is not None:
-            alias = ((config.KINDS or {}).get(sel["kind"]) or {}).get("aliases") or {}
-            out.append({"every": sel,
-                        "must": {alias.get(g["attr"], g["attr"]): _coerce(g["value"])}})
-        elif shape == "per" and g.get("make") and g.get("link"):
-            out.append({"per": sel, "make": g["make"], "link": g["link"]})
+            spec = (config.KINDS or {}).get(sel["kind"]) or {}
+            attr = (spec.get("aliases") or {}).get(g["attr"], g["attr"])
+            if attr == spec.get("key"):
+                # AN IDENTITY IS NOT A PROPERTY, and this is REPAIRED rather than asked for.
+                # "create a vm named alpha" came back as `every vm must be named alpha` —
+                # four of ten failures on 2026-08-01, all the same mistake. A name is what a
+                # thing IS; giving every member of a set one name is not a state any world
+                # can reach. The reading the operator meant is a COUNT OF ONE, and deriving
+                # it costs a line where teaching it costs prompt budget measured to have none.
+                out.append({"shape": "count",
+                            "select": {**sel, attr: _coerce(g["value"])}, "eq": 1})
+            else:
+                out.append({"every": sel, "must": {attr: _coerce(g["value"])}})
+        elif shape == "per" and g.get("make"):
+            link = g.get("link") or _link_between(sel.get("kind"), g["make"])
+            if link:
+                out.append({"per": sel, "make": g["make"], "link": link})
         elif shape == "observe":
             out.append({"observe": sel, "fact": g.get("fact") or "alive"})
     return out
+
+
+def _link_between(source_kind: str, made_kind: str) -> Optional[str]:
+    """Which attribute of the NEW kind names a member of the source kind. Derived.
+
+    A snapshot's `vm`, a page's `crawl` — the tie is an attribute of the thing being made,
+    named for the thing it belongs to. The model dropped `link` and the entire goal was
+    discarded (rung 12, 2026-08-01) when the manifest could have answered it. Ambiguity
+    declines rather than guesses.
+    """
+    spec = (config.KINDS or {}).get(made_kind) or {}
+    hits = [a for a in (spec.get("attrs") or ()) if a == source_kind]
+    return hits[0] if len(hits) == 1 else None
 
 
 def extract(request: str, model: str = None, temp: float = 0.0,

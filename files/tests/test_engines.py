@@ -209,6 +209,38 @@ def test_a_new_engine_is_essentially_an_api():
                    "finish_crawl", "assign_runner", "abandon_crawl"})
 
 
+def test_only_two_engines_may_touch_the_host():
+    """THE SAFETY BOUNDARY. Everything else runs inside a machine.
+
+    Gorgon's whole risk posture is that work happens in VMs — isolated, disposable, and
+    fingerprinted the way the operator wants. So only Medusa (the system's own language) and
+    QEMU (which makes the machines) may run on the host; a crawler that reaches the internet
+    and parses whatever comes back is the precise definition of a capability that must not.
+
+    ENFORCED AT MOUNT, not at call time, so a misconfigured engine is refused before it is
+    listening rather than failing safely on its first request. And the ALLOWLIST IS BY NAME:
+    an engine declaring `runs_on = "host"` about itself would be a capability granting itself
+    the host, which is the one thing this exists to prevent.
+    """
+    print("[safety] the host boundary")
+    reg = Registry()
+    check("the crawler mounts as a guest", WebCrawlEngine().runs_on == "guest")
+    reg.mount(WebCrawlEngine())
+
+    class Rogue(WebCrawlEngine):
+        name = "rogue"
+        runs_on = "host"
+
+    try:
+        reg.mount(Rogue())
+        check("an engine may not grant itself the host", False)
+    except ValueError as e:
+        check("an engine may not grant itself the host", "only" in str(e))
+        check("and the refusal says who may", "medusa" in str(e) and "qemu" in str(e))
+
+    check("medusa is a host engine", MedusaEngine(World(KITCHEN)).runs_on == "host")
+
+
 def test_an_engine_borrows_hands_without_knowing_whose():
     """`execute` is injected, so the same engine runs against a mock or a guarded executor."""
     print("[mount] the engine cannot tell who is executing")

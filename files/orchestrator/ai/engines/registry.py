@@ -23,11 +23,29 @@ class Registry:
     def __init__(self):
         self._mounted: Dict[str, Engine] = {}
 
+    HOST_ENGINES = frozenset({"medusa", "qemu"})
+
     def mount(self, engine: Engine) -> Engine:
         if not getattr(engine, "name", None):
             raise ValueError("an engine must have a name")
         if engine.name in self._mounted:
             raise ValueError(f"{engine.name} is already mounted")
+
+        # THE HOST BOUNDARY, ENFORCED AT MOUNT TIME. Only Gorgon's own language and the thing
+        # that makes machines may touch the host; everything else runs inside a VM. Checking
+        # here rather than at call time means a misconfigured engine cannot be mounted at
+        # all — a capability that reaches the internet does not get to fail safely on its
+        # first request, it gets refused before it is listening.
+        #
+        # The NAME is the allowlist, deliberately, not a flag the engine sets about itself.
+        # An engine declaring `runs_on = "host"` would be a capability granting itself the
+        # host, which is the one thing this boundary exists to prevent.
+        if getattr(engine, "runs_on", "guest") == "host" and engine.name not in self.HOST_ENGINES:
+            raise ValueError(
+                f"{engine.name} claims the host, and only {sorted(self.HOST_ENGINES)} may. "
+                f"A guest engine's hands are injected by the host engine that made its "
+                f"machine.")
+
         self._mounted[engine.name] = engine
         return engine
 

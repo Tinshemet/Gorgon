@@ -34,6 +34,7 @@ class MedusaEngine(Engine):
     description = ("write and run a Gorgon program — plan several steps against the lab, "
                    "in order, and check the result")
     intents = ("fetch", "ensure", "achieve")
+    runs_on = "host"      # Gorgon's own language — the one engine that IS the system
 
     def __init__(self, world, execute=None):
         """`world` carries `kinds`, `seams` and `execute` — the mount contract, nothing else.

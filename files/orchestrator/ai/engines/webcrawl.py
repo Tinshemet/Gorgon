@@ -112,6 +112,10 @@ class WebCrawlEngine(MedusaEngine):
     description = ("crawl or scrape web pages from inside a virtual machine, and record "
                    "which pages answered")
     intents = ("fetch", "ensure", "achieve")
+    # GUEST, AND THIS IS THE POINT OF THE EXAMPLE. A crawler reaches the internet and parses
+    # whatever comes back, which is the precise definition of a capability that must not have
+    # the host. It gets a machine, and its hands belong to whoever made that machine.
+    runs_on = "guest"
 
     def __init__(self, execute: Optional[Callable] = None):
         super().__init__(CrawlWorld(execute))
