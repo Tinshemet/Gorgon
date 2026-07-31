@@ -29,6 +29,25 @@ from ..planner.ir import validate as _validate
 from .base import Engine
 
 
+def _findings_of(world, result) -> List[Dict[str, Any]]:
+    """What the run OBSERVED — the ledger, never the call list.
+
+    A finding is something the world told us; a call is something we asked it. Conflating
+    them would let a reporter say "beta was unreachable" because a probe was ISSUED, which is
+    exactly the inference decision 6 forbids and the reason `reach` demands an answer rather
+    than a success flag.
+    """
+    ledger = getattr(world, "findings", None)
+    if isinstance(ledger, dict) and ledger:
+        return [{"fact": k, "value": v} for k, v in sorted(ledger.items())]
+    if isinstance(ledger, list) and ledger:
+        return list(ledger)
+    # NO OBSERVATIONS IS NOT NO ANSWER. A program that only acted has findings of a
+    # different kind — what it changed — and saying so is better than silence.
+    return ([{"did": tool, **(args or {})} for tool, args in (result.get("calls") or [])]
+            if result.get("ok") else [])
+
+
 class MedusaEngine(Engine):
     name = "medusa"
     description = ("write and run a Gorgon program — plan several steps against the lab, "
@@ -125,6 +144,12 @@ class MedusaEngine(Engine):
         survey = _consent.survey(program)
         return {"ok": bool(result.get("ok")),
                 "calls": result.get("calls") or [],
+                # WHAT WAS OBSERVED, kept apart from what was DONE. The reporter is handed
+                # findings and nothing else, so an engine that returned its calls under this
+                # name would be handing the narrator a list of INTENTIONS to describe as
+                # results — which is the difference between "three machines answered" and
+                # "I asked three machines".
+                "findings": _findings_of(world, result),
                 "program": program,
                 "rendered": _render(program),
                 "grounded": survey["grounded"],

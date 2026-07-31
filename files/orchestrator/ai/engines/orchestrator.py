@@ -31,10 +31,17 @@ class Orchestrator:
     """One registry, one channel, and the loop between them."""
 
     def __init__(self, registry: Registry, channel: Optional[Channel] = None,
-                 route: Optional[Callable] = None, budget: Optional[int] = None):
+                 route: Optional[Callable] = None, budget: Optional[int] = None,
+                 narrate: Optional[Callable] = None):
         self.registry = registry
         self.channel = channel or Channel()
         self.budget = budget
+        # THE REPORTER'S CHANNEL, separate from the extractor's and deliberately so. It is
+        # handed findings and NOTHING ELSE — never the request, never the program — because a
+        # model that can see what was asked writes a fluent answer to the question, and one
+        # that sees only what was found can describe the evidence. Absent, findings come back
+        # raw and the caller narrates them or does not.
+        self._narrate = narrate
         # `route(request, menu, engines) -> name | None`. Injected because it is the one
         # decision a model makes here, and injecting it means the whole orchestrator is
         # testable with a function that picks the first claimant — the same discipline that
@@ -109,4 +116,13 @@ class Orchestrator:
         out = session.close("DONE", result.get("why") or "")
         out["rendered"] = result.get("rendered", "")
         out["grounded"] = result.get("grounded")
+        if self._narrate is not None:
+            from . import reporter as _reporter
+            said = _reporter.report(session.findings, self._narrate)
+            out["answer"] = said["answer"]
+            # THE VERDICT TRAVELS WITH THE SENTENCE. An answer whose claims are not supported
+            # is still returned — suppressing it leaves silence where there was an answer —
+            # but it never arrives looking clean.
+            out["answer_grounded"] = said["grounded"]
+            out["answer_unsupported"] = said["unsupported"]
         return out

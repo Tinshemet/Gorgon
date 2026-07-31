@@ -265,6 +265,75 @@ def test_the_host_boundary_is_structural_not_a_check():
     check("and the engine still owns its own", "dish" in engine.manifest)
 
 
+def test_the_reporter_is_wired_into_the_close_path():
+    """BUILT AND WIRED, in that order and both proven.
+
+    The reporter existed for a commit before anything called it, which is the exact failure
+    this week was spent unwinding — a mechanism believed good because it was written. So this
+    asserts the orchestrator actually reaches it, and that the verdict travels WITH the
+    sentence rather than beside it.
+    """
+    print("[wiring] findings become an answer")
+    reg = _kitchen()
+    goals = [{"shape": "count", "select": {"kind": "dish", "dish_name": "risotto"},
+              "eq": 1}]
+
+    def narrator(prompt, findings):
+        names = [f.get("dish_name") for f in findings if f.get("dish_name")]
+        return {"answer": f"Created {names[0]}." if names else "Nothing was done.",
+                "mentions": names}
+
+    orch = Orchestrator(reg, Channel([stub({"a risotto": goals})]), narrate=narrator)
+    r = orch.handle("a risotto")
+    check("an answer comes back", r.get("answer") == "Created risotto.")
+    check("and it is grounded", r.get("answer_grounded") is True)
+
+    # AN INVENTED CLAIM IS RETURNED FLAGGED, not suppressed. Silence where there was an
+    # answer is its own failure; a confident sentence nobody checked is the worse one.
+    def liar(prompt, findings):
+        return {"answer": "Created paella.", "mentions": ["paella"]}
+
+    reg2 = _kitchen()
+    bad = Orchestrator(reg2, Channel([stub({"a risotto": goals})]),
+                       narrate=liar).handle("a risotto")
+    check("the invented answer still comes back", bad.get("answer") == "Created paella.")
+    check("but flagged ungrounded", bad.get("answer_grounded") is False)
+    check("and the unsupported claim named", "paella" in bad.get("answer_unsupported", []))
+
+    # WITHOUT A NARRATOR, NOTHING IS INVENTED. The default is raw findings, so a caller that
+    # never configured a reporter is not silently handed a model-written sentence.
+    plain = Orchestrator(_kitchen(), Channel([stub({"a risotto": goals})])).handle("a risotto")
+    check("no narrator means no answer field", "answer" not in plain)
+    check("but the findings are still there", bool(plain["findings"]))
+
+
+def test_findings_are_what_was_observed_not_what_was_asked():
+    """A finding is something the world said; a call is something we asked it.
+
+    Conflating them would let a reporter say "beta was unreachable" because a probe was
+    ISSUED — the inference decision 6 forbids, and the reason `reach` demands an answer
+    rather than a success flag.
+    """
+    print("[honesty] findings vs calls")
+    from orchestrator.ai.engines.medusa import _findings_of
+
+    class Observed:
+        findings = {"reachable(beta)": False}
+
+    check("a ledger is used when there is one",
+          _findings_of(Observed(), {"ok": True, "calls": [("x", {})]})
+          == [{"fact": "reachable(beta)", "value": False}])
+
+    class Silent:
+        findings = {}
+
+    got = _findings_of(Silent(), {"ok": True, "calls": [("create_dish", {"dish_name": "x"})]})
+    check("with no observations, what CHANGED is reported instead",
+          got == [{"did": "create_dish", "dish_name": "x"}])
+    check("and a failed run reports nothing rather than guessing",
+          _findings_of(Silent(), {"ok": False, "calls": [("create_dish", {})]}) == [])
+
+
 def test_an_engine_borrows_hands_without_knowing_whose():
     """`execute` is injected, so the same engine runs against a mock or a guarded executor."""
     print("[mount] the engine cannot tell who is executing")
