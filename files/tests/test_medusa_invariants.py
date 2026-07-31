@@ -1262,6 +1262,39 @@ def test_work_abandoned_inside_a_block_is_named_not_silently_dropped():
           ok_res["ok"] and "abandoned" not in ok_res)
 
 
+def test_there_is_exactly_one_noun_lexicon():
+    """`kinds.<k>.nouns` is THE list. A second copy has cost this project three times.
+
+    Its own `_nouns_doc` records two shape-based routers that each hardcoded a synonym set
+    and diverged the same day. A third copy was found 2026-08-01 in
+    `agent/forge_fields.json` — `vm_nouns` — and it had ALSO diverged: it knew `guest` and
+    `instance` while the manifest knew `node`, `server`, `host` and `resource`. Two readers
+    disagreeing about what an operator might call a machine.
+
+    Both words were merged INTO the manifest rather than dropped, because losing a synonym
+    makes a reader worse at the one job the second list existed for.
+    """
+    from orchestrator.ai.planner.ir import master as _m
+    import json as _json
+    import os as _os
+    here = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+
+    nouns = _m.kind_nouns("vm")
+    check("the manifest keeps the words the second list knew",
+          {"guest", "instance"} <= nouns)
+    check("and the ones it already had", {"machine", "box", "node", "server"} <= nouns)
+
+    fields = _json.load(open(_os.path.join(here, "orchestrator/ai/agent/forge_fields.json")))
+    check("forge_fields no longer carries its own copy",
+          "vm_nouns" not in (fields.get("intent") or {}))
+
+    # AND THE READER READS. A removed copy with a caller still hardcoding the old default
+    # would be the same defect wearing a tidier file.
+    body = open(_os.path.join(here, "orchestrator/ai/agent/forge_chat.py")).read()
+    check("forge_chat reads the manifest", "kind_nouns" in body)
+    check("and has no inline noun list", '"instance"]' not in body)
+
+
 def main():
     """Every `test_*` in this module, in definition order — DISCOVERED, not listed.
 

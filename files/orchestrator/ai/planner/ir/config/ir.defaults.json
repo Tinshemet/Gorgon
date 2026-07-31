@@ -316,7 +316,9 @@
     "node",
     "server",
     "host",
-    "resource"
+    "resource",
+    "guest",
+    "instance"
    ],
    "setters": {
     "add_label": {

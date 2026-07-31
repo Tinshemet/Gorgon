@@ -4,13 +4,29 @@
   "safeword_prompt": "Agent is coherent. Sign with a SAFEWORD to seal it (blank to cancel)",
   "intent": {
     "_doc": "Deterministic detection of 'the operator wants to forge an agent/contract'. A message triggers the wizard when it names a contract/agent AND a create-verb, but NOT a VM noun (so 'a vm to test smart contracts' is left to the AI). Data-driven so the trigger words live here.",
-    "forge_verbs": ["forge", "make", "create", "new", "draft", "build", "negotiate", "start", "write"],
-    "vm_nouns": ["vm", "vms", "machine", "guest", "box", "instance"]
+    "forge_verbs": [
+      "forge",
+      "make",
+      "create",
+      "new",
+      "draft",
+      "build",
+      "negotiate",
+      "start",
+      "write"
+    ],
+    "_vm_nouns_removed": "MOVED TO THE MANIFEST 2026-08-01. This list and `kinds.vm.nouns` had already diverged — this one knew `guest` and `instance`, the manifest knew `node`, `server`, `host` and `resource` — so two readers disagreed about what an operator might call a machine. Both words were merged into the manifest and `forge_chat` now reads `master.kind_nouns('vm')`. Do not re-add a copy here: the manifest's own `_nouns_doc` records that this exact defect has been paid for three times."
   },
   "wizard": {
     "_doc": "Behaviour knobs for the chat forge wizard (forge_chat.py). The password needs_input `type` stays 'password' in code (a wire-protocol constant the client keys on to mask input); only the prompt text is config here.",
     "max_password_attempts": 3,
-    "cancel_words": ["cancel", "abort", "quit", "/cancel", "stop"],
+    "cancel_words": [
+      "cancel",
+      "abort",
+      "quit",
+      "/cancel",
+      "stop"
+    ],
     "password_prompt": "Operator password:"
   }
 }

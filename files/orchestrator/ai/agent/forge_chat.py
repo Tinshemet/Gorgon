@@ -53,7 +53,17 @@ def _intent_words():
     intent = forge._load_fields().get("intent", {}) or {}
     verbs = set(intent.get("forge_verbs") or
                 ["forge", "make", "create", "new", "draft", "build", "negotiate", "start", "write"])
-    nouns = set(intent.get("vm_nouns") or ["vm", "vms", "machine", "guest", "box", "instance"])
+    # THE NOUNS COME FROM THE MANIFEST, not from a second list beside it. `forge_fields.json`
+    # carried its own `vm_nouns` and the two had ALREADY DIVERGED: this one knew `guest` and
+    # `instance`, the manifest knew `node`, `server`, `host` and `resource`. Two readers of
+    # the same fact, disagreeing about what an operator might call a machine — which is the
+    # stale-twin defect `kinds.<k>.nouns` was created to end (its own doc says the list must
+    # be ONE list, after two routers diverged the same day they were written).
+    #
+    # The two words this file knew were merged INTO the manifest rather than dropped: losing
+    # a synonym would make forge worse at the single job the second list existed for.
+    from ..planner.ir import master
+    nouns = set(master.kind_nouns("vm"))
     return verbs, nouns
 
 
