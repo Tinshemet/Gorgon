@@ -24,6 +24,20 @@ from __future__ import annotations
 from typing import Any, Dict, List, Tuple
 
 
+def _single(spec: Dict[str, Any], setter: Dict[str, Any]) -> bool:
+    """Is this attribute single-valued? DERIVED, not declared.
+
+    An attribute with an ENUMERATION takes one of its values — `status` is running or
+    stopped, never both — while one without is a collection: a machine carries several
+    labels and sits on several networks. So `attr_values` already answers the question, and
+    a hand-written `single` flag beside it would be a second authority to drift from the
+    first. An explicit flag still wins where a manifest needs to say otherwise.
+    """
+    if "single" in setter:
+        return bool(setter["single"])
+    return setter["attr"] in (spec.get("attr_values") or {})
+
+
 class World:
     """State as `{kind: {key: {attr: value}}}`, and a manifest that says how to change it."""
 
@@ -70,10 +84,19 @@ class World:
                 if member not in rows:
                     return {"success": False, "error": f"no {kind} {member}"}
                 value = args.get(s["value_arg"]) if "value_arg" in s else s.get("value")
-                if s.get("single"):
+                if _single(spec, s):
                     rows[member][s["attr"]] = value
                 else:
-                    rows[member].setdefault(s["attr"], set()).add(value)
+                    held = rows[member].get(s["attr"])
+                    if not isinstance(held, set):
+                        # A SCALAR WHERE A SET WAS EXPECTED is a manifest inconsistency —
+                        # a `create_defaults` entry for an attribute a multi-valued setter
+                        # also writes. Absorb it rather than crash: the world's job is to be
+                        # a world, and a backend that raises destroys the plan around it for
+                        # the same reason a seam may not raise.
+                        held = set() if held is None else {held}
+                    held.add(value)
+                    rows[member][s["attr"]] = held
                 return {"success": True}
 
             for unset_tool, u in (spec.get("unsetters") or {}).items():

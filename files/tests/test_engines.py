@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+"""
+test_engines.py — the mount contract, the registry, sessions, promotion, and routing.
+
+The architecture's own suite. It answers the question the design rests on: is an engine
+really just a manifest plus an adapter, and does the orchestrator really know nothing about
+what any of them do?
+
+NO MODEL ANYWHERE. The channel is stubbed with written-down components, which is not a
+testing convenience — it is the claim. The 13/13 rungs ran the same way, and it means the
+coupling was never to an AI, only to an answer.
+
+Run:  PYTHONPATH=. python3 -m tests.test_engines
+"""
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from orchestrator.ai.engines import (Channel, MedusaEngine, Orchestrator, Registry,
+                                     Session, WebCrawlEngine, describe, stub)
+from orchestrator.ai.engines.session import INTENT_REGIME, rank
+from orchestrator.ai.planner.ir import config
+from tests.bench.generic_world import World
+
+_PASS = 0
+_FAIL = 0
+
+
+def check(label, cond):
+    global _PASS, _FAIL
+    if cond:
+        _PASS += 1
+        print(f"  ok   {label}")
+    else:
+        _FAIL += 1
+        print(f"  FAIL {label}")
+
+
+# A KITCHEN, because a domain Gorgon will never ship is the honest test of a mount contract.
+KITCHEN = {
+    "dish": {"key": "dish_name", "attrs": ["dish_name", "serves"], "nouns": ["dish", "meal"],
+             "create": "create_dish",
+             "setters": {"set_serves": {"attr": "serves", "member_arg": "dish_name",
+                                        "value_arg": "n", "single": True}}},
+}
+RISOTTO = [{"shape": "count", "select": {"kind": "dish", "dish_name": "risotto"}, "eq": 1},
+           {"every": {"kind": "dish", "dish_name": "risotto"}, "must": {"serves": "4"}}]
+
+
+def _kitchen():
+    reg = Registry()
+    reg.mount(MedusaEngine(World(KITCHEN)))
+    return reg
+
+
+def test_an_engine_is_a_manifest_and_an_adapter():
+    """Mount a domain the planner has never seen and plan against it."""
+    print("[contract] a kitchen mounts with no code")
+    reg = _kitchen()
+    orch = Orchestrator(reg, Channel([stub({"risotto for four": RISOTTO})]))
+    r = orch.handle("risotto for four")
+    check("the request completes", r["outcome"] == "DONE")
+    check("the program is grounded", r.get("grounded") is True)
+    check("it costs 2 calls", len(r["calls"]) == 2)
+    check("and the world changed",
+          reg.get("medusa").world().state["dish"]["risotto"]["serves"] == "4")
+
+
+def test_the_default_manifest_is_restored_even_when_a_run_fails():
+    """`config.use_kinds` is acknowledged debt; the one thing it must never do is leak.
+
+    It swaps a module global so a foreign manifest can be validated, which is safe only while
+    nothing else runs inside the block — and utterly unsafe if an exception could leave the
+    wrong manifest live. The restore is in a `finally`; this proves it.
+    """
+    print("[debt] the manifest override always restores")
+    before = sorted(config.KINDS)
+    reg = _kitchen()
+    orch = Orchestrator(reg, Channel([stub({"impossible": [
+        {"shape": "count", "select": {"kind": "dish", "dish_name": "x", "serves": "9"},
+         "eq": 1}]})]))
+    orch.handle("impossible")
+    check("KINDS is what it was", sorted(config.KINDS) == before)
+    with config.use_kinds(KITCHEN):
+        inside = sorted(config.KINDS)
+    check("it really did swap inside the block", inside == ["dish"])
+    check("and restored after", sorted(config.KINDS) == before)
+
+
+def test_the_router_sees_one_line_per_engine():
+    """The reason context stops growing. The router's whole view is names and one-liners."""
+    print("[context] the router's view is O(1) in engines")
+    reg = _kitchen()
+    one = len(reg.menu())
+    reg.mount(WebCrawlEngine())
+    two = len(reg.menu())
+    check("a second engine adds one line", 0 < two - one < 200)
+    check("and the menu holds no tools, kinds or schemas",
+          "create_dish" not in reg.menu() and "attrs" not in reg.menu())
+
+
+def test_nobody_claiming_is_an_answer_not_a_crash():
+    """"Nothing mounted can do that" is useful; failing three steps later is not."""
+    print("[honesty] an unclaimed request is reported")
+    reg = Registry()
+    reg.mount(WebCrawlEngine())
+    orch = Orchestrator(reg, Channel())
+    r = orch.handle("defragment the mainframe")
+    check("outcome is UNCLAIMED", r["outcome"] == "UNCLAIMED")
+    check("and it says what IS mounted", r["mounted"] == ["webcrawl"])
+
+
+def test_an_untranslated_request_names_the_front_seam():
+    """A request nobody could translate never became a request.
+
+    Naming the stage is the point: confusing a translation failure with an engine failure is
+    how a day gets spent debugging the wrong half.
+    """
+    print("[honesty] translation failure is its own outcome")
+    orch = Orchestrator(_kitchen(), Channel([stub({})]))
+    r = orch.handle("make a dish somehow")
+    check("outcome is UNTRANSLATED", r["outcome"] == "UNTRANSLATED")
+    check("no calls were made", not r["calls"])
+
+
+def test_promotion_is_requested_by_the_engine_and_granted_by_the_orchestrator():
+    """The direction matters: an engine asked whether it wants more will always say yes."""
+    print("[promotion] the engine asks, the orchestrator decides")
+    reg = _kitchen()
+    engine = reg.get("medusa")
+    s = Session("x", engine, intent="ensure")
+    check("a session starts in the regime its intent implies", s.regime == "translation")
+    check("it may promote to tree", s.may_promote("tree") is True)
+    check("it may NOT demote", s.may_promote("tool") is False)
+    s.promote("tree", "unsolvable")
+    check("promotion is recorded, not silent", any("promoted" in l for l in s.log))
+
+    # BUDGET IS THE ORCHESTRATOR'S, AND IT MUST BE ABLE TO REFUSE. A tree runs until resolved
+    # or abandoned with cost accruing, so a session with nothing left to spend cannot be
+    # allowed to open one.
+    broke = Session("x", engine, intent="ensure", budget=0)
+    check("a session with no budget cannot promote", broke.may_promote("tree") is False)
+
+    # AN ENGINE THAT DOES NOT SERVE `achieve` CANNOT BE PROMOTED INTO AUTONOMY, however much
+    # budget there is — the ladder is about capability, not only cost.
+    class Answerer(MedusaEngine):
+        intents = ("fetch",)
+    only_answers = Session("x", Answerer(World(KITCHEN)), intent="fetch")
+    check("an answering engine is never promoted to tree",
+          only_answers.may_promote("tree") is False)
+
+
+def test_unsolvable_is_the_promotion_request():
+    """The signal already existed. It was built as a refusal and it is really an ask."""
+    print("[promotion] Unsolvable reaches the orchestrator as `promote`")
+    engine = MedusaEngine(World(KITCHEN))
+    # No tool changes a dish's name once it exists, and nothing can be counted into being
+    # with an attribute no setter owns on a member that is already there.
+    world = engine.world()
+    world.execute("create_dish", {"dish_name": "risotto"})
+    got = engine.run([{"shape": "count",
+                       "select": {"kind": "dish", "dish_name": "risotto", "serves": "4"},
+                       "eq": 1}])
+    check("the engine does not raise", isinstance(got, dict))
+    # It either promotes or completes; what it must never do is fail silently with no reason.
+    check("it either asks for a regime or says why",
+          bool(got.get("promote")) or got.get("ok") or bool(got.get("why")))
+
+
+def test_the_intent_ladder_and_the_regimes_are_one_table():
+    """Written once. A second copy would drift by the end of the week."""
+    print("[ladder] intents map to regimes in exactly one place")
+    check("fetch is the floor", INTENT_REGIME["fetch"] == "tool")
+    check("achieve is not the floor", INTENT_REGIME["achieve"] != "tool")
+    check("the ladder only goes up", rank("tool") < rank("translation") < rank("tree"))
+
+
+def test_a_new_engine_is_essentially_an_api():
+    """The mock crawl engine — a capability Gorgon has never had, mounted and run.
+
+    Deliberately the HARD case: the crawling belongs inside virtual machines, so the engine's
+    world is its own while its HANDS are injected. That is what a real one would do, and it
+    is the property a local-only mock would not have tested.
+    """
+    print("[mock] a capability Gorgon has never had")
+    reg = Registry()
+    reg.mount(WebCrawlEngine())
+    goals = [{"shape": "count", "select": {"kind": "crawl", "crawl_name": "sweep1"}, "eq": 1},
+             {"shape": "count", "select": {"kind": "page", "crawl": "sweep1"}, "eq": 3},
+             {"every": {"kind": "page", "crawl": "sweep1"}, "must": {"fetched": "yes"}},
+             {"observe": {"kind": "page", "crawl": "sweep1"}, "fact": "reachable"}]
+    req = "crawl example.com and check which pages answered"
+    r = Orchestrator(reg, Channel([stub({req: goals})])).handle(req)
+    check("the crawl completes", r["outcome"] == "DONE")
+    check("it is grounded", r.get("grounded") is True)
+    rendered = r.get("rendered", "")
+    check("it starts the crawl before recording pages in it",
+          rendered.index("start_crawl") < rendered.index("record_page"))
+    check("it records a page before fetching it",
+          rendered.index("record_page") < rendered.index("fetch_page"))
+    # REACHABILITY IS A FINDING. Nothing infers it from a fetch succeeding — the crawler that
+    # trusts its own success flags is the one that reports 400 pages and delivers 12.
+    check("and it PROBES rather than assuming", "probe_page" in rendered)
+
+    seen = {t for t, _ in r["calls"]}
+    check("the hands were injected — no tool ran that the manifest did not name",
+          seen <= {"start_crawl", "record_page", "fetch_page", "probe_page",
+                   "finish_crawl", "assign_runner", "abandon_crawl"})
+
+
+def test_an_engine_borrows_hands_without_knowing_whose():
+    """`execute` is injected, so the same engine runs against a mock or a guarded executor."""
+    print("[mount] the engine cannot tell who is executing")
+    seen = []
+
+    def borrowed(tool, args):
+        seen.append(tool)
+        return {"success": True}
+
+    engine = WebCrawlEngine(execute=borrowed)
+    engine.run([{"shape": "count", "select": {"kind": "crawl", "crawl_name": "s"}, "eq": 1}])
+    check("the injected executor was used", "start_crawl" in seen)
+
+
+def main():
+    from tests import _suite
+    sys.exit(_suite.run(sys.modules[__name__], "engines"))
+
+
+if __name__ == "__main__":
+    main()

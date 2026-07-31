@@ -279,6 +279,26 @@ def probe_for(kind: str, fact: str, kinds=None) -> Optional[str]:
     return obs.get("by")
 
 
+def tools_of(kinds=None) -> set:
+    """Every tool the manifest names — the engine's own registry, derived.
+
+    `validate` checks statements against KNOWN TOOLS, and until an engine could supply its
+    own that check silently meant "known to the VM executor". A kitchen's `create_dish` is
+    not a Gorgon tool and never will be, so validating it against Gorgon's registry rejected
+    a correct program. The manifest already names every tool it uses; asking it is one loop.
+    """
+    out = set()
+    for spec in _K(kinds).values():
+        for field in ("create", "delete"):
+            if spec.get(field):
+                out.add(spec[field])
+        out |= set(spec.get("setters") or {})
+        out |= set(spec.get("unsetters") or {})
+        out |= {c["tool"] for c in (spec.get("creators") or {}).values() if c.get("tool")}
+        out |= {o["by"] for o in (spec.get("observed") or {}).values() if o.get("by")}
+    return out
+
+
 def declared(kinds=None) -> Dict[str, str]:
     """Every tool that carries a postcondition, mapped to its kind — for drift tests."""
     out: Dict[str, str] = {}

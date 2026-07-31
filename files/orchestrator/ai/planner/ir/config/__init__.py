@@ -80,6 +80,45 @@ OBSERVED_VALUES  = _c("observed_values")    # true / false / unknown
 OBSERVED_UNKNOWN = _c("observed_unknown")   # the value meaning "nobody asked"
 
 
+class use_kinds:
+    """Run a block against a DIFFERENT manifest. The engine boundary, and nowhere else.
+
+    `KINDS` is a module-level singleton that sixteen places in `validate` and three in
+    `master` read directly, which quietly says "there is one world and it is made of VMs".
+    `effects` and the ghost writer were threaded to take a manifest as an argument; doing the
+    same to `validate` is a real refactor of a module everything depends on, and it is not
+    what today is for.
+
+    SO THIS IS ACKNOWLEDGED DEBT, not a design. It is safe in exactly the conditions the
+    system currently guarantees and no others:
+      * the ghost writer is SYNCHRONOUS and plans against a deep copy — nothing else is
+        running inside the block
+      * it restores in a `finally`, so an exception cannot leave the wrong manifest live
+      * it is used at ONE call site, the Medusa engine's validate
+
+    IT WILL NOT SURVIVE CONCURRENCY. The day two engines validate at once, this is a race,
+    and the fix is to thread `kinds` through `validate` properly rather than to make this
+    cleverer. That is written here so the next reader inherits the reason and not just the
+    trick.
+    """
+
+    def __init__(self, kinds):
+        self._new = kinds
+        self._old = None
+
+    def __enter__(self):
+        global KINDS
+        self._old = KINDS
+        if self._new:
+            KINDS = self._new
+        return self
+
+    def __exit__(self, *exc):
+        global KINDS
+        KINDS = self._old
+        return False
+
+
 def observed(kind: str) -> dict:
     """This kind's findings-sourced attributes -> {fact, by, doc}.
 

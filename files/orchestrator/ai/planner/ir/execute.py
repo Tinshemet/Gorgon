@@ -155,6 +155,7 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
         holds: Optional[Callable[[Dict, Dict], Tuple[bool, str]]] = None,
         params: Optional[Dict[str, Any]] = None,
         known_names: Optional[set] = None,
+        known_tools: Optional[set] = None,
         consent: Any = None,
         intent: Optional[str] = None) -> Dict[str, Any]:
     """Run a program. Returns {ok, scope, calls, failed}.
@@ -165,7 +166,13 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
     ledger, and this module has no business reaching into either. It also means the bench
     world can drive the same visitor the orchestrator does.
     """
-    ok, problems = validate(program, known_names=known_names)
+    # `known_tools` reaches the LAST check too. This re-validates deliberately — a program
+    # about to touch the world is the right place to look again — but it was checking
+    # statements against the VM executor's registry regardless of who was running them, so a
+    # second engine's program passed inspection and was then refused here as "invalid". A
+    # gate that judges by a different standard than the one before it is worse than one
+    # gate, because the disagreement is silent.
+    ok, problems = validate(program, known_names=known_names, known_tools=known_tools)
     if not ok:
         return {"ok": False, "failed": "invalid", "problems": problems,
                 "scope": {}, "calls": []}
