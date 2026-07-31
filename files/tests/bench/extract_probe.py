@@ -46,7 +46,13 @@ def one(rung, paraphrase: bool, model: str, verbose: bool):
         raw = _extract.extract(text, model)
     except Exception as e:
         return "EXTRACT_EMPTY", f"{type(e).__name__}: {e}", 0
+    said_no = _extract.declined(raw)
     goals = _extract.to_goals(raw, text)
+    if said_no and not goals:
+        # A REFUSAL IS ITS OWN OUTCOME, not an empty extraction. "I cannot express this"
+        # is a different event from "I tried and produced nothing", and on the rungs — all
+        # of which ARE expressible — it is a failure worth naming separately.
+        return "DECLINED", said_no[:120], 0
     if verbose:
         print(f"        extracted: {json.dumps(goals)[:300]}")
     if not goals:

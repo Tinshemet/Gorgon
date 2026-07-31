@@ -89,9 +89,25 @@ _SELECT = {
 SCHEMA = {
     "type": "object",
     "properties": {
+        # DECLINING MUST BE LEGAL, or the model routes around the check. This carried
+        # `minItems: 1` and `required: ["goals"]`, which means the GRAMMAR MADE REFUSAL
+        # IMPOSSIBLE — asked to translate "asdkjh qwe ;;; 42" the model could not answer
+        # "that is not a request", so it invented one ("make every vm running") and the
+        # writer built it and the orchestrator reported DONE. Found by the prompt matrix
+        # 2026-08-01, which is exactly what a matrix of six PROMPT KINDS is for: thirteen
+        # valid rungs could never have shown it.
+        #
+        # A schema that forbids the honest answer does not get honesty. It gets a
+        # confident answer to a question nobody asked.
+        "cannot": {
+            "type": "string",
+            "description": ("say WHY, if this is not a request you can express as goals — "
+                            "it is noise, it is ambiguous, or it asks for something these "
+                            "goals cannot say. Leave `goals` empty when you set this."),
+        },
         "goals": {
             "type": "array",
-            "minItems": 1,
+            "minItems": 0,
             "items": {
                 "type": "object",
                 "properties": {
@@ -125,7 +141,8 @@ SCHEMA = {
             },
         }
     },
-    "required": ["goals"],
+    # NOTHING IS REQUIRED. Either answer is a complete one: goals, or a reason there are
+    # none. Requiring `goals` is what made refusal unsayable in the first place.
     "additionalProperties": False,
 }
 
@@ -151,7 +168,11 @@ beta exists, and beta is running. Return one goal for every thing the operator a
   observe  ask each member something          "ping every vm" -> observe, fact alive
 
 `select` names the members a goal is about. `where` narrows it; `except` carves members out.
-Say what the operator asked for and nothing more."""
+Say what the operator asked for and nothing more.
+
+IF IT IS NOT A REQUEST YOU CAN EXPRESS THIS WAY — it is noise, it is too vague to act on, or
+it asks for something these goals cannot say — return NO goals and set `cannot` to the
+reason. That is a correct answer. Inventing a goal nobody asked for is not."""
 
 
 def _to_select(raw: Dict[str, Any]) -> Dict[str, Any]:
@@ -187,6 +208,12 @@ def _coerce(v: str) -> Any:
 
 _REACH_WORDS = {"ping", "reach", "reachable", "connect", "connected", "communicate",
                 "talk", "see", "mesh", "each"}
+
+
+def declined(raw: Dict[str, Any]) -> Optional[str]:
+    """The model's reason for refusing, or None. An answer, not an error."""
+    said = ((raw or {}).get("cannot") or "").strip()
+    return said or None
 
 
 def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
@@ -308,4 +335,9 @@ def assert_enforced(model: str = None) -> bool:
         got = extract("Say hello in one word.", model)
     except Exception:
         return False
-    return isinstance(got, dict) and "goals" in got
+    # THE SHAPE, NOT A PARTICULAR KEY. This asserted `"goals" in got`, which stopped being
+    # true the moment refusal became legal — and the guard then refused to run at all, which
+    # is the right failure but the wrong reason. What proves a grammar is applied is that a
+    # prompt whose answer CANNOT be JSON came back as an object of exactly this schema's
+    # keys; unconstrained generation returns prose, not `{}`.
+    return isinstance(got, dict) and set(got) <= {"goals", "cannot"}
