@@ -244,12 +244,33 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
         return evaluate(pred, scope, holds)
 
     def _block(stmts: List[Dict]) -> Optional[Dict]:
-        """Run statements in order. Returns a failure dict, or None if all ran."""
-        for st in stmts:
+        """Run statements in order. Returns a failure dict, or None if all ran.
+
+        WHAT A NESTED BLOCK DROPS IS RECORDED. A failed predicate returns from here and
+        every statement after it in this block is abandoned — and until 2026-08-01 nothing
+        said so. The comment at the top-level loop CLAIMED these were "reported as
+        unfinished"; they were not, which is this week's recurring defect arriving in the
+        one place it is most expensive: a program can end having quietly not done most of
+        its work while the result names only the top-level tail.
+
+        THEY ARE NAMED, NOT RESUMED, and that is a real distinction rather than a
+        limitation dressed up. A statement inside a `foreach` cannot be replayed by
+        appending a suffix — its loop variable is gone, and so is the branch condition of
+        an `if`. So the honest report is "this did not run and cannot simply be re-run",
+        which is what an operator needs to decide what to do next.
+        """
+        for i, st in enumerate(stmts):
             bad = _one(st)
             if bad is not None:
+                dropped = list(stmts[i + 1:])
+                if dropped:
+                    abandoned.extend(dropped)
                 return bad
         return None
+
+    # Statements inside a block that never ran because something before them failed. Kept
+    # separate from `remaining`: that one is a resumable top-level tail, this one is not.
+    abandoned: List[Dict[str, Any]] = []
 
     def _one(st: Dict) -> Optional[Dict]:
         op = st.get("op")
@@ -466,7 +487,13 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
         written it that way, and the next person debugging an ACHIEVE they never wrote would
         have nothing to go on.
         """
-        return {**res, "promoted": promoted} if promoted else res
+        out = {**res, "promoted": promoted} if promoted else dict(res)
+        if abandoned:
+            # SURFACED ON EVERY RESULT, including successful ones. A program whose loop body
+            # was cut short can still end with its top-level checks passing — which is
+            # precisely the case that must not read as a clean run.
+            out["abandoned"] = list(abandoned)
+        return out
 
     for i, st in enumerate(body):
         bad = _one(st)

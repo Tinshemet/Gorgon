@@ -1049,9 +1049,8 @@ def main(argv=None, sink=None) -> int:
             # it was not enough: para:8 and para:11 printed this line and passed 3/3
             # anyway, so the ladder rewarded acting blind exactly as much as verifying.
             if consent.question(prog):
-                ungrounded += 1
-                print(f"          ?| NO GROUNDING: {consent.survey(prog)['acts']} acting "
-                      f"statement(s), no ENSURE — operator would be asked here")
+                print(f"          ?| NO GROUNDING (draft): {consent.survey(prog)['acts']} "
+                      f"acting statement(s), no ENSURE — operator would be asked here")
             # `intent=` reaches the runtime too, so the authority check in run() —
             # built, enforced, and never once exercised by this benchmark — actually
             # runs against every program the ladder produces.
@@ -1255,6 +1254,18 @@ def main(argv=None, sink=None) -> int:
             # against a rule it was never told. Whether one prompt sentence recovers these
             # cells is a MEASUREMENT to run, not a thing to assume — and if it does, the
             # failure was ours (`language`) and not the model's.
+            # THE PROGRAM THAT RAN IS THE ONE REPORTED ON. This printed the note for the
+            # DRAFT and scored the FINAL program, so 60 cells landed UNGROUNDED while only
+            # 46 printed an explanation — 14 failures with nothing in the log saying why.
+            # Same shape as the two 2026-07-29 misdiagnoses: the artifact printed was not
+            # the artifact judged. The draft note stays, labelled as a draft, because seeing
+            # that a REPAIR fixed grounding is worth knowing.
+            final_survey = consent.survey(ran_prog)
+            if not final_survey["grounded"]:
+                ungrounded += 1
+                print(f"          ?| NO GROUNDING (ran): {final_survey['acts']} acting "
+                      f"statement(s), {final_survey['asserts']} assertion(s) of which "
+                      f"{final_survey['vacuous']} vacuous — this is what was SCORED")
             if passed and consent.question(ran_prog):
                 passed = False
                 _land("UNGROUNDED",
@@ -1309,7 +1320,8 @@ def main(argv=None, sink=None) -> int:
         if revised:
             print(f"   needed revision    : {revised}  (of which recovered: {fixed})")
         if ungrounded:
-            print(f"   NO GROUNDING       : {ungrounded}  (would need operator consent)")
+            print(f"   NO GROUNDING       : {ungrounded}  (counted on the program that RAN, "
+                  f"which is what the outcome column scored)")
     # THE ARTIFACT RATE, ALWAYS PRINTED — including when it is zero. A sanitiser that
     # cleans without counting makes its own workload invisible, and "it got quietly worse"
     # is the failure this whole instrument exists to prevent. Zero is a measurement;

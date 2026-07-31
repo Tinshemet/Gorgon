@@ -1204,6 +1204,64 @@ def test_a_witness_that_cannot_fail_does_not_ground_a_program():
     check("REACH is never called vacuous", _consent.survey(reach)["vacuous"] == 0)
 
 
+def test_work_abandoned_inside_a_block_is_named_not_silently_dropped():
+    """A failed predicate inside a loop cuts the rest of that body — and must SAY so.
+
+    MEASURED 2026-08-01: a `foreach` whose body held a failing ENSURE followed by an
+    `add_label` ended with neither machine labelled, and the result mentioned only the
+    top-level tail. The comment above the top-level loop CLAIMED nested statements were
+    "reported as unfinished". They were not — which is this week's recurring defect (a
+    comment describing behaviour that does not happen) landing where it costs most: a
+    program can end having quietly not done most of its work.
+
+    `remaining` and `abandoned` are DIFFERENT FACTS and must stay separate. The first is a
+    resumable top-level tail — `follow_up` replays it. The second cannot be replayed at all:
+    a statement inside a `foreach` has lost its loop variable, and one inside an `if` has
+    lost the condition that selected it. Naming them together would invite a caller to
+    resume something that cannot be resumed.
+    """
+    from tests.bench.seams import seams as _seams
+    from tests.bench.sim_world import SimWorld as _Sim
+    w = _Sim()
+    for n in ("a", "b"):
+        w.execute("create_vm", {"name": n, "os_type": "linux"})
+    sel, holds = _seams(w)
+    prog = {"body": [
+        {"op": "foreach", "select": {"kind": "vm"}, "do": [
+            {"op": "ensure", "predicate": {"shape": "count",
+                                           "select": {"kind": "vm", "label": "nope"},
+                                           "eq": 9}},
+            {"op": "call", "tool": "add_label",
+             "args": {"name": "$item", "label": "fleet"}}]},
+        {"op": "ensure", "predicate": {"shape": "count", "select": {"kind": "vm"}, "eq": 2}},
+    ]}
+    from orchestrator.ai.planner.ir import run as _run
+    res = _run(prog, w.execute, select=sel, holds=holds, known_names=w.names(),
+               consent=True, intent="achieve")
+    check("the run fails", res["ok"] is False)
+    check("the work really did not happen",
+          all(not v["labels"] for v in w.vms.values()))
+    check("the abandoned statement is NAMED", bool(res.get("abandoned")))
+    check("and it is the call that never ran",
+          (res["abandoned"][0] or {}).get("tool") == "add_label")
+    check("the resumable top-level tail stays SEPARATE",
+          bool(res.get("remaining")) and res["remaining"] != res["abandoned"])
+
+    # A CLEAN RUN MUST NOT CARRY ONE. The field is only meaningful when something was lost,
+    # and a key that is always present is a key nobody reads.
+    w2 = _Sim()
+    w2.execute("create_vm", {"name": "a", "os_type": "linux"})
+    sel2, holds2 = _seams(w2)
+    fine = {"body": [{"op": "call", "tool": "add_label",
+                      "args": {"name": "a", "label": "fleet"}},
+                     {"op": "ensure", "predicate": {"shape": "count",
+                      "select": {"kind": "vm", "label": "fleet"}, "eq": 1}}]}
+    ok_res = _run(fine, w2.execute, select=sel2, holds=holds2, known_names=w2.names(),
+                  consent=True, intent="achieve")
+    check("a program that finished carries no `abandoned`",
+          ok_res["ok"] and "abandoned" not in ok_res)
+
+
 def main():
     """Every `test_*` in this module, in definition order — DISCOVERED, not listed.
 
