@@ -284,7 +284,7 @@
      },
      "os_name": {
       "type": "string",
-      "description": "Specific distro or OS name the user mentioned (e.g. 'mint', 'ubuntu', 'kali', 'fedora'). Always set this when the user names a distro — the system uses it to auto-find the matching ISO."
+      "description": "Distro or OS name the user named (e.g. 'mint', 'kali'). ALWAYS set when a distro is named — it finds the matching ISO."
      },
      "profile": {
       "type": "string"
@@ -306,7 +306,7 @@
      },
      "disk_model": {
       "type": "string",
-      "description": "Disk model string exposed to the guest OS via inxi -D. E.g. 'Samsung SSD 870 EVO', 'WDC WD10EZEX-08WN4A0', 'ST1000LM049-2GH172', 'Samsung SSD 980 PRO', 'Crucial CT500MX500SSD1', 'INTEL SSDPEKNU512GZ'. Supported on sata, nvme, scsi, and ide buses. Not available on virtio."
+      "description": "Disk model string shown to the guest, e.g. 'Samsung SSD 870 EVO'. sata/nvme/scsi/ide only — not virtio."
      },
      "iso_path": {
       "type": "string"
@@ -371,19 +371,19 @@
      },
      "hardened": {
       "type": "boolean",
-      "description": "Enable hardened mode: hides hypervisor CPUID, QEMU seccomp sandbox, forces NAT, disables balloon. Use for security isolation of untrusted guests."
+      "description": "Hides hypervisor CPUID, seccomp sandbox, forces NAT, disables balloon. For isolating untrusted guests."
      },
      "stealth": {
       "type": "boolean",
-      "description": "Enable stealth mode (implies hardened). Applies full hardware fingerprint masking so the VM passes inxi -F as bare-metal hardware: SMBIOS chassis/board/BIOS overrides, PCI vendor spoofing (cirrus-vga, nec-usb-xhci), ACPI OEM ID, CPU flag hiding. Also auto-generates and serves a guest setup script on first launch (Firefox WebGL spoof + qemu_fw_cfg blacklist). Use when the VM must appear as real hardware to the OS and browser fingerprinting."
+      "description": "Full hardware-fingerprint masking so the guest reads as bare metal; implies hardened. Only when the user asks for stealth/undetectable."
      },
      "guest_agent": {
       "type": "boolean",
-      "description": "Enable in-VM command execution (run_guest_command) and liveness checks (guest_ping). Off by default. Non-stealth VMs use the standard qemu-guest-agent over virtio-serial; stealth VMs transparently use a separate PSK-authenticated serial channel instead (no virtio device, so no hardware-fingerprint tell) — same tools, same behavior either way. Only set when the user asks to enable the guest agent / in-VM command execution."
+      "description": "Enable in-VM command execution (run_guest_command) and liveness (guest_ping). Off by default. Only when the user asks for the guest agent."
      },
      "overwrite": {
       "type": "boolean",
-      "description": "If true and a VM with this name already exists, delete it and recreate. Only set this when the user explicitly said to overwrite or replace the existing VM."
+      "description": "If a VM of this name exists, delete and recreate it. Only when the user explicitly said overwrite or replace."
      },
      "extra_args": {
       "type": "array",
@@ -393,38 +393,38 @@
      },
      "manual": {
       "type": "boolean",
-      "description": "Set to true when the user said 'manual' and wants to configure each VM individually during batch creation. The CLI will prompt for os_type, memory_mb, cpu_cores, and disk_size_gb before creating each VM."
+      "description": "Configure each VM individually during batch creation — the CLI prompts per VM. Only when the user says 'manual'."
      },
      "labels": {
       "type": "array",
       "items": {
        "type": "string"
       },
-      "description": "User-defined labels/tags to assign at creation (e.g. ['work_vm', 'test_vm']). Registered machine-wide so they can be reused across VMs and used to filter list_vms."
+      "description": "Labels to assign at creation, e.g. ['work_vm']. Machine-wide, reusable, and filterable in list_vms."
      },
      "template": {
       "type": "string",
-      "description": "Name of a golden-image template (created via mark_as_template) to clone this VM's disk(s) from, instead of creating blank disks. Use when the user says something like 'give it the X template disk' or 'create it from the X template'. Call list_templates to see what's available."
+      "description": "Golden-image template to clone the disk from instead of creating blank disks; see list_templates. Use for 'from the X template'."
      },
      "randomize_root_password": {
       "type": "boolean",
-      "description": "When cloning from a Linux template, offline-edit the new disk's root password to a fresh random value (via virt-customize) instead of inheriting the template's exact password. Only applies with 'template' set on a Linux template; ignored for Windows. Only set when the user asks for a unique/randomized/different password per clone."
+      "description": "With 'template' on Linux: fresh random root password instead of the template's. Ignored for Windows. Only when the user asks for a unique password per clone."
      },
      "randomize_user_password": {
       "type": "boolean",
-      "description": "Same as randomize_root_password, but for the disk's primary (non-root) user account instead — the username is auto-detected from the disk (first account with UID >= 1000). Only applies with 'template' set on a Linux template; ignored for Windows. Only set when the user asks for a unique/randomized user-account password per clone."
+      "description": "As randomize_root_password but for the primary non-root account (auto-detected). Linux templates only."
      },
      "new_username": {
       "type": "string",
-      "description": "Rename the cloned disk's primary (non-root) user account to this — the old username is auto-detected from the disk. Only applies with 'template' set on a Linux template; ignored for Windows. Only set when the user explicitly asks for a unique/different/renamed username per clone. Must be a valid lowercase Linux username."
+      "description": "With 'template' on Linux: rename the cloned primary account to this (valid lowercase Linux username). Only when the user asks to rename the user."
      },
      "randomize_hostname": {
       "type": "boolean",
-      "description": "When cloning from a template (Linux or Windows), offline-edit the new disk's OS-level hostname/computer name to a fresh randomized value instead of inheriting the template's exact one — every clone otherwise shares the identical hostname, a cross-clone fingerprint. Only applies with 'template' set. Only set when the user asks for a unique/randomized/different hostname per clone."
+      "description": "With 'template': give the clone a fresh random hostname instead of inheriting the template's. Only when the user asks for a unique hostname per clone."
      },
      "unattended": {
       "type": "boolean",
-      "description": "Fully automate OS installation instead of showing the interactive installer (Windows and Linux both supported). WIPES the target disk. Only set when the user explicitly asks for unattended/automated/hands-off install."
+      "description": "Fully automate OS installation instead of the interactive installer. WIPES the target disk. Only when the user explicitly asks for unattended/automated install."
      },
      "unattended_username": {
       "type": "string",
@@ -444,7 +444,7 @@
      },
      "unattended_skip_user": {
       "type": "boolean",
-      "description": "Automate everything (disk, locale, network/hardware-check bypass) EXCEPT the account — the installer stops at its normal 'create your account' screen for the user to fill in themselves. Use when the user says something like 'automate everything except creating the user' or 'let me create my own account'."
+      "description": "Automate everything EXCEPT the account screen, which the installer still shows. Use for 'automate everything except creating the user'."
      }
     },
     "required": [
