@@ -46,7 +46,7 @@ def one(rung, paraphrase: bool, model: str, verbose: bool):
         raw = _extract.extract(text, model)
     except Exception as e:
         return "EXTRACT_EMPTY", f"{type(e).__name__}: {e}", 0
-    goals = _extract.to_goals(raw)
+    goals = _extract.to_goals(raw, text)
     if verbose:
         print(f"        extracted: {json.dumps(goals)[:300]}")
     if not goals:

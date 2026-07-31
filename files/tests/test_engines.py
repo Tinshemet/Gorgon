@@ -110,6 +110,15 @@ def test_nobody_claiming_is_an_answer_not_a_crash():
     check("outcome is UNCLAIMED", r["outcome"] == "UNCLAIMED")
     check("and it says what IS mounted", r["mounted"] == ["webcrawl"])
 
+    # A GUEST ENGINE IS NEVER A DESTINATION, even when it plainly claims the words. The
+    # orchestrator reaches Medusa and QEMU; a crawler is something a PROGRAM calls once it
+    # has a machine. Routing to it directly would put a capability that parses untrusted
+    # input one step from the host.
+    r2 = orch.handle("crawl example.com")
+    check("a guest engine is not routed to, however well it claims",
+          r2["outcome"] == "UNCLAIMED")
+    check("but it IS offered as a capability", r2["capabilities"] == ["webcrawl"])
+
 
 def test_an_untranslated_request_names_the_front_seam():
     """A request nobody could translate never became a request.
@@ -184,15 +193,15 @@ def test_a_new_engine_is_essentially_an_api():
     is the property a local-only mock would not have tested.
     """
     print("[mock] a capability Gorgon has never had")
-    reg = Registry()
-    reg.mount(WebCrawlEngine())
     goals = [{"shape": "count", "select": {"kind": "crawl", "crawl_name": "sweep1"}, "eq": 1},
              {"shape": "count", "select": {"kind": "page", "crawl": "sweep1"}, "eq": 3},
              {"every": {"kind": "page", "crawl": "sweep1"}, "must": {"fetched": "yes"}},
              {"observe": {"kind": "page", "crawl": "sweep1"}, "fact": "reachable"}]
-    req = "crawl example.com and check which pages answered"
-    r = Orchestrator(reg, Channel([stub({req: goals})])).handle(req)
-    check("the crawl completes", r["outcome"] == "DONE")
+    # CALLED, NOT ROUTED TO. A guest capability is what a Medusa program reaches for once it
+    # has a machine — `CALL web_crawler_search(vm: $temp)` — so this exercises it the way it
+    # is actually reached, rather than through a door the orchestrator deliberately closed.
+    r = WebCrawlEngine().run(goals)
+    check("the crawl completes", r["ok"] is True)
     check("it is grounded", r.get("grounded") is True)
     rendered = r.get("rendered", "")
     check("it starts the crawl before recording pages in it",
@@ -203,7 +212,7 @@ def test_a_new_engine_is_essentially_an_api():
     # trusts its own success flags is the one that reports 400 pages and delivers 12.
     check("and it PROBES rather than assuming", "probe_page" in rendered)
 
-    seen = {t for t, _ in r["calls"]}
+    seen = {t for t, _ in (r["calls"] or [])}
     check("the hands were injected — no tool ran that the manifest did not name",
           seen <= {"start_crawl", "record_page", "fetch_page", "probe_page",
                    "finish_crawl", "assign_runner", "abandon_crawl"})

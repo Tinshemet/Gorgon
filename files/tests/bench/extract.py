@@ -183,7 +183,11 @@ def _coerce(v: str) -> Any:
     return v
 
 
-def to_goals(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+_REACH_WORDS = {"ping", "reach", "reachable", "connect", "connected", "communicate",
+                "talk", "see", "mesh", "each"}
+
+
+def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
     """The model's answer, in the shape `ghost_writer.cover` takes.
 
     Anything malformed is DROPPED rather than repaired. A goal missing the field its own
@@ -220,6 +224,16 @@ def to_goals(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
                     sel = {**sel, a: _coerce(g["value"])}
             out.append({"shape": "count", "select": sel, "eq": eq})
         elif shape == "reach":
+            # REACH IS NOT INVENTED. Twenty of twenty-three extraction failures on
+            # 2026-08-01 were a `reach` goal the request never asked for, over a set too
+            # small to satisfy it — "create a vm named beta and then launch it" came back
+            # demanding two machines reach each other. The evidence for a reach goal is IN
+            # THE REQUEST, so it is checked there rather than argued with in a prompt. A
+            # slot-level guard, not a judgement about meaning: a request that does mention
+            # reaching keeps its goal untouched.
+            if request and not (_REACH_WORDS & {w.strip(".,!?;:'\"").lower()
+                                                for w in request.split()}):
+                continue
             out.append({"shape": "reach", "select": sel,
                         "min": int(g.get("amount") or 2)})
         elif shape == "every" and g.get("attr") and g.get("value") is not None:

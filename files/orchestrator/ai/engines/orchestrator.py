@@ -56,14 +56,18 @@ class Orchestrator:
         every result so far was measured. When absent the channel is asked, which is the only
         place English becomes structure.
         """
+        # HOST ENGINES ONLY. Medusa turns the prompt into action; QEMU provides the box.
+        # A guest capability — a crawler, a vision engine — is something a Medusa PROGRAM
+        # calls once it has a machine, never somewhere the orchestrator sends a request.
         claimants = self.registry.claimants(request)
         if not claimants:
             # NOBODY CLAIMS IT, and that reaches the operator as an answer rather than a
             # crash. "Nothing mounted can do that" is useful; routing to the general engine
             # and failing three steps later is not.
             return {"outcome": "UNCLAIMED", "engine": None, "regime": None,
-                    "why": "no mounted engine claims this request",
-                    "mounted": [e.name for e in self.registry.engines]}
+                    "why": "no mounted host engine claims this request",
+                    "mounted": [e.name for e in self.registry.engines],
+                    "capabilities": [e.name for e in self.registry.capabilities()]}
 
         chosen = self._route(request, self.registry.menu(), claimants)
         engine = self.registry.get(chosen) if chosen else None

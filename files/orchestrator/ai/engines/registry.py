@@ -62,13 +62,36 @@ class Registry:
         return [self._mounted[n] for n in sorted(self._mounted)]
 
     def claimants(self, request: str) -> List[Engine]:
-        """Every engine that thinks it could answer. May be several; may be none.
+        """Every HOST engine that thinks it could answer. Guest engines are never routed to.
 
-        NONE IS A REAL ANSWER and must reach the operator as one — "nothing mounted can do
-        that" is useful, where silently routing to the general engine and failing later is
-        not.
+        THE CORRECTION OF 2026-08-01, and it matters: the orchestrator does not reach a
+        crawler, a vision engine or a kitchen. It reaches MEDUSA and QEMU — the executor
+        provides the box, Medusa turns the prompt into action either on the host or inside
+        that box. A guest engine is not a destination; it is a CAPABILITY a Medusa program
+        calls, with a machine as one of its arguments:
+
+            STORE temp = NEW vm(os_type: windows)          <- qemu provides the box
+            STORE hits = CALL web_crawler_search(vm: $temp)  <- the guest capability
+            PUBLISH hits                                    <- back to the operator
+
+        Routing to a guest engine directly would put a capability that parses untrusted input
+        one step from the host, which is the boundary `mount` refuses. Keeping guests out of
+        the claimant list means the shortest path to running one always goes through a
+        machine.
         """
-        return [e for e in self.engines if e.claims(request)]
+        return [e for e in self.engines
+                if getattr(e, "runs_on", "guest") == "host" and e.claims(request)]
+
+    def capabilities(self, request: str = "") -> List[Engine]:
+        """Guest engines a Medusa program could CALL — offered, never routed to.
+
+        Separate from `claimants` on purpose. These are the tools a program may reach for
+        once it has a machine to run them in, which is a different question from who serves
+        the request.
+        """
+        return [e for e in self.engines
+                if getattr(e, "runs_on", "guest") != "host"
+                and (not request or e.claims(request))]
 
     def menu(self) -> str:
         """The router's entire context. One line per engine."""
