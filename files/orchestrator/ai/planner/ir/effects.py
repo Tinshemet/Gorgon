@@ -156,16 +156,65 @@ def invert(pred: Dict[str, Any]) -> Optional[tuple]:
         args = dict((spec.get("create_defaults") or {}))
         args[key] = member
         return (creator, args)
-    if len(rest) != 1:
-        return None                       # two attributes at once is two tiles, not one
-    attr, value = next(iter(rest.items()))
-    for tool, s in (spec.get("setters") or {}).items():
-        if s["attr"] != attr:
-            continue
-        if "value_arg" in s:
-            return (tool, {s["member_arg"]: member, s["value_arg"]: value})
-        if s.get("value") == value:
-            return (tool, {s["member_arg"]: member})
+    if len(rest) == 1:
+        attr, value = next(iter(rest.items()))
+        for tool, s in (spec.get("setters") or {}).items():
+            if s["attr"] != attr:
+                continue
+            if "value_arg" in s:
+                return (tool, {s["member_arg"]: member, s["value_arg"]: value})
+            if s.get("value") == value:
+                return (tool, {s["member_arg"]: member})
+
+    # NO SETTER WRITES IT — SO IT IS SET AT BIRTH. A snapshot's `vm` is not an attribute
+    # anyone changes later; it is what the snapshot IS, supplied when it is created. So a
+    # goal naming a member that does not exist yet, with attributes no setter owns, is the
+    # creator's call with those attributes as arguments. Guarded on the attributes being
+    # real ones of the kind, so a typo becomes None rather than a call with an invented
+    # argument.
+    attrs = set(spec.get("attrs") or ())
+    if spec.get("create") and rest and set(rest) <= attrs:
+        args = dict(spec.get("create_defaults") or {})
+        args[key] = member
+        # ATTRIBUTE -> ARGUMENT, where the manifest says they differ. A snapshot's `vm` is
+        # queried as `vm` and passed as `name`; without the mapping the call carried an
+        # argument the tool ignored and the snapshot was taken of nothing.
+        rename = spec.get("create_args") or {}
+        for a, v in rest.items():
+            args[rename.get(a, a)] = v
+        return (spec["create"], args)
+
+
+def forbids(tool: str, args: Dict[str, Any]) -> list:
+    """What must NOT already be true for `tool` to be placeable. Never satisfiable by acting.
+
+    A creator cannot run on a name that already exists, and that is a different kind of
+    requirement from a precondition: a precondition is something to GO AND ACHIEVE, while
+    this is a condition on the world that the writer must accept or give up on. Conflating
+    them is dangerous in one specific way — "x must not exist" is satisfiable by DELETING x,
+    so a writer that treated it as an ordinary goal would destroy a machine to make room for
+    one it was asked to create. It must refuse instead.
+
+    Found 2026-07-31: with creators able to take attributes, `COUNT(SELECT vm WHERE name=x
+    AND os_type=windows) = 1` against an existing linux `x` inverted to `create_vm(name=x,
+    os_type=windows)` — a call the world would reject, for a goal nothing can reach, because
+    no tool CHANGES os_type after birth.
+    """
+    kind = _kind_of(tool)
+    spec = (config.KINDS or {}).get(kind) or {}
+    key = spec.get("key")
+    if not key or tool != spec.get("create") or args.get(key) is None:
+        return []
+    # ALWAYS, for any creator — no special case for the with-attributes form. A creator
+    # cannot run on a name that is taken, full stop, and the simpler rule is also the true
+    # one. It costs nothing on a plain creation goal: `count == 1` already holds when the
+    # member exists, so the writer never reaches the tile to be stopped by this.
+    #
+    # The first version tried to fire only when extra attributes were named, and excluded
+    # anything in `create_defaults` — which cancelled the guard exactly where it was needed,
+    # because os_type IS a default. Narrowing a guard to the case you have in mind is how a
+    # guard ends up not guarding.
+    return [_exists(kind, key, args[key], count=0)]
     return None
 
 

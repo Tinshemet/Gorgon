@@ -98,8 +98,37 @@ def seams(world):
                 return False
             return True
 
+        if kind == "snapshot":
+            # THE THIRD KIND WAS NEVER SELECTABLE. `select` fell through to the VM loop for
+            # anything that was not a network, so `COUNT(SELECT snapshot WHERE vm = 'web')`
+            # was answered by iterating MACHINES — the same defect as the network filter
+            # bug above, in the kind rung 12 exists to test. A manifest row is not enough
+            # if the seam only knows two kinds.
+            out = []
+            for name, snap in sorted(world.snapshots.items()):
+                row = {"snap_name": name, **snap}
+                if all(row.get(k) == v for k, v in sel.items()
+                       if k not in ("kind", "not")):
+                    out.append(name)
+            return out
+
         if kind == "network":
-            return sorted(world.nets)
+            # FILTERS APPLY TO NETWORKS TOO. This returned EVERY network regardless of what
+            # was asked, so `COUNT(SELECT network WHERE net_name = 'dmz') = 1` was answered
+            # by the existence of ANY network at all. Found 2026-07-31 by the ghost writer:
+            # having created `core`, it read `dmz` as already existing, never created it,
+            # and the attach silently did nothing — rungs 6 and 8, the only two rungs that
+            # need a SECOND network, and both were being mis-evaluated. Any program handling
+            # two networks was graded against a seam that could not tell them apart.
+            names = sorted(world.nets)
+            want = sel.get("net_name", sel.get("name"))
+            if want is not None:
+                names = [n for n in names if n == want]
+            carve = sel.get("not") or {}
+            drop = carve.get("net_name", carve.get("name"))
+            if drop is not None:
+                names = [n for n in names if n != drop]
+            return names
         carve = sel.get("not") or {}
         return [n for n, vm in sorted(world.vms.items())
                 if _matches(n, vm, sel, scope)

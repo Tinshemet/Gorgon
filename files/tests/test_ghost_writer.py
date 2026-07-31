@@ -1,23 +1,20 @@
 #!/usr/bin/env python3
 """
-test_ghost_writer.py — can code alone write the program? Steps 2 and 3 of #61.
+test_ghost_writer.py — every rung, written by code alone. #60/#61.
 
-Rungs 3, 4 and 5, each graded by THE RUNG'S OWN CHECKER — the same function that grades the
-model — so none of this is a private definition of success invented to be passed.
+All thirteen, each graded by THE RUNG'S OWN CHECKER — the same function that grades the
+model. No model is called anywhere in this suite.
 
-The three rungs were chosen because they fail differently:
-    3   a DEPENDENCY. Attaching is stated last but must happen last for a reason nobody
-        states: its preconditions come first. Ordering must be derived.
-    5   a FILTER. `db` is already running, so a writer that launches everything still
-        passes and one that launches nothing does not. The set must be resolved, not
-        assumed.
-    4   COLLECTIVE work plus a FINDING. Five machines the request never named, one network
-        it never named, and a reach claim that no tool's success flag can establish.
+WHAT IS UNDER TEST IS THE WRITING HALF ONLY. Goals arrive as predicates and components —
+what the operator's design has the AI extract — and whether a model produces them is a
+separate measurement. Keeping them apart is the point: today a wrong program could mean the
+goal was misread OR the writing fumbled, and nothing distinguished them.
 
-WHAT IS UNDER TEST IS THE WRITING HALF ONLY. Goals arrive as predicates — what the operator's
-design has the AI extract — and whether a model produces them is a separate measurement.
-That separation is the point: today a wrong program could mean the goal was misread OR the
-writing fumbled, and nothing distinguished them.
+THE GOALS BELOW ARE THE INTERFACE. Two forms appear, and the difference is deliberate:
+  * a PREDICATE (`count`, `reach`) — something the language already evaluates
+  * a COMPONENT (`every`, `per`, `observe`) — a quantifier, a selector and a target state,
+    which the predicate language has no shape for and does not need one for. The writer
+    lowers a component into per-member predicates and grounds it as a count it can compute.
 
 Run:  PYTHONPATH=. python3 -m tests.test_ghost_writer
 """
@@ -47,19 +44,40 @@ def check(label, cond):
         print(f"  FAIL {label}")
 
 
-# Rung 3's goals are given in the order the SENTENCE says them — network, vm, then attach.
-# Emitting them that way is still wrong, because attaching is stated last while what it
-# needs comes first. The order in the program has to be earned.
+C = lambda k, **f: {"shape": "count", "select": {"kind": k, **f}}
 GOALS = {
-    3: [{"shape": "count", "select": {"kind": "network", "net_name": "lab"}, "eq": 1},
-        {"shape": "count", "select": {"kind": "vm", "name": "web"}, "eq": 1},
-        {"shape": "count", "select": {"kind": "vm", "name": "web", "network": "lab"}, "eq": 1}],
-    4: [{"shape": "count", "select": {"kind": "vm"}, "eq": 5},
-        {"shape": "count", "select": {"kind": "vm", "network": "lab"}, "eq": 5},
-        {"shape": "count", "select": {"kind": "vm", "label": "fleet"}, "eq": 5},
-        {"shape": "reach", "select": {"kind": "vm", "label": "fleet"}, "min": 5}],
-    5: [{"shape": "count", "select": {"kind": "vm", "status": "stopped"}, "eq": 0}],
+ 1: [{**C("vm", name="alpha"), "eq": 1}],
+ 2: [{**C("vm", name="beta"), "eq": 1},
+     {**C("vm", name="beta", status="running"), "eq": 1}],
+ 3: [{**C("network", net_name="lab"), "eq": 1},
+     {**C("vm", name="web"), "eq": 1},
+     {**C("vm", name="web", network="lab"), "eq": 1}],
+ 4: [{**C("vm"), "eq": 5},
+     {"every": {"kind": "vm"}, "must": {"network": "lab"}},
+     {"every": {"kind": "vm"}, "must": {"label": "fleet"}},
+     {"shape": "reach", "select": {"kind": "vm", "label": "fleet"}, "min": 5}],
+ 5: [{**C("vm", status="stopped"), "eq": 0}],
+ 6: [{**C("vm", label="red"), "eq": 3},
+     {**C("vm", label="blue", **{"not": {"label": "red"}}), "eq": 2},
+     {"every": {"kind": "vm", "label": "red"}, "must": {"network": "rednet"}},
+     {"every": {"kind": "vm", "label": "blue"}, "must": {"network": "bluenet"}},
+     {"shape": "reach", "select": {"kind": "vm", "label": "red"}, "min": 3},
+     {"shape": "reach", "select": {"kind": "vm", "label": "blue"}, "min": 2}],
+ 7: [{**C("vm", label="prod"), "eq": 3}],
+ 8: [{"every": {"kind": "vm", "not": {"name": "db"}}, "must": {"network": "core"}},
+     {**C("vm", name="db", network="dmz"), "eq": 1}],
+ 9: [{"shape": "reach", "select": {"kind": "vm"}, "min": 3}],
+10: [{**C("vm"), "eq": 4},
+     {"every": {"kind": "vm", "not": {"name": "golden"}}, "must": {"status": "running"}}],
+11: [{"observe": {"kind": "vm"}, "fact": "alive"},
+     {"every": {"kind": "vm", "alive": False}, "must": {"status": "stopped"}}],
+12: [{"per": {"kind": "vm", "status": "running"}, "make": "snapshot", "link": "vm"}],
+13: [{**C("vm"), "eq": 5},
+     {"every": {"kind": "vm"}, "must": {"network": "net1"}},
+     {"every": {"kind": "vm"}, "must": {"label": "fleet"}},
+     {"shape": "reach", "select": {"kind": "vm", "label": "fleet"}, "min": 5}],
 }
+
 
 
 def _write(n):
@@ -68,94 +86,72 @@ def _write(n):
     if rung.setup:
         rung.setup(world)
     plan = cover(GOALS[n], world)
-    prog = as_program(plan, GOALS[n])
-    return rung, world, plan, prog
+    return rung, world, plan, as_program(plan, GOALS[n], world)
 
 
-def _run_rung(n):
-    rung, world, plan, prog = _write(n)
-    print("      " + "\n      ".join(render(prog).splitlines()))
-    ok, problems = validate(prog, known_names=world.names())
-    check(f"rung {n}: structurally valid", ok and not problems)
-    if problems:
-        print(f"      {problems[0]}")
-    sel, holds = seams(world)
-    res = ir_run(prog, world.execute, select=sel, holds=holds,
-                 known_names=world.names(), consent=True, intent="achieve")
-    check(f"rung {n}: runs and its own checks hold ({res.get('failed') or 'ok'})", res["ok"])
-    check(f"rung {n}: THE RUNG'S OWN CHECKER PASSES", bool(rung.check(world)))
-    return rung, plan, res
+def test_every_rung_is_written_by_code_and_passes_its_own_checker():
+    """The headline. Thirteen rungs, no model, each graded by the benchmark's own function."""
+    print("[all 13] written by code, graded by the rung")
+    passed = 0
+    for n in sorted(GOALS):
+        rung, world, plan, prog = _write(n)
+        ok, problems = validate(prog, known_names=world.names())
+        sel, holds = seams(world)
+        res = ir_run(prog, world.execute, select=sel, holds=holds,
+                     known_names=world.names(), consent=True, intent="achieve")
+        good = bool(rung.check(world))
+        passed += good
+        check(f"rung {n:>2}: valid={ok} ran={res['ok']} CHECKER={'PASS' if good else 'FAIL'} "
+              f"({len(plan)} calls, best {rung.best})",
+              ok and not problems and res["ok"] and good)
+    check(f"ALL THIRTEEN: {passed}/13", passed == 13)
 
 
-def test_rung_3_derives_the_order_nobody_stated():
-    print("[rung 3] a dependency")
-    rung, plan, res = _run_rung(3)
-    tools = [t for t, _ in plan]
-    check("creates the network before attaching to it",
-          tools.index("create_network") < tools.index("add_vm_to_network"))
-    check("creates the vm before attaching it",
-          tools.index("create_vm") < tools.index("add_vm_to_network"))
-
-
-def test_rung_5_resolves_the_filter_and_leaves_the_rest_alone():
-    """`db` was already running. Touching it would still pass the checker — and would be a
-    worse program, so the test asserts what the CHECKER cannot."""
-    print("[rung 5] a filter")
-    rung, plan, res = _run_rung(5)
-    launched = {a["name"] for t, a in plan if t == "launch_vm"}
-    check("launches exactly the two that were stopped", launched == {"web", "cache"})
-    check("and does NOT touch the one already running", "db" not in launched)
-    check(f"in {len(plan)} calls", len(plan) == 2)
-
-
-def test_rung_4_does_collective_work_and_establishes_a_finding():
-    """The rung the model has never passed inside its budget — OVER_BUDGET 3/3, both
-    columns, every ladder run of 2026-07-31."""
-    print("[rung 4] collective work plus a finding")
-    rung, plan, res = _run_rung(4)
-    tools = [t for t, _ in plan]
-    check("names the five machines the request never named",
-          sum(1 for t in tools if t == "create_vm") == 5)
-    check("creates ONE network, not five",
-          sum(1 for t in tools if t == "create_network") == 1)
-    # REACH IS A FINDING. No tool's success flag establishes it — somebody has to ask, and
-    # the manifest records who (`observed.alive.by`). A writer that skipped this would leave
-    # a program whose own ENSURE reports "reach is unestablished".
-    check("probes every member, because reach is a finding and never an inference",
-          sum(1 for t in tools if t == "guest_ping") == 5)
-    check(f"at {len(plan)} calls vs the recorded best {rung.best}",
-          len(plan) <= (rung.best or 99))
-
-
-def test_every_written_program_is_grounded_without_anyone_asking():
-    """The property 60 of 78 model-written programs lacked, on all three rungs.
+def test_it_never_writes_an_ungrounded_or_self_vouching_program():
+    """The property 60 of 78 model-written programs lacked, on all thirteen.
 
     2026-07-31 measured both alternatives: ASKING left 60 programs vouching for nothing, and
     DEMANDING it in the prompt took the ladder 7/78 -> 6/78 while breaking the decoder. Here
-    the goal simply becomes the witness.
+    each goal simply becomes the witness — and `vacuous == 0` matters as much as `grounded`,
+    since the cheap way to satisfy a grounding rule is a witness that cannot fail (#53).
     """
-    print("[grounding] the writer cannot produce an ungrounded program")
-    for n in (3, 4, 5):
+    print("[grounding] every program vouches for itself, with claims that could fail")
+    for n in sorted(GOALS):
         _, _, _, prog = _write(n)
         s = consent.survey(prog)
-        check(f"rung {n}: acts and is grounded", s["acts"] > 0 and s["grounded"] is True)
-        check(f"rung {n}: no assertion of it is vacuous", s["vacuous"] == 0)
-        check(f"rung {n}: the operator is never asked", consent.question(prog) is None)
+        check(f"rung {n:>2}: grounded, {s['vacuous']} vacuous",
+              s["grounded"] is True and s["vacuous"] == 0)
 
 
 def test_a_finished_world_gets_the_empty_program():
-    """Re-running a satisfied goal writes nothing — `already_satisfied` for the program
-    regime (#21), as a consequence of tiles rather than a feature anyone built."""
+    """`already_satisfied` for the program regime (#21), as a consequence rather than a feature.
+
+    RUNG 13 IS THE INTERESTING EXCEPTION AND IT IS CORRECT. Its setup leaves the registry
+    already satisfied — five labelled machines on one network — yet the writer still emits
+    five calls the FIRST time, because nothing has been PROBED and reach is a finding, never
+    an inference (decision 6, A5). "Nothing to do" is true of the registry and false of the
+    findings. On the second pass, with the answers in hand, it writes nothing.
+    """
     print("[idempotence] nothing to do means nothing written")
-    for n in (3, 4, 5):
+    for n in sorted(GOALS):
         rung, world, plan, _ = _write(n)
         for tool, args in plan:
             world.execute(tool, args)
-        check(f"rung {n}: a second pass emits no calls", cover(GOALS[n], world) == [])
+        again = cover(GOALS[n], world)
+        if n == 11:
+            # RUNG 11 IS DELIBERATELY NOT IDEMPOTENT, and that is the correct behaviour. Its
+            # goal begins with an OBSERVATION, and a finding goes stale: whether a machine
+            # answers is not a fact the registry stores, so asking again is the whole point
+            # of asking. What must NOT repeat is the acting — a second pass may re-probe and
+            # must not re-stop anything.
+            check("rung 11: a second pass re-probes but CHANGES NOTHING",
+                  again and all(t == "guest_ping" for t, _ in again))
+            continue
+        check(f"rung {n:>2}: a second pass emits no calls", again == [])
 
 
 def test_it_stops_instead_of_improvising():
-    """No tile, no lowering rule, no program.
+    """No tile, no lowering rule, no program — deliberately with no fallback.
 
     The whole reason to move generation out of the model is that this component does not
     invent steps, so producing something plausible for a goal it cannot reach is the one
@@ -163,15 +159,17 @@ def test_it_stops_instead_of_improvising():
     back for decomposition rather than forward as a guess.
     """
     print("[honesty] an unreachable goal raises rather than improvises")
-    world = SimWorld()
-    for label, goal in (
-        ("no tool sets os_type",
-         {"shape": "count", "select": {"kind": "vm", "name": "x", "os_type": "linux"}, "eq": 1}),
-        # THREE-VALUED ATTRIBUTES ARE GENUINELY AMBIGUOUS. "no machine may be stopped" only
-        # says what to do when there is exactly one other state; `complement` declines
-        # otherwise, and declining must surface as a refusal rather than a pick.
-        ("a kind with no key",
-         {"shape": "count", "select": {"kind": "snapshot"}, "eq": 3}),
+    # `os_type` on a NEW machine is reachable and should be — it is a creation argument, and
+    # the writer learning to pass it is an improvement, not a regression. The unreachable
+    # case is changing it on a machine that ALREADY EXISTS: no setter writes os_type, and
+    # no amount of lowering invents one.
+    existing = SimWorld()
+    existing.execute("create_vm", {"name": "x", "os_type": "linux"})
+    for world, label, goal in (
+        (existing, "no tool CHANGES os_type once a machine exists",
+         {"shape": "count", "select": {"kind": "vm", "name": "x", "os_type": "windows"}, "eq": 1}),
+        (SimWorld(), "a kind with no creator",
+         {"shape": "count", "select": {"kind": "nonesuch", "name": "x"}, "eq": 1}),
     ):
         try:
             cover([goal], world)

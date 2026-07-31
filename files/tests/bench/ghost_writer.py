@@ -78,6 +78,58 @@ def _lower(goal: Dict[str, Any], select, world) -> List[Dict[str, Any]]:
     is the only shape `effects.invert` speaks. That is the whole of the translation from
     collective language to a program.
     """
+    # `every` — A COMPONENT, NOT A PREDICATE, and the distinction is deliberate. Medusa's
+    # `all` is a COMPOSITE ("every one of these checks holds"), not a universal over a set,
+    # so reusing the name would collide with a shape the language already evaluates.
+    #
+    # This is the operator's design arriving literally: the writer's INPUT is what the AI
+    # extracted — a quantifier, a selector, a target state — not something the predicate
+    # language has to be able to express. What the language must express is the WITNESS,
+    # and `_ground` turns this back into an ordinary count whose number the writer knows
+    # because it resolved the set.
+    if "every" in goal:
+        sel = dict(goal["every"])
+        kind = sel.get("kind")
+        spec = (effects.config.KINDS or {}).get(kind) or {}
+        key = spec.get("key")
+        if not key:
+            return []
+        return [{"shape": "count", "select": {"kind": kind, key: m, **goal["must"]},
+                 "eq": 1} for m in select(sel)]
+
+    # `observe` — ASK, without requiring anything of the answer. Rung 11 needs every
+    # machine pinged before anything can act on WHICH ones answered, and that is not a
+    # reach goal: reach also demands a shared network, which the request never asked for.
+    # The manifest names the asker (`observed.<fact>.by`), so the rule reads it.
+    if "observe" in goal:
+        sel = dict(goal["observe"])
+        kind = sel.get("kind")
+        spec = (effects.config.KINDS or {}).get(kind) or {}
+        key, probe = spec.get("key"), effects.probe_for(kind, goal.get("fact", "alive"))
+        if not key or not probe:
+            return []
+        return [{"_call": (probe, {key: m})} for m in select(sel)]
+
+    # `per` — one NEW member of another kind for each member of a set. Rung 12's snapshots
+    # are the case, and they are the real question it asks: is a third kind one manifest row
+    # or does it need language code? Here it is a row — `snapshot` declares its creator and
+    # its key like anything else, and this rule never mentions snapshots.
+    if "per" in goal:
+        src = dict(goal["per"])
+        skind = src.get("kind")
+        made = goal["make"]
+        mspec = (effects.config.KINDS or {}).get(made) or {}
+        mkey = mspec.get("key")
+        if not mkey:
+            return []
+        taken = set(select({"kind": made}))
+        out = []
+        for m in select(src):
+            name = _fresh_names(made, 1, taken)[0]
+            out.append({"shape": "count",
+                        "select": {"kind": made, mkey: name, goal["link"]: m}, "eq": 1})
+        return out
+
     shape = goal.get("shape")
     sel = dict(goal.get("select") or {})
     kind = sel.get("kind")
@@ -86,14 +138,31 @@ def _lower(goal: Dict[str, Any], select, world) -> List[Dict[str, Any]]:
     if not key:
         return []
 
-    # REACH — a finding, never an inference. Decision 6 and A5 both say the same thing:
-    # unverified is not done, so every member must be ASKED before reach can hold. The
-    # manifest already records who asks (`observed.alive.by`), so this is read, not declared.
+    # REACH — a finding AND a topology, so it lowers into both halves. A5 tightened the
+    # bench's `reach` to demand that every member has ANSWERED and that they share a
+    # network, precisely because production and the bench had drifted on this. So the
+    # lowering has to satisfy both: put them together, then ask.
     if shape == "reach":
         probe = effects.probe_for(kind, "alive")
         if not probe:
             return []
-        return [{"_call": (probe, {key: m})} for m in select(sel)]
+        members = select(sel)
+        subs: List[Dict[str, Any]] = []
+        if not world.common_networks(members):
+            # PREFER A NETWORK THEY MOSTLY ALREADY SHARE. Rung 9 is the case: two of three
+            # sit on `mesh0` and one does not, and the work is finding WHICH is wrong. A
+            # writer that created a fresh network and moved all three would pass the
+            # checker while doing three times the work and discarding what was already
+            # right. Ties break on the name so the same world yields the same program.
+            tally: Dict[str, int] = {}
+            for m in members:
+                for n in world.vms.get(m, {}).get("nets", ()):
+                    tally[n] = tally.get(n, 0) + 1
+            net = (max(sorted(tally), key=lambda n: tally[n]) if tally
+                   else _fresh_names("net", 1, set(world.nets))[0])
+            subs.append({"every": dict(sel), "must": {"network": net}})
+        subs += [{"_call": (probe, {key: m})} for m in select(sel)]
+        return subs
 
     if shape != "count" or key in sel:
         return []
@@ -124,17 +193,61 @@ def _lower(goal: Dict[str, Any], select, world) -> List[Dict[str, Any]]:
     subs: List[Dict[str, Any]] = []
     if filters:
         matched = set(members)
-        for m in [x for x in select({"kind": kind}) if x not in matched][:deficit]:
+        # CANDIDATES MUST RESPECT THE GOAL'S OWN CARVE-OUT. "two blue ones that are not
+        # red" may not be satisfied by relabelling a red one, and rung 6 is exactly that
+        # partition: without this, `count(vm label=blue)=2` cheerfully paints two of the
+        # three machines the previous goal made red. The exclusion is asked of `select`,
+        # which already evaluates carve-outs, rather than reimplemented here.
+        pool = {"kind": kind}
+        if sel.get("not"):
+            pool["not"] = sel["not"]
+        for m in [x for x in select(pool) if x not in matched][:deficit]:
             subs.append({"shape": "count",
-                         "select": {"kind": kind, key: m, **filters}, "eq": 1})
+                         "select": {"kind": kind, key: m,
+                                    **{k: v for k, v in filters.items() if k != "not"}},
+                         "eq": 1})
         deficit -= len(subs)
+    plain = {k: v for k, v in filters.items() if k != "not"}
     for name in _fresh_names(kind, deficit, set(select({"kind": kind}))):
         subs.append({"shape": "count", "select": {"kind": kind, key: name}, "eq": 1})
-        # A created member still has to satisfy the filters the goal asked for.
-        if filters:
+        # A created member still has to satisfy the filters the goal asked for — minus the
+        # carve-out, which scoped the SET and says nothing once a member is named.
+        if plain:
             subs.append({"shape": "count",
-                         "select": {"kind": kind, key: name, **filters}, "eq": 1})
+                         "select": {"kind": kind, key: name, **plain}, "eq": 1})
     return subs
+
+
+def _ground(goal, select):
+    """The predicate that WITNESSES a goal — what the program's closing ENSURE will say.
+
+    A count goal is already its own witness. An `every` component is not a predicate at all,
+    so it becomes one here: every member of S carries the target, which is a count over
+    S-and-target equal to the size of S. The writer knows that number because it resolved
+    the set — the language never has to learn a universal quantifier to check the work.
+    """
+    if "per" in goal:
+        src = dict(goal["per"])
+        made, link = goal["make"], goal["link"]
+        return [{"shape": "count", "select": {"kind": made, link: m}, "eq": 1}
+                for m in select(src)]
+    if "every" not in goal:
+        return goal
+    sel = dict(goal["every"])
+    return {"shape": "count", "select": {**sel, **goal["must"]},
+            "eq": len(select(sel))}
+
+
+def _holds(goal, holds, select):
+    """True when the goal is met — routed through `_ground` so both input forms answer."""
+    g = _ground(goal, select)
+    if isinstance(g, list):
+        for one in g:
+            ok, why = holds(one, {})
+            if not ok:
+                return False, why
+        return True, f"all {len(g)} witness(es) hold"
+    return holds(g, {})
 
 
 def cover(goals: List[Dict[str, Any]], world, trace: List[str] = None) -> List[Call]:
@@ -164,7 +277,18 @@ def _achieve(goal, scratch, plan, trace, depth):
             say(f"probe {tool}({args})")
         return
 
-    ok, why = holds(goal, {})
+    # AN OBSERVATION IS NOT A STATE, so it has no witness and no post-check. "Ask every
+    # machine" is a thing DONE, not a thing that becomes true — the findings it writes are
+    # what later goals read. Verifying it would need a predicate for "has been asked",
+    # which the language does not have and should not grow just to make this uniform.
+    if "observe" in goal:
+        subs = _lower(goal, sel, scratch)
+        say(f"observe {goal['observe']} — {len(subs)} probe(s)")
+        for s_ in subs:
+            _achieve(s_, scratch, plan, trace, depth + 1)
+        return
+
+    ok, why = _holds(goal, holds, sel)
     if ok:
         say(f"{_short(goal)} — ALREADY HOLDS ({why})")
         return
@@ -173,6 +297,16 @@ def _achieve(goal, scratch, plan, trace, depth):
     if tile:
         tool, args = tile
         say(f"{_short(goal)} — not yet -> {tool}")
+        # A CONDITION ON THE WORLD, NOT A GOAL TO PURSUE. `forbids` says what must not
+        # already be true, and the writer's only legal responses are to proceed or to give
+        # up — never to act. Treating it as a goal would let "x must not exist" be satisfied
+        # by deleting x, destroying a machine to make room for one it was asked to create.
+        for no in effects.forbids(tool, args):
+            held, why = holds(no, {})
+            if not held:
+                raise Unsolvable(
+                    f"{tool} cannot be placed here ({why}) — and nothing may act to "
+                    f"change that: {goal}")
         for need in effects.precondition(tool, args):
             _achieve(need, scratch, plan, trace, depth + 1)
         if (tool, args) not in plan:
@@ -189,7 +323,7 @@ def _achieve(goal, scratch, plan, trace, depth):
     for s in subs:
         _achieve(s, scratch, plan, trace, depth + 1)
 
-    ok, why = holds(goal, {})
+    ok, why = _holds(goal, holds, sel)
     if not ok:
         # THE LOWERING RAN AND THE GOAL STILL DOES NOT HOLD, which means the rule was wrong,
         # not the world. Checking is cheap and the alternative is a writer that reports
@@ -199,7 +333,7 @@ def _achieve(goal, scratch, plan, trace, depth):
     say(f"{_short(goal)} — now holds ({why})")
 
 
-def as_program(plan: List[Call], goals: List[Dict[str, Any]]) -> Dict[str, Any]:
+def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None) -> Dict[str, Any]:
     """The plan as a grounded Medusa program.
 
     Grounding is not requested from anyone: each goal becomes the program's own closing
@@ -207,6 +341,19 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]]) -> Dict[str, Any]:
     nothing, and DEMANDING it in the prompt made the ladder worse while breaking the decoder.
     Here it is a list comprehension.
     """
+    scratch = copy.deepcopy(world) if world is not None else None
+    if scratch is not None:
+        for tool, args in plan:
+            scratch.execute(tool, args)
+    select = seams(scratch)[0] if scratch is not None else (lambda s, scope=None: [])
     body = [{"op": "call", "tool": t, "args": a} for t, a in plan]
-    body += [{"op": "ensure", "predicate": g} for g in goals if "_call" not in g]
+    # GROUNDED THROUGH `_ground`, because a goal and a WITNESS are not the same object. An
+    # `every` component is not a predicate the language can evaluate; its witness is a count
+    # over the same set, and the number is resolved against the world AS THE PROGRAM LEAVES
+    # IT — not as it was before, or the witness would assert the wrong total.
+    for g in goals:
+        if "_call" in g or "observe" in g:
+            continue
+        w = _ground(g, select)
+        body += [{"op": "ensure", "predicate": p} for p in (w if isinstance(w, list) else [w])]
     return {"body": body}

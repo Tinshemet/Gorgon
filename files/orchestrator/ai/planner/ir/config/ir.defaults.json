@@ -381,7 +381,10 @@
    "nouns": [
     "restore point",
     "checkpoint"
-   ]
+   ],
+   "create_args": {
+    "vm": "name"
+   }
   }
  },
  "_predicates_doc": "What ENSURE can assert. `comparators` maps each comparator to the SYMBOL it renders as, so adding one is a data change — it used to be a dict in render.py, which meant a new comparator printed as `?`. EVERY shape carries its operand under `select` — the same key foreach uses — and names itself under `shape`. That regularity was measured, not chosen: an earlier form keyed the shape and operand together ({count: <select>, eq: N}) and llama3.1 put the NUMBER where the SET belongs on every attempt, while getting foreach's select right in the same programs. `source` records WHERE the truth comes from: `registry` is current state; `findings` is the probe ledger, because reachability is not registry state and is deliberately never inferred from a tool's success flag. `not`/`all`/`any` are COMPOSITE: their operand is other predicates rather than a set, which is why `source` is neither registry nor findings — they read whatever their children read. All three take parentheses in the written form, so a reader never has to know operator precedence, because there is none. `is` reads a GRAFTED RESULT rather than the world — IS($answer.reachable) = false. It is the only shape whose source is neither the registry nor findings, and it exists because rung 11's condition is a call's answer: which machines are unreachable is knowable only by asking.",
