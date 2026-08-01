@@ -53,10 +53,8 @@ class Plan(Shortcut):
         # time, so every import in this file is paid by every chat session that never types
         # `plan`. The engine layer pulls in the planner, the manifest and the tool registry;
         # none of that should cost a session that is not using it.
-        from orchestrator.ai.active_library import LIBRARY
-        from orchestrator.ai.engines import (Channel, ExecutorEngine, Orchestrator,
-                                             QemuEngine, Registry)
-        from orchestrator.ai.engines.channel import Answer
+        from orchestrator.ai.engines import insession as _insession
+        from orchestrator.ai.engines import rig as _rig
         from orchestrator.pipeline import execute_tool
 
         def guarded(tool, args):
@@ -65,24 +63,6 @@ class Plan(Shortcut):
             # killswitch. Building a second executor here would quietly create a second door,
             # and the whole point of the engine layer is that there is one.
             return execute_tool(tool, args, verbose=verbose)
-
-        def translate(gap, world=None):
-            # STILL IN THE BENCH, AND DELIBERATELY. The extractor is the one component of
-            # this path that is NOT measured well enough to be production — 9/39 — and the
-            # `plan` shortcut exists precisely to earn it evidence. Moving it out would say
-            # it had arrived. The world model made the opposite journey the same day, for
-            # the opposite reason: it was measured, and a production mount depended on it.
-            from tests.bench import extract as _extract
-            try:
-                raw = _extract.extract(str(gap))
-            except Exception as e:
-                return Answer(None, "extractor", f"{type(e).__name__}: {e}")
-            got = _extract.to_goals(raw, str(gap))
-            return Answer(got, "extractor", "") if got else Answer(None, "extractor",
-                                                                   "no usable goal")
-        translate.name = "extractor"
-
-        from orchestrator.ai.engines import insession as _insession
 
         offered = []
 
@@ -95,55 +75,10 @@ class Plan(Shortcut):
                 return _insession.Verdict(_insession.STOP, "dry run — nothing was done")
             return _insession.Verdict(step.kind)
 
-        # STAGED LOWERING'S TWO SEAMS, so a PROMOTION CAN ACTUALLY BUY SOMETHING. Without
-        # them the engine asks for the tree regime, is granted it, and reaches for a
-        # decomposer that is not there — a recorded-but-inert escalation, which is the exact
-        # shape this project has found in three separate places.
-        #
-        # THEY LIVE IN THE BENCH FOR THE SAME REASON THE EXTRACTOR DOES, and it is a
-        # measurement rather than an accident: the model-driven tree scores 4/13 where the
-        # deterministic writer scores 13/13. Moving them into production would say they had
-        # arrived. They are the FALLBACK for a goal the writer refuses, reached only after
-        # `Unsolvable` and only inside a granted tree session, so their cost is paid by
-        # whoever holds the budget.
-        def _staged_seams():
-            try:
-                from tests.bench.ladder import BENCH_MODEL
-                from tests.bench.sim_world import SimWorld
-                from tests.bench.tree_probe import make_emit, make_route
-            except Exception:
-                return None, None
-            stats = {"route_calls": 0, "emit_calls": 0, "route_channel": 0,
-                     "emit_channel": 0}
-            # THE PROMPTS THOSE BUILDERS WRITE DESCRIBE A WORLD, and the one they describe
-            # here is a MODEL of the lab rather than the lab — the same scratch the writer
-            # plans against. A decomposer that could reach the real executor would be a
-            # second door.
-            model_world = SimWorld()
-            return (make_emit(BENCH_MODEL, model_world, None, stats),
-                    make_route(BENCH_MODEL, model_world, stats))
-
-        author, route = _staged_seams()
-        registry = Registry()
-        # BOTH LOAD-BEARING ENGINES, floor first. The executor provides the box — one call,
-        # one answer — and Medusa turns a prompt into a program when one call is not enough.
-        # Mounting only the planner meant every request, however small, went to the thing
-        # that writes programs; the rerouting handles the handover with nobody watching.
-        registry.mount(ExecutorEngine(LIBRARY, guarded))
-        registry.mount(QemuEngine(LIBRARY, guarded, author=author, route=route))
-        # TRY THE FLOOR FIRST. `route` is the one decision a model makes here and there is
-        # no model in this path yet, so the rule is the ladder's own: gravity points down,
-        # and an engine that cannot serve a request says so cheaply.
-        floor_first = lambda req, menu, engines: next(
-            (e.name for e in engines if e.name == "executor"),
-            engines[0].name if engines else None)
-        # THE ANSWER IN ENGLISH, with every claim checked against the findings. Skipped for
-        # a dry run: there is nothing to describe, and asking a model to narrate a preview
-        # would invite it to describe work that did not happen.
-        from orchestrator.ai.engines import reporter as _reporter
-        result = Orchestrator(registry, Channel([translate]), decide=decide,
-                              route=floor_first,
-                              narrate=None if dry else _reporter.narrator()).handle(request)
+        # THE MOUNT LIVES IN `engines/rig.py` so a TEST CAN BUILD THE SAME ONE. Four
+        # capabilities shipped this session with their seam left at `None` — invisible,
+        # because a feature that does not run also does not fail.
+        result = _rig.build(guarded, narrate=not dry, decide=decide).handle(request)
 
         if offered:
             console.print("\n[bold]what it would do[/bold]" if dry
