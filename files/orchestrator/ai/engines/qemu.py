@@ -50,11 +50,50 @@ class LabWorld:
         # killswitch. Building our own executor here would quietly create a second door.
         return self._execute(tool, args)
 
+    def scratch(self):
+        """A MODEL of the lab to plan against — never the lab.
+
+        The ghost writer executes each placed tile on its scratch world to advance the
+        virtual state, which is what makes lowering correct: "every stopped machine" must
+        resolve against the world AS IT WILL BE. Against a real lab that would mean PLANNING
+        PERFORMS THE ACTIONS, and it did — one goal created a machine on the way to producing
+        the plan that would create it.
+
+        So the scratch is a manifest-driven in-memory world seeded from what the lab holds
+        now. The same simulator that runs a kitchen becomes the planning model for the lab,
+        which is the payoff of having made the writer domain-free: there was no second
+        simulator to write.
+
+        It is a SNAPSHOT, deliberately. A plan is computed against the world as it was when
+        planning began, and the program's own ENSUREs are what confirm the world it actually
+        meets — which is the same division of labour `already_satisfied` relies on.
+        """
+        from tests.bench.generic_world import World as _Model
+        model = _Model(self.kinds)
+        # `vms` is a METHOD on ActiveLibrary, not an attribute — the second interface
+        # mistake this mount made against a library it had never been pointed at. Called,
+        # and guarded, because an unreachable library must not read as an empty lab.
+        rows = self._library.vms()
+        for name, rec in (rows or {}).items():
+            row = {k: v for k, v in (rec or {}).items() if not str(k).startswith("_")}
+            model.state.setdefault("vm", {})[name] = row
+        return model
+
     def names(self) -> set:
-        try:
-            return set(self._library.names())
-        except Exception:
-            return set()
+        """Every name the lab already knows. `known_names`, not `names`.
+
+        THIS WAS WRONG FROM THE DAY IT WAS WRITTEN and a bare `except Exception` hid it: the
+        call was `self._library.names()`, which `ActiveLibrary` does not have, so it raised
+        every time and the handler returned an empty set. Silently — so `known_names` was
+        ALWAYS EMPTY, and every `$reference` check the validator makes was being answered
+        against a lab that appeared to contain nothing.
+
+        Found 2026-08-01 the first time this mount was pointed at a real library rather than
+        the sim, which is precisely the risk of shipping a seam nobody has exercised. THE
+        HANDLER IS GONE: a library that cannot answer this is a broken lab and must say so,
+        because the failure it was swallowing is indistinguishable from an empty one.
+        """
+        return set(self._library.known_names())
 
 
 class QemuEngine(MedusaEngine):

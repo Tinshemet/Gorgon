@@ -349,6 +349,65 @@ def test_an_engine_borrows_hands_without_knowing_whose():
     check("the injected executor was used", "start_crawl" in seen)
 
 
+def test_planning_never_touches_the_world_it_plans_against():
+    """PLANNING MUST NOT ACT. Found 2026-08-01, the first time the QEMU mount met a real
+    library rather than the sim.
+
+    `cover` advances its virtual world by EXECUTING each placed tile on a copy — which is
+    what makes lowering correct, since "every stopped machine" must resolve against the world
+    as it WILL BE. That is safe for a sim, whose `execute` mutates its own dict. It is
+    catastrophic for a world whose `execute` reaches OUTSIDE ITSELF: deep-copying a lab
+    copies a reference to the real executor, so PLANNING PERFORMED THE ACTIONS. One goal
+    created a machine on the way to producing the plan that would create it.
+
+    A world may now offer `scratch()` — a model of itself with a simulated executor — and one
+    that does not is assumed to be pure state. The distinction is the WORLD'S to declare,
+    because only it knows whether its hands reach outside.
+
+    This is the highest-consequence bug of the day and the cheapest possible test, so it is
+    asserted directly rather than inferred from a passing plan.
+    """
+    print("[safety] planning is not acting")
+    calls = []
+
+    class Reaching:
+        """A world whose executor reaches outside — what a real lab is."""
+        kinds = KITCHEN
+
+        def __init__(self):
+            self.state = {"dish": {}}
+
+        @property
+        def seams(self):
+            from tests.bench.generic_world import seams as _s
+            return _s(self)
+
+        def names(self):
+            return set()
+
+        def execute(self, tool, args):
+            calls.append((tool, args))
+            return {"success": True}
+
+        def scratch(self):
+            from tests.bench.generic_world import World as _Model
+            return _Model(KITCHEN)
+
+    from orchestrator.ai.planner import ghost_writer as _gw
+    plan = _gw.cover([{"shape": "count", "select": {"kind": "dish", "dish_name": "x"},
+                       "eq": 1}], Reaching())
+    check("a plan is still produced", plan == [("create_dish", {"dish_name": "x"})])
+    check("and the world was NOT touched while planning", calls == [])
+
+    # A WORLD WITH NO `scratch` IS STILL COPIED, so the sim path is unchanged — the fix must
+    # not quietly require every world to grow a method.
+    from tests.bench.generic_world import World
+    pure = World(KITCHEN)
+    _gw.cover([{"shape": "count", "select": {"kind": "dish", "dish_name": "y"}, "eq": 1}],
+              pure)
+    check("a pure-state world is unaffected by planning", pure.state["dish"] == {})
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "engines"))

@@ -300,9 +300,29 @@ def _holds(goal, holds, select):
     return holds(g, {})
 
 
+def _scratch_of(world):
+    """A world safe to PLAN against — a model of it, never the thing itself.
+
+    THE BUG THIS EXISTS FOR, found 2026-08-01 the first time the QEMU mount met a real
+    library: `cover` advances its virtual world by EXECUTING each placed tile on a deep copy.
+    That is safe for a sim, whose `execute` mutates its own dict. It is catastrophic for a
+    world whose `execute` reaches OUTSIDE ITSELF — deep-copying a lab copies a reference to
+    the real executor, so PLANNING PERFORMED THE ACTIONS. A single goal produced a plan and
+    created a machine on the way to producing it, which the program would then have created
+    again.
+
+    So a world may offer `scratch()`: a stand-in with the same state and a simulated
+    executor. A world that does not offer one is assumed to be pure state, which is what a
+    sim is, and is copied. THE DISTINCTION IS THE WORLD'S TO DECLARE, because only it knows
+    whether its hands reach outside.
+    """
+    maker = getattr(world, "scratch", None)
+    return maker() if callable(maker) else copy.deepcopy(world)
+
+
 def cover(goals: List[Dict[str, Any]], world, trace: List[str] = None) -> List[Call]:
     """The calls that make every goal hold, in an order that runs."""
-    scratch = copy.deepcopy(world)
+    scratch = _scratch_of(world)
     plan: List[Call] = []
     for _round in range(4):
         before = len(plan)
