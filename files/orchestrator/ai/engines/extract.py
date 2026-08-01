@@ -189,7 +189,19 @@ def schema(kinds=None) -> Dict[str, Any]:
                             # measurably good at, and the opposite of the `from` field that
                             # was required and withdrawn an hour ago: THAT asked for a span of
                             # prose, this asks for a number the sentence already contains.
-                            "required": ["goal", "select", "amount"],
+                            # BOTH ARE REQUIRED, because the model fills ONE optional field
+                            # and drops the other. With `amount` alone required it found the
+                            # counts and lost the names — "a machine called box1 running
+                            # linux" came back as COUNT(vm)=1 with box1 nowhere, which is the
+                            # request that wrote a lab-wipe. With neither required it lost the
+                            # counts instead.
+                            #
+                            # A NAME IT HAD TO INVENT IS STRIPPED, NOT OBEYED — see `_keep`.
+                            # That is what makes requiring it safe: the model must answer, and
+                            # an answer that echoes the schema back is removed rather than
+                            # built. Requiring a field is only reasonable when a wrong answer
+                            # costs nothing.
+                            "required": ["goal", "select", "amount", "name"],
                             "additionalProperties": False,
                         },
                         {
@@ -721,8 +733,25 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
         identity — so the only selector worth judging is the one that comes out.
         """
         sel = goal.get("select") or goal.get("every") or goal.get("observe") or {}
-        if isinstance(sel, dict) and unusable(sel):
+        if not isinstance(sel, dict):
             return
+        why = unusable(sel)
+        if why:
+            # STRIP THE NAME, KEEP THE GOAL. Dropping the whole component threw away a
+            # perfectly good count because the model had echoed `machines` into the name
+            # slot — the request survived as nothing rather than as most of itself.
+            #
+            # THE KIND IS THE EXCEPTION: a selector whose KIND is unusable describes nothing
+            # at all, and there is no smaller true statement left inside it.
+            kind = sel.get("kind")
+            key = ((config.KINDS or {}).get(kind) or {}).get("key")
+            trimmed = {k: v for k, v in sel.items()
+                       if not (k == key or k in (config.KINDS or {}))
+                       or not unusable({"kind": kind, k: v})}
+            if not trimmed.get("kind") or unusable(trimmed):
+                return
+            goal = {**goal, ("select" if "select" in goal else
+                             "every" if "every" in goal else "observe"): trimmed}
         out.append(goal)
 
     for g in (raw or {}).get("goals") or []:
