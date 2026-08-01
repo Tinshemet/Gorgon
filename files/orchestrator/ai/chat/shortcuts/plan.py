@@ -54,6 +54,11 @@ class Plan(Shortcut):
             return execute_tool(tool, args, verbose=verbose)
 
         def translate(gap, world=None):
+            # STILL IN THE BENCH, AND DELIBERATELY. The extractor is the one component of
+            # this path that is NOT measured well enough to be production — 9/39 — and the
+            # `plan` shortcut exists precisely to earn it evidence. Moving it out would say
+            # it had arrived. The world model made the opposite journey the same day, for
+            # the opposite reason: it was measured, and a production mount depended on it.
             from tests.bench import extract as _extract
             try:
                 raw = _extract.extract(str(gap))

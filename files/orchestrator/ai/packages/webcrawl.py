@@ -88,7 +88,7 @@ class CrawlWorld:
 
     @property
     def seams(self):
-        from tests.bench.generic_world import seams as _generic
+        from ..planner.model_world import seams as _generic
         return _generic(self)
 
     def names(self) -> set:
@@ -104,7 +104,7 @@ class CrawlWorld:
         """
         if self._execute is not None:
             return self._execute(tool, args)
-        from tests.bench.generic_world import World
+        from ..planner.model_world import World
         proxy = World(MANIFEST)
         proxy.state = self.state
         return proxy.execute(tool, args)

@@ -68,7 +68,7 @@ class LabWorld:
         planning began, and the program's own ENSUREs are what confirm the world it actually
         meets — which is the same division of labour `already_satisfied` relies on.
         """
-        from tests.bench.generic_world import World as _Model
+        from ..planner.model_world import World as _Model
         model = _Model(self.kinds)
         # `vms` is a METHOD on ActiveLibrary, not an attribute — the second interface
         # mistake this mount made against a library it had never been pointed at. Called,
