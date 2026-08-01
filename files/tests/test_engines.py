@@ -1541,15 +1541,26 @@ def test_an_intent_that_may_not_act_is_refused_before_the_decider():
         check(f"and the session records it ({granted})",
               any("REFUSED" in l for l in sess.log))
 
-    # AND THE SAME RULE ON THE PLANNER, whose nodes are whole programs rather than single
-    # calls. One field on the step, one gate, two engines that share no code.
+    # AND THE PLANNER NEVER GETS THAT FAR, WHICH IS BETTER THAN BEING REFUSED. The ladder
+    # shapes what Medusa WRITES: under an `ensure` the writer plans a CHECK, so there is no
+    # acting step for the gate to catch. Being refused was the first version of this and it
+    # was a poor answer — the operator asked whether something was so and was told they were
+    # not allowed to ask.
+    #
+    # THE GATE IS STILL THE BACKSTOP and it is proven above, on the floor engine, which
+    # inverts a goal to one call and has no intent-aware planner to shape. Two readings of
+    # one rule: one decides what is written, one refuses what escapes.
     kitchen = World(KITCHEN)
     eng = MedusaEngine(kitchen)
     sess = Session("risotto", eng, intent="ensure", regime="translation")
     out = insession.drive(eng, RISOTTO, sess,
                           lambda st, s: insession.Verdict(insession.RUN))
-    check("medusa is refused the same way", out.get("refused") is True)
+    check("medusa answers instead of refusing", out.get("ok") is True)
     check("and nothing was cooked", not kitchen.state.get("dish"))
+    check("the answer is a verdict, and it is no",
+          {"fact": "holds", "value": False} in
+          [{k: v for k, v in f.items() if k in ("fact", "value")}
+           for f in (out.get("findings") or [])])
 
     # A PROBE IS NOT AN ACT, AND THIS IS THE OTHER HALF OF THE RULE. A `fetch` that could
     # read nothing is a rung with nothing on it, and that is what shipped for a day: every

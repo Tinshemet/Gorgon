@@ -432,12 +432,24 @@ def _scratch_of(world):
 
 
 def cover(goals: List[Dict[str, Any]], world, trace: List[str] = None,
-          temps: List = None) -> List[Call]:
+          temps: List = None, acting: bool = True) -> List[Call]:
     """The calls that make every goal hold, in an order that runs.
 
     `temps` collects `(kind, name)` for every member this plan CREATES as a precondition —
     something nobody asked for, made so the request could happen. `as_program` takes them
     down at the end.
+
+    `acting=False` PLANS A CHECK RATHER THAN A CORRECTION, and it is the writer's side of the
+    intent ladder. This function is the ACHIEVE engine: it closes whatever gap it finds. Under
+    a `fetch` or an `ensure` there is no gap to close — the operator asked what is so — and
+    planning the correction anyway meant an ENSURE request was translated into a program that
+    creates machines and then REFUSED for exceeding its authority. The operator asked a
+    question and was told they were not allowed to ask it.
+
+    PROBES STILL RUN, because you cannot report on what you never asked: `reach` and every
+    observed attribute are read out of the findings ledger, and a check that skipped the
+    probe would answer `unknown` and call it a verdict. What is withheld is every tile that
+    CHANGES something — and an unmet goal is then not a failure, it is the answer.
     """
     scratch = _scratch_of(world)
     asked = _named_in(goals, _kinds(scratch))
@@ -450,7 +462,7 @@ def cover(goals: List[Dict[str, Any]], world, trace: List[str] = None,
         before = len(plan)
         for goal in goals:
             _achieve(goal, scratch, plan, trace, 0, temps=temps, asked=asked,
-                     asked_kinds=asked_kinds)
+                     asked_kinds=asked_kinds, acting=acting)
         if len(plan) == before:
             return plan
         if trace is not None:
@@ -461,7 +473,7 @@ def cover(goals: List[Dict[str, Any]], world, trace: List[str] = None,
 
 
 def _achieve(goal, scratch, plan, trace, depth, internal=False, temps=None, asked=None,
-             asked_kinds=None):
+             asked_kinds=None, acting=True):
     if depth > 12:
         raise Unsolvable("lowering too deep — a goal probably depends on itself")
     say = (lambda m: trace.append("  " * depth + m)) if trace is not None else lambda m: None
@@ -488,12 +500,33 @@ def _achieve(goal, scratch, plan, trace, depth, internal=False, temps=None, aske
         say(f"observe {goal['observe']} — {len(subs)} probe(s)")
         for s_ in subs:
             _achieve(s_, scratch, plan, trace, depth + 1, internal=internal, temps=temps, asked=asked,
-                     asked_kinds=asked_kinds)
+                     asked_kinds=asked_kinds, acting=acting)
         return
 
     ok, why = _holds(goal, holds, sel)
     if ok:
         say(f"{_short(goal)} — ALREADY HOLDS ({why})")
+        return
+
+    if not acting:
+        # A CHECK PLACES NO WORK, AND AN UNMET GOAL IS THE ANSWER. Under `fetch` or `ensure`
+        # the operator asked what is so; closing the gap is exactly the authority they did
+        # not grant, and `Unsolvable` would be wrong too — nothing here failed to find a
+        # plan, there was no plan to find.
+        #
+        # STILL LOWERED, ONLY FOR THE PROBES. A goal about an OBSERVED attribute cannot be
+        # judged until somebody asks, so the sub-goals are walked and every `_call` among
+        # them is placed; the acting tiles inside are refused by this same branch one level
+        # down. That is what lets "are they all reachable?" ping four machines and then
+        # answer, instead of answering `unknown` and calling it a verdict.
+        try:
+            subs = _lower(goal, sel, scratch)
+        except Exception:
+            subs = []
+        for s_ in subs:
+            _achieve(s_, scratch, plan, trace, depth + 1, internal=internal, temps=temps,
+                     asked=asked, asked_kinds=asked_kinds, acting=False)
+        say(f"{_short(goal)} — does not hold ({why}), and a {'check'} does not close it")
         return
 
     # THE OPERATOR'S OWN LIBRARY IS TRIED FIRST, and this is the whole of "can it call what
@@ -545,7 +578,7 @@ def _achieve(goal, scratch, plan, trace, depth, internal=False, temps=None, aske
         # whether it is the program's to clean up afterwards.
         for need in effects.precondition(tool, args, _kinds(scratch)):
             _achieve(need, scratch, plan, trace, depth + 1, internal=True, temps=temps, asked=asked,
-                     asked_kinds=asked_kinds)
+                     asked_kinds=asked_kinds, acting=acting)
         if (tool, args) not in plan:
             plan.append((tool, args))
             scratch.execute(tool, args)
@@ -584,7 +617,7 @@ def _achieve(goal, scratch, plan, trace, depth, internal=False, temps=None, aske
         # said more precisely — "every machine running" becomes one goal per machine, and
         # each is still theirs. Only `precondition` marks work nobody requested.
         _achieve(s, scratch, plan, trace, depth + 1, internal=internal, temps=temps, asked=asked,
-                     asked_kinds=asked_kinds)
+                     asked_kinds=asked_kinds, acting=acting)
 
     ok, why = _holds(goal, holds, sel)
     if not ok:
@@ -694,13 +727,20 @@ def _as_statement(tool: str, args: Dict[str, Any], kinds) -> Dict[str, Any]:
 
 
 def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
-               temps: List = None) -> Dict[str, Any]:
+               temps: List = None, witness: bool = True) -> Dict[str, Any]:
     """The plan as a grounded Medusa program.
 
     Grounding is not requested from anyone: each goal becomes the program's own closing
     witness. Measured 2026-07-31 — ASKING a model for it left 60 of 78 programs vouching for
     nothing, and DEMANDING it in the prompt made the ladder worse while breaking the decoder.
     Here it is a list comprehension.
+
+    `witness=False` IS THE BOTTOM RUNG OF THE LADDER, and only that. A FETCH answers with
+    DATA — "how many are there, list them" — and `intent._PERMITS` does not license it an
+    `ensure`, because a verdict is the rung above. So a fetch program asks, publishes what
+    it found, and passes judgement on nothing. Every other intent grounds, and the flag is
+    named for what it withholds rather than for the intent, because this module has no
+    business knowing the ladder's words.
     """
     # THE SAME SCRATCH `cover` USES, AND FOR THE SAME REASON. This deep-copied instead, which
     # is the exact bug `_scratch_of` was written for — a deep copy of a world whose hands
@@ -778,7 +818,7 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
     # over the same set, and the number is resolved against the world AS THE PROGRAM LEAVES
     # IT — not as it was before, or the witness would assert the wrong total.
     for g in goals:
-        if not groundable(g):
+        if not witness or not groundable(g):
             continue
         w = _ground(g, select)
         body += [{"op": "ensure", "predicate": p} for p in (w if isinstance(w, list) else [w])]

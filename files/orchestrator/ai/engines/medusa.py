@@ -500,11 +500,17 @@ class MedusaEngine(Engine):
         # unvouched-for because part of it was an observation.
         vouched = [r.get("grounded") for r, gs in ran_nodes
                    if any(_gw.groundable(g) for g in gs) and r.get("grounded") is not None]
-        out = {"ok": True, "calls": calls, "why": None,
+        # THE VERDICTS THE NODES REACHED, carried across the join. See `_execute_plan`.
+        verdicts = [r["verdict"] for r, _ in ran_nodes if r.get("verdict")]
+        # AND ITS REASON. "count is 4, wanted == 9" IS the answer to an ensure, and a join
+        # that kept the verdict while dropping the sentence would report `holds: false` with
+        # nothing saying what was found.
+        said = next((v["why"] for v in verdicts if v.get("why")), None)
+        out = {"ok": True, "calls": calls, "why": said,
                # THE WHOLE RUN'S CALLS, not one node's. `_findings_of` falls back to what was
                # done when the world observed nothing, and handing it a single node would
                # report a quarter of the work as all of it.
-               "findings": _findings_of(self._world, {"ok": True, "calls": calls}),
+               "findings": _findings_of(self._world, {"ok": True, "calls": calls}) + verdicts,
                "rendered": "\n".join(r.get("rendered", "") for r, _ in ran_nodes).strip(),
                "grounded": all(vouched) if vouched else None}
         if len(ran_nodes) == 1:
@@ -653,6 +659,20 @@ class MedusaEngine(Engine):
                 if planned.get("promote") else planned.get("result", planned)
         return self._execute_plan(planned, components, session)
 
+    @staticmethod
+    def _corrects(session) -> bool:
+        """May this session CLOSE a gap, or only report one?
+
+        ONE READING OF THE LADDER, ASKED TWICE — once by `_plan`, to decide what to write,
+        and once by `_execute_plan`, to decide whether a false assertion is a failure or an
+        answer. Written here so the two cannot drift: they are the same question about the
+        same session, and a version where the writer planned a check while the reader
+        expected a correction would report every verdict as a broken run.
+        """
+        from ..planner.ir import intent as _intent
+        want = getattr(session, "intent", None)
+        return want is None or _intent.permits(want)
+
     def _plan(self, components: List[Dict[str, Any]], session=None) -> Dict[str, Any]:
         """Everything up to the first side effect. Returns a plan, or the reason there
         cannot be one.
@@ -690,9 +710,22 @@ class MedusaEngine(Engine):
         # machine is still there. The whole provenance rule — a machine the operator never
         # named is the program's own and goes away after the witness — was implemented, tested
         # in the writer, and unreachable from production.
+        # WHAT THE OPERATOR GRANTED DECIDES WHAT IS WRITTEN, not only what is allowed to run.
+        #
+        # `cover` is the ACHIEVE engine — it closes whatever gap it finds — and it was called
+        # for every intent. So an ENSURE request became a program that CREATES machines and
+        # was then refused for exceeding its authority: the operator asked whether something
+        # was so and was told they were not allowed to ask. Measured, on "are there nine
+        # machines?" against a lab holding four: REFUSED, `a ensure may not change the lab`.
+        #
+        # A check is not a correction with the acting removed afterwards; it is a different
+        # program, and it has to be written as one. The gate stays where it is — two readings
+        # of the same rule, one shaping the plan and one refusing what escapes it.
+        want = getattr(session, "intent", None)
+        corrects = self._corrects(session)
         temps: List = []
         try:
-            plan = _gw.cover(components, world, temps=temps)
+            plan = _gw.cover(components, world, temps=temps, acting=corrects)
         except _gw.Unsolvable as e:
             # THE PROMOTION REQUEST. Built as an honest refusal — no tile, no rule, will not
             # improvise — and under the engine architecture that is exactly what asking for
@@ -701,7 +734,12 @@ class MedusaEngine(Engine):
             return {"ok": False, "promote": "tree", "why": str(e),
                     "calls": [], "program": None}
 
-        program = _gw.as_program(plan, components, world, temps=temps)
+        # A FETCH ANSWERS WITH DATA AND NEVER WITH A VERDICT — `intent._PERMITS` does not
+        # license it an `ensure`, because judging is the rung above reading. So the bottom
+        # rung writes probes and a PUBLISH, and the findings carry what was seen.
+        from ..planner.ir import intent as _intent
+        program = _gw.as_program(plan, components, world, temps=temps,
+                                 witness=want != _intent.FETCH)
         if not program["body"]:
             # NOTHING OWED. The correct answer to a finished world is the empty program, and
             # `validate` rejects an empty body — right for something a model wrote, wrong for
@@ -802,6 +840,38 @@ class MedusaEngine(Engine):
                       # can ask a question and one that cannot.
                       acting_tools=_effects.actors(self.manifest))
         survey = _consent.survey(program)
+        # A CHECK THAT SAYS NO IS AN ANSWER, NOT A FAILURE.
+        #
+        # `run` reports an unsatisfied ENSURE as `failed: unsatisfied`, which is right for an
+        # ACHIEVE — there the assertion is a precondition the plan was built on, and its
+        # falsity means the plan was wrong. Under an `ensure` the assertion IS THE REQUEST,
+        # and reporting "count is 4, wanted == 9" as a failed run tells the operator their
+        # question broke rather than answering it.
+        #
+        # SOUND ONLY BECAUSE OF THE LINE ABOVE. This can be read as the verdict precisely
+        # because a non-acting program contains nothing but the checks the operator asked
+        # for — no preconditions, no corrections, nothing whose falsity would mean something
+        # else. Under an ACHIEVE the two are genuinely indistinguishable from here, and the
+        # branch is not taken.
+        corrects = self._corrects(session)
+        verdict = None
+        if not corrects and result.get("failed") == "unsatisfied":
+            verdict = {"fact": "holds", "value": False, "why": result.get("why") or ""}
+        elif not corrects and result.get("ok") and survey["asserts"]:
+            verdict = {"fact": "holds", "value": True, "why": result.get("why") or ""}
+        if verdict is not None:
+            return {"ok": True, "calls": result.get("calls") or [],
+                    "findings": (_findings_of(world, {"ok": True, **result}) or []) + [verdict],
+                    # NAMED, NOT LEFT TO BE RECOGNISED IN A LIST. `_joined` rebuilds findings
+                    # from the world's LEDGER, which is right for observations and wrong for
+                    # this: a verdict is something the engine DETERMINED, not something the
+                    # world was asked. Without its own key it was dropped on every path that
+                    # joins nodes — so an ENSURE answered correctly and reported nothing.
+                    "verdict": verdict,
+                    "published": result.get("published") or [],
+                    "program": program, "rendered": _render(program),
+                    "grounded": survey["grounded"], "vacuous": survey["vacuous"],
+                    "why": verdict["why"]}
         return {"ok": bool(result.get("ok")),
                 "calls": result.get("calls") or [],
                 # WHAT WAS OBSERVED, kept apart from what was DONE. The reporter is handed
