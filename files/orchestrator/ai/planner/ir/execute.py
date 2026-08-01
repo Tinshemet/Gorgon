@@ -20,7 +20,21 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from . import config, consent as _consent, intent as _intent, refs
 from .. import procedures as _procs
+
+
 from .validate import coerce_body, validate
+
+
+def _books():
+    """The creation ledger, imported lazily.
+
+    LAZY BECAUSE THE LEDGER SITS ABOVE THIS MODULE. `books` reconciles the Active Library
+    AND the findings, so importing it at module load would point the dependency arrow the
+    wrong way through the whole planner — and would make `ir/` unimportable without it,
+    which is the property that keeps the language testable on its own.
+    """
+    from ...books import ledger
+    return ledger
 
 
 class Unsatisfied(Exception):
@@ -65,6 +79,19 @@ def _amount(raw: Any, scope: Dict[str, Any]) -> int:
     if isinstance(val, str) and val.lstrip("-").isdigit():
         return max(0, int(val))
     return 1
+
+
+def _clock() -> float:
+    """WHEN, for the creation ledger and nothing else.
+
+    THE ONE PLACE THIS MODULE READS A CLOCK, and it is worth saying why it is allowed here
+    when `procedures.due` insists the caller supplies it. A schedule's `now` DECIDES
+    something — it changes what runs — so a module that read it could not be tested without
+    waiting. A ledger timestamp decides nothing; it RECORDS when a slot was taken, and a
+    lease is judged against it later by a caller that supplies its own `now`.
+    """
+    import time
+    return time.time()
 
 
 def _mint(kind: str, var: str, i: int, n: int) -> str:
@@ -375,7 +402,36 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
                 call_args = {**extra, key_arg: nm}
                 if source and chosen.get("from"):
                     call_args[chosen["from"]] = source
-                _do(chosen["tool"], call_args)
+                # THE RECORD PRECEDES THE OBJECT. The slot is reserved BEFORE the creator
+                # runs, which inverts the ordering every other record in Gorgon uses — the
+                # event log, the findings and the library's updates are all written after the
+                # thing happened.
+                #
+                # WHAT IT BUYS is the window between "NEW starts" and "the creator returns",
+                # in which the object exists in no record at all: a reader cannot tell "not
+                # started" from "being built", and IF THE PROCESS DIES THERE IS NO TRACE IT
+                # WAS EVER ATTEMPTED. The trap is that a sweep cannot catch that either,
+                # because there is nothing to sweep — so the injection is what makes the
+                # guarantee reachable rather than an improvement on it.
+                #
+                # IT NEVER BREAKS A RUN. A ledger that cannot be written is a book-keeping
+                # failure, and refusing to create a machine because a log file is read-only
+                # would be the record governing the world instead of describing it.
+                slot, books = None, None
+                try:
+                    books = _books()
+                    slot = books.LEDGER.reserve(nm, kind, _clock(), by="new")
+                except Exception:
+                    slot = None
+                out = _do(chosen["tool"], call_args)
+                if slot is not None:
+                    try:
+                        good = (out or {}).get("success", True)
+                        books.LEDGER.settle(
+                            slot, books.EXIST if good else books.FAILED, _clock(),
+                            why="" if good else str((out or {}).get("error") or ""))
+                    except Exception:
+                        pass
             # One resource binds its name; several bind the LIST, so `foreach in` can
             # iterate what was just created — before it has any attribute to query by.
             scope[st["var"]] = names[0] if n == 1 else names
