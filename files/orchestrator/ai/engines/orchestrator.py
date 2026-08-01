@@ -1,6 +1,12 @@
 """orchestrator.py — route a request to an engine, run a session, answer.
 
-    user -> /sync -> which engine -> in-session -> [promote?] -> findings -> answer
+    user -> [ /sync -> route -> IN-SESSION: engine <-> orchestrator, until done ] -> answer
+
+THE OPERATOR SEES THE ENDS, NEVER THE MIDDLE. Everything between the prompt and the answer is
+the IN-SESSION: the engine reports what it could and could not close, the orchestrator decides
+whether to grant more, and that repeats — a tree — until the work is done or abandoned. The
+record of it comes back under `in_session` so a wrong result can be traced to the stage that
+caused it, and so that nothing user-facing renders it by accident.
 
 It knows three things and none of them are domain knowledge: who is mounted, who claims a
 request, and what to do when an engine asks for help. It never learns what a VM is, what a

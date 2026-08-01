@@ -42,9 +42,19 @@ def rank(regime: str) -> int:
 class Session:
     """One request, one engine, one regime — plus what it has spent and been told.
 
-    NOT A CONVERSATION. A session is bounded work with a cost and a verdict; the back-and-
-    forth of a tree lives INSIDE one, as nodes. Keeping that distinction means "close" is a
-    decision about work rather than about a chat window.
+    THE IN-SESSION IS THE PART THE OPERATOR DOES NOT SEE. It is the back-and-forth between
+    the orchestrator and an engine — the engine reports what it could and could not close,
+    the orchestrator decides whether to grant more, and that repeats until the work is done
+    or abandoned. A tree, in other words, and the operator sees only its result.
+
+    THAT BOUNDARY IS WHY `log` AND `answer` ARE DIFFERENT FIELDS. The log is the internal
+    record: routing, syncs, promotions, which answerer spoke. It exists so a wrong result can
+    be traced to the stage that caused it, and showing it to an operator would be handing
+    them the machinery instead of the outcome. `close()` returns both and marks which is
+    which; anything user-facing reads `answer`.
+
+    NOT A CONVERSATION either way. A session is bounded work with a cost and a verdict — so
+    "close" is a decision about work, not about a chat window.
     """
 
     def __init__(self, request: str, engine, intent: str = "fetch",
@@ -110,4 +120,9 @@ class Session:
         self.record(f"closed {outcome} ({why})" if why else f"closed {outcome}")
         return {"outcome": outcome, "why": why, "regime": self.regime,
                 "engine": getattr(self.engine, "name", "?"), "calls": self.calls,
-                "findings": self.findings, "log": self.log}
+                "findings": self.findings,
+                # INTERNAL. The back-and-forth that produced the result, kept under its own
+                # key so nothing user-facing shows it by accident — a caller that renders
+                # every field would otherwise narrate the machinery.
+                "in_session": self.log,
+                "log": self.log}

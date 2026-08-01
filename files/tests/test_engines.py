@@ -509,6 +509,31 @@ def test_sync_covers_the_engine_that_was_routed_to():
     check("naming the engine it routed to", any("synced medusa" in l for l in r["log"]))
 
 
+def test_the_operator_sees_the_ends_and_never_the_middle():
+    """THE IN-SESSION IS INTERNAL. The back-and-forth between orchestrator and engine is
+    machinery, and an operator is owed the outcome rather than the machinery.
+
+    It still comes back — under its own key — because a wrong result has to be traceable to
+    the stage that caused it. What must not happen is a caller rendering every field and
+    narrating the plumbing at somebody who asked a question.
+    """
+    print("[boundary] internal record vs the answer")
+    reg = _kitchen()
+
+    def narrator(prompt, findings):
+        return {"answer": "Made risotto.", "mentions": ["risotto"]}
+
+    r = Orchestrator(reg, Channel([stub({"a risotto": RISOTTO})]),
+                     narrate=narrator).handle("a risotto")
+    check("the answer is a sentence", r.get("answer") == "Made risotto.")
+    check("the in-session is recorded separately", bool(r.get("in_session")))
+    check("and it holds the routing and sync steps",
+          any("routed to" in l for l in r["in_session"])
+          and any("synced" in l for l in r["in_session"]))
+    check("none of that leaked into the answer",
+          "routed" not in r["answer"] and "synced" not in r["answer"])
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "engines"))
