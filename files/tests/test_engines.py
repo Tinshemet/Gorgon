@@ -840,8 +840,19 @@ def test_the_book_keeper_reports_a_split_served_against_a_moving_set():
           [r["path"] for r in moved["tree"]["origins"]] == ["0"])
     check("the report says what changed",
           "the set it was split over changed" in moved["tree_report"])
-    check("children stay sound — the fault was never in one of them",
-          moved["tree"]["infected"] == 1 and moved["tree"]["nodes"] == 3)
+    # THE SUBTREE IS MARKED, AND THE ORIGIN IS NAMED SEPARATELY. The children were locally
+    # correct and are wrong anyway — that IS root poisoning — so a report calling them sound
+    # would be honest about each node and silent about the run. `origins` keeps the
+    # distinction the earlier version made with the state alone: who CAUSED it, versus who
+    # is under it.
+    check("the whole subtree is marked, not just the node that broke",
+          moved["tree"]["infected"] == moved["tree"]["nodes"])
+    check("while the origin stays exactly one", len(moved["tree"]["origins"]) == 1)
+    # ASSERTED ON THE REPORT, which is what a person reads. The first version of this line
+    # ended in `or True` — a check that cannot fail, which is the decorative grounding this
+    # codebase refuses everywhere else, arriving in a test about honesty.
+    check("and a child says it was built under the parent, by name",
+          "built under" in moved["tree_report"])
 
 
 def test_a_goal_of_any_shape_can_be_named_in_one_line():

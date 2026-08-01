@@ -74,22 +74,38 @@ def with_premise(node: dict, predicate: Optional[dict]) -> dict:
     return out
 
 
-def inspect(root: dict, holds: Callable[[dict, dict], Any]) -> List[dict]:
+def inspect(rows: List[dict], holds: Callable[[dict, dict], Any]) -> List[dict]:
     """Re-check every recorded premise against the world AS IT IS NOW.
 
     `holds(predicate, scope)` is the evaluator seam, injected exactly as `run()` injects it,
     so this module never touches a registry or a model directly.
 
-    Returns one row per node, PARENTS FIRST — because that is the order the report has to be
-    read in. An infected parent explains every child under it, and a reader shown the
-    children first would chase symptoms.
-    """
-    rows: List[dict] = []
+    IT TAKES THE ROWS THE ENGINE ALREADY BUILDS, keyed by dotted path, and that is a change
+    from the nested-node shape it was written with. Nothing ever called that shape: the
+    engine builds path-keyed rows because its queue is breadth-first, and a keeper that
+    demanded a tree object would have needed the engine to build a second structure for the
+    auditor's benefit. Parents-first ordering, which the report depends on, falls out of
+    sorting the paths — an infected parent explains every child under it, and a reader shown
+    the children first chases symptoms.
 
-    def walk(n: dict, path: str, poisoned_by: Optional[str]):
-        premise = n.get("premise")
-        if poisoned_by is not None:
-            state, why = INFECTED, f"built under {poisoned_by!r}, whose premise no longer holds"
+    A ROW THE ENGINE ALREADY JUDGED IS LEFT ALONE. The witness re-visit is a stronger check
+    than a premise — it RE-PLANS the goal against the world and asks whether work remains —
+    so overwriting its verdict with this one would trade evidence for inference. This fills
+    in the nodes that had no witness available, which is precisely where the engine's own
+    method is silent.
+    """
+    out: List[dict] = []
+    poisoned: Dict[str, str] = {}          # path prefix -> the goal whose premise broke
+    for row in sorted(rows, key=lambda r: str(r.get("path") or "")):
+        path = str(row.get("path") or "")
+        by = next((g for pre, g in poisoned.items()
+                   if path != pre and path.startswith(pre + ".")), None)
+        premise = row.get("premise")
+        if by is not None:
+            state, why = INFECTED, f"built under {by!r}, whose premise no longer holds"
+        elif row.get("state") in (SOUND, INFECTED):
+            # ALREADY WITNESSED. See the docstring: evidence beats inference.
+            state, why = row["state"], row.get("why") or ""
         elif premise is None:
             state, why = UNKNOWN, "no premise recorded — nobody asked"
         else:
@@ -104,17 +120,13 @@ def inspect(root: dict, holds: Callable[[dict, dict], Any]) -> List[dict]:
             else:
                 state, why = INFECTED, f"premise no longer holds ({detail})"
 
-        rows.append({"goal": n.get("goal"), "path": path, "state": state, "why": why,
-                     "op": n.get("op")})
         # AN INFECTED NODE POISONS ITS SUBTREE, which is the whole shape of the defect: the
         # children are locally fine and wrong anyway. Marking them keeps the report honest
         # about scope without pretending each was independently checked.
-        deeper = poisoned_by or (n.get("goal") if state == INFECTED else None)
-        for i, k in enumerate(n.get("children") or []):
-            walk(k, f"{path}.{i}" if path else str(i), deeper)
-
-    walk(root, "", None)
-    return rows
+        if state == INFECTED and by is None:
+            poisoned[path] = row.get("goal")
+        out.append({**row, "state": state, "why": why})
+    return out
 
 
 def drift(rows: List[dict]) -> Dict[str, Any]:

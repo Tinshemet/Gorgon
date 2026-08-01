@@ -271,12 +271,19 @@ class MedusaEngine(Engine):
             # THE TREE, AS THE BOOK KEEPER WANTS IT — one row per node, keyed by path so a
             # parent's re-visit updates the parent's own row rather than adding a second.
             rows: Dict[str, Dict[str, Any]] = {}
+            # WHAT EACH CHILD WAS SPLIT UNDER, keyed by the child's path and stashed
+            # SEPARATELY from the rows. A premise is recorded when the PARENT is opened,
+            # which is before the child is ever popped — writing it into `rows` there would
+            # leave a half-built row that `setdefault` then refuses to complete, and the
+            # report would read a node with a premise and no goal.
+            premises: Dict[str, Dict[str, Any]] = {}
             settling: Dict[str, int] = {}
             while queue:
                 goals, label, path = queue.pop(0)
                 rows.setdefault(path, {
                     "goal": _gw._short(goals[0]) if len(goals) == 1 else label,
                     "path": path, "op": label,
+                    "premise": premises.get(path),
                     # UNKNOWN UNTIL SOMETHING ASKS. Decision 6's rule, and the keeper's own:
                     # a node nobody re-checked is not sound, it is unexamined.
                     "state": _keeper.UNKNOWN, "why": "no witness — nothing to re-check"})
@@ -413,6 +420,20 @@ class MedusaEngine(Engine):
                     back = [(witnessed, f"{label} · witness", path)] if witnessed else []
                     queue = [(g, l, f"{path}.{i}") for i, (g, l) in enumerate(finer)] \
                         + back + queue
+                    # THE PREMISE THIS SPLIT WAS MADE UNDER, recorded so it can be
+                    # RE-EVALUATED later. It is the design note's own answer to "what marks
+                    # a node infected": a child is built on the assumption that the set its
+                    # parent was split over still has the membership it had at the split, and
+                    # `_lower` resolved exactly that set to produce the children.
+                    #
+                    # A MEDUSA PREDICATE, NEVER PROSE, so `holds` re-checks it through the
+                    # same seam an ENSURE uses — a keeper whose verdict came from a model
+                    # would be the second bad draw on the one number this exists to make
+                    # trustworthy.
+                    premise = self._premise_of(goals, len(finer))
+                    if premise is not None:
+                        for i in range(len(finer)):
+                            premises[f"{path}.{i}"] = premise
                     continue
 
                 ran = self._execute_plan(planned, goals, session)
@@ -526,8 +547,17 @@ class MedusaEngine(Engine):
             # happened — the parent was re-planned — so what is left is telling somebody it
             # was needed. A run served against a moving set succeeded and is not the same
             # thing as one served against a set that held still.
-            out["tree"] = _keeper.drift(sorted(rows, key=lambda r: r["path"]))
-            out["tree_report"] = _keeper.report(sorted(rows, key=lambda r: r["path"]))
+            #
+            # AND THE RECORDED PREMISES ARE RE-CHECKED, which is the half that was built and
+            # never wired: `with_premise` and `inspect` existed while the engine assigned
+            # states from the witness alone. The witness is the STRONGER check — it re-plans
+            # the goal and asks whether work remains — so `inspect` leaves a node it already
+            # judged and fills in the ones that had NO witness available, which is exactly
+            # where the engine's own method is silent.
+            _, holds = _gw._seams_of(self._world)
+            judged = _keeper.inspect(list(rows), holds)
+            out["tree"] = _keeper.drift(judged)
+            out["tree_report"] = _keeper.report(judged)
         return out
 
     def _staged(self, components, session) -> Optional[Dict[str, Any]]:
@@ -629,6 +659,30 @@ class MedusaEngine(Engine):
             return {"ok": False, "calls": [], "program": program,
                     "why": f"staged lowering produced an invalid program: {problems[:1]}"}
         return {"ok": True, "plan": [], "program": program}
+
+    def _premise_of(self, goals: List[Dict[str, Any]],
+                    members: int) -> Optional[Dict[str, Any]]:
+        """What a split assumed: the set it was split over still has this many members.
+
+        ROOT POISONING IS EXACTLY THIS ASSUMPTION BREAKING. "Every stopped machine" resolves
+        to three, three children act on those three, a fourth machine stops, and every child
+        is locally correct while the parent goal is false. Nothing about a child says so;
+        the parent's own count does.
+
+        None WHEN THERE IS NOTHING TO ASSUME. A node holding several goals was split one per
+        goal — no set was resolved, so no membership was relied on — and a node whose goal
+        names no selector has nothing to count. Inventing a premise for those would produce a
+        check that passes however the world behaves, which is the decorative grounding this
+        codebase refuses.
+        """
+        if len(goals) != 1:
+            return None
+        goal = goals[0]
+        sel = next((goal[k] for k in ("every", "observe", "per", "select")
+                    if isinstance(goal.get(k), dict)), None)
+        if not sel or not sel.get("kind"):
+            return None
+        return {"shape": "count", "select": dict(sel), "eq": members}
 
     def _open(self, goals: List[Dict[str, Any]]) -> Optional[List]:
         """One node into finer ones, or None when the node is already atomic.
