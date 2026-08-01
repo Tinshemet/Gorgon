@@ -32,7 +32,21 @@ REGIMES = ("tool", "translation", "tree")
 
 # Which regime an intent starts in. The correspondence is the whole design and is written
 # once, here, rather than re-decided per call site.
-INTENT_REGIME = {"fetch": "tool", "ensure": "translation", "achieve": "translation"}
+#
+# ACHIEVE STARTS IN THE TREE, and it did not until now — this line said `translation` while
+# the table eight lines above said TREE, and the comment on it claimed to be the one place
+# the correspondence lived. A mapping that contradicts its own docstring is worse than
+# either version alone, because both readers are entitled to believe it.
+#
+# THE FIX IS THE TABLE'S SIDE, because ACHIEVE MEANS "MAKE IT SO". An achieve session that
+# started in translation got ONE program, ran it, and closed — so a goal the program did not
+# reach came back UNMET rather than being corrected, which is precisely the difference
+# between `ensure` and `achieve`. Correcting is the whole of what the third regime buys.
+#
+# GRAVITY STILL POINTS DOWN and this does not contradict it. Gravity is about which INTENT a
+# request is granted — most should be `fetch` or `ensure` — not about overriding an intent
+# once granted. A caller that asks for `achieve` has asked to pay for correction.
+INTENT_REGIME = {"fetch": "tool", "ensure": "translation", "achieve": "tree"}
 
 
 def rank(regime: str) -> int:
