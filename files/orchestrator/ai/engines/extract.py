@@ -754,6 +754,46 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
                              "every" if "every" in goal else "observe"): trimmed}
         out.append(goal)
 
+    def _scoped(goals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """An UNFILTERED `every` beside a goal that names ONE member is about that member.
+
+        THE SCOPE ERROR, AND IT IS THE LAST THING BETWEEN THE BUILDER AND WORKING. "a machine
+        called box1 running linux" translates to two goals — `count(vm WHERE name=box1) = 1`,
+        which is right, and `every vm must be linux`, which is not. The second lowered to a
+        goal about `work-laptop`, an existing machine with a different OS, and the writer
+        honestly refused. `box1` survived and the words "running linux" ESCAPED THEIR
+        RECEIVER and attached to every machine the operator owns.
+
+        THE RECEIVER IS THE FIX AND IT IS THE WHOLE CLASSES ARGUMENT: a property asked of an
+        object cannot land on the wrong object, because the scope is the receiver. Until the
+        extractor emits receiver-scoped goals this folds them back together afterwards.
+
+        NARROW, AND IT DECLINES WHEN UNSURE — the deterministic-rules pattern:
+
+            the `every` carries a FILTER      -> it names its own set; leave it
+            more than one member is named     -> which one? cannot say; leave it
+            the kinds differ                  -> unrelated clauses; leave it
+
+        So "create 3 machines and make them all linux" is untouched (no member is named), and
+        "create alpha, then launch every stopped vm" is untouched (the `every` is filtered).
+        """
+        named = [g for g in goals
+                 if "select" in g and g.get("eq") == 1
+                 and len(g["select"]) == 2 and "kind" in g["select"]]
+        if len(named) != 1:
+            return goals
+        host = named[0]
+        kind = host["select"]["kind"]
+        out2 = []
+        for g in goals:
+            sel = g.get("every")
+            if (g is not host and isinstance(sel, dict) and sel.get("kind") == kind
+                    and len(sel) == 1 and g.get("must")):
+                host["select"] = {**host["select"], **g["must"]}
+                continue
+            out2.append(g)
+        return out2
+
     for g in (raw or {}).get("goals") or []:
         shape, sel = g.get("goal"), _to_select(g.get("select") or {})
         if not sel.get("kind"):
@@ -902,6 +942,7 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
                 _keep({"per": sel, "make": g["make"], "link": link})
         elif shape == "observe":
             _keep({"observe": sel, "fact": g.get("fact") or "alive"})
+    out = _scoped(out)
     return _subject_survived(_one_statement_not_two(out), request)
 
 
