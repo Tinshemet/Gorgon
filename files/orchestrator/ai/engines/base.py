@@ -47,6 +47,14 @@ class Engine:
     description: str = ""
     # Which intents this engine can serve. An engine that only ANSWERS declares `fetch`; one
     # that acts declares `achieve`. The router uses it to pick a REGIME, not just an engine.
+    #
+    # THIS IS WHAT THE ENGINE CAN DO, NEVER WHAT IT MAY. The two were confused for as long as
+    # this line existed alone: the executor declares `fetch` and ran `delete_vm` on request,
+    # because nothing read the declaration as a limit and nothing else limited it either. What
+    # the OPERATOR granted is `session.intent`, and it is enforced in `insession.drive` against
+    # the `acts` a step declares — so AN ENGINE WITH A `steps()` GENERATOR MUST DECLARE WHAT
+    # EACH STEP WOULD CHANGE. An undeclared step is taken at its word, exactly as an undeclared
+    # `cost` is.
     intents: Tuple[str, ...] = ("fetch",)
 
     # Packages this engine has loaded. Their kinds join the engine's manifest and their

@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from orchestrator.ai.engines import (Channel, MedusaEngine, Orchestrator, Registry,
                                      insession)
 from orchestrator.ai.engines.channel import Answer
-from orchestrator.ai.planner.ir import config as _config
+from orchestrator.ai.planner.ir import effects as _effects
 from tests.bench.rungs import RUNGS
 from tests.bench.seams import seams
 from tests.bench.sim_world import SimWorld
@@ -55,10 +55,22 @@ class LabEngine(MedusaEngine):
         return True
 
 
-# THE TOOLS THAT ASK RATHER THAN ACT, derived from the manifest's own `observed.<fact>.by`.
-# A hand-written list would drift the first time a kind grows an observation.
-_ASKING_TOOLS = {o["by"] for spec in (_config.KINDS or {}).values()
-                 for o in (spec.get("observed") or {}).values() if o.get("by")}
+# THE TOOLS THAT ASK RATHER THAN ACT. Derived here from the manifest's own
+# `observed.<fact>.by` until the intent gate needed the same set — it is `effects.askers()`
+# now, asked of the one module that reads the manifest, so the bench and the gate cannot
+# disagree about which tools are harmless.
+_ASKING_TOOLS = _effects.askers()
+
+
+# THE RUNGS ARE COMMANDS, so they are served with the authority a command needs.
+#
+# THEY USED TO SAY `ensure`, which was never a claim about the rungs — it was how you asked
+# for the TRANSLATION regime before `regime=` existed, since `INTENT_REGIME` maps the two
+# together. Harmless while intent was unenforced and a lie the moment it was: every rung asks
+# for a state to be TRUE, which is `achieve` by the ladder's own definition, and thirteen of
+# thirteen were refused for reaching above a rung nobody meant to grant them. The grain is
+# still named explicitly, which is what the `regime` argument is for.
+_INTENT = "achieve"
 
 
 def _reserve(rung):
@@ -72,8 +84,9 @@ def _reserve(rung):
         return Answer(GOALS[rung.n], "table", "")
     translate.name = "table"
     orch = Orchestrator(reg, Channel([translate]))
-    orch.handle(rung.goal, intent="ensure")
-    return orch.handle(rung.goal, intent="ensure").get("calls") or []
+    orch.handle(rung.goal, intent=_INTENT, regime="translation")
+    return orch.handle(rung.goal, intent=_INTENT,
+                       regime="translation").get("calls") or []
 
 
 def _world(rung):
@@ -99,7 +112,7 @@ def _serve(rung, regime="translation", open_everything=False):
     decide = (lambda st, s: insession.Verdict(
         insession.DECOMPOSE if (open_everything and st.divisible) else insession.RUN))
     orch = Orchestrator(reg, Channel([translate]), decide=decide)
-    return orch.handle(rung.goal, intent="ensure", regime=regime), world
+    return orch.handle(rung.goal, intent=_INTENT, regime=regime), world
 
 
 def test_every_rung_is_served_by_the_engine():
@@ -161,8 +174,8 @@ def test_a_second_pass_does_nothing():
             return Answer(GOALS[rung.n], "table", "")
         translate.name = "table"
         orch = Orchestrator(reg, Channel([translate]))
-        orch.handle(rung.goal, intent="ensure")
-        again = orch.handle(rung.goal, intent="ensure")
+        orch.handle(rung.goal, intent=_INTENT, regime="translation")
+        again = orch.handle(rung.goal, intent=_INTENT, regime="translation")
         # A PROBE IS NEVER "ALREADY DONE". An observation is a thing done, not a thing that
         # becomes true, so re-serving a request that asks something re-asks it — that is the
         # only way to know, and calling it a repeat would make staleness the cheaper answer.

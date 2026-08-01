@@ -56,7 +56,8 @@ class Step:
     """
 
     def __init__(self, kind: str, node: Any, why: str = "", cost: int = 1,
-                 divisible: bool = True, destroys: Optional[List] = None):
+                 divisible: bool = True, destroys: Optional[List] = None,
+                 acts: Optional[List] = None):
         self.kind = kind
         self.node = node
         self.why = why
@@ -83,10 +84,22 @@ class Step:
         # opened grain; it is what the ladder means by "gravity points down", and the only
         # place to catch it is here, before the verdict.
         self.destroys = list(destroys or ())
+        # WHAT IT WOULD CHANGE IF GRANTED — [(tool, args), ...], and `destroys` is a subset of
+        # it. DECLARED BY THE ENGINE for the same reason `cost` and `divisible` are: the engine
+        # has already planned this node, so it knows, and the alternative is the in-session
+        # inferring effects from a node whose shape differs per engine (a whole program here,
+        # one tool call there).
+        #
+        # IT IS WHAT MAKES THE INTENT LADDER ENFORCEABLE ABOVE THE LANGUAGE. `intent.violations`
+        # refuses a PROGRAM that reaches above its rung, which covers Medusa and says nothing
+        # about the executor engine — the floor, routed to FIRST, declaring `intents =
+        # ("fetch",)` and running `delete_vm` on request. One field, one gate, both engines.
+        self.acts = list(acts if acts is not None else self.destroys)
 
     def __repr__(self) -> str:
         return (f"<Step {self.kind} cost={self.cost}"
                 f"{'' if self.divisible else ' atomic'}"
+                f"{f' acts={len(self.acts)}' if self.acts else ''}"
                 f"{f' destroys={len(self.destroys)}' if self.destroys else ''}"
                 f" {str(self.node)[:48]}>")
 
@@ -150,6 +163,34 @@ class Verdict:
         return f"<Verdict {self.action} {self.why[:40]}>"
 
 
+def _above_authority(step: Step, session) -> Optional[str]:
+    """Why this step exceeds what the operator granted, or None.
+
+    ONE RULE, BOTH ENGINES, and it is the ladder's own: `fetch` reads, `ensure` judges, and
+    only `achieve` may change anything. `intent.permits` is the single authority for that —
+    asking it here rather than restating it means a rung added to the ladder is enforced in
+    the in-session without an edit.
+
+    NO INTENT SUPPLIED REFUSES NOTHING, which is `intent.violations`' documented meaning of
+    absence and not a loophole: the safe default belongs where the operator is ASKED — the
+    front seam — because a default buried here would be a fourth place that decides what
+    somebody meant.
+    """
+    if not step.acts:
+        return None
+    granted = getattr(session, "intent", None)
+    if granted is None:
+        return None
+    from ..planner.ir import intent as _intent
+    if _intent.permits(granted):
+        return None
+    tools = sorted({t for t, _ in step.acts})
+    return (f"a {granted} may not change the lab, and this would: "
+            f"{', '.join(tools[:3])}"
+            f"{f' and {len(tools) - 3} more' if len(tools) > 3 else ''}. "
+            f"Say `achieve:` if you meant to act.")
+
+
 def drive(engine, components: List[Dict[str, Any]], session, decide) -> Dict[str, Any]:
     """Run an engine's in-session to completion. Returns its final result.
 
@@ -188,6 +229,15 @@ def drive(engine, components: List[Dict[str, Any]], session, decide) -> Dict[str
                 # billed for it would have spent money nobody agreed to.
                 verdict = Verdict(STOP, f"budget: {step.cost} more than this session has")
                 session.record(f"step {step.kind} REFUSED — {verdict.why}")
+                continue
+            trespass = _above_authority(step, session)
+            if trespass:
+                # AUTHORITY REFUSES BEFORE THE ACT, exactly as the budget does, and BEFORE the
+                # decider is consulted — because what the operator granted is not a policy the
+                # orchestrator gets to weigh. A gate the decider could overrule would make the
+                # intent ladder advisory, and `intent.py` is explicit that it is enforced.
+                verdict = Verdict(STOP, trespass)
+                session.record(f"step {step.kind} REFUSED — {trespass}", level="warn")
                 continue
             verdict = decide(step, session)
             session.record(f"step {step.kind} -> {verdict.action}"

@@ -41,6 +41,38 @@ class Plan(Shortcut):
     def matches(self, ui: str) -> bool:
         return ui.strip().lower().startswith(_PREFIX) and len(ui.strip()) > len(_PREFIX)
 
+    @staticmethod
+    def _ask_intent(question: str):
+        """The one question, when the operator's own words did not answer it.
+
+        RETURNS None ON ANYTHING ELSE, which `resolve` reads as unanswered and floors to
+        FETCH. A typo must not be a grant: reading a lab you meant to change wastes a run,
+        and changing a lab you meant to read cannot be undone. AN ABSENT TERMINAL IS THE
+        SAME ANSWER — `intent.py`'s own rule is that with nobody to ask, it is FETCH.
+        """
+        console.print(f"\n[bold]{question}[/bold]")
+        try:
+            said = console.input("[bold cyan]fetch / ensure / achieve:[/bold cyan] ")
+        except (EOFError, KeyboardInterrupt):
+            return None
+        return said.strip().lower() or None
+
+    @staticmethod
+    def _ask_consent(question: str) -> bool:
+        """`consent.py`'s question — *this changes the world and nothing checks it, sure?*
+
+        ASKED HERE BECAUSE THIS IS WHERE THE PERSON IS. The engine used to answer it with a
+        hardcoded `True`, which is an unattended run granting itself the permission a person
+        was supposed to give. Absent this seam the answer is NO, and that is the right way
+        round: the question is only ever reached by a program that vouches for nothing.
+        """
+        console.print(f"\n[warn]{question}[/warn]")
+        try:
+            said = console.input("[bold cyan]Run it anyway? (y/n):[/bold cyan] ")
+        except (EOFError, KeyboardInterrupt):
+            return False
+        return said.strip().lower() in ("y", "yes")
+
     def run(self, ui: str, messages: List[dict], runtime_drift_count: int,
             verbose: bool) -> None:
         request = ui.strip()[len(_PREFIX):].strip()
@@ -48,6 +80,24 @@ class Plan(Shortcut):
         for flag in ("--dry", "-n"):
             if request.lower().startswith(flag + " "):
                 dry, request = True, request[len(flag):].strip()
+
+        # THE OPERATOR'S INTENT, AND THIS IS WHERE IT IS SETTLED — the front seam, the one
+        # place with a person to ask. `ir/intent.py` says so in as many words: the safe
+        # default belongs where the operator is asked, not scattered through every consumer,
+        # which is why `handle()` treats an absent intent as "nobody said" rather than
+        # inventing one.
+        #
+        # THREE WAYS, CHEAPEST FIRST, and `resolve` walks them: a prefix the operator typed
+        # (`achieve: …`), then the marker words they already used, then one question. Nothing
+        # is guessed — a sentence using no marker is asked about, and a sentence nobody is
+        # there to answer for falls to FETCH, the rung that can do no harm.
+        #
+        # UNTIL THIS EXISTED THE LADDER WAS DECORATIVE HERE. The engine ran every program with
+        # `intent="achieve"` hardcoded, so a request to be TOLD something was authorised to
+        # change the lab, and the module enforcing authority was never handed any.
+        from orchestrator.ai.planner.ir import intent as _intent
+        granted = _intent.resolve(request, asked=self._ask_intent)
+        request = _intent.strip_prefix(request)
 
         # IMPORTED HERE, NOT AT MODULE LOAD. A shortcut registers itself at class-definition
         # time, so every import in this file is paid by every chat session that never types
@@ -104,7 +154,11 @@ class Plan(Shortcut):
         # THE MOUNT LIVES IN `engines/rig.py` so a TEST CAN BUILD THE SAME ONE. Four
         # capabilities shipped this session with their seam left at `None` — invisible,
         # because a feature that does not run also does not fail.
-        result = _rig.build(guarded, narrate=not dry, decide=decide).handle(request)
+        # A DRY RUN NEEDS NO CONSENT SURFACE, because it never reaches the world — and
+        # offering one would train the operator to answer a question that decides nothing.
+        result = _rig.build(guarded, narrate=not dry, decide=decide,
+                            consent=None if dry else self._ask_consent).handle(
+                                request, intent=granted)
 
         if offered:
             console.print("\n[bold]what it would do[/bold]" if dry

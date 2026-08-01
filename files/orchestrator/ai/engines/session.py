@@ -72,11 +72,29 @@ class Session:
     """
 
     def __init__(self, request: str, engine, intent: str = "fetch",
-                 budget: Optional[int] = None):
+                 budget: Optional[int] = None, consent: Any = None,
+                 regime: Optional[str] = None):
         self.request = request
         self.engine = engine
         self.intent = intent
-        self.regime = INTENT_REGIME.get(intent, "tool")
+        # THE OPERATOR'S SURFACE FOR THE ONE QUESTION `consent.py` ASKS — *this code changes
+        # the world and nothing checks it, run it anyway?* — carried on the session because
+        # that is what an engine is handed, and the engine is where a program meets the world.
+        #
+        # `None` MEANS NOBODY IS THERE, and `consent.granted` reads that as no. Fail-closed is
+        # the standing rule for every other high-impact act here, and the engine used to pass
+        # a hardcoded `True` — an unattended run granting itself the permission a person was
+        # supposed to give, which is the exact thing that module's docstring forbids.
+        self.consent = consent
+        # THE GRAIN, WHICH THE INTENT CHOOSES AND A CALLER MAY NAME.
+        #
+        # THE TWO ARE NOT THE SAME QUESTION and only stopped looking alike once intent became
+        # enforceable. `INTENT_REGIME` maps `ensure` to TRANSLATION, so "serve this as one
+        # program" and "you may not change anything" were one word for a long time, and every
+        # caller that wanted the first said the second. That is fine until the second is
+        # enforced, at which point thirteen rungs are refused for an authority nobody meant to
+        # withhold. Naming the grain separately is what lets the intent be about authority.
+        self.regime = regime or INTENT_REGIME.get(intent, "tool")
         self.budget = budget
         self.calls: List = []
         self.findings: List[Dict[str, Any]] = []

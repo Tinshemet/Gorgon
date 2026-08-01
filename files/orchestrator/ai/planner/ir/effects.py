@@ -391,6 +391,30 @@ def tools_of(kinds=None) -> set:
     return out
 
 
+def askers(kinds=None) -> set:
+    """Every tool that only ASKS — `kinds.<k>.observed.<fact>.by`. Derived, never listed.
+
+    A probe changes nothing, which is why it is the one thing a FETCH may still call. The set
+    was already being derived by hand in `test_medusa_rungs` to answer "did the second pass
+    repeat any WORK?", and a second copy of it would drift the first time a kind grows an
+    observation — silently, and in the direction of calling a probe an act.
+    """
+    return {o["by"] for spec in _K(kinds).values()
+            for o in (spec.get("observed") or {}).values() if o.get("by")}
+
+
+def actors(kinds=None) -> set:
+    """Every tool that CHANGES the world — every tool the manifest names, minus the probes.
+
+    THE COMPLEMENT, NOT A LIST. `intent.py` refuses a program that reaches above the rung it
+    was granted, and doing the same for a single tool call needs the same question answered
+    about a TOOL rather than an op. Deriving it as "everything that is not an observation"
+    means a tool added to the manifest is ACTING until its kind says otherwise — which is the
+    right direction for a set whose whole job is to stop a `fetch` from deleting something.
+    """
+    return tools_of(kinds) - askers(kinds)
+
+
 def deleters(kinds=None) -> Dict[str, str]:
     """Every tool that DESTROYS a member, mapped to its kind. Derived, never listed.
 

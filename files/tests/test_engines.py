@@ -575,7 +575,7 @@ def test_the_in_session_grain_is_the_regime():
 
     def count(regime):
         eng = MedusaEngine(World(KITCHEN))
-        sess = Session("risotto", eng, intent="ensure")
+        sess = Session("risotto", eng, intent="achieve", regime="translation")
         sess.regime = regime
         seen = []
         out = insession.drive(eng, RISOTTO, sess, lambda st, s: (
@@ -603,7 +603,7 @@ def test_an_engine_may_not_act_on_a_node_it_was_refused():
 
     world = World(KITCHEN)
     eng = MedusaEngine(world)
-    sess = Session("risotto", eng, intent="ensure")
+    sess = Session("risotto", eng, intent="achieve", regime="translation")
     out = insession.drive(eng, RISOTTO, sess,
                           lambda st, s: insession.Verdict(insession.STOP, "not tonight"))
     check("nothing ran", not world.state.get("dish"))
@@ -633,7 +633,7 @@ def test_the_budget_refuses_before_the_act_not_after():
     world = World(KITCHEN)
     eng = MedusaEngine(world)
     # The program costs two calls; this session may afford one.
-    sess = Session("risotto", eng, intent="ensure", budget=1)
+    sess = Session("risotto", eng, intent="achieve", regime="translation", budget=1)
     asked = []
     out = insession.drive(eng, RISOTTO, sess,
                           lambda st, s: (asked.append(st) or insession.Verdict(insession.RUN)))
@@ -666,7 +666,7 @@ def test_decompose_is_a_verdict_that_does_something():
 
     world = World(KITCHEN)
     eng = MedusaEngine(world)
-    sess = Session("risotto", eng, intent="ensure")   # translation: one whole program
+    sess = Session("risotto", eng, intent="achieve", regime="translation")   # translation: one whole program
     seen, opened = [], [False]
 
     def decide(step, s):
@@ -691,7 +691,7 @@ def test_an_atomic_node_says_so_instead_of_inventing_a_split():
 
     world = World(KITCHEN)
     eng = MedusaEngine(world)
-    sess = Session("risotto", eng, intent="ensure")
+    sess = Session("risotto", eng, intent="achieve", regime="translation")
     sess.regime = "tree"
     out = insession.drive(eng, [RISOTTO[0]], sess,
                           lambda st, s: insession.Verdict(insession.DECOMPOSE, "again"))
@@ -707,7 +707,7 @@ def test_a_step_declares_whether_there_is_anything_finer_inside_it():
 
     seen = []
     eng = MedusaEngine(World(KITCHEN))
-    sess = Session("risotto", eng, intent="ensure")
+    sess = Session("risotto", eng, intent="achieve", regime="translation")
     sess.regime = "tree"
     insession.drive(eng, RISOTTO, sess,
                     lambda st, s: (seen.append(st) or insession.Verdict(insession.RUN)))
@@ -738,7 +738,7 @@ def test_the_grain_does_not_change_the_work_on_any_rung():
         if rung.setup:
             rung.setup(world)
         eng = MedusaEngine(world)
-        sess = Session("", eng, intent="ensure")
+        sess = Session("", eng, intent="achieve", regime="translation")
         sess.regime = regime
         out = insession.drive(eng, GOALS[n], sess, lambda st, s: insession.Verdict(
             insession.DECOMPOSE if (open_everything and st.divisible) else insession.RUN))
@@ -775,7 +775,7 @@ def test_a_decomposed_goal_is_still_witnessed_by_its_parent():
     for name in ("risotto", "paella"):
         world.execute("create_dish", {"dish_name": name})
     eng = MedusaEngine(world)
-    sess = Session("four each", eng, intent="ensure")
+    sess = Session("four each", eng, intent="achieve", regime="translation")
     goals = [{"every": {"kind": "dish"}, "must": {"serves": "4"}}]
     seen, opened = [], [False]
 
@@ -818,7 +818,7 @@ def test_the_book_keeper_reports_a_split_served_against_a_moving_set():
         for name in ("risotto", "paella"):
             world.execute("create_dish", {"dish_name": name})
         eng = MedusaEngine(world)
-        sess = Session("four each", eng, intent="ensure")
+        sess = Session("four each", eng, intent="achieve", regime="translation")
         opened = [False]
 
         def decide(step, s):
@@ -878,7 +878,7 @@ def test_a_step_declares_what_it_would_destroy():
     for name in ("alpha", "beta", "gamma"):
         world.execute("create_vm", {"name": name, "os_type": "linux"})
     eng = MedusaEngine(world)
-    sess = Session("just one", eng, intent="ensure")
+    sess = Session("just one", eng, intent="achieve", regime="translation")
     goals = [{"shape": "count", "select": {"kind": "vm"}, "eq": 1}]
     seen = []
 
@@ -917,7 +917,7 @@ def test_the_opened_grain_acts_before_it_knows_the_request_is_impossible():
         for name in ("alpha", "beta", "gamma"):
             world.execute("create_vm", {"name": name, "os_type": "linux"})
         eng = MedusaEngine(world)
-        sess = Session("", eng, intent="ensure")
+        sess = Session("", eng, intent="achieve", regime="translation")
         sess.regime = regime
         out = insession.drive(eng, [{"shape": "reach", "select": {"kind": "vm"}, "min": 3},
                                     {"shape": "count", "select": {"kind": "vm"}, "eq": 1}],
@@ -951,7 +951,7 @@ def test_a_node_can_be_told_to_wait_and_comes_round_again():
 
     world = World(KITCHEN)
     eng = MedusaEngine(world)
-    sess = Session("two dishes", eng, intent="ensure")
+    sess = Session("two dishes", eng, intent="achieve", regime="translation")
     sess.regime = "tree"
     goals = [{"shape": "count", "select": {"kind": "dish", "dish_name": "risotto"}, "eq": 1},
              {"shape": "count", "select": {"kind": "dish", "dish_name": "paella"}, "eq": 1}]
@@ -981,7 +981,7 @@ def test_waiting_re_plans_against_the_world_it_comes_back_to():
 
     world = World(KITCHEN)
     eng = MedusaEngine(world)
-    sess = Session("four each", eng, intent="ensure")
+    sess = Session("four each", eng, intent="achieve", regime="translation")
     sess.regime = "tree"
     goals = [{"every": {"kind": "dish"}, "must": {"serves": "4"}}]
     costs, first = [], [True]
@@ -1010,7 +1010,7 @@ def test_a_node_that_waits_forever_is_refused_by_name():
 
     world = World(KITCHEN)
     eng = MedusaEngine(world)
-    sess = Session("a dish", eng, intent="ensure")
+    sess = Session("a dish", eng, intent="achieve", regime="translation")
     out = insession.drive(eng, [RISOTTO[0]], sess,
                           lambda st, s: insession.Verdict(insession.YIELD, "the oven"))
     check("it stopped", out.get("refused") is True)
@@ -1026,7 +1026,7 @@ def test_a_queue_where_everything_waits_is_a_deadlock_and_says_so():
 
     world = World(KITCHEN)
     eng = MedusaEngine(world)
-    sess = Session("two dishes", eng, intent="ensure")
+    sess = Session("two dishes", eng, intent="achieve", regime="translation")
     sess.regime = "tree"
     goals = [{"shape": "count", "select": {"kind": "dish", "dish_name": n}, "eq": 1}
              for n in ("risotto", "paella")]
@@ -1162,7 +1162,7 @@ def test_a_kind_the_world_cannot_see_is_refused_not_assumed_empty():
             return {"red"}
 
     eng = QemuEngine(FakeLibrary(), lambda t, a: {"success": False})
-    sess = Session("snapshot everything", eng, intent="ensure")
+    sess = Session("snapshot everything", eng, intent="achieve", regime="translation")
     out = insession.drive(eng, [{"per": {"kind": "vm"}, "make": "snapshot", "link": "vm"}],
                           sess, lambda st, s: insession.Verdict(insession.RUN))
     check("it refuses rather than planning against a false empty",
@@ -1172,7 +1172,7 @@ def test_a_kind_the_world_cannot_see_is_refused_not_assumed_empty():
 
     # A GOAL THAT TOUCHES ONLY WHAT IT CAN SEE IS UNAFFECTED — the guard is per-goal, not a
     # blanket refusal, or mounting a lab would disable most of the language.
-    sess2 = Session("one machine", eng, intent="ensure")
+    sess2 = Session("one machine", eng, intent="achieve", regime="translation")
     seen = []
     insession.drive(eng, [{"shape": "count", "select": {"kind": "vm"}, "eq": 2}], sess2,
                     lambda st, s: (seen.append(st) or insession.Verdict(insession.STOP, "x")))
@@ -1504,6 +1504,121 @@ def test_the_executor_is_the_tool_regime_made_real():
     check("and it actually happened", "alpha" in world.vms)
 
 
+def test_an_intent_that_may_not_act_is_refused_before_the_decider():
+    """THE LADDER, ENFORCED — on BOTH engines, from one rule.
+
+    `intent.violations` refuses a PROGRAM that reaches above its rung, which covers Medusa and
+    says nothing at all about the executor engine: the FLOOR, routed to first by
+    `rig.floor_first`, declaring `intents = ("fetch",)` and running `delete_vm` on request.
+    Declaring a ladder and enforcing one are different things, and only the first had been
+    done.
+
+    BEFORE THE DECIDER, NOT THROUGH IT. Authority is what the operator granted, not a policy
+    the orchestrator weighs — a gate a decider could overrule would make the whole thing
+    advisory. So the step never reaches `decide`, exactly as a step nobody can afford does
+    not, and the refusal is filed in the session's own ledger instead.
+    """
+    print("[intent] a fetch may not change the lab, whichever engine is asked")
+    from orchestrator.ai.engines import ExecutorEngine, insession
+    from tests.bench.sim_world import SimWorld
+
+    for granted in ("fetch", "ensure"):
+        world = SimWorld()
+        world.execute("create_vm", {"name": "doomed", "os_type": "linux"})
+        eng = ExecutorEngine(FakeLab(world), world.execute)
+        sess = Session("delete it", eng, intent=granted)
+        seen = []
+        out = insession.drive(
+            eng, [{"shape": "count", "select": {"kind": "vm", "name": "doomed"}, "eq": 0}],
+            sess, lambda st, s: (seen.append(st) or insession.Verdict(insession.RUN)))
+        check(f"the floor will not delete under a {granted}", "doomed" in world.vms)
+        check(f"and the decider was never asked to weigh it ({granted})", not seen)
+        check(f"it closes as a refusal, not a failure ({granted})",
+              out.get("refused") is True)
+        check(f"naming the tool it would have called ({granted})",
+              "delete_vm" in (out.get("why") or ""))
+        check(f"and the session records it ({granted})",
+              any("REFUSED" in l for l in sess.log))
+
+    # AND THE SAME RULE ON THE PLANNER, whose nodes are whole programs rather than single
+    # calls. One field on the step, one gate, two engines that share no code.
+    kitchen = World(KITCHEN)
+    eng = MedusaEngine(kitchen)
+    sess = Session("risotto", eng, intent="ensure", regime="translation")
+    out = insession.drive(eng, RISOTTO, sess,
+                          lambda st, s: insession.Verdict(insession.RUN))
+    check("medusa is refused the same way", out.get("refused") is True)
+    check("and nothing was cooked", not kitchen.state.get("dish"))
+
+    # A PROBE IS NOT AN ACT, and a `fetch` that could not read anything would be a rung with
+    # nothing on it. The gate asks the manifest which tools CHANGE something, so an engine
+    # whose whole plan is questions passes it untouched.
+    world = SimWorld()
+    world.execute("create_vm", {"name": "alpha", "os_type": "linux"})
+    lab = MedusaEngine(world)
+    ask = Session("is alpha up", lab, intent="fetch", regime="translation")
+    out = insession.drive(lab, [{"shape": "reach", "of": {"kind": "vm", "name": "alpha"}}],
+                          ask, lambda st, s: insession.Verdict(insession.RUN))
+    check("a fetch may still ask questions", not out.get("refused"))
+
+
+def test_consent_is_the_operators_and_the_engine_stops_answering_it_for_them():
+    """`consent=True`, HARDCODED, ON THE PATH THAT REACHES THE REAL LAB.
+
+    `consent.py` says it in as many words: absent an operator the answer is NO, because the
+    alternative is an unattended run granting itself the permission a person was supposed to
+    give. The engine granted it on every program regardless, so the one question that module
+    exists to ask was answered by the thing being asked about.
+
+    DRIVEN THROUGH `_execute_plan` DIRECTLY, and deliberately: the ghost writer grounds every
+    program it writes and staged lowering refuses one that does not, so nothing in production
+    can currently REACH this gate. That is a good property and a bad reason not to test the
+    gate — a seam nothing exercises is the shape of every defect this project has spent a week
+    on.
+    """
+    print("[consent] the ungrounded program asks, and a no is honoured")
+    from tests.bench.sim_world import SimWorld
+
+    from orchestrator.ai.planner import ghost_writer as _gw
+
+    world = SimWorld()
+    eng = MedusaEngine(world)
+    # ACTS AND VOUCHES FOR NOTHING — the exact program `consent.question` is written about.
+    #
+    # BUILT BY THE WRITER AND THEN STRIPPED OF ITS WITNESS, rather than hand-authored: a
+    # hand-written body would be testing this gate against a program shape nothing produces,
+    # and the statement form is the writer's business, not this test's.
+    goal = {"shape": "count", "select": {"kind": "vm", "name": "ghost"}, "eq": 1}
+    plan = _gw.cover([goal], world)
+    whole = _gw.as_program(plan, [goal], world)
+    ungrounded = {"body": [st for st in whole["body"]
+                           if st.get("op") not in ("ensure", "achieve")]}
+    planned = {"ok": True, "program": ungrounded, "plan": plan}
+
+    asked = []
+
+    def refuse(question):
+        asked.append(question)
+        return False
+
+    out = eng._execute_plan(planned, [], Session("x", eng, intent="achieve",
+                                                 consent=refuse))
+    check("the operator is asked", len(asked) == 1 and "Run it anyway?" in asked[0])
+    check("a no stops it", not out["ok"] and not world.vms)
+
+    said = []
+    out = eng._execute_plan(planned, [], Session("x", eng, intent="achieve",
+                                                 consent=lambda q: said.append(q) or True))
+    check("a yes runs it", out["ok"] and "ghost" in world.vms)
+
+    # AND WITH NOBODY THERE, THE ANSWER IS NO. Fail-closed is the standing rule for every
+    # other high-impact act here, and an unattended session is exactly when it matters.
+    world2 = SimWorld()
+    out = MedusaEngine(world2)._execute_plan(
+        planned, [], Session("x", None, intent="achieve"))
+    check("an unattended session is refused", not out["ok"] and not world2.vms)
+
+
 def test_the_floor_asks_before_it_acts():
     """FOUND BY POINTING `plan --dry` AT THE REAL LAB with an executor that refuses to act.
 
@@ -1518,7 +1633,7 @@ def test_the_floor_asks_before_it_acts():
     world = SimWorld()
     world.execute("create_vm", {"name": "doomed", "os_type": "linux"})
     eng = ExecutorEngine(FakeLab(world), world.execute)
-    sess = Session("delete it", eng, intent="fetch")
+    sess = Session("delete it", eng, intent="achieve")
     seen = []
     out = insession.drive(
         eng, [{"shape": "count", "select": {"kind": "vm", "name": "doomed"}, "eq": 0}],

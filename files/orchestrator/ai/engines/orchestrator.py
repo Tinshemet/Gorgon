@@ -41,10 +41,23 @@ class Orchestrator:
                  route: Optional[Callable] = None, budget: Optional[int] = None,
                  narrate: Optional[Callable] = None,
                  decide: Optional[Callable] = None,
-                 forward: Optional[Callable] = None):
+                 forward: Optional[Callable] = None,
+                 consent: Optional[Callable] = None):
         self.registry = registry
         self.channel = channel or Channel()
         self.budget = budget
+        # `consent(question) -> bool`: the operator's answer to the ONE question consent.py
+        # asks — *this program changes the world and nothing checks it, run it anyway?* It
+        # travels on the session because the engine is what meets the world.
+        #
+        # NOT THE SAME SEAM AS `decide`, and the split is deliberate. `decide` rules on a NODE
+        # — cost, destruction, whether to open it — and it is the orchestrator's own judgement.
+        # This is the OPERATOR's, about a property of the program itself, and folding them
+        # would let a policy function answer a question only a person can.
+        #
+        # DEFAULT None IS NOBODY THERE, and `consent.granted` reads that as no. Every grounded
+        # program is unaffected — the question is only asked of one that vouches for nothing.
+        self._consent = consent
         # THE REPORTER'S CHANNEL, separate from the extractor's and deliberately so. It is
         # handed findings and NOTHING ELSE — never the request, never the program — because a
         # model that can see what was asked writes a fluent answer to the question, and one
@@ -79,10 +92,20 @@ class Orchestrator:
     def sync(self, capabilities: Optional[List[str]] = None) -> Dict[str, Any]:
         return self.registry.sync(capabilities)
 
-    def handle(self, request: str, intent: str = "ensure",
+    def handle(self, request: str, intent: Optional[str] = None,
                components: Optional[List[Dict[str, Any]]] = None,
                regime: Optional[str] = None) -> Dict[str, Any]:
         """One request, start to finish.
+
+        `intent` IS THE OPERATOR'S, AND IT IS ENFORCED — see `ir/intent.py`. A `fetch` or an
+        `ensure` may not change the lab, and a step that would is refused in the in-session
+        before the decider is consulted.
+
+        IT DEFAULTS TO `None`, MEANING NOBODY SAID, and nothing is refused. That is not a hole
+        left open — it is `intent.violations`' own reading of absence, and the reason is that
+        the safe default belongs in ONE place: `intent.resolve`, at the front seam, where
+        there is an operator to ask. A default of `ensure` here was worse than either: it
+        GRANTED an authority nobody had asked for, and read as deliberate.
 
         `regime` OVERRIDES what the intent would choose. It exists because the regime is a
         real dial — the promotion path already turns it — and a caller that wants a tree
@@ -146,7 +169,8 @@ class Orchestrator:
             tried.append(engine.name)
             session = Session(request, engine, intent=intent,
                               budget=None if self.budget is None
-                              else max(0, self.budget - spent))
+                              else max(0, self.budget - spent),
+                              consent=self._consent)
             if regime:
                 session.regime = regime
                 session.record(f"regime set to {regime} by the caller")

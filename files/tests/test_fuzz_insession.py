@@ -41,8 +41,7 @@ def check(label, ok):
 def _serve(seed, regime, greedy):
     world, goals, _ = fuzz.random_case(seed)
     eng = MedusaEngine(world)
-    sess = Session("", eng, intent="ensure")
-    sess.regime = regime
+    sess = Session("", eng, intent="achieve", regime=regime)
     out = ins.drive(eng, goals, sess, lambda st, s: ins.Verdict(
         ins.DECOMPOSE if (greedy and st.divisible) else ins.RUN))
     # A PROMOTION REQUEST AND A PLAIN REFUSAL ARE THE SAME OUTCOME — the writer could not
@@ -121,8 +120,7 @@ def test_a_destructive_step_says_so_before_the_verdict():
     for seed in range(CASES):
         world, goals, _ = fuzz.random_case(seed)
         eng = MedusaEngine(world)
-        sess = Session("", eng, intent="ensure")
-        sess.regime = "tree"
+        sess = Session("", eng, intent="achieve", regime="tree")
         deleters = set(effects.deleters(None))
 
         def decide(step, s):

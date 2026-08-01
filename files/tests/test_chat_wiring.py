@@ -148,6 +148,54 @@ def test_plan_has_a_dry_run_and_it_does_not_act():
           {list(a.values())[0] for _, a in offered[0].destroys} <= {"a", "b", "c", "d"})
 
 
+def test_the_plan_shortcut_settles_the_intent_before_it_builds_anything():
+    """THE FRONT SEAM IS WHERE AUTHORITY IS DECIDED, and this asserts somebody decides it.
+
+    `intent.py` is explicit that the safe default belongs in ONE place — where there is an
+    operator to ask — which is why `handle()` reads an absent intent as "nobody said" and
+    refuses nothing. That is only safe while the production caller always says. Before this,
+    nobody did: the engine ran every program with `intent="achieve"` hardcoded, so the module
+    enforcing the ladder was never handed a rung, and the whole mechanism was inert.
+
+    THE SAME SHAPE AS THE FOUR SEAMS `test_rig` GUARDS — built, not wired, and therefore
+    invisible. This is that test one layer up, at the caller rig.py cannot see.
+    """
+    print("[plan] the operator's intent is resolved and passed on")
+    from orchestrator.ai.chat.shortcuts.plan import Plan
+    from orchestrator.ai.engines import rig as _rig
+
+    seen = {}
+
+    class StubOrchestrator:
+        def handle(self, request, intent=None, **kw):
+            seen["request"], seen["intent"] = request, intent
+            return {"outcome": "DONE", "why": "", "log": [], "calls": []}
+
+    def fake_build(execute, library=None, narrate=True, decide=None, consent=None):
+        seen["consent"] = consent
+        return StubOrchestrator()
+
+    real, _rig.build = _rig.build, fake_build
+    try:
+        # THE PREFIX, WHICH IS `resolve`'s CHEAPEST PATH — unambiguous, free, and the only one
+        # a test can take without a person at the terminal.
+        Plan().run("plan achieve: create a vm named alpha", [], 0, False)
+        check("the intent reaches the orchestrator", seen.get("intent") == "achieve")
+        check("and the prefix is stripped from the request itself",
+              seen.get("request") == "create a vm named alpha")
+        check("a consent surface is supplied, not left at None",
+              callable(seen.get("consent")))
+
+        seen.clear()
+        # A DRY RUN NEVER REACHES THE WORLD, so there is nothing to consent to — and offering
+        # the question anyway would teach the operator to answer one that decides nothing.
+        Plan().run("plan --dry fetch: how many machines are there", [], 0, False)
+        check("a fetch stays a fetch", seen.get("intent") == "fetch")
+        check("and a dry run is offered no consent surface", seen.get("consent") is None)
+    finally:
+        _rig.build = real
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "chat wiring"))

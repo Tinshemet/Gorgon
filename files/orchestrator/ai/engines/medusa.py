@@ -328,7 +328,13 @@ class MedusaEngine(Engine):
                                      # discard the very check it exists to make.
                                      divisible=finer is not None and bool(planned["plan"]),
                                      destroys=[c for c in planned["plan"]
-                                               if c[0] in _effects.deleters(self.manifest)])
+                                               if c[0] in _effects.deleters(self.manifest)],
+                                     # WHAT IT WOULD CHANGE, so the in-session can refuse a
+                                     # node that reaches above the rung this session was
+                                     # granted. The writer plans against the world as it is,
+                                     # so this is the actual bill and not an estimate.
+                                     acts=[c for c in planned["plan"]
+                                           if c[0] in _effects.actors(self.manifest)])
                 action = verdict.action if verdict is not None else STOP
 
                 if action == YIELD:
@@ -403,7 +409,7 @@ class MedusaEngine(Engine):
                         + back + queue
                     continue
 
-                ran = self._execute_plan(planned, goals, getattr(session, 'events', None))
+                ran = self._execute_plan(planned, goals, session)
                 calls += ran.get("calls") or []
                 # WHAT THIS NODE OBSERVED, SAID RATHER THAN LEFT LYING IN THE WORLD. The
                 # orchestrator used to reach into the ledger and take what it found; an
@@ -645,7 +651,7 @@ class MedusaEngine(Engine):
         if planned.get("promote") or planned.get("done") or not planned.get("ok", True):
             return {k: v for k, v in planned.items() if k not in ("plan", "done", "ok")} \
                 if planned.get("promote") else planned.get("result", planned)
-        return self._execute_plan(planned, components, getattr(session, 'events', None))
+        return self._execute_plan(planned, components, session)
 
     def _plan(self, components: List[Dict[str, Any]], session=None) -> Dict[str, Any]:
         """Everything up to the first side effect. Returns a plan, or the reason there
@@ -728,10 +734,33 @@ class MedusaEngine(Engine):
 
     def _execute_plan(self, planned: Dict[str, Any],
                       components: List[Dict[str, Any]],
-                      session_events=None) -> Dict[str, Any]:
-        """Run a plan that has already been granted. No decisions are made here."""
+                      session=None) -> Dict[str, Any]:
+        """Run a plan that has already been granted. No decisions are made here.
+
+        THE SESSION, NOT ITS EVENT LOG. This took `session_events` and therefore could not
+        answer the two questions `run()` asks before it touches anything — what was the
+        operator's INTENT, and have they CONSENTED — so it answered them itself, with
+        `consent=True, intent="achieve"`. That is the maximum of both: every program granted
+        the top of the ladder, and grounding waved through unasked, on the one path that
+        reaches the real lab. The session has carried the real answers since it was written.
+        """
+        session_events = getattr(session, "events", None)
         world = self._world
         program = planned["program"]
+        # DOES THIS PROGRAM CHANGE ANYTHING AT ALL — computed from the manifest, not read off
+        # the op names.
+        #
+        # `consent.survey` counts a `CALL` as acting, and it is right to: it reads an artifact
+        # alone and cannot know what the tool behind the word does. The ENGINE can, because it
+        # holds the manifest, and the two answers differ exactly on a probe — a program of four
+        # `guest_ping`s "acts" four times by the artifact's reading and changes nothing.
+        #
+        # MEASURED THE MOMENT CONSENT STOPPED BEING HARDCODED: rung 11 and every opened leaf of
+        # rung 4 were refused for carrying no witness to work they never did. Asking a person
+        # to consent to a program that only asks questions is how a consent prompt becomes
+        # noise, which is the failure `consent.py`'s own docstring set out to avoid.
+        changes = [c for c in planned.get("plan") or ()
+                   if c[0] in _effects.actors(self.manifest)]
         select, holds = _gw._seams_of(world)
         if session_events is not None:
             session_events.program(f"{len(program.get('body') or ())} statement(s)",
@@ -757,7 +786,16 @@ class MedusaEngine(Engine):
         result = _run(program, watched, select=select, holds=holds,
                       known_names=world.names(),
                       known_tools=_effects.tools_of(self.manifest) or None,
-                      consent=True, intent="achieve")
+                      # THE SESSION'S, NOT THIS ENGINE'S. `run()` re-checks the whole program
+                      # statement by statement, which is finer than what the in-session can
+                      # see: the step gate refuses a node that ACTS above its rung, and this
+                      # also catches a FETCH that judges. Both read `intent._PERMITS`, so the
+                      # two gates cannot disagree — a second gate judging by a different
+                      # standard is worse than one, because the disagreement is silent.
+                      # A PROGRAM THAT CHANGES NOTHING HAS NOTHING TO CONSENT TO, and that is
+                      # computed above rather than assumed — the answer, not a bypass.
+                      consent=(getattr(session, "consent", None) if changes else True),
+                      intent=getattr(session, "intent", None))
         survey = _consent.survey(program)
         return {"ok": bool(result.get("ok")),
                 "calls": result.get("calls") or [],

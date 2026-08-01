@@ -103,12 +103,18 @@ def packages(findings=None) -> Tuple:
 
 
 def build(execute: Callable, library=None, narrate: bool = True,
-          decide: Optional[Callable] = None) -> Any:
+          decide: Optional[Callable] = None,
+          consent: Optional[Callable] = None) -> Any:
     """The whole production mount: two engines, a channel, a reporter, a router.
 
     `execute` is the caller's GUARDED executor — the same door a single tool call goes
     through. Building one here would be a second door, which is the thing the engine layer
     exists to prevent.
+
+    `consent` IS THE OPERATOR'S SURFACE, and it is the caller's for the same reason `execute`
+    is: this module knows how to assemble a mount, not who is at the terminal. Left `None` it
+    is the unattended answer, which `consent.granted` reads as no — and the fifth seam this
+    file exists to keep visible.
     """
     from orchestrator.ai.active_library import LIBRARY
 
@@ -137,5 +143,5 @@ def build(execute: Callable, library=None, narrate: bool = True,
                               packages=packages(findings=found)))
 
     return Orchestrator(registry, Channel([translator()]), decide=decide,
-                        route=floor_first,
+                        route=floor_first, consent=consent,
                         narrate=_reporter.narrator() if narrate else None)

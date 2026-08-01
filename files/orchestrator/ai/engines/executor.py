@@ -97,8 +97,14 @@ class ExecutorEngine(Engine):
             if not tool:
                 continue                      # already true — zero calls is a real answer
             destroys = [(tool, args)] if tool in _effects.deleters(kinds) else []
+            # AND WHETHER IT CHANGES ANYTHING AT ALL, which is a wider question than whether it
+            # destroys something and the one the intent ladder asks. This engine declares
+            # `intents = ("fetch",)` and, until the in-session could read this, ran `create_vm`
+            # and `delete_vm` on request — the FLOOR, which `floor_first` routes to before
+            # anything else. Declaring the ladder and enforcing it are different things.
+            acts = [(tool, args)] if tool in _effects.actors(kinds) else []
             verdict = yield Step(RUN, {"tool": tool, "args": args}, f"one call: {tool}",
-                                 cost=1, divisible=False, destroys=destroys)
+                                 cost=1, divisible=False, destroys=destroys, acts=acts)
             if verdict is None or verdict.action == STOP:
                 return {"ok": False, "refused": True, "calls": calls, "findings": findings,
                         "why": verdict.why if verdict is not None else "no verdict given"}
