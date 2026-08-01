@@ -74,8 +74,15 @@ class Orchestrator:
         return self.registry.sync(capabilities)
 
     def handle(self, request: str, intent: str = "ensure",
-               components: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+               components: Optional[List[Dict[str, Any]]] = None,
+               regime: Optional[str] = None) -> Dict[str, Any]:
         """One request, start to finish.
+
+        `regime` OVERRIDES what the intent would choose. It exists because the regime is a
+        real dial — the promotion path already turns it — and a caller that wants a tree
+        session should be able to ask for one by name rather than reaching into a Session.
+        It cannot go DOWN what the intent allows; that is `may_promote`'s job and this does
+        not bypass it.
 
         `components` may be supplied directly — that is the stubbed channel, and it is how
         every result so far was measured. When absent the channel is asked, which is the only
@@ -115,9 +122,9 @@ class Orchestrator:
         # THE REST OF THE CLAIMANTS ARE FALLBACKS, in the order the registry mounted them.
         # The router picks first; being wrong about that is a routing mistake, not a dead end.
         order = [engine] + [e for e in claimants if e.name != engine.name]
-        return self._serve(request, order, state, intent, components)
+        return self._serve(request, order, state, intent, components, regime)
 
-    def _serve(self, request, order, state, intent, components):
+    def _serve(self, request, order, state, intent, components, regime=None):
         """Try each claimant in turn until one serves it, refuses it, or all are spent.
 
         REROUTING HAPPENS ON INABILITY, NEVER ON REFUSAL, and the distinction is the whole
@@ -134,6 +141,9 @@ class Orchestrator:
             session = Session(request, engine, intent=intent,
                               budget=None if self.budget is None
                               else max(0, self.budget - spent))
+            if regime:
+                session.regime = regime
+                session.record(f"regime set to {regime} by the caller")
             for note in attempts:
                 session.record(note)
             session.record(f"routed to {engine.name} · regime {session.regime}")
