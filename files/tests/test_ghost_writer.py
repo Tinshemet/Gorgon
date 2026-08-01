@@ -204,6 +204,55 @@ def test_the_same_request_against_the_same_world_writes_the_same_program():
         check(f"rung {n:>2}: one program over four runs", len(seen) == 1)
 
 
+def test_verified_costs_still_hold():
+    """A3/#16 — THE VERIFIED COST BASELINE, all thirteen rungs, no model.
+
+    `rung.best` prices a MODEL'S program and is deliberately loose, because a model may
+    spend calls verifying its own work. `rung.verified` is a different number: what
+    deterministic code actually does, graded by the rung's own checker. The writer is
+    deterministic, so any movement here is a change in what the PLANNER does — which is
+    exactly the tripwire that was missing when rung 4 went from 17 calls to 35 overnight
+    with nothing comparing the number to anything.
+
+    IT IS A TRIPWIRE, NEVER A TARGET. A number that falls because the system got better is
+    progress and this test will say so; a number that falls because a rung was special-cased
+    is the benchmark being gamed, and it will say that identically. Reading which is which is
+    a person's job, and it cannot be done at all if nobody is told the number moved.
+    """
+    print("[cost] the writer's own price, per rung")
+    moved = []
+    for n in sorted(GOALS):
+        rung, world, plan, _program = _write(n)
+        for tool, args in plan:
+            world.execute(tool, args)
+        cost = len(plan)
+        if rung.verified is None:
+            moved.append(f"rung {n}: nothing recorded, writer costs {cost}")
+        elif cost != rung.verified:
+            moved.append(f"rung {n}: {rung.verified} -> {cost} "
+                         f"({'cheaper' if cost < rung.verified else 'MORE EXPENSIVE'})")
+        if not rung.check(world):
+            moved.append(f"rung {n}: the plan ran and its own checker refused it")
+    check(f"all {len(GOALS)} rungs cost what was recorded and pass their checker", not moved)
+    for line in moved:
+        print(f"       {line}")
+    # AND THE LOOSE DIRECTION IS REPORTED, not enforced. Where `best` sits above what the
+    # writer achieves, the gap is real information about model pricing — rung 6 is priced at
+    # 30 and code does it in 22 — but tightening `best` to match would punish a model for
+    # checking its own work, which is the mistake this file warns about one field over.
+    loose = [(r.n, r.best, r.verified) for r in RUNGS
+             if r.best is not None and r.verified is not None and r.verified < r.best]
+    print(f"       `best` is loose on {len(loose)} rung(s): "
+          + ", ".join(f"#{n} priced {b}, code does {v}" for n, b, v in loose))
+    # THE REAL PROPERTY, rather than a note. Wherever both numbers exist, the writer must
+    # come in at or under the price a model is allowed — if deterministic code ever cost MORE
+    # than the model's budget, the budget would be pricing something nothing can achieve, and
+    # every OVER_BUDGET verdict against a model would be measuring the harness.
+    over = [(r.n, r.best, r.verified) for r in RUNGS
+            if r.best is not None and r.verified is not None and r.verified > r.best]
+    check(f"the writer never costs more than a model is priced at ({len(over)} do)", not over)
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "ghost writer"))

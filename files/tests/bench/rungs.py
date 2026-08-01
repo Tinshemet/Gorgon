@@ -69,6 +69,22 @@ class Rung(NamedTuple):
     # separately from pass/fail for exactly that reason.
     minimum: Optional[int] = None
     best: Optional[int] = None
+    # VERIFIED — the calls the GHOST WRITER actually makes, on every rung, checked by that
+    # rung's own function. Not an estimate and not a target: a number produced by running
+    # deterministic code and grading the result.
+    #
+    # IT IS A SEPARATE FIELD FROM `best` ON PURPOSE. `best` prices a MODEL'S program, and it
+    # is deliberately loose because a model may spend calls VERIFYING its own work — rung 4's
+    # own comment says so, and setting best=16 there would flag every program that checks
+    # itself. The writer grounds with ENSUREs, which cost no calls, so its number is not
+    # comparable and overwriting `best` with it would buy cheapness by punishing
+    # verification. That is the pricing-versus-gating mistake this file already warns about,
+    # one field over.
+    #
+    # WHAT IT IS FOR: a regression tripwire on the PLANNER. The writer is deterministic, so
+    # any change to these numbers is a change in what the planner does, and
+    # `test_verified_costs_still_hold` says which rung moved and in which direction.
+    verified: Optional[int] = None
     # WHAT THE GOAL ASKS FOR, clause by clause — the [clause ledger]'s record, opened
     # before the author writes anything. Each is {"text", "anchors"}: `text` restates one
     # demand in the goal's own terms, `anchors` are literal tokens the plan must mention.
@@ -282,15 +298,15 @@ RUNGS: List[Rung] = [
     Rung(1, "single", "create a vm named alpha", _r1,
          "one action, fully specified", None,
          "spin up a machine and call it alpha",
-         minimum=1, best=2),          # 1 create; the measured run also lists to ground itself
+         minimum=1, best=2, verified=1),          # 1 create; the measured run also lists to ground itself
     Rung(2, "sequential", "create a vm named beta and then launch it", _r2,
          "two ordered actions on one entity", None,
          "make a box called beta, then start it up",
-         minimum=2, best=2),          # create + launch
+         minimum=2, best=2, verified=2),          # create + launch
     Rung(3, "dependency-chain", "create a network called lab and a vm named web, then put web on lab", _r3,
          "an action whose prerequisite must exist first", None,
          "set up an isolated network named lab, provision a machine called web, and connect web to it",
-         minimum=3, best=7),          # create net + create vm + attach
+         minimum=3, best=7, verified=3),          # create net + create vm + attach
     Rung(4, "collective-loop",
          "create 5 vms, put them all in a network, give them all the 'fleet' label, "
          "and make sure they all ping each other", _r4,
@@ -318,10 +334,10 @@ RUNGS: List[Rung] = [
          #
          # So `best` is the cheapest program correct in BOTH regimes, and `minimum` is the
          # logical floor for the state change alone.
-         minimum=16, best=21),
+         minimum=16, best=21, verified=21),
     Rung(5, "filtered-collective", "launch every vm that is currently stopped", _r5,
          "act on the SUBSET matching a condition, not on everything", _s5,
-         "start up any machine that isn't already running"),
+         "start up any machine that isn't already running", verified=2),
     Rung(6, "partition",
          "create 3 vms labelled 'red' and 2 vms labelled 'blue', put the red ones together "
          "on their own network, and put the blue ones on a different network", _r6,
@@ -330,10 +346,10 @@ RUNGS: List[Rung] = [
          "one private network, and the blue group a separate one",
          # 5 creates + 2 nets + 5 attaches + 5 labels. 30 was the measured cost at the
          # 07-25 close, with the redundancy (14 attaches where 5 would do) a known problem.
-         minimum=17, best=30),
+         minimum=17, best=30, verified=22),
     Rung(7, "convergence", "make sure exactly 3 vms carry the 'prod' label", _r7,
          "diff what IS against what is wanted, and change only the difference", _s7,
-         "there should end up being precisely three machines tagged prod, no more and no fewer"),
+         "there should end up being precisely three machines tagged prod, no more and no fewer", verified=1),
     Rung(8, "exception",
          "put every vm on a network called core, except db — db goes on a network "
          "called dmz instead", _r8,
@@ -355,22 +371,22 @@ RUNGS: List[Rung] = [
          demands=[
              {"text": "put every vm on a network called core", "anchors": ["core"]},
              {"text": "db goes on a network called dmz", "anchors": ["db", "dmz"]},
-         ]),
+         ], verified=6),
     Rung(9, "diagnosis", "make sure n1, n2 and n3 can all ping each other", _r9,
          "the goal names an end-state; find WHICH member breaks it", _s9,
-         "n1, n2 and n3 should all be able to reach one another — sort out whatever is stopping that"),
+         "n1, n2 and n3 should all be able to reach one another — sort out whatever is stopping that", verified=4),
     Rung(10, "derived-set", "clone golden into 3 new vms and launch all of them", _r10,
          "a set that does not exist until the model makes it, then acted on", _s10,
-         "take a copy of golden three times over and boot every copy"),
+         "take a copy of golden three times over and boot every copy", verified=6),
     Rung(11, "result-dependent",
          "ping every vm and stop the ones that do not answer", _r11,
          "the condition is a call's ANSWER, not an attribute anything can query", _s11,
-         "check which machines respond and shut down whichever ones don't"),
+         "check which machines respond and shut down whichever ones don't", verified=6),
     Rung(12, "second-kind",
          "take a snapshot of every running vm", _r12,
          "a resource type that is neither vm nor network — the manifest claim, measured",
          _s12,
-         "make a restore point for each machine that is currently up"),
+         "make a restore point for each machine that is currently up", verified=2),
     # NEITHER COLUMN MAY SAY create OR spin up — see _r13. The first forces the wrong
     # answer; the second was silently read as launch_vm and passed without ever meeting
     # the question. Both wordings now NAME the set rather than prescribe how to get it,
@@ -381,5 +397,5 @@ RUNGS: List[Rung] = [
          "and make sure they all ping each other", _r13,
          "the goal ALREADY holds — doing it again must change nothing", _s13,
          "use five machines, wire them together on one private network, tag every one "
-         "of them 'fleet', and confirm each can reach the others"),
+         "of them 'fleet', and confirm each can reach the others", verified=5),
 ]
