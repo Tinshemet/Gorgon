@@ -95,7 +95,7 @@ def test_every_goal_shape_is_exercised_somewhere():
     for weeks — offered by the schema, accepted by the validator, printed by the renderer,
     and impossible to satisfy."""
     print("[shape] the goal vocabulary has no untouched corner")
-    from tests.bench.extract import SCHEMA
+    from orchestrator.ai.engines.extract import SCHEMA
 
     offered = set(SCHEMA["properties"]["goals"]["items"]["properties"]["goal"]["enum"])
     seen = set()

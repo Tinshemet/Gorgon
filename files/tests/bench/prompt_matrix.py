@@ -29,7 +29,7 @@ from typing import Any, Dict, List, Optional
 from orchestrator.ai.engines import (Channel, MedusaEngine, Orchestrator, Registry,
                                      WebCrawlEngine)
 
-from . import extract as _extract
+from orchestrator.ai.engines import extract as _extract
 from .seams import seams
 from .sim_world import SimWorld
 

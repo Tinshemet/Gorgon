@@ -38,6 +38,22 @@ class SimWorld:
         # world that began by knowing would make the third value untestable.
         self.findings = Findings()
 
+    @property
+    def seams(self):
+        """`(select, holds)` — this world's own adapter, DECLARED like every other world's.
+
+        THE GHOST WRITER USED TO IMPORT THIS ONE. `_seams_of` fell back to `tests.bench.seams`
+        for a world that named none, so a production module carried an import of the test
+        tree on a live code path, and a checkout shipped without `tests/` reported a missing
+        test package where the real fault would have been "this world forgot to say".
+
+        THE MOUNT CONTRACT ALREADY HAD THE ANSWER — a world names `kinds`, `seams` and
+        `execute` — and the sim was the one world exempt from it for no reason but history.
+        Saying it here costs three lines and deletes the exemption.
+        """
+        from .seams import seams as _seams
+        return _seams(self)
+
     def names(self) -> Set[str]:
         """Every resource that exists, for grounding a program's `FROM` before it runs."""
         return set(self.vms) | set(self.nets) | set(self.snapshots)

@@ -23,7 +23,7 @@ from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from tests.bench.extract import to_goals
+from orchestrator.ai.engines.extract import to_goals
 
 _PASS = _FAIL = 0
 _CORPUS = os.path.join(os.path.dirname(os.path.abspath(__file__)),

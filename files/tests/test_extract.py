@@ -19,7 +19,7 @@ import sys
 # `-m` and NO-RESULT under run_all, which is the shape of a suite that quietly stops running.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from tests.bench.extract import to_goals
+from orchestrator.ai.engines.extract import to_goals
 
 _PASS = _FAIL = 0
 

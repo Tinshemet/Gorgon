@@ -4,6 +4,16 @@ The translation half of the operator's design (#60). The ghost writer proved tha
 can write every rung once the goal is expressed as components; this is the question that was
 left open — whether a model can produce those components from a sentence.
 
+IT LIVED IN `tests/bench/` UNTIL 2026-08-02, and it is production code: `rig.translator()`
+imports it, so the chat path's front seam was a module in the test tree. That is not a
+tidiness complaint. A bench module is one nobody is careful about deleting, it is free to
+import other bench modules — this one pulled in `pinned` and `BENCH_MODEL`, so PRODUCTION was
+silently running under the BENCH'S reproducibility policy, which `pinned` explicitly says is
+not production's — and a checkout that ships without `tests/` ships without a front seam.
+
+It sits beside the channel that calls it and the reporter that mirrors it, which is where the
+three model seams of the architecture belong: translation in, findings out.
+
 WHY THIS SHOULD BE EASIER THAN AUTHORING. Every field is a CLOSED SET drawn from the
 manifest: seven kinds of goal, three kinds, the attributes of each, the legal values of the
 enumerated ones. There is no program to get wrong, no ordering to remember, no grounding to
@@ -26,11 +36,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional
 
-from orchestrator.ai.chat.ollama_client import OLLAMA_URL
-from orchestrator.ai.planner.ir import config
-
-from . import pinned
-from .ladder import BENCH_MODEL
+from ..planner.ir import config
 
 
 def _kinds() -> List[str]:
@@ -731,10 +737,9 @@ def extract(request: str, model: str = None, temp: float = 0.0,
     # months, which was fine while it was the only one and became #26's defect the moment it
     # was not: two paths deciding what a model call IS, differing on keep_alive and on how a
     # decode failure surfaces.
-    from orchestrator.ai.engines.channel import constrained
+    from .channel import constrained
     return constrained(prompt(request=request), request, schema(),
-                       model=model or BENCH_MODEL,
-                       temp=temp, timeout=timeout)
+                       model=model, temp=temp, timeout=timeout)
 
 
 def assert_enforced(model: str = None) -> bool:

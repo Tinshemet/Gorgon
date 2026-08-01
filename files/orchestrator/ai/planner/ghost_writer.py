@@ -39,14 +39,23 @@ def _kinds(world):
 
 
 def _seams_of(world):
-    """The world's own adapter. A world that does not name one is the VM sim, whose
-    adapter lives in the bench — production worlds always name theirs, which is what
-    stops this module importing a test fixture."""
+    """The world's own adapter — `(select, holds)`, part of the mount contract.
+
+    IT USED TO FALL BACK TO `tests.bench.seams` for a world that named none, because the VM
+    sim was the one world exempt from the contract, for no reason but history. So a
+    production module carried an import of the TEST TREE on a live code path, and a checkout
+    shipped without `tests/` would have reported a missing test package where the real fault
+    is "this world forgot to say".
+
+    The sim declares its own now, in three lines, exactly like every other world. There is no
+    fallback because there is nothing left to fall back for.
+    """
     got = getattr(world, "seams", None)
-    if got is not None:
-        return got
-    from tests.bench.seams import seams as _bench
-    return _bench(world)
+    if got is None:
+        raise TypeError(
+            f"{type(world).__name__} declares no `seams` — a world names `kinds`, `seams` "
+            f"and `execute`, and that is the whole mount contract")
+    return got
 
 Call = Tuple[str, Dict[str, Any]]
 

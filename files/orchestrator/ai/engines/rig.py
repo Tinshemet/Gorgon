@@ -29,24 +29,23 @@ def staged_seams(model: str = None) -> Tuple[Optional[Callable], Optional[Callab
     cost is paid by whoever holds the budget rather than by every request.
     """
     try:
-        from tests.bench.ladder import BENCH_MODEL
         from tests.bench.sim_world import SimWorld
         from tests.bench.tree_probe import make_emit, make_route
     except Exception:
         return None, None
+    from .channel import _model as _configured
     stats: Dict[str, int] = {"route_calls": 0, "emit_calls": 0,
                              "route_channel": 0, "emit_channel": 0}
     # THE WORLD THOSE BUILDERS DESCRIBE IS A MODEL OF THE LAB, never the lab. A decomposer
     # that could reach the real executor would be a second door.
     scratch = SimWorld()
-    name = model or BENCH_MODEL
+    name = model or _configured()
     return make_emit(name, scratch, None, stats), make_route(name, scratch, stats)
 
 
 def translator() -> Callable:
     """English -> goals. The front seam, and the one still measured at the wall."""
-    from tests.bench import extract as _extract
-
+    from . import extract as _extract
     from .channel import Answer
 
     def translate(gap, world=None):

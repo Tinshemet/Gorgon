@@ -89,6 +89,45 @@ def test_the_translator_is_the_one_that_is_measured():
     check("it names itself", getattr(translate, "name", None) == "extractor")
 
 
+def test_production_does_not_import_the_test_tree():
+    """A CHECKOUT WITHOUT `tests/` MUST STILL HAVE A FRONT SEAM.
+
+    The extractor lived in `tests/bench/` while `rig.translator()` imported it, so the chat
+    path's translation stage was a module in the test tree. Not a tidiness complaint: a bench
+    module is one nobody is careful about deleting, and it is free to import other bench
+    modules — this one pulled in `pinned` and `BENCH_MODEL`, so every production model call
+    ran under a reproducibility policy whose own docstring says *"THIS IS THE BENCH'S POLICY,
+    NOT PRODUCTION'S."*
+
+    TWO IMPORTS ARE ALLOWED AND BOTH ARE DELIBERATE. `staged_seams` reaches into the bench on
+    purpose — the model-driven decomposer scores 4/13 against the writer's 13/13, and moving
+    it into production would say it had arrived — and it is wrapped so its absence yields
+    `(None, None)` rather than an import error. A third would be a regression.
+    """
+    print("[rig] the packages that ship do not import the ones that do not")
+    import pathlib
+    import re
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    pattern = re.compile(r"^\s*(from|import)\s+tests[.\s]", re.M)
+    offenders = []
+    for pkg in ("orchestrator", "client", "admin", "executor", "shared"):
+        for path in (root / pkg).rglob("*.py"):
+            if "__pycache__" in str(path):
+                continue
+            for m in pattern.finditer(path.read_text()):
+                offenders.append(f"{path.relative_to(root)}:"
+                                 f"{path.read_text()[:m.start()].count(chr(10)) + 1}")
+    # THE TWO STAGED-LOWERING IMPORTS, NAMED. An allowlist rather than a count, so a NEW
+    # import cannot hide by replacing one of these.
+    allowed = {"orchestrator/ai/engines/rig.py:32", "orchestrator/ai/engines/rig.py:33"}
+    stray = sorted(set(offenders) - allowed)
+    check(f"nothing shipped imports tests/ except the staged-lowering seam ({stray or 'none'})",
+          not stray)
+    check("and that seam survives the bench being absent",
+          "except Exception" in (root / "orchestrator/ai/engines/rig.py").read_text())
+
+
 def test_building_the_rig_touches_nothing():
     """A mount that acted while being assembled would make every test that builds one a run
     against the operator's lab."""
@@ -118,7 +157,7 @@ def test_a_loaded_package_is_askable_not_just_runnable():
     # THE TRANSLATION HAPPENS UNDER THAT MANIFEST, asserted by watching what the schema
     # offers at the moment the channel is asked.
     from orchestrator.ai.engines.channel import Answer
-    from tests.bench import extract as _extract
+    from orchestrator.ai.engines import extract as _extract
     seen = {}
 
     def spy(request, world=None):
@@ -247,7 +286,7 @@ def test_the_worked_example_is_blinded_to_the_request():
     from orchestrator.ai.engines.qemu import QemuEngine
     from orchestrator.ai.active_library import LIBRARY
     from orchestrator.ai.planner.ir import config
-    from tests.bench import extract as EX
+    from orchestrator.ai.engines import extract as EX
 
     eng = QemuEngine(LIBRARY, lambda t, a: None, packages=rig.packages())
     with config.use_kinds(eng.manifest):

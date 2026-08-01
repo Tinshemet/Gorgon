@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from orchestrator.ai.planner import ghost_writer as gw
 from orchestrator.ai.planner.ir import config, effects
-from tests.bench import extract
+from orchestrator.ai.engines import extract
 from tests.bench.sim_world import SimWorld
 
 _PASS = _FAIL = 0

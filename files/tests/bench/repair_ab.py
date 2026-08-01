@@ -33,7 +33,7 @@ from collections import Counter
 from orchestrator.ai.planner.ghost_writer import Unsolvable, as_program, cover
 from orchestrator.ai.planner.ir import run as _run
 from orchestrator.ai.planner.ir import validate as _validate
-from tests.bench import extract as NEW
+from orchestrator.ai.engines import extract as NEW
 from tests.bench.rungs import RUNGS
 from tests.bench.seams import seams
 from tests.bench.sim_world import SimWorld

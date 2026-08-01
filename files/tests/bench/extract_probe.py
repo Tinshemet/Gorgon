@@ -29,7 +29,7 @@ from collections import Counter
 from orchestrator.ai.planner.ir import consent, render, validate
 from orchestrator.ai.planner.ir import run as ir_run
 
-from . import extract as _extract
+from orchestrator.ai.engines import extract as _extract
 from .ghost_writer import Unsolvable, as_program, cover
 from .ladder import BENCH_MODEL
 from .rungs import RUNGS

@@ -74,10 +74,9 @@ def constrained(prompt: str, payload: Any, schema: Dict[str, Any],
     import urllib.request
 
     from orchestrator.ai.chat.ollama_client import OLLAMA_URL
-    from tests.bench import pinned
 
-    body = {"model": model or _bench_model(), "stream": False, "format": schema,
-            "keep_alive": pinned.KEEP_ALIVE, "options": pinned.options(temp),
+    body = {"model": model or _model(), "stream": False, "format": schema,
+            "keep_alive": KEEP_ALIVE, "options": _options(temp),
             "messages": [{"role": "system", "content": prompt},
                          {"role": "user", "content": payload if isinstance(payload, str)
                           else _json.dumps(payload, default=str)}]}
@@ -89,11 +88,44 @@ def constrained(prompt: str, payload: Any, schema: Dict[str, Any],
     return _json.loads((reply.get("message") or {}).get("content") or "{}")
 
 
-def _bench_model() -> str:
-    """One model name, not several. The bench's, unless a caller names another."""
+# ── WHAT A MODEL CALL IS, ON THE PRODUCTION SIDE ──────────────────────────────────────────
+#
+# THESE WERE THE BENCH'S. `constrained` imported `tests.bench.pinned`, whose own docstring
+# says in as many words: *"THIS IS THE BENCH'S POLICY, NOT PRODUCTION'S."* So the one seam
+# every production model call goes through was running under a reproducibility policy written
+# for measurement, from a module in the test tree, and the file saying it should not be was
+# the file being imported.
+#
+# THE NUMBERS AGREE WITH THE BENCH'S TODAY and that is deliberate, not shared: two policies
+# that happen to coincide, each stated where it is decided. Copying them here rather than
+# importing is the point — a bench that changes its conditions to isolate a variable must not
+# change what the operator's chat does.
+#
+# WHY THESE, FOR PRODUCTION'S OWN REASONS. Every call through here is a CLOSED-SET
+# CLASSIFICATION — English to components, findings to a sentence, a route to one of a short
+# list. There is no creativity being asked for, and a request translated two different ways
+# on two identical asks is a system nobody can debug. Reproducibility is the correct default
+# for a translator even when it is not the default for a chat.
+KEEP_ALIVE = -1
+SEED = 0
+
+
+def _options(temperature: float = 0.0) -> Dict[str, Any]:
+    from orchestrator.ai.chat.ollama_client import _OLLAMA
+    return {"temperature": temperature, "num_ctx": _OLLAMA["num_ctx"],
+            "seed": SEED, "top_k": 1}
+
+
+def _model() -> str:
+    """One model name, not several — the configured one, unless a caller names another.
+
+    READ FROM `_OLLAMA`, NOT FROM THE `OLLAMA_MODEL` ENV OVERRIDE, which is the same choice
+    the ladder made and for the same reason: an ambient variable silently swapping the model
+    under a translation seam would make every measurement taken against it a lie.
+    """
     try:
-        from tests.bench.ladder import BENCH_MODEL
-        return BENCH_MODEL
+        from orchestrator.ai.chat.ollama_client import _OLLAMA
+        return _OLLAMA["model"]
     except Exception:
         return "llama3.1:8b"
 

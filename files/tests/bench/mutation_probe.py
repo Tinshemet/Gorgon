@@ -25,7 +25,7 @@ import argparse
 import sys
 from collections import Counter, defaultdict
 
-from tests.bench import extract as _extract
+from orchestrator.ai.engines import extract as _extract
 from tests.bench import mutate
 from tests.bench.repair_ab import grade
 from tests.bench.rungs import RUNGS
