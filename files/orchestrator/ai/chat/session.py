@@ -16,6 +16,11 @@ _DRIFT       = _CFG.get("drift_thresholds", {})
 SESSION_FILE        = os.path.expanduser(_SESSION_CFG["file"])
 MAX_SESSION_HISTORY = _SESSION_CFG["max_history"]
 AUTO_CLEAR_SESSION  = _SESSION_CFG.get("auto_clear", False)
+# THE ENGINE PATH AS THE DEFAULT TURN. Off, and the reason is in the config beside the key:
+# the front seam measures 17/39 literal and 6/39 paraphrase, and its failures are
+# DONE_BUT_FALSE rather than refusals. Everything behind the switch is wired and tested; what
+# is missing is a number that justifies flipping it.
+ENGINE_PATH         = _SESSION_CFG.get("engine_path", False)
 VERBOSE             = _SESSION_CFG.get("verbose", False)
 
 

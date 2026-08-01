@@ -19,6 +19,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from orchestrator.executor_client import get_ovmf as _get_ovmf  # noqa: E402
+from . import session as _session
 from .session import (
     AUTO_CLEAR_SESSION, clear_session, detect_drift, load_session,
     save_session, get_loop_max, get_verbose,
@@ -202,6 +203,24 @@ def chat_loop(verbose: bool = False) -> None:
 
         if not _is_synthetic:
             messages.append({"role": "user", "content": user_input})
+
+        # THE ENGINE PATH, WHEN THE OPERATOR HAS ASKED FOR IT. `session.ENGINE_PATH` is the
+        # one switch: extractor -> orchestrator -> writer -> runtime -> reporter, with the
+        # intent ladder and both book keepers behind it, instead of the agentic tool loop.
+        #
+        # OFF BY DEFAULT ON A MEASUREMENT, not on caution. The front seam scores 17/39
+        # literal and 6/39 paraphrase on the production probe, and its failures are
+        # DONE_BUT_FALSE — the system reporting success over a world that disagrees — which
+        # is worse for an operator than a refusal. Making it the default today would replace
+        # a chat flow that works with one that mistranslates most requests.
+        #
+        # IT IS WIRED RATHER THAN WAITING TO BE WRITTEN, which is the difference between a
+        # decision that is one flag away and a feature that still needs building. `plan
+        # <request>` runs the same code explicitly, and does so today.
+        if _session.ENGINE_PATH:
+            from .shortcuts.plan import Plan
+            Plan().run(f"plan {user_input}", messages, _runtime_drift_count, verbose)
+            continue
 
         # "action" here means any tool-worthy intent — an action OR a state/read
         # query — so factual questions get grounded in a tool call, not confabulated.

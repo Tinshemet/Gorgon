@@ -401,6 +401,36 @@
      "statement 3: names 'private-net', which this program does not create until statement 7 and the lab does not already hold \u2014 move the creation before the statement that uses it"
     ]
    }
+  },
+  "lit:14": {
+   "n": 3,
+   "goal": "make sure there are exactly two machines left",
+   "outcomes": {
+    "CHECKER_DISPUTE": 3
+   },
+   "passes": 0,
+   "calls_min": 7,
+   "artifacts": 0,
+   "details": {
+    "CHECKER_DISPUTE": [
+     "program ok, checker false"
+    ]
+   }
+  },
+  "para:14": {
+   "n": 3,
+   "goal": "cut the lab down to two machines and no more",
+   "outcomes": {
+    "CHECKER_DISPUTE": 3
+   },
+   "passes": 0,
+   "calls_min": 7,
+   "artifacts": 0,
+   "details": {
+    "CHECKER_DISPUTE": [
+     "program ok, checker false"
+    ]
+   }
   }
  }
 }

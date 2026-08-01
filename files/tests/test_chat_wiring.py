@@ -196,6 +196,39 @@ def test_the_plan_shortcut_settles_the_intent_before_it_builds_anything():
         _rig.build = real
 
 
+def test_the_engine_path_is_one_flag_from_the_default_turn():
+    """#80: WIRED, AND OFF ON A MEASUREMENT.
+
+    Everything behind the switch is built and tested — extractor, orchestrator, writer,
+    runtime, reporter, the intent ladder, both book keepers — and `plan <request>` runs it
+    explicitly today. It is not the default because the production probe scores 17/39
+    literal and 6/39 paraphrase, and its failures are DONE_BUT_FALSE rather than refusals:
+    the system reporting success over a world that disagrees, which is worse for an operator
+    than being told it could not read the request.
+
+    THE DISTINCTION THIS ASSERTS is between a decision that is one flag away and a feature
+    that still needs writing. A seam left at `None` is invisible; a seam behind a declared,
+    documented switch is a choice somebody can make.
+    """
+    print("[plan] the engine path is wired, and deliberately off")
+    import json
+    import pathlib as _p
+
+    from orchestrator.ai.chat import session as _session
+
+    check("the switch exists", hasattr(_session, "ENGINE_PATH"))
+    check("and it is OFF", _session.ENGINE_PATH is False)
+
+    cfg = json.loads((_p.Path(_session.__file__).parent / "config.json").read_text())
+    doc = cfg["session"].get("_engine_path_doc", "")
+    check("the config says WHY, with the number", "17/39" in doc and "6/39" in doc)
+
+    src = (_p.Path(_session.__file__).parent / "cli.py").read_text()
+    check("the loop actually branches on it", "_session.ENGINE_PATH" in src)
+    check("and the branch runs the same code `plan` does",
+          "from .shortcuts.plan import Plan" in src)
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "chat wiring"))

@@ -10,7 +10,9 @@
     "file": "~/.gorgon/.session.json",
     "max_history": 10,
     "auto_clear": true,
-    "verbose": false
+    "verbose": false,
+    "engine_path": false,
+    "_engine_path_doc": "ROUTE AN ORDINARY TURN THROUGH THE ENGINE ARCHITECTURE instead of the agentic tool loop. Everything behind it is wired and tested \u2014 extractor, orchestrator, writer, runtime, reporter, the intent ladder, the book keepers \u2014 and `plan <request>` runs it explicitly today. It defaults OFF because of a MEASUREMENT, not caution: the front seam scores 17/39 literal and 6/39 paraphrase on the production probe, and the failure is not refusal but DONE_BUT_FALSE \u2014 the system saying it finished over a world that disagrees. Switching the default would replace a chat flow that works with one that mistranslates most requests, which is the 'if everything works' clause not met. Flip it when the probe says so; the code path is one flag away and does not need writing."
   },
   "chat": {
     "tool_loop_max": 15,
