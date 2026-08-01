@@ -221,6 +221,32 @@ def _as_count(v: Any) -> Optional[int]:
     return _WORD_NUMBERS.get(text)
 
 
+def _name_shaped(v: Any) -> bool:
+    """Could this string be a member's NAME at all? A shape question, never a meaning one.
+
+    THE REPAIR NEEDED A FLOOR AND THIS IS IT. Reading a bare value on a count of one as an
+    identity is right when the value is a name and wrong when it is the model shrugging:
+    `value: "Not specified"` became a machine CALLED "Not specified", and the writer produced
+    an invalid program from it. `value: "${5}"` is template residue and did the same.
+
+    THE RULE IS THE SYSTEM'S OWN. `_fresh_names` mints `vm1`, `network2`; every machine in
+    the real lab is `bench-red-1`, `vm-orchestrator`, `work-laptop`. A name is ONE token of
+    word characters, hyphens and dots — so a value with a space, a brace or a dollar is not a
+    name under any reading, and saying so requires no opinion about what the model meant.
+
+    IT IS DELIBERATELY NOT A STOP-LIST. "unknown", "none", "n/a" and every other way a model
+    can shrug are NOT enumerated here, because that is the arms race this project has
+    refused twice. `fleetsize` passes this test and becomes a name, which is a genuine
+    ambiguity the model created — and a wrong answer that came from the model is a different
+    thing to fix than one this module invented.
+    """
+    text = str(v).strip()
+    return bool(text) and len(text) <= 64 and _NAME_OK.match(text) is not None
+
+
+_NAME_OK = __import__("re").compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
 def _enumerated(kind: str) -> set:
     """Every value the manifest already CLAIMS for this kind, from wherever it claims it.
 
@@ -314,8 +340,9 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
                 # "two machines called prod" is not an identity under any reading.
                 spec = (config.KINDS or {}).get(sel.get("kind")) or {}
                 key = spec.get("key")
-                if key and str(g["value"]).strip().lower() not in _enumerated(sel["kind"]):
-                    sel = {**sel, key: g["value"]}
+                if (key and _name_shaped(g["value"])
+                        and str(g["value"]).strip().lower() not in _enumerated(sel["kind"])):
+                    sel = {**sel, key: str(g["value"]).strip()}
             out.append({"shape": "count", "select": sel, "eq": eq})
         elif shape == "reach":
             # REACH IS NOT INVENTED. Twenty of twenty-three extraction failures on

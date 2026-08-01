@@ -80,6 +80,34 @@ def test_the_identity_repair_declines_where_it_could_be_wrong():
           named[0]["select"].get("label") == "prod" and "name" not in named[0]["select"])
 
 
+def test_the_identity_repair_has_a_shape_floor():
+    """A/B-FOUND REGRESSION. `value: "Not specified"` became a machine CALLED "Not
+    specified", and the writer produced an invalid program from it.
+
+    The floor is the system's OWN notion of a name: `_fresh_names` mints `vm1`, and the real
+    lab holds `bench-red-1` and `vm-orchestrator`. One token of word characters, hyphens and
+    dots. A shape question, never a meaning one.
+    """
+    print("[decline] a value that cannot be a name is not one")
+    def name_of(v):
+        out = to_goals(g(goal="count", select={"kind": "vm"}, value=v))
+        return out[0]["select"].get("name")
+    check("a name is taken", name_of("beta") == "beta")
+    check("a hyphenated one too, because real machines are named that way",
+          name_of("bench-red-1") == "bench-red-1")
+    check("a shrug is not a name", name_of("Not specified") is None)
+    check("nor is template residue", name_of("${5}") is None
+          and name_of("${lab}") is None)
+    check("nor is anything with a space", name_of("two machines") is None)
+    check("nor is nothing at all", name_of("") is None)
+    # NOT A STOP-LIST, and that is deliberate. "unknown", "none", "n/a" and every other way
+    # a model can shrug are NOT enumerated — that is the arms race refused twice already.
+    # `fleetsize` looks like a name and becomes one; a wrong answer that came from the model
+    # is a different thing to fix than one this module invented.
+    check("a plausible token is still taken, ambiguity and all",
+          name_of("fleetsize") == "fleetsize")
+
+
 def test_an_identity_is_not_a_property():
     """`every vm must be named alpha` is not a state any world can reach."""
     print("[repair] `every ... must be named x` is a count of one")
