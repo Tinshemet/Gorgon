@@ -512,7 +512,30 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
             # statement abandoned inside a `foreach` or an `if` branch is not resumable by
             # replaying a suffix of the body, because its loop variable and its branch
             # condition are gone. Those are reported as unfinished, not silently resumed.
-            return _said({**bad, "remaining": list(body[i + 1:])})
+            #
+            # CLEANUP RUNS ANYWAY — the program's `finally`. Everything after the failure is
+            # abandoned, and the teardown of what this program MADE FOR ITSELF lives in that
+            # tail, so every failed run leaked its own scaffolding: three machines in one
+            # afternoon, each created for a search that could not run, each left for an
+            # operator who never asked for a machine at all.
+            #
+            # ONLY WHAT THE WRITER MARKED. The mark means "this member is the program's own",
+            # a judgement made where provenance is actually known; a runtime guessing which
+            # trailing deletes are safe to force would eventually force one that is not.
+            #
+            # ITS FAILURES ARE RECORDED AND DO NOT REPLACE THE ORIGINAL. The run failed for
+            # the reason it failed; a teardown that also could not complete is a second fact,
+            # not a correction of the first.
+            tail = list(body[i + 1:])
+            cleanup = [st for st in tail if st.get("cleanup")]
+            for st in cleanup:
+                try:
+                    _one(st)
+                except Exception as exc:                       # noqa: BLE001
+                    failures.append({"tool": st.get("tool"), "args": st.get("args") or {},
+                                     "error": f"cleanup raised {type(exc).__name__}: {exc}"})
+            return _said({**bad, "remaining": [st for st in tail if not st.get("cleanup")],
+                          "cleaned_up": len(cleanup)})
     op = None
 
     if failures and not asserted:

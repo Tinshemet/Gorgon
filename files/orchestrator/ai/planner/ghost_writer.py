@@ -653,5 +653,33 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
         spec = effects._K(kinds).get(kind) or {}
         deleter, key = spec.get("delete"), spec.get("key")
         if deleter and key and name:
-            body.append({"op": "call", "tool": deleter, "args": {key: name}})
+            # WHAT MUST BE TRUE BEFORE IT CAN GO. `delete_vm` refuses a running machine, so a
+            # teardown that emitted the bare deleter emitted a call that could never succeed —
+            # and the machine the program minted for its own use survived every run, exactly
+            # as if there had been no teardown at all. `Stop the VM before deleting.`, on the
+            # lab, on a machine three statements after the program had launched it.
+            #
+            # DERIVED THROUGH `invert`, not written out here, which is the same route any
+            # other attribute change takes. The manifest says a removal needs the member
+            # stopped; the writer works out which tool makes that true. A kind that declares
+            # nothing emits nothing, so this costs the other kinds exactly zero.
+            for attr, value in (spec.get("delete_requires") or {}).items():
+                got = effects.invert({"shape": "count", "eq": 1,
+                                      "select": {"kind": kind, key: name, attr: value}},
+                                     kinds, internal=True)
+                if got:
+                    tool, args = got
+                    body.append({"op": "call", "tool": tool, "args": args, "cleanup": True})
+            # MARKED AS CLEANUP, which is what lets it run when the program does not finish.
+            # A program that fails at statement three abandons its tail, and the tail is where
+            # the teardown lives — so every failed run leaked the machine it had minted, and
+            # the operator who never asked for that machine is the one left with it. The
+            # runtime treats these as a `finally`: whatever else happened, what the program
+            # made for its own use goes away.
+            #
+            # THE MARK IS IN THE PROGRAM, not a rule in the runtime, because "is this
+            # statement scaffolding?" is a fact only the writer knows — it is the thing that
+            # decided the member was the program's own rather than the operator's.
+            body.append({"op": "call", "tool": deleter, "args": {key: name},
+                         "cleanup": True})
     return {"body": body}

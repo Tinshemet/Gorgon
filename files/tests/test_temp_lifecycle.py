@@ -202,3 +202,57 @@ def test_the_engine_collects_temps_so_teardown_can_fire():
     del_at = next(i for i, s in enumerate(body)
                   if s.get("op") == "call" and s.get("tool") == "delete_vm")
     assert del_at > ensure_at, "teardown must follow the witness, not precede it"
+
+
+def test_cleanup_runs_when_the_program_fails_midway():
+    """Teardown is the program's `finally` — a failed run must not leak its own scaffolding.
+
+    Three machines leaked in one afternoon: the search program failed at statement three,
+    everything after it was abandoned, and the `delete_vm` for the machine it had minted
+    lived in that tail. The operator who never asked for a machine was the one left with it.
+    """
+    from orchestrator.ai.planner.ir import execute as EX
+
+    done = []
+
+    def world(tool, args):
+        done.append(tool)
+        # The middle statement fails, exactly as `camoufox_launch` did against a machine
+        # with no guest agent.
+        if tool == "stop_vm":
+            return {"success": False, "error": "no"}
+        return {"success": True}
+
+    program = {"body": [
+        {"op": "call", "tool": "create_vm", "args": {"name": "vm1", "os_type": "linux"}},
+        {"op": "call", "tool": "stop_vm", "args": {"name": "vm1"}},
+        {"op": "ensure", "predicate": {"shape": "count", "select": {"kind": "vm"}, "eq": 1}},
+        {"op": "call", "tool": "delete_vm", "args": {"name": "vm1"}, "cleanup": True},
+    ]}
+    out = EX.run(program, world,
+                 select=lambda q: [], holds=lambda p, s: (False, "no"),
+                 known_tools={"create_vm", "stop_vm", "delete_vm"})
+
+    assert not out["ok"]
+    assert "delete_vm" in done, f"the minted machine leaked: {done}"
+    # THE ORIGINAL FAILURE STANDS — cleanup is a second fact, not a correction of the first.
+    assert out.get("failed") not in (None, "ok"), out
+    # And a statement that ran is not reported as still owed.
+    assert not [s for s in (out.get("remaining") or []) if s.get("cleanup")], out.get("remaining")
+
+
+def test_cleanup_only_covers_what_the_writer_marked():
+    """A runtime guessing which trailing deletes are safe to force would eventually be wrong."""
+    from orchestrator.ai.planner.ir import execute as EX
+
+    done = []
+    program = {"body": [
+        {"op": "ensure", "predicate": {"shape": "count",
+                                       "select": {"kind": "vm"}, "eq": 9}},
+        {"op": "call", "tool": "delete_vm", "args": {"name": "theirs"}},
+    ]}
+    out = EX.run(program, lambda t, a: done.append(t) or {"success": True},
+                 select=lambda q: [], holds=lambda p, s: (False, "no"),
+                 known_tools={"delete_vm"})
+    assert "delete_vm" not in done, "an unmarked delete was forced"
+    assert any(s.get("tool") == "delete_vm" for s in (out.get("remaining") or []))

@@ -106,7 +106,8 @@
         "tool",
         "args",
         "graft",
-        "ifails"
+        "ifails",
+        "cleanup"
       ],
       "acts": true
     },
@@ -314,6 +315,10 @@
         "guest_agent": true
       },
       "delete": "delete_vm",
+      "_why_delete_requires": "WHAT MUST BE TRUE BEFORE A MEMBER CAN BE REMOVED, declared where the fact lives. `delete_vm` refuses a running machine \u2014 `Stop the VM before deleting.` \u2014 so the writer's teardown emitted a delete that could never succeed, and the machine the program had minted for itself survived every run that reached the end. Same shape as `create_requires` pointed the other way: a creation may need something to exist first, a removal may need something to be true first, and both are properties of the KIND rather than rules in the writer. The setter that establishes it is derived from the manifest exactly as any other attribute change would be.",
+      "delete_requires": {
+        "status": "stopped"
+      },
       "nouns": [
         "machine",
         "box",
@@ -519,6 +524,10 @@
     "args": {
       "type": "object",
       "doc": "the tool's arguments"
+    },
+    "cleanup": {
+      "type": "boolean",
+      "doc": "this statement takes down something THE PROGRAM MADE FOR ITSELF \u2014 the program's `finally`. It runs even when an earlier statement fails and the rest of the body is abandoned, because that tail is exactly where teardown lives and every failed run was otherwise leaking its own scaffolding. Set by the writer, which is the only thing that knows a member's provenance: a member the operator named is theirs and is never taken away, and a runtime guessing which trailing deletes are safe to force would eventually force one that is not."
     },
     "select": {
       "type": "object",
