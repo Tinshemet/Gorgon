@@ -206,6 +206,42 @@ def _coerce(v: str) -> Any:
     return v
 
 
+_WORD_NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+                 "seven": 7, "eight": 8, "nine": 9, "ten": 10}
+
+
+def _as_count(v: Any) -> Optional[int]:
+    """`v` read as a number, or None if it is not one. Words included, because the model
+    writes what the operator wrote and operators write "two"."""
+    if v is None:
+        return None
+    text = str(v).strip().lower()
+    if text.isdigit():
+        return int(text)
+    return _WORD_NUMBERS.get(text)
+
+
+def _enumerated(kind: str) -> set:
+    """Every value the manifest already CLAIMS for this kind, from wherever it claims it.
+
+    Used to decline rather than to decide: a bare value the manifest names — `running`,
+    `linux` — is ambiguous between an identity and a state, and an extractor that guessed
+    there would be inventing meaning rather than moving a field.
+
+    TWO PLACES DECLARE VALUES AND BOTH COUNT. `attr_values` enumerates a closed set
+    (`status`), and `create_defaults` names one the world will use if nobody says otherwise
+    (`os_type: linux`). Reading only the first left `linux` looking like an unclaimed word,
+    so "one linux machine" would have become a machine NAMED linux — the manifest knew and
+    was not asked.
+    """
+    spec = (config.KINDS or {}).get(kind) or {}
+    out = set()
+    for values in (spec.get("attr_values") or {}).values():
+        out |= {str(x).lower() for x in (values or ())}
+    out |= {str(v).lower() for v in (spec.get("create_defaults") or {}).values()}
+    return out
+
+
 _REACH_WORDS = {"ping", "reach", "reachable", "connect", "connected", "communicate",
                 "talk", "see", "mesh", "each"}
 
@@ -234,7 +270,19 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
             # prompt now says so in those words, so the model omits `amount` as obvious —
             # and the goal was being DISCARDED over it. Defaulting is not a guess about
             # meaning; it is the reading the sentence already had.
-            eq = 1 if g.get("amount") is None else int(g["amount"])
+            # THE NUMBER MAY ARRIVE IN EITHER SLOT. The schema offers `amount`, and the
+            # model routinely puts the count in `value` instead — "create a vm named alpha"
+            # came back as `value: "1"`, which was DISCARDED and then defaulted back to 1 by
+            # luck. A field the schema offers and the reader ignores is not a model failure.
+            eq = _as_count(g.get("amount"))
+            if eq is None:
+                eq = _as_count(g.get("value"))
+            # A MISSING NUMBER MEANS ONE. "Create a vm named alpha" is a count of one and the
+            # prompt says so in those words, so the model omits it as obvious — and the goal
+            # was being DISCARDED over it. Defaulting is not a guess about meaning; it is the
+            # reading the sentence already had.
+            if eq is None:
+                eq = 1
             # THE CONSTRAINT IN THE WRONG SLOT. It came back as `value: "name=alpha"` at the
             # goal level rather than in `select.where` — the right MEANING in the wrong
             # FIELD, which is a slot error and repairable. What is never repaired is a wrong
@@ -251,6 +299,23 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
                 a = (spec.get("aliases") or {}).get(g["attr"], g["attr"])
                 if a in set(spec.get("attrs") or ()):
                     sel = {**sel, a: _coerce(g["value"])}
+            elif (g.get("value") is not None and _as_count(g["value"]) is None
+                  and eq == 1 and len(sel) == 1):
+                # A BARE VALUE ON A COUNT OF ONE IS AN IDENTITY. "create a vm named beta and
+                # then launch it" came back as `count vm, value: "beta"` — no attribute, so
+                # the value was dropped and the writer built `vm1`. Naming ONE thing is a
+                # count of one, which is already how this module reads `every x must be
+                # named y`; the same reading, reached through the other slot.
+                #
+                # IT DECLINES RATHER THAN GUESSES in the one place it could be wrong: a
+                # value the manifest already claims as a legal state (`running`, `linux`) is
+                # ambiguous between an identity and a property, and moving it would be
+                # deciding what the operator meant. Only a count of ONE qualifies, because
+                # "two machines called prod" is not an identity under any reading.
+                spec = (config.KINDS or {}).get(sel.get("kind")) or {}
+                key = spec.get("key")
+                if key and str(g["value"]).strip().lower() not in _enumerated(sel["kind"]):
+                    sel = {**sel, key: g["value"]}
             out.append({"shape": "count", "select": sel, "eq": eq})
         elif shape == "reach":
             # REACH IS NOT INVENTED. Twenty of twenty-three extraction failures on

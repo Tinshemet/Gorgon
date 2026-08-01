@@ -1,0 +1,134 @@
+"""test_extract.py — the extractor's REPAIRS, with no model in the loop.
+
+EVERY REPAIR IN `to_goals` WAS VERIFIED BY RUNNING THE MODEL and nothing else. That is a
+40-minute, non-deterministic check of a pure function over a dict, and it meant a repair
+could be broken by an edit and only noticed on the next ladder run — if the number happened
+to move enough to be believed.
+
+The repairs are the interesting half of the extractor, because they are the line the project
+draws: A SLOT ERROR IS REPAIRED, A WRONG MEANING NEVER IS. Both sides of that line are
+asserted here, and the DECLINES matter more than the repairs — a repair that fires when it
+should not is how an extractor starts inventing requests.
+"""
+import os
+import sys
+
+# THE REPO ROOT FIRST, and it is not boilerplate. Run as a script, `tests/` becomes
+# sys.path[0] — where `tests/shared.py` shadows the real `shared` PACKAGE, so the first
+# import that reaches `shared.display` dies with "not a package". The suite was green under
+# `-m` and NO-RESULT under run_all, which is the shape of a suite that quietly stops running.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from tests.bench.extract import to_goals
+
+_PASS = _FAIL = 0
+
+
+def check(label, ok):
+    global _PASS, _FAIL
+    if ok:
+        _PASS += 1
+        print(f"  ok   {label}")
+    else:
+        _FAIL += 1
+        print(f"  FAIL {label}")
+
+
+def g(**kw):
+    return {"goals": [kw]}
+
+
+def test_the_number_is_read_from_either_slot():
+    """The schema offers `amount`; the model routinely uses `value`."""
+    print("[repair] a count arrives in whichever field the model chose")
+    check("from amount", to_goals(g(goal="count", select={"kind": "vm"}, amount=3))[0]["eq"] == 3)
+    check("from value", to_goals(g(goal="count", select={"kind": "vm"}, value="3"))[0]["eq"] == 3)
+    check("as a word, because operators write words",
+          to_goals(g(goal="count", select={"kind": "vm"}, value="three"))[0]["eq"] == 3)
+    check("missing means one — the reading the sentence already had",
+          to_goals(g(goal="count", select={"kind": "vm"}))[0]["eq"] == 1)
+
+
+def test_a_number_that_is_not_a_number_does_not_crash():
+    """`int("One")` raises, and a raising extractor loses the whole request."""
+    print("[repair] an unparseable amount degrades, it does not explode")
+    out = to_goals(g(goal="count", select={"kind": "vm"}, amount="lots"))
+    check("the goal survives", len(out) == 1 and out[0]["eq"] == 1)
+
+
+def test_a_bare_value_on_a_count_of_one_is_an_identity():
+    """"create a vm named beta" came back as a count with `value: "beta"` and no attribute —
+    the name was dropped and the writer built `vm1`."""
+    print("[repair] naming one thing IS a count of one")
+    out = to_goals(g(goal="count", select={"kind": "vm"}, value="beta"))
+    check("the name reaches the selector", out[0]["select"].get("name") == "beta")
+    check("and the count is one", out[0]["eq"] == 1)
+
+
+def test_the_identity_repair_declines_where_it_could_be_wrong():
+    """THE HALF THAT MATTERS. A repair that fires when it should not invents a request."""
+    print("[decline] ambiguous is left alone, not guessed at")
+    two = to_goals(g(goal="count", select={"kind": "vm"}, value="prod", amount=2))
+    check("two things are not one thing's name", "name" not in two[0]["select"])
+    state = to_goals(g(goal="count", select={"kind": "vm"}, value="running"))
+    check("a value the manifest already claims is not an identity",
+          "name" not in state[0]["select"])
+    check("nor is a declared os", "name" not in
+          to_goals(g(goal="count", select={"kind": "vm"}, value="linux"))[0]["select"])
+    named = to_goals(g(goal="count", select={"kind": "vm"}, attr="label", value="prod"))
+    check("an attributed value stays on its attribute",
+          named[0]["select"].get("label") == "prod" and "name" not in named[0]["select"])
+
+
+def test_an_identity_is_not_a_property():
+    """`every vm must be named alpha` is not a state any world can reach."""
+    print("[repair] `every ... must be named x` is a count of one")
+    out = to_goals(g(goal="every", select={"kind": "vm"}, attr="name", value="alpha"))
+    check("it becomes a count", out[0].get("shape") == "count" and out[0]["eq"] == 1)
+    check("carrying the name", out[0]["select"].get("name") == "alpha")
+    other = to_goals(g(goal="every", select={"kind": "vm"}, attr="status", value="running"))
+    check("a real property stays an `every`", "every" in other[0])
+
+
+def test_the_constraint_in_the_wrong_field():
+    """`value: "name=alpha"` at goal level is the right meaning in the wrong slot."""
+    print("[repair] a packed filter is unpacked into the selector")
+    out = to_goals(g(goal="count", select={"kind": "vm"}, value="name=alpha"))
+    check("unpacked", out[0]["select"].get("name") == "alpha")
+    junk = to_goals(g(goal="count", select={"kind": "vm"}, value="colour=blue"))
+    check("an attribute the kind does not have is refused",
+          "colour" not in junk[0]["select"])
+
+
+def test_reach_is_not_invented():
+    """Twenty of twenty-three failures were a reach goal the request never asked for."""
+    print("[decline] a goal with no evidence in the request is dropped")
+    asked = to_goals(g(goal="reach", select={"kind": "vm"}, amount=2),
+                     "make sure the machines can ping each other")
+    check("a request that asks for it keeps it", asked and asked[0].get("shape") == "reach")
+    unasked = to_goals(g(goal="reach", select={"kind": "vm"}, amount=2),
+                       "create a vm named beta and then launch it")
+    check("a request that does not is dropped", not unasked)
+    check("with no request given, nothing is assumed either way",
+          to_goals(g(goal="reach", select={"kind": "vm"}, amount=2))[0]["shape"] == "reach")
+
+
+def test_a_goal_the_model_did_not_state_is_dropped_not_completed():
+    """The job this module exists to NOT have: deciding what the operator meant."""
+    print("[decline] malformed is dropped, never filled in")
+    check("no kind, no goal", not to_goals(g(goal="count", select={})))
+    check("an `every` with no property is not a goal",
+          not to_goals(g(goal="every", select={"kind": "vm"})))
+    check("a `per` with nothing to make is not a goal",
+          not to_goals(g(goal="per", select={"kind": "vm"})))
+    check("an empty answer is an empty list, not a crash", to_goals({}) == [])
+    check("and so is None", to_goals(None) == [])
+
+
+def main():
+    from tests import _suite
+    sys.exit(_suite.run(sys.modules[__name__], "extract repairs"))
+
+
+if __name__ == "__main__":
+    main()
