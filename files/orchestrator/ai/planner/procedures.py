@@ -76,6 +76,26 @@ def declared_in(request: str):
     return (m.group(1), m.group(2).strip()) if m else (None, request)
 
 
+# A SPAN, IN THE FORM THE MANIFEST ALREADY DECLARES. `param_types.duration` says it in as
+# many words — *"a span — 30s, 15m, 1h, 7d. What a ROUTINE's schedule and a timeout are"* —
+# so the type was named for this before anything could use it. Read from the manifest rather
+# than restated, which is what stops a second spelling appearing the first time somebody
+# wants weeks.
+_SPAN = re.compile(r"^\s*(\d+)\s*([smhd])\s*$", re.I)
+_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+
+
+def seconds(span: Any) -> Optional[int]:
+    """`"1h"` -> 3600. `None` when it is not a span at all.
+
+    None RATHER THAN A GUESS. A schedule nobody can read must not become "every zero
+    seconds" — that is a routine that runs on every sweep forever, which is the loudest
+    possible reading of a typo.
+    """
+    m = _SPAN.match(str(span or ""))
+    return int(m.group(1)) * _SECONDS[m.group(2).lower()] if m else None
+
+
 def legal_name(name: str) -> bool:
     """A procedure name is an identifier — lowercase, underscores, no spaces.
 
@@ -221,9 +241,87 @@ class Store:
         self.broken = bad
         return out
 
+    # ── when it runs, if anything but a caller decides ───────────────────────
+    def state(self, name: str) -> Dict[str, Any]:
+        """What this procedure's SCHEDULE has seen. `{last_run, last_seen}` or empty.
+
+        A SEPARATE FILE, and deliberately not a field on the program. The `.medusa` is the
+        artifact the operator reads, edits and shares; when it last ran is not part of what
+        it says, and writing run state into it would rewrite the operator's file behind them
+        every sweep — and invalidate the read cache each time, which is the other half of the
+        cost.
+
+        `.state` RATHER THAN `.state.json`, because `names()` lists `*.json` and a run record
+        would have arrived in the library as a procedure called `<name>.state`.
+        """
+        at = os.path.join(self.path, f"{str(name)}.state")
+        try:
+            with open(at) as fh:
+                return json.load(fh) or {}
+        except Exception:
+            return {}
+
+    def remember(self, name: str, **facts: Any) -> None:
+        os.makedirs(self.path, exist_ok=True)
+        got = {**self.state(name), **facts}
+        with open(os.path.join(self.path, f"{str(name)}.state"), "w") as fh:
+            json.dump(got, fh, indent=1)
+
+    def due(self, now: float, holds=None) -> List[Dict[str, Any]]:
+        """Which stored programs the CLOCK or the WORLD says to run, and why.
+
+        TWO WAYS A PROGRAM RUNS WITHOUT ANYBODY CALLING IT, and they are one object with one
+        extra field rather than two new kinds — a procedure is a tool you wrote, a ROUTINE is
+        one the clock calls, a TRIGGER is one the world calls:
+
+            every: "1h"          due when that long has passed since it last ran
+            when:  <predicate>   due when the world MAKES it true, once per becoming
+
+        `when` FIRES ON THE RISING EDGE, and that is the whole of why `last_seen` exists. A
+        level-triggered rule fires on every sweep for as long as the condition holds, so
+        "when a machine stops answering, snapshot it" would snapshot forever — the operator
+        would learn to ignore it, which is the failure `consent.py` argues about one layer up.
+        Becoming true is an event; being true is a state.
+
+        `now` IS SUPPLIED, never read here. A module that read the clock could not be tested
+        without waiting, and the sweep's caller is the thing that knows what time it is.
+
+        A PREDICATE NOBODY CAN EVALUATE IS NOT A FIRING. `holds` absent, or raising, leaves
+        `last_seen` untouched — unknown is not false, so the edge is still ahead of us rather
+        than behind.
+        """
+        out: List[Dict[str, Any]] = []
+        for proc in self.all():
+            name = proc.get("name")
+            if not name:
+                continue
+            seen = self.state(name)
+            every = proc.get("every")
+            if every:
+                gap = seconds(every)
+                last = seen.get("last_run")
+                if gap is not None and (last is None or now - last >= gap):
+                    out.append({"name": name, "why": (
+                        f"every {every}, and it has never run" if last is None
+                        else f"every {every}, last ran {int(now - last)}s ago"),
+                        "procedure": proc})
+                    continue
+            when = proc.get("when")
+            if when is not None and holds is not None:
+                try:
+                    now_true, why = holds(when, {})
+                except Exception:
+                    continue                       # unknown is not false — no edge either way
+                was = seen.get("last_seen")
+                self.remember(name, last_seen=bool(now_true))
+                if now_true and not was:
+                    out.append({"name": name, "why": f"became true: {why}",
+                                "procedure": proc})
+        return out
+
     def forget(self, name: str) -> bool:
         gone = False
-        for ext in (".medusa", ".json"):
+        for ext in (".medusa", ".json", ".state"):
             at = os.path.join(self.path, f"{str(name)}{ext}")
             if os.path.exists(at):
                 os.remove(at)

@@ -66,6 +66,20 @@ def coerce_body(raw: Any) -> Optional[List[Any]]:
     return raw if isinstance(raw, list) and raw else None
 
 
+def _stored() -> set:
+    """Every procedure the operator has kept, by name. Empty if the library is unreachable.
+
+    A LIBRARY THAT CANNOT BE READ MUST NOT BREAK VALIDATION. This is a widening — it can only
+    make a program legal that would otherwise be refused — so failing closed here costs
+    nothing and failing loudly would take down every validation over a bad directory.
+    """
+    try:
+        from ..procedures import LIBRARY
+        return set(LIBRARY.names())
+    except Exception:
+        return set()
+
+
 def validate(program: Any, known_tools=None, known_names=None,
              bound: Optional[set] = None,
              sets: Optional[set] = None,
@@ -98,7 +112,17 @@ def validate(program: Any, known_tools=None, known_names=None,
     # `known_names`, which is a flat list and cannot answer "are there already five vms".
     # Optional, because well-formedness must be answerable without a world; supplied, it
     # is what lets a counted creation be judged against what is already there.
-    tools = _KNOWN_TOOLS if known_tools is None else known_tools
+    # THE OPERATOR'S OWN LIBRARY IS A LEGAL CALL TARGET, and it is added HERE rather than at
+    # a call site because there are three of them and only one had it. `run()` unioned the
+    # stored names in; `MedusaEngine._plan` did not — so the writer PLANNED a call to a
+    # procedure, this refused the program as naming an unknown tool, and the engine's
+    # invalid-program branch reported it as "nothing to do". The operator was told a request
+    # was already satisfied because their own snippet was not recognised.
+    #
+    # A PROCEDURE EXTENDS WHAT MAY BE CALLED AND NEVER LICENSES A TOOL THAT WAS REFUSED —
+    # union, never replacement — and a caller that supplied nothing is asking about
+    # well-formedness alone, where a library it cannot see has no bearing.
+    tools = _KNOWN_TOOLS if known_tools is None else set(known_tools) | _stored()
     body = coerce_body(program)
     if body is None:
         return False, ["program has no statements"]

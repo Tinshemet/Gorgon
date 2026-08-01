@@ -358,6 +358,124 @@ def test_write_it_then_use_it():
               [t for t, _ in plan] == ["vm_disk_builder"])
 
 
+def test_a_span_is_read_or_refused_and_never_guessed():
+    """A schedule nobody can read must not become "every zero seconds"."""
+    print("[routines] a span, in the form the manifest already declares")
+    for text, want in (("30s", 30), ("15m", 900), ("1h", 3600), ("7d", 604800),
+                       (" 2 h ", 7200)):
+        check(f"{text!r} -> {want}", procs.seconds(text) == want)
+    for junk in ("", None, "hourly", "1", "1w", "-5m", "1.5h", "soon"):
+        check(f"{junk!r} is refused, not guessed", procs.seconds(junk) is None)
+
+
+def test_the_clock_calls_a_routine_and_only_when_it_is_due():
+    print("[routines] every 1h means every 1h")
+    with _Library() as lib:
+        sweep = _builder("hourly_sweep")
+        sweep["every"] = "1h"
+        lib.save(sweep, render(sweep))
+
+        due = lib.due(1000.0)
+        check("a routine that has never run is due", [d["name"] for d in due]
+              == ["hourly_sweep"])
+        check("and it says why", "never run" in due[0]["why"])
+
+        lib.remember("hourly_sweep", last_run=1000.0)
+        check("just-run is not due", lib.due(1000.0) == [])
+        check("and neither is it 59 minutes later", lib.due(1000.0 + 3540) == [])
+        check("an hour later it is", len(lib.due(1000.0 + 3600)) == 1)
+
+        # `now` IS SUPPLIED, NEVER READ. A module that reached for the clock could not be
+        # tested without waiting, and the caller is what knows what time it is.
+        check("nothing here reads a clock", "time" not in dir(procs))
+
+
+def test_a_trigger_fires_on_becoming_true_and_not_on_being_true():
+    """LEVEL-TRIGGERED IS THE BUG. "When a machine stops answering, snapshot it" run as a
+    level rule snapshots forever, and the operator learns to ignore it."""
+    print("[routines] a trigger fires on the edge, once per becoming")
+    with _Library() as lib:
+        watch = _builder("on_empty")
+        watch["when"] = {"shape": "count", "select": {"kind": "vm"}, "eq": 0}
+        lib.save(watch, render(watch))
+
+        world = SimWorld()
+        _select, holds = seams(world)
+
+        check("an empty lab fires it once", len(lib.due(1.0, holds=holds)) == 1)
+        check("and not again while it stays empty", lib.due(2.0, holds=holds) == [])
+
+        world.execute("create_vm", {"name": "a", "os_type": "linux"})
+        check("a lab that filled up does not fire it", lib.due(3.0, holds=holds) == [])
+        world.execute("delete_vm", {"name": "a"})
+        check("emptying it again is a new edge", len(lib.due(4.0, holds=holds)) == 1)
+
+
+def test_a_condition_nobody_can_evaluate_is_not_a_firing():
+    """UNKNOWN IS NOT FALSE, which means it is not the far side of an edge either — the
+    becoming is still ahead of us rather than behind."""
+    print("[routines] an unanswerable condition moves nothing")
+    with _Library() as lib:
+        watch = _builder("on_mystery")
+        watch["when"] = {"shape": "count", "select": {"kind": "vm"}, "eq": 0}
+        lib.save(watch, render(watch))
+
+        def cannot(pred, scope):
+            raise RuntimeError("the world cannot answer that")
+
+        check("it does not fire", lib.due(1.0, holds=cannot) == [])
+        check("and nothing was remembered about it",
+              lib.state("on_mystery").get("last_seen") is None)
+        world = SimWorld()
+        _select, holds = seams(world)
+        check("so the first real answer is still an edge",
+              len(lib.due(2.0, holds=holds)) == 1)
+
+
+def test_being_scheduled_earns_a_program_nothing():
+    """A due routine is served by the ordinary path. If a schedule could license work the
+    same program could not do when typed, the schedule would be a way around every gate."""
+    print("[routines] due is about WHEN, never about what is allowed")
+    with _Library() as lib:
+        watch = _builder("nightly")
+        watch["every"] = "1d"
+        at = lib.save(watch, render(watch))
+        check("it is kept like any other procedure", at.endswith("nightly.medusa"))
+        check("it is callable by name", lib.get("nightly") is not None)
+        check("and it is still reachable by the writer, because it says what it achieves",
+              lib.covering({"shape": "count",
+                            "select": {"kind": "vm", "name": "web"}, "eq": 1}) is not None)
+        # THE STATE IS NOT THE PROGRAM. Writing `last_run` into the artifact would rewrite
+        # the operator's own file every sweep and invalidate the read cache each time.
+        lib.remember("nightly", last_run=5.0)
+        check("run state is kept beside it, not inside it",
+              "last_run" not in (lib.text("nightly") or ""))
+        check("and the IR is untouched", "last_run" not in json.dumps(lib.get("nightly")))
+
+
+def test_a_due_routine_runs_through_the_ordinary_engine():
+    """THE SEAM THAT WOULD OTHERWISE BE LEFT AT None. A schedule nobody sweeps is a feature
+    that does not fail because it does not run — the shape `rig.py` exists to prevent."""
+    print("[routines] and the sweep actually runs one")
+    from orchestrator.ai.engines import Channel, MedusaEngine, Orchestrator, Registry
+
+    with _Library() as lib:
+        lib.save(_builder("nightly_box"), render(_builder("nightly_box")))
+        world = SimWorld()
+
+        class LabEngine(MedusaEngine):
+            def claims(self, request):
+                return True
+
+        reg = Registry()
+        reg.mount(LabEngine(world))
+        out = Orchestrator(reg, Channel()).handle(
+            "nightly_box", intent="achieve", regime="translation",
+            components=[{"_call": ("nightly_box", {"box": "web"})}])
+        check(f"it closes DONE ({out.get('why')})", out["outcome"] == "DONE")
+        check("the procedure's body actually ran", "web" in world.vms)
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "procedures"))

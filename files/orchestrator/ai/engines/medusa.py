@@ -310,11 +310,17 @@ class MedusaEngine(Engine):
                     if not staged.get("ok"):
                         return {**staged, "calls": calls, "partial": done}
                     planned = staged
+                # `ok` BEFORE `done`, AND THE ORDER WAS THE BUG. `_plan` marks an INVALID
+                # program `done: True` so the caller stops rather than running it — and this
+                # read `done` first, so a program the validator refused was folded into the
+                # satisfied pile and the session closed DONE with an empty rendering. The
+                # operator was told their request needed nothing doing because the writer had
+                # produced something unrunnable.
+                if not planned.get("ok", True):
+                    return {**planned.get("result", planned), "calls": calls}
                 if planned.get("done"):
                     done += goals
                     continue
-                if not planned.get("ok", True):
-                    return {**planned.get("result", planned), "calls": calls}
 
                 # PLANNED, SO IT IS ALREADY KNOWN. Computing this before the yield rather
                 # than after a DECOMPOSE means the step can DECLARE its own grain, and a
