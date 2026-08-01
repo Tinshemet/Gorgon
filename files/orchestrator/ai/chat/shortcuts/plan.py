@@ -113,7 +113,15 @@ class Plan(Shortcut):
         # granted and no question worth asking. Asking anyway is the prompt-that-fires-on-
         # ordinary-requests failure in its politest form: a question whose answer changes
         # nothing, in front of every snippet the operator ever writes.
-        granted = (None if keep_as
+        # NEITHER A DRY RUN NOR AN AUTHORING REQUEST NEEDS A RUNG, and for one reason: NOTHING
+        # RUNS. A dry run stops at the first step by construction and an authoring request
+        # plans and keeps — so the question "what do you want back?" has an answer that
+        # changes nothing, asked in front of every preview the operator ever takes.
+        #
+        # FOUND BY POINTING `plan --dry` AT THE REAL LAB, which is the second time that has
+        # caught this exact shape today: the authoring branch asked it too, for the same
+        # reason, and was fixed one branch over.
+        granted = (None if (keep_as or dry)
                    else _intent.resolve(request, asked=self._ask_intent))
         request = _intent.strip_prefix(request)
 

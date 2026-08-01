@@ -187,11 +187,19 @@ def test_the_plan_shortcut_settles_the_intent_before_it_builds_anything():
               callable(seen.get("consent")))
 
         seen.clear()
-        # A DRY RUN NEVER REACHES THE WORLD, so there is nothing to consent to — and offering
-        # the question anyway would teach the operator to answer one that decides nothing.
+        # A DRY RUN NEVER REACHES THE WORLD, so it needs NEITHER a consent surface nor a rung.
+        # Offering either would teach the operator to answer questions that decide nothing —
+        # and the intent question was doing exactly that in front of every preview, found by
+        # pointing `plan --dry` at the real lab.
         Plan().run("plan --dry fetch: how many machines are there", [], 0, False)
-        check("a fetch stays a fetch", seen.get("intent") == "fetch")
-        check("and a dry run is offered no consent surface", seen.get("consent") is None)
+        check("a dry run asks for no authority", seen.get("intent") is None)
+        check("and is offered no consent surface", seen.get("consent") is None)
+
+        seen.clear()
+        # THE SAME REQUEST WET still settles it, so the rung is withheld by the DRY flag
+        # rather than lost.
+        Plan().run("plan fetch: how many machines are there", [], 0, False)
+        check("and the same request, wet, still resolves one", seen.get("intent") == "fetch")
     finally:
         _rig.build = real
 

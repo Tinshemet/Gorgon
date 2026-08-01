@@ -456,6 +456,20 @@ def _as_count(v: Any) -> Optional[int]:
     # machine vm1" into "one machine". Two numbers ("3 of the 5 machines") is a sentence this
     # cannot read, and declining beats picking one — the rule this module keeps: compute
     # where the answer is determined, decline where it is not.
+    # A TOKEN WITH DIGITS AND NO LETTERS IS A NUMBER, whatever punctuation is around it.
+    # `vm1` is a NAME that happens to contain a digit and must never be read as one — which is
+    # why single tokens are declined below — but that rule also threw away `/2`, and `/2` is
+    # how this model wrote "exactly two machines". MEASURED 3/3, and the request it lost is
+    # the one this codebase's own note calls the dangerous case: against a real lab it plans
+    # seven deletions including vm-orchestrator. It came back UNTRANSLATED instead.
+    #
+    # THE LETTERS ARE WHAT SEPARATE THEM, so the rule is exact rather than a guess: strip
+    # everything that is not a digit, and accept only if nothing alphabetic was there to
+    # begin with.
+    if not any(c.isalpha() for c in text):
+        digits = "".join(c for c in text if c.isdigit())
+        if digits:
+            return int(digits)
     if " " in text:
         found = __import__("re").findall(r"\b\d+\b", text)
         words = [w for w in _WORD_NUMBERS if __import__("re").search(rf"\b{w}\b", text)]
