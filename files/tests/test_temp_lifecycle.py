@@ -63,12 +63,25 @@ def _deletes(text):
     return [ln for ln in text.splitlines() if ln.startswith("delete_vm(")]
 
 
+def _creates(program, kind="vm"):
+    """Creations, asked of the IR rather than the rendering.
+
+    A CREATION IS A `new`, NOT A CALL — the language has an operator for it, and the writer
+    now uses it. These assertions read the op so they say what they mean and do not break
+    the next time the surface changes.
+    """
+    creators = {(effects._K(None).get(k) or {}).get("create") for k in (kind,)}
+    return [st for st in program["body"]
+            if st.get("op") in ("new", "call")
+            and (st.get("kind") == kind or st.get("tool") in creators)]
+
+
 def test_a_machine_the_operator_named_is_never_taken_away():
     print("[lifecycle] named by the operator -> theirs")
-    _p, temps, text = _plan([{"shape": "count",
-                              "select": {"kind": "vm", "name": "keeper",
-                                         "status": "running"}, "eq": 1}])
-    check("it is created", "create_vm" in text)
+    program, temps, text = _plan([{"shape": "count",
+                                   "select": {"kind": "vm", "name": "keeper",
+                                              "status": "running"}, "eq": 1}])
+    check("it is created", len(_creates(program)) == 1)
     check("nothing is marked temporary", temps == [])
     check("and nothing is deleted", not _deletes(text))
 
@@ -76,18 +89,19 @@ def test_a_machine_the_operator_named_is_never_taken_away():
 def test_a_name_in_an_attribute_is_still_a_name():
     """"take a snapshot of web" names web as plainly as "the machine web" does."""
     print("[lifecycle] named as an attribute -> still theirs")
-    _p, temps, text = _plan([{"shape": "count",
-                              "select": {"kind": "snapshot", "snap_name": "s1",
-                                         "vm": "web"}, "eq": 1}])
-    check("the machine is brought into being", "create_vm(os_type: linux, name: web)" in text)
-    check("the snapshot is taken of it", "snapshot_create" in text)
+    program, temps, text = _plan([{"shape": "count",
+                                   "select": {"kind": "snapshot", "snap_name": "s1",
+                                              "vm": "web"}, "eq": 1}])
+    check("the machine is brought into being", len(_creates(program)) == 1)
+    check("the snapshot is taken of it", len(_creates(program, "snapshot")) == 1)
     check("and the machine survives", not _deletes(text) and temps == [])
 
 
 def test_deleting_is_what_the_operator_asked_for():
     print("[lifecycle] told to remove it -> removed")
-    _p, temps, text = _plan([{"shape": "count", "select": {"kind": "vm", "name": "doomed"},
-                              "eq": 0}], seed=("doomed",))
+    _program, temps, text = _plan([{"shape": "count",
+                                    "select": {"kind": "vm", "name": "doomed"}, "eq": 0}],
+                                  seed=("doomed",))
     check("it is deleted", _deletes(text) == ["delete_vm(name: doomed);"])
     check("but not as scaffolding — the operator asked", temps == [])
 
@@ -95,10 +109,10 @@ def test_deleting_is_what_the_operator_asked_for():
 def test_a_fetched_machine_is_never_deleted():
     """It was already there. The program did not make it and does not get to unmake it."""
     print("[lifecycle] fetched -> left exactly as found")
-    _p, temps, text = _plan([{"every": {"kind": "vm"}, "must": {"label": "audit"}}],
-                            seed=("existing1", "existing2"))
+    program, temps, text = _plan([{"every": {"kind": "vm"}, "must": {"label": "audit"}}],
+                                 seed=("existing1", "existing2"))
     check("the label is applied", "add_label" in text)
-    check("nothing was created", "create_vm" not in text)
+    check("nothing was created", not _creates(program))
     check("nothing is temporary", temps == [])
     check("and nothing is deleted", not _deletes(text))
 

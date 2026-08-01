@@ -104,6 +104,31 @@ def postcondition(tool: str, args: Dict[str, Any], kinds=None) -> Optional[Dict[
     return None
 
 
+def _mint_required(spec: Dict[str, Any], args: Dict[str, Any], kinds) -> None:
+    """Fill in a REQUIRED host nobody named. Mutates `args`.
+
+    "Search the web for X" says nothing about a browser or a machine, and a search cannot
+    exist without either — so the writer names them, exactly as it names the machines behind
+    "create 5 vms". Declared per kind with `create_requires` and NEVER INFERRED: minting for
+    an optional reference would grow a program work nobody asked for.
+
+    IT BELONGS TO BOTH CREATOR BRANCHES. `invert` reaches a creator two ways — a goal naming
+    only the key ("a search for X exists") and one naming attributes too — and putting this
+    in the second alone meant the commonest shape of all, a bare identity, silently skipped
+    its own requirements.
+    """
+    rename = spec.get("create_args") or {}
+    for req in (spec.get("create_requires") or ()):
+        # A REQUIREMENT IS A KIND, or a kind plus what must be true of it.
+        need = req["kind"] if isinstance(req, dict) else req
+        arg = rename.get(need, need)
+        if args.get(arg) is not None:
+            continue
+        ref_spec = _K(kinds).get(need) or {}
+        if ref_spec.get("key"):
+            args[arg] = f"{need}1"
+
+
 def precondition(tool: str, args: Dict[str, Any], kinds=None) -> list:
     """What must ALREADY be true for `tool` to succeed. Derived, never declared.
 
@@ -133,13 +158,23 @@ def precondition(tool: str, args: Dict[str, Any], kinds=None) -> list:
     # the name being a DECLARED KIND, so an ordinary attribute never becomes a dependency.
     if tool == spec.get("create"):
         rename = spec.get("create_args") or {}
+        # WHAT A REQUIREMENT DEMANDS BEYOND EXISTING. A browser needs a machine that is
+        # RUNNING, not merely one that has been created — a process cannot start on a host
+        # that is switched off, and requiring only existence produced a program that made a
+        # machine and then tried to run something inside it.
+        demands = {}
+        for req in (spec.get("create_requires") or ()):
+            if isinstance(req, dict) and req.get("kind"):
+                demands[req["kind"]] = req.get("must") or {}
         for attr in (spec.get("attrs") or ()):
             ref_spec = _K(kinds).get(attr)
             if not ref_spec or not ref_spec.get("key"):
                 continue
             value = args.get(rename.get(attr, attr))
             if value is not None:
-                out.append(_exists(attr, ref_spec["key"], value))
+                need = _exists(attr, ref_spec["key"], value)
+                need["select"].update(demands.get(attr) or {})
+                out.append(need)
         return out
 
     setter = (spec.get("setters") or {}).get(tool)
@@ -201,6 +236,7 @@ def invert(pred: Dict[str, Any], kinds=None, internal: bool = False) -> Optional
             return None
         args = dict((spec.get("create_defaults") or {}))
         args[key] = member
+        _mint_required(spec, args, kinds)
         return (creator, args)
     if len(rest) == 1:
         attr, value = next(iter(rest.items()))
@@ -240,6 +276,7 @@ def invert(pred: Dict[str, Any], kinds=None, internal: bool = False) -> Optional
         rename = spec.get("create_args") or {}
         for a, v in rest.items():
             args[rename.get(a, a)] = v
+        _mint_required(spec, args, kinds)
         return (spec["create"], args)
 
 

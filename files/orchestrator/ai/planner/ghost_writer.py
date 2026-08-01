@@ -542,6 +542,43 @@ def groundable(goal: Dict[str, Any]) -> bool:
     return not ("_call" in goal or "observe" in goal)
 
 
+def _as_statement(tool: str, args: Dict[str, Any], kinds) -> Dict[str, Any]:
+    """One placed tile as a Medusa statement — `new` for a creation, `call` for the rest.
+
+    THE LANGUAGE HAS A CREATION OPERATOR AND THE WRITER WAS NOT USING IT. Every tile came
+    out as a bare tool call, so a program that made a machine read `create_vm(name: vm1)`
+    where Medusa says `STORE vm1 = NEW vm(...)`. That is not a formatting preference: `new`
+    is the operator the runtime mints names through, the one the book keeper's registry
+    injection hangs off, and the one that BINDS what it made so later statements can refer
+    to it rather than repeating a string literal.
+
+    Everything else stays a `call`, which is what it is: a tool being invoked.
+    """
+    spec = None
+    kind = effects._kind_of(tool, kinds)
+    if kind:
+        spec = effects._K(kinds).get(kind) or {}
+    # WITHDRAWN, AND THE REASON IS WORTH MORE THAN THE CHANGE WAS.
+    #
+    # This emitted `new` for creations, which is right in principle — the language HAS a
+    # creation operator, `new` is what the runtime mints names through, and a program of raw
+    # tool calls is not really written in its own language. It produced:
+    #
+    #     STORE http://x = NEW page(url: http://x);
+    #
+    # `http://x` IS NOT A LEGAL VARIABLE NAME. Fed back in, or written by hand, that program
+    # fails. The var was the member's KEY VALUE, which is a name for a thing in the world and
+    # not an identifier in a program, and those are different alphabets.
+    #
+    # EVERY SUITE STAYED GREEN, and that is the finding: the writer builds IR DIRECTLY, so it
+    # is never held to the constraints the MODEL is held to. The schema constrains `var` to
+    # something pronounceable and the writer never meets the schema, so it can emit programs
+    # a user could not have written and the system cannot re-read. `test_writer_output_is_
+    # writable` now closes that, and doing `new` properly means binding real identifiers AND
+    # referring to them with the sigil — a whole change, not half of one.
+    return {"op": "call", "tool": tool, "args": args}
+
+
 def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
                temps: List = None) -> Dict[str, Any]:
     """The plan as a grounded Medusa program.
@@ -561,7 +598,8 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
         for tool, args in plan:
             scratch.execute(tool, args)
     select = _seams_of(scratch)[0] if scratch is not None else (lambda s, scope=None: [])
-    body = [{"op": "call", "tool": t, "args": a} for t, a in plan]
+    kinds_now = _kinds(scratch)
+    body = [_as_statement(t, a, kinds_now) for t, a in plan]
     # GROUNDED THROUGH `_ground`, because a goal and a WITNESS are not the same object. An
     # `every` component is not a predicate the language can evaluate; its witness is a count
     # over the same set, and the number is resolved against the world AS THE PROGRAM LEAVES

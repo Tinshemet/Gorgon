@@ -56,95 +56,139 @@ def _facts() -> List[str]:
     return sorted(out) or ["alive"]
 
 
-_WHERE = {
-    "type": "array",
-    "items": {
-        "type": "object",
-        "properties": {
-            "attr": {"type": "string", "enum": _attrs(),
-                     "description": "which property to match on"},
-            "value": {"type": "string",
-                      "description": "the value it must have, as written by the operator"},
-        },
-        "required": ["attr", "value"],
-        "additionalProperties": False,
-    },
-}
-
-_SELECT = {
-    "type": "object",
-    "properties": {
-        "kind": {"type": "string", "enum": _kinds()},
-        "where": _WHERE,
-        "except": {**_WHERE,
-                   "description": "members to EXCLUDE — 'every vm except db' puts db here"},
-    },
-    "required": ["kind"],
-    "additionalProperties": False,
-}
-
 # ONE BRANCH PER SHAPE OF GOAL, and the set is closed. A request that fits none of these is
 # one the writer could not build anyway, so the honest outcome is a refusal at this step
 # rather than a program nobody can trust.
-SCHEMA = {
-    "type": "object",
-    "properties": {
-        # DECLINING MUST BE LEGAL, or the model routes around the check. This carried
-        # `minItems: 1` and `required: ["goals"]`, which means the GRAMMAR MADE REFUSAL
-        # IMPOSSIBLE — asked to translate "asdkjh qwe ;;; 42" the model could not answer
-        # "that is not a request", so it invented one ("make every vm running") and the
-        # writer built it and the orchestrator reported DONE. Found by the prompt matrix
-        # 2026-08-01, which is exactly what a matrix of six PROMPT KINDS is for: thirteen
-        # valid rungs could never have shown it.
-        #
-        # A schema that forbids the honest answer does not get honesty. It gets a
-        # confident answer to a question nobody asked.
-        "cannot": {
-            "type": "string",
-            "description": ("say WHY, if this is not a request you can express as goals — "
-                            "it is noise, it is ambiguous, or it asks for something these "
-                            "goals cannot say. Leave `goals` empty when you set this."),
-        },
-        "goals": {
-            "type": "array",
-            "minItems": 0,
-            "items": {
-                "type": "object",
-                "properties": {
-                    "goal": {
-                        "type": "string",
-                        "enum": ["count", "reach", "every", "per", "observe"],
-                        "description": (
-                            "count: how many members must match. "
-                            "reach: these must be able to reach each other. "
-                            "every: every member of a set must get a property. "
-                            "per: make one new thing for each member of a set. "
-                            "observe: ask each member something, without requiring an answer"
-                        ),
-                    },
-                    "select": _SELECT,
-                    "amount": {"type": "integer",
-                               "description": "for count: how many. for reach: how few is too few"},
-                    "attr": {"type": "string", "enum": _attrs(),
-                             "description": "for every: which property to give them"},
-                    "value": {"type": "string",
-                              "description": "for every: what to set that property to"},
-                    "make": {"type": "string", "enum": _kinds(),
-                             "description": "for per: what kind of thing to make"},
-                    "link": {"type": "string", "enum": _attrs(),
-                             "description": "for per: the property tying the new thing to the member"},
-                    "fact": {"type": "string", "enum": _facts(),
-                             "description": "for observe: what to ask"},
-                },
-                "required": ["goal", "select"],
-                "additionalProperties": False,
+def schema(kinds=None) -> Dict[str, Any]:
+    """The grammar the model is decoded against — BUILT FROM THE MANIFEST IN FORCE.
+
+    IT USED TO BE A MODULE CONSTANT, frozen at import from the default manifest, and that
+    made a package half-mounted: its kinds joined what the system could DO and never what it
+    could be ASKED for. Loading the Camoufox package let the writer plan a search and left
+    the model unable to say the word — "search the web for the diameter of the earth" came
+    back with zero goals, and the request closed UNTRANSLATED with nothing wrong anywhere
+    the ledger could point at.
+
+    A CAPABILITY THAT CANNOT BE REQUESTED IS NOT MOUNTED. Rebuilding costs microseconds and
+    is done per call, so `config.use_kinds` — which every engine operation already runs
+    inside — reaches the front seam the same way it reaches the writer.
+
+    EVERY PIECE THAT READS THE MANIFEST IS BUILT HERE. A first attempt moved only the outer
+    literal and left `_SELECT` at module level, so the KIND ENUM — the one part that decides
+    whether a package's kinds can be named at all — stayed frozen. It appeared to work only
+    because a test imported this module from inside the context.
+    """
+    _WHERE = {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "attr": {"type": "string", "enum": _attrs(),
+                         "description": "which property to match on"},
+                "value": {"type": "string",
+                          "description": "the value it must have, as written by the operator"},
             },
-        }
-    },
-    # NOTHING IS REQUIRED. Either answer is a complete one: goals, or a reason there are
-    # none. Requiring `goals` is what made refusal unsayable in the first place.
-    "additionalProperties": False,
-}
+            "required": ["attr", "value"],
+            "additionalProperties": False,
+        },
+    }
+
+    _SELECT = {
+        "type": "object",
+        "properties": {
+            "kind": {"type": "string", "enum": _kinds()},
+            "where": _WHERE,
+            "except": {**_WHERE,
+                       "description": "members to EXCLUDE — 'every vm except db' puts db here"},
+        },
+        "required": ["kind"],
+        "additionalProperties": False,
+    }
+
+    return {
+        "type": "object",
+        "properties": {
+            # DECLINING MUST BE LEGAL, or the model routes around the check. This carried
+            # `minItems: 1` and `required: ["goals"]`, which means the GRAMMAR MADE REFUSAL
+            # IMPOSSIBLE — asked to translate "asdkjh qwe ;;; 42" the model could not answer
+            # "that is not a request", so it invented one ("make every vm running") and the
+            # writer built it and the orchestrator reported DONE. Found by the prompt matrix
+            # 2026-08-01, which is exactly what a matrix of six PROMPT KINDS is for: thirteen
+            # valid rungs could never have shown it.
+            #
+            # A schema that forbids the honest answer does not get honesty. It gets a
+            # confident answer to a question nobody asked.
+            "cannot": {
+                "type": "string",
+                "description": ("say WHY, if this is not a request you can express as goals — "
+                                "it is noise, it is ambiguous, or it asks for something these "
+                                "goals cannot say. Leave `goals` empty when you set this."),
+            },
+            "goals": {
+                "type": "array",
+                "minItems": 0,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "goal": {
+                            "type": "string",
+                            "enum": ["count", "reach", "every", "per", "observe"],
+                            "description": (
+                                "count: how many members must match. "
+                                "reach: these must be able to reach each other. "
+                                "every: every member of a set must get a property. "
+                                "per: make one new thing for each member of a set. "
+                                "observe: ask each member something, without requiring an answer"
+                            ),
+                        },
+                        "select": _SELECT,
+                        "amount": {"type": "integer",
+                                   "description": "for count: how many. for reach: how few is too few"},
+                        "attr": {"type": "string", "enum": _attrs(),
+                                 "description": "for every: which property to give them"},
+                        "value": {"type": "string",
+                                  "description": "for every: what to set that property to"},
+                        "make": {"type": "string", "enum": _kinds(),
+                                 "description": "for per: what kind of thing to make"},
+                        "link": {"type": "string", "enum": _attrs(),
+                                 "description": "for per: the property tying the new thing to the member"},
+                        "fact": {"type": "string", "enum": _facts(),
+                                 "description": "for observe: what to ask"},
+                    },
+                    "required": ["goal", "select"],
+                    "additionalProperties": False,
+                },
+            }
+        },
+        # NOTHING IS REQUIRED. Either answer is a complete one: goals, or a reason there are
+        # none. Requiring `goals` is what made refusal unsayable in the first place.
+        "additionalProperties": False,
+    }
+
+
+# The default-manifest instance, for callers that only ever wanted that one.
+SCHEMA = schema()
+
+def prompt(kinds=None) -> str:
+    """The system prompt, with the DOMAIN named from the manifest in force.
+
+    IT ASSERTED "virtual machines" UNCONDITIONALLY, and that is a false statement the moment
+    a package is loaded. Asked to translate "search the web for the diameter of the earth"
+    with the Camoufox package mounted — its kinds in the schema, the writer able to plan the
+    whole chain — the model answered `cannot: too vague` and was RIGHT TO: it had been told
+    the subject was machines, and a web search is not one.
+
+    ONLY THE DOMAIN CLAIM IS BUILT, and deliberately nothing else. Every other line of this
+    prompt has been measured, several of them expensively; changing more while chasing a
+    package would mix an unmeasured edit into a measured artifact. The nouns come from the
+    manifest, which is where the operator's words already live.
+    """
+    nouns = []
+    for kind, spec in (config.KINDS or {}).items():
+        nouns.append((spec.get("nouns") or [kind])[0])
+    subject = ", ".join(sorted(nouns)) or "virtual machines"
+    return PROMPT.replace("about virtual machines", f"about {subject}")
+
 
 PROMPT = """You read an operator's request about virtual machines and say WHAT MUST BE TRUE
 when it is done. You do NOT write any program, choose any tool, or decide any order —
@@ -439,7 +483,52 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
                 out.append({"per": sel, "make": g["make"], "link": link})
         elif shape == "observe":
             out.append({"observe": sel, "fact": g.get("fact") or "alive"})
-    return _one_statement_not_two(out)
+    return _subject_survived(_one_statement_not_two(out), request)
+
+
+def _subject_survived(goals: List[Dict[str, Any]], request: str) -> List[Dict[str, Any]]:
+    """Drop everything when the request's SUBJECT is missing from the goals.
+
+    THE FAILURE THIS EXISTS FOR, and it is the worst kind. "search the web for the diameter
+    of the earth" came back as two goals about MACHINES — put them on a network, make there
+    be three — and the whole system then worked perfectly: the writer built that program, it
+    ran, its ENSUREs asserted exactly what it had done, grounding passed, and the orchestrator
+    reported DONE. Three machines and a network, no search, no answer, and nothing anywhere
+    that could tell.
+
+    A PROGRAM VOUCHES FOR ITS OWN GOALS, NEVER FOR THE REQUEST. That is a real hole and this
+    is the narrow, non-lexical part of it that can be closed here: if the operator named a
+    KIND — by any noun the manifest records for it — then some goal must be about that kind.
+    Not the words, not the verbs, not a clause count: the SUBJECT.
+
+    SAME SHAPE AS THE REACH GUARD, which is measured and kept: `reach` is never invented
+    because the evidence for it is IN THE REQUEST, so it is checked there. This is the
+    mirror — a subject the request DOES name may not vanish.
+
+    IT DROPS EVERYTHING RATHER THAN THE ODD GOAL. A translation that lost the subject is not
+    partly right; the goals that remain are about something else entirely, and running them
+    is how three machines get made for a question about the earth. UNTRANSLATED is the honest
+    close, and it is recoverable — a wrong program is not.
+    """
+    if not request or not goals:
+        return goals
+    words = {w.strip(".,!?;:'\"").lower() for w in request.split()}
+    mentioned = set()
+    for kind, spec in (config.KINDS or {}).items():
+        nouns = {kind, *(spec.get("nouns") or ())}
+        if nouns & words or {n + "s" for n in nouns} & words:
+            mentioned.add(kind)
+    if not mentioned:
+        return goals
+    covered = set()
+    for g in goals:
+        for holder in ("select", "every", "observe", "per"):
+            sel = g.get(holder)
+            if isinstance(sel, dict) and sel.get("kind"):
+                covered.add(sel["kind"])
+        if isinstance(g.get("make"), str):
+            covered.add(g["make"])
+    return goals if mentioned & covered else []
 
 
 def _one_statement_not_two(goals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -510,10 +599,10 @@ def extract(request: str, model: str = None, temp: float = 0.0,
     body = {
         "model": model or BENCH_MODEL,
         "stream": False,
-        "format": SCHEMA,
+        "format": schema(),
         "keep_alive": pinned.KEEP_ALIVE,
         "options": pinned.options(temp),
-        "messages": [{"role": "system", "content": PROMPT},
+        "messages": [{"role": "system", "content": prompt()},
                      {"role": "user", "content": request}],
     }
     req = urllib.request.Request(

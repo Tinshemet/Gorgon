@@ -54,17 +54,22 @@ from .base import Package
 MANIFEST: Dict[str, Any] = {
     "browser": {
         "key": "browser_name",
-        "attrs": ["browser_name", "host", "status"],
+        "attrs": ["browser_name", "vm", "status"],
         "nouns": ["browser", "camoufox", "webcrawler", "crawler"],
         "create": "camoufox_launch",
         "delete": "camoufox_close",
         "attr_values": {"status": ["running", "stopped"]},
         "create_defaults": {"status": "running"},
+        # A BROWSER'S MACHINE IS FIXED AT BIRTH, not assigned afterwards. A process runs on
+        # a host from the moment it starts — there is no launching one nowhere and binding
+        # it later — and saying so is what makes the machine a REQUIREMENT rather than an
+        # attribute somebody might set. Same shape as the kitchen's lesson: an ingredient's
+        # dish is what the ingredient IS.
+        # RUNNING, not merely existing. A browser process cannot start on a machine that is
+        # switched off, and the writer turns that into `create_vm` then `launch_vm` — with
+        # no display, because this machine is the program's own.
+        "create_requires": [{"kind": "vm", "must": {"status": "running"}}],
         "setters": {
-            # `refs: vm` IS THE WHOLE DEPENDENCY. It says a browser's host names a MACHINE,
-            # and from that alone the writer works out that the machine must exist first.
-            "camoufox_bind": {"attr": "host", "member_arg": "browser_name",
-                              "value_arg": "vm_name", "refs": "vm"},
             "camoufox_stop": {"attr": "status", "member_arg": "browser_name",
                               "value": "stopped"},
         },
@@ -79,7 +84,11 @@ MANIFEST: Dict[str, Any] = {
         "attrs": ["query", "browser", "answered"],
         "nouns": ["search", "query", "lookup", "question"],
         "create": "camoufox_search",
-        "create_args": {"browser": "in_browser"},
+        # THE ARGUMENT NAME MATCHES THE ATTRIBUTE, so the chain derives. An earlier version
+        # renamed it to `in_browser`, which broke the tie `precondition` reads — the
+        # attribute `browser` names the KIND browser, and that is the whole dependency.
+        "create_args": {},
+        "create_requires": ["browser"],
         "attr_values": {"answered": ["yes", "no"]},
         "create_defaults": {"answered": "no"},
         # OBSERVED — LEARNED BY ASKING, NEVER INFERRED. A search that ran is not a search
