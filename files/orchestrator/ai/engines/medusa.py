@@ -48,6 +48,12 @@ def _findings_of(world, result) -> List[Dict[str, Any]]:
             if result.get("ok") else [])
 
 
+# HOW MANY TIMES ONE IN-SESSION MAY BE TOLD TO OPEN A NODE INSTEAD OF RUNNING IT. Twelve
+# matches the writer's own lowering depth, for one reason: a session that out-opens its writer
+# is refining a goal the writer already knows how to reach.
+_MAX_OPENINGS = 12
+
+
 class MedusaEngine(Engine):
     name = "medusa"
     description = ("write and run a Gorgon program — plan several steps against the lab, "
@@ -92,6 +98,136 @@ class MedusaEngine(Engine):
         """
         return bool(self.manifest)
 
+    def steps(self, components: List[Dict[str, Any]], session=None):
+        """THE IN-SESSION: what this engine wants a verdict on before it acts.
+
+            engine:        this node — run it, or decompose it?
+            orchestrator:  run it / decompose it / stop
+            ...until the work is done or refused.
+
+        THE ENGINE DECOMPOSES; THE ORCHESTRATOR ONLY SAYS WHETHER IT SHOULD. That division
+        is deliberate. Decomposing needs the manifest, the world and the lowering rules — all
+        of which belong to the engine — while the decision to spend another round on a node
+        belongs to whoever holds the budget and the operator's consent, which is never the
+        thing asking for more.
+
+        THE REGIME DECIDES THE STARTING GRAIN, mechanically rather than by description:
+
+            TRANSLATION  the writer plans the WHOLE request, so it opens with ONE exchange —
+                         "here is the program, run it?" One question, one verdict.
+            TREE         each goal is offered SEPARATELY, so the orchestrator rules on every
+                         node. That is exactly why promotion COSTS: a tree is not a cleverer
+                         regime, it is a more expensive conversation.
+
+        BUT THE GRAIN IS NOT FIXED BY THE REGIME — a DECOMPOSE verdict refines it. A whole
+        program told to decompose becomes its goals; a goal told to decompose becomes its
+        sub-goals. That is what makes the verdict real: an earlier version accepted DECOMPOSE
+        and ran the node anyway, which is the recorded-but-inert escalation this project has
+        found in three separate places.
+
+        A STOP is honoured and the work stops where it stopped — reported as partial rather
+        than rolled back, because the calls already made are facts.
+        """
+        from .insession import DECOMPOSE, RUN, STOP, Step
+
+        with _config.use_kinds(self.manifest if self._foreign else None):
+            whole = getattr(session, "regime", "translation") != "tree"
+            # THE QUEUE IS THE TREE, breadth-first and explicit. A node is (goals, label) —
+            # the whole request is just the node whose goals are all of them, which is why
+            # translation and tree are one loop rather than two code paths that drift.
+            queue = [(list(components), "the whole program")] if whole else \
+                    [([g], "one goal") for g in components]
+            calls, done, opened, ran_nodes = [], [], 0, []
+            while queue:
+                goals, label = queue.pop(0)
+                planned = self._plan(goals)
+                if planned.get("promote"):
+                    return {**planned, "calls": calls}
+                if planned.get("done"):
+                    done += goals
+                    continue
+                if not planned.get("ok", True):
+                    return {**planned.get("result", planned), "calls": calls}
+
+                verdict = yield Step(RUN, goals[0] if len(goals) == 1 else planned["program"],
+                                     label, cost=len(planned["plan"]))
+                action = verdict.action if verdict is not None else STOP
+
+                if action == STOP:
+                    return {"ok": False, "refused": True, "calls": calls, "partial": done,
+                            "why": verdict.why if verdict is not None else "no verdict given"}
+
+                if action == DECOMPOSE:
+                    opened += 1
+                    if opened > _MAX_OPENINGS:
+                        # AN IN-SESSION THAT ONLY EVER OPENS NEVER ACTS. The cap is not a
+                        # safety net for a bug; it is the point at which "decompose it again"
+                        # has stopped being a decision and become a refusal that will not say
+                        # so, and it is named as one here.
+                        return {"ok": False, "refused": True, "calls": calls, "partial": done,
+                                "why": f"decomposed {opened} times without ever being granted "
+                                       f"a node to run"}
+                    finer = self._open(goals)
+                    if finer is None:
+                        # NOTHING LOWERS IT, so the honest answer is to say the node is atomic
+                        # rather than quietly run what was not granted. The orchestrator asked
+                        # for something the engine does not have, and inventing a split to
+                        # satisfy the request is how a decomposer starts producing fragments.
+                        return {"ok": False, "refused": True, "calls": calls, "partial": done,
+                                "why": f"asked to decompose an atomic node, and nothing "
+                                       f"lowers it: {_gw._short(goals[0])}"}
+                    queue = finer + queue
+                    continue
+
+                ran = self._execute_plan(planned, goals)
+                calls += ran.get("calls") or []
+                if not ran.get("ok"):
+                    return {**ran, "calls": calls, "partial": done}
+                ran_nodes.append(ran)
+                done += goals
+            return self._joined(ran_nodes, calls)
+
+    def _joined(self, ran_nodes: List[Dict[str, Any]], calls: List) -> Dict[str, Any]:
+        """Several executed nodes as one result.
+
+        THE GRAIN OF THE IN-SESSION MUST NOT CHANGE THE ANSWER. A request served as one
+        program and the same request served as four nodes have to come back saying the same
+        things, or the orchestrator's verdicts would silently alter what the operator is told
+        — and GROUNDING is where that bites: a whole program vouches for itself once, four
+        nodes vouch four times, and reporting the last one's verdict would call a run grounded
+        because its final quarter was.
+        """
+        vouched = [r.get("grounded") for r in ran_nodes if r.get("grounded") is not None]
+        out = {"ok": True, "calls": calls, "why": None,
+               # THE WHOLE RUN'S CALLS, not one node's. `_findings_of` falls back to what was
+               # done when the world observed nothing, and handing it a single node would
+               # report a quarter of the work as all of it.
+               "findings": _findings_of(self._world, {"ok": True, "calls": calls}),
+               "rendered": "\n".join(r.get("rendered", "") for r in ran_nodes).strip(),
+               "grounded": all(vouched) if vouched else None}
+        if len(ran_nodes) == 1:
+            out["program"] = ran_nodes[0].get("program")
+        return out
+
+    def _open(self, goals: List[Dict[str, Any]]) -> Optional[List]:
+        """One node into finer ones, or None when the node is already atomic.
+
+        TWO WAYS A NODE IS FINER THAN ITS PARENT and they are tried in that order: a node
+        holding SEVERAL goals splits into one node per goal, and a node holding ONE goal is
+        lowered by the writer's own rules — the same `_lower` that plans, so a decomposition
+        never disagrees with a plan.
+        """
+        if len(goals) > 1:
+            return [([g], "one goal") for g in goals]
+        select, _ = _gw._seams_of(self._world)
+        try:
+            subs = _gw._lower(goals[0], select, self._world)
+        except Exception:
+            # A LOWERING THAT RAISES IS NOT A DECOMPOSITION. It is answered as "atomic",
+            # because the alternative is reporting a crash as a tree structure.
+            return None
+        return [([s], "sub-goal") for s in subs] if subs else None
+
     def run(self, components: List[Dict[str, Any]], session=None) -> Dict[str, Any]:
         # THE WHOLE OPERATION RUNS UNDER THIS ENGINE'S MANIFEST, not just the validate call.
         # `run()` re-validates internally — correctly, since a program reaching the world is
@@ -102,6 +238,20 @@ class MedusaEngine(Engine):
             return self._run_scoped(components, session)
 
     def _run_scoped(self, components: List[Dict[str, Any]], session=None) -> Dict[str, Any]:
+        planned = self._plan(components)
+        if planned.get("promote") or planned.get("done") or not planned.get("ok", True):
+            return {k: v for k, v in planned.items() if k not in ("plan", "done", "ok")} \
+                if planned.get("promote") else planned.get("result", planned)
+        return self._execute_plan(planned, components)
+
+    def _plan(self, components: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Everything up to the first side effect. Returns a plan, or the reason there
+        cannot be one.
+
+        SPLIT FROM EXECUTION so the in-session can offer a program for a verdict BEFORE any
+        of it happens. A budget holder shown the bill afterwards is not holding a budget, and
+        an operator asked to consent after the fact is being informed rather than asked.
+        """
         world = self._world
         try:
             plan = _gw.cover(components, world)
@@ -118,7 +268,11 @@ class MedusaEngine(Engine):
             # NOTHING OWED. The correct answer to a finished world is the empty program, and
             # `validate` rejects an empty body — right for something a model wrote, wrong for
             # a writer that looked and found nothing to do.
-            return {"ok": True, "calls": [], "program": program, "rendered": "",
+            return {"done": True, "ok": True, "calls": [], "program": program,
+                    "rendered": "", "findings": [],
+                    "result": {"ok": True, "calls": [], "program": program, "rendered": "",
+                               "findings": [],
+                               "why": "already satisfied — nothing to do"},
                     "why": "already satisfied — nothing to do"}
 
         # THE ENGINE'S OWN TOOLS, not Gorgon's. `validate` checks statements against known
@@ -133,9 +287,18 @@ class MedusaEngine(Engine):
         if not ok:
             # THE WRITER'S OWN FAULT, and it must never read as the model's. Nothing
             # probabilistic produced this program.
-            return {"ok": False, "why": f"writer produced an invalid program: {problems[:1]}",
-                    "calls": [], "program": program}
+            bad = {"ok": False,
+                   "why": f"writer produced an invalid program: {problems[:1]}",
+                   "calls": [], "program": program}
+            return {**bad, "done": True, "result": bad}
 
+        return {"ok": True, "plan": plan, "program": program}
+
+    def _execute_plan(self, planned: Dict[str, Any],
+                      components: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Run a plan that has already been granted. No decisions are made here."""
+        world = self._world
+        program = planned["program"]
         select, holds = _gw._seams_of(world)
         result = _run(program, self._execute, select=select, holds=holds,
                       known_names=world.names(),

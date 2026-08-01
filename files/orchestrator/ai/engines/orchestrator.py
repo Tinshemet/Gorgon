@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional
 
+from . import insession as _insession
 from .channel import Channel
 from .registry import Registry
 from .session import Session
@@ -38,7 +39,8 @@ class Orchestrator:
 
     def __init__(self, registry: Registry, channel: Optional[Channel] = None,
                  route: Optional[Callable] = None, budget: Optional[int] = None,
-                 narrate: Optional[Callable] = None):
+                 narrate: Optional[Callable] = None,
+                 decide: Optional[Callable] = None):
         self.registry = registry
         self.channel = channel or Channel()
         self.budget = budget
@@ -53,10 +55,20 @@ class Orchestrator:
         # testable with a function that picks the first claimant — the same discipline that
         # let the ghost writer be proven with hand-written goals.
         self._route = route or self._first_claimant
+        # `decide(step, session) -> Verdict`: the verdict on ONE act, inside the in-session.
+        # The default grants what the engine proposed, and that is not a formality — the
+        # budget has already refused anything unaffordable before this is reached, so what
+        # is left is the seam where a consent gate or a destructive-act policy hangs. It is
+        # injected for the same reason routing is: the whole loop stays testable without one.
+        self._decide = decide or self._grant
 
     @staticmethod
     def _first_claimant(request, menu, engines):
         return engines[0].name if engines else None
+
+    @staticmethod
+    def _grant(step, session):
+        return _insession.Verdict(step.kind)
 
     def sync(self, capabilities: Optional[List[str]] = None) -> Dict[str, Any]:
         return self.registry.sync(capabilities)
@@ -111,7 +123,7 @@ class Orchestrator:
                 return session.close("UNTRANSLATED", answer.why)
             components = answer.components
 
-        result = engine.run(components, session)
+        result = _insession.drive(engine, components, session, self._decide)
         session.calls = result.get("calls") or []
 
         # THE PROMOTION REQUEST, heard here and nowhere else — and then ACTED ON.
@@ -148,9 +160,15 @@ class Orchestrator:
             # quietly change the request.
             components = list(components) + [c for c in answer.components
                                              if c not in components]
-            result = engine.run(components, session)
+            result = _insession.drive(engine, components, session, self._decide)
             session.calls = result.get("calls") or []
 
+        if result.get("refused"):
+            # A REFUSAL IS NOT A FAILURE. The engine asked, something here said no, and that
+            # is the system working — so it closes under its own name rather than being filed
+            # with the gaps nothing could close. Whatever ran before the refusal is reported
+            # as run, because those calls are facts.
+            return session.close("REFUSED", str(result.get("why") or ""))
         if not result.get("ok"):
             return session.close("UNMET", str(result.get("why") or ""))
 

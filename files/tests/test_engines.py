@@ -534,6 +534,133 @@ def test_the_operator_sees_the_ends_and_never_the_middle():
           "routed" not in r["answer"] and "synced" not in r["answer"])
 
 
+def test_the_in_session_grain_is_the_regime():
+    """A tree asks per goal; a translation asks once. Not described — counted."""
+    print("[in-session] the regime IS how often the orchestrator is consulted")
+    from orchestrator.ai.engines import insession
+
+    def count(regime):
+        eng = MedusaEngine(World(KITCHEN))
+        sess = Session("risotto", eng, intent="ensure")
+        sess.regime = regime
+        seen = []
+        out = insession.drive(eng, RISOTTO, sess, lambda st, s: (
+            seen.append(st) or insession.Verdict(insession.RUN)))
+        return seen, out
+
+    one, out1 = count("translation")
+    many, out2 = count("tree")
+    check("translation is a single exchange", len(one) == 1)
+    check("and it declares the whole program's cost up front", one[0].cost == 2)
+    check("a tree is one exchange per goal", len(many) == len(RISOTTO))
+    check("each declaring only its own cost", all(s.cost == 1 for s in many))
+    check("both close the work", out1.get("ok") and out2.get("ok"))
+    check("and both make the same calls", len(out1["calls"]) == len(out2["calls"]) == 2)
+
+
+def test_an_engine_may_not_act_on_a_node_it_was_refused():
+    """The verdict is load-bearing, and a decline keeps its reason."""
+    print("[in-session] the engine proposes; the orchestrator disposes")
+    from orchestrator.ai.engines import insession
+
+    world = World(KITCHEN)
+    eng = MedusaEngine(world)
+    sess = Session("risotto", eng, intent="ensure")
+    out = insession.drive(eng, RISOTTO, sess,
+                          lambda st, s: insession.Verdict(insession.STOP, "not tonight"))
+    check("nothing ran", not world.state.get("dish"))
+    check("the refusal is not filed as a failure", out.get("refused") is True)
+    check("and it carries the reason it was given", out.get("why") == "not tonight")
+    check("which the in-session recorded", any("-> stop" in l for l in sess.log))
+
+
+def test_a_refusal_closes_under_its_own_name():
+    """REFUSED is a distinct outcome from UNMET: one is the system working."""
+    print("[in-session] a decline is an outcome, not a gap")
+    from orchestrator.ai.engines import insession
+
+    orch = Orchestrator(_kitchen(), Channel([stub({"a risotto": RISOTTO})]),
+                        decide=lambda st, s: insession.Verdict(insession.STOP,
+                                                               "the operator said no"))
+    r = orch.handle("a risotto")
+    check("the outcome names the refusal", r["outcome"] == "REFUSED")
+    check("and says who refused and why", r["why"] == "the operator said no")
+
+
+def test_the_budget_refuses_before_the_act_not_after():
+    """An engine told yes and then billed for it spent money nobody agreed to."""
+    print("[in-session] cost is declared with the proposal")
+    from orchestrator.ai.engines import insession
+
+    world = World(KITCHEN)
+    eng = MedusaEngine(world)
+    # The program costs two calls; this session may afford one.
+    sess = Session("risotto", eng, intent="ensure", budget=1)
+    asked = []
+    out = insession.drive(eng, RISOTTO, sess,
+                          lambda st, s: (asked.append(st) or insession.Verdict(insession.RUN)))
+    check("the decider was never consulted", not asked)
+    check("nothing ran", not world.state.get("dish"))
+    check("and the log says it was the budget",
+          any("REFUSED" in l and "budget" in l for l in sess.log))
+
+
+def test_an_engine_without_an_in_session_still_runs():
+    """The tool regime is one call and no exchange, and the protocol must fit it."""
+    print("[in-session] no steps is not an error")
+    from orchestrator.ai.engines import insession
+
+    class Plain:
+        name = "plain"
+
+        def run(self, components, session=None):
+            return {"ok": True, "calls": list(components)}
+
+    out = insession.drive(Plain(), [1, 2], Session("x", Plain()),
+                          lambda st, s: insession.Verdict(insession.STOP, "never asked"))
+    check("it ran without being asked", out["ok"] and out["calls"] == [1, 2])
+
+
+def test_decompose_is_a_verdict_that_does_something():
+    """The grain is not fixed by the regime — being told to open a node refines it."""
+    print("[in-session] 'no, decompose it' actually decomposes")
+    from orchestrator.ai.engines import insession
+
+    world = World(KITCHEN)
+    eng = MedusaEngine(world)
+    sess = Session("risotto", eng, intent="ensure")   # translation: one whole program
+    seen, opened = [], [False]
+
+    def decide(step, s):
+        seen.append(step.why)
+        if not opened[0]:                 # open the whole program exactly once
+            opened[0] = True
+            return insession.Verdict(insession.DECOMPOSE, "one goal at a time, please")
+        return insession.Verdict(insession.RUN)
+
+    out = insession.drive(eng, RISOTTO, sess, decide)
+    check("it opened once, then ran each goal",
+          seen == ["the whole program", "one goal", "one goal"])
+    check("and the work still completed", out.get("ok"))
+    check("with the same calls the whole program would have made", len(out["calls"]) == 2)
+
+
+def test_an_atomic_node_says_so_instead_of_inventing_a_split():
+    """Decomposing forever is a refusal that will not admit to being one."""
+    print("[in-session] nothing lowers it -> say so")
+    from orchestrator.ai.engines import insession
+
+    world = World(KITCHEN)
+    eng = MedusaEngine(world)
+    sess = Session("risotto", eng, intent="ensure")
+    sess.regime = "tree"
+    out = insession.drive(eng, [RISOTTO[0]], sess,
+                          lambda st, s: insession.Verdict(insession.DECOMPOSE, "again"))
+    check("it refused rather than looping", out.get("refused") is True)
+    check("and named the node as atomic", "atomic" in out.get("why", ""))
+    check("nothing ran without a grant", not world.state.get("dish"))
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "engines"))
