@@ -177,6 +177,25 @@ def precondition(tool: str, args: Dict[str, Any], kinds=None) -> list:
                 out.append(need)
         return out
 
+    # A DELETER'S OWN REQUIREMENTS, and they were reachable from exactly one place.
+    #
+    # `delete_requires` says a machine must be STOPPED before it can go, and the writer's
+    # TEARDOWN derives that — added the day a program's own scaffolding survived every run
+    # because the bare deleter was a call that could never succeed. The ORDINARY path never
+    # asked. So a program that removes a machine the OPERATOR asked to remove emits the same
+    # impossible call, and the fix that was written for the program's own litter was never
+    # applied to the operator's own request.
+    #
+    # Found by rung 14 the first time the ladder deleted anything — which is what the
+    # coverage gap was hiding, and a sharper answer than "no rung deletes".
+    if tool == spec.get("delete") and spec.get("key"):
+        member = args.get(spec["key"])
+        for attr, value in (spec.get("delete_requires") or {}).items():
+            if member is not None:
+                out.append({"shape": "count", "eq": 1,
+                            "select": {"kind": kind, spec["key"]: member, attr: value}})
+        return out
+
     setter = (spec.get("setters") or {}).get(tool)
     if not setter:
         return out

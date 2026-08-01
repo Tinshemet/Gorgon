@@ -114,25 +114,24 @@ def test_the_dangerous_paths_are_exercised_at_all():
     kills = [s["n"] for s in shapes if s["destroys"]]
     asks = [s["n"] for s in shapes if s["asks"]]
 
-    # A NAMED HOLE, NOT A FAILING ASSERTION AND NOT A SILENCE.
+    # THE HOLE IS CLOSED, AND THE NOTE IS REWRITTEN — which is what encoding it as a check
+    # rather than a comment was for.
     #
-    # NO RUNG ON THE LADDER DELETES ANYTHING. Thirteen rungs, and the one act that cannot be
-    # undone has never been exercised by the benchmark — found by this file on its first run,
-    # which is what a coverage instrument is for. It matters today rather than in principle:
-    # `make sure there are exactly two machines` against the real lab plans SEVEN deletions
-    # including vm-orchestrator, and nothing in the measured set resembles it.
+    # For thirteen rungs no rung deleted anything: the one act that cannot be undone was
+    # never exercised, found by this file on its first run. Rung 14 closes it with the very
+    # request the old note cited — *"make sure there are exactly two machines"*, which
+    # against the real lab plans seven deletions including vm-orchestrator.
     #
-    # I AM NOT ADDING A RUNG TO SATISFY MY OWN NEW TEST. Adding one changes the cell count
-    # and voids every recorded baseline, which is the operator's call and not a side effect
-    # of writing this file. So the gap is REPORTED here, loudly, and this assertion flips the
-    # day somebody closes it — at which point this note has to be rewritten, which is the
-    # point of encoding it as a check rather than a comment.
-    if kills:
-        check(f"deletion is covered by rung(s) {kills} — the known hole is CLOSED, and "
-              f"this test's note must now be updated", True)
-    else:
-        print("       *** GAP: no rung deletes. The irreversible act is unmeasured. ***")
-        check("the deletion gap is still open, and named rather than hidden", not kills)
+    # ADDING IT VOIDED EVERY RECORDED BASELINE, which is why the old note declined to do it
+    # unasked. It is on the operator's own list as #88, and the baseline was re-recorded.
+    #
+    # WHAT IT FOUND IMMEDIATELY, and this is the argument for coverage instruments: the
+    # writer emitted `delete_vm` on a RUNNING machine. `delete_requires` says it must be
+    # stopped first, and the TEARDOWN path derived that — added the day a program's own
+    # scaffolding survived every run — while the ordinary path never asked. So the fix
+    # written for the program's own litter had never been applied to the operator's own
+    # request.
+    check(f"deletion is covered by rung(s) {kills}", bool(kills))
     check(f"some rung has to ASK the world ({asks or 'NONE'})", bool(asks))
     starts = [s["n"] for s in shapes if s["setup"]]
     check(f"some rung starts from a world that is already populated ({starts or 'NONE'})",

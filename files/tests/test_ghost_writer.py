@@ -76,6 +76,20 @@ GOALS = {
      {"every": {"kind": "vm"}, "must": {"network": "net1"}},
      {"every": {"kind": "vm"}, "must": {"label": "fleet"}},
      {"shape": "reach", "select": {"kind": "vm", "label": "fleet"}, "min": 5}],
+# THE DELETION RUNG, AND THE GOAL IS A PLAIN COUNT. That is not a simplification — it is
+# the only shape that MEANS deletion today, and finding out why was the point of adding it.
+#
+# `count(vm WHERE label = 'scratch') = 0` does NOT mean "delete those machines". The writer
+# reads a filtered zero-count as "no member carries this value" and surrenders the ATTRIBUTE,
+# deliberately: taking `prod` off a machine is reversible and cheap, deleting the machine is
+# neither, and a writer that destroyed a member to satisfy a claim about a label would be
+# choosing the irreversible reading of an ambiguous request. So a filtered count can never
+# express a deletion, and an UNFILTERED one — "there should be two" — is what removes members.
+#
+# THE LANGUAGE CANNOT SAY "these particular members must not exist", and that is a sharper
+# statement of the deletion gap than "no rung deletes". It is left named rather than closed
+# by inventing a component shape: language work is designed and reviewed before it is typed.
+14: [{**C("vm"), "eq": 2}],
 }
 
 
@@ -104,7 +118,10 @@ def test_every_rung_is_written_by_code_and_passes_its_own_checker():
         check(f"rung {n:>2}: valid={ok} ran={res['ok']} CHECKER={'PASS' if good else 'FAIL'} "
               f"({len(plan)} calls, best {rung.best})",
               ok and not problems and res["ok"] and good)
-    check(f"ALL THIRTEEN: {passed}/13", passed == 13)
+    # COUNTED FROM THE TABLE, NOT FROM A NUMBER IN THIS LINE. It read `passed == 13` and the
+    # label said THIRTEEN, so adding rung 14 failed a suite in which every rung had passed —
+    # the stale twin, in the headline of the writer's own proof.
+    check(f"ALL {len(GOALS)}: {passed}/{len(GOALS)}", passed == len(GOALS))
 
 
 def test_it_never_writes_an_ungrounded_or_self_vouching_program():

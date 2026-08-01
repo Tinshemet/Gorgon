@@ -146,6 +146,38 @@ def _r6(w):
     return not w.common_networks(w.members("red") + w.members("blue"))
 
 
+# ── 14: destruction, and the restraint that goes with it ──────────────────────
+def _s14(w):
+    """FIVE MACHINES, TWO OF THEM RUNNING, AND THREE HAVE TO GO.
+
+    THE REQUEST IS THE ONE THE COVERAGE NOTE CITED: *"make sure there are exactly two
+    machines"* against the real lab plans SEVEN deletions including vm-orchestrator. Nothing
+    in the measured set resembled it until now.
+
+    RUNNING ON PURPOSE. `delete_requires` declares that a machine must be stopped before it
+    can go, and a bare deleter emits a call that can never succeed — measured on the lab,
+    where the machine a program minted for its own use survived every run. A rung whose
+    machines were all already stopped would never exercise the derived precondition.
+    """
+    _vm(w, "alpha")
+    _vm(w, "beta", status="running")
+    _vm(w, "delta")
+    _vm(w, "epsilon", status="running")
+    _vm(w, "gamma")
+
+
+def _r14(w):
+    """Two left, AND THE RIGHT TWO. Deleting the whole lab satisfies a count of two never;
+    deleting four and creating one satisfies it dishonestly, so the survivors are named.
+
+    THE SURVIVORS ARE THE DETERMINISTIC SLICE — the writer removes off the end of a SORTED
+    list, so the same request against the same world always removes the same machines. That
+    is what makes a destructive program reviewable before it runs, and it is the property
+    worth pinning: a checker that only counted would pass a writer that chose at random.
+    """
+    return set(w.vms) == {"alpha", "beta"}
+
+
 # ── 7: convergence to a spec ──────────────────────────────────────────────────
 def _s7(w):
     _vm(w, "one", labels=["prod"]); _vm(w, "two", labels=["prod"])
@@ -398,4 +430,9 @@ RUNGS: List[Rung] = [
          "the goal ALREADY holds — doing it again must change nothing", _s13,
          "use five machines, wire them together on one private network, tag every one "
          "of them 'fleet', and confirm each can reach the others", verified=5),
+    # ── 14: the irreversible act, which the ladder had never once exercised ────────
+    Rung(14, "destruction",
+         "make sure there are exactly two machines left", _r14,
+         "the one act that cannot be undone, and the one that must not overreach", _s14,
+         "cut the lab down to two machines and no more", verified=4),
 ]
