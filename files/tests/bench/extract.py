@@ -608,22 +608,13 @@ def _link_between(source_kind: str, made_kind: str) -> Optional[str]:
 def extract(request: str, model: str = None, temp: float = 0.0,
             timeout: int = 300) -> Dict[str, Any]:
     """Call the model once. Returns the raw parsed answer (use `to_goals` to convert)."""
-    import urllib.request
-    body = {
-        "model": model or BENCH_MODEL,
-        "stream": False,
-        "format": schema(),
-        "keep_alive": pinned.KEEP_ALIVE,
-        "options": pinned.options(temp),
-        "messages": [{"role": "system", "content": prompt()},
-                     {"role": "user", "content": request}],
-    }
-    req = urllib.request.Request(
-        f"{OLLAMA_URL}/api/chat", method="POST",
-        data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        reply = json.loads(r.read())
-    return json.loads((reply.get("message") or {}).get("content") or "{}")
+    # THE ONE CONSTRAINED CALL, shared with every other AI seam. This built its own for
+    # months, which was fine while it was the only one and became #26's defect the moment it
+    # was not: two paths deciding what a model call IS, differing on keep_alive and on how a
+    # decode failure surfaces.
+    from orchestrator.ai.engines.channel import constrained
+    return constrained(prompt(), request, schema(), model=model or BENCH_MODEL,
+                       temp=temp, timeout=timeout)
 
 
 def assert_enforced(model: str = None) -> bool:

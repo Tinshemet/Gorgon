@@ -139,32 +139,12 @@ def narrator(model: str = None, timeout: int = 120):
     actually read. A narrator asked for prose and then parsed would put the hallucination this
     file exists to catch back into the answer.
     """
-    import json as _json
-    import urllib.request
-
-    from orchestrator.ai.chat.ollama_client import OLLAMA_URL
+    from .channel import constrained
 
     def ask(prompt: str, payload: Any) -> Dict[str, Any]:
-        body = {"model": model or _default_model(), "stream": False, "format": SCHEMA,
-                "messages": [{"role": "system", "content": prompt},
-                             {"role": "user", "content": _json.dumps(payload, default=str)}]}
-        req = urllib.request.Request(f"{OLLAMA_URL}/api/chat", method="POST",
-                                     data=_json.dumps(body).encode(),
-                                     headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=timeout) as fh:
-            reply = _json.loads(fh.read())
-        return _json.loads((reply.get("message") or {}).get("content") or "{}")
+        return constrained(prompt, payload, SCHEMA, model=model, timeout=timeout)
 
     return ask
-
-
-def _default_model() -> str:
-    """The bench's model unless something says otherwise — one name, not two."""
-    try:
-        from tests.bench.ladder import BENCH_MODEL
-        return BENCH_MODEL
-    except Exception:
-        return "llama3.1:8b"
 
 
 def report(findings: Any, ask, verify: bool = True) -> Dict[str, Any]:

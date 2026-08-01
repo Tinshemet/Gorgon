@@ -1667,6 +1667,37 @@ def test_a_failure_is_an_event_not_an_absence():
     check("an unclaimed request still returns an outcome", empty["outcome"] == "UNCLAIMED")
 
 
+def test_there_is_one_constrained_model_call():
+    """#63 — ONE PROTOCOL FOR EVERY AI SEAM, and I had just added a third violation of it.
+
+    `extract` built its own call, `reporter.narrator` built a second, and the staged-lowering
+    author would have been a fourth. Two of them already differed on `keep_alive` and on how
+    a decode failure surfaces — #26's defect (two prompt paths silently diverged) reappearing
+    one layer down, where it decides what a model call IS.
+    """
+    print("[channel] every seam calls the model the same way")
+    import inspect
+
+    from orchestrator.ai.engines import channel as _channel
+    from orchestrator.ai.engines import reporter as _reporter
+    from tests.bench import extract as _extract
+
+    check("the shared call exists", callable(getattr(_channel, "constrained", None)))
+
+    # NOBODY ELSE BUILDS ONE. Asserted on the source, because the failure mode is a NEW seam
+    # quietly growing its own — which is how there came to be three.
+    for name, mod in (("extractor", _extract), ("reporter", _reporter)):
+        src = inspect.getsource(mod)
+        check(f"{name} does not build its own HTTP call",
+              "api/chat" not in src and "urllib.request.Request" not in src)
+
+    # THE GRAMMAR IS NOT OPTIONAL. A caller that forgot the schema would be free generation
+    # wearing a schema's name, which is precisely what 2026-07-31 turned out to be.
+    sig = inspect.signature(_channel.constrained)
+    check("a schema is required, not defaulted",
+          sig.parameters["schema"].default is inspect.Parameter.empty)
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "engines"))

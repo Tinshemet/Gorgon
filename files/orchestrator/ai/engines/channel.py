@@ -48,6 +48,53 @@ class Answer:
         return f"<Answer {self.source} n={len(self.components)} {self.why[:40]}>"
 
 
+def constrained(prompt: str, payload: Any, schema: Dict[str, Any],
+                model: str = None, temp: float = 0.0, timeout: int = 300) -> Dict[str, Any]:
+    """ONE CONSTRAINED MODEL CALL. Every AI seam in the system goes through here.
+
+    THE DUPLICATION THIS ENDS was real and I had just added to it. `extract` built its own
+    call, `reporter.narrator` built a second, `author_probe` a third, and the staged-lowering
+    author would have been a fourth — four places deciding what a model call IS. Two of them
+    already differed on `keep_alive` and on how a decode failure surfaces, which is #26's
+    defect (two prompt paths that had silently diverged) reappearing one layer down.
+
+    `format=schema` IS THE GRAMMAR AND IT IS NOT OPTIONAL HERE. The whole of 2026-07-31 was a
+    grammar accepted and ignored — one bad `pattern` silently disabling constrained decoding
+    across the entire authoring path — and a caller that forgot to pass a schema would be
+    free generation wearing a schema's name. Passing it is the only way to call this.
+
+    A DECODE FAILURE RAISES rather than returning `{}`. An empty answer and a broken one are
+    different events, and a seam that cannot tell them apart reports "the model had nothing
+    to say" for what was actually a malformed response.
+    """
+    import json as _json
+    import urllib.request
+
+    from orchestrator.ai.chat.ollama_client import OLLAMA_URL
+    from tests.bench import pinned
+
+    body = {"model": model or _bench_model(), "stream": False, "format": schema,
+            "keep_alive": pinned.KEEP_ALIVE, "options": pinned.options(temp),
+            "messages": [{"role": "system", "content": prompt},
+                         {"role": "user", "content": payload if isinstance(payload, str)
+                          else _json.dumps(payload, default=str)}]}
+    req = urllib.request.Request(f"{OLLAMA_URL}/api/chat", method="POST",
+                                 data=_json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as fh:
+        reply = _json.loads(fh.read())
+    return _json.loads((reply.get("message") or {}).get("content") or "{}")
+
+
+def _bench_model() -> str:
+    """One model name, not several. The bench's, unless a caller names another."""
+    try:
+        from tests.bench.ladder import BENCH_MODEL
+        return BENCH_MODEL
+    except Exception:
+        return "llama3.1:8b"
+
+
 class Channel:
     """Ordered answerers. The first that speaks wins; silence falls through to the next."""
 
