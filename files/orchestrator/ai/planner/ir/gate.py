@@ -80,6 +80,27 @@ from typing import Any, Callable, Dict, List, Optional
 
 from . import config, consent as _consent, master, refs
 
+# ── #25, THE PROGRAM-REGIME REASON GATE: CLOSED BY TRIAGE, NOT BUILT ────────────────────
+#
+# The TOOL regime has one (`autonomous.make_reason_gate`): before a call runs, the model
+# states WHY, and the stated reason is checked against the action. It exists because a model
+# choosing a tool can choose a wrong one for a plausible-sounding reason.
+#
+# THE PROGRAM REGIME DOES NOT HAVE THAT FAILURE, because it does not choose. The ghost writer
+# places a tile only where `effects.invert` says the tile makes the goal true, refuses with
+# `Unsolvable` when nothing does, and NEVER IMPROVISES — the reason is the inversion, and it
+# is a computation rather than a claim. A gate asking "why did you place this?" would be
+# asking a lookup table to justify itself.
+#
+# WHAT PLAYS THE ROLE INSTEAD, and it is stricter: every goal closes with a WITNESS
+# (`as_program` grounds each one), an assertion that ALREADY HOLDS is refused as decorative
+# (`MedusaEngine._staged`), and a program that acts while asserting nothing is refused before
+# it runs (`consent.survey`). A stated reason is a promise; a witness is a check.
+#
+# IT WOULD COME BACK if a model ever authored whole programs on the main line again. Staged
+# lowering authors LEAVES, and each leaf is graded against one operator's schema and then
+# against the assembled artifact — which is the same job at a finer grain.
+
 PROCEED, CLARIFY, REFUSE = "proceed", "clarify", "refuse"
 
 # The operator's own wording. Kept verbatim: these are the three things a person needs to

@@ -527,6 +527,33 @@ def kinds_of(goal: Dict[str, Any]) -> set:
     return {k for k in out if k}
 
 
+# ── FOUR BACKLOG ITEMS THIS MODULE ANSWERED BY EXISTING ────────────────────────────────
+#
+# Recorded here rather than left open, because a backlog item that a design has DELETED is
+# worse than one nobody started: somebody eventually builds it.
+#
+# #56  "does one prompt sentence recover the 60 UNGROUNDED cells?"  ASKING A MODEL TO GROUND
+#      ITS PROGRAM IS NOT A QUESTION ANY MORE. `as_program` writes the witness for every
+#      goal it plans, as a list comprehension. The measurement that motivated the item —
+#      60 of 78 programs vouching for nothing — was of a model authoring; nothing on the
+#      main line authors.
+#
+# #29  "the router emits DANGLING sub-goals"  THE ROUTER IS THE FALLBACK NOW. It runs only
+#      after `Unsolvable`, inside a granted tree session. The main line lowers STRUCTURE
+#      (`_lower`), and a lowering rule cannot emit a fragment: every sub-goal it produces is
+#      a predicate over named members, checked by `_holds` before the parent is called done.
+#
+# #50  "p_self authoring — declare the line's shape before emitting it, then compare"  THE
+#      WRITER DOES NOT EMIT LINES, it places tiles, and a tile's shape is the manifest's.
+#      The idea survives for STAGED LOWERING, where a model does emit — and `emit_leaf`
+#      already validates each statement in the scope it will occupy, which is the same
+#      declare-then-check at the only place it applies.
+#
+# #52  "capability ledger — predict prerequisites from the prompt, reveal them per line"
+#      PREREQUISITES ARE NOT PREDICTED, THEY ARE DERIVED. `effects.precondition` computes
+#      exactly what must be true before a tool runs, from the manifest, with no prompt and
+#      no model. The blinders half dissolved when context became O(1) in engines.
+
 def groundable(goal: Dict[str, Any]) -> bool:
     """Can this goal have a closing witness at all?
 
