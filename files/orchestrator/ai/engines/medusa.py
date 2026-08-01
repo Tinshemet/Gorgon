@@ -399,6 +399,24 @@ class MedusaEngine(Engine):
         an operator asked to consent after the fact is being informed rather than asked.
         """
         world = self._world
+        # A KIND THE WORLD CANNOT SEE IS NOT A KIND WITH NOTHING IN IT.
+        #
+        # Decision 6 applied to planning: unprobed is not healthy, and unseeded is not empty.
+        # A world that cannot enumerate a kind will answer every question about it with an
+        # empty set, and the writer's next move is to CREATE what is missing — so a goal
+        # about restore points would plan to make every one of them again. The lab mount
+        # declares `unseeded` for exactly this; a world that declares nothing is unaffected.
+        blind = set(getattr(world, "unseeded", ()) or ())
+        if blind:
+            touched = set()
+            for g in components:
+                touched |= _gw.kinds_of(g)
+            hidden = sorted(touched & blind)
+            if hidden:
+                return {"ok": False, "promote": "tree",
+                        "why": f"nothing here can enumerate {', '.join(hidden)}, and an "
+                               f"empty answer would be read as 'there are none'",
+                        "calls": [], "program": None}
         try:
             plan = _gw.cover(components, world)
         except _gw.Unsolvable as e:

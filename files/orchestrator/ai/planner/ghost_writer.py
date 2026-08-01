@@ -445,6 +445,24 @@ def _achieve(goal, scratch, plan, trace, depth):
     say(f"{_short(goal)} — now holds ({why})")
 
 
+def kinds_of(goal: Dict[str, Any]) -> set:
+    """Every kind a goal touches — the ones it SELECTS over and the one it MAKES.
+
+    Both matter and for different reasons: selecting over a kind the planner cannot see
+    resolves to an empty set, and MAKING one it cannot see means it never notices the thing
+    already exists. `per vm make snapshot` is the case that needs both.
+    """
+    out = set()
+    for shape in ("every", "observe", "per"):
+        if shape in goal:
+            out.add((goal[shape] or {}).get("kind"))
+    if goal.get("select"):
+        out.add(goal["select"].get("kind"))
+    if goal.get("make"):
+        out.add(goal["make"])
+    return {k for k in out if k}
+
+
 def groundable(goal: Dict[str, Any]) -> bool:
     """Can this goal have a closing witness at all?
 

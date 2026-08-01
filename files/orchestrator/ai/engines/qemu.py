@@ -37,6 +37,12 @@ class LabWorld:
         self._findings = findings
         self._execute = execute
         self.kinds = _config.KINDS
+        # WHAT THIS WORLD CANNOT ENUMERATE, said out loud. The library tracks machines and
+        # networks; it has no snapshot listing, and `snapshot_list` is per-machine, so
+        # building one would add a call per VM to every session start. Until that trade is
+        # made deliberately, the honest answer to "what restore points exist?" is "I cannot
+        # tell you" — not "none", which is what an unseeded kind silently becomes.
+        self.unseeded = {k for k in (self.kinds or {}) if k not in ("vm", "network")}
 
     @property
     def seams(self):
@@ -103,7 +109,7 @@ class LabWorld:
         # UNKNOWN and EMPTY, and it is recorded rather than papered over: a `per ... make
         # snapshot` goal planned here will re-create restore points that may exist. Fixing
         # it needs a snapshot listing in the library, not a change to this file.
-        model.unseeded = {k for k in (self.kinds or {}) if not model.state.get(k)} - {"vm"}
+        model.unseeded = set(self.unseeded)
         return model
 
     def _as_manifest_row(self, kind: str, rec) -> dict:

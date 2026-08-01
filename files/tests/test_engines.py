@@ -1094,6 +1094,51 @@ def test_a_world_that_cannot_ask_still_plans_a_reach():
     check("answered and connected is reachable", ok)
 
 
+def test_a_kind_the_world_cannot_see_is_refused_not_assumed_empty():
+    """UNSEEDED IS NOT EMPTY — decision 6, applied to planning.
+
+    A world that cannot enumerate a kind answers every question about it with an empty set,
+    and the writer's next move is to CREATE what is missing. So a goal about restore points
+    would plan to make every one of them again, against a lab that may already have them.
+    """
+    print("[mount] the planner declines a kind it cannot enumerate")
+    from orchestrator.ai.engines import QemuEngine, insession
+    from orchestrator.ai.planner import ghost_writer as gw
+
+    check("a goal's kinds include what it SELECTS over",
+          gw.kinds_of({"shape": "count", "select": {"kind": "vm"}, "eq": 1}) == {"vm"})
+    check("and what it MAKES, which is the one that matters here",
+          gw.kinds_of({"per": {"kind": "vm"}, "make": "snapshot", "link": "vm"})
+          == {"vm", "snapshot"})
+
+    class FakeLibrary:
+        def vms(self):
+            return {"red": {"name": "red", "status": "stopped"}}
+
+        def by_network(self):
+            return {}
+
+        def known_names(self):
+            return {"red"}
+
+    eng = QemuEngine(FakeLibrary(), lambda t, a: {"success": False})
+    sess = Session("snapshot everything", eng, intent="ensure")
+    out = insession.drive(eng, [{"per": {"kind": "vm"}, "make": "snapshot", "link": "vm"}],
+                          sess, lambda st, s: insession.Verdict(insession.RUN))
+    check("it refuses rather than planning against a false empty",
+          out.get("promote") == "tree" and "snapshot" in (out.get("why") or ""))
+    check("and says WHY the empty answer cannot be trusted",
+          "there are none" in (out.get("why") or ""))
+
+    # A GOAL THAT TOUCHES ONLY WHAT IT CAN SEE IS UNAFFECTED — the guard is per-goal, not a
+    # blanket refusal, or mounting a lab would disable most of the language.
+    sess2 = Session("one machine", eng, intent="ensure")
+    seen = []
+    insession.drive(eng, [{"shape": "count", "select": {"kind": "vm"}, "eq": 2}], sess2,
+                    lambda st, s: (seen.append(st) or insession.Verdict(insession.STOP, "x")))
+    check("a vm goal still plans normally", seen and seen[0].cost == 1)
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "engines"))
