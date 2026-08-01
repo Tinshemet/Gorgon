@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from orchestrator.ai.planner import ghost_writer as gw
 from orchestrator.ai.planner.ir import effects
+from orchestrator.ai.engines import extract as _extract
 from tests.bench.rungs import RUNGS
 from tests.bench.sim_world import SimWorld
 from tests.test_ghost_writer import GOALS
@@ -95,9 +96,7 @@ def test_every_goal_shape_is_exercised_somewhere():
     for weeks — offered by the schema, accepted by the validator, printed by the renderer,
     and impossible to satisfy."""
     print("[shape] the goal vocabulary has no untouched corner")
-    from orchestrator.ai.engines.extract import SCHEMA
-
-    offered = set(SCHEMA["properties"]["goals"]["items"]["properties"]["goal"]["enum"])
+    offered = set(_extract.goal_shapes())
     seen = set()
     for n in sorted(GOALS):
         for shape in _shape(n)["shapes"]:

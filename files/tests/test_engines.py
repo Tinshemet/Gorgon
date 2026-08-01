@@ -1057,8 +1057,8 @@ def test_a_queue_where_everything_waits_is_a_deadlock_and_says_so():
 def extract_attr_enum():
     """The attributes a MODEL may name, straight from the extractor's schema."""
     from orchestrator.ai.engines.extract import SCHEMA
-    return (SCHEMA["properties"]["goals"]["items"]["properties"]["select"]["properties"]
-            ["where"]["items"]["properties"]["attr"]["enum"])
+    from orchestrator.ai.engines import extract as _ex
+    return _ex.select_attrs()
 
 
 def test_the_lab_mount_speaks_the_manifest_not_the_library():

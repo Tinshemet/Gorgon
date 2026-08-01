@@ -41,8 +41,7 @@ def check(label, ok):
 
 def _emitted_shapes() -> set:
     """The goal names the SCHEMA lets a model choose — the extractor's side of the contract."""
-    props = extract.SCHEMA["properties"]["goals"]["items"]["properties"]
-    return set(props["goal"]["enum"])
+    return set(extract.goal_shapes())
 
 
 # One well-formed raw goal per shape the schema offers, as a model would send it.
@@ -128,7 +127,7 @@ def test_a_goal_names_a_kind_the_manifest_declares():
     against an empty spec."""
     print("[contract] the kind is the manifest's, not the model's")
     check("an undeclared kind is refused by the schema's own enum",
-          set(extract.SCHEMA["properties"]["goals"]["items"]["properties"]
+          set(extract.SCHEMA["properties"]["goals"]["items"]["oneOf"][0]["properties"]
               ["select"]["properties"]["kind"]["enum"]) == set(config.KINDS or {}))
     check("and a goal with no kind at all is dropped",
           not extract.to_goals({"goals": [{"goal": "count", "select": {}}]}))

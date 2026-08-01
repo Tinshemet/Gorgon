@@ -161,8 +161,7 @@ def test_a_loaded_package_is_askable_not_just_runnable():
     seen = {}
 
     def spy(request, world=None):
-        seen["kinds"] = set(_extract.schema()["properties"]["goals"]["items"]
-                            ["properties"]["select"]["properties"]["kind"]["enum"])
+        seen["kinds"] = set(_extract.kinds_offered())
         return Answer(None, "spy", "not translating, just looking")
     spy.name = "spy"
 
@@ -172,8 +171,7 @@ def test_a_loaded_package_is_askable_not_just_runnable():
     check(f"the model is offered the package's kinds too ({sorted(seen.get('kinds', ()))})",
           {"search", "browser"} <= seen.get("kinds", set()))
     check("and the default kinds are back afterwards, outside the scope",
-          "search" not in set(_extract.schema()["properties"]["goals"]["items"]
-                              ["properties"]["select"]["properties"]["kind"]["enum"]))
+          "search" not in set(_extract.kinds_offered()))
 
 
 def main():

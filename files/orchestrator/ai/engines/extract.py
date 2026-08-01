@@ -144,90 +144,111 @@ def schema(kinds=None) -> Dict[str, Any]:
             "goals": {
                 "type": "array",
                 "minItems": 0,
+                # ONE BRANCH PER SHAPE, AND EVERY BRANCH IS CLOSED. The goal used to be one
+                # flat object offering NINE fields — `amount`, `name`, `attr`, `value`,
+                # `make`, `link`, `fact` — of which at most three ever apply, so the model
+                # chose a slot from a wide open surface on every goal it wrote. That is the
+                # one thing every measurement here says it is bad at.
+                #
+                # WHAT IT COST, measured on the simplest requests there are: "a machine
+                # called box1 running linux" put the NAME in `value`, which a count goal
+                # reads as a number first, and box1 was lost; "make 5 vms" put the literal
+                # string `name` in `value`, echoing the schema back; and `to_goals` grew a
+                # repair path for each wrong slot — a stack of corrections for a choice that
+                # should never have been offered.
+                #
+                # A COUNT GOAL NOW HAS NO `value` FIELD AT ALL, so a name cannot land there:
+                # the decoder is constrained, and what is not in the branch cannot be
+                # emitted. This is the move `master.ops` already makes for the intent ladder
+                # and the quantifier router — MAKE THE WRONG PROGRAM UNREPRESENTABLE RATHER
+                # THAN REJECT IT AFTERWARDS — applied to the seam where the wrong thing was
+                # actually being written.
                 "items": {
-                    "type": "object",
-                    "properties": {
-                        "goal": {
-                            "type": "string",
-                            "enum": ["count", "reach", "every", "per", "observe"],
-                            "description": (
-                                # WITHDRAWN AFTER MEASUREMENT: "the number goes in `amount`,
-                                # and a request to remove something is a count of zero" was
-                                # added here and changed NOTHING at n=3 — `delete the vm
-                                # called doomed` still came back as a count of one. Prompt
-                                # text is paid for on every request; text that buys nothing
-                                # is a cost with no purchase, so it goes back out.
-                                "count: how many members must match. "
-                                "reach: these must be able to reach each other. "
-                                "every: every member of a set must get a property. "
-                                "per: make one new thing for each member of a set. "
-                                "observe: ask each member something, without requiring an answer"
-                            ),
+                    "oneOf": [
+                        {
+                            "type": "object",
+                            "properties": {
+                                "goal": {"type": "string", "enum": ["count"],
+                                         "description": "how many members must match"},
+                                "select": _SELECT,
+                                "amount": {"type": "integer",
+                                           "description": ("HOW MANY there must be. Zero "
+                                                           "means none may remain")},
+                                "name": {"type": "string",
+                                         "description": ("the NAME of the member, when the "
+                                                         "operator gave one — 'a vm called "
+                                                         "box1' puts box1 here")},
+                            },
+                            # `amount` IS REQUIRED, and it is the last slot the model was
+                            # skipping. Offered as optional it went unfilled on every counted
+                            # request — "create 3 machines" and "make 5 vms" both lost their
+                            # number — while `name`, the only string left in the branch,
+                            # absorbed whatever was nearby.
+                            #
+                            # AN INTEGER IS A CLOSED TYPE, which is the thing this model is
+                            # measurably good at, and the opposite of the `from` field that
+                            # was required and withdrawn an hour ago: THAT asked for a span of
+                            # prose, this asks for a number the sentence already contains.
+                            "required": ["goal", "select", "amount"],
+                            "additionalProperties": False,
                         },
-                        "select": _SELECT,
-                        "amount": {"type": "integer",
-                                   "description": "for count: how many. for reach: how few is too few"},
-                        # THE NAME HAD NOWHERE TO GO, and that is a SCHEMA defect rather than a
-                        # model one. A `count` goal offered `amount` for the number and `value`
-                        # for "what to set that property to (for every)" — so a request naming
-                        # a machine had one slot, `value`, doing two jobs, and the reader tried
-                        # the number first.
-                        #
-                        # MEASURED ON THE OPERATOR'S OWN REQUEST. "a machine called box1
-                        # running linux" came back as `value: "1"` — the model reading "a
-                        # machine" as a count — with `box1` pushed into a third goal the reader
-                        # then dropped. The name was in the answer TWICE and thrown away both
-                        # times, and what ran was `COUNT(SELECT vm) = 1` against a lab of nine:
-                        # a program that deleted eight machines including vm-orchestrator.
-                        #
-                        # ONE SLOT, ONE MEANING. `amount` is the number, `name` is the name,
-                        # and neither can be mistaken for the other because they are different
-                        # types in different fields.
-                        # THE CLAUSE DECLARATION WAS BUILT HERE AND WITHDRAWN, and this note
-                        # is what it bought. #41's design: each goal declares the operator's
-                        # own words it came from, so `unaccounted()` can compute which of
-                        # their words reached NO goal — the one check that catches a request
-                        # read as a DIFFERENT request, because only the English knows what was
-                        # asked. It would have caught all three of the failures measured on
-                        # 2026-08-02: `delete` reaching nothing, `5` reaching nothing, `box1`
-                        # reaching nothing.
-                        #
-                        # IT DOES NOT WORK WITH THIS MODEL, measured both ways:
-                        #
-                        #   OPTIONAL   `from: None` on every goal of every request — the same
-                        #              dead field the `procedure` slot was
-                        #   REQUIRED   filled with schema noise (`all`, `none`, `where`,
-                        #              `except`, a single word off the end of the sentence),
-                        #              AND it cost two translations of six: "create 3
-                        #              machines" went 3 -> 1 with a spurious every-clause, and
-                        #              "launch every stopped vm" went correct -> nothing
-                        #
-                        # THE PATTERN IS THE ONE EVERYTHING ELSE HERE SHOWS: this model fills
-                        # CLOSED SETS well and open strings badly. Span attribution is an open
-                        # string, and requiring one takes decoder budget from the fields that
-                        # were working.
-                        #
-                        # WHAT WOULD MAKE IT WORK is not a better description — it is the
-                        # request arriving pre-split, so the model picks a clause from a CLOSED
-                        # SET (`which of these three fragments?`) instead of quoting one. That
-                        # is a real build against a corpus, not a field.
-                        "name": {"type": "string",
-                                 "description": ("for count: the NAME of the member, when the "
-                                                 "operator gave one — 'a vm called box1' puts "
-                                                 "box1 here. Never a number, never a count")},
-                        "attr": {"type": "string", "enum": _attrs(),
-                                 "description": "for every: which property to give them"},
-                        "value": {"type": "string",
-                                  "description": "for every: what to set that property to"},
-                        "make": {"type": "string", "enum": _kinds(),
-                                 "description": "for per: what kind of thing to make"},
-                        "link": {"type": "string", "enum": _attrs(),
-                                 "description": "for per: the property tying the new thing to the member"},
-                        "fact": {"type": "string", "enum": _facts(),
-                                 "description": "for observe: what to ask"},
-                    },
-                    "required": ["goal", "select"],
-                    "additionalProperties": False,
+                        {
+                            "type": "object",
+                            "properties": {
+                                "goal": {"type": "string", "enum": ["reach"],
+                                         "description": "these must be able to reach each other"},
+                                "select": _SELECT,
+                                "amount": {"type": "integer",
+                                           "description": "how few is too few"},
+                            },
+                            "required": ["goal", "select"],
+                            "additionalProperties": False,
+                        },
+                        {
+                            "type": "object",
+                            "properties": {
+                                "goal": {"type": "string", "enum": ["every"],
+                                         "description": ("every member of a set must get a "
+                                                         "property")},
+                                "select": _SELECT,
+                                "attr": {"type": "string", "enum": _attrs(),
+                                         "description": "which property to give them"},
+                                "value": {"type": "string",
+                                          "description": "what to set that property to"},
+                            },
+                            "required": ["goal", "select", "attr", "value"],
+                            "additionalProperties": False,
+                        },
+                        {
+                            "type": "object",
+                            "properties": {
+                                "goal": {"type": "string", "enum": ["per"],
+                                         "description": ("make one new thing for each member "
+                                                         "of a set")},
+                                "select": _SELECT,
+                                "make": {"type": "string", "enum": _kinds(),
+                                         "description": "what kind of thing to make"},
+                                "link": {"type": "string", "enum": _attrs(),
+                                         "description": ("the property tying the new thing "
+                                                         "to the member")},
+                            },
+                            "required": ["goal", "select", "make"],
+                            "additionalProperties": False,
+                        },
+                        {
+                            "type": "object",
+                            "properties": {
+                                "goal": {"type": "string", "enum": ["observe"],
+                                         "description": ("ask each member something, without "
+                                                         "requiring an answer")},
+                                "select": _SELECT,
+                                "fact": {"type": "string", "enum": _facts(),
+                                         "description": "what to ask"},
+                            },
+                            "required": ["goal", "select"],
+                            "additionalProperties": False,
+                        },
+                    ],
                 },
             }
         },
@@ -239,6 +260,47 @@ def schema(kinds=None) -> Dict[str, Any]:
 
 # The default-manifest instance, for callers that only ever wanted that one.
 SCHEMA = schema()
+
+
+def goal_shapes(sc: Dict[str, Any] = None) -> List[str]:
+    """Which goal shapes the model is offered. ASKED, never reached into.
+
+    FOUR TEST FILES INDEXED THE LITERAL STRUCTURE — `["properties"]["goals"]["items"]
+    ["properties"]["goal"]["enum"]` — so giving each shape its own closed branch broke them
+    all with `KeyError: 'properties'`, on a change that made the schema strictly better. A
+    structure four readers index by hand is one nobody can improve.
+    """
+    items = (sc or SCHEMA)["properties"]["goals"]["items"]
+    branches = items.get("oneOf") or [items]
+    return [b["properties"]["goal"]["enum"][0] for b in branches]
+
+
+def fields_for(shape: str, sc: Dict[str, Any] = None) -> set:
+    """What one goal shape may carry — which is the whole point of the closed branches."""
+    items = (sc or SCHEMA)["properties"]["goals"]["items"]
+    for b in items.get("oneOf") or [items]:
+        if shape in b["properties"]["goal"].get("enum", ()):
+            return set(b["properties"])
+    return set()
+
+
+def kinds_offered(sc: Dict[str, Any] = None) -> List[str]:
+    """The kinds the model may NAME — the manifest in force, seen from the model's side.
+
+    THE ONE THING A PACKAGE'S MOUNT HAS TO REACH. A capability that cannot be requested is
+    not mounted, and this is where that is checked.
+    """
+    items = (sc or schema())["properties"]["goals"]["items"]
+    b = (items.get("oneOf") or [items])[0]
+    return list(b["properties"]["select"]["properties"]["kind"]["enum"])
+
+
+def select_attrs(sc: Dict[str, Any] = None) -> List[str]:
+    """The attributes a `where` clause may name — the enum the model actually sees."""
+    items = (sc or SCHEMA)["properties"]["goals"]["items"]
+    b = (items.get("oneOf") or [items])[0]
+    return list(b["properties"]["select"]["properties"]["where"]["items"]
+                ["properties"]["attr"]["enum"])
 
 def _relevant(spec: Dict[str, Any], request: str) -> bool:
     """Could this request be about this kind at all? A word match on the kind's own nouns.
@@ -606,7 +668,10 @@ def _echoed() -> set:
            "select", "where", "kind", "count"}
     for kind, spec in (config.KINDS or {}).items():
         out.add(kind)
-        out |= {str(n).lower() for n in (spec.get("nouns") or ())}
+        for n in (spec.get("nouns") or ()):
+            out.add(str(n).lower())
+            out.add(str(n).lower() + "s")          # "machines" is the kind, said twice
+        out.add(kind + "s")
         out |= {str(a).lower() for a in (spec.get("attrs") or ())}
     return out
 
@@ -701,6 +766,22 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
             # the field that was missing, and a request whose name reached it needs no repair
             # at all.
             named = g.get("name")
+            # A NAME THAT IS A NUMBER IS THE COUNT, and nothing else it could be. Giving the
+            # count branch its own closed shape stopped the model losing names — box1 now
+            # survives "a machine called box1 running linux", which it never did — and moved
+            # the failure one slot over: `name` is the only string field left, so a count
+            # lands in it. "make sure there are exactly two machines" came back as A MACHINE
+            # CALLED 2.
+            #
+            # THE REPAIR IS EXACT rather than a guess: no member is named by a bare number,
+            # and `_as_count` already knows what a number looks like — including the `/2` the
+            # model writes for "two". A name with a digit IN it (`vm1`) is untouched, because
+            # that is not a bare number.
+            if named is not None and _as_count(named) is not None \
+                    and not any(c.isalpha() for c in str(named)):
+                if _as_count(g.get("amount")) is None:
+                    eq = _as_count(named)
+                named = None
             if named is not None and str(named).strip():
                 spec = (config.KINDS or {}).get(sel.get("kind")) or {}
                 key = spec.get("key")
