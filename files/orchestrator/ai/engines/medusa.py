@@ -795,7 +795,12 @@ class MedusaEngine(Engine):
                       # A PROGRAM THAT CHANGES NOTHING HAS NOTHING TO CONSENT TO, and that is
                       # computed above rather than assumed — the answer, not a bypass.
                       consent=(getattr(session, "consent", None) if changes else True),
-                      intent=getattr(session, "intent", None))
+                      intent=getattr(session, "intent", None),
+                      # WHICH OF THE KNOWN TOOLS CHANGE SOMETHING. The engine holds the
+                      # manifest, so the ladder gets the exact answer about a `CALL` rather
+                      # than the safe one — which is the difference between a `fetch` that
+                      # can ask a question and one that cannot.
+                      acting_tools=_effects.actors(self.manifest))
         survey = _consent.survey(program)
         return {"ok": bool(result.get("ok")),
                 "calls": result.get("calls") or [],

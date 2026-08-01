@@ -123,6 +123,41 @@ def acting_ops() -> set:
     return {op for op, spec in config.OPS.items() if spec.get("acts")}
 
 
+def statement_acts(st: Any, actors: Optional[set] = None) -> bool:
+    """Does this ONE statement change the world?
+
+    THE OP ALONE CANNOT ANSWER IT, and that is the whole reason this exists. `acting_ops`
+    says `call` acts, which is the only honest answer available to a reader holding nothing
+    but the manifest's op table — a `CALL` could be `create_vm` or it could be `guest_ping`,
+    and a probe changes nothing. The TOOL decides, so a caller that holds the tool manifest
+    can supply `actors` (see `effects.actors`) and get the exact answer instead of the safe
+    one.
+
+    THIS QUESTION HAS NOW BEEN ASKED THREE TIMES IN THREE PLACES — the in-session's `Step.acts`,
+    the engine's consent computation, and the intent ladder — and each got it slightly
+    differently. Written once, here, where `acting_ops` already lives.
+
+    A `foreach` IS ITS BODY. The manifest marks it acting because it usually is, but its own
+    effect is "issues a call per member": a loop of probes changes nothing, and decision 6's
+    canonical example is exactly that — `FOREACH $item IN SELECT vm ... { guest_ping(...); }`.
+    Judging the loop by its contents is the difference between a FETCH that can ask about
+    every machine and one that cannot ask about any.
+
+    `actors=None` MEANS THE CALLER CANNOT SAY, and then a call acts. Fail-closed is the
+    standing rule, and it keeps every existing reader's answer exactly as it was.
+    """
+    if not isinstance(st, dict):
+        return False
+    op = st.get("op")
+    if op == "foreach":
+        body = st.get("do") if isinstance(st.get("do"), list) else []
+        inner = list(body) + ([st["call"]] if isinstance(st.get("call"), dict) else [])
+        return any(statement_acts(k, actors) for k in inner)
+    if op == "call" and actors is not None:
+        return st.get("tool") in actors
+    return op in acting_ops()
+
+
 def kind_nouns(kind: Optional[str] = None) -> set:
     """Every English noun that names a kind — THE one lexicon, read from the manifest.
 

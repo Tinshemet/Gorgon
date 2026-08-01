@@ -158,7 +158,8 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
         known_names: Optional[set] = None,
         known_tools: Optional[set] = None,
         consent: Any = None,
-        intent: Optional[str] = None) -> Dict[str, Any]:
+        intent: Optional[str] = None,
+        acting_tools: Optional[set] = None) -> Dict[str, Any]:
     """Run a program. Returns {ok, scope, calls, failed}.
 
     `select` answers a registry query (kind + attribute filters) -> member names, and
@@ -189,7 +190,12 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
     # your work". See intent.py: the operator decides, and it is enforced, not advised.
     promoted = None
     if intent is not None:
-        exceeded = _intent.violations(program, intent)
+        # `acting_tools` TRAVELS BESIDE `known_tools` AND IS NOT THE SAME SET. One says what
+        # may be called at all; this says which of them CHANGE something, and without it a
+        # `fetch` cannot ask a question — every probe is a `CALL`, and the ladder is written
+        # in ops. A caller holding a manifest supplies `effects.actors(manifest)`; one that
+        # does not gets the fail-closed reading, where a call acts.
+        exceeded = _intent.violations(program, intent, actors=acting_tools)
         if exceeded:
             return {"ok": False, "failed": "exceeds_authority", "problems": exceeded,
                     "why": exceeded[0], "scope": {}, "calls": []}

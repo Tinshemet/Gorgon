@@ -182,6 +182,7 @@
       "ops": [
         "new",
         "fetch",
+        "publish",
         "call",
         "foreach",
         "ensure",
@@ -194,6 +195,7 @@
       "ops": [
         "new",
         "fetch",
+        "publish",
         "call",
         "foreach",
         "ensure",
@@ -206,6 +208,7 @@
       "ops": [
         "new",
         "fetch",
+        "publish",
         "call",
         "ensure",
         "achieve",
@@ -217,6 +220,7 @@
       "ops": [
         "new",
         "fetch",
+        "publish",
         "call",
         "foreach",
         "ensure",
@@ -226,6 +230,7 @@
       "doc": "a named WHOLE, MINUS named members \u2014 'every vm except db'. There must be a whole to subtract from; without one it is a condition, not an exclusion"
     }
   },
+  "_op_categories_doc": "STRUCTURAL vs INTENT vs CONVERSATIONAL. A decomposition CHOOSES a structural op; the three INTENT ops are the operator's and ir/intent.py enforces them, so a router must never be offered one as a free choice. PUBLISH is neither, and a third row says so rather than filing it under whichever of the two it least resembles \u2014 its own doc calls it 'the only statement whose effect is on the CONVERSATION rather than on the world'. It was added to `ops` and to NO category at all, which is how an op becomes real to the writer and invisible to every table derived from the manifest: the schema offered it, a quantifier silently removed it, and the intent ladder had never heard of it.",
   "op_categories": {
     "structural": [
       "new",
@@ -237,6 +242,9 @@
       "fetch",
       "ensure",
       "achieve"
+    ],
+    "conversational": [
+      "publish"
     ]
   },
   "_sanitize_doc": "ARTIFACTS \u2014 residue in an authored program that provably does nothing, dropped before the program is judged, and COUNTED so the rate is a number rather than something a reader notices. A pass that only cleans makes the artifact rate unmeasurable, and 'it got quietly worse' is a failure this codebase keeps finding: a suite that stopped being mentioned stopped being run; a tool declaring no criterion reported done whenever the call returned. Cleaning without counting is that shape again. SEVERITY IS THREE-VALUED, and that is load-bearing: a screener reporting zero DANGEROUS while owning no dangerous detector is not reporting a clean result, it is reporting an unasked question \u2014 the distinction decision 6 draws between alive=false and alive=unknown, applied to the instrument's own coverage. KINDS ARE EARNED BY MEASUREMENT, NEVER INVENTED. The schema gate scored 0/12 because six factors were reasoned out from first principles and four duplicated machinery that already existed and answered better. So this ships with exactly one row, and a candidate is admitted only after it is observed in a corpus. Two candidates have already been REFUSED on that rule: `repeated_loop_same_set` fired six times across 31 programs with five of them PASSING, because one loop per operation over one set is the natural spelling and not a fault; and `repeated_identical_call`, its replacement, never fired at all. WHAT IT MAY NOT DO: it never rewrites a condition. `IF X {} ELSE {Y}` is left exactly as written so the validator's objection still fires, because turning it into `IF NOT(X) THEN {Y}` changes what the program SAYS, and a program should say what it means rather than be edited into meaning it. SECOND KIND, AND THE FIRST WITH A `symptom_of`. `trailing_prose` is benign to REMOVE \u2014 it was never part of the program \u2014 but unlike `dead_if` it is a SCHEMA VIOLATION: `type: object` has no production permitting a byte after the closing brace, so its presence is evidence the constrained decoder is not holding. That splits two questions a single severity cannot answer: is it safe to clean (yes) and is its rate telling us something is broken elsewhere (yes). The operator's framing, and the reason the alarm exists: the results stay coherent BECAUSE the artifact is cleaned, while the rate says something underneath is failing and something else is keeping it in check. A kind carrying `symptom_of` is reported against that layer without being counted as a failure of it.",

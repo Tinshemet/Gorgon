@@ -140,6 +140,7 @@ _OP_EFFECT = {
     "new":     "issues a creator call",
     "call":    "issues its tool",
     "fetch":   "binds what it read",
+    "publish": "submits a finding upward",
     "foreach": "issues a call per member",
     "ensure":  "produces a verdict",
     "achieve": "produces a verdict",

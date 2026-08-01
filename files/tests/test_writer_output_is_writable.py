@@ -29,7 +29,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from orchestrator.ai.planner import ghost_writer as gw
-from orchestrator.ai.planner.ir import config, schema as _schema, validate
+from orchestrator.ai.planner.ir import config, validate
 from tests.bench.rungs import RUNGS
 from tests.bench.sim_world import SimWorld
 from tests.test_ghost_writer import GOALS
@@ -84,10 +84,17 @@ def test_every_bound_name_is_a_name_a_person_could_type():
 
 
 def test_every_statement_names_an_operator_the_language_has():
-    """A statement whose `op` is not one of the seven is not Medusa, whatever it does."""
+    """A statement whose `op` is not one the manifest declares is not Medusa, whatever it does.
+
+    ASKED OF `config.OPS`, WHICH IS THE ONE AUTHORITY. This used to try `schema.OPS` — an
+    attribute that does not exist — and fall back to a list of seven ops written out here. So
+    the fallback was the only branch that ever ran, and it was a copy of the op set frozen at
+    the moment it was typed. `publish` was added to the language and this failed all thirteen
+    rungs, reporting a legal statement as a stray: the stale twin, in the test whose whole job
+    is to say what the language contains.
+    """
     print("[writable] the operator set is closed")
-    legal = set(_schema.OPS) if hasattr(_schema, "OPS") else {
-        "new", "fetch", "call", "foreach", "ensure", "achieve", "if"}
+    legal = set(config.OPS)
     strays = []
     for n, program in _programs():
         for st in _walk(program["body"]):

@@ -1520,6 +1520,7 @@ def test_an_intent_that_may_not_act_is_refused_before_the_decider():
     """
     print("[intent] a fetch may not change the lab, whichever engine is asked")
     from orchestrator.ai.engines import ExecutorEngine, insession
+    from orchestrator.ai.planner.ir import effects as _effects
     from tests.bench.sim_world import SimWorld
 
     for granted in ("fetch", "ensure"):
@@ -1550,16 +1551,27 @@ def test_an_intent_that_may_not_act_is_refused_before_the_decider():
     check("medusa is refused the same way", out.get("refused") is True)
     check("and nothing was cooked", not kitchen.state.get("dish"))
 
-    # A PROBE IS NOT AN ACT, and a `fetch` that could not read anything would be a rung with
-    # nothing on it. The gate asks the manifest which tools CHANGE something, so an engine
-    # whose whole plan is questions passes it untouched.
+    # A PROBE IS NOT AN ACT, AND THIS IS THE OTHER HALF OF THE RULE. A `fetch` that could
+    # read nothing is a rung with nothing on it, and that is what shipped for a day: every
+    # observation the writer makes is spelled `CALL <probe>`, `call` is absent from FETCH's
+    # op set, and so *"how many machines are up"* was refused on statement one.
+    #
+    # ASSERTED ON THE CALLS, NOT ON THE ABSENCE OF A REFUSAL. The first version of this check
+    # asked `not out["refused"]` and passed while the program was being thrown out as
+    # `exceeds_authority` — a different word for the same nothing. A read that reads is a
+    # read that made the call.
     world = SimWorld()
-    world.execute("create_vm", {"name": "alpha", "os_type": "linux"})
+    for n in ("alpha", "beta"):
+        world.execute("create_vm", {"name": n, "os_type": "linux"})
     lab = MedusaEngine(world)
-    ask = Session("is alpha up", lab, intent="fetch", regime="translation")
-    out = insession.drive(lab, [{"shape": "reach", "of": {"kind": "vm", "name": "alpha"}}],
-                          ask, lambda st, s: insession.Verdict(insession.RUN))
-    check("a fetch may still ask questions", not out.get("refused"))
+    probe = [{"observe": {"kind": "vm"}, "fact": "alive"}]
+    ask = Session("which machines are up", lab, intent="fetch", regime="translation")
+    out = insession.drive(lab, probe, ask,
+                          lambda st, s: insession.Verdict(insession.RUN))
+    check("a fetch may still ask questions", out.get("ok") is True)
+    check("and it actually asked them", len(out.get("calls") or []) == 2)
+    check("with nothing in the plan the manifest calls an act",
+          not [t for t, _ in out["calls"] if t in _effects.actors(lab.manifest)])
 
 
 def test_consent_is_the_operators_and_the_engine_stops_answering_it_for_them():

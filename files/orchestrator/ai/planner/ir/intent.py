@@ -55,9 +55,31 @@ _PREFIXES = {"achieve:": ACHIEVE, "command:": ACHIEVE, "do:": ACHIEVE,
 # The ladder. Each intent permits its own ops and everything below it; `if` rides along
 # everywhere because a branch is only as consequential as the block it runs, and that
 # block's own statements are checked when the walk reaches them.
+#
+# `publish` RIDES ALONG FOR A DIFFERENT REASON, and the manifest already said so before this
+# table was updated to agree: it is "the only statement whose effect is on the CONVERSATION
+# rather than on the world — so it needs no authority and is legal under FETCH". A rung that
+# reads the world and may not REPORT what it read is not a rung, and the writer closes every
+# program with one, so its absence here refused every fetch ever written.
+#
+# `call` AND `foreach` ARE LISTED AT EVERY RUNG, AND THE TOOL DECIDES THE REST. Whether a
+# call acts is not a property of the word: `CALL guest_ping` asks a question and `CALL
+# create_vm` changes the lab, and every observation the writer makes is spelled the first
+# way. So the OP is permitted everywhere and `violations` refuses the INSTANCE, using the
+# acting-tool set a caller with a manifest supplies. A `foreach` is judged by its body for
+# the same reason — decision 6's canonical read is a loop of probes.
+#
+# THE ALTERNATIVE WAS LEAVING THEM OUT, and that is what shipped for a day: the two lower
+# rungs of the ladder could not run a single program the writer produces, because a probe
+# was a trespass. A rung that may not read is not a rung.
+#
+# THE OFFER AND THE ENFORCEMENT MUST AGREE, which is a live invariant rather than a wish
+# (`test_medusa_invariants`, both directions). Narrowing further belongs at the TOOL level —
+# offering a fetch only the tools that ask — and that is a schema change nobody has measured,
+# so it is not made here on the strength of it sounding right.
 _PERMITS = {
-    FETCH:   {"fetch", "if"},
-    ENSURE:  {"fetch", "ensure", "if"},
+    FETCH:   {"fetch", "publish", "call", "foreach", "if"},
+    ENSURE:  {"fetch", "ensure", "publish", "call", "foreach", "if"},
     ACHIEVE: None,                # the whole language
 }
 
@@ -136,7 +158,7 @@ def permits(intent: str) -> bool:
     return _PERMITS.get(intent, _PERMITS[FETCH]) is None
 
 
-def violations(program: Any, intent: str) -> List[str]:
+def violations(program: Any, intent: str, actors: Optional[set] = None) -> List[str]:
     """Statements this intent is not authorised to contain.
 
     Enforced, not advised. The operator asked to be told something; a program that
@@ -152,24 +174,55 @@ def violations(program: Any, intent: str) -> List[str]:
     this function would have refused five sevenths of it. `run()` never hit it because it
     guards on `is not None`, so the disagreement was latent rather than live; it was found
     by asking the two sides the same question.
+
+    `actors` IS THE SET OF TOOLS THAT CHANGE THE WORLD, and without it the two lower rungs
+    of this ladder could not run a single program. `_PERMITS` is a set of OPS, and every
+    observation the writer makes is spelled `CALL <probe>` — so `call` being absent from
+    FETCH and ENSURE meant *"how many machines are up"* was refused for reaching above a
+    fetch, on statement one. MEASURED the day enforcement was switched on: every read-only
+    request, every phrasing.
+
+    A rung that may read but not report, or report but not read, is not a rung. So the
+    question a CALL is judged by is the one the tool answers, not the one the word does —
+    see `master.statement_acts`, and `effects.actors(manifest)` is what to hand it. Absent,
+    a call still counts as acting: the caller could not say, and fail-closed is the rule.
     """
     if intent is None:
         return []
     allowed = _PERMITS.get(intent, _PERMITS[FETCH])
     if allowed is None:
         return []
+    from . import master
     from .consent import _walk
     from .validate import coerce_body
     out = []
     for i, st in enumerate(_walk(coerce_body(program) or [])):
         op = st.get("op")
-        if op and op not in allowed:
+        if not op or op in allowed:
+            continue
+        # AN ACTING OP IS A TRESPASS; A READING ONE IS A QUESTION ABOUT THE ANSWER SHAPE.
+        # Different mistakes, so different sentences — the second is not a safety matter at
+        # all: a `fetch` that wanted a verdict simply asked for the rung below the one it
+        # meant.
+        #
+        # `achieve` IS COUNTED AS ACTING HERE AND IS NOT MARKED SO IN THE MANIFEST, and the
+        # difference is real rather than an oversight. To `consent.survey` an ACHIEVE is an
+        # ASSERTION — it is what grounds a program — while to this ladder it is the
+        # CORRECTION operator, which closes whatever gap it finds and therefore changes the
+        # lab. Both readings are right about their own question; only this one decides
+        # authority, and getting it wrong would let a `fetch:` carry the one statement whose
+        # entire purpose is to make something so.
+        acts = master.statement_acts(st, actors) or op == ACHIEVE
+        if acts:
             out.append(f"statement {i + 1}: `{op}` reaches above a {intent} — "
-                       + (f"you asked to be TOLD something, and this changes the lab. "
-                          f"Say `achieve:` if you meant to act."
-                          if op not in ("fetch", "ensure") else
-                          f"a {intent} answers with data, not a verdict. Say `ensure:` "
-                          f"if you wanted it checked."))
+                       f"you asked to be TOLD something, and this changes the lab. "
+                       f"Say `achieve:` if you meant to act.")
+        elif op in (FETCH, ENSURE):
+            out.append(f"statement {i + 1}: `{op}` reaches above a {intent} — "
+                       f"a {intent} answers with data, not a verdict. Say `ensure:` "
+                       f"if you wanted it checked.")
+        # ANYTHING ELSE NEITHER ACTS NOR JUDGES, so there is nothing to refuse it for — a
+        # statement whose whole effect is on the conversation is legal at every rung.
     return out
 
 
