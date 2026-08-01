@@ -928,8 +928,14 @@ def test_the_opened_grain_acts_before_it_knows_the_request_is_impossible():
     opened, w2 = serve("tree")
     check("neither claims success on an impossible request",
           not whole.get("ok") and not opened.get("ok"))
-    check("both ask to be promoted rather than inventing an answer",
-          whole.get("promote") == "tree" and opened.get("promote") == "tree")
+    # THE WHOLE-PROGRAM SESSION ASKS; THE TREE SESSION CANNOT. There is nothing above the
+    # tree, so a writer that cannot build it there closes with its OWN reason rather than
+    # asking to be promoted to where it already is.
+    check("the translation session asks to be promoted", whole.get("promote") == "tree")
+    check("the tree session does not ask for a regime it already holds",
+          opened.get("promote") is None)
+    check("and says why it could not build it instead",
+          "reach" in str(opened.get("why") or ""))
     check("the whole-program grain destroyed nothing", len(w1.vms) == 3)
     check("the opened grain had already acted", len(w2.vms) < 3)
 

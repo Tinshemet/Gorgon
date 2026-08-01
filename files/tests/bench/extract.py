@@ -298,7 +298,27 @@ def _as_count(v: Any) -> Optional[int]:
     text = str(_unwrap(v)).strip().lower()
     if text.isdigit():
         return int(text)
-    return _WORD_NUMBERS.get(text)
+    if text in _WORD_NUMBERS:
+        return _WORD_NUMBERS[text]
+
+    # A NUMBER INSIDE A SENTENCE IS STILL THE NUMBER. `value: "There must be exactly 3 vms"`
+    # was dropped whole — not parseable, not name-shaped — and the request to create THREE
+    # MACHINES vanished with it, leaving goals quantified over an empty world that were
+    # vacuously true. The model answered the question; it just answered in prose.
+    #
+    # ONLY FROM A PHRASE, AND ONLY WHEN THERE IS EXACTLY ONE. A single token like `vm1` is a
+    # NAME that happens to contain a digit, and reading it as the count would turn "the
+    # machine vm1" into "one machine". Two numbers ("3 of the 5 machines") is a sentence this
+    # cannot read, and declining beats picking one — the rule this module keeps: compute
+    # where the answer is determined, decline where it is not.
+    if " " in text:
+        found = __import__("re").findall(r"\b\d+\b", text)
+        words = [w for w in _WORD_NUMBERS if __import__("re").search(rf"\b{w}\b", text)]
+        if len(found) == 1 and not words:
+            return int(found[0])
+        if len(found) == 0 and len(words) == 1:
+            return _WORD_NUMBERS[words[0]]
+    return None
 
 
 def _name_shaped(v: Any, kind: str = None) -> bool:

@@ -204,8 +204,11 @@ def test_a_goal_with_no_sentence_behind_it_is_left_alone():
     eng, _, sess = _rig()
     bare = [{"every": {"kind": "dish"}, "must": {"serves": "4"}}]
     out = insession.drive(eng, bare, sess, lambda st, s: insession.Verdict(insession.RUN))
-    check("it asks rather than inventing a goal to decompose",
-          out.get("promote") == "tree")
+    # ALREADY IN THE TREE, so there is nothing to ask for. What matters is that it did not
+    # INVENT prose to decompose — it failed with the writer's own reason.
+    check("it does not invent a goal to decompose", out.get("promote") is None)
+    check("and carries the writer's refusal", "cannot be placed" in str(out.get("why") or "")
+          or "nothing reaches" in str(out.get("why") or ""))
 
 
 def test_an_engine_with_no_author_is_exactly_what_it_was():
@@ -218,8 +221,8 @@ def test_an_engine_with_no_author_is_exactly_what_it_was():
     sess.regime = "tree"
     out = insession.drive(eng, UNREACHABLE, sess,
                           lambda st, s: insession.Verdict(insession.RUN))
-    check("no author means the old behaviour, unchanged",
-          out.get("promote") == "tree")
+    check("no author means no staged lowering", not out.get("ok"))
+    check("and no request for a regime it already holds", out.get("promote") is None)
 
 
 def main():

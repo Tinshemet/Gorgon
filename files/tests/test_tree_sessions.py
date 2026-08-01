@@ -155,6 +155,49 @@ def test_a_tree_never_reports_done_over_a_goal_that_does_not_hold():
     check(f"no achieve claimed success over a false goal ({lied[:4] or 'none'})", not lied)
 
 
+def test_a_creation_that_did_not_happen_is_caught_by_the_world():
+    """#20's first half — "NEW's internal ACHIEVE" — and it already exists, as the WITNESS.
+
+    A creator that returns `success: False` is a tool saying it failed, and a program that
+    believed tools would be trusting exactly the flag decision 6 forbids. It does not: the
+    writer grounds every goal it plans, so the closing ENSURE asks the WORLD whether the
+    machine is there and the run fails with `count is 0, wanted == 1`.
+
+    THAT IS WHY IT NEEDS NO SEPARATE MECHANISM. An "internal achieve" on `new` would be a
+    second check of the same fact, and the one that already exists is the stronger of the
+    two: it asks the registry rather than the caller.
+    """
+    print("[tree] a creation is proven by the world, not by the tool's return")
+    from orchestrator.ai.planner.ir import run as ir_run
+    from orchestrator.ai.planner.ir import validate
+    from tests.bench.seams import seams as vm_seams
+
+    world = SimWorld()
+    attempted = []
+
+    def refuses(tool, args):
+        attempted.append(tool)
+        return {"success": False, "error": "disk full"}
+
+    program = {"body": [
+        {"op": "new", "var": "a", "kind": "vm", "amount": 1,
+         "args": {"name": "a", "os_type": "linux"}},
+        {"op": "ensure", "predicate": {"shape": "count",
+                                       "select": {"kind": "vm", "name": "a"}, "eq": 1}}]}
+    ok, problems = validate(program, known_names=world.names())
+    check("the program is well formed", ok and not problems)
+
+    select, holds = vm_seams(world)
+    result = ir_run(program, refuses, select=select, holds=holds,
+                    known_names=world.names(), consent=True, intent="achieve")
+    check("the creator was attempted", attempted == ["create_vm"])
+    check("the run FAILS rather than believing the tool",
+          not result.get("ok"))
+    check("and the reason is what the WORLD says, not what the tool returned",
+          "count is 0" in str(result.get("why") or result.get("failed")))
+    check("nothing was created", not world.vms)
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "tree sessions"))

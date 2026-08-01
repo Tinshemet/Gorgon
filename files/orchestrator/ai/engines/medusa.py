@@ -243,6 +243,23 @@ class MedusaEngine(Engine):
                     # engine that wanted it.
                     staged = self._staged(goals, session)
                     if staged is None:
+                        # DO NOT ASK FOR A REGIME YOU ALREADY HAVE. `_plan` returns
+                        # `promote: tree` on every `Unsolvable`, which was right while
+                        # `achieve` started in TRANSLATION and became nonsense the moment it
+                        # started in TREE: the session asked to be promoted to where it
+                        # already was, `may_promote` refused because a regime cannot outrank
+                        # itself, and the operator read `promotion to tree DECLINED` on a
+                        # session already running as a tree.
+                        #
+                        # THERE IS NOTHING ABOVE THE TREE. When the writer cannot build it
+                        # and staged lowering is not available, the honest close is the
+                        # WRITER'S OWN REASON — "nothing reaches this goal" — rather than a
+                        # story about an escalation that was never possible.
+                        from .session import rank as _rank
+                        here = getattr(session, "regime", "translation")
+                        if _rank(planned["promote"]) <= _rank(here):
+                            return {k: v for k, v in planned.items() if k != "promote"} | {
+                                "calls": calls, "partial": done}
                         return {**planned, "calls": calls}
                     if not staged.get("ok"):
                         return {**staged, "calls": calls, "partial": done}

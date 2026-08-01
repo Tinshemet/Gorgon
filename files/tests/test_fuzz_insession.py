@@ -45,7 +45,12 @@ def _serve(seed, regime, greedy):
     sess.regime = regime
     out = ins.drive(eng, goals, sess, lambda st, s: ins.Verdict(
         ins.DECOMPOSE if (greedy and st.divisible) else ins.RUN))
-    tag = "PROMOTE" if out.get("promote") else ("OK" if out.get("ok") else "OTHER")
+    # A PROMOTION REQUEST AND A PLAIN REFUSAL ARE THE SAME OUTCOME — the writer could not
+    # build it — and they differ only in whether an ESCALATION IS AVAILABLE. A translation
+    # session can ask for the tree and says so; a tree session is already there, so it says
+    # WHY instead. Tagging those differently made 26 cases look like a divergence when the
+    # substance was identical: nothing built, and the same reason.
+    tag = "OK" if out.get("ok") else ("REFUSED" if out.get("refused") else "UNBUILT")
     return tag, out, world, goals
 
 
@@ -91,7 +96,7 @@ def test_the_cost_of_a_doomed_request_is_what_the_grain_changes():
     for seed in range(CASES):
         whole = _serve(seed, "translation", False)
         opened = _serve(seed, "tree", False)
-        if whole[0] != "PROMOTE":
+        if whole[0] != "UNBUILT":
             continue
         if opened[1].get("calls"):
             acted_anyway += 1
