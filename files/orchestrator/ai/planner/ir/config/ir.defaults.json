@@ -299,7 +299,8 @@
         "status",
         "label",
         "os_type",
-        "network"
+        "network",
+        "template"
       ],
       "aliases": {
         "tag": "label",
@@ -373,6 +374,12 @@
           "member_arg": "name",
           "value": "stopped"
         },
+        "mark_as_template": {
+          "_doc": "A TEMPLATE IS A STATE A MACHINE IS IN, not a thing that is created. `mark_as_template` takes the name of a vm that already exists and `remove_template` takes it back, so this is a SETTER on `vm` and not a kind of its own \u2014 modelling it as a kind gave it no creator and left it uninvertible, which is the shape saying it was the wrong object. A writer asked for a template now reaches for a machine and marks it, rather than trying to make one.",
+          "attr": "template",
+          "member_arg": "name",
+          "value": "true"
+        },
         "launch_vm": {
           "attr": "status",
           "member_arg": "name",
@@ -388,6 +395,11 @@
           "attr": "label",
           "member_arg": "name",
           "value_arg": "label"
+        },
+        "remove_template": {
+          "_doc": "NO `value_arg`, AND THAT IS THE POINT. `remove_vm_from_network` needs to be told WHICH network to leave; `remove_template` needs only the machine, because there is one thing to stop being. Declaring `value_arg: name` to fill the slot produced `remove_template(name: 'true')` \u2014 the value overwriting the member, because both named the same argument.",
+          "attr": "template",
+          "member_arg": "name"
         },
         "remove_vm_from_network": {
           "attr": "network",
@@ -436,6 +448,30 @@
           "fact": "file_exists({path})"
         }
       }
+    },
+    "profile": {
+      "package": "core",
+      "create": "create_profile",
+      "delete": "delete_profile",
+      "list": "list_profiles",
+      "key": "profile_name",
+      "attrs": [
+        "profile_name"
+      ],
+      "aliases": {
+        "name": "profile_name"
+      },
+      "creators": {
+        "create": {
+          "tool": "create_profile"
+        }
+      },
+      "nouns": [
+        "profile",
+        "hardware profile",
+        "spec"
+      ],
+      "_doc": "A NAMED HARDWARE SPEC. Six tools for profiles and templates have been in the executor's registry for as long as the lab has, and a Medusa program could name none of them \u2014 the same shape as `run_command`: real capability, unreachable from the language, so nothing could plan with it and nobody noticed because a tool nobody can ask for also never fails."
     },
     "snapshot": {
       "package": "core",

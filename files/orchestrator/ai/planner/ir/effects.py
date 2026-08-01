@@ -244,8 +244,18 @@ def invert(pred: Dict[str, Any], kinds=None, internal: bool = False) -> Optional
         if len(rest) == 1:
             attr, value = next(iter(rest.items()))
             for tool, u in (spec.get("unsetters") or {}).items():
-                if u["attr"] == attr and "value_arg" in u:
+                if u["attr"] != attr:
+                    continue
+                # AN UNSETTER NEED NOT BE TOLD WHICH VALUE TO DROP. `remove_vm_from_network`
+                # does — a machine can sit on several networks and leaving one is not leaving
+                # them all — while `remove_template` needs only the machine, because there is
+                # one thing to stop being. Requiring the argument meant an attribute with a
+                # single state had no way OFF it, and declaring `value_arg` anyway to fill
+                # the slot produced `remove_template(name: 'true')`: the value overwriting
+                # the member, because both named the same argument.
+                if "value_arg" in u:
                     return (tool, {u["member_arg"]: member, u["value_arg"]: value})
+                return (tool, {u["member_arg"]: member})
         return None
     if pred.get("eq") != 1:
         return None                       # counts other than 0/1 are derive()'s territory

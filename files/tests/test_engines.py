@@ -1124,7 +1124,7 @@ def test_the_lab_mount_speaks_the_manifest_not_the_library():
     # manifest makes, holding: a new kind the library cannot enumerate is UNSEEDED without an
     # edit, so the writer refuses to read silence as "there are none".
     check(f"a kind nothing could seed is named, not silently empty ({model.unseeded})",
-          model.unseeded == {"snapshot", "file"})
+          model.unseeded == {"snapshot", "file", "profile"})
 
 
 def test_a_world_that_cannot_ask_still_plans_a_reach():
