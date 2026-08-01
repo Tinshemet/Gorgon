@@ -40,6 +40,7 @@ LIVE = {"test_api"}
 
 # Not suites: harnesses, fixtures and manual tools that live alongside the tests.
 NOT_SUITES = {"shared", "renderer", "log_runner", "probe_tools", "chat_harness",
+              "repair_ab",
               "sim_live", "sim_autonomous", "smoke_commands", "smoke_tools",
               "bench_reasoning"}
 
