@@ -81,6 +81,10 @@ MANIFEST: Dict[str, Any] = {
     # through the tool path when they want the machine themselves.
     "search": {
         "key": "query",
+        # A SEARCH IS NAMED BY ITS QUESTION, which is prose. "diameter of the earth" is the
+        # member's identity here the way `bench-red-1` is a machine's, and the extractor's
+        # name-shape floor has to be told that or it refuses every query for having spaces.
+        "key_freetext": True,
         "attrs": ["query", "browser", "answered"],
         "nouns": ["search", "query", "lookup", "question"],
         "create": "camoufox_search",

@@ -301,8 +301,15 @@ def _as_count(v: Any) -> Optional[int]:
     return _WORD_NUMBERS.get(text)
 
 
-def _name_shaped(v: Any) -> bool:
+def _name_shaped(v: Any, kind: str = None) -> bool:
     """Could this string be a member's NAME at all? A shape question, never a meaning one.
+
+    SOME KINDS ARE NAMED BY A PHRASE, and the manifest says which. A machine is called
+    `bench-red-1`; a SEARCH is named by its query — "diameter of the earth" — and rejecting
+    it for containing spaces killed the whole Camoufox path at the first goal. `key_freetext`
+    lets a kind declare that its key is prose, which is a fact about the kind and not a
+    loosening of the rule for everyone: a value still cannot be empty, cannot be residue,
+    and cannot be longer than a name plausibly is.
 
     THE REPAIR NEEDED A FLOOR AND THIS IS IT. Reading a bare value on a count of one as an
     identity is right when the value is a name and wrong when it is the model shrugging:
@@ -321,7 +328,13 @@ def _name_shaped(v: Any) -> bool:
     thing to fix than one this module invented.
     """
     text = str(_unwrap(v)).strip()
-    return bool(text) and len(text) <= 64 and _NAME_OK.match(text) is not None
+    if not text or len(text) > 200:
+        return False
+    if kind and ((config.KINDS or {}).get(kind) or {}).get("key_freetext"):
+        # A PHRASE, BUT STILL NOT A SHRUG. Residue and shell syntax are refused for a
+        # free-text key exactly as they are for a token one; what is allowed is spaces.
+        return not any(c in text for c in "${}|;&<>`\n")
+    return len(text) <= 64 and _NAME_OK.match(text) is not None
 
 
 _NAME_OK = __import__("re").compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -427,7 +440,7 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
                 # "two machines called prod" is not an identity under any reading.
                 spec = (config.KINDS or {}).get(sel.get("kind")) or {}
                 key = spec.get("key")
-                if (key and _name_shaped(g["value"])
+                if (key and _name_shaped(g["value"], sel.get("kind"))
                         and str(_unwrap(g["value"])).strip().lower()
                         not in _enumerated(sel["kind"])):
                     sel = {**sel, key: str(_unwrap(g["value"])).strip()}
