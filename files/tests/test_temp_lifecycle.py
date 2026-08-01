@@ -33,6 +33,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from orchestrator.ai.planner import ghost_writer as gw
 from orchestrator.ai.planner.ir import effects
+from orchestrator.ai.planner.ir import master
 from orchestrator.ai.planner.ir import render
 from tests.bench.sim_world import SimWorld
 
@@ -59,8 +60,17 @@ def _plan(goals, seed=()):
     return program, temps, render(program)
 
 
-def _deletes(text):
-    return [ln for ln in text.splitlines() if ln.startswith("delete_vm(")]
+def _deletes(program):
+    """Deletions, asked of the IR — for the reason `_creates` states two functions below.
+
+    It read the RENDERING and matched a line starting with `delete_vm(`, and the renderer
+    now writes `CALL delete_vm(...)`. So it matched nothing whatever the program did: the
+    check that a requested deletion happens passed the day it was written and has been
+    reporting an empty list ever since. The lesson was already recorded beside it.
+    """
+    tools = set(effects.deleters(None))
+    return [st for st in program["body"]
+            if st.get("op") == "call" and st.get("tool") in tools]
 
 
 def _creates(program, kind="vm"):
@@ -83,7 +93,7 @@ def test_a_machine_the_operator_named_is_never_taken_away():
                                               "status": "running"}, "eq": 1}])
     check("it is created", len(_creates(program)) == 1)
     check("nothing is marked temporary", temps == [])
-    check("and nothing is deleted", not _deletes(text))
+    check("and nothing is deleted", not _deletes(program))
 
 
 def test_a_name_in_an_attribute_is_still_a_name():
@@ -94,15 +104,17 @@ def test_a_name_in_an_attribute_is_still_a_name():
                                               "vm": "web"}, "eq": 1}])
     check("the machine is brought into being", len(_creates(program)) == 1)
     check("the snapshot is taken of it", len(_creates(program, "snapshot")) == 1)
-    check("and the machine survives", not _deletes(text) and temps == [])
+    check("and the machine survives", not _deletes(program) and temps == [])
 
 
 def test_deleting_is_what_the_operator_asked_for():
     print("[lifecycle] told to remove it -> removed")
-    _program, temps, text = _plan([{"shape": "count",
+    program, temps, _text = _plan([{"shape": "count",
                                     "select": {"kind": "vm", "name": "doomed"}, "eq": 0}],
                                   seed=("doomed",))
-    check("it is deleted", _deletes(text) == ["delete_vm(name: doomed);"])
+    gone = _deletes(program)
+    check("it is deleted",
+          len(gone) == 1 and gone[0]["args"] == {"name": "doomed"})
     check("but not as scaffolding — the operator asked", temps == [])
 
 
@@ -114,7 +126,7 @@ def test_a_fetched_machine_is_never_deleted():
     check("the label is applied", "add_label" in text)
     check("nothing was created", not _creates(program))
     check("nothing is temporary", temps == [])
-    check("and nothing is deleted", not _deletes(text))
+    check("and nothing is deleted", not _deletes(program))
 
 
 def test_display_follows_the_same_line():
@@ -150,8 +162,14 @@ def test_the_teardown_comes_after_the_witness():
     # example. A run with nothing to tear down must still put its witness last.
     ops = [st.get("op") for st in program["body"]]
     check("the witness is present", "ensure" in ops)
+    # NOTHING THAT ACTS, WHICH IS WHAT THIS ALWAYS MEANT. It asked whether the ENSURE was
+    # the LAST statement, and `PUBLISH done` was added after it — a statement whose whole
+    # effect is on the conversation. A witness followed by a report is still a witness that
+    # nothing dismantled; asked as "is it last" the check fails on a program that is
+    # perfectly ordered.
+    after = program["body"][ops.index("ensure") + 1:]
     check("and nothing acts after it in a run with no scaffolding",
-          ops.index("ensure") == len(ops) - 1 or temps)
+          temps or not [st for st in after if master.statement_acts(st)])
 
 
 def main():

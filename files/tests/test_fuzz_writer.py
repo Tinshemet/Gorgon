@@ -25,7 +25,7 @@ from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.planner.ir import consent, validate
+from orchestrator.ai.planner.ir import consent, effects, master, validate
 from orchestrator.ai.planner.ir import run as ir_run
 from tests.bench import fuzz
 from tests.bench.ghost_writer import Unsolvable, as_program, cover
@@ -120,13 +120,18 @@ def test_every_random_program_is_grounded_and_none_vouch_vacuously():
         seen += 1
         s = consent.survey(prog)
         # AN OBSERVE-ONLY PROGRAM HAS NOTHING TO VOUCH FOR, so grounding does not apply.
-        # `consent` counts a `guest_ping` as an acting statement because acting-ness is
-        # decided per OP and a probe is a `call` — conservative rather than dangerous, since
-        # the effect is that the operator gets asked about a program that changes nothing.
-        # Worth knowing, not worth loosening a safety rule over.
-        probes_only = all(st.get("op") == "call" and st.get("tool") == "guest_ping"
-                          for st in prog["body"])
-        if s["acts"] and not s["grounded"] and not probes_only:
+        # `consent` counts a probe as an acting statement because acting-ness is decided per
+        # OP and a probe is a `call` — conservative rather than dangerous for a reader that
+        # holds nothing but the artifact, and its docstring says so.
+        #
+        # ASKED OF THE MANIFEST, NOT OF ONE TOOL'S NAME. This used to require every statement
+        # to be a `guest_ping` call, which named a single tool and broke twice over: a probe
+        # of any other kind counted as an act, and `PUBLISH done` — appended to every program
+        # the writer emits — is not a call at all, so the exemption stopped matching anything
+        # and 34 read-only programs were reported as ungrounded work.
+        changes_nothing = not [st for st in consent._walk(prog["body"])
+                               if master.statement_acts(st, effects.actors())]
+        if s["acts"] and not s["grounded"] and not changes_nothing:
             ungrounded.append(seed)
         if s["vacuous"]:
             vacuous.append(seed)
@@ -153,7 +158,11 @@ def test_running_it_twice_changes_nothing_the_second_time():
             again = cover(goals, world)
         except Unsolvable:
             continue
-        acting = [c for c in again if c[0] != "guest_ping"]
+        # THE MANIFEST DECIDES WHICH CALLS ARE WORK, not a tool name written here. This said
+        # `c[0] != "guest_ping"`, which is the same single-tool assumption `_walk` above was
+        # carrying: a probe added to any other kind would have counted as repeated work and
+        # failed a correct writer.
+        acting = [c for c in again if c[0] in effects.actors()]
         if acting:
             bad.append((seed, acting[:2]))
     check(f"no second pass repeats work ({len(bad)} that do)", not bad)

@@ -371,6 +371,37 @@ def _named_in(goals, kinds) -> set:
     return out
 
 
+def _asked_kinds(goals) -> set:
+    """Every KIND the request is about — the third clause of the provenance rule.
+
+    THE TWO CLAUSES ABOVE ARE ABOUT NAMES, AND A REQUEST NEED NOT USE ANY. *"create 3 vms
+    labelled red and 2 labelled blue"* names no machine at all, so every one of the five the
+    writer mints was scaffolding by the name test, and rung 6's program CREATED THE FIVE
+    MACHINES IT WAS ASKED FOR AND THEN DELETED THEM — ten calls of teardown on top of a
+    22-call plan, closing DONE against a world it had just emptied. The third instance of
+    this same bug, and each earlier one was fixed at the level it was found: first every
+    precondition-creation was temp, then a name in the selector's key was honoured, then a
+    name in an attribute. All three were sharpenings of "did they SAY it".
+
+    THE QUESTION IS NOT WHETHER THEY NAMED IT — IT IS WHETHER THE GOAL IS ABOUT IT. Asked of
+    the KIND, which every goal declares whether or not it names a member:
+
+        create 3 vms labelled red   the goals range over `vm`, so a vm is the DELIVERABLE
+        search the web for X        the goals range over `search`, and the `vm` created to
+                                    host a browser is a MEANS — nobody asked for a machine
+
+    That is what the motivating case actually turned on, and unlike a name it survives a
+    request that mentions none. It only ever WIDENS what belongs to the operator, which is
+    the safe direction: scaffolding left standing is litter, and a deliverable torn down is
+    the request undone.
+    """
+    out = set()
+    for goal in goals or ():
+        out |= kinds_of(goal)
+    return out
+
+
+
 def _scratch_of(world):
     """A world safe to PLAN against — a model of it, never the thing itself.
 
@@ -401,11 +432,16 @@ def cover(goals: List[Dict[str, Any]], world, trace: List[str] = None,
     """
     scratch = _scratch_of(world)
     asked = _named_in(goals, _kinds(scratch))
+    # AND THE KINDS THE REQUEST IS ABOUT, computed once beside the names for the same reason
+    # the names are: a member is the operator's if they NAMED it or if the goals RANGE OVER
+    # its kind, and a request need not contain a single name.
+    asked_kinds = _asked_kinds(goals)
     plan: List[Call] = []
     for _round in range(4):
         before = len(plan)
         for goal in goals:
-            _achieve(goal, scratch, plan, trace, 0, temps=temps, asked=asked)
+            _achieve(goal, scratch, plan, trace, 0, temps=temps, asked=asked,
+                     asked_kinds=asked_kinds)
         if len(plan) == before:
             return plan
         if trace is not None:
@@ -415,7 +451,8 @@ def cover(goals: List[Dict[str, Any]], world, trace: List[str] = None,
     raise Unsolvable("goals do not settle — they may be pulling against each other")
 
 
-def _achieve(goal, scratch, plan, trace, depth, internal=False, temps=None, asked=None):
+def _achieve(goal, scratch, plan, trace, depth, internal=False, temps=None, asked=None,
+             asked_kinds=None):
     if depth > 12:
         raise Unsolvable("lowering too deep — a goal probably depends on itself")
     say = (lambda m: trace.append("  " * depth + m)) if trace is not None else lambda m: None
@@ -441,7 +478,8 @@ def _achieve(goal, scratch, plan, trace, depth, internal=False, temps=None, aske
         subs = _lower(goal, sel, scratch)
         say(f"observe {goal['observe']} — {len(subs)} probe(s)")
         for s_ in subs:
-            _achieve(s_, scratch, plan, trace, depth + 1, internal=internal, temps=temps, asked=asked)
+            _achieve(s_, scratch, plan, trace, depth + 1, internal=internal, temps=temps, asked=asked,
+                     asked_kinds=asked_kinds)
         return
 
     ok, why = _holds(goal, holds, sel)
@@ -497,7 +535,8 @@ def _achieve(goal, scratch, plan, trace, depth, internal=False, temps=None, aske
         # writer would otherwise have to guess: whether a machine gets a display, and
         # whether it is the program's to clean up afterwards.
         for need in effects.precondition(tool, args, _kinds(scratch)):
-            _achieve(need, scratch, plan, trace, depth + 1, internal=True, temps=temps, asked=asked)
+            _achieve(need, scratch, plan, trace, depth + 1, internal=True, temps=temps, asked=asked,
+                     asked_kinds=asked_kinds)
         if (tool, args) not in plan:
             plan.append((tool, args))
             scratch.execute(tool, args)
@@ -511,11 +550,18 @@ def _achieve(goal, scratch, plan, trace, depth, internal=False, temps=None, aske
                 # the first version recorded alpha as temp and had the program DELETE THE
                 # MACHINE THE OPERATOR ASKED FOR. Scaffolding is a member nobody mentioned,
                 # brought into being only so the request could happen.
+                #
+                # AND A REQUEST NEED NOT NAME ANYTHING AT ALL, which is the third and last
+                # form of the same mistake. "create 3 vms labelled red" names no machine, so
+                # by the name test alone every one of them was scaffolding and rung 6's
+                # program built its five machines and then deleted them. The goals RANGE OVER
+                # `vm`, so a vm is what was asked for — see `_asked_kinds`.
                 kind = effects._kind_of(tool, _kinds(scratch))
                 spec = effects._K(_kinds(scratch)).get(kind) or {}
                 name = args.get(spec.get("key"))
                 if kind and name and tool == spec.get("create") \
-                        and (kind, name) not in (asked or set()):
+                        and (kind, name) not in (asked or set()) \
+                        and kind not in (asked_kinds or set()):
                     temps.append((kind, name))
         return
 
@@ -528,7 +574,8 @@ def _achieve(goal, scratch, plan, trace, depth, internal=False, temps=None, aske
         # LOWERING IS NOT A PRECONDITION. A sub-goal is part of what the operator asked for,
         # said more precisely — "every machine running" becomes one goal per machine, and
         # each is still theirs. Only `precondition` marks work nobody requested.
-        _achieve(s, scratch, plan, trace, depth + 1, internal=internal, temps=temps, asked=asked)
+        _achieve(s, scratch, plan, trace, depth + 1, internal=internal, temps=temps, asked=asked,
+                     asked_kinds=asked_kinds)
 
     ok, why = _holds(goal, holds, sel)
     if not ok:
