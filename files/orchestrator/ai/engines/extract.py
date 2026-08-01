@@ -183,6 +183,34 @@ def schema(kinds=None) -> Dict[str, Any]:
                         # ONE SLOT, ONE MEANING. `amount` is the number, `name` is the name,
                         # and neither can be mistaken for the other because they are different
                         # types in different fields.
+                        # THE CLAUSE DECLARATION WAS BUILT HERE AND WITHDRAWN, and this note
+                        # is what it bought. #41's design: each goal declares the operator's
+                        # own words it came from, so `unaccounted()` can compute which of
+                        # their words reached NO goal — the one check that catches a request
+                        # read as a DIFFERENT request, because only the English knows what was
+                        # asked. It would have caught all three of the failures measured on
+                        # 2026-08-02: `delete` reaching nothing, `5` reaching nothing, `box1`
+                        # reaching nothing.
+                        #
+                        # IT DOES NOT WORK WITH THIS MODEL, measured both ways:
+                        #
+                        #   OPTIONAL   `from: None` on every goal of every request — the same
+                        #              dead field the `procedure` slot was
+                        #   REQUIRED   filled with schema noise (`all`, `none`, `where`,
+                        #              `except`, a single word off the end of the sentence),
+                        #              AND it cost two translations of six: "create 3
+                        #              machines" went 3 -> 1 with a spurious every-clause, and
+                        #              "launch every stopped vm" went correct -> nothing
+                        #
+                        # THE PATTERN IS THE ONE EVERYTHING ELSE HERE SHOWS: this model fills
+                        # CLOSED SETS well and open strings badly. Span attribution is an open
+                        # string, and requiring one takes decoder budget from the fields that
+                        # were working.
+                        #
+                        # WHAT WOULD MAKE IT WORK is not a better description — it is the
+                        # request arriving pre-split, so the model picks a clause from a CLOSED
+                        # SET (`which of these three fragments?`) instead of quoting one. That
+                        # is a real build against a corpus, not a field.
                         "name": {"type": "string",
                                  "description": ("for count: the NAME of the member, when the "
                                                  "operator gave one — 'a vm called box1' puts "
