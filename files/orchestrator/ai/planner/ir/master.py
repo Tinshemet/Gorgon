@@ -49,11 +49,20 @@ from . import config, intent as _intent
 # operator level (#15), and rolling a quantifier up over a closed set of split points (#51).
 #
 # THEY WERE MAIN-LINE PROBLEMS WHEN A MODEL AUTHORED PROGRAMS FROM PROSE. It does not any
-# more. `master.ops(want, quantifier)` is reached from exactly two places — `lower.py` and
-# `schema.py` — and the ghost writer touches neither: the quantifier arrives EXPLICIT in the
-# goal (`every` / `count` are shapes the extractor emits, not readings inferred from a
-# sentence), and `_lower` turns a statement about a set into statements about named members
-# deterministically.
+# more. The quantifier arrives EXPLICIT in the goal — `every` and `count` are shapes the
+# extractor emits, not readings inferred from a sentence — and `_lower` turns a statement
+# about a set into statements about named members deterministically.
+#
+# MEASURED AT THE CALL, NOT THE IMPORT, because the first version of this note said "reached
+# from exactly two places" and that was a claim about static references. THIS MODULE IS
+# IMPORTED BY THE MAIN LINE: `ir/__init__` pulls it in and `medusa` pulls in `lower`. What
+# is true is stronger and had to be measured rather than read — thirteen rungs served end to
+# end through the orchestrator make ZERO calls to `master.ops`, `schema.leaf`,
+# `lower.decompose` or `lower.lower_tree`.
+#
+# The distinction matters because "not imported" would be enforceable and is FALSE, while
+# "not called" is the real property and needs a probe. Anyone re-checking this should count
+# calls during a run, not grep for the name.
 #
 # SO THEY ARE NOT DEAD, THEY ARE BOUNDED. Every one of them now matters exactly as much as
 # STAGED LOWERING matters, which is the fallback path measured at 4/13 and reached only after
