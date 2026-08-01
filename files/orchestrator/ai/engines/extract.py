@@ -151,6 +151,12 @@ def schema(kinds=None) -> Dict[str, Any]:
                             "type": "string",
                             "enum": ["count", "reach", "every", "per", "observe"],
                             "description": (
+                                # WITHDRAWN AFTER MEASUREMENT: "the number goes in `amount`,
+                                # and a request to remove something is a count of zero" was
+                                # added here and changed NOTHING at n=3 — `delete the vm
+                                # called doomed` still came back as a count of one. Prompt
+                                # text is paid for on every request; text that buys nothing
+                                # is a cost with no purchase, so it goes back out.
                                 "count: how many members must match. "
                                 "reach: these must be able to reach each other. "
                                 "every: every member of a set must get a property. "

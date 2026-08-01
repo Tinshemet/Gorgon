@@ -248,3 +248,38 @@ def test_the_refusal_reaches_to_goals():
     got = to_goals(raw, "launch all of them")
     assert len(got) == 1, "the unusable goal is dropped and the real one survives"
     assert got[0]["select"]["name"] == "web"
+
+
+def test_a_DELETION_and_a_CREATION_are_currently_indistinguishable():
+    """A NAMED HOLE, LOUD, AND IT FLIPS THE DAY SOMEBODY CLOSES IT.
+
+    `delete the vm called doomed` and `create a vm named doomed` produce BYTE-IDENTICAL
+    components: `COUNT(SELECT vm WHERE name = 'doomed') = 1`. The writer reads that as "make
+    sure it exists", so a request to REMOVE a machine plans to CREATE one.
+
+    THE CAUSE IS NOT THE MODEL BEING WRONG. It emits no `amount` at all, and `to_goals`
+    defaults a missing count to ONE — documented, and correct for the commonest request
+    there is. The reader cannot tell the two apart because nothing in the answer
+    distinguishes them, and deciding from the English is the line this module exists not to
+    cross.
+
+    WHAT WAS TRIED AND WITHDRAWN: telling the `count` field that a removal is a count of
+    zero. Measured at n=3, changed nothing, and prompt text is paid for on every request.
+
+    THIS ASSERTION IS THE HOLE, not a wish. It passes while the two are identical and FAILS
+    the day they differ — at which point this note is wrong and must be rewritten, which is
+    the point of encoding it as a check rather than a comment.
+    """
+    import os
+
+    if not os.environ.get("GORGON_LIVE_EXTRACT"):
+        return                      # needs the model; opt in, like every other live arm
+
+    from orchestrator.ai.engines.extract import extract, to_goals
+    remove = to_goals(extract("delete the vm called doomed"), "")
+    create = to_goals(extract("create a vm named doomed"), "")
+    assert remove == create, (
+        "THE HOLE IS CLOSED — a deletion and a creation now differ. Rewrite this test's "
+        f"note.\n  delete -> {remove}\n  create -> {create}")
+    assert remove and remove[0].get("eq") == 1, (
+        "and the shared reading is COUNT = 1, which is the creation")
