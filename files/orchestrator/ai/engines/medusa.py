@@ -236,7 +236,17 @@ class MedusaEngine(Engine):
                     "state": _keeper.UNKNOWN, "why": "no witness — nothing to re-check"})
                 planned = self._plan(goals, session)
                 if planned.get("promote"):
-                    return {**planned, "calls": calls}
+                    # THE WRITER REFUSED, AND THAT REFUSAL IS THE PROMOTION SIGNAL. What is
+                    # new is that a promotion can now BUY something rather than asking the
+                    # same question again — but only where the tree regime has already been
+                    # GRANTED, so the cost falls on whoever holds the budget and not on the
+                    # engine that wanted it.
+                    staged = self._staged(goals, session)
+                    if staged is None:
+                        return {**planned, "calls": calls}
+                    if not staged.get("ok"):
+                        return {**staged, "calls": calls, "partial": done}
+                    planned = staged
                 if planned.get("done"):
                     done += goals
                     continue
@@ -424,8 +434,15 @@ class MedusaEngine(Engine):
             out["tree_report"] = _keeper.report(sorted(rows, key=lambda r: r["path"]))
         return out
 
-    def _staged(self, components, why: str, session) -> Optional[Dict[str, Any]]:
+    def _staged(self, components, session) -> Optional[Dict[str, Any]]:
         """STAGED LOWERING — one operator per leaf, fused upward, graded before it runs.
+
+        RETURNS A PLAN, NEVER A RESULT. An earlier version of this ran the program it built,
+        from inside `_plan` — the function whose whole contract is "everything up to the
+        first side effect". So a staged program ACTED WITHOUT A STEP EVER BEING OFFERED, and
+        the one invariant the in-session exists to keep was broken by the mechanism added to
+        serve it. Building and running are separate here for the same reason they are
+        separate everywhere else in this file.
 
         Returns None when it does not apply, which keeps the default path exactly as it was:
         no author, no tree grant, or a goal with no prose to open all fall through to the
@@ -447,19 +464,28 @@ class MedusaEngine(Engine):
             # and inventing prose to decompose would be authoring the request rather than
             # serving it.
             return None
-        log: List[str] = []
-        try:
-            root = _lower.decompose(goal, self._route, log=log)
-            tree = _lower.lower_tree(root, self._author, known=set(self._world.names()),
-                                     log=log, route=self._route)
-        except (_lower.DecompositionError, _lower.LoweringError, _lower.FusionError) as e:
-            for line in log:
-                session.record(f"staged: {line}")
-            return {"ok": False, "calls": [], "program": None,
-                    "why": f"staged lowering could not build it either: {e}"}
-        for line in log:
+        # `log` IS A CALLABLE IN THAT MODULE, not a list. Passing a list would have raised
+        # on the first thing worth logging, which is the moment you most want the log.
+        def say(line):
             session.record(f"staged: {line}")
 
+        try:
+            tools = _effects.tools_of(self.manifest) or None
+            root = _lower.decompose(goal, self._route, log=say)
+            tree = _lower.lower_tree(root, self._author, known=set(self._world.names()),
+                                     log=say, route=self._route, known_tools=tools)
+        except (_lower.DecompositionError, _lower.LoweringError, _lower.FusionError) as e:
+            return {"ok": False, "calls": [], "program": None,
+                    "why": f"staged lowering could not build it either: {e}"}
+
+        if not _lower.review(tree)["grounded"]:
+            # ASK FOR A CLOSING VERDICT BEFORE REFUSING. `ground` exists for exactly this —
+            # a tree that acts and asserts nothing gets one more call, for the statement that
+            # says what must hold at the end. Refusing without asking would throw away a
+            # program the author could have finished, and the writer's own rule is that
+            # every goal it plans closes with a witness.
+            tree = _lower.ground(tree, self._author, goal, known=set(self._world.names()),
+                                 log=say, known_tools=tools)
         program = _lower.assemble(tree)
         report = _lower.review(tree)
         session.record(f"staged: {report['statements']} statement(s), "
@@ -471,12 +497,42 @@ class MedusaEngine(Engine):
             # and everything to discover afterwards.
             return {"ok": False, "calls": [], "program": program,
                     "why": "staged lowering produced a program that vouches for nothing"}
+        # AND DECORATIVE GROUNDING IS NOT GROUNDING. `review` asks whether an assertion
+        # EXISTS, never whether one could FAIL. Measured on the first staged program ever
+        # built here: it closed with `ACHIEVE COUNT(dish) >= 1` over a world that ALREADY
+        # HELD ONE — true before the program ran, and so a witness to nothing about it.
+        #
+        # `consent.vacuous` does not catch this and SHOULD NOT: it is deliberately narrow,
+        # and it refused a relevance test on the grounds that a false accusation of vacuity
+        # is worse than a missed one. That reasoning stands. But this is not a heuristic —
+        # THE ENGINE HAS THE WORLD AS IT IS BEFORE THE PROGRAM RUNS, which nothing reading
+        # the artifact alone can have, so it can COMPUTE the answer and decline nothing.
+        #
+        # It does not fire on the case that check was worried about: a program creating five
+        # machines and closing with `count == 5` starts from a world where the count is
+        # zero, so the assertion does not already hold and nothing is flagged.
+        _, holds = _gw._seams_of(self._world)
+        witnesses = [st for st in program.get("body") or []
+                     if st.get("op") in ("ensure", "achieve") and st.get("predicate")]
+        already = []
+        for st in witnesses:
+            try:
+                ok_now, _why = holds(st["predicate"], {})
+            except Exception:
+                ok_now = False          # a predicate the world cannot answer is not vacuous
+            if ok_now:
+                already.append(_gw._short(st["predicate"]))
+        if witnesses and len(already) == len(witnesses):
+            return {"ok": False, "calls": [], "program": program,
+                    "why": f"staged lowering grounded itself only with assertion(s) that "
+                           f"ALREADY HOLD before it runs, so nothing it does is witnessed: "
+                           f"{already[:2]}"}
         problems = _validate(program, known_names=self._world.names(),
                              known_tools=_effects.tools_of(self.manifest) or None)[1]
         if problems:
             return {"ok": False, "calls": [], "program": program,
                     "why": f"staged lowering produced an invalid program: {problems[:1]}"}
-        return self._execute_plan({"plan": [], "program": program}, components)
+        return {"ok": True, "plan": [], "program": program}
 
     def _open(self, goals: List[Dict[str, Any]]) -> Optional[List]:
         """One node into finer ones, or None when the node is already atomic.
@@ -547,14 +603,6 @@ class MedusaEngine(Engine):
             # improvise — and under the engine architecture that is exactly what asking for
             # a regime looks like. The orchestrator decides; this engine only reports that it
             # has run out of things it can compute.
-            # THE WRITER REFUSED. That refusal is the promotion signal and always has been;
-            # what changes here is that a promotion can now BUY something instead of asking
-            # the same question again. Staged lowering only runs when the session has already
-            # been granted the tree regime — so the cost is paid by whoever holds the budget,
-            # not helped along by the engine that wanted it.
-            staged = self._staged(components, str(e), session)
-            if staged is not None:
-                return staged
             return {"ok": False, "promote": "tree", "why": str(e),
                     "calls": [], "program": None}
 

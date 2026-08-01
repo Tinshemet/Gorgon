@@ -236,7 +236,8 @@ def emit_leaf(leaf: dict, emit, want: Optional[str] = None,
               bound: Optional[set] = None,
               body: Optional[List[dict]] = None,
               context: Optional[List[dict]] = None,
-              ancestry: Optional[List[str]] = None) -> dict:
+              ancestry: Optional[List[str]] = None,
+              known_tools: Optional[set] = None) -> dict:
     """Fill one leaf's `stmt`. Returns the leaf (mutated copy), or raises LoweringError.
 
     ORDER, and it is the reason-gate note's `sanitize -> repair -> ask` read backwards from
@@ -303,7 +304,13 @@ def emit_leaf(leaf: dict, emit, want: Optional[str] = None,
         if body is not None and field:
             subject[field] = list(body)
             subject.pop("call", None) if stmt.get("op") == "foreach" else None
-        ok, problems = validate({"body": [subject]}, bound=set(bound or ()))
+        # `known_tools` IS THE ENGINE'S, NOT THE DEFAULT REGISTRY'S. Without it this
+        # validated every leaf against the VM executor's tools whatever engine was running —
+        # so a kitchen's `create_dish` came back "no such tool" and every leaf was retried to
+        # exhaustion and then refused. The whole-program path was threaded for this on
+        # 2026-08-01 and staged lowering, written before engines existed, was not.
+        ok, problems = validate({"body": [subject]}, bound=set(bound or ()),
+                                known_tools=known_tools)
         if ok:
             out = dict(leaf); out["stmt"] = stmt
             return out
@@ -329,7 +336,8 @@ def emit_leaf(leaf: dict, emit, want: Optional[str] = None,
 
 
 def lower_tree(root: dict, emit, want: Optional[str] = None, known: Optional[set] = None,
-               derive_fn=None, max_depth: int = MAX_DEPTH, log=None, route=None) -> dict:
+               derive_fn=None, max_depth: int = MAX_DEPTH, log=None, route=None,
+               known_tools: Optional[set] = None) -> dict:
     """Emit every leaf, bottom-up, and return a NEW tree with statements filled.
 
     Mutates nothing: review can send the tree back, and a second pass has to grade the same
@@ -352,7 +360,8 @@ def lower_tree(root: dict, emit, want: Optional[str] = None, known: Optional[set
             # PART OF, and neither substitutes for the other.
             try:
                 out = emit_leaf(n, emit, want, known, derive_fn, log=log, bound=bound,
-                                context=done_so_far, ancestry=ancestry)
+                                context=done_so_far, ancestry=ancestry,
+                                known_tools=known_tools)
             except LoweringError:
                 # A LEAF THAT CANNOT BE EMITTED IS EVIDENCE THE ROUTER WAS WRONG ABOUT
                 # ATOMICITY. Measured: rungs 8 and 11 handed the WHOLE goal to one leaf —
@@ -401,7 +410,7 @@ def lower_tree(root: dict, emit, want: Optional[str] = None, known: Optional[set
                 fused += fuse(k)
             out = emit_leaf(out, emit, want, known, derive_fn, log=log,
                             bound=bound, body=fused, context=done_so_far,
-                            ancestry=ancestry)
+                            ancestry=ancestry, known_tools=known_tools)
         return out
 
     return walk(root, set(), [])
@@ -658,7 +667,8 @@ def decompose(goal: str, route, max_depth: int = MAX_DEPTH, log=None,
 
 
 def ground(root: dict, emit, goal: str, want: Optional[str] = None,
-           known: Optional[set] = None, log=None) -> dict:
+           known: Optional[set] = None, log=None,
+           known_tools: Optional[set] = None) -> dict:
     """Give an ungrounded tree a VERDICT, as one more leaf at the root.
 
     Medusa's one soundness rule: a program that acts and asserts nothing has established
@@ -679,7 +689,8 @@ def ground(root: dict, emit, goal: str, want: Optional[str] = None,
         return root
     verdict = node(f"state what must hold at the end: {goal}", op="achieve")
     try:
-        filled = emit_leaf(verdict, emit, want, known, log=log)
+        filled = emit_leaf(verdict, emit, want, known, log=log,
+                           known_tools=known_tools)
     except LoweringError as exc:
         if log:
             log(f"could not author a verdict: {exc}")
