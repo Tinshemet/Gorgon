@@ -1,0 +1,86 @@
+================================================================================
+TEST     1 — LAB SETUP
+REQUEST  "set up a lab: create 3 vms, put them all on a network called lab, give them all the 'lab' label, and make sure they can all ping each other"
+RUN      3 of 3   ·   17:22:08   ·   live
+--------------------------------------------------------------------------------
+  FIX: the plan shortcut folds each call back into the registry. The two count 
+  ENSUREs now read 9 and pass. Closes UNMET on REACH — '9 of 9 have not been 
+  probed' — which is correct rather than a bug: reachability is a finding, 
+  never an inference from a call's success flag.
+================================================================================
+
+bench-red-1: guest agent not responding
+bench-red-2: guest agent not responding
+bench-ref: guest agent not responding
+box: guest agent not responding
+tsurugi-stealth: guest agent not responding
+vm-client: guest agent not responding
+vm-executor: guest agent not responding
+vm-orchestrator: guest agent not responding
+work-laptop: guest agent not responding
+
+what it did
+  · the whole program: 9 call(s)
+UNMET  reach is unestablished: 9 of 9 have not been probed (bench-red-1, 
+bench-red-2, bench-ref)
+  REQUEST: "set up a lab: create 3 vms, put them all on a network called lab, 
+give them all the 'lab' label, and make sure they can all ping each other"
+  
+  TIMESTAMP                TXN      FILED BY      CAUGHT BY     EXECUTED        
+DESCRIPTION
+  ------------------------------------------------------------------------------
+------------------------------
+  2026-08-01T17:22:08.696  000001 ! executor      orchestrator  executor: cannot
+serve             executor could not: this needs a program, not a call — some 
+goal here is not one already-reachable operation
+  2026-08-01T17:22:08.696  000002   orchestrator  qemu          route -> qemu   
+routed to qemu · regime translation
+  2026-08-01T17:22:08.696  000003   registry      orchestrator  sync(claimants) 
+2 claimant(s) synced
+  2026-08-01T17:22:08.696  000004   orchestrator  channel       ask('set up a 
+lab: create 3 vms, p English -> goals
+  2026-08-01T17:22:14.393  000005   extractor     orchestrator  translate       
+3 goal(s)
+  2026-08-01T17:22:14.524  000006   qemu          orchestrator  ·               
+step run -> run
+  2026-08-01T17:22:14.599  000007   qemu          world         
+guest_ping(name=bench-red-1)       call
+  2026-08-01T17:22:14.668  000008   qemu          world         
+guest_ping(name=bench-red-2)       call
+  2026-08-01T17:22:14.741  000009   qemu          world         
+guest_ping(name=bench-ref)         call
+  2026-08-01T17:22:14.814  000010   qemu          world         
+guest_ping(name=box)               call
+  2026-08-01T17:22:14.882  000011   qemu          world         
+guest_ping(name=tsurugi-stealth)   call
+  2026-08-01T17:22:14.952  000012   qemu          world         
+guest_ping(name=vm-client)         call
+  2026-08-01T17:22:15.020  000013   qemu          world         
+guest_ping(name=vm-executor)       call
+  2026-08-01T17:22:15.088  000014   qemu          world         
+guest_ping(name=vm-orchestrator)   call
+  2026-08-01T17:22:15.154  000015   qemu          world         
+guest_ping(name=work-laptop)       call
+  2026-08-01T17:22:15.155  000016 X orchestrator  operator      close(UNMET)    
+closed UNMET (reach is unestablished: 9 of 9 have not been probed (bench-red-1, 
+bench-red-2, bench-ref))
+  
+  2 EVENT(S) NEEDING A READER:
+    000001  executor could not: this needs a program, not a call — some goal 
+here is not one already-reachable operation
+    000016  closed UNMET (reach is unestablished: 9 of 9 have not been probed 
+(bench-red-1, bench-red-2, bench-ref))
+  
+  THE MEDUSA PROGRAM (12 statement(s)):
+    guest_ping(name: bench-red-1);
+    guest_ping(name: bench-red-2);
+    guest_ping(name: bench-ref);
+    guest_ping(name: box);
+    guest_ping(name: tsurugi-stealth);
+    guest_ping(name: vm-client);
+    guest_ping(name: vm-executor);
+    guest_ping(name: vm-orchestrator);
+    guest_ping(name: work-laptop);
+    ENSURE COUNT(SELECT vm WHERE network = 'lab') = 9;
+    ENSURE COUNT(SELECT vm WHERE label = 'lab') = 9;
+    ENSURE REACH(SELECT vm) >= 2;

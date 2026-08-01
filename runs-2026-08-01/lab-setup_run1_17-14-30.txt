@@ -1,0 +1,59 @@
+================================================================================
+TEST     1 — LAB SETUP
+REQUEST  "set up a lab: create 3 vms, put them all on a network called lab, give them all the 'lab' label, and make sure they can all ping each other"
+RUN      1 of 3   ·   17:14:30   ·   live
+--------------------------------------------------------------------------------
+  BASELINE. Planned against an EMPTY lab: ActiveLibrary starts built=False and 
+  only the REPL calls snapshot(), so nine machines and five networks read as 
+  zero. Closed UNMET on two vacuous ENSUREs over an empty selection — a wrong 
+  answer wearing the costume of a careful refusal.
+================================================================================
+
+
+what it did
+  · one goal: 0 call(s)
+  · one goal: 0 call(s)
+UNMET  lowering did not achieve it (reach over 0 member(s), floor 2): {'shape': 
+'reach', 'select': {'kind': 'vm'}, 'min': 2}
+  REQUEST: "set up a lab: create 3 vms, put them all on a network called lab, 
+give them all the 'lab' label, and make sure they can all ping each other"
+  
+  TIMESTAMP                TXN      FILED BY      CAUGHT BY     EXECUTED        
+DESCRIPTION
+  ------------------------------------------------------------------------------
+------------------------------
+  2026-08-01T17:14:30.130  000001 ! executor      orchestrator  executor: cannot
+serve             executor could not: this needs a program, not a call — some 
+goal here is not one already-reachable operation
+  2026-08-01T17:14:30.130  000002   orchestrator  qemu          route -> qemu   
+routed to qemu · regime translation
+  2026-08-01T17:14:30.130  000003   registry      orchestrator  sync(claimants) 
+2 claimant(s) synced
+  2026-08-01T17:14:30.130  000004   orchestrator  channel       ask('set up a 
+lab: create 3 vms, p English -> goals
+  2026-08-01T17:14:35.837  000005   extractor     orchestrator  translate       
+3 goal(s)
+  2026-08-01T17:14:35.837  000006   qemu          orchestrator  ·               
+promoted translation -> tree (lowering did not achieve it (reach over 0 
+member(s), floor 2): {'shape': 'reach', 'select': {'kind': 'vm'}, 'min': 2})
+  2026-08-01T17:14:40.536  000007   qemu          orchestrator  ·               
+in-session asked about the gap -> extractor: 3 component(s)
+  2026-08-01T17:14:40.536  000008   qemu          orchestrator  ·               
+step run -> run
+  2026-08-01T17:14:40.537  000009   qemu          orchestrator  ·               
+step run -> run
+  2026-08-01T17:14:40.537  000010 X orchestrator  operator      close(UNMET)    
+closed UNMET (lowering did not achieve it (reach over 0 member(s), floor 2): 
+{'shape': 'reach', 'select': {'kind': 'vm'}, 'min': 2})
+  
+  2 EVENT(S) NEEDING A READER:
+    000001  executor could not: this needs a program, not a call — some goal 
+here is not one already-reachable operation
+    000010  closed UNMET (lowering did not achieve it (reach over 0 member(s), 
+floor 2): {'shape': 'reach', 'select': {'kind': 'vm'}, 'min': 2})
+  
+  THE MEDUSA PROGRAM (1 statement(s)):
+    ENSURE COUNT(SELECT vm WHERE network = 'lab') = 0;
+  
+  THE MEDUSA PROGRAM (1 statement(s)):
+    ENSURE COUNT(SELECT vm WHERE label = 'lab') = 0;

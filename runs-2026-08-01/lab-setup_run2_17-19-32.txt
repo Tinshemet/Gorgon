@@ -1,0 +1,141 @@
+================================================================================
+TEST     1 — LAB SETUP
+REQUEST  "set up a lab: create 3 vms, put them all on a network called lab, give them all the 'lab' label, and make sure they can all ping each other"
+RUN      2 of 3   ·   17:19:32   ·   live
+--------------------------------------------------------------------------------
+  FIX: the mount builds the registry before planning, and raises if it cannot. 
+  Now it sees the real lab. It DID the work — all nine machines on 'lab', all 
+  nine labelled, the lab shows every one — and then reported 'count is 0, 
+  wanted == 9'. LIBRARY.apply was reached only from the chat dispatch gate, so 
+  the registry never learned what the program did.
+================================================================================
+
+bench-red-1: guest agent not responding
+bench-red-2: guest agent not responding
+bench-ref: guest agent not responding
+box: guest agent not responding
+tsurugi-stealth: guest agent not responding
+vm-client: guest agent not responding
+vm-executor: guest agent not responding
+vm-orchestrator: guest agent not responding
+work-laptop: guest agent not responding
+
+what it did
+  · the whole program: 28 call(s)
+UNMET  count is 0, wanted == 9
+  REQUEST: "set up a lab: create 3 vms, put them all on a network called lab, 
+give them all the 'lab' label, and make sure they can all ping each other"
+  
+  TIMESTAMP                TXN      FILED BY      CAUGHT BY     EXECUTED        
+DESCRIPTION
+  ------------------------------------------------------------------------------
+------------------------------
+  2026-08-01T17:19:32.840  000001 ! executor      orchestrator  executor: cannot
+serve             executor could not: this needs a program, not a call — some 
+goal here is not one already-reachable operation
+  2026-08-01T17:19:32.840  000002   orchestrator  qemu          route -> qemu   
+routed to qemu · regime translation
+  2026-08-01T17:19:32.840  000003   registry      orchestrator  sync(claimants) 
+2 claimant(s) synced
+  2026-08-01T17:19:32.840  000004   orchestrator  channel       ask('set up a 
+lab: create 3 vms, p English -> goals
+  2026-08-01T17:19:38.567  000005   extractor     orchestrator  translate       
+3 goal(s)
+  2026-08-01T17:19:38.710  000006   qemu          orchestrator  ·               
+step run -> run
+  2026-08-01T17:19:38.712  000007   qemu          world         
+create_network(net_name=lab)       call
+  2026-08-01T17:19:38.714  000008   qemu          world         
+add_vm_to_network(vm_name=bench-re call
+  2026-08-01T17:19:38.714  000009   qemu          world         
+add_vm_to_network(vm_name=bench-re call
+  2026-08-01T17:19:38.715  000010   qemu          world         
+add_vm_to_network(vm_name=bench-re call
+  2026-08-01T17:19:38.716  000011   qemu          world         
+add_vm_to_network(vm_name=box, net call
+  2026-08-01T17:19:38.716  000012   qemu          world         
+add_vm_to_network(vm_name=tsurugi- call
+  2026-08-01T17:19:38.717  000013   qemu          world         
+add_vm_to_network(vm_name=vm-clien call
+  2026-08-01T17:19:38.718  000014   qemu          world         
+add_vm_to_network(vm_name=vm-execu call
+  2026-08-01T17:19:38.718  000015   qemu          world         
+add_vm_to_network(vm_name=vm-orche call
+  2026-08-01T17:19:38.719  000016   qemu          world         
+add_vm_to_network(vm_name=work-lap call
+  2026-08-01T17:19:38.778  000017   qemu          world         
+add_label(name=bench-red-1, label= call
+  2026-08-01T17:19:38.843  000018   qemu          world         
+add_label(name=bench-red-2, label= call
+  2026-08-01T17:19:38.905  000019   qemu          world         
+add_label(name=bench-ref, label=la call
+  2026-08-01T17:19:38.968  000020   qemu          world         
+add_label(name=box, label=lab)     call
+  2026-08-01T17:19:39.031  000021   qemu          world         
+add_label(name=tsurugi-stealth, la call
+  2026-08-01T17:19:39.090  000022   qemu          world         
+add_label(name=vm-client, label=la call
+  2026-08-01T17:19:39.154  000023   qemu          world         
+add_label(name=vm-executor, label= call
+  2026-08-01T17:19:39.212  000024   qemu          world         
+add_label(name=vm-orchestrator, la call
+  2026-08-01T17:19:39.273  000025   qemu          world         
+add_label(name=work-laptop, label= call
+  2026-08-01T17:19:39.341  000026   qemu          world         
+guest_ping(name=bench-red-1)       call
+  2026-08-01T17:19:39.407  000027   qemu          world         
+guest_ping(name=bench-red-2)       call
+  2026-08-01T17:19:39.474  000028   qemu          world         
+guest_ping(name=bench-ref)         call
+  2026-08-01T17:19:39.540  000029   qemu          world         
+guest_ping(name=box)               call
+  2026-08-01T17:19:39.612  000030   qemu          world         
+guest_ping(name=tsurugi-stealth)   call
+  2026-08-01T17:19:39.678  000031   qemu          world         
+guest_ping(name=vm-client)         call
+  2026-08-01T17:19:39.747  000032   qemu          world         
+guest_ping(name=vm-executor)       call
+  2026-08-01T17:19:39.816  000033   qemu          world         
+guest_ping(name=vm-orchestrator)   call
+  2026-08-01T17:19:39.889  000034   qemu          world         
+guest_ping(name=work-laptop)       call
+  2026-08-01T17:19:39.889  000035 X orchestrator  operator      close(UNMET)    
+closed UNMET (count is 0, wanted == 9)
+  
+  2 EVENT(S) NEEDING A READER:
+    000001  executor could not: this needs a program, not a call — some goal 
+here is not one already-reachable operation
+    000035  closed UNMET (count is 0, wanted == 9)
+  
+  THE MEDUSA PROGRAM (31 statement(s)):
+    create_network(net_name: lab);
+    add_vm_to_network(vm_name: bench-red-1, net_name: lab);
+    add_vm_to_network(vm_name: bench-red-2, net_name: lab);
+    add_vm_to_network(vm_name: bench-ref, net_name: lab);
+    add_vm_to_network(vm_name: box, net_name: lab);
+    add_vm_to_network(vm_name: tsurugi-stealth, net_name: lab);
+    add_vm_to_network(vm_name: vm-client, net_name: lab);
+    add_vm_to_network(vm_name: vm-executor, net_name: lab);
+    add_vm_to_network(vm_name: vm-orchestrator, net_name: lab);
+    add_vm_to_network(vm_name: work-laptop, net_name: lab);
+    add_label(name: bench-red-1, label: lab);
+    add_label(name: bench-red-2, label: lab);
+    add_label(name: bench-ref, label: lab);
+    add_label(name: box, label: lab);
+    add_label(name: tsurugi-stealth, label: lab);
+    add_label(name: vm-client, label: lab);
+    add_label(name: vm-executor, label: lab);
+    add_label(name: vm-orchestrator, label: lab);
+    add_label(name: work-laptop, label: lab);
+    guest_ping(name: bench-red-1);
+    guest_ping(name: bench-red-2);
+    guest_ping(name: bench-ref);
+    guest_ping(name: box);
+    guest_ping(name: tsurugi-stealth);
+    guest_ping(name: vm-client);
+    guest_ping(name: vm-executor);
+    guest_ping(name: vm-orchestrator);
+    guest_ping(name: work-laptop);
+    ENSURE COUNT(SELECT vm WHERE network = 'lab') = 9;
+    ENSURE COUNT(SELECT vm WHERE label = 'lab') = 9;
+    ENSURE REACH(SELECT vm) >= 2;

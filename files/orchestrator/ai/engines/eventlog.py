@@ -23,6 +23,8 @@ about it, which is the whole reason event viewers number things.
 from __future__ import annotations
 
 import json
+import os
+import re
 import time
 from typing import Any, Dict, List, Optional
 
@@ -124,12 +126,118 @@ class EventLog:
         """One JSON object per line — for anything that wants to read this with a program."""
         return "\n".join(json.dumps(e.as_dict(), default=str) for e in self.events)
 
+    # THE COLUMNS, ONCE. The rendered ledger and the CSV are the same six fields in the same
+    # order, so a reader who learned one has learned the other — plus `value`, which the line
+    # form cannot carry.
+    COLUMNS = ("timestamp", "txn", "level", "filed_by", "caught_by", "executed",
+               "description", "value")
+
+    def csv(self) -> str:
+        """The ledger as CSV, with EVERY PUBLISHED VALUE IN FULL.
+
+        WHY A SEVENTH COLUMN. The line form truncates — `claim: answer(the diameter of the
+        earth) = 12,742 km mean (12,7...` — because a column has to fit on a screen. That is
+        right for reading and wrong for keeping: the published value IS the answer, and a log
+        that abbreviates the answer is a log of everything except the point.
+        `data` already carries it whole; this is the first reader that says so.
+
+        NOT ONLY PUBLICATIONS. Any event carrying `data` — a raw model answer, a tool's full
+        result — puts it here, because deciding which evidence is worth keeping is the
+        judgement that loses the evidence you needed.
+
+        JSON-ENCODED WHEN IT IS NOT A STRING, so a dict stays machine-readable in a
+        spreadsheet cell rather than becoming Python's repr, which nothing can parse back.
+
+        `csv.writer` DOES THE QUOTING. A published answer is arbitrary text a browser
+        returned — it contains commas, quotes and newlines — and hand-joining fields is how
+        a log becomes unparseable exactly when something interesting happened.
+        """
+        import csv as _csv
+        import io
+
+        out = io.StringIO()
+        w = _csv.writer(out, lineterminator="\n")
+        w.writerow(self.COLUMNS)
+        for ev in self.events:
+            t = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(ev.ts))
+            t += f".{int((ev.ts % 1) * 1000):03d}"
+            if ev.data is None:
+                value = ""
+            elif isinstance(ev.data, str):
+                value = ev.data
+            else:
+                value = json.dumps(ev.data, default=str)
+            w.writerow([t, f"{ev.seq:06d}", ev.level, ev.filed_by, ev.caught_by,
+                        ev.executed, ev.note, value])
+        return out.getvalue()
+
     def program(self, label: str, rendered: str) -> None:
         """Attach a program to the ledger. Shown in full at the end, never inline."""
         self.programs.append((label, rendered))
 
     def failures(self) -> List[Event]:
         return [e for e in self.events if e.level in ("warn", "error")]
+
+    # ── keeping it, without being asked ───────────────────────────────────────────────
+    def save(self, at: Optional[str] = None) -> Optional[str]:
+        """Write this run's ledger to disk. Returns the CSV path, or None if it could not.
+
+        AUTOMATIC, BECAUSE A LOG YOU HAVE TO REMEMBER TO ASK FOR IS A LOG OF THE RUNS YOU
+        EXPECTED TO GO WRONG. Every interesting failure this week was found by reading a
+        ledger after the fact, and the ones I lost were the ones nobody captured.
+
+        ONE FILE PER RUN, which the operator asked for explicitly after a document that
+        merged two separate tests read as one continuous story. The name carries the clock
+        time and a slug of the request, so a directory listing is already an index.
+
+        THREE FORMS, same run: `.csv` to read and pivot, `.jsonl` for anything reading it
+        with a program, `.medusa` for the program itself — the artifact the ledger exists to
+        explain, and the one thing that cannot be reconstructed from the lines.
+
+        IT NEVER RAISES. A log that can break the run it is logging is worse than no log;
+        the path comes back as None and the work carries on.
+
+        WRITE-ONCE AND READ-ONLY, BECAUSE THIS IS THE OPERATOR'S GROUND TRUTH ABOUT ME.
+        *"I want you to add it where there is no way for you to touch it, it's my grounding
+        for you."* So: a file is never overwritten — an existing name takes a suffix rather
+        than a replacement — and every file is chmod 0444 the moment it is closed. The run
+        that produced a record cannot revise it, and neither can the next one.
+
+        WHAT THIS DOES NOT DO, said plainly rather than implied: it is not a sandbox. Any
+        process with the operator's permissions, including me, can `chmod` it back. It makes
+        overwriting an ACT — deliberate, separate, and visible in a shell history — instead
+        of something a stray `open(path, "w")` does silently. Real enforcement is
+        `sudo chattr +a` on the directory, which only the operator can set and which the
+        kernel then holds against everything, this code included.
+        """
+        try:
+            base = at or os.path.join(
+                os.environ.get("GORGON_HOME") or os.path.expanduser("~/.gorgon"), "logs")
+            os.makedirs(base, exist_ok=True)
+            slug = re.sub(r"[^a-z0-9]+", "-", (self.request or "run").lower()).strip("-")
+            stem = time.strftime("%Y-%m-%dT%H-%M-%S", time.localtime()) + "_" + (slug[:48] or "run")
+            # NEVER CLOBBER. Two runs inside one second, or a rerun of the same request, get
+            # their own file — the second must not quietly become the only record.
+            n, base_stem = 1, stem
+            while os.path.exists(os.path.join(base, stem + ".csv")):
+                n += 1
+                stem = f"{base_stem}-{n}"
+
+            def keep(suffix: str, body: str) -> str:
+                path = os.path.join(base, stem + suffix)
+                with open(path, "w") as fh:
+                    fh.write(body)
+                os.chmod(path, 0o444)
+                return path
+
+            csv_at = keep(".csv", self.csv())
+            keep(".jsonl", self.jsonl() + "\n")
+            if self.programs:
+                keep(".medusa", "".join(f"-- {label}\n{(text or '').rstrip()}\n\n"
+                                        for label, text in self.programs))
+            return csv_at
+        except Exception:
+            return None
 
     def __len__(self) -> int:
         return len(self.events)

@@ -1,0 +1,70 @@
+================================================================================
+TEST     2 — WEBCRAWLER (acceptance)
+REQUEST  "search the web for the diameter of the earth"
+RUN      7 of 9   ·   17:54:31   ·   live
+--------------------------------------------------------------------------------
+  FIX: create_internal_args — a machine minted to host a guest package is 
+  created WITH the agent, where an operator's own machine keeps the shipped 
+  default. Failure moves to 'Guest agent channel unreachable: timed out'. 
+  Teardown still did not run: the program aborted and its tail was abandoned.
+================================================================================
+
+  [OVMF] Copied VARS from: /usr/share/OVMF/OVMF_VARS_4M.fd
+✓ VM 'vm1' created at /home/tinshemet/.gorgon/vm1
+╭─────────────────────── QEMU 8.2.2 Compatibility Notes ───────────────────────╮
+│   warn QEMU 8.2.2: 'vgamem_mb' property removed — virtio-vga 'vgamem_mb'     │
+│ property removed — resolution set via xres/yres (handled automatically)      │
+│   warn QEMU 8.2.2: '-accel kvm' conflicts with '-machine accel=kvm' — using  │
+│ -enable-kvm only (handled automatically)                                     │
+│   warn QEMU 8.2.2: PulseAudio backend may need pipewire-pulse — falling back │
+│ to 'none' if pa fails                                                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+Guest agent channel unreachable for 'vm1': timed out
+Guest agent channel unreachable for 'vm1': timed out
+
+what it did
+  · the whole program: 4 call(s)
+UNMET  count is 0, wanted == 1
+  REQUEST: 'search the web for the diameter of the earth'
+  
+  TIMESTAMP                TXN      FILED BY      CAUGHT BY     EXECUTED        
+DESCRIPTION
+  ------------------------------------------------------------------------------
+------------------------------
+  2026-08-01T17:54:31.635  000001   orchestrator  qemu          route -> qemu   
+routed to qemu · regime translation
+  2026-08-01T17:54:31.635  000002   registry      orchestrator  sync(claimants) 
+1 claimant(s) synced
+  2026-08-01T17:54:31.635  000003   orchestrator  channel       ask('search the 
+web for the diamet English -> goals
+  2026-08-01T17:54:33.605  000004   extractor     orchestrator  translate       
+1 goal(s)
+  2026-08-01T17:54:33.747  000005   qemu          orchestrator  ·               
+step run -> run
+  2026-08-01T17:54:33.774  000006   qemu          world         
+create_vm(os_type=linux, name=vm1, call
+  2026-08-01T17:54:34.156  000007   qemu          world         
+launch_vm(display=none, name=vm1)  call
+  2026-08-01T17:54:39.254  000008 X qemu          world         
+camoufox_launch(status=running, br call failed: Guest agent channel unreachable 
+for 'vm1': timed out
+  2026-08-01T17:54:44.341  000009 X qemu          world         
+camoufox_search(answered=no, query call failed: Guest agent channel unreachable 
+for 'vm1': timed out
+  2026-08-01T17:54:44.341  000010 X orchestrator  operator      close(UNMET)    
+closed UNMET (count is 0, wanted == 1)
+  
+  3 EVENT(S) NEEDING A READER:
+    000008  call failed: Guest agent channel unreachable for 'vm1': timed out
+    000009  call failed: Guest agent channel unreachable for 'vm1': timed out
+    000010  closed UNMET (count is 0, wanted == 1)
+  
+  THE MEDUSA PROGRAM (7 statement(s)):
+    create_vm(os_type: linux, name: vm1, guest_agent: True);
+    launch_vm(display: none, name: vm1);
+    camoufox_launch(status: running, browser_name: browser1, vm: vm1);
+    camoufox_search(answered: no, query: the diameter of the earth, browser: 
+browser1);
+    ENSURE COUNT(SELECT search WHERE query = 'the diameter of the earth') = 1;
+    camoufox_close(browser_name: browser1);
+    delete_vm(name: vm1);

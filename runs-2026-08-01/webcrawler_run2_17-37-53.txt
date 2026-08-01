@@ -1,0 +1,39 @@
+================================================================================
+TEST     2 — WEBCRAWLER (acceptance)
+REQUEST  "search the web for the diameter of the earth"
+RUN      2 of 9   ·   17:37:53   ·   live
+--------------------------------------------------------------------------------
+  FIX: a kind declares its own worked example, blinded to the request. 1 goal, 
+  correct shape. PROMOTED translation -> tree, and the gap went back on the 
+  channel as its own question. Then 'nothing reaches': the writer had no tile 
+  for a search.
+================================================================================
+
+UNMET  nothing reaches: {'shape': 'count', 'select': {'kind': 'search', 'query':
+'the diameter of the earth'}, 'eq': 1}
+  REQUEST: 'search the web for the diameter of the earth'
+  
+  TIMESTAMP                TXN      FILED BY      CAUGHT BY     EXECUTED        
+DESCRIPTION
+  ------------------------------------------------------------------------------
+------------------------------
+  2026-08-01T17:37:53.301  000001   orchestrator  qemu          route -> qemu   
+routed to qemu · regime translation
+  2026-08-01T17:37:53.301  000002   registry      orchestrator  sync(claimants) 
+1 claimant(s) synced
+  2026-08-01T17:37:53.301  000003   orchestrator  channel       ask('search the 
+web for the diamet English -> goals
+  2026-08-01T17:37:55.236  000004   extractor     orchestrator  translate       
+1 goal(s)
+  2026-08-01T17:37:55.380  000005   qemu          orchestrator  ·               
+promoted translation -> tree (nothing reaches: {'shape': 'count', 'select': 
+{'kind': 'search', 'query': 'the diameter of the earth'}, 'eq': 1})
+  2026-08-01T17:37:57.422  000006   qemu          orchestrator  ·               
+in-session asked about the gap -> extractor: 1 component(s)
+  2026-08-01T17:37:57.422  000007 X orchestrator  operator      close(UNMET)    
+closed UNMET (nothing reaches: {'shape': 'count', 'select': {'kind': 'search', 
+'query': 'the diameter of the earth'}, 'eq': 1})
+  
+  1 EVENT(S) NEEDING A READER:
+    000007  closed UNMET (nothing reaches: {'shape': 'count', 'select': {'kind':
+'search', 'query': 'the diameter of the earth'}, 'eq': 1})

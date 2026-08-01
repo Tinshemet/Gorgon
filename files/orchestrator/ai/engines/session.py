@@ -174,8 +174,14 @@ class Session:
                     filed_by="orchestrator", caught_by="operator",
                     executed=f"close({outcome})",
                     level="error" if outcome not in ("DONE", "REFUSED") else "info")
+        # KEPT WITHOUT BEING ASKED, on every close — DONE, UNMET, REFUSED alike. A log you
+        # have to request is a log of the runs somebody expected to go wrong, and this
+        # week's findings all came from reading a ledger after the fact. The path rides back
+        # so a caller can tell the operator where it went; a failure to write returns None
+        # and never touches the outcome.
+        saved = self.events.save() if hasattr(self.events, "save") else None
         return {"outcome": outcome, "why": why, "regime": self.regime,
-                "events": self.events,
+                "events": self.events, "log_at": saved,
                 "engine": getattr(self.engine, "name", "?"), "calls": self.calls,
                 "findings": self.findings,
                 # INTERNAL. The back-and-forth that produced the result, kept under its own
