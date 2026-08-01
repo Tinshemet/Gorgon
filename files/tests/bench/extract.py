@@ -195,9 +195,38 @@ def _to_select(raw: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+_RESIDUE = __import__("re").compile(r"^\$\{?([A-Za-z0-9._-]+)\}?$")
+
+
+def _unwrap(v: Any) -> Any:
+    """`${lab}` -> `lab`. Template residue stripped, because there is nothing for it to name.
+
+    MEASURED ON RUNG 13 AGAINST THE REAL PATH, and it is the failure that rung exists to
+    catch. The world already satisfied the request; the model returned `value: "${lab}"` and
+    `value: "${fleet}"`, so the writer planned against a network that does not exist and a
+    label nobody asked for — SIXTEEN CALLS on a goal that already held, a junk network and a
+    junk label. The rung's own checker still passed, because the original state survived
+    underneath, which is exactly how this hides.
+
+    THE ARGUMENT THAT MAKES THIS SAFE IS SCOPE. Inside a Medusa program `$item` is a real
+    reference and stripping it would be vandalism. A GOAL HAS NO BINDINGS — there is no
+    scope, nothing has been bound, and nothing can be — so at this layer anything shaped
+    like a variable is notation the model reached for and not a reference to anything. The
+    value inside is what the operator wrote; only the wrapper is invented.
+
+    This is the sanitiser's rule one layer up: residue that cannot mean anything is removed,
+    and the shape is counted rather than guessed at.
+    """
+    if not isinstance(v, str):
+        return v
+    hit = _RESIDUE.match(v.strip())
+    return hit.group(1) if hit else v
+
+
 def _coerce(v: str) -> Any:
     """`"false"` is not `False`, and an observed attribute compared against a string never
     matches. The extractor emits strings because a grammar cannot type a free value."""
+    v = _unwrap(v)
     low = str(v).strip().lower()
     if low in ("true", "yes"):
         return True
@@ -212,10 +241,17 @@ _WORD_NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
 
 def _as_count(v: Any) -> Optional[int]:
     """`v` read as a number, or None if it is not one. Words included, because the model
-    writes what the operator wrote and operators write "two"."""
+    writes what the operator wrote and operators write "two".
+
+    RESIDUE IS STRIPPED FIRST, and skipping that here cost rung 13 a machine called "5".
+    `${5}` is the number five wrapped in notation; read literally it is not a number, so it
+    fell past this, defaulted the count to one, and was then taken as an IDENTITY — the
+    request for five machines became a request for one machine NAMED five. Residue has to be
+    removed before ANY interpretation, not before some of them.
+    """
     if v is None:
         return None
-    text = str(v).strip().lower()
+    text = str(_unwrap(v)).strip().lower()
     if text.isdigit():
         return int(text)
     return _WORD_NUMBERS.get(text)
@@ -240,7 +276,7 @@ def _name_shaped(v: Any) -> bool:
     ambiguity the model created — and a wrong answer that came from the model is a different
     thing to fix than one this module invented.
     """
-    text = str(v).strip()
+    text = str(_unwrap(v)).strip()
     return bool(text) and len(text) <= 64 and _NAME_OK.match(text) is not None
 
 
@@ -303,6 +339,14 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
             eq = _as_count(g.get("amount"))
             if eq is None:
                 eq = _as_count(g.get("value"))
+            if (eq is None and g.get("value") is not None and not g.get("attr")
+                    and not _name_shaped(g["value"])):
+                # THE MODEL TRIED TO GIVE A NUMBER AND FAILED. `value: "Not specified (2)"`
+                # is a hedge, not an omission, and the two must not be read the same way:
+                # an ABSENT number means one, because that is the reading the sentence
+                # already had, while a PRESENT unparseable one means the model did not know.
+                # Defaulting a hedge to 1 over a nine-machine lab means DELETE EIGHT.
+                continue
             # A MISSING NUMBER MEANS ONE. "Create a vm named alpha" is a count of one and the
             # prompt says so in those words, so the model omits it as obvious — and the goal
             # was being DISCARDED over it. Defaulting is not a guess about meaning; it is the
@@ -341,8 +385,9 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
                 spec = (config.KINDS or {}).get(sel.get("kind")) or {}
                 key = spec.get("key")
                 if (key and _name_shaped(g["value"])
-                        and str(g["value"]).strip().lower() not in _enumerated(sel["kind"])):
-                    sel = {**sel, key: str(g["value"]).strip()}
+                        and str(_unwrap(g["value"])).strip().lower()
+                        not in _enumerated(sel["kind"])):
+                    sel = {**sel, key: str(_unwrap(g["value"])).strip()}
             out.append({"shape": "count", "select": sel, "eq": eq})
         elif shape == "reach":
             # REACH IS NOT INVENTED. Twenty of twenty-three extraction failures on
@@ -377,7 +422,55 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
                 out.append({"per": sel, "make": g["make"], "link": link})
         elif shape == "observe":
             out.append({"observe": sel, "fact": g.get("fact") or "alive"})
-    return out
+    return _one_statement_not_two(out)
+
+
+def _one_statement_not_two(goals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Drop a bare total that the IDENTITY goals beside it already account for.
+
+    MEASURED AGAINST THE REAL LAB, and it is the worst thing found all day. "create a machine
+    named probe1" came back as TWO goals — a count of one over ALL machines, and the name —
+    because the model said "a machine" and "named probe1" separately. Read literally over a
+    nine-machine lab the first means DELETE EIGHT, and the program did exactly that: a benign
+    creation request that would have emptied the lab.
+
+    THE RULE FIRES ONLY WHERE THE TOTAL IS FULLY EXPLAINED. One unfiltered count of N over a
+    kind, and exactly N identity goals over that same kind — then the total is the same
+    statement said as a sum, and dropping it is the reading the sentence had. "Make sure
+    there are three machines, and web carries the prod label" keeps its total, because a
+    label goal is not an identity and does not account for anything.
+
+    IT DROPS RATHER THAN KEEPS, and that is decided by which mistake is recoverable. The
+    ambiguity is real; what is not symmetric is the cost. `clean up the lab` is already
+    written down here as the case where AN IRREVERSIBLE READING OF A VAGUE SENTENCE MUST
+    NEVER BE CHOSEN CONFIDENTLY, and this is that rule applied where it was measured to
+    matter rather than where it was first written.
+    """
+    by_kind: Dict[str, Dict[str, List]] = {}
+    for g in goals:
+        if g.get("shape") != "count":
+            continue
+        sel = g.get("select") or {}
+        kind = sel.get("kind")
+        spec = (config.KINDS or {}).get(kind) or {}
+        key = spec.get("key")
+        if not kind or not key:
+            continue
+        slot = by_kind.setdefault(kind, {"totals": [], "identities": []})
+        filters = {k: v for k, v in sel.items() if k != "kind"}
+        if not filters:
+            slot["totals"].append(g)
+        elif set(filters) == {key} and g.get("eq") == 1:
+            slot["identities"].append(g)
+
+    drop = []
+    for kind, slot in by_kind.items():
+        if len(slot["totals"]) != 1 or not slot["identities"]:
+            continue
+        total = slot["totals"][0]
+        if total.get("eq") == len(slot["identities"]):
+            drop.append(id(total))
+    return [g for g in goals if id(g) not in drop]
 
 
 def _link_between(source_kind: str, made_kind: str) -> Optional[str]:

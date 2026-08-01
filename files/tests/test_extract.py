@@ -65,6 +65,32 @@ def test_a_bare_value_on_a_count_of_one_is_an_identity():
     check("and the count is one", out[0]["eq"] == 1)
 
 
+def test_a_total_the_identities_account_for_is_dropped():
+    """THE WORST THING FOUND ALL DAY, against the real lab.
+
+    "create a machine named probe1" came back as TWO goals — a count of one over ALL
+    machines, and the name — because the model said "a machine" and "named probe1"
+    separately. Read literally over a nine-machine lab the first means DELETE EIGHT, and the
+    program did exactly that: a benign creation request that would have emptied the lab.
+    """
+    print("[decline] a bare total the identities already explain")
+    both = to_goals({"goals": [
+        {"goal": "count", "select": {"kind": "vm"}, "value": "One"},
+        {"goal": "every", "select": {"kind": "vm"}, "attr": "name", "value": "probe1"}]})
+    check("only the identity survives", len(both) == 1)
+    check("and it is the named one", both[0]["select"].get("name") == "probe1")
+
+    # IT FIRES ONLY WHERE THE TOTAL IS FULLY EXPLAINED. A label goal is not an identity and
+    # accounts for nothing, so the total stands.
+    kept = to_goals({"goals": [
+        {"goal": "count", "select": {"kind": "vm"}, "amount": 3},
+        {"goal": "every", "select": {"kind": "vm"}, "attr": "label", "value": "prod"}]})
+    check("a real total is not dropped", any(
+        gg.get("shape") == "count" and gg.get("eq") == 3 for gg in kept))
+    check("and a lone destructive ask is untouched — the operator meant it",
+          to_goals(g(goal="count", select={"kind": "vm"}, amount=2))[0]["eq"] == 2)
+
+
 def test_the_identity_repair_declines_where_it_could_be_wrong():
     """THE HALF THAT MATTERS. A repair that fires when it should not invents a request."""
     print("[decline] ambiguous is left alone, not guessed at")
@@ -91,13 +117,25 @@ def test_the_identity_repair_has_a_shape_floor():
     print("[decline] a value that cannot be a name is not one")
     def name_of(v):
         out = to_goals(g(goal="count", select={"kind": "vm"}, value=v))
-        return out[0]["select"].get("name")
+        return out[0]["select"].get("name") if out else None
     check("a name is taken", name_of("beta") == "beta")
     check("a hyphenated one too, because real machines are named that way",
           name_of("bench-red-1") == "bench-red-1")
-    check("a shrug is not a name", name_of("Not specified") is None)
-    check("nor is template residue", name_of("${5}") is None
-          and name_of("${lab}") is None)
+    # A SHRUG IS NOT A GOAL AT ALL, which is stronger than "not a name". An ABSENT number
+    # means one — that is the reading the sentence already had — but a PRESENT unparseable
+    # one means the model TRIED and did not know, and defaulting that to 1 over a
+    # nine-machine lab means DELETE EIGHT.
+    check("a shrug is dropped, not defaulted",
+          to_goals(g(goal="count", select={"kind": "vm"}, value="Not specified")) == [])
+    check("while an absent number still means one",
+          to_goals(g(goal="count", select={"kind": "vm"}))[0]["eq"] == 1)
+    # TEMPLATE RESIDUE IS STRIPPED BEFORE ANYTHING IS READ. `${5}` is the number five in
+    # notation: read literally it fell past `_as_count`, defaulted to 1, and was then taken
+    # as an IDENTITY — rung 13's request for five machines became one machine NAMED five.
+    check("residue unwraps to the number it was hiding",
+          to_goals(g(goal="count", select={"kind": "vm"}, value="${5}"))[0]["eq"] == 5)
+    check("and a residue-wrapped name unwraps to the name",
+          name_of("${probe1}") == "probe1")
     check("nor is anything with a space", name_of("two machines") is None)
     check("nor is nothing at all", name_of("") is None)
     # NOT A STOP-LIST, and that is deliberate. "unknown", "none", "n/a" and every other way
