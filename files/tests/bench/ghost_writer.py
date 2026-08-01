@@ -7,5 +7,5 @@ authority for a production component.
 """
 from orchestrator.ai.planner.ghost_writer import (  # noqa: F401
     Call, Unsolvable, as_program, cover, _achieve, _fresh_names, _ground, _holds, _lower,
-    _short,
+    _short, groundable,
 )

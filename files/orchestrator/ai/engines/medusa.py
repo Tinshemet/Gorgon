@@ -155,7 +155,11 @@ class MedusaEngine(Engine):
                 finer = self._open(goals)
                 verdict = yield Step(RUN, goals[0] if len(goals) == 1 else planned["program"],
                                      label, cost=len(planned["plan"]),
-                                     divisible=finer is not None)
+                                     # A NODE WITH NOTHING LEFT TO DO IS NOT DIVISIBLE. Its
+                                     # whole content is the witness, and there is nothing
+                                     # finer inside a verification — splitting one would
+                                     # discard the very check it exists to make.
+                                     divisible=finer is not None and bool(planned["plan"]))
                 action = verdict.action if verdict is not None else STOP
 
                 if action == STOP:
@@ -180,14 +184,37 @@ class MedusaEngine(Engine):
                         return {"ok": False, "refused": True, "calls": calls, "partial": done,
                                 "why": f"told to decompose a node declared atomic, and "
                                        f"nothing lowers it: {_gw._short(goals[0])}"}
-                    queue = finer + queue
+                    # THE PARENT IS RE-QUEUED BEHIND ITS OWN CHILDREN, and this is not
+                    # bookkeeping — it is the parent's WITNESS.
+                    #
+                    # MEASURED, not reasoned: opening every divisible node left 5 of 13 rungs
+                    # reporting `grounded=False` while their own checkers still passed. The
+                    # work was done and the run no longer proved it, because a decomposed
+                    # goal's closing ENSURE is never written — each child vouches for itself
+                    # and nobody vouches for the whole. Re-visiting the parent costs one
+                    # exchange with an empty plan when the children did their job, and
+                    # catches ROOT POISONING when they did not: the goal is re-planned
+                    # against the world as it now is, so a set that changed underneath the
+                    # split shows up as work still to do rather than as silent success.
+                    # A NODE WITH NO WITNESS IS NOT RE-VISITED. `observe` and bare probes are
+                    # things DONE, not things that become true, so returning to one would
+                    # RE-ASK rather than verify — measured, and it took rung 11 from 6 calls
+                    # to 44 while turning a passing run into a failing one.
+                    # ONLY THE GOALS THAT HAVE A WITNESS COME BACK. Carrying an `observe`
+                    # into the re-visit re-ASKS it — a probe is never "already done", so a
+                    # node holding one always has work and never settles. Rung 11 opened
+                    # thirteen times without ever being granted anything to run, because its
+                    # whole-program witness dragged four pings around with it.
+                    witnessed = [g for g in goals if _gw.groundable(g)]
+                    back = [(witnessed, f"{label} · witness")] if witnessed else []
+                    queue = finer + back + queue
                     continue
 
                 ran = self._execute_plan(planned, goals)
                 calls += ran.get("calls") or []
                 if not ran.get("ok"):
                     return {**ran, "calls": calls, "partial": done}
-                ran_nodes.append(ran)
+                ran_nodes.append((ran, goals))
                 done += goals
             return self._joined(ran_nodes, calls)
 
@@ -201,16 +228,20 @@ class MedusaEngine(Engine):
         nodes vouch four times, and reporting the last one's verdict would call a run grounded
         because its final quarter was.
         """
-        vouched = [r.get("grounded") for r in ran_nodes if r.get("grounded") is not None]
+        # ONLY NODES THAT COULD BE GROUNDED GET A VOTE. A node carrying nothing but probes
+        # has no witness available to it, and counting its `False` would report a run as
+        # unvouched-for because part of it was an observation.
+        vouched = [r.get("grounded") for r, gs in ran_nodes
+                   if any(_gw.groundable(g) for g in gs) and r.get("grounded") is not None]
         out = {"ok": True, "calls": calls, "why": None,
                # THE WHOLE RUN'S CALLS, not one node's. `_findings_of` falls back to what was
                # done when the world observed nothing, and handing it a single node would
                # report a quarter of the work as all of it.
                "findings": _findings_of(self._world, {"ok": True, "calls": calls}),
-               "rendered": "\n".join(r.get("rendered", "") for r in ran_nodes).strip(),
+               "rendered": "\n".join(r.get("rendered", "") for r, _ in ran_nodes).strip(),
                "grounded": all(vouched) if vouched else None}
         if len(ran_nodes) == 1:
-            out["program"] = ran_nodes[0].get("program")
+            out["program"] = ran_nodes[0][0].get("program")
         return out
 
     def _open(self, goals: List[Dict[str, Any]]) -> Optional[List]:

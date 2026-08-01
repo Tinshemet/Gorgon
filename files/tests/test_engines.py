@@ -639,8 +639,9 @@ def test_decompose_is_a_verdict_that_does_something():
         return insession.Verdict(insession.RUN)
 
     out = insession.drive(eng, RISOTTO, sess, decide)
-    check("it opened once, then ran each goal",
-          seen == ["the whole program", "one goal", "one goal"])
+    check("it opened once, then ran each goal, then witnessed the parent",
+          seen == ["the whole program", "one goal", "one goal",
+                   "the whole program · witness"])
     check("and the work still completed", out.get("ok"))
     check("with the same calls the whole program would have made", len(out["calls"]) == 2)
 
@@ -703,8 +704,11 @@ def test_the_grain_does_not_change_the_work_on_any_rung():
         sess.regime = regime
         out = insession.drive(eng, GOALS[n], sess, lambda st, s: insession.Verdict(
             insession.DECOMPOSE if (open_everything and st.divisible) else insession.RUN))
-        return out.get("ok"), sorted(f"{t}{sorted((a or {}).items())}"
-                                     for t, a in out.get("calls") or [])
+        # THE CHECKER AND THE GROUNDING VERDICT TRAVEL WITH THE CALLS. Matching calls alone
+        # would have passed while five rungs quietly stopped vouching for themselves, which
+        # is exactly what happened the first time this was measured.
+        return (out.get("ok"), out.get("grounded"), rung.check(world),
+                sorted(f"{t}{sorted((a or {}).items())}" for t, a in out.get("calls") or []))
 
     same = 0
     for n in sorted(GOALS):
@@ -714,8 +718,49 @@ def test_the_grain_does_not_change_the_work_on_any_rung():
             same += 1
         else:
             print(f"  rung {n} differs by grain")
-    check(f"all {len(GOALS)} rungs make the same calls at every grain "
+    check(f"all {len(GOALS)} rungs do — and prove — the same work at every grain "
           f"({same}/{len(GOALS)})", same == len(GOALS))
+
+
+def test_a_decomposed_goal_is_still_witnessed_by_its_parent():
+    """The parent's closing ENSURE is why the re-visit exists, and it catches root poisoning.
+
+    A GOAL SPLIT AGAINST A SET THAT THEN CHANGES is the defect: every child is locally
+    correct, every child closes, and the parent goal is false anyway. Nothing that checks a
+    node can see it, because the fault is not in any node — so the parent is re-planned
+    against the world as it now is, and the work that reappeared shows up as work.
+    """
+    print("[in-session] the parent is re-visited, so a changed set cannot hide")
+    from orchestrator.ai.engines import insession
+
+    world = World(KITCHEN)
+    for name in ("risotto", "paella"):
+        world.execute("create_dish", {"dish_name": name})
+    eng = MedusaEngine(world)
+    sess = Session("four each", eng, intent="ensure")
+    goals = [{"every": {"kind": "dish"}, "must": {"serves": "4"}}]
+    seen, opened = [], [False]
+
+    def decide(step, s):
+        seen.append((step.why, step.cost))
+        if not opened[0]:
+            opened[0] = True
+            return insession.Verdict(insession.DECOMPOSE, "one dish at a time")
+        # THE SET CHANGES UNDERNEATH THE SPLIT — a third dish nobody planned for, arriving
+        # while the children run. This is the concurrent world, simulated at the one moment
+        # that makes it visible.
+        if step.why == "sub-goal" and "pasta" not in (world.state.get("dish") or {}):
+            world.execute("create_dish", {"dish_name": "pasta"})
+        return insession.Verdict(insession.RUN)
+
+    out = insession.drive(eng, goals, sess, decide)
+    witness = [c for w, c in seen if "witness" in w]
+    check("the parent came back as a witness", len(witness) == 1)
+    check("and it had work to do — the split was stale", witness[0] > 0)
+    check("the goal now actually holds", out.get("ok") and
+          all(d.get("serves") == "4" for d in world.state["dish"].values()))
+    check("including the dish that arrived late",
+          world.state["dish"]["pasta"]["serves"] == "4")
 
 
 def main():

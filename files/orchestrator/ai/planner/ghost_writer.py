@@ -411,6 +411,21 @@ def _achieve(goal, scratch, plan, trace, depth):
     say(f"{_short(goal)} — now holds ({why})")
 
 
+def groundable(goal: Dict[str, Any]) -> bool:
+    """Can this goal have a closing witness at all?
+
+    NO, FOR EXACTLY TWO SHAPES, and the reason is the language rather than the writer: a
+    `_call` and an `observe` are things DONE, not things that become true, and Medusa has no
+    predicate for "has been asked". So they are not ungrounded — they are UNGROUNDABLE, and
+    a verdict that counts them as failures is measuring the absence of a predicate nobody
+    should add.
+
+    SSOT with `as_program`'s skip, which is what this was extracted from — the two had to
+    agree, and agreeing by coincidence is how twins start.
+    """
+    return not ("_call" in goal or "observe" in goal)
+
+
 def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None) -> Dict[str, Any]:
     """The plan as a grounded Medusa program.
 
@@ -430,7 +445,7 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None) -> Dic
     # over the same set, and the number is resolved against the world AS THE PROGRAM LEAVES
     # IT — not as it was before, or the witness would assert the wrong total.
     for g in goals:
-        if "_call" in g or "observe" in g:
+        if not groundable(g):
             continue
         w = _ground(g, select)
         body += [{"op": "ensure", "predicate": p} for p in (w if isinstance(w, list) else [w])]
