@@ -108,7 +108,8 @@ class _PlanMixin:
         corrects = self._corrects(session)
         temps: List = []
         try:
-            plan = _gw.cover(components, world, temps=temps, acting=corrects)
+            plan = _gw.cover(components, world, temps=temps, acting=corrects,
+                             without=getattr(session, 'authoring', None))
         except _gw.Unsolvable as e:
             # THE PROMOTION REQUEST. Built as an honest refusal — no tile, no rule, will not
             # improvise — and under the engine architecture that is exactly what asking for

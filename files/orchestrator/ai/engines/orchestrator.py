@@ -253,6 +253,9 @@ class Orchestrator:
             return session.close("REFUSED",
                                  f"{name!r} is not a legal procedure name — it is written "
                                  f"into programs, so it must be an identifier")
+        # THE NAME BEING WRITTEN, so the writer does not cover this goal with a PREVIOUS
+        # version of the very procedure it is authoring.
+        session.authoring = name
         planned = engine._plan(components, session)
         program = planned.get("program")
         if not program:

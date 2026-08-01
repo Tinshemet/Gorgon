@@ -26,7 +26,7 @@ version had: a precondition met by an earlier tile is simply true by the time it
 from __future__ import annotations
 
 import copy
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from .ir import effects
 from .ir import observe as _observe
@@ -432,7 +432,8 @@ def _scratch_of(world):
 
 
 def cover(goals: List[Dict[str, Any]], world, trace: List[str] = None,
-          temps: List = None, acting: bool = True) -> List[Call]:
+          temps: List = None, acting: bool = True,
+          without: Optional[str] = None) -> List[Call]:
     """The calls that make every goal hold, in an order that runs.
 
     `temps` collects `(kind, name)` for every member this plan CREATES as a precondition —
@@ -462,7 +463,7 @@ def cover(goals: List[Dict[str, Any]], world, trace: List[str] = None,
         before = len(plan)
         for goal in goals:
             _achieve(goal, scratch, plan, trace, 0, temps=temps, asked=asked,
-                     asked_kinds=asked_kinds, acting=acting)
+                     asked_kinds=asked_kinds, acting=acting, without=without)
         if len(plan) == before:
             return plan
         if trace is not None:
@@ -473,7 +474,7 @@ def cover(goals: List[Dict[str, Any]], world, trace: List[str] = None,
 
 
 def _achieve(goal, scratch, plan, trace, depth, internal=False, temps=None, asked=None,
-             asked_kinds=None, acting=True):
+             asked_kinds=None, acting=True, without=None):
     if depth > 12:
         raise Unsolvable("lowering too deep — a goal probably depends on itself")
     say = (lambda m: trace.append("  " * depth + m)) if trace is not None else lambda m: None
@@ -500,7 +501,7 @@ def _achieve(goal, scratch, plan, trace, depth, internal=False, temps=None, aske
         say(f"observe {goal['observe']} — {len(subs)} probe(s)")
         for s_ in subs:
             _achieve(s_, scratch, plan, trace, depth + 1, internal=internal, temps=temps, asked=asked,
-                     asked_kinds=asked_kinds, acting=acting)
+                     asked_kinds=asked_kinds, acting=acting, without=without)
         return
 
     ok, why = _holds(goal, holds, sel)
@@ -543,7 +544,14 @@ def _achieve(goal, scratch, plan, trace, depth, internal=False, temps=None, aske
     # NOTHING IS BLESSED BY BEING STORED. The body runs through the same visitor and the same
     # guarded executor; what is saved here is a plan, never a permission.
     from . import procedures as _procs
+    # A PROCEDURE MAY NOT REACH FOR ITSELF. Authoring `vm_disk_builder` a second time found
+    # the FIRST one sitting in the library, covered the goal with it, and produced a body of
+    # `CALL vm_disk_builder()` — a procedure whose whole content is a call to itself. It was
+    # caught by the validator refusing a call with no args, which is luck rather than a
+    # guard: a self-call with arguments would have been kept and would recurse at run time.
     found = _procs.LIBRARY.covering(goal)
+    if found and found.get("name") == without:
+        found = None
     if found:
         tool, args = found["name"], dict(found["params"] or {})
         say(f"{_short(goal)} — not yet -> PROCEDURE {tool}")
@@ -578,7 +586,7 @@ def _achieve(goal, scratch, plan, trace, depth, internal=False, temps=None, aske
         # whether it is the program's to clean up afterwards.
         for need in effects.precondition(tool, args, _kinds(scratch)):
             _achieve(need, scratch, plan, trace, depth + 1, internal=True, temps=temps, asked=asked,
-                     asked_kinds=asked_kinds, acting=acting)
+                     asked_kinds=asked_kinds, acting=acting, without=without)
         if (tool, args) not in plan:
             plan.append((tool, args))
             scratch.execute(tool, args)
@@ -617,7 +625,7 @@ def _achieve(goal, scratch, plan, trace, depth, internal=False, temps=None, aske
         # said more precisely — "every machine running" becomes one goal per machine, and
         # each is still theirs. Only `precondition` marks work nobody requested.
         _achieve(s, scratch, plan, trace, depth + 1, internal=internal, temps=temps, asked=asked,
-                     asked_kinds=asked_kinds, acting=acting)
+                     asked_kinds=asked_kinds, acting=acting, without=without)
 
     ok, why = _holds(goal, holds, sel)
     if not ok:
