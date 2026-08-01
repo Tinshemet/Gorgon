@@ -108,8 +108,13 @@ class Plan(Shortcut):
         floor_first = lambda req, menu, engines: next(
             (e.name for e in engines if e.name == "executor"),
             engines[0].name if engines else None)
+        # THE ANSWER IN ENGLISH, with every claim checked against the findings. Skipped for
+        # a dry run: there is nothing to describe, and asking a model to narrate a preview
+        # would invite it to describe work that did not happen.
+        from orchestrator.ai.engines import reporter as _reporter
         result = Orchestrator(registry, Channel([translate]), decide=decide,
-                              route=floor_first).handle(request)
+                              route=floor_first,
+                              narrate=None if dry else _reporter.narrator()).handle(request)
 
         if offered:
             console.print("\n[bold]what it would do[/bold]" if dry
@@ -153,6 +158,13 @@ class Plan(Shortcut):
                           f"{tree['infected']} of {tree['nodes']} node(s)")
             for line in (result.get("tree_report") or "").splitlines()[1:]:
                 console.print(f"  [dim]{line}[/dim]")
+        if result.get("answer"):
+            console.print(f"\n[bold]{result['answer']}[/bold]")
+            if result.get("answer_grounded") is False:
+                # RETURNED, BUT NEVER CLEAN. Suppressing it leaves silence where there was an
+                # answer; returning it silently is the hallucination the reporter exists for.
+                console.print(f"  [warn]unsupported by any finding: "
+                              f"{result.get('answer_unsupported')}[/warn]")
         if result.get("grounded") is not None:
             console.print(f"\n  grounded: {result['grounded']} · "
                           f"{len(result.get('calls') or [])} call(s)")

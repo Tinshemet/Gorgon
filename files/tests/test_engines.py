@@ -282,7 +282,18 @@ def test_the_reporter_is_wired_into_the_close_path():
               "eq": 1}]
 
     def narrator(prompt, findings):
-        names = [f.get("dish_name") for f in findings if f.get("dish_name")]
+        # A FINDING IS `{fact, value}` NOW, uniformly — publications became the source, and a
+        # publication says WHAT and WHAT IT WAS rather than spreading a call's arguments
+        # across the top level. A narrator that reached for a known key stops working, which
+        # is the right pressure: findings whose shape nobody anticipated are exactly what
+        # `_atoms` walks the whole structure for.
+        names = []
+        for f in findings:
+            value = f.get("value")
+            if isinstance(value, dict) and value.get("dish_name"):
+                names.append(value["dish_name"])
+            elif f.get("dish_name"):
+                names.append(f["dish_name"])
         return {"answer": f"Created {names[0]}." if names else "Nothing was done.",
                 "mentions": names}
 

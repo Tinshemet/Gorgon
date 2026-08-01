@@ -92,9 +92,14 @@ def _atoms(findings: Any) -> Set[str]:
             for v in node:
                 walk(v)
         elif node is not None and not isinstance(node, bool):
-            for piece in re.split(r"[\s,;:/]+", str(node).lower()):
+            # SPLIT ON STRUCTURE TOO, not only on whitespace. A finding's key is
+            # `reachable(alpha)` — a fact template with the member inside it — and splitting
+            # on spaces alone yielded the single atom `reachable(alpha`, so THE MACHINE'S
+            # NAME WAS INVISIBLE to the grounding check. A reporter that correctly said
+            # "alpha is reachable" was told it had invented alpha.
+            for piece in re.split(r"[\s,;:/()\[\]=<>|]+", str(node).lower()):
                 if piece:
-                    out.add(piece.strip(".'\"()[]"))
+                    out.add(piece.strip(".'\"—-"))
     walk(findings)
     return {a for a in out if a}
 
@@ -119,6 +124,47 @@ def unsupported(mentions: Sequence[str], findings: Any) -> List[str]:
             if word and word not in have:
                 bad.append(word)
     return bad
+
+
+def narrator(model: str = None, timeout: int = 120):
+    """A model-backed `ask` for `report`. The ONE place a narrator is actually built.
+
+    THE REPORTER HAD A PROMPT, A SCHEMA AND A GROUNDING CHECK AND NO WAY TO BE CALLED — every
+    caller had to construct its own model call, so nobody did, and `plan` handed the operator
+    raw findings after all that machinery. Built here rather than in the shortcut because a
+    second caller would otherwise build a second one, and two narrators steering differently
+    is the defect #26 already found in the prompt paths.
+
+    IT IS DECODED AGAINST `SCHEMA`, so `mentions` comes back as a list the grounding check can
+    actually read. A narrator asked for prose and then parsed would put the hallucination this
+    file exists to catch back into the answer.
+    """
+    import json as _json
+    import urllib.request
+
+    from orchestrator.ai.chat.ollama_client import OLLAMA_URL
+
+    def ask(prompt: str, payload: Any) -> Dict[str, Any]:
+        body = {"model": model or _default_model(), "stream": False, "format": SCHEMA,
+                "messages": [{"role": "system", "content": prompt},
+                             {"role": "user", "content": _json.dumps(payload, default=str)}]}
+        req = urllib.request.Request(f"{OLLAMA_URL}/api/chat", method="POST",
+                                     data=_json.dumps(body).encode(),
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as fh:
+            reply = _json.loads(fh.read())
+        return _json.loads((reply.get("message") or {}).get("content") or "{}")
+
+    return ask
+
+
+def _default_model() -> str:
+    """The bench's model unless something says otherwise — one name, not two."""
+    try:
+        from tests.bench.ladder import BENCH_MODEL
+        return BENCH_MODEL
+    except Exception:
+        return "llama3.1:8b"
 
 
 def report(findings: Any, ask, verify: bool = True) -> Dict[str, Any]:
@@ -153,5 +199,9 @@ def report(findings: Any, ask, verify: bool = True) -> Dict[str, Any]:
         text, mentions, declared = str(said or "").strip(), [], False
     missing = unsupported(mentions, findings) if verify else []
     return {"answer": text, "mentions": list(mentions), "unsupported": missing,
+            # NO DECLARED CLAIMS IS NOT GROUNDED, and `bool(declared)` is what says so. A
+            # narrator that lists nothing has nothing checkable, and calling that grounded
+            # would make "declare fewer claims" the cheapest way to pass — the same
+            # decorative-compliance failure #53 records for ENSURE.
             "grounded": bool(declared) and not missing,
             "source": "model" if declared else "model (undeclared claims — unverifiable)"}

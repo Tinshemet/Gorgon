@@ -86,6 +86,9 @@ def main(argv=None) -> int:
     ap.add_argument("repeats", nargs="?", type=int, default=3)
     ap.add_argument("--old", default=os.environ.get("OLD"))
     ap.add_argument("-r", "--rung", type=int, action="append")
+    ap.add_argument("--capture", metavar="PATH",
+                    help="also write every raw model answer to PATH as JSONL — a corpus the "
+                         "repairs can be replayed against with NO MODEL, forever")
     a = ap.parse_args(argv)
     if not a.old:
         print("REFUSING TO RUN: --old (or $OLD) must name an earlier extract.py. "
@@ -113,6 +116,14 @@ def main(argv=None) -> int:
                 tally["new"][after] += 1
                 if before != after:
                     flips.append((column, rung.n, i + 1, before, after, json.dumps(raw)))
+                if a.capture:
+                    # EVERY ANSWER, NOT JUST THE INTERESTING ONES. A corpus of only the cells
+                    # that flipped would be a corpus of the cases that already worked out —
+                    # exactly the sample that cannot catch the next regression.
+                    with open(a.capture, "a") as fh:
+                        fh.write(json.dumps({"rung": rung.n, "column": column.strip(),
+                                             "request": text, "raw": raw,
+                                             "outcome": after}) + "\n")
                 print(f"{column} rung {rung.n:>2} [{i + 1}/{a.repeats}] "
                       f"old={before:<14} new={after:<14}"
                       + ("  <-- FLIP" if before != after else ""), flush=True)

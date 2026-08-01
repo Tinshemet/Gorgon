@@ -264,8 +264,13 @@ class Orchestrator:
             (forwarded if self._forward(pub, session) else kept).append(pub)
         if kept:
             session.record(f"kept {len(kept)} publication(s) internal")
-        session.findings = [p.as_finding() for p in forwarded] + (
-            result.get("findings") or [])
+        # PUBLICATIONS ARE THE FINDINGS WHEN THERE ARE ANY, not an addition to them. Both
+        # carry the same facts — an engine publishes what it observed and also returns it —
+        # so adding them handed the reporter `reachable(alpha)` twice and would have let a
+        # narrator say "both machines answered, twice". The engine's own list is the fallback
+        # for an engine that returns findings and publishes nothing.
+        session.findings = ([p.as_finding() for p in forwarded] if forwarded
+                            else (result.get("findings") or []))
         out = session.close("DONE", result.get("why") or "")
         if session.published:
             out["published"] = [p.as_finding() for p in session.published]
