@@ -1119,8 +1119,12 @@ def test_the_lab_mount_speaks_the_manifest_not_the_library():
           "gone" not in model.state["vm"])
     # UNKNOWN IS NOT EMPTY. The library tracks no snapshots, so the model must not answer
     # "there are none" to a question nobody asked.
-    check("a kind nothing could seed is named, not silently empty",
-          model.unseeded == {"snapshot"})
+    # DERIVED, NOT LISTED. `file` joined the manifest with `local_probe` as its observer and
+    # no lister at all, and it arrived here for free — which is the extensibility claim the
+    # manifest makes, holding: a new kind the library cannot enumerate is UNSEEDED without an
+    # edit, so the writer refuses to read silence as "there are none".
+    check(f"a kind nothing could seed is named, not silently empty ({model.unseeded})",
+          model.unseeded == {"snapshot", "file"})
 
 
 def test_a_world_that_cannot_ask_still_plans_a_reach():

@@ -439,9 +439,17 @@ def _system(want: str = None, ops: Sequence[str] = None) -> str:
         # made the author join two separate lists to learn that a vm needs os_type — it
         # managed for `NEW vm` and forgot for `NEW AMOUNT(5) vm`, which is what a
         # join-two-lists task fails like.
+        # A KIND NEED NOT HAVE A CREATOR, and this read `v['create']` unconditionally. The
+        # `file` kind has none on purpose — a file is made by an arbitrary command, so naming
+        # `run_command` as its creator would be a lie the writer would then plan with — and
+        # the prompt builder raised KeyError on a manifest row that is perfectly legal.
+        # Saying so is better than hiding the kind: an author that cannot see it cannot ask
+        # about it, and observing one is exactly what it is for.
         f"  {k}: created by {v['create']}"
         + (f"(needs {', '.join(a for a in (REQUIRED_FIELDS.get(v['create']) or []) if a != 'name')})"
            if [a for a in (REQUIRED_FIELDS.get(v['create']) or []) if a != 'name'] else "")
+        if v.get("create") else
+        f"  {k}: not created by any one tool — observe it"
         # An attribute with a fixed vocabulary shows it. Naming `status` without saying
         # it is running-or-stopped is what let the author write 'not running' and match
         # nobody — the schema constrains the decoder, but the prompt is where a reader

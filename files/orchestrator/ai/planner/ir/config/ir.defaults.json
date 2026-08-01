@@ -66,6 +66,11 @@
       "doc": "a set of NAMES \u2014 Medusa's one collection, what FOREACH iterates and what a SELECT binds. Every other type here is a scalar, and that was a real limit rather than a gap nobody had reached: a class method like `attach(vms, net_name)` cannot declare its first argument, and `follow_up` hit the same wall from the other side \u2014 a bound set could not be declared as a param, so the abandoned tail had to be inlined by resolving refs instead."
     }
   },
+  "_primitives_doc": "TOOLS A PROGRAM MAY CALL THAT INVERT NO GOAL. Every other tool in this manifest is reachable because a KIND declares it \u2014 a creator, a deleter, a setter, an observer \u2014 and `effects.tools_of` derives the callable set from those rows. `run_command` belongs to no kind: it is the general host primitive, shell or python, bubblewrap-confined to the workspace, and it was designed as THE BACKBONE OF ROUTINES AND PROCEDURES. It has been in the executor's registry since 2026-07-23 and a Medusa program could not call it \u2014 `no such tool 'run_command'` \u2014 so the substrate the whole procedure feature was meant to stand on was unreachable from the language that feature is written in. A primitive is CALLABLE and never PLANNED FOR: nothing here inverts a goal, so the writer will not reach for one on its own, and an author who wants it says so. That is the honest shape for a tool whose success means 'the command ran' and never 'the goal is achieved' \u2014 its own docstring \u2014 which is why the `file` kind below declares `local_probe` as the observer that decides.",
+  "primitives": [
+    "run_command",
+    "local_probe"
+  ],
   "_ops_doc": "The statement types. `one_of` means exactly one of those fields must be present \u2014 foreach names its set EITHER by querying state (`select`) OR by referring to a set already bound (`in`). Those are different things and conflating them was a real gap: `new` with a count binds a SET, and until `in` existed there was no way to act on it before its members had an attribute to query by. \"Create X vms and label them\" was inexpressible. `required` is what validate() insists on; `doc` is what the model is shown. Adding an op here does NOT make it executable \u2014 the visitor must learn it too \u2014 so this table is the contract between the two, not a switch. `in` accepts a LITERAL LIST as well as a bound reference, because a correction usually acts on specific things the last attempt left behind \u2014 the model reached for exactly that on rung 7, naming three VMs it had read off current state, and the language had no way to say it. `new` carries `args` because a resource is rarely just a name: create_vm alone accepts 47 arguments and REQUIRES os_type. Without them `new` could not build a real VM at all \u2014 it passed only because the bench world is lenient about missing required fields, which is exactly the kind of gap a simulator hides.",
   "ops": {
     "new": {
@@ -412,6 +417,25 @@
         "net",
         "subnet"
       ]
+    },
+    "file": {
+      "package": "core",
+      "key": "path",
+      "attrs": [
+        "path"
+      ],
+      "nouns": [
+        "file",
+        "artifact",
+        "output"
+      ],
+      "_doc": "A FILE IN THE WORKSPACE, and it has NO CREATOR on purpose. Every other kind names the tool that makes one; a file is made by an arbitrary command, so declaring `run_command` as its creator would be a lie the writer would then plan with \u2014 it takes `code`, not a path, and no argument of it is the key. What the kind DOES declare is who can answer whether the file is there, which is the half that matters: run_command's own docstring says success means the command RAN and never that the goal is achieved, and `local_probe` is the host twin of `guest_probe` that decides. So a program writes a file with a primitive and GROUNDS it with an observation \u2014 three-valued, like every other observed attribute, so a file nobody probed reads `unknown` rather than absent.",
+      "observed": {
+        "exists": {
+          "by": "local_probe",
+          "fact": "file_exists({path})"
+        }
+      }
     },
     "snapshot": {
       "package": "core",

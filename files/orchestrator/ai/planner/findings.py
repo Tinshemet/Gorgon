@@ -52,6 +52,22 @@ DEFAULT_SCHEMA: Dict[str, Dict[str, Any]] = {
     # is to produce a liveness verdict. `fleet` above already reads its VERDICT key
     # (all_reachable) rather than success, which is why this one was the odd entry out.
     "guest_ping": {"fact": "reachable({name})", "value": "alive"},
+    # THE HOST TWIN OF `guest_ping`, and the reason the `file` kind can be grounded at all.
+    # `run_command`'s own docstring is emphatic that its success means THE COMMAND RAN and
+    # never that the goal is achieved, so something else has to decide — `local_probe` is
+    # that something, and a finding is how its answer reaches a predicate. Without this row
+    # `file.exists` would read `unknown` forever: a query that can never answer, which is
+    # the same false assurance as a check that can never pass.
+    "local_probe": {"fact": "file_exists({path})", "value": "ok",
+                    # THE TOOL'S ARGUMENT IS NOT ALWAYS THE KIND'S KEY. `guest_ping` takes
+                    # `name` and a vm's key is `name`, so the two directions of this template
+                    # happened to agree everywhere and nothing had to say which was which.
+                    # `local_probe` takes `target` and a file's key is `path`, and the ledger
+                    # has to write the key the QUERY side will look under — `config.fact_key`
+                    # formats with the kind's key, so a template naming the argument would be
+                    # written one way and read another, and `file.exists` would answer
+                    # `unknown` forever while the probe recorded perfectly good facts.
+                    "as": {"path": "target"}},
     # A model-PROPOSED, TYPED finding (see claim_types.json). The fact key and the
     # verify probe are derived from the claim's `type`, not a static template — so
     # yield_fact / finding_probe_spec special-case it below. This entry just tells
@@ -202,7 +218,9 @@ def yield_fact(tool: str, args: Dict[str, Any], schema: Dict[str, Dict[str, Any]
     if when and any(str(args.get(k)) != str(v) for k, v in when.items()):
         return None
     try:
-        return _fmt(spec["fact"], args)
+        return _fmt(spec["fact"], {**args,
+                                   **{k: args.get(v) for k, v in
+                                      (spec.get("as") or {}).items()}})
     except Exception:
         return None
 

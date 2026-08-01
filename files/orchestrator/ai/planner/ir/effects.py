@@ -398,7 +398,11 @@ def tools_of(kinds=None) -> set:
     not a Gorgon tool and never will be, so validating it against Gorgon's registry rejected
     a correct program. The manifest already names every tool it uses; asking it is one loop.
     """
-    out = set()
+    # THE PRIMITIVES, WHICH BELONG TO NO KIND. `run_command` is the general host command and
+    # `local_probe` the observation that decides whether it worked; neither inverts a goal, so
+    # neither can be derived from a kind row — and without this a Medusa program could not
+    # call the tool the whole procedure feature was designed to stand on.
+    out = set(config.PRIMITIVES or ())
     for spec in _K(kinds).values():
         for field in ("create", "delete"):
             if spec.get(field):

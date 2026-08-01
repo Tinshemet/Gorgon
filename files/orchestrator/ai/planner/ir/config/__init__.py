@@ -49,6 +49,7 @@ LANGUAGE   = _c("language")        # name, version, file extension
 SIGIL      = _c("sigil")           # marks a reference to a bound name
 LOOP_VAR   = _c("loop_var")        # the member inside a foreach
 PARAM_TYPES = _c("param_types")    # declarable parameter types -> {sql, py, doc}
+PRIMITIVES = _c("primitives")     # callable tools that belong to no kind (ir/effects.py)
 SURFACE    = _c("surface")         # the written spelling of things the IR stores plainly
 FIELDS     = _c("fields")          # every statement field, described once
 
