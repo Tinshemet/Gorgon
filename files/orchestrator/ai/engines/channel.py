@@ -36,9 +36,12 @@ class Answer:
     turns "the plan was wrong" into a question with three separable answers.
     """
 
-    def __init__(self, components: Optional[List[Dict[str, Any]]], source: str, why: str = ""):
+    def __init__(self, components: Optional[List[Dict[str, Any]]], source: str, why: str = "",
+                 procedure: Optional[str] = None):
         self.components = components or []
         self.source = source
+        # AN AUTHORING REQUEST NAMES WHAT TO KEEP. `None` is an ordinary request: do it now.
+        self.procedure = procedure
         self.why = why
 
     def __bool__(self) -> bool:

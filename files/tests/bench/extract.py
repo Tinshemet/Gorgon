@@ -118,6 +118,24 @@ def schema(kinds=None) -> Dict[str, Any]:
             #
             # A schema that forbids the honest answer does not get honesty. It gets a
             # confident answer to a question nobody asked.
+            # AN AUTHORING REQUEST IS NOT A WORLD REQUEST, and until this field existed the
+            # extractor had no way to say so. "Create a reusable snippet for a temporary vm"
+            # came back as `count vm = 1` with the placeholder name `default`, the executor
+            # served it in one call, a real machine was created on the lab, and the run
+            # closed DONE. Every layer was truthful about what it did and none of them was
+            # asked to do it.
+            #
+            # THE GOALS STAY THE GOALS. What changes is the DISPOSITION: the same components
+            # describe what the procedure must achieve, and naming one here says "write this
+            # and keep it" rather than "do this now". That keeps one translation path instead
+            # of two, which is the defect #26 already records.
+            "procedure": {
+                "type": "string",
+                "description": ("ONLY if the operator asked you to SAVE this as a reusable "
+                                "snippet, procedure or script: the name to save it under, "
+                                "lowercase with underscores. Leave this out for an ordinary "
+                                "request to do something now."),
+            },
             "cannot": {
                 "type": "string",
                 "description": ("say WHY, if this is not a request you can express as goals — "
@@ -193,6 +211,22 @@ def _relevant(spec: Dict[str, Any], request: str) -> bool:
     return bool(nouns & words) or bool({n + "s" for n in nouns} & words)
 
 
+def _authoring(request: str) -> bool:
+    """Is the operator asking for something KEPT, rather than something done?
+
+    A word match, deliberately — the same shape as the kind blinder, and for the same
+    reason: this decides what the model is SHOWN, and a decision about what to show cannot
+    itself depend on the model. The words are the ones an operator actually uses for it.
+
+    THE LIMIT, SAID PLAINLY: an authoring request phrased without any of these words gets
+    the ordinary prompt and will be read as a request to act. Widening the list puts the
+    authoring instruction in front of requests that measurably do worse for seeing it.
+    """
+    words = {w.strip(".,!?;:'\"").lower() for w in str(request or "").split()}
+    return bool(words & {"procedure", "snippet", "script", "reusable", "routine",
+                         "template-script", "save", "store", "keep", "reuse"})
+
+
 def prompt(kinds=None, request: str = "") -> str:
     """The system prompt, with the DOMAIN named from the manifest in force.
 
@@ -230,6 +264,25 @@ def prompt(kinds=None, request: str = "") -> str:
         nouns.append((spec.get("nouns") or [kind])[0])
     subject = ", ".join(sorted(nouns)) or "virtual machines"
     out = PROMPT.replace("about virtual machines", f"about {subject}")
+
+    # AN AUTHORING REQUEST HAS TO BE SHOWN, NOT MERELY ALLOWED. The `procedure` field went
+    # into the schema with a description naming "snippet, procedure or script", and asked to
+    # "create a reusable medusa procedure called vm_disk_builder ... and save it so it can be
+    # called later" the model returned `procedure: null` 2/2 and two goals about snapshots.
+    # A field this model has never seen used is a field it does not use.
+    #
+    # BLINDED, for the reason the worked examples are: this line is paid for on every request
+    # that sees it, and unconditional prompt text was measured at five broken rungs to buy
+    # one capability. It appears only when the operator used an authoring word, which makes
+    # it BYTE-IDENTICAL on every ordinary request — provable without spending a model call.
+    if _authoring(request):
+        out = out.replace(
+            "IF IT IS NOT A REQUEST YOU CAN EXPRESS THIS WAY",
+            "THIS OPERATOR IS ASKING YOU TO SAVE SOMETHING REUSABLE. Put the name they gave\n"
+            "it in `procedure`, and let the goals say what it must achieve when it is called.\n"
+            '"save a script called build_box that makes a machine from a template"\n'
+            "  -> procedure: build_box, and a goal for the machine it makes.\n\n"
+            "IF IT IS NOT A REQUEST YOU CAN EXPRESS THIS WAY")
 
     shown = []
     for kind, spec in (config.KINDS or {}).items():

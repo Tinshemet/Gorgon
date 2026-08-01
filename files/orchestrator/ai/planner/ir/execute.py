@@ -19,6 +19,7 @@ the model invent names. Same rule here: position and index, never a counter or a
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from . import config, consent as _consent, intent as _intent, refs
+from .. import procedures as _procs
 from .validate import coerce_body, validate
 
 
@@ -172,6 +173,11 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
     # second engine's program passed inspection and was then refused here as "invalid". A
     # gate that judges by a different standard than the one before it is worse than one
     # gate, because the disagreement is silent.
+    # A STORED PROCEDURE IS A LEGAL CALL TARGET, and the validator has to be told or it
+    # refuses the operator's own library as an unknown tool. Added rather than replaced:
+    # a procedure EXTENDS what can be called and never licenses a tool that was refused.
+    if known_tools is not None:
+        known_tools = set(known_tools) | set(_procs.LIBRARY.names())
     ok, problems = validate(program, known_names=known_names, known_tools=known_tools)
     if not ok:
         return {"ok": False, "failed": "invalid", "problems": problems,
@@ -281,6 +287,29 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
     def _one(st: Dict) -> Optional[Dict]:
         op = st.get("op")
         before = len(failures)
+
+        if op == "call" and _procs.LIBRARY.get(st.get("tool")) is not None:
+            # A PROCEDURE IS A TOOL YOU WROTE, and this is where that stops being a slogan.
+            # `CALL setup_temp_vm(template: ...)` runs the stored body with its parameters
+            # bound, through THIS SAME VISITOR — so every statement inside meets the guarded
+            # executor, the commit gate and the contract tier exactly as it did the day it
+            # was written. Storing a program does not bless it.
+            #
+            # THE CALLER'S ARGUMENTS BECOME THE CALLEE'S SCOPE, and nothing else does. A
+            # procedure that could read the caller's bindings would be a program whose
+            # meaning depends on where it was called from, which is the opposite of the
+            # reusability it exists for.
+            proc = _procs.LIBRARY.get(st.get("tool"))
+            inner_scope = dict(_resolve(st.get("args") or {}, scope))
+            saved, scope_backup = dict(scope), dict(scope)
+            scope.clear()
+            scope.update(inner_scope)
+            try:
+                bad = _block(coerce_body(proc) or [])
+            finally:
+                scope.clear()
+                scope.update(scope_backup)
+            return bad
 
         if op == "publish":
             # NAMED HERE, VALUED BY THE ENGINE. This module has no findings ledger and should

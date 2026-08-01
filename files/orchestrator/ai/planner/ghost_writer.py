@@ -30,6 +30,7 @@ from typing import Any, Dict, List, Tuple
 
 from .ir import effects
 from .ir import observe as _observe
+from .ir import refs
 
 
 def _kinds(world):
@@ -446,6 +447,35 @@ def _achieve(goal, scratch, plan, trace, depth, internal=False, temps=None, aske
     ok, why = _holds(goal, holds, sel)
     if ok:
         say(f"{_short(goal)} — ALREADY HOLDS ({why})")
+        return
+
+    # THE OPERATOR'S OWN LIBRARY IS TRIED FIRST, and this is the whole of "can it call what
+    # it wrote". A stored procedure declares what it ACHIEVES, so covering a goal with one is
+    # the same question as covering it with a primitive — does this make the goal true? — and
+    # the answer is a structural match rather than a judgement about a sentence.
+    #
+    # BEFORE THE PRIMITIVE, DELIBERATELY. A snippet exists because somebody decided the
+    # primitive sequence was worth naming: it carries the template, the credentials and the
+    # ordering they settled on. Reaching for `create_vm` when `vm_disk_builder` is sitting
+    # there would be the writer ignoring the operator's own decision and re-deriving a worse
+    # version of it.
+    #
+    # NOTHING IS BLESSED BY BEING STORED. The body runs through the same visitor and the same
+    # guarded executor; what is saved here is a plan, never a permission.
+    from . import procedures as _procs
+    found = _procs.LIBRARY.covering(goal)
+    if found:
+        tool, args = found["name"], dict(found["params"] or {})
+        say(f"{_short(goal)} — not yet -> PROCEDURE {tool}")
+        if (tool, args) not in plan:
+            plan.append((tool, args))
+            # THE SCRATCH IS ADVANCED BY THE PROCEDURE'S OWN BODY, so the world the rest of
+            # the plan is written against reflects what the call will actually do. Skipping
+            # this would leave later goals resolved against a world where the procedure never
+            # ran — the same reason every placed tile is executed on the scratch.
+            for st in (found["procedure"].get("body") or []):
+                if st.get("op") == "call" and st.get("tool"):
+                    scratch.execute(st["tool"], refs.resolve(st.get("args") or {}, args))
         return
 
     tile = effects.invert(goal, _kinds(scratch), internal=internal)

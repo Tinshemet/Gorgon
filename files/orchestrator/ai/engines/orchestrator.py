@@ -189,6 +189,44 @@ class Orchestrator:
             out["tried"] = list(tried)
         return out
 
+    def _author(self, engine, session, name, components):
+        """Write a named program for these goals and KEEP it. Nothing runs.
+
+        THE ENGINE PLANS EXACTLY AS IT WOULD TO ACT, which is what makes the artifact worth
+        keeping: it is the program that would have run, against the world as it actually is.
+
+        `achieves` IS THE GOAL ITSELF, and that is the line between a library and a macro. A
+        procedure written to make something true is a procedure that makes that thing true,
+        and saying so in the goal's own vocabulary is what lets the WRITER match it later —
+        so the operator's snippet enters a future plan without the operator being in the room.
+        """
+        from ..planner import procedures as _procs
+        from ..planner.ir.render import render as _render
+
+        if not _procs.legal_name(name):
+            return session.close("REFUSED",
+                                 f"{name!r} is not a legal procedure name — it is written "
+                                 f"into programs, so it must be an identifier")
+        planned = engine._plan(components, session)
+        program = planned.get("program")
+        if not program:
+            return session.close("UNMET", planned.get("why") or "nothing could be written")
+
+        program = dict(program)
+        program["name"] = name
+        # ONE GOAL OR THE CONJUNCTION OF ALL OF THEM. A snippet may not advertise more than
+        # it does: written for three goals, it claims all three or the match is a lie.
+        program["achieves"] = (components[0] if len(components) == 1
+                               else {"all": list(components)})
+        rendered = _render(program)
+        at = _procs.LIBRARY.save(program, rendered)
+        session.record(f"kept as {name}", filed_by=engine.name, caught_by="orchestrator",
+                       executed=f"PROCEDURE {name}", data={"at": at})
+        session.events.program(f"THE MEDUSA PROCEDURE — {name}", rendered)
+        out = session.close("DONE", f"written and kept as {name}")
+        out["procedure"] = {"name": name, "at": at, "rendered": rendered}
+        return out
+
     def _attempt(self, request, engine, session, components):
         """One engine's whole turn: translate, run the in-session, close."""
         if components is None:
@@ -216,6 +254,16 @@ class Orchestrator:
                 # the wrong half.
                 return session.close("UNTRANSLATED", answer.why)
             components = answer.components
+
+            # AUTHORING, NOT ACTING. The operator asked for a reusable snippet, so the engine
+            # WRITES the program for these goals and the orchestrator keeps it — nothing runs.
+            # Doing otherwise is what put a machine called `default` on the lab in answer to a
+            # request for a script.
+            #
+            # PLANNED, NOT SIMULATED: the real writer against the real world, so the artifact
+            # is one that would actually work. Only the last step — doing it — is withheld.
+            if getattr(answer, "procedure", None):
+                return self._author(engine, session, answer.procedure, components)
 
         result = _insession.drive(engine, components, session, self._decide)
         session.calls = result.get("calls") or []
