@@ -339,14 +339,6 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
             eq = _as_count(g.get("amount"))
             if eq is None:
                 eq = _as_count(g.get("value"))
-            if (eq is None and g.get("value") is not None and not g.get("attr")
-                    and not _name_shaped(g["value"])):
-                # THE MODEL TRIED TO GIVE A NUMBER AND FAILED. `value: "Not specified (2)"`
-                # is a hedge, not an omission, and the two must not be read the same way:
-                # an ABSENT number means one, because that is the reading the sentence
-                # already had, while a PRESENT unparseable one means the model did not know.
-                # Defaulting a hedge to 1 over a nine-machine lab means DELETE EIGHT.
-                continue
             # A MISSING NUMBER MEANS ONE. "Create a vm named alpha" is a count of one and the
             # prompt says so in those words, so the model omits it as obvious — and the goal
             # was being DISCARDED over it. Defaulting is not a guess about meaning; it is the
@@ -357,6 +349,11 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
             # goal level rather than in `select.where` — the right MEANING in the wrong
             # FIELD, which is a slot error and repairable. What is never repaired is a wrong
             # meaning: that goes back as a failure.
+            # WAS THE VALUE USED BY ANYTHING? Tracked rather than assumed, because the
+            # hedge check below must only fire on a value NO repair claimed. An earlier
+            # version ran it first and swallowed `value: "name=alpha"` — a measured repair,
+            # broken by a guard placed one branch too early.
+            used = False
             stray = g.get("value")
             if stray and "=" in str(stray) and len(sel) == 1:
                 a, _, v = str(stray).partition("=")
@@ -364,11 +361,13 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
                 a = (spec.get("aliases") or {}).get(a.strip(), a.strip())
                 if a in set(spec.get("attrs") or ()):
                     sel = {**sel, a: _coerce(v.strip())}
+                    used = True
             elif g.get("attr") and g.get("value") is not None and len(sel) == 1:
                 spec = (config.KINDS or {}).get(sel.get("kind")) or {}
                 a = (spec.get("aliases") or {}).get(g["attr"], g["attr"])
                 if a in set(spec.get("attrs") or ()):
                     sel = {**sel, a: _coerce(g["value"])}
+                    used = True
             elif (g.get("value") is not None and _as_count(g["value"]) is None
                   and eq == 1 and len(sel) == 1):
                 # A BARE VALUE ON A COUNT OF ONE IS AN IDENTITY. "create a vm named beta and
@@ -388,6 +387,24 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
                         and str(_unwrap(g["value"])).strip().lower()
                         not in _enumerated(sel["kind"])):
                     sel = {**sel, key: str(_unwrap(g["value"])).strip()}
+                    used = True
+            if (not used and not g.get("attr") and g.get("amount") is None
+                    and g.get("value") is not None
+                    and _as_count(g["value"]) is None
+                    and not _name_shaped(g["value"])):
+                # THE MODEL HEDGED AND NOTHING COULD USE WHAT IT GAVE. `value: "Not
+                # specified (2)"` is a hedge, not an omission, and the two must not read the
+                # same: an ABSENT number means one, because that is the reading the sentence
+                # already had, while a PRESENT unusable one means the model did not know.
+                # Defaulting a hedge to 1 over a nine-machine lab means DELETE EIGHT.
+                #
+                # FOUR CONDITIONS, AND EVERY ONE OF THEM EARNED. A first version dropped on
+                # "not a number and unused", which killed `value: "prod", amount: 2` — the
+                # model HAD given the count and only the stray value was unusable — and
+                # `value: "running"`, where the value is a plausible token this module
+                # merely declined to read as an identity. What is left is the narrow case:
+                # no count anywhere, and a value that is not even a plausible token.
+                continue
             out.append({"shape": "count", "select": sel, "eq": eq})
         elif shape == "reach":
             # REACH IS NOT INVENTED. Twenty of twenty-three extraction failures on

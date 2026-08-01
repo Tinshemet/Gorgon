@@ -161,9 +161,12 @@ def test_the_constraint_in_the_wrong_field():
     print("[repair] a packed filter is unpacked into the selector")
     out = to_goals(g(goal="count", select={"kind": "vm"}, value="name=alpha"))
     check("unpacked", out[0]["select"].get("name") == "alpha")
-    junk = to_goals(g(goal="count", select={"kind": "vm"}, value="colour=blue"))
-    check("an attribute the kind does not have is refused",
-          "colour" not in junk[0]["select"])
+    # A FILTER ON AN ATTRIBUTE THE KIND DOES NOT HAVE TAKES THE GOAL WITH IT. Keeping the
+    # count and dropping only the filter would turn "one vm with colour=blue" into "exactly
+    # one vm" — which over a nine-machine lab means DELETE EIGHT. The unusable half is not
+    # separable from the half that would act on it.
+    check("an unusable filter takes the goal with it, rather than acting without it",
+          to_goals(g(goal="count", select={"kind": "vm"}, value="colour=blue")) == [])
 
 
 def test_reach_is_not_invented():
