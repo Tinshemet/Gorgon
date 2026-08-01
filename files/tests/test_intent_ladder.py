@@ -190,6 +190,92 @@ def test_the_same_request_at_three_rungs_gives_three_answers():
           {s[0] for s in shapes.values()} == {"DONE"})
 
 
+def test_achieve_corrects_itself_and_derive_is_the_first_engine():
+    """ACHIEVE HAS TWO ENGINES AND PRODUCTION RAN NEITHER.
+
+        derive()   deterministic, free, auditable, no model call   FIRST
+        tree       bounded, scoped by the gap                      where derive returns None
+
+    `derive` has been the deterministic half of ACHIEVE since it was written and
+    `ir/__init__` exports it — and NO PRODUCTION MODULE CALLED IT. Only the two bench probes
+    did, so the correction loop the ladder measures was a property of the bench rather than
+    of the system: an ACHIEVE whose witness failed came back UNMET with the gap uncomputed.
+
+    DRIVEN THROUGH A SHORT PLAN, deliberately. The writer plans the whole gap up front, so a
+    program it wrote does not normally under-deliver — which is exactly why this seam had
+    never run. A plan that falls short is what a moving world produces, and it is the case
+    the corrector exists for.
+    """
+    print("[achieve] the gap is computed, not asked about")
+    world = _world(names=("alpha",))
+    eng = Lab(world)
+    sess = Session("five machines", eng, intent="achieve", regime="translation")
+
+    goal = {"shape": "count", "select": {"kind": "vm"}, "eq": 5}
+    short = {"ok": True,
+             "plan": [("create_vm", {"name": "vm1", "os_type": "linux"})],
+             "program": {"body": [
+                 {"op": "call", "tool": "create_vm",
+                  "args": {"name": "vm1", "os_type": "linux"}},
+                 {"op": "achieve", "predicate": goal},
+                 {"op": "publish", "fact": "done"}]}}
+
+    out = eng._execute_plan(short, [goal], sess)
+    check(f"the run closes ok ({out.get('why')})", out["ok"] is True)
+    check("the world reaches what was asked for", len(world.vms) == 5)
+    check(f"every call is on the bill, the first pass included ({len(out['calls'])})",
+          len([t for t, _ in out["calls"] if t == "create_vm"]) == 4)
+    check("and the session records that it was DERIVED, not authored",
+          any("derived a correction" in line for line in sess.log))
+
+
+def test_a_gap_that_is_not_arithmetic_asks_for_the_second_engine():
+    """WHERE `derive` RETURNS None THE GAP IS NOT COMPUTABLE, and that is a doorway rather
+    than a failure. The engine sets `promote`; it never opens a tree itself, because a tree
+    accrues cost and the thing asking for more is never the thing that should approve it."""
+    print("[achieve] a gap nobody can compute is handed upward")
+    world = _world(names=("alpha", "beta"))
+    eng = Lab(world)
+    sess = Session("keep them apart", eng, intent="achieve", regime="translation")
+
+    # `disjoint` IS ONE OF `derive`'s NINE REFUSALS — there is no way to know which side of a
+    # shared network should move, so it declines rather than guessing.
+    goal = {"shape": "disjoint", "sets": ["$a", "$b"]}
+    planned = {"ok": True, "plan": [],
+               "program": {"body": [
+                   # THE SETS MUST ACTUALLY OVERLAP, or the goal holds and the deriver is
+                   # never asked — a test that proves a refusal by never reaching it. Both
+                   # names bind the SAME set, so `disjoint` is false and unclosable: there
+                   # is no way to know which side should move.
+                   {"op": "fetch", "var": "a", "select": {"kind": "vm"}},
+                   {"op": "fetch", "var": "b", "select": {"kind": "vm"}},
+                   {"op": "achieve", "predicate": goal},
+                   {"op": "publish", "fact": "done"}]}}
+    out = eng._execute_plan(planned, [goal], sess)
+    check(f"it does not report success ({out.get('why')})", not out["ok"])
+    check("it asks for the tree", out.get("promote") == "tree")
+    check("and says why, in the deriver's own words",
+          "not arithmetic" in (out.get("why") or ""))
+
+
+def test_a_correction_may_not_reach_above_the_rung_it_was_granted():
+    """THE ONE DOOR NOBODY WAS WATCHING. A derived fix is computed, not authored, so it is
+    the easiest place for creation to arrive under an authority that never licensed it. The
+    corrective run meets the same ladder the first one did."""
+    print("[achieve] a derived fix is still bound by the intent")
+    world = _world(names=("alpha",))
+    eng = Lab(world)
+    goal = {"shape": "count", "select": {"kind": "vm"}, "eq": 5}
+    planned = {"ok": True, "plan": [],
+               "program": {"body": [{"op": "achieve", "predicate": goal},
+                                    {"op": "publish", "fact": "done"}]}}
+    # AN `ensure` SESSION NEVER REACHES THIS PROGRAM in production — the planner writes a
+    # check — so the assertion is that the corrector does not become a second way in.
+    sess = Session("five", eng, intent="ensure", regime="translation")
+    eng._execute_plan(planned, [goal], sess)
+    check("nothing was created under an ensure", len(world.vms) == 1)
+
+
 def test_the_gate_is_still_behind_the_planner():
     """THE PLANNER SHAPES; THE GATE REFUSES. Two readings of one rule, and the second is not
     made redundant by the first — an engine with no intent-aware planner still has to be

@@ -410,6 +410,23 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
                     missing = [nm for nm in names if nm not in present]
                 if missing:
                     asked = extra.get(key_arg)
+                    # WHY THIS IS A REPORT AND NOT A CORRECTION, recorded where the next
+                    # reader will be tempted to change it.
+                    #
+                    # `new` carrying an INTERNAL ACHIEVE — retry until it exists — is #81's
+                    # own proposal and it cannot be built on this check. `NEW` IS SECRETLY
+                    # ASYNC: a creator that returns success and a registry that does not yet
+                    # list the member are indistinguishable here from a creator that made
+                    # something else and from one that never started, because THERE IS NO
+                    # PENDING RECORD TO WATCH. An achieve over those three states re-fires
+                    # the creator — keyed, so the object will not duplicate, but the WORK
+                    # does, and it can race the call still in flight.
+                    #
+                    # The book keeper's registry injection is what makes the states
+                    # distinguishable (the record PRECEDES the object), and with it this
+                    # becomes a WAIT rather than a retry. So the correction waits on that,
+                    # and the message says which three things it cannot tell apart instead
+                    # of asserting one of them.
                     failures.append({
                         "tool": chosen["tool"],
                         "args": {key_arg: missing[0]},
@@ -418,7 +435,9 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
                             f"{', '.join(repr(m) for m in missing)} exists"
                             + (f" (the statement asked for {asked!r})"
                                if isinstance(asked, str) and asked not in names else "")
-                            + ". The creator ran and made something else, or nothing.")})
+                            + ". It made something else, it made nothing, or it is still "
+                              "making it — and with no pending record there is nothing "
+                              "here that can tell those apart.")})
 
         elif op == "call":
             result = _do(st["tool"], _resolve(st.get("args") or {}, scope))

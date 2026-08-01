@@ -7,7 +7,7 @@
   "quantization": "Q4_K_M",
   "parameters": "8.0B",
   "num_ctx": 8192,
-  "offload": "71% GPU by bytes",
+  "offload": "73% GPU by bytes",
   "runtime": "ollama 0.30.7"
  },
  "cells": {
@@ -15,14 +15,14 @@
    "n": 3,
    "goal": "create a vm named alpha",
    "outcomes": {
-    "PASS": 3
+    "UNGROUNDED": 3
    },
-   "passes": 3,
+   "passes": 0,
    "calls_min": 1,
    "artifacts": 0,
    "details": {
-    "PASS": [
-     "1 calls vs best 2"
+    "UNGROUNDED": [
+     "1 acting statement(s), no ENSURE/ACHIEVE \u2014 the program vouches for nothing"
     ]
    }
   },
@@ -30,14 +30,14 @@
    "n": 3,
    "goal": "create a vm named beta and then launch it",
    "outcomes": {
-    "PASS": 3
+    "UNGROUNDED": 3
    },
-   "passes": 3,
+   "passes": 0,
    "calls_min": 2,
    "artifacts": 0,
    "details": {
-    "PASS": [
-     "2 calls vs best 2"
+    "UNGROUNDED": [
+     "2 acting statement(s), no ENSURE/ACHIEVE \u2014 the program vouches for nothing"
     ]
    }
   },
@@ -45,14 +45,14 @@
    "n": 3,
    "goal": "create a network called lab and a vm named web, then put web on lab",
    "outcomes": {
-    "PASS": 3
+    "UNGROUNDED": 3
    },
-   "passes": 3,
-   "calls_min": 4,
+   "passes": 0,
+   "calls_min": 3,
    "artifacts": 0,
    "details": {
-    "PASS": [
-     "4 calls vs best 7"
+    "UNGROUNDED": [
+     "3 acting statement(s), no ENSURE/ACHIEVE \u2014 the program vouches for nothing"
     ]
    }
   },
@@ -63,11 +63,11 @@
     "OVER_BUDGET": 3
    },
    "passes": 3,
-   "calls_min": 27,
+   "calls_min": 26,
    "artifacts": 0,
    "details": {
     "OVER_BUDGET": [
-     "27 calls vs best 21"
+     "26 calls vs best 21"
     ]
    }
   },
@@ -75,27 +75,29 @@
    "n": 3,
    "goal": "launch every vm that is currently stopped",
    "outcomes": {
-    "PASS": 3
+    "UNGROUNDED": 3
    },
-   "passes": 3,
+   "passes": 0,
    "calls_min": 2,
    "artifacts": 0,
    "details": {
-    "PASS": []
+    "UNGROUNDED": [
+     "1 acting statement(s), no ENSURE/ACHIEVE \u2014 the program vouches for nothing"
+    ]
    }
   },
   "lit:6": {
    "n": 3,
    "goal": "create 3 vms labelled 'red' and 2 vms labelled 'blue', put the red ones together on their own network, and put the blue ones on a different network",
    "outcomes": {
-    "PASS": 3
+    "UNGROUNDED": 3
    },
-   "passes": 3,
+   "passes": 0,
    "calls_min": 17,
    "artifacts": 0,
    "details": {
-    "PASS": [
-     "17 calls vs best 30"
+    "UNGROUNDED": [
+     "8 acting statement(s), no ENSURE/ACHIEVE \u2014 the program vouches for nothing"
     ]
    }
   },
@@ -106,7 +108,7 @@
     "PASS": 3
    },
    "passes": 3,
-   "calls_min": 6,
+   "calls_min": 5,
    "artifacts": 0,
    "details": {
     "PASS": []
@@ -116,14 +118,14 @@
    "n": 3,
    "goal": "put every vm on a network called core, except db \u2014 db goes on a network called dmz instead",
    "outcomes": {
-    "BAD_JSON:malformed": 3
+    "UNRECOVERED": 3
    },
    "passes": 0,
    "calls_min": null,
    "artifacts": 0,
    "details": {
-    "BAD_JSON:malformed": [
-     "JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 350 (char 349)"
+    "UNRECOVERED": [
+     "statement 3 (foreach body) \u2192 statement 1: is reads what a CALL returned, and $item is the member's name, not a result \u2014 reading a field off it is always empty. To treat one member differently, filter the SET instead: `select` takes `name = '...'`, and a carve-out excludes one (EXCEPT name = '...')."
     ]
    }
   },
@@ -131,66 +133,75 @@
    "n": 3,
    "goal": "make sure n1, n2 and n3 can all ping each other",
    "outcomes": {
-    "PASS": 3
+    "UNGROUNDED": 3
    },
-   "passes": 3,
-   "calls_min": 8,
+   "passes": 0,
+   "calls_min": 10,
    "artifacts": 0,
    "details": {
-    "PASS": []
+    "UNGROUNDED": [
+     "5 acting statement(s), no ENSURE/ACHIEVE \u2014 the program vouches for nothing"
+    ]
    }
   },
   "lit:10": {
    "n": 3,
    "goal": "clone golden into 3 new vms and launch all of them",
    "outcomes": {
-    "PASS": 3
+    "UNGROUNDED": 3
    },
-   "passes": 3,
+   "passes": 0,
    "calls_min": 6,
    "artifacts": 0,
    "details": {
-    "PASS": []
+    "UNGROUNDED": [
+     "2 acting statement(s), no ENSURE/ACHIEVE \u2014 the program vouches for nothing"
+    ]
    }
   },
   "lit:11": {
    "n": 3,
    "goal": "ping every vm and stop the ones that do not answer",
    "outcomes": {
-    "PASS": 3
+    "UNGROUNDED": 3
    },
-   "passes": 3,
+   "passes": 0,
    "calls_min": 6,
    "artifacts": 0,
    "details": {
-    "PASS": []
+    "UNGROUNDED": [
+     "3 acting statement(s), no ENSURE/ACHIEVE \u2014 the program vouches for nothing"
+    ]
    }
   },
   "lit:12": {
    "n": 3,
    "goal": "take a snapshot of every running vm",
    "outcomes": {
-    "PASS": 3
+    "UNGROUNDED": 3
    },
-   "passes": 3,
+   "passes": 0,
    "calls_min": 2,
    "artifacts": 0,
    "details": {
-    "PASS": []
+    "UNGROUNDED": [
+     "2 acting statement(s), no ENSURE/ACHIEVE \u2014 the program vouches for nothing"
+    ]
    }
   },
   "lit:13": {
    "n": 3,
    "goal": "take 5 vms, put them all in a network, give them all the 'fleet' label, and make sure they all ping each other",
    "outcomes": {
-    "REPAIR_UNDELIVERED:empty": 3
+    "UNRECOVERED": 3
    },
    "passes": 0,
    "calls_min": null,
    "artifacts": 0,
    "details": {
-    "REPAIR_UNDELIVERED:empty": [
-     "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+    "UNRECOVERED": [
+     "statement 1: NEW vm also requires 'os_type' \u2014 put them in this statement's own arguments, e.g. NEW vm(os_type: ...). NEW already calls create_vm; do NOT add a separate create_vm call.",
+     "statement 3 (foreach body) \u2192 statement 1: create_vm requires 'os_type'"
     ]
    }
   },
@@ -198,14 +209,14 @@
    "n": 3,
    "goal": "spin up a machine and call it alpha",
    "outcomes": {
-    "PASS": 3
+    "UNGROUNDED": 3
    },
-   "passes": 3,
-   "calls_min": 1,
+   "passes": 0,
+   "calls_min": 2,
    "artifacts": 0,
    "details": {
-    "PASS": [
-     "1 calls vs best 2"
+    "UNGROUNDED": [
+     "2 acting statement(s), no ENSURE/ACHIEVE \u2014 the program vouches for nothing"
     ]
    }
   },
@@ -213,14 +224,14 @@
    "n": 3,
    "goal": "make a box called beta, then start it up",
    "outcomes": {
-    "PASS": 3
+    "UNGROUNDED": 3
    },
-   "passes": 3,
+   "passes": 0,
    "calls_min": 2,
    "artifacts": 0,
    "details": {
-    "PASS": [
-     "2 calls vs best 2"
+    "UNGROUNDED": [
+     "2 acting statement(s), no ENSURE/ACHIEVE \u2014 the program vouches for nothing"
     ]
    }
   },
@@ -228,14 +239,14 @@
    "n": 3,
    "goal": "set up an isolated network named lab, provision a machine called web, and connect web to it",
    "outcomes": {
-    "PASS": 3
+    "UNGROUNDED": 3
    },
-   "passes": 3,
+   "passes": 0,
    "calls_min": 3,
    "artifacts": 0,
    "details": {
-    "PASS": [
-     "3 calls vs best 7"
+    "UNGROUNDED": [
+     "3 acting statement(s), no ENSURE/ACHIEVE \u2014 the program vouches for nothing"
     ]
    }
   },
@@ -243,14 +254,14 @@
    "n": 3,
    "goal": "spin up five machines, wire them together on one private network, tag every one of them 'fleet', and confirm each can reach the others",
    "outcomes": {
-    "OVER_BUDGET": 3
+    "UNGROUNDED": 3
    },
-   "passes": 3,
+   "passes": 0,
    "calls_min": 31,
    "artifacts": 0,
    "details": {
-    "OVER_BUDGET": [
-     "31 calls vs best 21"
+    "UNGROUNDED": [
+     "3 acting statement(s), no ENSURE/ACHIEVE \u2014 the program vouches for nothing"
     ]
    }
   },
@@ -258,27 +269,29 @@
    "n": 3,
    "goal": "start up any machine that isn't already running",
    "outcomes": {
-    "PASS": 3
+    "UNGROUNDED": 3
    },
-   "passes": 3,
+   "passes": 0,
    "calls_min": 2,
    "artifacts": 0,
    "details": {
-    "PASS": []
+    "UNGROUNDED": [
+     "1 acting statement(s), no ENSURE/ACHIEVE \u2014 the program vouches for nothing"
+    ]
    }
   },
   "para:6": {
    "n": 3,
    "goal": "set up three machines tagged 'red' and two tagged 'blue'; the red group must share one private network, and the blue group a separate one",
    "outcomes": {
-    "PASS": 3
+    "UNGROUNDED": 3
    },
-   "passes": 3,
+   "passes": 0,
    "calls_min": 17,
    "artifacts": 0,
    "details": {
-    "PASS": [
-     "17 calls vs best 30"
+    "UNGROUNDED": [
+     "12 acting statement(s), no ENSURE/ACHIEVE \u2014 the program vouches for nothing"
     ]
    }
   },
@@ -286,27 +299,29 @@
    "n": 3,
    "goal": "there should end up being precisely three machines tagged prod, no more and no fewer",
    "outcomes": {
-    "PASS": 3
+    "GOAL_UNMET": 3
    },
-   "passes": 3,
-   "calls_min": 5,
+   "passes": 0,
+   "calls_min": 0,
    "artifacts": 0,
    "details": {
-    "PASS": []
+    "GOAL_UNMET": [
+     "unachieved"
+    ]
    }
   },
   "para:8": {
    "n": 3,
    "goal": "connect all the machines to a network named core, apart from db, which belongs on dmz",
    "outcomes": {
-    "UNRECOVERED": 3
+    "UNGROUNDED": 3
    },
    "passes": 0,
-   "calls_min": null,
+   "calls_min": 6,
    "artifacts": 0,
    "details": {
-    "UNRECOVERED": [
-     "statement 4: select must name a kind"
+    "UNGROUNDED": [
+     "4 acting statement(s), no ENSURE/ACHIEVE \u2014 the program vouches for nothing"
     ]
    }
   },
@@ -314,14 +329,14 @@
    "n": 3,
    "goal": "n1, n2 and n3 should all be able to reach one another \u2014 sort out whatever is stopping that",
    "outcomes": {
-    "UNRECOVERED": 3
+    "GATE_REFUSED": 3
    },
    "passes": 0,
    "calls_min": null,
    "artifacts": 0,
    "details": {
-    "UNRECOVERED": [
-     "statement 1 (foreach body) \u2192 statement 1: net_name=$item.networks[0] reads a field off $item, which is a NAME, not a call's result \u2014 only something bound by `graft` has fields. Select what you need instead, or graft the call whose answer you mean."
+    "GATE_REFUSED": [
+     "clarify @ 0.75"
     ]
    }
   },
@@ -329,27 +344,29 @@
    "n": 3,
    "goal": "take a copy of golden three times over and boot every copy",
    "outcomes": {
-    "PASS": 3
+    "UNGROUNDED": 3
    },
-   "passes": 3,
+   "passes": 0,
    "calls_min": 9,
    "artifacts": 0,
    "details": {
-    "PASS": []
+    "UNGROUNDED": [
+     "4 acting statement(s), no ENSURE/ACHIEVE \u2014 the program vouches for nothing"
+    ]
    }
   },
   "para:11": {
    "n": 3,
    "goal": "check which machines respond and shut down whichever ones don't",
    "outcomes": {
-    "BAD_JSON:malformed": 3
+    "UNGROUNDED": 3
    },
    "passes": 0,
-   "calls_min": null,
+   "calls_min": 6,
    "artifacts": 0,
    "details": {
-    "BAD_JSON:malformed": [
-     "JSONDecodeError: Expecting ',' delimiter: line 1 column 245 (char 244)"
+    "UNGROUNDED": [
+     "3 acting statement(s), no ENSURE/ACHIEVE \u2014 the program vouches for nothing"
     ]
    }
   },
@@ -357,27 +374,31 @@
    "n": 3,
    "goal": "make a restore point for each machine that is currently up",
    "outcomes": {
-    "PASS": 3
+    "CHECKER_DISPUTE": 3
    },
-   "passes": 3,
-   "calls_min": 2,
+   "passes": 0,
+   "calls_min": 3,
    "artifacts": 0,
    "details": {
-    "PASS": []
+    "CHECKER_DISPUTE": [
+     "program ok, checker false"
+    ]
    }
   },
   "para:13": {
    "n": 3,
    "goal": "use five machines, wire them together on one private network, tag every one of them 'fleet', and confirm each can reach the others",
    "outcomes": {
-    "REPAIR_UNDELIVERED:empty": 3
+    "PASS": 1,
+    "UNRECOVERED": 2
    },
-   "passes": 0,
-   "calls_min": null,
+   "passes": 1,
+   "calls_min": 1,
    "artifacts": 0,
    "details": {
-    "REPAIR_UNDELIVERED:empty": [
-     "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+    "PASS": [],
+    "UNRECOVERED": [
+     "statement 3: names 'private-net', which this program does not create until statement 7 and the lab does not already hold \u2014 move the creation before the statement that uses it"
     ]
    }
   }

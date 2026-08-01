@@ -770,6 +770,86 @@ class MedusaEngine(Engine):
 
         return {"ok": True, "plan": plan, "program": program}
 
+    # HOW MANY TIMES A GOAL MAY BE CORRECTED BEFORE THE GAP IS CALLED UNCLOSABLE. Three,
+    # which is `Session.rounds_left`'s number for the same reason: `cover`'s own fixpoint
+    # gives up after four passes that will not settle, and a corrector that out-loops the
+    # writer is chasing a gap the writer already declined.
+    _MAX_CORRECTIONS = 3
+
+    def _correct(self, program, result, select, holds, execute, session):
+        """ACHIEVE'S FIRST ENGINE, and until now it was not connected to anything.
+
+        `derive()` computes the difference between what a goal asked for and what the world
+        holds — "six exist, three wanted" closes in one line — and the model provably cannot:
+        it oscillated 6->5->7->5 with the state and the objection in hand. It has been the
+        deterministic half of ACHIEVE since it was written, `ir/__init__` exports it, and NO
+        PRODUCTION MODULE CALLED IT. Only the two bench probes did, so the correction loop the
+        ladder measures was a property of the bench rather than of the system.
+
+        ONLY FOR `unachieved`. `unsatisfied` means a ground check was false — the program
+        assumed something about the world that was not true — and computing a diff there would
+        paper over the wrong assumption instead of rethinking it. That is the model's to
+        answer, which is why the two words exist.
+
+        THE FIX AND THEN THE TAIL. A failed predicate returns from `run` and abandons every
+        statement after it, so replaying only the correction leaves that work undone while the
+        predicate now reports the goal as held — a green verdict over an unfinished program.
+        `follow_up` appends what never ran, resolved against the scope the aborted run held.
+
+        WHERE DERIVE RETURNS None THE GAP IS NOT ARITHMETIC, and that is the doorway to the
+        second engine: the result keeps `promote: tree`, which the orchestrator may grant or
+        refuse. This function never opens one — a tree accrues cost, and the thing asking for
+        more is never the thing that should approve it.
+        """
+        from ..planner.ir import derive as _derive
+        from ..planner.ir import execute as _exec
+
+        # EVERY CALL, ACROSS EVERY ROUND. `run` reports the calls IT made, so replacing the
+        # result with the correction's would drop the ones the first pass made — the operator
+        # is shown three creations where four happened, and the cost the budget already
+        # charged for vanishes from the record. Measured the first time the corrector fired.
+        made = list(result.get("calls") or [])
+        rounds = 0
+        while (result.get("failed") == "unachieved"
+               and rounds < self._MAX_CORRECTIONS):
+            rounds += 1
+            goal = result.get("predicate")
+            fix = _derive(goal, select, result.get("scope"),
+                          getattr(session, "intent", None)) if goal else None
+            if fix is None:
+                # NOT ARITHMETIC. Said plainly and handed upward rather than retried — the
+                # ninth `return None` in `derive.py` is a refusal, not a failure, and asking
+                # it again gets the same answer.
+                result = {**result, "calls": made, "promote": "tree",
+                          "why": f"the gap is not arithmetic: {result.get('why') or ''}"}
+                break
+            if fix == []:
+                break                       # already satisfied; nothing to close
+            if session is not None:
+                session.record(f"derived a correction ({len(fix)} statement(s)) for "
+                               f"{_gw._short(goal)}", filed_by=self.name,
+                               caught_by="orchestrator", executed="derive()")
+            result = _run(_exec.follow_up(result, fix), execute, select=select, holds=holds,
+                          known_names=self._world.names(),
+                          known_tools=_effects.tools_of(self.manifest) or None,
+                          # THE CORRECTION IS THE SAME PROGRAM CONTINUING, so it meets the
+                          # same AUTHORITY. Deriving a fix that reached above the rung the
+                          # operator granted would be the escalation the ladder exists to
+                          # prevent, arriving through the one door nobody was watching.
+                          #
+                          # CONSENT IS NOT RE-ASKED, and that is not the same relaxation.
+                          # The question `consent.py` asks is about a PROGRAM — "this changes
+                          # the world and nothing checks it" — and this body is a fragment of
+                          # one that already passed it. A fix plus an abandoned tail carries
+                          # no witness by construction, so asking would refuse every
+                          # correction under an unattended run and prompt on every round
+                          # under an attended one.
+                          consent=True, intent=getattr(session, "intent", None),
+                          acting_tools=_effects.actors(self.manifest))
+            made += list(result.get("calls") or [])
+            result = {**result, "calls": made}
+        return result
+
     def _execute_plan(self, planned: Dict[str, Any],
                       components: List[Dict[str, Any]],
                       session=None) -> Dict[str, Any]:
@@ -839,6 +919,7 @@ class MedusaEngine(Engine):
                       # than the safe one — which is the difference between a `fetch` that
                       # can ask a question and one that cannot.
                       acting_tools=_effects.actors(self.manifest))
+        result = self._correct(program, result, select, holds, watched, session)
         survey = _consent.survey(program)
         # A CHECK THAT SAYS NO IS AN ANSWER, NOT A FAILURE.
         #
@@ -890,4 +971,9 @@ class MedusaEngine(Engine):
                 "rendered": _render(program),
                 "grounded": survey["grounded"],
                 "vacuous": survey["vacuous"],
+                # THE PROMOTION REQUEST, IF THE CORRECTOR MADE ONE. `derive` returning None
+                # is the doorway to ACHIEVE's second engine, and the orchestrator is the only
+                # thing that may open it — dropping the key here would leave a refusal that
+                # said "unmet" where the truth is "this needs a regime I was not granted".
+                **({"promote": result["promote"]} if result.get("promote") else {}),
                 "why": result.get("why") or result.get("failed")}
