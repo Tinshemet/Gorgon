@@ -1241,6 +1241,184 @@ def test_trying_three_engines_does_not_cost_three_budgets():
           any("budget" in l for l in r["log"]) or "budget" in (r.get("why") or ""))
 
 
+def test_the_mount_contract_is_answerable_by_every_engine():
+    """WHAT THE ORCHESTRATOR ASKS, asked of every engine that ships.
+
+    The contract is small on purpose, and small contracts rot quietly: a field nobody reads
+    on the engine you happen to test is a field nobody notices missing on the next one. This
+    asks every question the orchestrator and registry actually ask, of every mounted engine,
+    and it is where a new engine finds out what it forgot.
+    """
+    print("[contract] every engine answers everything the orchestrator asks")
+    from orchestrator.ai.engines import QemuEngine
+    from orchestrator.ai.engines.session import REGIMES
+
+    class FakeLibrary:
+        def vms(self):
+            return {}
+
+        def by_network(self):
+            return {}
+
+        def known_names(self):
+            return set()
+
+    shipped = [MedusaEngine(World(KITCHEN)),
+               MedusaEngine(SimWorldStub()),
+               QemuEngine(FakeLibrary(), lambda t, a: {"success": False})]
+
+    for eng in shipped:
+        who = type(eng).__name__
+        check(f"{who}: has a name", isinstance(eng.name, str) and eng.name != "unnamed")
+        check(f"{who}: has a one-line description for the router",
+              isinstance(eng.description, str) and 10 < len(eng.description) < 200)
+        check(f"{who}: declares intents the ladder knows",
+              eng.intents and set(eng.intents) <= {"fetch", "ensure", "achieve"})
+        check(f"{who}: its manifest is non-empty — `{{}}` means the DEFAULT, not none",
+              bool(eng.manifest))
+        # THE WORLD CONTRACT IS ONE REQUIRED THING AND TWO OPTIONAL ONES, and writing it
+        # down is the point of this line. `execute` is mandatory — a world that cannot act
+        # is not a world. `kinds` absent means the DEFAULT manifest, and `seams` absent means
+        # the sim's, which is the one deliberate import production makes from tests/ and is
+        # documented at `_seams_of`. The VM sim has NEITHER and all thirteen rungs run on it.
+        check(f"{who}: its world can act", callable(getattr(eng.world(), "execute", None)))
+        check(f"{who}: and names its own adapter, or is the sim that may not",
+              hasattr(eng.world(), "seams") or type(eng.world()).__name__ == "SimWorldStub")
+        check(f"{who}: answers `claims` without raising", isinstance(
+            eng.claims("make sure there are two machines"), bool))
+        check(f"{who}: offers an in-session", callable(getattr(eng, "steps", None)))
+    check("and every regime an engine can be put in is one the ladder names",
+          set(REGIMES) == {"tool", "translation", "tree"})
+
+
+def test_claiming_is_derived_from_the_manifest_not_written_twice():
+    """Two engines had each hand-rolled the noun match, differently. A third would have made
+    it three."""
+    print("[contract] one noun match, in the contract, from the manifest")
+    from orchestrator.ai.engines.base import Engine
+
+    class Kitchen(Engine):
+        name = "kitchen"
+
+        @property
+        def manifest(self):
+            return KITCHEN
+
+    k = Kitchen()
+    check("it claims by the kind's own name", k.claims("how many dish are there"))
+    check("and by a noun the manifest declares", k.claims("make a meal"))
+    check("and by the plural of one", k.claims("count the meals"))
+    check("and declines what it has no noun for", not k.claims("launch a vm"))
+    check("Medusa overrides to WIDEN, deliberately, being the fallback",
+          MedusaEngine(World(KITCHEN)).claims("launch a vm"))
+
+
+class SimWorldStub:
+    """A world that declares NO kinds — the configuration nobody had tested.
+
+    Every existing test mounts an engine with a manifest of its own: the kitchen, the crawl
+    package, a fake library. The ordinary one — an engine on Gorgon's own manifest — was the
+    case where `{}` was read as "there are no kinds", and the general engine claimed nothing.
+    """
+
+    def execute(self, tool, args):
+        return {"success": False}
+
+    def names(self):
+        return set()
+
+    @property
+    def seams(self):
+        return (lambda sel, scope=None: []), (lambda p, scope=None: (False, "stub"))
+
+
+def test_publish_is_how_an_engine_speaks_upward():
+    """THE OTHER HALF OF THE PROTOCOL.
+
+        down:  Step     "this node — run it, or decompose it?"     -> Verdict
+        up:    Publish  "here is something I found / claim / made"  -> kept, or forwarded
+
+    It does NOT print. An engine that wrote to the operator directly would be deciding what
+    the operator sees, which is the one thing the in-session exists to prevent.
+    """
+    print("[publish] the engine submits; the orchestrator keeps or forwards")
+    from orchestrator.ai.engines import insession
+
+    class Talker(MedusaEngine):
+        name = "talker"
+
+        def steps(self, components, session=None):
+            yield insession.Publish("dish_count", 2, "counted before doing anything")
+            verdict = yield insession.Step(insession.RUN, components, "the whole thing",
+                                           cost=0)
+            if verdict.action == insession.STOP:
+                return {"ok": False, "refused": True, "calls": []}
+            yield insession.Publish("oven", "hot")
+            return {"ok": True, "calls": [], "findings": []}
+
+    reg = Registry()
+    reg.mount(Talker(World(KITCHEN)))
+    r = Orchestrator(reg, Channel([stub({"a risotto": RISOTTO})])).handle("a risotto")
+    check("publications reach the result", len(r.get("published") or []) == 2)
+    check("and become findings the reporter could narrate",
+          {f["fact"] for f in r["findings"]} >= {"dish_count", "oven"})
+    check("a publication carries its reason",
+          any(f.get("why") for f in r["published"]))
+    check("submitting needed no verdict — the engine never waited",
+          any("published dish_count" in l for l in r["log"]))
+
+
+def test_the_orchestrator_may_keep_a_publication_internal():
+    """The operator's boundary is the orchestrator's to hold, not the engine's."""
+    print("[publish] kept is a decision, and a recorded one")
+    from orchestrator.ai.engines import insession
+
+    class Talker(MedusaEngine):
+        name = "talker"
+
+        def steps(self, components, session=None):
+            yield insession.Publish("debug_trace", "internals")
+            yield insession.Publish("dish_count", 2)
+            yield insession.Step(insession.RUN, components, "nothing", cost=0)
+            return {"ok": True, "calls": [], "findings": []}
+
+    reg = Registry()
+    reg.mount(Talker(World(KITCHEN)))
+    r = Orchestrator(reg, Channel([stub({"a risotto": RISOTTO})]),
+                     forward=lambda pub, s: pub.what != "debug_trace").handle("a risotto")
+    check("the kept one never becomes a finding",
+          {f["fact"] for f in r["findings"]} == {"dish_count"})
+    check("but it is still on the record as having been said",
+          any("published debug_trace" in l for l in r["log"]) and r["kept"] == 1)
+    check("and the operator's half never mentions it",
+          "debug_trace" not in str(r["findings"]))
+
+
+def test_findings_travel_as_publications_now():
+    """WHY THIS REPLACES READING THE WORLD'S LEDGER. Findings used to travel implicitly —
+    the orchestrator reached into the world and took what it found. That works while an
+    engine's world HAS a ledger and quietly returns nothing when it does not."""
+    print("[publish] what the engine observed, SAID rather than left lying around")
+    from tests.bench.sim_world import SimWorld
+
+    world = SimWorld()
+    for n in ("alpha", "beta"):
+        world.execute("create_vm", {"name": n, "os_type": "linux"})
+
+    class Lab(MedusaEngine):
+        name = "lab"
+
+    reg = Registry()
+    reg.mount(Lab(world))
+    goals = [{"observe": {"kind": "vm"}, "fact": "alive"}]
+    r = Orchestrator(reg, Channel([stub({"ping the machines": goals})])).handle(
+        "ping the machines")
+    check("the probe's answers came up as publications",
+          len(r.get("published") or []) >= 2)
+    check("naming what was asked about",
+          any("alpha" in str(f.get("fact")) for f in r["published"]))
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "engines"))

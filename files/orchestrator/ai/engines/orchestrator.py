@@ -40,7 +40,8 @@ class Orchestrator:
     def __init__(self, registry: Registry, channel: Optional[Channel] = None,
                  route: Optional[Callable] = None, budget: Optional[int] = None,
                  narrate: Optional[Callable] = None,
-                 decide: Optional[Callable] = None):
+                 decide: Optional[Callable] = None,
+                 forward: Optional[Callable] = None):
         self.registry = registry
         self.channel = channel or Channel()
         self.budget = budget
@@ -61,6 +62,11 @@ class Orchestrator:
         # is left is the seam where a consent gate or a destructive-act policy hangs. It is
         # injected for the same reason routing is: the whole loop stays testable without one.
         self._decide = decide or self._grant
+        # `forward(publication, session) -> bool`: does this claim reach the OPERATOR, or is
+        # it kept internal? The default forwards everything, and that is not laziness — an
+        # engine that publishes has CHOSEN to say something, and silently keeping it would
+        # make the act a no-op. Suppression is a policy someone has to write down.
+        self._forward = forward or (lambda pub, session: True)
 
     @staticmethod
     def _first_claimant(request, menu, engines):
@@ -235,8 +241,20 @@ class Orchestrator:
         if not result.get("ok"):
             return session.close("UNMET", str(result.get("why") or ""))
 
-        session.findings = result.get("findings") or []
+        # PUBLICATIONS BECOME FINDINGS ONCE THEY ARE FORWARDED, and that is the only place
+        # the two vocabularies meet: a publication is what an ENGINE SAID, a finding is what
+        # the OPERATOR IS TOLD, and the orchestrator is what stands between them.
+        kept, forwarded = [], []
+        for pub in session.published:
+            (forwarded if self._forward(pub, session) else kept).append(pub)
+        if kept:
+            session.record(f"kept {len(kept)} publication(s) internal")
+        session.findings = [p.as_finding() for p in forwarded] + (
+            result.get("findings") or [])
         out = session.close("DONE", result.get("why") or "")
+        if session.published:
+            out["published"] = [p.as_finding() for p in session.published]
+            out["kept"] = len(kept)
         out["rendered"] = result.get("rendered", "")
         out["grounded"] = result.get("grounded")
         # THE TREE'S OWN VERDICT TRAVELS LIKE GROUNDING DOES — beside the answer, not inside

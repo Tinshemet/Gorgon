@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 
 from ..planner import ghost_writer as _gw
 from ..planner import tree_keeper as _keeper
+from ..planner.ir import lower as _lower
 from ..planner.ir import config as _config
 from ..planner.ir import consent as _consent
 from ..planner.ir import render as _render
@@ -28,6 +29,21 @@ from ..planner.ir import run as _run
 from ..planner.ir import effects as _effects
 from ..planner.ir import validate as _validate
 from .base import Engine
+
+
+def _prose_of(components) -> str:
+    """The sentence a set of components came from, if one travelled with them.
+
+    STAGED LOWERING OPENS PROSE; the writer covers structure. A component that carries no
+    `_goal` has no sentence to open, and manufacturing one from the structure would be
+    writing the request rather than serving it — the decomposer that split prose to BUILD is
+    the mistake #55 already recorded.
+    """
+    for c in components or ():
+        text = (c or {}).get("_goal")
+        if isinstance(text, str) and text.strip():
+            return text.strip()
+    return ""
 
 
 def _findings_of(world, result) -> List[Dict[str, Any]]:
@@ -39,6 +55,15 @@ def _findings_of(world, result) -> List[Dict[str, Any]]:
     than a success flag.
     """
     ledger = getattr(world, "findings", None)
+    # THREE LEDGER SHAPES AND THE PRODUCTION ONE WAS MISSING. `Findings` is neither a dict
+    # nor a list — it is the object the real runtime records into — so an engine over the VM
+    # sim fell straight through to listing its own CALLS, and reported "I asked alpha" where
+    # it had been told "alpha answered". Exactly the conflation `_findings_of` was written to
+    # prevent, in the one world that matters most.
+    if hasattr(ledger, "facts") and callable(ledger.facts):
+        got = [{"fact": f, "value": ledger.get(f)} for f in sorted(ledger.facts())]
+        if got:
+            return got
     if isinstance(ledger, dict) and ledger:
         return [{"fact": k, "value": v} for k, v in sorted(ledger.items())]
     if isinstance(ledger, list) and ledger:
@@ -66,15 +91,32 @@ class MedusaEngine(Engine):
                    "in order, and check the result")
     intents = ("fetch", "ensure", "achieve")
 
-    def __init__(self, world, execute=None, packages=()):
+    def __init__(self, world, execute=None, packages=(), author=None, route=None):
         """`world` carries `kinds`, `seams` and `execute` — the mount contract, nothing else.
 
         `execute` may be supplied separately when the world reads state but something else
         is authorised to change it. That split is the whole reason a program's statements are
         not a trusted region: they reach the world through the caller's guarded executor, the
         same gauntlet a single tool call meets.
+
+        `author` and `route` ARE THE STAGED-LOWERING SEAM, and they are optional because the
+        engine must work without a model at all — 13/13 rungs with neither.
+
+            author(prompt, schema) -> dict      one leaf, one operator's schema
+            route(goal) -> {atomic, op, steps}  is this one statement, or several?
+
+        WHERE THEY ARE USED IS THE WHOLE POINT. NOT as a first choice: the ghost writer is
+        deterministic and covers every rung, and handing a model the job it already does
+        would be trading a measured 13/13 for a measured 4/13. They are what happens when
+        the writer says `Unsolvable` — no tile, no rule, will not improvise. That refusal is
+        already the promotion signal, and staged lowering is what a promotion BUYS: the goal
+        is opened until every leaf is one operator, each leaf is emitted against ONE branch
+        (the regime where grammar enforcement was observed to hold), and the assembled
+        artifact is GRADED BEFORE ANYTHING RUNS.
         """
         self._world = world
+        self._author = author
+        self._route = route
         self._execute = execute or world.execute
         # PACKAGES ARE LOADED, NOT MOUNTED. Their kinds join this engine's manifest so a
         # program can plan over them, and their tools become callable — but EXECUTION STAYS
@@ -88,10 +130,19 @@ class MedusaEngine(Engine):
 
     @property
     def manifest(self) -> Dict[str, Any]:
-        """This engine's kinds, plus every loaded package's — merged, collisions refused."""
+        """This engine's kinds, plus every loaded package's — merged, collisions refused.
+
+        A WORLD THAT DECLARES NO KINDS IS ON THE DEFAULT MANIFEST, not on an empty one.
+        `{}` means "nothing of my own to say", and reading it as "there are no kinds" is a
+        trap that bit FOUR TIMES in one day: `effects._K` answered every question with
+        silence, the lab mount's row translation matched nothing, `deleters` reported that
+        nothing was destructive, and `claims` had the GENERAL ENGINE claim nothing at all.
+        Each was patched at the call site until it became obvious the call sites were not
+        the problem. Answered once, here, where the question is actually asked.
+        """
         from ..packages.base import merge
-        return merge(getattr(self._world, "kinds", {}) or {},
-                     *(p.manifest for p in self.packages))
+        own = getattr(self._world, "kinds", None) or _config.KINDS or {}
+        return merge(own, *(p.manifest for p in self.packages))
 
     def world(self):
         return self._world
@@ -102,14 +153,12 @@ class MedusaEngine(Engine):
         Over-claiming on purpose: this is the fallback when nothing more specific fits, and
         an engine never tried is worse than one tried and refused. `Unsolvable` is a cheap no.
 
-        THE MANIFEST IN FORCE, NOT THE OVERRIDE. `self.manifest` is `{}` for an engine
-        running on Gorgon's OWN manifest — it has nothing of its own to declare — so reading
-        it literally meant the GENERAL ENGINE, MOUNTED NORMALLY, CLAIMED NOTHING and every
-        request came back UNCLAIMED. Third place the empty-means-default trap has bitten
-        today, after `effects._K` and the mount's row translation; the pattern is that `{}`
-        reads as "no" wherever somebody asks a yes/no question of it.
+        THIS OVERRIDES THE BASE, WHICH MATCHES THE MANIFEST'S NOUNS. Medusa is the fallback
+        when nothing more specific fits, and a fallback that only answers when it recognises
+        a noun is not a fallback. The base's noun match is right for a SPECIFIC engine; this
+        is the general one, and widening is a decision rather than a duplicated regex.
         """
-        return bool(self.manifest or _config.KINDS)
+        return bool(self.manifest)
 
     def steps(self, components: List[Dict[str, Any]], session=None):
         """THE IN-SESSION: what this engine wants a verdict on before it acts.
@@ -141,7 +190,7 @@ class MedusaEngine(Engine):
         A STOP is honoured and the work stops where it stopped — reported as partial rather
         than rolled back, because the calls already made are facts.
         """
-        from .insession import DECOMPOSE, RUN, STOP, YIELD, Step
+        from .insession import DECOMPOSE, RUN, STOP, YIELD, Publish as _Publish, Step
 
         with _config.use_kinds(self.manifest if self._foreign else None):
             whole = getattr(session, "regime", "translation") != "tree"
@@ -185,7 +234,7 @@ class MedusaEngine(Engine):
                     # UNKNOWN UNTIL SOMETHING ASKS. Decision 6's rule, and the keeper's own:
                     # a node nobody re-checked is not sound, it is unexamined.
                     "state": _keeper.UNKNOWN, "why": "no witness — nothing to re-check"})
-                planned = self._plan(goals)
+                planned = self._plan(goals, session)
                 if planned.get("promote"):
                     return {**planned, "calls": calls}
                 if planned.get("done"):
@@ -283,6 +332,19 @@ class MedusaEngine(Engine):
 
                 ran = self._execute_plan(planned, goals)
                 calls += ran.get("calls") or []
+                # WHAT THIS NODE OBSERVED, SAID RATHER THAN LEFT LYING IN THE WORLD. The
+                # orchestrator used to reach into the ledger and take what it found; an
+                # engine whose world has no ledger was simply never heard. Saying it makes
+                # any engine audible, including one whose world is somebody else's API.
+                for finding in ran.get("findings") or []:
+                    if "fact" in finding:
+                        yield _Publish(finding["fact"], finding.get("value"))
+                    elif "did" in finding:
+                        # WHAT WAS DONE, WHEN NOTHING WAS OBSERVED. Said under its own name
+                        # so nobody can mistake an intention for a result: "I asked alpha" is
+                        # not "alpha answered", and the reporter is handed these too.
+                        yield _Publish(f"did:{finding['did']}",
+                                       {k: v for k, v in finding.items() if k != "did"})
                 if not ran.get("ok"):
                     return {**ran, "calls": calls, "partial": done}
                 ran_nodes.append((ran, goals))
@@ -362,6 +424,60 @@ class MedusaEngine(Engine):
             out["tree_report"] = _keeper.report(sorted(rows, key=lambda r: r["path"]))
         return out
 
+    def _staged(self, components, why: str, session) -> Optional[Dict[str, Any]]:
+        """STAGED LOWERING — one operator per leaf, fused upward, graded before it runs.
+
+        Returns None when it does not apply, which keeps the default path exactly as it was:
+        no author, no tree grant, or a goal with no prose to open all fall through to the
+        ordinary promotion request.
+
+        THE GRADE IS THE POINT AND IT HAPPENS BEFORE EXECUTION. `review` is deterministic and
+        reads the assembled artifact — grounded, repeated statements, clauses unaccounted
+        for. That is the program regime's whole advantage over the tree regime, kept here:
+        an inert artifact can be refused for free, and this one is refused rather than run
+        when it cannot vouch for itself.
+        """
+        if self._author is None or self._route is None:
+            return None
+        if getattr(session, "regime", "translation") != "tree":
+            return None
+        goal = _prose_of(components)
+        if not goal:
+            # NOTHING TO OPEN. The goals arrived as structure with no sentence behind them,
+            # and inventing prose to decompose would be authoring the request rather than
+            # serving it.
+            return None
+        log: List[str] = []
+        try:
+            root = _lower.decompose(goal, self._route, log=log)
+            tree = _lower.lower_tree(root, self._author, known=set(self._world.names()),
+                                     log=log, route=self._route)
+        except (_lower.DecompositionError, _lower.LoweringError, _lower.FusionError) as e:
+            for line in log:
+                session.record(f"staged: {line}")
+            return {"ok": False, "calls": [], "program": None,
+                    "why": f"staged lowering could not build it either: {e}"}
+        for line in log:
+            session.record(f"staged: {line}")
+
+        program = _lower.assemble(tree)
+        report = _lower.review(tree)
+        session.record(f"staged: {report['statements']} statement(s), "
+                       f"grounded={report['grounded']}, repeated={len(report['repeated'])}")
+        if not report["grounded"]:
+            # AN ARTIFACT THAT VOUCHES FOR NOTHING IS REFUSED WHILE IT IS STILL INERT. The
+            # writer grounds every goal it plans; a model-authored program that does not is
+            # the exact thing #54 made a scored outcome, and it costs nothing to refuse now
+            # and everything to discover afterwards.
+            return {"ok": False, "calls": [], "program": program,
+                    "why": "staged lowering produced a program that vouches for nothing"}
+        problems = _validate(program, known_names=self._world.names(),
+                             known_tools=_effects.tools_of(self.manifest) or None)[1]
+        if problems:
+            return {"ok": False, "calls": [], "program": program,
+                    "why": f"staged lowering produced an invalid program: {problems[:1]}"}
+        return self._execute_plan({"plan": [], "program": program}, components)
+
     def _open(self, goals: List[Dict[str, Any]]) -> Optional[List]:
         """One node into finer ones, or None when the node is already atomic.
 
@@ -391,13 +507,13 @@ class MedusaEngine(Engine):
             return self._run_scoped(components, session)
 
     def _run_scoped(self, components: List[Dict[str, Any]], session=None) -> Dict[str, Any]:
-        planned = self._plan(components)
+        planned = self._plan(components, session)
         if planned.get("promote") or planned.get("done") or not planned.get("ok", True):
             return {k: v for k, v in planned.items() if k not in ("plan", "done", "ok")} \
                 if planned.get("promote") else planned.get("result", planned)
         return self._execute_plan(planned, components)
 
-    def _plan(self, components: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _plan(self, components: List[Dict[str, Any]], session=None) -> Dict[str, Any]:
         """Everything up to the first side effect. Returns a plan, or the reason there
         cannot be one.
 
@@ -431,6 +547,14 @@ class MedusaEngine(Engine):
             # improvise — and under the engine architecture that is exactly what asking for
             # a regime looks like. The orchestrator decides; this engine only reports that it
             # has run out of things it can compute.
+            # THE WRITER REFUSED. That refusal is the promotion signal and always has been;
+            # what changes here is that a promotion can now BUY something instead of asking
+            # the same question again. Staged lowering only runs when the session has already
+            # been granted the tree regime — so the cost is paid by whoever holds the budget,
+            # not helped along by the engine that wanted it.
+            staged = self._staged(components, str(e), session)
+            if staged is not None:
+                return staged
             return {"ok": False, "promote": "tree", "why": str(e),
                     "calls": [], "program": None}
 

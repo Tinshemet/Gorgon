@@ -67,6 +67,10 @@ class Session:
         self.calls: List = []
         self.findings: List[Dict[str, Any]] = []
         self.log: List[str] = []
+        # WHAT THE ENGINE SUBMITTED UPWARD, in order. Kept apart from `findings` until the
+        # orchestrator has decided which of them the operator sees — a publication is a
+        # thing an engine SAID, and a finding is a thing the operator is TOLD.
+        self.published: List = []
         self.closed = False
         self.outcome: Optional[str] = None
         self.promotions = 0
@@ -74,6 +78,12 @@ class Session:
     # ── the ledger of this session ────────────────────────────────────────────────────
     def record(self, note: str) -> None:
         self.log.append(note)
+
+    def publish(self, pub) -> None:
+        """An engine's claim, submitted. Recorded in the internal log too, so a publication
+        that is later KEPT rather than forwarded still left a trace of having been made."""
+        self.published.append(pub)
+        self.record(f"published {pub.what}")
 
     def spent(self) -> int:
         return len(self.calls)

@@ -70,7 +70,23 @@ class Engine:
         ties; the real answer comes from trying, and `Unsolvable` is how an engine says no
         after looking properly. An engine that over-claims costs one failed attempt; one
         that under-claims is never tried at all, so when in doubt, claim.
+
+        DERIVED FROM THE MANIFEST'S OWN NOUNS, HERE, ONCE. `kinds.<k>.nouns` already records
+        what an operator calls these things — "machine", "box", "subnet" — and it is the same
+        list the extractor's schema is built from. Two engines had each hand-rolled this,
+        differently, and a third would have made it three: a new engine gets claiming for
+        free from the manifest it already had to write, which is the whole argument for the
+        mount contract being two things.
+
+        AN ENGINE MAY STILL OVERRIDE, and Medusa does — the general fallback claims anything
+        about kinds it knows, on purpose. Overriding to WIDEN is a decision worth writing
+        down; re-implementing the same noun match is not.
         """
+        words = {w.strip(".,!?;:'\"").lower() for w in request.split()}
+        for kind, spec in (self.manifest or {}).items():
+            names = {kind, *(spec.get("nouns") or ())}
+            if names & words or {f"{n}s" for n in names} & words:
+                return True
         return False
 
     def run(self, components: List[Dict[str, Any]], session=None) -> Dict[str, Any]:

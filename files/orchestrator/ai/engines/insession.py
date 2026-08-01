@@ -91,6 +91,46 @@ class Step:
                 f" {str(self.node)[:48]}>")
 
 
+class Publish:
+    """WHAT AN ENGINE SUBMITS UPWARD. The other half of the protocol.
+
+        down:  Step     "this node — run it, or decompose it?"     -> Verdict
+        up:    Publish  "here is something I found / claim / made"  -> kept, or forwarded
+
+    IT DOES NOT PRINT. That is the whole distinction: an engine PUBLISHES a claim and the
+    orchestrator decides whether to keep it internal or move it to the operator, because the
+    orchestrator is the thing that owns the boundary — it already separates `in_session` from
+    `answer` for exactly this reason. An engine that wrote to the operator directly would be
+    deciding what the operator sees, which is the one thing the in-session exists to prevent.
+
+    WHY THIS REPLACES READING THE WORLD'S LEDGER. Findings used to travel up implicitly: the
+    orchestrator reached into the world and took what it found there. That works while an
+    engine's world HAS a ledger and quietly returns nothing when it does not — a second
+    engine would have had to grow one to be heard. A publication is a thing an engine SAYS,
+    so any engine can say it, including one whose world is somebody else's API.
+
+    A PUBLICATION NEEDS NO VERDICT. Submitting is not asking, so `drive` records it and lets
+    the engine carry on — an engine that had to wait for permission to SPEAK would be
+    blocked on the orchestrator for something the orchestrator cannot refuse.
+    """
+
+    def __init__(self, what: str, value: Any = None, why: str = ""):
+        self.what = what
+        self.value = value
+        self.why = why
+
+    def as_finding(self) -> Dict[str, Any]:
+        """The shape the reporter is handed. A publication IS a finding once it is forwarded;
+        keeping two vocabularies for one thing is how the two drift."""
+        out: Dict[str, Any] = {"fact": self.what, "value": self.value}
+        if self.why:
+            out["why"] = self.why
+        return out
+
+    def __repr__(self) -> str:
+        return f"<Publish {self.what}={str(self.value)[:40]}>"
+
+
 class Verdict:
     """What the orchestrator answers. `stop` ends the in-session.
 
@@ -130,6 +170,13 @@ def drive(engine, components: List[Dict[str, Any]], session, decide) -> Dict[str
     try:
         while True:
             step = gen.send(verdict) if verdict is not None else next(gen)
+            if isinstance(step, Publish):
+                # SUBMITTED, NOT ASKED. The engine keeps its place and carries on; whether
+                # this reaches the operator is decided later, by the thing that owns the
+                # boundary between the middle and the ends.
+                session.publish(step)
+                verdict = None
+                continue
             if not session.afford(step.cost):
                 # THE BUDGET REFUSES BEFORE THE ACT, not after. An engine told "yes" and then
                 # billed for it would have spent money nobody agreed to.
