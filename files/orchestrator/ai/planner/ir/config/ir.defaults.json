@@ -309,6 +309,10 @@
       "create_defaults": {
         "os_type": "linux"
       },
+      "_why_create_internal_args": "THE CREATOR'S COUNTERPART TO A SETTER'S `internal_args`, and the same question decides it: who is the machine FOR? An operator asking for a machine gets the shipped defaults, and the guest agent stays OFF because it is a way in. A machine the writer mints because a package needs somewhere to run has no other reason to exist \u2014 the work is inside it, through the agent, and without one the machine is created, launched and useless. Measured on the acceptance run: `create_vm(vm1)`, `launch_vm(vm1, display: none)`, then `Guest agent not enabled for 'vm1'` on the search that was the entire point of the machine. Applies ONLY when the call is a precondition of another call, which is exactly when nobody asked for a machine at all.",
+      "create_internal_args": {
+        "guest_agent": true
+      },
       "delete": "delete_vm",
       "nouns": [
         "machine",

@@ -236,6 +236,20 @@ def invert(pred: Dict[str, Any], kinds=None, internal: bool = False) -> Optional
             return None
         args = dict((spec.get("create_defaults") or {}))
         args[key] = member
+        # THE CREATOR'S COUNTERPART TO A SETTER'S `internal_args`, and its absence was the
+        # last link in the acceptance chain. `launch_vm` already takes `display: none` when
+        # the machine is the program's own; nothing said what CREATING one for the program's
+        # own use should differ in, so a machine minted purely to host a guest package was
+        # built without a guest agent — and the search that was the entire reason for the
+        # machine could not be run inside it. `Guest agent not enabled for 'vm1'`, on a
+        # machine created three statements earlier for no other purpose.
+        #
+        # SAME RULE, SAME JUSTIFICATION: who the machine is FOR decides. An operator asking
+        # for a machine gets the shipped defaults, and the agent stays off because it is a
+        # way in. A machine nobody asked for, minted so something can run INSIDE it, has no
+        # other reason to exist.
+        if internal:
+            args.update(spec.get("create_internal_args") or {})
         _mint_required(spec, args, kinds)
         return (creator, args)
     if len(rest) == 1:

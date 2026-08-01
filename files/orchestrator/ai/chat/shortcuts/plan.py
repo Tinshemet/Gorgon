@@ -62,7 +62,33 @@ class Plan(Shortcut):
             # single tool call meets — legal filter, commit gate, contract tier, watchdog,
             # killswitch. Building a second executor here would quietly create a second door,
             # and the whole point of the engine layer is that there is one.
-            return execute_tool(tool, args, verbose=verbose)
+            result = execute_tool(tool, args, verbose=verbose)
+            # AND THE SAME BOOKKEEPING, which "the same door" did not include and had to.
+            #
+            # `LIBRARY.apply` is the post-execution hook that folds a call's effect back into
+            # the registry, and it was reached from the CHAT dispatch gate and nowhere else. So
+            # a program's calls changed the lab and never told the registry — and the registry
+            # is what the program's own ENSUREs are evaluated against.
+            #
+            # MEASURED, NOT REASONED: `set up a lab` put nine machines on a network and labelled
+            # all nine, the lab shows every one of them, and the program closed UNMET with
+            # `count is 0, wanted == 9`. It did the work and then reported that it had not. The
+            # mirror of that failure is the one that matters — a DELETE whose count still reads
+            # the pre-state can decide it has more to remove.
+            #
+            # `execute_tool` is deliberately left alone: it is the raw call, and a caller that
+            # wants transaction logging should say so. What was wrong is that this caller
+            # wanted it and did not ask.
+            try:
+                from orchestrator.ai.active_library import LIBRARY
+                LIBRARY.apply(tool, args, result=result)
+            except Exception:
+                # A REFRESH FAILURE MUST NOT LOSE THE CALL'S RESULT. The world already moved;
+                # swallowing the outcome here would leave the program unable to report what it
+                # did. The stale registry that follows is caught by the ENSURE, which is what
+                # it is for.
+                pass
+            return result
 
         offered = []
 

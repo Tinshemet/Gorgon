@@ -58,6 +58,26 @@ class Package:
         """
         return False
 
+    def hands(self, execute):
+        """What this package's tools MEAN, given the engine's executor. `None` = not runnable.
+
+        THE MISSING HALF OF LOADING. A package supplied a manifest and a tool list, both of
+        which were honoured — the kinds joined the engine's manifest, the writer planned the
+        whole chain in the right order — and then the program said `camoufox_launch(...)` and
+        the world answered `Unknown tool`. Measured on the lab: the machine was created and
+        launched for a browser that could never start.
+
+        `execute` IS THE ENGINE'S, and passing it in rather than letting the package keep one
+        is what makes the guest boundary structural. The package decides what its tool means;
+        the engine decides what running anything means. A package that built its own executor
+        would be the second door the whole layer exists to prevent.
+
+        RETURNING `None` IS A REAL ANSWER — a package may contribute vocabulary that some
+        other component executes, and one that cannot run its own tools should say so rather
+        than raise when the first one is called.
+        """
+        return None
+
 
 def merge(*manifests: Dict[str, Any]) -> Dict[str, Any]:
     """Combine manifests, refusing collisions rather than letting one win silently.

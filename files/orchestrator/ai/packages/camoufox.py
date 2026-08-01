@@ -87,6 +87,24 @@ MANIFEST: Dict[str, Any] = {
         "key_freetext": True,
         "attrs": ["query", "browser", "answered"],
         "nouns": ["search", "query", "lookup", "question"],
+        # THE WORKED EXAMPLE FOR THIS KIND, and the package is the only thing that knows it.
+        #
+        # Loading the package joined `search` to the schema, the enums and the prompt's domain
+        # line, and the model still answered a web-search request with the prompt's two
+        # MACHINE examples copied verbatim — it had never been shown what asking for one of
+        # these looks like. A kind that can be named and cannot be demonstrated is a kind the
+        # model will not reach for.
+        #
+        # THE SENTENCE IS DELIBERATELY NOT THE ONE ANYBODY TESTS WITH. "The diameter of the
+        # earth" is the acceptance request, and an example the model can copy straight into a
+        # passing answer would measure copying — the exact defect this is here to remove.
+        #
+        # IT DEMONSTRATES THE FREE-TEXT KEY, which is the part that is genuinely unlike a
+        # machine: the operator's own words become the member's identity, spaces and all.
+        "example": {
+            "request": "look up the boiling point of water",
+            "goal": "count 1, select search where query=the boiling point of water",
+        },
         "create": "camoufox_search",
         # THE ARGUMENT NAME MATCHES THE ATTRIBUTE, so the chain derives. An earlier version
         # renamed it to `in_browser`, which broke the tie `precondition` reads — the
@@ -185,6 +203,39 @@ class CamoufoxPackage(Package):
 
     def world(self, execute: Optional[Callable] = None) -> "SearchWorld":
         return SearchWorld(execute)
+
+    def hands(self, execute):
+        """These tools, as guest-agent commands run through the engine's own executor.
+
+        `run_guest_command` IS THE ONE DOOR. Every Camoufox tool becomes a shell line inside a
+        machine, and it gets there through the same `execute` a `create_vm` goes through — the
+        legal filter, the commit gate, the contract tier, the watchdog. Nothing here holds a
+        manager or a socket.
+
+        A BROWSER'S MACHINE IS REMEMBERED FROM ITS LAUNCH, because the later tools do not carry
+        one and should not have to. `camoufox_search` names a browser; the browser named a
+        machine when it started; a process cannot move hosts. The manifest already says exactly
+        this — `create_requires` on a RUNNING vm — so the lookup is reading back a fact the
+        program has already established rather than guessing at one.
+        """
+        host_of: Dict[str, str] = {}
+
+        def run_guest(vm: str, command: str):
+            return execute("run_guest_command", {"name": vm, "command": command})
+
+        def host_for(args: Dict[str, Any]) -> Optional[str]:
+            args = args or {}
+            # THE LAUNCH IS THE ONLY PLACE A MACHINE IS NAMED, so it is the only place the
+            # binding can be recorded. `browser` on a search, `browser_name` on a close —
+            # same identity, two argument names, because one is the member and the other is
+            # a reference to it.
+            vm = args.get("vm")
+            browser = args.get("browser_name") or args.get("browser")
+            if vm and browser:
+                host_of[str(browser)] = str(vm)
+            return vm or host_of.get(str(browser)) if browser else vm
+
+        return guest_hands(run_guest, host_for=host_for)
 
     def claims(self, request: str) -> bool:
         words = {w.strip(".,!?;:'\"").lower() for w in request.split()}

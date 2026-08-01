@@ -144,3 +144,115 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def test_unbuilt_library_is_unknown_not_empty():
+    """An unbuilt registry must never plan as an empty lab.
+
+    The `plan` shortcut hit this live: `ActiveLibrary` starts `built = False` with empty
+    tables, the REPL happens to call `snapshot()` at startup and nothing else does, so a
+    nine-machine lab planned as though it held nothing and closed UNMET on vacuous ENSUREs.
+    """
+    from orchestrator.ai.engines.qemu import LabWorld
+
+    class Lib:
+        def __init__(self):
+            self.built, self.rows = False, {}
+
+        def snapshot(self):
+            self.built = True
+            self.rows = {"alpha": {"name": "alpha", "state": "running"}}
+            return self
+
+        def vms(self):
+            return self.rows
+
+        def by_network(self):
+            return {}
+
+        def known_names(self):
+            return set(self.rows)
+
+    lib = Lib()
+    world = LabWorld(lib, lambda t, a: None)
+    assert world.scratch().state.get("vm", {}), "planned against an unbuilt library as if empty"
+    assert lib.built
+
+    class Broken(Lib):
+        def snapshot(self):
+            return self          # stays unbuilt — a lab that will not answer
+
+    try:
+        LabWorld(Broken(), lambda t, a: None).scratch()
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("an unreachable library read as an empty lab")
+
+
+def test_package_tools_are_callable_through_the_engines_own_door():
+    """Loading a package must make its tools RUN, not merely nameable.
+
+    Measured on the lab: the writer planned the whole chain — create the machine, launch it
+    headless, start the browser on it, search — and the world answered `Unknown tool:
+    camoufox_launch`. A real machine was created and launched to host a browser that could
+    never start.
+    """
+    from orchestrator.ai.engines import rig
+    from orchestrator.ai.engines.qemu import QemuEngine
+    from orchestrator.ai.active_library import LIBRARY
+
+    seen = []
+    eng = QemuEngine(LIBRARY, lambda t, a: seen.append((t, a)) or {"success": True},
+                     packages=rig.packages())
+    eng._execute("camoufox_launch", {"browser_name": "b1", "vm": "vm1"})
+    eng._execute("camoufox_search", {"browser": "b1", "query": "the diameter of the earth"})
+    eng._execute("create_vm", {"name": "x"})
+
+    tools = [t for t, _ in seen]
+    assert tools[:2] == ["run_guest_command", "run_guest_command"], tools
+    # THE BROWSER'S MACHINE IS REMEMBERED FROM ITS LAUNCH — a search names no machine.
+    assert seen[1][1]["name"] == "vm1", seen[1]
+    # AND THE OPERATOR'S WORDS ARE QUOTED, never spliced into a shell line.
+    assert "'the diameter of the earth'" in seen[1][1]["command"], seen[1]
+    # A tool nobody claims goes to the engine's own executor untouched.
+    assert seen[2][0] == "create_vm"
+
+
+def test_a_packages_kinds_reach_the_planner_not_only_the_schema():
+    """`use_kinds` is a dynamic scope; a manifest captured before it is a different world.
+
+    The lab world assigned `self.kinds = config.KINDS` in `__init__`, so a loaded package's
+    kinds reached the schema and the prompt and never the writer: the model could name a
+    search and the planner had never heard of one.
+    """
+    from orchestrator.ai.engines import rig
+    from orchestrator.ai.engines.qemu import QemuEngine
+    from orchestrator.ai.active_library import LIBRARY
+    from orchestrator.ai.planner.ir import config
+
+    eng = QemuEngine(LIBRARY, lambda t, a: None, packages=rig.packages())
+    assert eng._foreign, "an engine with packages has a manifest of its own"
+    with config.use_kinds(eng.manifest):
+        assert "search" in eng.world().kinds
+        # A PACKAGE IS THE AUTHORITY FOR ITS OWN KINDS — it knows it holds none, where the
+        # library merely has no idea. Only the latter is unenumerable.
+        assert "search" not in eng.world().unseeded
+        assert "snapshot" in eng.world().unseeded
+
+
+def test_the_worked_example_is_blinded_to_the_request():
+    """Rendering every loaded kind's example cost five rungs at n=3 to buy one search."""
+    from orchestrator.ai.engines import rig
+    from orchestrator.ai.engines.qemu import QemuEngine
+    from orchestrator.ai.active_library import LIBRARY
+    from orchestrator.ai.planner.ir import config
+    from tests.bench import extract as EX
+
+    eng = QemuEngine(LIBRARY, lambda t, a: None, packages=rig.packages())
+    with config.use_kinds(eng.manifest):
+        assert "SAME SHAPES" in EX.prompt(request="search the web for the boiling point")
+        for text in ("create 3 vms labelled prod",
+                     "clone golden into 3 new vms and launch all of them",
+                     "make sure they can all ping each other"):
+            assert "SAME SHAPES" not in EX.prompt(request=text), text

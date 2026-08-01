@@ -32,17 +32,94 @@ class LabWorld:
     handed ONE thing that answers the three questions it asks.
     """
 
-    def __init__(self, library, execute, findings=None):
+    def __init__(self, library, execute, findings=None, packages=()):
         self._library = library
         self._findings = findings
         self._execute = execute
-        self.kinds = _config.KINDS
+        self._packages = tuple(packages or ())
         # WHAT THIS WORLD CANNOT ENUMERATE, said out loud. The library tracks machines and
         # networks; it has no snapshot listing, and `snapshot_list` is per-machine, so
         # building one would add a call per VM to every session start. Until that trade is
         # made deliberately, the honest answer to "what restore points exist?" is "I cannot
         # tell you" — not "none", which is what an unseeded kind silently becomes.
-        self.unseeded = {k for k in (self.kinds or {}) if k not in ("vm", "network")}
+
+    @property
+    def kinds(self) -> Dict[str, Any]:
+        """THE MANIFEST IN FORCE, read at access — never a copy taken at construction.
+
+        It was `self.kinds = _config.KINDS`, assigned in `__init__`, which runs when the rig is
+        built and therefore outside every `use_kinds` scope. So a loaded package's kinds reached
+        the SCHEMA and the PROMPT — the orchestrator scopes translation explicitly — and never
+        reached the world the writer plans against. The model could name a search and the
+        planner had never heard of one: `nothing reaches` on a goal whose whole dependency
+        chain was sitting in the manifest one layer up.
+
+        THIRD TIME FOR THIS EXACT DEFECT. The schema was frozen at import, then the prompt's
+        domain line, now the world's kinds. Anything that reads the manifest must read it when
+        it is used, because `use_kinds` is a dynamic scope and a value captured before it is a
+        value from a different world.
+        """
+        return _config.KINDS
+
+    @property
+    def unseeded(self) -> set:
+        """Kinds this world cannot enumerate — derived, so a package's kinds are counted.
+
+        A package contributes kinds the LIBRARY knows nothing about: it does not track
+        browsers or searches and never will. Those would be `unseeded` — UNKNOWN, not empty —
+        and computing this from the live manifest is what keeps that true as packages come and
+        go.
+
+        EXCEPT THAT A PACKAGE IS THE AUTHORITY FOR ITS OWN KINDS, and that is the whole
+        distinction this attribute exists to draw. The library has NO IDEA whether a search
+        exists; Camoufox KNOWS it holds none, the way an empty table knows it is empty. Both
+        answer "zero" and only one of them is entitled to.
+
+        Treating a package's kinds as unenumerable made the acceptance request fail with
+        `nothing here can enumerate search` — the guard working perfectly against the wrong
+        authority, refusing to plan the one kind of thing that is never pre-existing because
+        the program is what creates it.
+        """
+        known = set()
+        for p in self._packages:
+            known |= set((getattr(p, "manifest", None) or {}).keys())
+        return {k for k in (self.kinds or {})
+                if k not in ("vm", "network") and k not in known}
+
+    def _ensure_built(self):
+        """An UNBUILT LIBRARY IS UNKNOWN, NOT EMPTY — and it read as empty for a whole session.
+
+        `ActiveLibrary` starts with `built = False` and empty tables, and `vms()`,
+        `known_names()` and `by_network()` answer an unbuilt registry with `{}`. The REPL calls
+        `snapshot()` at startup, so every interactive session was fine and NOTHING ELSE WAS.
+        The `plan` shortcut, invoked directly, planned a nine-machine five-network lab as though
+        it held nothing: the writer found zero members for `every vm`, `reach` had nothing to
+        connect, and the run closed UNMET having emitted two vacuous ENSUREs over an empty
+        selection. Not a wrong answer that looked wrong — a wrong answer that looked like a
+        careful refusal.
+
+        THIS IS THE SAME RULE `unseeded` ALREADY STATES one attribute below, applied to the
+        registry itself rather than to one of its kinds. The mount is where a library becomes a
+        world to plan against, so it is where the distinction has to be enforced.
+
+        AND IT RAISES IF IT CANNOT. A lab that will not answer is broken, and the empty set it
+        would otherwise return is indistinguishable from a lab with nothing in it — the exact
+        confusion `names()` below records having been bitten by. Building here is idempotent
+        and costs one local scan; being wrong about what the lab contains costs a plan that
+        creates what already exists, or deletes on a count it computed from nothing.
+        """
+        # A LIBRARY WITH NO `built` ATTRIBUTE IS NOT MAKING A CLAIM, and that is different from
+        # one claiming False. Test doubles and any future read-through registry simply hold what
+        # they hold; only something that tracks its own builtness can be UNBUILT, and only that
+        # is worth building. `None` rather than `False` as the default is what keeps this guard
+        # from demanding `snapshot()` of every object that satisfies the rest of the contract.
+        if getattr(self._library, "built", None) is not False:
+            return
+        self._library.snapshot()
+        if not getattr(self._library, "built", False):
+            raise RuntimeError(
+                "the lab registry could not be built — refusing to plan against it, because "
+                "an unreachable library is indistinguishable from an empty lab")
 
     @property
     def seams(self):
@@ -74,6 +151,7 @@ class LabWorld:
         planning began, and the program's own ENSUREs are what confirm the world it actually
         meets — which is the same division of labour `already_satisfied` relies on.
         """
+        self._ensure_built()
         from ..planner.model_world import World as _Model
         model = _Model(self.kinds)
         # `vms` is a METHOD on ActiveLibrary, not an attribute — the second interface
@@ -169,6 +247,7 @@ class LabWorld:
         HANDLER IS GONE: a library that cannot answer this is a broken lab and must say so,
         because the failure it was swallowing is indistinguishable from an empty one.
         """
+        self._ensure_built()
         return set(self._library.known_names())
 
 
@@ -190,7 +269,10 @@ class QemuEngine(MedusaEngine):
         # `author`/`route` ARE STAGED LOWERING'S SEAMS, passed straight through. Without
         # them a granted promotion reaches for a decomposer that is not there —
         # recorded, inert, and indistinguishable from an escalation that worked.
-        super().__init__(LabWorld(library, execute, findings),
+        # THE PACKAGES GO TO THE WORLD TOO, not only to the engine. The engine needs them for
+        # its manifest; the WORLD needs them to know which kinds have an authority behind
+        # them — a package's own kinds are enumerable-by-somebody, where a snapshot is not.
+        super().__init__(LabWorld(library, execute, findings, packages=packages),
                          author=author, route=route, packages=packages)
 
     # THE CONTRACT'S NOUN MATCH, NOT MEDUSA'S OVER-CLAIM, and it has to be said explicitly

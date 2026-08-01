@@ -169,7 +169,31 @@ def schema(kinds=None) -> Dict[str, Any]:
 # The default-manifest instance, for callers that only ever wanted that one.
 SCHEMA = schema()
 
-def prompt(kinds=None) -> str:
+def _relevant(spec: Dict[str, Any], request: str) -> bool:
+    """Could this request be about this kind at all? A word match on the kind's own nouns.
+
+    BLINDERS, AND THEY ARE NOT AN OPTIMISATION HERE — they are what makes the example safe to
+    show at all. Rendering every loaded kind's example unconditionally was MEASURED at n=3 and
+    it bought one search for five broken rungs: rung 10 went from four goals to ZERO, rung 6,
+    7 and 9 each lost one, rung 13 gained one. Consistent 3/3 in both arms, so not noise. That
+    prompt has no headroom; anything added to it is paid for somewhere else.
+
+    So a kind's example appears only when the request could plausibly be about that kind, and
+    the test is the nouns the manifest already carries for the operator's benefit. On every
+    request that mentions no browser and no search the prompt is BYTE-IDENTICAL to the one
+    the ladder was measured on — which is a property that can be proved without spending a
+    single model call, rather than a regression that has to be re-measured after every change.
+
+    THE LIMIT, SAID PLAINLY: a request that needs a search and never uses one of its words
+    gets no example and will fail the way it failed before. Widening the match would put the
+    example back in front of requests that measurably do worse for seeing it.
+    """
+    words = {w.strip(".,!?;:'\"").lower() for w in str(request or "").split()}
+    nouns = {str(n).lower() for n in (spec.get("nouns") or ())}
+    return bool(nouns & words) or bool({n + "s" for n in nouns} & words)
+
+
+def prompt(kinds=None, request: str = "") -> str:
     """The system prompt, with the DOMAIN named from the manifest in force.
 
     IT ASSERTED "virtual machines" UNCONDITIONALLY, and that is a false statement the moment
@@ -178,16 +202,50 @@ def prompt(kinds=None) -> str:
     whole chain — the model answered `cannot: too vague` and was RIGHT TO: it had been told
     the subject was machines, and a web search is not one.
 
-    ONLY THE DOMAIN CLAIM IS BUILT, and deliberately nothing else. Every other line of this
-    prompt has been measured, several of them expensively; changing more while chasing a
-    package would mix an unmeasured edit into a measured artifact. The nouns come from the
-    manifest, which is where the operator's words already live.
+    THE DOMAIN CLAIM AND THE WORKED EXAMPLES, and still nothing else. The examples were left
+    frozen on the first pass with the reasoning that changing more than the domain line would
+    mix an unmeasured edit into a measured artifact. That was right then and wrong now, because
+    the frozen examples turned out to BE the failure — measured, on the real request:
+
+        "search the web for the diameter of the earth"
+          -> every, select vm, attr network, value lab
+             count 3, select vm
+
+    which is the prompt's own two worked examples RETURNED VERBATIM. The model did not
+    misread the request; it never read it. Every demonstration it had was about machines, so
+    it produced machines. The subject guard threw both goals away and the session closed
+    UNTRANSLATED — honest, and still no answer.
+
+    SO A KIND DECLARES ITS OWN EXAMPLE, and this renders whatever the manifest in force holds.
+    The alternative was to synthesise one from a kind's key and nouns, which means inventing
+    English inside the extractor for a subject it knows nothing about; the package already
+    knows what asking for one of its things sounds like. Same rule as the schema, the enums and
+    the domain line — declare it where it is known, do not infer it where it is not.
+
+    THE EXAMPLE MUST NOT BE THE REQUEST ANYBODY MEANS TO TEST. A demonstration the model can
+    copy into a passing answer measures copying, which is the defect this exists to remove.
     """
     nouns = []
     for kind, spec in (config.KINDS or {}).items():
         nouns.append((spec.get("nouns") or [kind])[0])
     subject = ", ".join(sorted(nouns)) or "virtual machines"
-    return PROMPT.replace("about virtual machines", f"about {subject}")
+    out = PROMPT.replace("about virtual machines", f"about {subject}")
+
+    shown = []
+    for kind, spec in (config.KINDS or {}).items():
+        ex = (spec or {}).get("example") or {}
+        req, goal = str(ex.get("request") or "").strip(), str(ex.get("goal") or "").strip()
+        if req and goal and _relevant(spec, request):
+            shown.append(f'  "{req}"\n     -> {goal}')
+    if shown:
+        # PLACED AFTER THE TABLE, where a reader looks for more of the same. The five shapes
+        # are the vocabulary; these say the vocabulary is not only about machines.
+        out = out.replace(
+            "`select` names the members",
+            "THE SAME SHAPES DESCRIBE EVERY SUBJECT NAMED ABOVE, not only machines:\n"
+            + "\n".join(shown)
+            + "\n\n`select` names the members")
+    return out
 
 
 PROMPT = """You read an operator's request about virtual machines and say WHAT MUST BE TRUE
@@ -652,7 +710,8 @@ def extract(request: str, model: str = None, temp: float = 0.0,
     # was not: two paths deciding what a model call IS, differing on keep_alive and on how a
     # decode failure surfaces.
     from orchestrator.ai.engines.channel import constrained
-    return constrained(prompt(), request, schema(), model=model or BENCH_MODEL,
+    return constrained(prompt(request=request), request, schema(),
+                       model=model or BENCH_MODEL,
                        temp=temp, timeout=timeout)
 
 

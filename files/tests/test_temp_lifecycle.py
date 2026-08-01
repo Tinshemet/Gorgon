@@ -161,3 +161,44 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def test_the_engine_collects_temps_so_teardown_can_fire():
+    """`cover` fills a temps list and `as_program` empties it — the engine passed neither.
+
+    The writer's whole provenance rule (a machine the operator never named is the program's
+    own and goes away after the witness) was implemented, unit-tested, and unreachable from
+    production. The search request created and launched a machine and emitted no delete; it
+    was still on the lab afterwards.
+    """
+    from orchestrator.ai.engines.medusa import MedusaEngine
+    from orchestrator.ai.planner.model_world import World
+
+    KINDS = {
+        "vm": {"key": "name", "attrs": ["name", "status"], "nouns": ["vm"],
+               "create": "create_vm", "delete": "delete_vm",
+               "attr_values": {"status": ["running", "stopped"]},
+               "create_defaults": {"status": "stopped"},
+               "setters": {"launch_vm": {"attr": "status", "member_arg": "name",
+                                         "value": "running"}}},
+        "browser": {"key": "browser_name", "attrs": ["browser_name", "vm"],
+                    "nouns": ["browser"], "create": "start_browser",
+                    "delete": "stop_browser",
+                    "create_requires": [{"kind": "vm", "must": {"status": "running"}}]},
+    }
+
+    class W(World):
+        def __init__(self):
+            super().__init__(KINDS)
+
+    eng = MedusaEngine(W())
+    plan = eng._plan([{"shape": "count", "select": {"kind": "browser"}, "eq": 1}], None)
+    body = ((plan.get("program") or {}).get("body")) or []
+    tools = [s.get("tool") for s in body if s.get("op") == "call"]
+    assert "create_vm" in tools, tools
+    # THE MACHINE NOBODY ASKED FOR GOES AWAY, and after the witness rather than before.
+    assert "delete_vm" in tools, tools
+    ensure_at = next(i for i, s in enumerate(body) if s.get("op") == "ensure")
+    del_at = next(i for i, s in enumerate(body)
+                  if s.get("op") == "call" and s.get("tool") == "delete_vm")
+    assert del_at > ensure_at, "teardown must follow the witness, not precede it"

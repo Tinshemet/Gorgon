@@ -123,10 +123,55 @@ class MedusaEngine(Engine):
         # HERE. A package that held its own executor would be a second door into the world,
         # and the point of the engine layer is that there is one.
         self.packages = tuple(packages)
+        self._execute = self._with_packages(self._execute)
         # A world whose kinds are NOT the default manifest needs the override below. Asking
         # once, here, keeps the default target — the actual Gorgon lab — on the untouched
         # path it has always used.
-        self._foreign = (getattr(world, "kinds", None) or None) not in (None, _config.KINDS)
+        # DOES THIS ENGINE HAVE A MANIFEST OF ITS OWN? Asked of `manifest` rather than of the
+        # world, because a package is the other way an engine's kinds can differ and the world
+        # knows nothing about packages. The lab's world declares the DEFAULT kinds — literally
+        # the same object — so this read False with Camoufox loaded, the engine never entered
+        # its own scope, and the writer planned a search request against a manifest with no
+        # search in it.
+        self._foreign = (self.manifest or None) not in (None, _config.KINDS)
+
+    def _with_packages(self, execute):
+        """One executor that also knows what a loaded package's tools mean.
+
+        THE SECOND HALF OF LOADING, and it was missing. A package's kinds joined the manifest,
+        the writer planned the entire chain in the right order — create the machine, launch it
+        headless, start the browser on it, run the search — and then the world answered
+        `Unknown tool: camoufox_launch`, because the tool registry is the executor's and a
+        package is not an executor. Measured on the lab, with a real machine created and
+        launched to host a browser that could never start.
+
+        DISPATCH BY OWNERSHIP, decided once at construction. A tool belongs to exactly one
+        package — `merge` already refuses two packages defining the same kind — so the map is
+        built here rather than searched per call, and a tool nobody claims falls through to
+        the engine's own executor untouched.
+
+        THE PACKAGE'S HANDS ARE BUILT FROM THIS ENGINE'S EXECUTOR, so a search reaches the
+        world through the same gauntlet a `create_vm` does. That is the difference between
+        loading a capability and opening a second door for it.
+        """
+        owner = {}
+        for p in self.packages:
+            hands = None
+            try:
+                hands = p.hands(execute)
+            except Exception:
+                hands = None
+            if hands is None:
+                continue
+            for tool in (p.tools() or ()):
+                owner[tool] = hands
+        if not owner:
+            return execute
+
+        def dispatch(tool: str, args: Dict[str, Any]):
+            return (owner.get(tool) or execute)(tool, args)
+
+        return dispatch
 
     @property
     def manifest(self) -> Dict[str, Any]:
@@ -613,8 +658,19 @@ class MedusaEngine(Engine):
                         "why": f"nothing here can enumerate {', '.join(hidden)}, and an "
                                f"empty answer would be read as 'there are none'",
                         "calls": [], "program": None}
+        # THE COLLECTOR FOR EVERY MEMBER THIS PLAN MINTS AS A PRECONDITION, and without it the
+        # writer's teardown could never fire. `cover` fills the list, `as_program` turns it
+        # into the closing deletes — and this engine called both and passed neither, so the
+        # list was built inside `cover` and dropped on the floor.
+        #
+        # MEASURED ON THE LAB, NOT REASONED: the search request derived `create_vm(vm1)` and
+        # `launch_vm(vm1, display: none)` correctly, ran them, and emitted no `delete_vm`. The
+        # machine is still there. The whole provenance rule — a machine the operator never
+        # named is the program's own and goes away after the witness — was implemented, tested
+        # in the writer, and unreachable from production.
+        temps: List = []
         try:
-            plan = _gw.cover(components, world)
+            plan = _gw.cover(components, world, temps=temps)
         except _gw.Unsolvable as e:
             # THE PROMOTION REQUEST. Built as an honest refusal — no tile, no rule, will not
             # improvise — and under the engine architecture that is exactly what asking for
@@ -623,7 +679,7 @@ class MedusaEngine(Engine):
             return {"ok": False, "promote": "tree", "why": str(e),
                     "calls": [], "program": None}
 
-        program = _gw.as_program(plan, components, world)
+        program = _gw.as_program(plan, components, world, temps=temps)
         if not program["body"]:
             # NOTHING OWED. The correct answer to a finished world is the empty program, and
             # `validate` rejects an empty body — right for something a model wrote, wrong for
