@@ -1419,6 +1419,110 @@ def test_findings_travel_as_publications_now():
           any("alpha" in str(f.get("fact")) for f in r["published"]))
 
 
+def test_the_executor_is_the_tool_regime_made_real():
+    """THE FLOOR HAD NO ENGINE. `session.py` has described the tool regime since the day it
+    was written — one call, one answer, close — and `rank("tool") == 0` was a number nothing
+    could occupy. A ladder whose bottom rung is a diagram."""
+    print("[executor] one call, one answer, close")
+    from orchestrator.ai.engines import ExecutorEngine
+    from tests.bench.sim_world import SimWorld
+
+    class Lab:
+        def __init__(self, world):
+            self.world = world
+
+        def vms(self):
+            return {n: {"name": n, **r} for n, r in self.world.vms.items()}
+
+        def by_network(self):
+            return {}
+
+        def known_names(self):
+            return set(self.world.vms)
+
+    world = SimWorld()
+    lab = Lab(world)
+    eng = ExecutorEngine(lab, world.execute)
+
+    check("it declares only the floor", eng.intents == ("fetch",))
+    check("and offers NO in-session — the protocol must fit the floor",
+          not callable(getattr(eng, "steps", None)))
+    check("it claims by the manifest's nouns, inherited from the contract",
+          eng.claims("create a machine") and not eng.claims("bake a cake"))
+
+    # ONE CALL, RUN.
+    out = eng.run([{"shape": "count", "select": {"kind": "vm", "name": "alpha"}, "eq": 1}])
+    check("a single reachable goal is executed", out["ok"] and len(out["calls"]) == 1)
+    check("and it actually happened", "alpha" in world.vms)
+
+
+def test_the_executor_refuses_to_plan_and_says_so():
+    """WHAT MAKES IT THE FLOOR IS WHAT IT REFUSES TO DO. Naming a tool and knowing WHEN to
+    call it are different jobs, and the second one is what Medusa is for."""
+    print("[executor] anything needing an order is handed back")
+    from orchestrator.ai.engines import ExecutorEngine
+    from tests.bench.sim_world import SimWorld
+
+    class Lab:
+        def __init__(self, world):
+            self.world = world
+
+        def vms(self):
+            return {n: {"name": n, **r} for n, r in self.world.vms.items()}
+
+        def by_network(self):
+            return {}
+
+        def known_names(self):
+            return set(self.world.vms)
+
+    world = SimWorld()
+    eng = ExecutorEngine(Lab(world), world.execute)
+    # A machine must exist before it can be put on a network — that ordering is planning.
+    out = eng.run([{"every": {"kind": "vm", "name": "ghost"}, "must": {"network": "lab"}}])
+    check("it asks for the translation regime", out.get("promote") == "translation")
+    check("naming what it is not", "needs a program" in out["why"])
+    check("and nothing was done on the way to saying so", not out["calls"])
+
+
+def test_a_request_the_floor_cannot_serve_reroutes_up():
+    """THE PAIR THE REROUTING WAS BUILT FOR. The executor tries, cannot, and the orchestrator
+    sends it to the engine that writes programs — one request, two engines, no operator."""
+    print("[executor] floor first, then the engine that plans")
+    from orchestrator.ai.engines import ExecutorEngine
+    from tests.bench.sim_world import SimWorld
+
+    class Lab:
+        def __init__(self, world):
+            self.world = world
+
+        def vms(self):
+            return {n: {"name": n, **r} for n, r in self.world.vms.items()}
+
+        def by_network(self):
+            return {}
+
+        def known_names(self):
+            return set(self.world.vms)
+
+    world = SimWorld()
+
+    class Planner(MedusaEngine):
+        name = "medusa"
+
+    reg = Registry()
+    reg.mount(ExecutorEngine(Lab(world), world.execute))
+    reg.mount(Planner(world))
+    goals = [{"shape": "count", "select": {"kind": "vm", "name": "web"}, "eq": 1},
+             {"every": {"kind": "vm", "name": "web"}, "must": {"network": "lab"}}]
+    r = Orchestrator(reg, Channel([stub({"put web on lab": goals})]),
+                     route=lambda req, menu, engines: "executor").handle("put web on lab")
+    check("it ended up done", r["outcome"] == "DONE")
+    check("by the engine that plans", r["engine"] == "medusa")
+    check("having tried the floor first", r.get("tried") == ["executor", "medusa"])
+    check("and the work is real", "web" in world.vms and "lab" in world.vms["web"]["nets"])
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "engines"))

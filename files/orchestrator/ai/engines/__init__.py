@@ -15,3 +15,5 @@ from .qemu import LabWorld, QemuEngine      # noqa: F401
 from .registry import Registry              # noqa: F401
 from .translation_cache import TranslationCache  # noqa: F401
 from .session import INTENT_REGIME, REGIMES, Session, rank  # noqa: F401
+
+from .executor import ExecutorEngine  # noqa: E402,F401
