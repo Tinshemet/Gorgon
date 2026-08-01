@@ -256,3 +256,77 @@ def test_the_worked_example_is_blinded_to_the_request():
                      "clone golden into 3 new vms and launch all of them",
                      "make sure they can all ping each other"):
             assert "SAME SHAPES" not in EX.prompt(request=text), text
+
+
+def _answering_world():
+    import json as _json
+
+    def world(tool, args):
+        if tool == "run_guest_command" and "camoufox search" in (args.get("command") or ""):
+            return {"success": True, "stdout": _json.dumps({"answer": "12,742 km"})}
+        return {"success": True, "stdout": ""}
+    return world
+
+
+def test_a_program_calls_verifies_and_publishes():
+    """The operator's three corrections, in one program.
+
+    1. every invocation leads with CALL — a program has to be something a person could type
+    2. the answer is VERIFIED, not just the search's existence
+    3. and it is PUBLISHED, by the program, rather than inferred from a ledger afterwards
+    """
+    from orchestrator.ai.engines import rig, insession
+    from orchestrator.ai.engines.session import Session
+    from orchestrator.ai.planner.ir import config
+    from orchestrator.ai.planner.ir.render import render
+
+    orc = rig.build(_answering_world(), narrate=False)
+    eng = orc.registry.get("qemu")
+    goal = [{"shape": "count",
+             "select": {"kind": "search", "query": "the diameter of the earth"}, "eq": 1}]
+    sess = Session("search the web for the diameter of the earth", eng, intent="achieve")
+    with config.use_kinds(eng.manifest):
+        res = insession.drive(eng, goal, sess, lambda st, s: insession.Verdict(st.kind))
+
+    assert res.get("ok"), res.get("why")
+    # The in-session returns the LAST node's result; the rendered program travels with it.
+    text = res.get("rendered") or render(res.get("program") or {})
+    for line in text.splitlines():
+        if "(" in line and not line.startswith(("ENSURE", "PUBLISH", "STORE")):
+            assert line.startswith("CALL "), f"invocation without CALL: {line}"
+    # THE DELIVERABLE WITNESS — `unknown = 0` says every member was actually ASKED, where
+    # `answered != no` would be satisfied by a search nobody ran.
+    assert "answer = 'unknown') = 0" in text, text
+    assert "PUBLISH answer(the diameter of the earth);" in text, text
+
+    said = [p.as_finding() for p in sess.published]
+    assert said == [{"fact": "answer(the diameter of the earth)", "value": "12,742 km"}], said
+
+
+def test_an_ordinary_program_still_says_done():
+    """Most programs have no findings to report and must not finish in silence."""
+    from orchestrator.ai.engines import rig
+    from orchestrator.ai.engines.qemu import QemuEngine
+    from orchestrator.ai.active_library import LIBRARY
+    from orchestrator.ai.planner.ir import config
+    from orchestrator.ai.planner.ir.render import render
+
+    eng = QemuEngine(LIBRARY, lambda t, a: {"success": True}, packages=rig.packages())
+    with config.use_kinds(eng.manifest):
+        p = eng._plan([{"shape": "count",
+                        "select": {"kind": "vm", "name": "zzz-probe"}, "eq": 1}], None)
+    assert "PUBLISH done;" in render(p["program"]), render(p["program"])
+
+
+def test_the_same_claim_twice_is_one_claim():
+    """A settling tree re-offers a node, and one search reported its answer five times."""
+    from orchestrator.ai.engines.insession import Publish
+    from orchestrator.ai.engines.session import Session
+
+    sess = Session("q", None)
+    sess.publish(Publish("alive(beta)", "false"))
+    sess.publish(Publish("alive(beta)", "false"))
+    assert len(sess.published) == 1
+    # A CHANGE OF VALUE IS A SECOND FACT and stays audible.
+    sess.publish(Publish("alive(beta)", "true"))
+    assert len(sess.published) == 2

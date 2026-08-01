@@ -87,11 +87,29 @@ def _statement(st: Any, indent: str) -> list:
         return _with_tail([f"{indent}{config.SURFACE['bind']} {st.get('var')} = {_w('new')} {many}"
                            f"{st.get('kind')}{f'({extra})' if extra else ''}{src};"], st, indent)
 
+    if op == "publish":
+        # THE ONE STATEMENT WHOSE EFFECT IS ON THE CONVERSATION. It names the fact and never
+        # a value — the engine supplies what it actually observed — so a reader can tell at a
+        # glance that the program is REPORTING rather than asserting.
+        return _with_tail([f"{indent}{_w('publish')} {st.get('fact')};"], st, indent)
+
     if op == "call":
         # A grafted result reads as a binding, the same LET that binds a resource —
         # because naming a result and naming a resource are the same act.
+        #
+        # AND THE KEYWORD LEADS. An invocation is the one statement that reaches the world,
+        # and printing it bare made the ACTING lines the only ones on the page without a word
+        # in front of them — the quietest thing in a program, where they should be the
+        # loudest. `CALL create_vm(...)` reads the way `ENSURE` and `ACHIEVE` do: what the
+        # line does, then what it touches.
+        #
+        # WHERE THE BINDING GOES. `STORE $x = CALL probe(...)` — the keyword belongs to the
+        # invocation, not to the statement, so it sits after the `=` where the value comes
+        # from rather than in front of the name being bound.
+        verb = config.SURFACE.get("call")
         lead = f"{config.SURFACE['bind']} {st['graft']} = " if st.get("graft") else ""
-        return _with_tail([f"{indent}{lead}{st.get('tool')}({_args(st.get('args'))});"],
+        head = f"{verb} " if verb else ""
+        return _with_tail([f"{indent}{lead}{head}{st.get('tool')}({_args(st.get('args'))});"],
                           st, indent)
 
     if op == "foreach":

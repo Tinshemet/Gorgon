@@ -113,6 +113,23 @@ MANIFEST: Dict[str, Any] = {
         "create_requires": ["browser"],
         "attr_values": {"answered": ["yes", "no"]},
         "create_defaults": {"answered": "no"},
+        # WHAT A SEARCH IS FOR, said out loud, because only this kind knows. A machine exists
+        # to run things and its reachability is incidental; a SEARCH EXISTS FOR ITS ANSWER and
+        # is worthless without one.
+        #
+        # The program it produced without this line started a machine, started a browser, ran
+        # a search, asserted that a search EXISTED, and tore everything down. Every call could
+        # have succeeded and the operator would still have had no answer — nothing ever asked
+        # what came back. The observer was declared right below and no code path called it, so
+        # there was no finding, so there was nothing to PUBLISH, so the reporter had nothing to
+        # say. Four silent layers downstream of one missing question.
+        "deliverable": "answer",
+        # AND THE ACT ALREADY BRINGS IT BACK. `camoufox search --json` prints the result, so
+        # the answer arrives WITH the search and a separate read would be a second question to
+        # a browser that has already spoken. This is not the success-flag inference decision 6
+        # forbids: it is what the browser actually returned, parsed. `camoufox_read` stays as
+        # the way to ask again later without searching again.
+        "create_yields": ["answer"],
         # OBSERVED — LEARNED BY ASKING, NEVER INFERRED. A search that ran is not a search
         # that answered, and the difference is the only thing the operator actually wanted.
         "observed": {
@@ -204,6 +221,12 @@ class CamoufoxPackage(Package):
     def world(self, execute: Optional[Callable] = None) -> "SearchWorld":
         return SearchWorld(execute)
 
+    def __init__(self, findings=None):
+        # THE LEDGER IS HANDED IN, never built here. The engine owns where observations are
+        # stored — the same reason this class holds no executor.
+        self.findings = findings
+        self.state: Dict[str, Dict[str, Any]] = {"browser": {}, "search": {}}
+
     def hands(self, execute):
         """These tools, as guest-agent commands run through the engine's own executor.
 
@@ -219,6 +242,12 @@ class CamoufoxPackage(Package):
         program has already established rather than guessing at one.
         """
         host_of: Dict[str, str] = {}
+        # THE PACKAGE REMEMBERS ITS OWN MEMBERS, because nothing else can. The lab registry
+        # tracks machines and networks; it has never heard of a browser or a search, so a
+        # program that ran a search perfectly still failed its own existence witness —
+        # `count is 0, wanted == 1` over a member the world had no way to see. Saying a
+        # package is the AUTHORITY for its kinds is only true if it actually keeps the books.
+        state = self.state
 
         def run_guest(vm: str, command: str):
             return execute("run_guest_command", {"name": vm, "command": command})
@@ -235,7 +264,52 @@ class CamoufoxPackage(Package):
                 host_of[str(browser)] = str(vm)
             return vm or host_of.get(str(browser)) if browser else vm
 
-        return guest_hands(run_guest, host_for=host_for)
+        inner = guest_hands(run_guest, host_for=host_for)
+
+        def execute_and_record(tool: str, args: Dict[str, Any]):
+            """Run it, then write down what now exists — and what it said.
+
+            WHY THE PACKAGE AND NOT THE RUNTIME. A member of a package's kind is invisible to
+            the lab registry by construction, so the only component that can honestly answer
+            "does this search exist?" is the one that made it. The alternative was to teach
+            the registry about every kind any package might ever add, which is the second
+            authority this codebase keeps deleting.
+
+            THE ANSWER IS RECORDED AS A FINDING, NOT AS AN ATTRIBUTE. `answered: yes` would be
+            a claim about a call having succeeded; the FACT `answer(<query>)` carries what the
+            browser actually returned, which is what PUBLISH submits and what the reporter is
+            allowed to describe. A search whose output could not be parsed stays unknown, and
+            unknown is a real answer.
+            """
+            out = inner(tool, args) or {}
+            if not out.get("success"):
+                return out
+            if tool == "camoufox_launch":
+                state.setdefault("browser", {})[str(args.get("browser_name"))] = {
+                    "browser_name": args.get("browser_name"), "vm": args.get("vm"),
+                    "status": "running"}
+            elif tool == "camoufox_close":
+                state.get("browser", {}).pop(str(args.get("browser_name")), None)
+            elif tool in ("camoufox_search", "camoufox_read"):
+                query = str(args.get("query"))
+                answer = out.get("answer")
+                if answer is None:
+                    raw = out.get("stdout") or out.get("output") or ""
+                    try:
+                        answer = json.loads(raw).get("answer", raw)
+                    except Exception:
+                        answer = (raw or "").strip() or None
+                row = state.setdefault("search", {}).setdefault(query, {"query": query})
+                row["browser"] = args.get("browser") or row.get("browser")
+                if answer:
+                    row["answered"] = "yes"
+                    if self.findings is not None:
+                        self.findings.record(f"answer({query})", answer, source="camoufox")
+                else:
+                    row.setdefault("answered", "no")
+            return out
+
+        return execute_and_record
 
     def claims(self, request: str) -> bool:
         words = {w.strip(".,!?;:'\"").lower() for w in request.split()}

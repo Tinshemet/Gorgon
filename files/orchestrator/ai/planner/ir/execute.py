@@ -272,9 +272,24 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
     # separate from `remaining`: that one is a resumable top-level tail, this one is not.
     abandoned: List[Dict[str, Any]] = []
 
+    # WHAT THE PROGRAM ASKED TO SUBMIT. Carried out of the run so the engine can attach the
+    # values it observed and hand them up — the upward half of the in-session protocol,
+    # reaching it from the program rather than from an engine reading the ledger behind the
+    # program's back.
+    published: List[str] = []
+
     def _one(st: Dict) -> Optional[Dict]:
         op = st.get("op")
         before = len(failures)
+
+        if op == "publish":
+            # NAMED HERE, VALUED BY THE ENGINE. This module has no findings ledger and should
+            # not grow one — it records WHAT the program asked to submit, and whoever owns the
+            # observations attaches what was actually seen. A program that could state its own
+            # answer could state one it never obtained, which is the whole failure class this
+            # layer exists to refuse.
+            published.append(str(st.get("fact") or ""))
+            return None
 
         if op == "if":
             good, _why = _holds(st.get("cond") or {}, scope)
@@ -493,6 +508,8 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
             # was cut short can still end with its top-level checks passing — which is
             # precisely the case that must not read as a clean run.
             out["abandoned"] = list(abandoned)
+        if published:
+            out["published"] = list(published)
         return out
 
     for i, st in enumerate(body):

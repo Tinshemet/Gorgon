@@ -72,7 +72,7 @@ def floor_first(request, menu, engines):
                 engines[0].name if engines else None)
 
 
-def packages() -> Tuple:
+def packages(findings=None) -> Tuple:
     """Capabilities a Medusa program may CALL, loaded into the world engine.
 
     A PACKAGE IS NOT MOUNTED AND CANNOT BE ROUTED TO — it has no `run` and no `intents`, so
@@ -89,7 +89,11 @@ def packages() -> Tuple:
         from ..packages.camoufox import CamoufoxPackage
     except Exception:
         return ()
-    return (CamoufoxPackage(),)
+    # THE LEDGER GOES TO THE PACKAGE, so an observed answer lands where PUBLISH and the
+    # reporter will look for it rather than in a dict only the package can see. It is the
+    # SAME object the engine plans against — one ledger, or the thing that wrote the answer
+    # and the thing that reports it are looking at different worlds.
+    return (CamoufoxPackage(findings=findings),)
 
 
 def build(execute: Callable, library=None, narrate: bool = True,
@@ -116,9 +120,15 @@ def build(execute: Callable, library=None, narrate: bool = True,
     # BOTH LOAD-BEARING ENGINES. The executor provides the box — one call, one answer — and
     # Medusa turns a prompt into a program when one call is not enough. Mounting only the
     # planner sent every request, however small, to the thing that writes programs.
+    # ONE FINDINGS LEDGER for the whole mount. The engine plans and checks against it, the
+    # package records observations into it, and the reporter is handed what it holds — three
+    # readers of one book. Two books is how a program comes to assert a fact nobody can find.
+    from ..planner.findings import Findings
+    found = Findings()
+
     registry.mount(ExecutorEngine(lib, execute))
-    registry.mount(QemuEngine(lib, execute, author=author, route=route,
-                              packages=packages()))
+    registry.mount(QemuEngine(lib, execute, findings=found, author=author, route=route,
+                              packages=packages(findings=found)))
 
     return Orchestrator(registry, Channel([translator()]), decide=decide,
                         route=floor_first,

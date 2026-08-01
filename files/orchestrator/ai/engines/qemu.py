@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from ..planner.ir import config as _config
+from ..planner.ir import observe as _observe
 from .base import Engine
 from .medusa import MedusaEngine
 
@@ -122,9 +123,107 @@ class LabWorld:
                 "an unreachable library is indistinguishable from an empty lab")
 
     @property
+    def findings(self):
+        """THE LEDGER, UNDER THE NAME EVERYTHING ELSE LOOKS FOR.
+
+        It was `self._findings`, private, and `_findings_of` reads `world.findings` — so the
+        engine could not see its own observations and fell through to listing what it had
+        DONE. The acceptance run therefore published `answer(...) = unknown` on a search whose
+        answer was sitting in the ledger, which is the exact conflation `_findings_of` exists
+        to prevent, arriving through a spelling.
+        """
+        return self._findings
+
+    @property
     def seams(self):
+        """The lab's own seams, with a package's kinds answered by the package.
+
+        A MEMBER OF A PACKAGE'S KIND IS INVISIBLE TO THE REGISTRY BY CONSTRUCTION. The lab
+        tracks machines and networks; it has never heard of a browser or a search. So a
+        program that ran a search perfectly still failed its own existence witness — `count
+        is 0, wanted == 1` — and the production select, asked about a kind it did not know,
+        answered with the nine MACHINES.
+
+        Both halves of that are fixed here by the same rule: whoever owns the kind answers
+        for it. `unseeded` already says a package is the authority for its kinds; this is
+        what makes that claim true rather than merely asserted.
+        """
         from ..planner.program import seams as _prod_seams
-        return _prod_seams(self._library, self._findings)
+        select, holds = _prod_seams(self._library, self._findings)
+        owned = {}
+        for p in self._packages:
+            for kind in (getattr(p, "manifest", None) or {}):
+                owned[kind] = p
+        if not owned:
+            return select, holds
+
+        def routed(sel, scope=None):
+            pkg = owned.get((sel or {}).get("kind"))
+            if pkg is None:
+                return select(sel, scope) if scope is not None else select(sel)
+            kind = sel["kind"]
+            rows = (getattr(pkg, "state", None) or {}).get(kind) or {}
+            spec = (getattr(pkg, "manifest", None) or {}).get(kind) or {}
+            observed = spec.get("observed") or {}
+            want = {k: v for k, v in (sel or {}).items() if k != "kind"}
+
+            def value_of(name, row, attr):
+                """One attribute of one member — from the LEDGER if it is an observed fact.
+
+                AN OBSERVED ATTRIBUTE IS NOT A COLUMN ON THE ROW. `answered: yes` is a claim
+                that a call ran; `answer(<query>)` is what the browser actually said, and it
+                lives in the findings ledger because that is where things learned by ASKING
+                go. Reading the row for it made `answer` permanently `unknown` — so the
+                deliverable witness counted an unanswered search that had, in fact, answered.
+                """
+                obs = observed.get(attr)
+                if not obs:
+                    return row.get(attr, _observe.unknown())
+                ledger = self._findings
+                if ledger is None:
+                    return _observe.unknown()
+                fact = str(obs.get("fact") or f"{attr}({{{spec.get('key')}}})") \
+                    .replace("{" + str(spec.get("key")) + "}", str(name)) \
+                    .replace("{member}", str(name))
+                has = getattr(ledger, "has", None)
+                if callable(has) and not has(fact):
+                    return _observe.unknown()
+                got = ledger.get(fact) if hasattr(ledger, "get") else None
+                # ANYTHING RECORDED IS AN ANSWER. What the value IS belongs to the reporter;
+                # this seam only decides asked-or-not, which is what the witness asks.
+                return _observe.unknown() if got in (None, "") else got
+
+            out = []
+            for name, row in rows.items():
+                if all(str(value_of(name, row, k)) == str(v) for k, v in want.items()):
+                    out.append(name)
+            return out
+
+        def judged(pred, scope=None):
+            """A witness over a package's kind, answered by the package.
+
+            ROUTING `select` WAS HALF THE JOB. An `ENSURE` is evaluated through `holds`, which
+            runs its own registry query — so the writer PLANNED correctly against the package's
+            books and then the closing witness asked the lab, which has never heard of a
+            search, and the program failed `count is 0, wanted == 1` over a member sitting in
+            the package's own state with `answered: yes`.
+
+            The two seams have to agree about who owns a kind, or a program is judged against
+            a different world than the one it was written for.
+            """
+            sel = (pred or {}).get("select") or {}
+            if sel.get("kind") not in owned:
+                return holds(pred, scope) if scope is not None else holds(pred, {})
+            got = len(routed(sel))
+            if "eq" in pred:
+                want = pred["eq"]
+                return got == want, f"count is {got}, wanted == {want}"
+            if "min" in pred:
+                want = pred["min"]
+                return got >= want, f"count is {got}, wanted >= {want}"
+            return False, f"cannot judge {pred.get('shape')} over {sel.get('kind')}"
+
+        return routed, judged
 
     def execute(self, tool: str, args: Dict[str, Any]):
         # THE CALLER'S GUARDED EXECUTOR, handed in rather than constructed. A program's

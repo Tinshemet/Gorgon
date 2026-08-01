@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 from ..planner import ghost_writer as _gw
 from ..planner import tree_keeper as _keeper
 from ..planner.ir import lower as _lower
+from ..planner.ir import observe as _observe
 from ..planner.ir import config as _config
 from ..planner.ir import consent as _consent
 from ..planner.ir import render as _render
@@ -408,6 +409,21 @@ class MedusaEngine(Engine):
                 # orchestrator used to reach into the ledger and take what it found; an
                 # engine whose world has no ledger was simply never heard. Saying it makes
                 # any engine audible, including one whose world is somebody else's API.
+                # WHAT THE PROGRAM ITSELF ASKED TO SUBMIT, first and by name. A `PUBLISH`
+                # line is the program saying what it was FOR; the sweep below is this engine
+                # noticing what else it happened to learn. The value comes from the ledger,
+                # never from the statement — the program names the fact and the world says
+                # what it is, so a program cannot report an answer it never obtained.
+                #
+                # AN UNOBSERVED FACT PUBLISHES AS `unknown`, which is a real answer and the
+                # one this codebase keeps insisting on: a search nobody could run reports
+                # that it has no answer, rather than reporting nothing at all and leaving the
+                # operator to guess whether it worked.
+                observed = {f.get("fact"): f.get("value")
+                            for f in (ran.get("findings") or []) if "fact" in f}
+                for fact in ran.get("published") or []:
+                    yield _Publish(fact, observed.get(fact, _observe.unknown())
+                                   if fact != "done" else "done")
                 for finding in ran.get("findings") or []:
                     if "fact" in finding:
                         yield _Publish(finding["fact"], finding.get("value"))
@@ -751,6 +767,12 @@ class MedusaEngine(Engine):
                 # results — which is the difference between "three machines answered" and
                 # "I asked three machines".
                 "findings": _findings_of(world, result),
+                # WHAT THE PROGRAM ASKED TO SUBMIT, in its own words. The engine used to
+                # decide on its own what was worth saying by scraping the findings ledger,
+                # which meant the PROGRAM — the artifact an operator reads and could have
+                # written — never mentioned the one thing they were waiting for. A `PUBLISH`
+                # line makes the report part of the code rather than a side effect of it.
+                "published": result.get("published") or [],
                 "program": program,
                 "rendered": _render(program),
                 "grounded": survey["grounded"],

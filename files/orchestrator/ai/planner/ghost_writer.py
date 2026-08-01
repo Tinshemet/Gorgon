@@ -29,6 +29,7 @@ import copy
 from typing import Any, Dict, List, Tuple
 
 from .ir import effects
+from .ir import observe as _observe
 
 
 def _kinds(world):
@@ -627,6 +628,65 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
     select = _seams_of(scratch)[0] if scratch is not None else (lambda s, scope=None: [])
     kinds_now = _kinds(scratch)
     body = [_as_statement(t, a, kinds_now) for t, a in plan]
+
+    # THE DELIVERABLE — ask the thing the member was CREATED IN ORDER TO ANSWER.
+    #
+    # "Search the web for the diameter of the earth" produced a program that started a
+    # machine, started a browser, ran a search, asserted that a search EXISTED, and tore it
+    # all down. Every call could have succeeded and the operator would still have had no
+    # answer, because nothing ever asked what came back. The manifest named the observer —
+    # `search.observed.answer.by = camoufox_read` — and no code path ever called it, so
+    # there was no finding, so there was nothing to PUBLISH, so the reporter had nothing to
+    # say. Four silent layers downstream of one missing question.
+    #
+    # A KIND DECLARES WHICH FACT IS ITS POINT, because only the kind knows. A machine exists
+    # to run things and its reachability is incidental; a SEARCH exists for its answer and is
+    # worthless without one. That is not something the writer can infer from the shape of a
+    # manifest row.
+    #
+    # AND THE WITNESS IS `unknown = 0`, which is the clause `observe.py` already argues for:
+    # an observed attribute is three-valued, and asserting `answer != 'no'` would be
+    # satisfied by a search nobody asked. `unknown = 0` says every member was actually
+    # ASKED — the one form that a program which probed nothing cannot pass.
+    deliverables: List[str] = []
+    for g in goals:
+        for holder in ("select", "count", "every"):
+            sel = g.get(holder) if isinstance(g.get(holder), dict) else None
+            if sel is None and holder == "count":
+                sel = g.get("select") if isinstance(g.get("select"), dict) else None
+            if not sel:
+                continue
+            kind = sel.get("kind")
+            spec = effects._K(kinds_now).get(kind) or {}
+            fact = spec.get("deliverable")
+            probe = effects.probe_for(kind, fact) if fact else None
+            key = spec.get("key")
+            if not (fact and probe and key):
+                continue
+            # UNLESS THE CREATOR ALREADY BRINGS IT BACK. `camoufox search --json` prints the
+            # result — the answer arrives with the act, and a separate read would be a second
+            # question to a browser that has already spoken. A kind says so with
+            # `create_yields`; anything not listed there still has to be asked.
+            if fact not in (spec.get("create_yields") or ()):
+                for member in select(sel) or ():
+                    body.append({"op": "call", "tool": probe, "args": {key: member}})
+            # SCOPED TO THE MEMBERS THIS GOAL IS ABOUT, not to every member of the kind.
+            # An unscoped `COUNT(SELECT search WHERE answer='unknown') = 0` asks the world to
+            # enumerate a kind it does not track, and production's select answered with the
+            # nine machines — so the witness failed at `count is 9, wanted == 0` over a set it
+            # was never about. Carrying the goal's own filters keeps the question the same
+            # size as the goal.
+            body.append({"op": "ensure", "predicate": {
+                "shape": "count", "eq": 0,
+                "select": {**{k: v for k, v in sel.items() if k != "kind"},
+                           "kind": kind, fact: _observe.unknown()}}})
+            spec_obs = (spec.get("observed") or {}).get(fact) or {}
+            template = spec_obs.get("fact") or (fact + "({member})")
+            for member in select(sel) or ():
+                deliverables.append(template.replace("{" + key + "}", str(member))
+                                            .replace("{member}", str(member)))
+            break
+
     # GROUNDED THROUGH `_ground`, because a goal and a WITNESS are not the same object. An
     # `every` component is not a predicate the language can evaluate; its witness is a count
     # over the same set, and the number is resolved against the world AS THE PROGRAM LEAVES
@@ -636,6 +696,21 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
             continue
         w = _ground(g, select)
         body += [{"op": "ensure", "predicate": p} for p in (w if isinstance(w, list) else [w])]
+
+    # EVERY PROGRAM SAYS SOMETHING WHEN IT IS DONE — the results if it has any, `done` if it
+    # does not. A program that finishes silently leaves the operator reading a ledger to work
+    # out whether they got what they asked for, and PUBLISH is the channel built so they do
+    # not have to: the engine submits, the orchestrator keeps it or carries it up.
+    #
+    # THE FACT, NEVER THE VALUE. `PUBLISH answer(the diameter of the earth)` names what to
+    # submit; the engine attaches what it actually observed. A program that could state its
+    # own answer could state one it never obtained.
+    #
+    # BEFORE TEARDOWN, AFTER THE WITNESS — the same place and the same reason as the closing
+    # ENSUREs. Publishing after the scaffolding is gone would report on a world the program
+    # had already dismantled.
+    said = [{"op": "publish", "fact": f} for f in dict.fromkeys(deliverables)]
+    body += said or [{"op": "publish", "fact": "done"}]
 
     # TEARDOWN LAST, AFTER THE WITNESS. A machine this program made so something else could
     # happen is the program's to take down — the operator never asked for it and will never

@@ -110,7 +110,18 @@ class Session:
 
     def publish(self, pub) -> None:
         """An engine's claim, submitted. Recorded in the ledger too, so a publication that
-        is later KEPT rather than forwarded still left a trace of having been made."""
+        is later KEPT rather than forwarded still left a trace of having been made.
+
+        SAYING THE SAME THING TWICE IS NOT SAYING IT TWICE AS HARD. A node is offered again
+        while a tree settles, and the engine republishes what it found each pass — so one
+        search reported its answer FIVE TIMES, and a reporter handed that list would describe
+        five searches. Deduplicated on (what, value), which keeps a genuine CHANGE of value
+        audible: `alive(beta) = false` then `alive(beta) = true` is two facts and stays two.
+        """
+        prior = next((p for p in self.published
+                      if p.what == pub.what and p.value == pub.value), None)
+        if prior is not None:
+            return
         self.published.append(pub)
         self.record(f"claim: {pub.what} = {str(pub.value)[:40]}",
                     filed_by=getattr(self.engine, "name", "engine"),
