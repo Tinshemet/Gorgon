@@ -95,17 +95,27 @@ class Plan(Shortcut):
         # UNTIL THIS EXISTED THE LADDER WAS DECORATIVE HERE. The engine ran every program with
         # `intent="achieve"` hardcoded, so a request to be TOLD something was authorised to
         # change the lab, and the module enforcing authority was never handed any.
-        from orchestrator.ai.planner.ir import intent as _intent
-        granted = _intent.resolve(request, asked=self._ask_intent)
-        request = _intent.strip_prefix(request)
-
         # `plan procedure build_box: make a machine from a template` — KEEP this, do not do
         # it. Declared for the same reason the intent is: the alternative was a word blinder
         # sniffing {save, store, keep, reuse, …} out of the sentence, which fires on "save a
         # snapshot of web" and on 5 of 7 realistic requests. An operator who wants a snippet
         # can say so in four characters.
+        #
+        # READ BEFORE THE INTENT, and the order is not cosmetic. `resolve` saw the whole
+        # string — prefix included — found no marker word in it, and ASKED THE OPERATOR what
+        # they wanted back. They had just said: they want it kept.
         from orchestrator.ai.planner import procedures as _procs
+        from orchestrator.ai.planner.ir import intent as _intent
         keep_as, request = _procs.declared_in(request)
+
+        # AN AUTHORING REQUEST NEEDS NO RUNG, because nothing runs. The engine plans exactly
+        # as it would to act and the program is kept instead — so there is no authority being
+        # granted and no question worth asking. Asking anyway is the prompt-that-fires-on-
+        # ordinary-requests failure in its politest form: a question whose answer changes
+        # nothing, in front of every snippet the operator ever writes.
+        granted = (None if keep_as
+                   else _intent.resolve(request, asked=self._ask_intent))
+        request = _intent.strip_prefix(request)
 
         # IMPORTED HERE, NOT AT MODULE LOAD. A shortcut registers itself at class-definition
         # time, so every import in this file is paid by every chat session that never types

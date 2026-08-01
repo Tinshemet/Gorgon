@@ -57,6 +57,14 @@ class Engine:
     # `cost` is.
     intents: Tuple[str, ...] = ("fetch",)
 
+    # CAN THIS ENGINE WRITE A PROGRAM DOWN WITHOUT RUNNING IT? An authoring request — "keep
+    # this as a snippet" — needs a plan as an ARTIFACT, and an engine that inverts one goal
+    # into one tool call has nothing to hand over. Declared rather than discovered: the
+    # orchestrator called `engine._plan` on whichever engine the router picked, and the router
+    # picks the FLOOR first, so the first real authoring request died on
+    # `'ExecutorEngine' object has no attribute '_plan'`.
+    authors: bool = False
+
     # Packages this engine has loaded. Their kinds join the engine's manifest and their
     # tools become callable by a program the engine runs — with execution staying the
     # ENGINE'S, so a package never holds hands of its own.

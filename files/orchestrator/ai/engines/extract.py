@@ -161,6 +161,26 @@ def schema(kinds=None) -> Dict[str, Any]:
                         "select": _SELECT,
                         "amount": {"type": "integer",
                                    "description": "for count: how many. for reach: how few is too few"},
+                        # THE NAME HAD NOWHERE TO GO, and that is a SCHEMA defect rather than a
+                        # model one. A `count` goal offered `amount` for the number and `value`
+                        # for "what to set that property to (for every)" — so a request naming
+                        # a machine had one slot, `value`, doing two jobs, and the reader tried
+                        # the number first.
+                        #
+                        # MEASURED ON THE OPERATOR'S OWN REQUEST. "a machine called box1
+                        # running linux" came back as `value: "1"` — the model reading "a
+                        # machine" as a count — with `box1` pushed into a third goal the reader
+                        # then dropped. The name was in the answer TWICE and thrown away both
+                        # times, and what ran was `COUNT(SELECT vm) = 1` against a lab of nine:
+                        # a program that deleted eight machines including vm-orchestrator.
+                        #
+                        # ONE SLOT, ONE MEANING. `amount` is the number, `name` is the name,
+                        # and neither can be mistaken for the other because they are different
+                        # types in different fields.
+                        "name": {"type": "string",
+                                 "description": ("for count: the NAME of the member, when the "
+                                                 "operator gave one — 'a vm called box1' puts "
+                                                 "box1 here. Never a number, never a count")},
                         "attr": {"type": "string", "enum": _attrs(),
                                  "description": "for every: which property to give them"},
                         "value": {"type": "string",
@@ -519,6 +539,30 @@ _NOT_A_NAME = {
 }
 
 
+def _echoed() -> set:
+    """Words the model was SHOWN, coming back as if they were the operator's.
+
+    DERIVED FROM THE SCHEMA AND THE MANIFEST, never listed, because listing them is how a
+    guard goes stale the first time a field is added. Two sources, and both are the model
+    reading its own instructions back:
+
+        the FIELD NAMES it was offered   `name`, `value`, `amount`, `attr`, `fact`, `link`
+        the NOUNS for the kinds          `vm`, `machine`, `network`, `snapshot`, `file`
+
+    MEASURED: "make 5 vms" came back as `value: "name"`, and the identity repair — which
+    takes a bare name-shaped value on a count of one — turned it into A MACHINE CALLED
+    `name`, losing the five. The repair is right about the shape and cannot tell an
+    identity from an echo, so the echo is what gets named.
+    """
+    out = {"name", "value", "amount", "attr", "fact", "link", "make", "goal",
+           "select", "where", "kind", "count"}
+    for kind, spec in (config.KINDS or {}).items():
+        out.add(kind)
+        out |= {str(n).lower() for n in (spec.get("nouns") or ())}
+        out |= {str(a).lower() for a in (spec.get("attrs") or ())}
+    return out
+
+
 def unusable(sel: Dict[str, Any]) -> Optional[str]:
     """Why this selector names something that cannot exist, or None.
 
@@ -534,7 +578,7 @@ def unusable(sel: Dict[str, Any]) -> Optional[str]:
         names_a_member = attr == key or attr in (config.KINDS or {})
         if not names_a_member:
             continue
-        if value.strip().lower() in _NOT_A_NAME:
+        if value.strip().lower() in _NOT_A_NAME | _echoed():
             return (f"{attr} = {value!r} is a word, not a name — the request named no "
                     f"{attr}, and inventing one puts it in the lab")
         if any(c.isspace() for c in value.strip()):
@@ -555,12 +599,28 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
     one, because the writer plans faithfully for it and the run closes DONE.
     """
     out: List[Dict[str, Any]] = []
+
+    def _keep(goal: Dict[str, Any]) -> None:
+        """Admit a finished component, unless its selector names something that cannot exist.
+
+        ONE PLACE, AT THE END. Every branch below builds a selector its own way and several
+        REPAIR one — moving a value out of the wrong slot, reading a bare value as an
+        identity — so the only selector worth judging is the one that comes out.
+        """
+        sel = goal.get("select") or goal.get("every") or goal.get("observe") or {}
+        if isinstance(sel, dict) and unusable(sel):
+            return
+        out.append(goal)
+
     for g in (raw or {}).get("goals") or []:
         shape, sel = g.get("goal"), _to_select(g.get("select") or {})
         if not sel.get("kind"):
             continue
-        if unusable(sel):
-            continue
+        # NOTE: the usability check is at the END of this loop, on the FINAL selector — see
+        # `_keep`. Checked here it ran BEFORE the repairs that fill the selector in, so a
+        # name the repair had just invented was never examined: "make 5 vms" came back as
+        # `value: "name"`, the identity repair made it A MACHINE CALLED `name`, and the guard
+        # had already passed on a selector that did not yet contain it.
         if shape == "count":
             # A MISSING NUMBER MEANS ONE. "Create a vm named alpha" is a count of one and the
             # prompt now says so in those words, so the model omits `amount` as obvious —
@@ -588,6 +648,16 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
             # version ran it first and swallowed `value: "name=alpha"` — a measured repair,
             # broken by a guard placed one branch too early.
             used = False
+            # THE DECLARED NAME FIRST, because it is the one slot that cannot mean anything
+            # else. Everything below repairs a name that arrived in the WRONG field; this is
+            # the field that was missing, and a request whose name reached it needs no repair
+            # at all.
+            named = g.get("name")
+            if named is not None and str(named).strip():
+                spec = (config.KINDS or {}).get(sel.get("kind")) or {}
+                key = spec.get("key")
+                if key and key not in sel:
+                    sel = {**sel, key: _coerce(str(named).strip())}
             stray = g.get("value")
             if stray and "=" in str(stray) and len(sel) == 1:
                 a, _, v = str(stray).partition("=")
@@ -639,7 +709,7 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
                 # merely declined to read as an identity. What is left is the narrow case:
                 # no count anywhere, and a value that is not even a plausible token.
                 continue
-            out.append({"shape": "count", "select": sel, "eq": eq})
+            _keep({"shape": "count", "select": sel, "eq": eq})
         elif shape == "reach":
             # REACH IS NOT INVENTED. Twenty of twenty-three extraction failures on
             # 2026-08-01 were a `reach` goal the request never asked for, over a set too
@@ -651,7 +721,7 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
             if request and not (_REACH_WORDS & {w.strip(".,!?;:'\"").lower()
                                                 for w in request.split()}):
                 continue
-            out.append({"shape": "reach", "select": sel,
+            _keep({"shape": "reach", "select": sel,
                         "min": int(g.get("amount") or 2)})
         elif (shape == "every" and g.get("attr") and g.get("value") is not None
                 and not placeholder(g["value"])):
@@ -664,16 +734,16 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
                 # thing IS; giving every member of a set one name is not a state any world
                 # can reach. The reading the operator meant is a COUNT OF ONE, and deriving
                 # it costs a line where teaching it costs prompt budget measured to have none.
-                out.append({"shape": "count",
+                _keep({"shape": "count",
                             "select": {**sel, attr: _coerce(g["value"])}, "eq": 1})
             else:
-                out.append({"every": sel, "must": {attr: _coerce(g["value"])}})
+                _keep({"every": sel, "must": {attr: _coerce(g["value"])}})
         elif shape == "per" and g.get("make"):
             link = g.get("link") or _link_between(sel.get("kind"), g["make"])
             if link:
-                out.append({"per": sel, "make": g["make"], "link": link})
+                _keep({"per": sel, "make": g["make"], "link": link})
         elif shape == "observe":
-            out.append({"observe": sel, "fact": g.get("fact") or "alive"})
+            _keep({"observe": sel, "fact": g.get("fact") or "alive"})
     return _subject_survived(_one_statement_not_two(out), request)
 
 

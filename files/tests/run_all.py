@@ -47,6 +47,29 @@ NOT_SUITES = {"shared", "renderer", "log_runner", "probe_tools", "chat_harness",
 _RESULT = re.compile(r"(\d+)\s*/\s*(\d+)\s+passed")
 
 
+def _sandbox() -> dict:
+    """The environment every suite runs in — with `GORGON_HOME` pointed somewhere disposable.
+
+    `tests/conftest.py` says "there is no way to write a new test that quietly escapes it".
+    That was true of every test PYTEST collects, and this runner sends the OTHER FORTY-ODD
+    suites out as plain subprocesses, which load no conftest at all. So the sandbox covered
+    the smaller half and its own docstring said otherwise.
+
+    MEASURED THE HARD WAY, 2026-08-02: twenty runs of this file left **329,111 files and
+    4.0 GB** in the operator's `~/.gorgon/logs` — every one a fixture named for a rung, in
+    the directory whose whole purpose is to be their grounding record about what this system
+    actually did. *"I want you to add it where there is no way for you to touch it, it's my
+    grounding for you."* The 0444 write-once rule held perfectly and protected nothing,
+    because nothing was overwritten — it was BURIED.
+
+    ONE TEMPORARY HOME FOR THE WHOLE RUN rather than one per suite, so a suite that writes
+    something another reads still works, and the whole lot goes when the process ends.
+    """
+    import tempfile
+    _sandbox.dir = getattr(_sandbox, "dir", None) or tempfile.mkdtemp(prefix="gorgon-suite-")
+    return dict(os.environ, PYTHONPATH=_ROOT, GORGON_HOME=_sandbox.dir)
+
+
 def _discover():
     """(pytest_files, standalone_files, live_files) — by how each declares itself.
 
@@ -73,7 +96,7 @@ def _discover():
 
 def _run_standalone(stem):
     """(ok, label) for one hand-rolled suite."""
-    env = dict(os.environ, PYTHONPATH=_ROOT)
+    env = _sandbox()
     try:
         p = subprocess.run([sys.executable, os.path.join(_HERE, stem + ".py")],
                            capture_output=True, text=True, timeout=600, env=env, cwd=_ROOT)
@@ -105,7 +128,7 @@ def main(argv=None) -> int:
           f"{'' if a.live else f' ({len(LIVE)} live SKIPPED — use --live)'}\n")
 
     if pyt:
-        env = dict(os.environ, PYTHONPATH=_ROOT)
+        env = _sandbox()
         p = subprocess.run([sys.executable, "-m", "pytest", "-q", *[f"tests/{s}.py" for s in pyt]],
                            capture_output=True, text=True, cwd=_ROOT, env=env)
         tail = [l for l in p.stdout.splitlines() if "passed" in l or "failed" in l or "error" in l]

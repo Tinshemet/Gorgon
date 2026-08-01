@@ -45,6 +45,8 @@ class MedusaEngine(_TreeMixin, _StagedMixin, _PlanMixin, _ExecuteMixin,
     description = ("write and run a Gorgon program — plan several steps against the lab, "
                    "in order, and check the result")
     intents = ("fetch", "ensure", "achieve")
+    # IT WRITES PROGRAMS, so it can hand one over instead of running it.
+    authors = True
 
     def __init__(self, world, execute=None, packages=(), author=None, route=None):
         """`world` carries `kinds`, `seams` and `execute` — the mount contract, nothing else.

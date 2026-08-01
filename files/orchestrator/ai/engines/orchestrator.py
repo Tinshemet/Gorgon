@@ -158,6 +158,19 @@ class Orchestrator:
         # THE REST OF THE CLAIMANTS ARE FALLBACKS, in the order the registry mounted them.
         # The router picks first; being wrong about that is a routing mistake, not a dead end.
         order = [engine] + [e for e in claimants if e.name != engine.name]
+        if procedure:
+            # AN AUTHORING REQUEST GOES TO SOMETHING THAT CAN WRITE. `floor_first` sends every
+            # request to the executor, which inverts one goal into one call and has no program
+            # to hand over — so the first real "keep this as a snippet" died on
+            # `'ExecutorEngine' object has no attribute '_plan'`. Routing is about who serves
+            # a request; this is about who can produce the ARTIFACT, and they are not the same
+            # question.
+            order = [e for e in order if getattr(e, "authors", False)]
+            if not order:
+                from .session import Session
+                return Session(request, engine, intent=intent).close(
+                    "REFUSED", f"nothing mounted can write a program down: "
+                               f"{[e.name for e in claimants]}")
         return self._serve(request, order, state, intent, components, regime,
                            procedure)
 
