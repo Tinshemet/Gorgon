@@ -867,10 +867,18 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
             # nine machines — so the witness failed at `count is 9, wanted == 0` over a set it
             # was never about. Carrying the goal's own filters keeps the question the same
             # size as the goal.
-            body.append({"op": "ensure", "predicate": {
-                "shape": "count", "eq": 0,
-                "select": {**{k: v for k, v in sel.items() if k != "kind"},
-                           "kind": kind, fact: _observe.unknown()}}})
+            # AND GATED BY `witness`, LIKE THE CLOSING ONE. This is a DELIVERABLE witness
+            # rather than a goal witness, but it is the same op under the same ladder, and
+            # emitting it under a FETCH made the writer author a program the intent gate then
+            # refused as its own — *"statement 1: `ensure` reaches above a fetch"*. Two gates
+            # judging the same statement by different standards is the failure the ladder
+            # exists to prevent, and a writer that trips it on its own output is the sharpest
+            # possible case. The PROBE above still runs: a fetch may ask, it may not assert.
+            if witness:
+                body.append({"op": "ensure", "predicate": {
+                    "shape": "count", "eq": 0,
+                    "select": {**{k: v for k, v in sel.items() if k != "kind"},
+                               "kind": kind, fact: _observe.unknown()}}})
             spec_obs = (spec.get("observed") or {}).get(fact) or {}
             template = spec_obs.get("fact") or (fact + "({member})")
             for member in select(sel) or ():

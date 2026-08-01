@@ -53,10 +53,18 @@ def translator() -> Callable:
             raw = _extract.extract(str(gap))
         except Exception as exc:
             return Answer(None, "extractor", f"{type(exc).__name__}: {exc}")
+        # A DECLINE IS AN ANSWER AND IT CARRIES ITS OWN REASON. `declined()` existed and was
+        # called from the bench ONLY — production flattened `{"cannot": "too vague"}` into the
+        # same "no usable goal" it reports for a garbled reply. Those are different events: one
+        # is the translator saying the request cannot be read, in its own words, and the other
+        # is the translator failing to be read. Reporting them alike throws away the one piece
+        # of information the operator can act on, which is WHY.
+        said_no = _extract.declined(raw)
+        if said_no:
+            return Answer(None, "extractor", f"cannot translate: {said_no}")
         goals = _extract.to_goals(raw, str(gap))
-        got = (Answer(goals, "extractor", "") if goals
-               else Answer(None, "extractor", "no usable goal"))
-        return got
+        return (Answer(goals, "extractor", "") if goals
+                else Answer(None, "extractor", "no usable goal"))
     translate.name = "extractor"
     return translate
 
