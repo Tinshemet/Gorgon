@@ -40,8 +40,11 @@ def check(label, cond):
 
 # A KITCHEN, because a domain Gorgon will never ship is the honest test of a mount contract.
 KITCHEN = {
-    "dish": {"key": "dish_name", "attrs": ["dish_name", "serves"], "nouns": ["dish", "meal"],
-             "create": "create_dish",
+    # `origin` is deliberately settable by NOTHING: no setter writes it, so demanding it on
+    # a dish that already exists is genuinely unreachable. A promotion test needs a real
+    # dead end, and `serves` is not one — the creator can take it at birth.
+    "dish": {"key": "dish_name", "attrs": ["dish_name", "serves", "origin"],
+             "nouns": ["dish", "meal"], "create": "create_dish",
              "setters": {"set_serves": {"attr": "serves", "member_arg": "dish_name",
                                         "value_arg": "n", "single": True}}},
 }
@@ -406,6 +409,104 @@ def test_planning_never_touches_the_world_it_plans_against():
     _gw.cover([{"shape": "count", "select": {"kind": "dish", "dish_name": "y"}, "eq": 1}],
               pure)
     check("a pure-state world is unaffected by planning", pure.state["dish"] == {})
+
+
+def test_promotion_opens_an_in_session_rather_than_repeating_itself():
+    """A RECORDED-BUT-INERT ESCALATION IS WORSE THAN NONE.
+
+    This used to note the promotion and re-run the SAME engine with the SAME components,
+    which fails identically by construction — the log said "promoted to tree" and nothing had
+    happened. That is the shape of every defect this project spent a week on.
+
+    What a tree session is: the engine could not close a gap, so THE GAP goes on the channel
+    as its own question. Not the original request — that was already translated and asking it
+    again gets the same answer. The gap is smaller and different: "nothing reaches this — what
+    would?"
+    """
+    print("[promotion] the gap becomes its own question")
+    asked = []
+
+    def gap_answerer(gap, world=None):
+        from orchestrator.ai.engines.channel import Answer
+        asked.append(gap)
+        # Answering with what unblocks it: the dish must exist before it can be served.
+        return Answer([{"shape": "count", "select": {"kind": "dish", "dish_name": "risotto"},
+                        "eq": 1}], "gap-solver", "")
+
+    reg = _kitchen()
+    engine = reg.get("medusa")
+    engine.world().execute("create_dish", {"dish_name": "other"})
+
+    # A goal the writer cannot reach on its own: no setter writes `serves` onto a member that
+    # does not exist, and the creator cannot run on a name already taken by nothing.
+    engine.world().execute("create_dish", {"dish_name": "risotto"})
+    impossible_first = [{"shape": "count",
+                         "select": {"kind": "dish", "dish_name": "risotto",
+                                    "origin": "milan"},
+                         "eq": 1}]
+    orch = Orchestrator(reg, Channel([gap_answerer]))
+    r = orch.handle("serve risotto for four", components=impossible_first)
+
+    check("the channel was asked about the GAP, not the request",
+          bool(asked) and isinstance(asked[0], dict) and "gap" in asked[0])
+    check("and the gap text is the writer's own refusal",
+          bool(str(asked[0].get("gap"))))
+    check("the log records an in-session", any("in-session" in l for l in r["log"]))
+
+
+def test_an_unanswerable_gap_closes_honestly_instead_of_looping():
+    """An escalation with no answerer behind it is a slower refusal, and must say so."""
+    print("[promotion] nobody can answer the gap")
+    reg = _kitchen()
+    reg.get("medusa").world().execute("create_dish", {"dish_name": "risotto"})
+    orch = Orchestrator(reg, Channel())        # no answerers at all
+    r = orch.handle("where is this risotto from",
+                    components=[{"shape": "count",
+                                 "select": {"kind": "dish", "dish_name": "risotto",
+                                            "origin": "milan"},
+                                 "eq": 1}])
+    check("it closes UNMET", r["outcome"] == "UNMET")
+    check("naming the gap", "gap" in (r["why"] or "").lower())
+    check("and does not loop forever", len(r["log"]) < 12)
+
+
+def test_a_session_is_abandoned_rather_than_promoted_forever():
+    """A tree runs until resolved OR ABANDONED, and abandonment needs a number.
+
+    Three rounds, because the ghost writer's own fixpoint gives up after four passes that
+    will not settle — a session that out-loops its writer is chasing a gap the writer has
+    already said it cannot close.
+    """
+    print("[promotion] bounded, not endless")
+    from orchestrator.ai.engines.channel import Answer
+
+    def unhelpful(gap, world=None):
+        # Answers, but with something that never closes the gap — the shape that would loop.
+        return Answer([{"shape": "count", "select": {"kind": "dish", "dish_name": "decoy"},
+                        "eq": 1}], "unhelpful", "")
+
+    reg = _kitchen()
+    reg.get("medusa").world().execute("create_dish", {"dish_name": "risotto"})
+    r = Orchestrator(reg, Channel([unhelpful])).handle(
+        "where is this risotto from",
+        components=[{"shape": "count",
+                     "select": {"kind": "dish", "dish_name": "risotto", "origin": "milan"},
+                     "eq": 1}])
+    check("it stops", r["outcome"] in {"ABANDONED", "UNMET", "PROMOTION_DECLINED"})
+    check("and says the rounds ran out or the gap stayed open",
+          bool(r["why"]))
+
+
+def test_sync_covers_the_engine_that_was_routed_to():
+    """/sync is in the flow, and syncing EVERY engine on EVERY prompt is the 2026-07-31
+    context overflow one level up — it grows with the number of engines while nothing
+    recomputes the budget. Syncing the chosen one costs a lookup."""
+    print("[sync] the routed engine, not all of them")
+    reg = _kitchen()
+    r = Orchestrator(reg, Channel([stub({"risotto for four": RISOTTO})])).handle(
+        "risotto for four")
+    check("the session records a sync", any("synced" in l for l in r["log"]))
+    check("naming the engine it routed to", any("synced medusa" in l for l in r["log"]))
 
 
 def main():

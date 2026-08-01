@@ -85,6 +85,14 @@ class Orchestrator:
 
         session = Session(request, engine, intent=intent, budget=self.budget)
         session.record(f"routed to {engine.name} · regime {session.regime}")
+        # SYNC ONLY WHAT WAS ROUTED TO. The flow says "/sync then route", and doing it in
+        # that order would ask EVERY mounted engine for state on EVERY prompt — the context
+        # overflow of 2026-07-31 one level up, growing with the number of engines while
+        # nothing recomputes the budget. Syncing the CHOSEN engine costs one lookup and
+        # answers the only question that matters: what is actually there, for the engine
+        # about to act. The capability ledger is what would let the order be reversed safely.
+        session.record(f"synced {engine.name}: "
+                       f"{self.registry.sync([engine.name]).get(engine.name)}")
 
         if components is None:
             answer = self.channel.ask(request, engine.world())
@@ -100,14 +108,42 @@ class Orchestrator:
         result = engine.run(components, session)
         session.calls = result.get("calls") or []
 
-        # THE PROMOTION REQUEST, heard here and nowhere else.
-        if result.get("promote"):
+        # THE PROMOTION REQUEST, heard here and nowhere else — and then ACTED ON.
+        #
+        # This used to record the promotion and RE-RUN THE SAME ENGINE WITH THE SAME
+        # COMPONENTS, which fails identically by construction. A recorded-but-inert
+        # escalation is worse than none: the log says "promoted to tree" and nothing
+        # happened, which is the shape of every defect this project has spent a week on.
+        #
+        # What a tree session actually is: the engine could not close a gap, so the gap goes
+        # ON THE CHANNEL as its own question. Not the original request — that was already
+        # translated, and asking it again gets the same answer. The GAP is a different and
+        # much smaller question: "nothing reaches COUNT(SELECT vm WHERE ...) — what would?"
+        while result.get("promote"):
             to = result["promote"]
-            if session.promote(to, result.get("why", "")):
-                result = engine.run(components, session)
-                session.calls = result.get("calls") or []
-            else:
+            if not session.promote(to, result.get("why", "")):
                 return session.close("PROMOTION_DECLINED", result.get("why", ""))
+            if not session.rounds_left():
+                return session.close("ABANDONED", "the gap did not close in the rounds "
+                                                  "this session was allowed")
+            gap = {"gap": result.get("why", ""), "request": request,
+                   "have": components}
+            answer = self.channel.ask(gap, engine.world())
+            session.record(f"in-session asked about the gap -> {answer.source}: "
+                           f"{len(answer.components)} component(s)")
+            if not answer:
+                # NOBODY COULD ANSWER THE GAP, so the session ends saying so rather than
+                # looping. An escalation with no answerer behind it is a slower refusal, and
+                # naming it as one is the only honest close.
+                return session.close("UNMET", f"no answer for the gap: "
+                                              f"{result.get('why', '')}")
+            # THE NEW COMPONENTS ARE ADDED, NOT SUBSTITUTED. The original goals are still
+            # what was asked; the answer is what unblocks them, and dropping the first would
+            # quietly change the request.
+            components = list(components) + [c for c in answer.components
+                                             if c not in components]
+            result = engine.run(components, session)
+            session.calls = result.get("calls") or []
 
         if not result.get("ok"):
             return session.close("UNMET", str(result.get("why") or ""))

@@ -59,6 +59,7 @@ class Session:
         self.log: List[str] = []
         self.closed = False
         self.outcome: Optional[str] = None
+        self.promotions = 0
 
     # ── the ledger of this session ────────────────────────────────────────────────────
     def record(self, note: str) -> None:
@@ -90,7 +91,18 @@ class Session:
             return False
         self.record(f"promoted {self.regime} -> {to} ({why})")
         self.regime = to
+        self.promotions += 1
         return True
+
+    def rounds_left(self, cap: int = 3) -> int:
+        """How many more in-session rounds this session may take.
+
+        A tree runs until resolved or ABANDONED, and abandonment needs a number. Three is
+        chosen for one reason: the ghost writer's own fixpoint gives up after four passes
+        that will not settle, and a session that out-loops its writer is chasing a gap the
+        writer has already said it cannot close.
+        """
+        return max(0, cap - self.promotions)
 
     def close(self, outcome: str, why: str = "") -> Dict[str, Any]:
         self.closed = True
