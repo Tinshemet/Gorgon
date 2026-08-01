@@ -1629,7 +1629,14 @@ def test_consent_is_the_operators_and_the_engine_stops_answering_it_for_them():
     goal = {"shape": "count", "select": {"kind": "vm", "name": "ghost"}, "eq": 1}
     plan = _gw.cover([goal], world)
     whole = _gw.as_program(plan, [goal], world)
-    ungrounded = {"body": [st for st in whole["body"]
+    # STRIPPED OF ITS WITNESSES *AND* OF ITS `new`-NESS. The writer emits creations as `new`
+    # now, and a `new` vouches for its own creation — so a body of creations is grounded act
+    # by act and this gate correctly does not fire on it. What the gate is about is an act
+    # that proves NOTHING, which is a bare `call`: it passes the author's arguments through
+    # and decides nothing, so nothing checks it.
+    ungrounded = {"body": [({"op": "call", "tool": "create_vm", "args": st.get("args", {})}
+                            if st.get("op") == "new" else st)
+                           for st in whole["body"]
                            if st.get("op") not in ("ensure", "achieve")]}
     planned = {"ok": True, "program": ungrounded, "plan": plan}
 

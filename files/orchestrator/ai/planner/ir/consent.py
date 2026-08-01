@@ -188,6 +188,20 @@ def survey(program: Any) -> Dict[str, Any]:
     # Both words ground a program. `achieve` is the stronger of the two — it states what
     # the whole thing was for — so a program carrying one is grounded by definition.
     asserts = sum(1 for st in stmts if st.get("op") in ("ensure", "achieve"))
+    # A `new` VOUCHES FOR ITS OWN CREATION, AND FOR NOTHING ELSE. The visitor re-reads the
+    # world after every creation and files a failure if what was asked for is not there — a
+    # verdict about that statement, produced by that statement. So a program whose every act
+    # is a creation is already checked act by act, and a closing ENSURE over it asserts a
+    # second time what the body just proved: that is the two-line program the operator asked
+    # for, *"ensure is unneeded here"*.
+    #
+    # ONLY WHEN EVERY ACT IS ONE, which is the whole precision of it. A program that creates
+    # a machine and then LABELS it has an unvouched-for act — `new` said nothing about the
+    # label — and the question still stands. Counting a `new` unconditionally would let a
+    # single creation ground a program of sixteen unchecked changes.
+    acting = [st for st in stmts if st.get("op") in _ACTING]
+    if acting and all(st.get("op") == "new" for st in acting):
+        asserts += len(acting)
     empty = vacuous(program)
     return {"acts": acts, "asserts": asserts, "vacuous": len(empty),
             "why_vacuous": empty,

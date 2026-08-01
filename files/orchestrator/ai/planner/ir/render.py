@@ -84,14 +84,24 @@ def _statement(st: Any, indent: str) -> list:
         # difference — whether this copies something that exists — is exactly what an
         # operator is deciding about when they read the line.
         src = f" FROM {st['from']}" if st.get("from") else ""
-        return _with_tail([f"{indent}{config.SURFACE['bind']} {st.get('var')} = {_w('new')} {many}"
-                           f"{st.get('kind')}{f'({extra})' if extra else ''}{src};"], st, indent)
+        # `NEW CALL create_vm(…)`, NOT `NEW vm(…)`. The operator's decision, 2026-08-02:
+        # *"how you create a new object/class its with the tool call that creates them, IE
+        # NEW CALL create_vm"*. Now that a kind is a CLASS, its creation is a constructor
+        # call and should say so — `NEW` marks it a creation rather than an invocation, and
+        # the call names WHICH constructor instead of leaving the kind to imply it.
+        maker = _creator(st)
+        head = f"{_w('new')} {many}" + (f"{config.SURFACE.get('call', 'CALL')} {maker}"
+                                        if maker else f"{st.get('kind')}")
+        return _with_tail([f"{indent}{config.SURFACE['bind']} {st.get('var')} = {head}"
+                           f"{f'({extra})' if extra else ''}{src};"], st, indent)
 
     if op == "publish":
         # THE ONE STATEMENT WHOSE EFFECT IS ON THE CONVERSATION. It names the fact and never
         # a value — the engine supplies what it actually observed — so a reader can tell at a
         # glance that the program is REPORTING rather than asserting.
-        return _with_tail([f"{indent}{_w('publish')} {st.get('fact')};"], st, indent)
+        # `PUBLISH(vm)` — the operator's form. A publication names a THING, and parentheses
+        # say it is being handed over rather than declared.
+        return _with_tail([f"{indent}{_w('publish')}({st.get('fact')});"], st, indent)
 
     if op == "call":
         # A grafted result reads as a binding, the same LET that binds a resource —
@@ -158,6 +168,20 @@ def _statement(st: Any, indent: str) -> list:
         return out
 
     return [f"{indent}<unknown op {op!r}>"]
+
+
+def _creator(st) -> str:
+    """The tool that makes this kind — read from the manifest, never written in the line.
+
+    A `new` statement carries its KIND; which constructor that implies is a manifest fact,
+    and `FROM` picks the copying one where a kind declares two.
+    """
+    spec = (config.KINDS or {}).get(st.get("kind")) or {}
+    if st.get("from"):
+        for c in (spec.get("creators") or {}).values():
+            if c.get("from") and c.get("tool"):
+                return c["tool"]
+    return spec.get("create") or ""
 
 
 def _with_tail(lines: list, st: dict, indent: str) -> list:

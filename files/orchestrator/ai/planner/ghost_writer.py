@@ -102,6 +102,12 @@ def _short(p: Dict[str, Any]) -> str:
     return f"{p.get('shape')}:{sel.get('kind', '?')}[{_sel(sel)}] {tail}"
 
 
+# WHAT A BOUND NAME MAY LOOK LIKE — the schema's own rule, where the WRITER can meet it. The
+# writer builds IR directly and is otherwise never held to the constraints the model is held
+# to, which is how `STORE http://x = …` once shipped with every suite green.
+_PRONOUNCEABLE = __import__("re").compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
 def _fresh_names(kind: str, n: int, taken: set) -> List[str]:
     """Names for members the request never named.
 
@@ -311,6 +317,39 @@ def _lower(goal: Dict[str, Any], select, world) -> List[Dict[str, Any]]:
         subs.append({"shape": "count",
                      "select": {"kind": kind, key: name, **plain}, "eq": 1})
     return subs
+
+
+def _self_vouched(goal, body, kinds, select) -> bool:
+    """Is every member this goal is about one that a `new` in this body already checked?
+
+    NARROW, AND IT DECLINES WHEN UNSURE. Only a plain identity or count over a kind counts:
+    a goal carrying `reach`, an observation, or a filter the creation does not establish is
+    NOT vouched for by the creation, because `new` proves the member exists and says nothing
+    about what else became true of it.
+    """
+    if goal.get("shape") != "count" or "eq" not in goal:
+        return False
+    sel = goal.get("select") or {}
+    kind = sel.get("kind")
+    spec = effects._K(kinds).get(kind) or {}
+    key = spec.get("key")
+    if not key:
+        return False
+    news = [st for st in body if st.get("op") == "new" and st.get("kind") == kind]
+    if not news:
+        return False
+    # THE GOAL'S FILTERS MUST BE ONES THE CREATION ITSELF SUPPLIES. `name` and anything the
+    # creator was passed are established by the call; a label or a network is not.
+    extra = {k: v for k, v in sel.items() if k not in ("kind", key)}
+    for st in news:
+        args = st.get("args") or {}
+        if any(str(args.get(a)) != str(v) for a, v in extra.items()):
+            return False
+    named = sel.get(key)
+    if named is not None:
+        return any((st.get("args") or {}).get(key) == named for st in news)
+    # AN UNNAMED COUNT is vouched for when the creations ARE the whole of it.
+    return len(news) == goal["eq"] and len(select({"kind": kind})) == goal["eq"]
 
 
 def _ground(goal, select):
@@ -731,6 +770,24 @@ def _as_statement(tool: str, args: Dict[str, Any], kinds) -> Dict[str, Any]:
     # a user could not have written and the system cannot re-read. `test_writer_output_is_
     # writable` now closes that, and doing `new` properly means binding real identifiers AND
     # referring to them with the sigil — a whole change, not half of one.
+    # A CREATION IS A `new`. `CALL create_vm(…)` GETS NO CHECK AT ALL — `new` is the one op
+    # where the harness itself invents something (it mints the name, chooses the creator,
+    # supplies the key), so the visitor re-reads the world after it and files a failure if
+    # what was asked for is not there. Emitting a raw call throws that check away and then
+    # needs an ENSURE bolted on to replace it, which is exactly the third line the operator
+    # struck: *"it should be like 2 lines"*, *"ensure is unneeded here"*.
+    #
+    # THE WITHDRAWAL THIS REVERSES was about the VARIABLE NAME and nothing else: `var` was
+    # set to the member's key value, so it emitted `STORE http://x = NEW page(url: http://x)`.
+    # A name for a thing in the world is not an identifier in a program. The key still
+    # travels in `args`, where the visitor's "THE AUTHOR'S OWN NAME WINS" rule reads it.
+    kind = effects._kind_of(tool, kinds)
+    spec = effects._K(kinds).get(kind) or {}
+    key = spec.get("key")
+    if kind and key and tool == spec.get("create"):
+        member = args.get(key)
+        var = str(member) if _PRONOUNCEABLE.match(str(member or "")) else f"{kind}1"
+        return {"op": "new", "var": var, "kind": kind, "args": dict(args)}
     return {"op": "call", "tool": tool, "args": args}
 
 
@@ -825,8 +882,22 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
     # `every` component is not a predicate the language can evaluate; its witness is a count
     # over the same set, and the number is resolved against the world AS THE PROGRAM LEAVES
     # IT — not as it was before, or the witness would assert the wrong total.
+    # WHICH MEMBERS THIS PROGRAM CREATED WITH `new`. A `new` VOUCHES FOR ITSELF — the visitor
+    # re-reads the world after it and files a failure if what was asked for is not there — so
+    # a goal whose whole content is creations is already checked, statement by statement, and
+    # a closing ENSURE over it asserts a second time what the body just proved.
+    #
+    # THE OPERATOR STRUCK IT ON SIGHT: *"it should be like 2 lines"*, *"ensure is unneeded
+    # here"*. The third line only ever existed because the first was a raw `CALL`, which has
+    # no check to give.
+    minted = {st.get("var") for st in body if st.get("op") == "new"}
+    made = {(st.get("kind"), (st.get("args") or {}).get(
+        (effects._K(kinds_now).get(st.get("kind")) or {}).get("key")))
+        for st in body if st.get("op") == "new"}
     for g in goals:
         if not witness or not groundable(g):
+            continue
+        if _self_vouched(g, body, kinds_now, select):
             continue
         w = _ground(g, select)
         body += [{"op": "ensure", "predicate": p} for p in (w if isinstance(w, list) else [w])]
@@ -843,7 +914,13 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
     # BEFORE TEARDOWN, AFTER THE WITNESS — the same place and the same reason as the closing
     # ENSUREs. Publishing after the scaffolding is gone would report on a world the program
     # had already dismantled.
+    # PUBLISH THE THING, NOT THE WORD. A program that made something has an answer to give —
+    # the binding it just created — and `done` is what a program says when it has nothing.
+    # The operator's form: `PUBLISH(vm)`.
     said = [{"op": "publish", "fact": f} for f in dict.fromkeys(deliverables)]
+    if not said and minted:
+        said = [{"op": "publish", "fact": v} for v in dict.fromkeys(
+            st.get("var") for st in body if st.get("op") == "new")]
     body += said or [{"op": "publish", "fact": "done"}]
 
     # TEARDOWN LAST, AFTER THE WITNESS. A machine this program made so something else could

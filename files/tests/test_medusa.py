@@ -283,6 +283,9 @@ def test_graft_binds_per_iteration_and_does_not_outlive_the_loop():
 
 def test_intent_is_enforced_before_anything_runs():
     w = _world()
+    # A `new` IS STILL AN ACT, which is what this gate is about — `new` is in `acting_ops`
+    # and a FETCH may not contain one. That it VOUCHES for itself is a different question,
+    # answered by `consent`; authority and grounding are two gates and this is the first.
     acting = {"body": [{"op": "new", "var": "x", "kind": "vm",
                         "args": {"os_type": "linux"}}]}
     res = _run(acting, w, intent=intent.FETCH)
@@ -440,8 +443,14 @@ def test_a_failed_predicate_does_not_silently_swallow_the_rest_of_the_program():
 
 def test_an_ungrounded_program_asks_first():
     w = _world()
-    acting = {"body": [{"op": "new", "var": "x", "kind": "vm",
-                        "args": {"os_type": "linux"}}]}
+    # A BARE `call`, NOT A `new`. A `new` vouches for its own creation — the visitor re-reads
+    # the world after it — so a program of only creations is checked act by act and needs no
+    # closing ENSURE. That is the two-line program: create it, say what you made. A `call`
+    # passes the author's arguments through and decides nothing, so it proves nothing, which
+    # is the case this gate is actually about.
+    acting = {"body": [{"op": "call", "tool": "add_label",
+                        "args": {"name": "alpha", "label": "prod"}}]}
+    w.execute("create_vm", {"name": "alpha", "os_type": "linux"})
     sel, holds = _seams(w)
     res = run(acting, w.execute, select=sel, holds=holds, known_names=w.names())
     check("a program that acts and vouches for nothing is refused pending consent",
@@ -1260,6 +1269,8 @@ def test_the_operators_intent_reaches_the_runtime():
     check("with no intent supplied the instruction is absent, not guessed",
           "THIS IS A COMMAND" not in _system(None))
     w = _world()
+    # A `new` IS AN ACT under the ladder, whatever it vouches for. Same fixture as the FETCH
+    # case above and for the same reason: this gate is about AUTHORITY, not grounding.
     acting = {"body": [{"op": "new", "var": "x", "kind": "vm",
                         "args": {"os_type": "linux"}}]}
     res = _run(acting, w, intent=intent.ENSURE)
