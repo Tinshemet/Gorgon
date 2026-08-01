@@ -54,6 +54,11 @@ def _findings_of(world, result) -> List[Dict[str, Any]]:
 # is refining a goal the writer already knows how to reach.
 _MAX_OPENINGS = 12
 
+# HOW MANY TIMES ONE NODE MAY BE TOLD TO WAIT. The same twelve, for the same reason: a node
+# re-offered a thirteenth time is not waiting for something, it is being refused by a
+# decider that will not say so.
+_MAX_WAITS = 12
+
 
 class MedusaEngine(Engine):
     name = "medusa"
@@ -129,7 +134,7 @@ class MedusaEngine(Engine):
         A STOP is honoured and the work stops where it stopped — reported as partial rather
         than rolled back, because the calls already made are facts.
         """
-        from .insession import DECOMPOSE, RUN, STOP, Step
+        from .insession import DECOMPOSE, RUN, STOP, YIELD, Step
 
         with _config.use_kinds(self.manifest if self._foreign else None):
             whole = getattr(session, "regime", "translation") != "tree"
@@ -155,6 +160,12 @@ class MedusaEngine(Engine):
                 if whole_goals:
                     queue.append((whole_goals, "the request · witness", "*"))
             calls, done, opened, ran_nodes = [], [], 0, []
+            # HOW MANY TIMES EACH NODE HAS BEEN TOLD TO WAIT, and how many verdicts in a row
+            # have been waits. The second is the deadlock detector: a queue where everything
+            # yields and nothing runs will never change, because the only thing that changes
+            # the world here is running.
+            waited: Dict[str, int] = {}
+            stalled = 0
             # THE TREE, AS THE BOOK KEEPER WANTS IT — one row per node, keyed by path so a
             # parent's re-visit updates the parent's own row rather than adding a second.
             rows: Dict[str, Dict[str, Any]] = {}
@@ -190,6 +201,29 @@ class MedusaEngine(Engine):
                                      destroys=[c for c in planned["plan"]
                                                if c[0] in _effects.deleters(self.manifest)])
                 action = verdict.action if verdict is not None else STOP
+
+                if action == YIELD:
+                    waited[path] = waited.get(path, 0) + 1
+                    stalled += 1
+                    why = verdict.why or "no reason given"
+                    session.record(f"waiting: {label} — {why}")
+                    rows[path]["state"] = _keeper.UNKNOWN
+                    rows[path]["why"] = f"waited for {why}"
+                    if waited[path] > _MAX_WAITS:
+                        return {"ok": False, "refused": True, "calls": calls, "partial": done,
+                                "why": f"waited {waited[path]} times for {why} and it never "
+                                       f"came"}
+                    if stalled > len(queue) + 1:
+                        # EVERY REMAINING NODE HAS YIELDED SINCE ANYTHING LAST RAN. Nothing
+                        # in this session can change that, because running is the only thing
+                        # that changes the world — so it is named as a deadlock rather than
+                        # spun on until a counter runs out and blames the wrong node.
+                        return {"ok": False, "refused": True, "calls": calls, "partial": done,
+                                "why": f"deadlocked — every remaining node is waiting and "
+                                       f"nothing can run; the last said: {why}"}
+                    queue.append((goals, label, path))
+                    continue
+                stalled = 0
 
                 if action == STOP:
                     return {"ok": False, "refused": True, "calls": calls, "partial": done,

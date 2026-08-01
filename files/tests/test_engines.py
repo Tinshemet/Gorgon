@@ -900,6 +900,109 @@ def test_the_opened_grain_acts_before_it_knows_the_request_is_impossible():
     check("the opened grain had already acted", len(w2.vms) < 3)
 
 
+def test_a_node_can_be_told_to_wait_and_comes_round_again():
+    """YIELD: not now, ask me again — the third answer a node needs.
+
+    Until it existed a node could only run, split, or die, so anything not ready YET had to
+    be treated as something that would never be ready.
+    """
+    print("[in-session] wait, then re-offer")
+    from orchestrator.ai.engines import insession
+
+    world = World(KITCHEN)
+    eng = MedusaEngine(world)
+    sess = Session("two dishes", eng, intent="ensure")
+    sess.regime = "tree"
+    goals = [{"shape": "count", "select": {"kind": "dish", "dish_name": "risotto"}, "eq": 1},
+             {"shape": "count", "select": {"kind": "dish", "dish_name": "paella"}, "eq": 1}]
+    order, held = [], [True]
+
+    def decide(step, s):
+        name = (step.node.get("select") or {}).get("dish_name")
+        if name == "risotto" and held[0]:
+            held[0] = False
+            return insession.Verdict(insession.YIELD, "the rice is still in the cupboard")
+        order.append(name)
+        return insession.Verdict(insession.RUN)
+
+    out = insession.drive(eng, goals, sess, decide)
+    check("the yielded node ran after the others", order[0] == "paella")
+    check("but it did run", "risotto" in order)
+    check("and the work completed", out.get("ok"))
+    check("the wait is in the record, with its reason",
+          any("waiting" in l and "cupboard" in l for l in sess.log))
+
+
+def test_waiting_re_plans_against_the_world_it_comes_back_to():
+    """THE ONLY KIND OF WAITING THAT CAN END. A yielded node is not a sleep — it is re-planned
+    when it comes round, so what it was waiting for can actually have arrived."""
+    print("[in-session] the wait is a re-plan, not a sleep")
+    from orchestrator.ai.engines import insession
+
+    world = World(KITCHEN)
+    eng = MedusaEngine(world)
+    sess = Session("four each", eng, intent="ensure")
+    sess.regime = "tree"
+    goals = [{"every": {"kind": "dish"}, "must": {"serves": "4"}}]
+    costs, first = [], [True]
+
+    def decide(step, s):
+        costs.append(step.cost)
+        if first[0]:
+            first[0] = False
+            # WHAT IT WAS WAITING FOR ARRIVES WHILE IT WAITS — the dish it is about to
+            # quantify over does not exist yet when the node is first offered.
+            world.execute("create_dish", {"dish_name": "risotto"})
+            return insession.Verdict(insession.YIELD, "no dishes exist yet")
+        return insession.Verdict(insession.RUN)
+
+    out = insession.drive(eng, goals, sess, decide)
+    check("it had nothing to do the first time", costs[0] == 0)
+    check("and real work the second", costs[1] > 0)
+    check("the goal holds", out.get("ok")
+          and world.state["dish"]["risotto"]["serves"] == "4")
+
+
+def test_a_node_that_waits_forever_is_refused_by_name():
+    """A decider that never says yes is refusing; the engine says so rather than spinning."""
+    print("[in-session] waiting forever is a refusal that will not admit it")
+    from orchestrator.ai.engines import insession
+
+    world = World(KITCHEN)
+    eng = MedusaEngine(world)
+    sess = Session("a dish", eng, intent="ensure")
+    out = insession.drive(eng, [RISOTTO[0]], sess,
+                          lambda st, s: insession.Verdict(insession.YIELD, "the oven"))
+    check("it stopped", out.get("refused") is True)
+    check("naming what it waited for", "the oven" in out.get("why", ""))
+    check("and nothing was cooked", not world.state.get("dish"))
+
+
+def test_a_queue_where_everything_waits_is_a_deadlock_and_says_so():
+    """Running is the only thing that changes the world, so a queue that never runs never
+    changes. Naming it beats spinning until a counter blames the last node to speak."""
+    print("[in-session] every node waiting is a deadlock, not patience")
+    from orchestrator.ai.engines import insession
+
+    world = World(KITCHEN)
+    eng = MedusaEngine(world)
+    sess = Session("two dishes", eng, intent="ensure")
+    sess.regime = "tree"
+    goals = [{"shape": "count", "select": {"kind": "dish", "dish_name": n}, "eq": 1}
+             for n in ("risotto", "paella")]
+    asked = []
+
+    def decide(step, s):
+        asked.append(step)
+        return insession.Verdict(insession.YIELD, "each other")
+
+    out = insession.drive(eng, goals, sess, decide)
+    check("it named the deadlock", "deadlock" in (out.get("why") or ""))
+    check("rather than running the wait counter out",
+          len(asked) < len(goals) * 12)
+    check("nothing ran", not world.state.get("dish"))
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "engines"))

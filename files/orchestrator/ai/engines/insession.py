@@ -31,6 +31,21 @@ from typing import Any, Dict, List, Optional
 RUN = "run"
 DECOMPOSE = "decompose"
 STOP = "stop"
+# WAIT — NOT NOW, ASK ME AGAIN. The node goes to the back of the queue and is re-offered
+# after the others have had their turn.
+#
+# WHY A THIRD ANSWER AND NOT A REFUSAL. Until this existed a node could only run, split, or
+# die, so anything not ready YET had to be treated as something that would never be ready.
+# That is wrong wherever a record precedes the object it names — a machine that has been
+# created and is not up, a snapshot still being written, an answer the channel has been asked
+# for and has not given. Refusing those loses work that was about to become possible; running
+# them acts on something that is not there.
+#
+# THE WAIT IS NOT A SLEEP. A yielded node is RE-PLANNED against the world as it is when it
+# comes round again, so "waiting" means exactly "the plan may be different next time" — which
+# is the only kind of waiting that can end. An in-session that blocked would be holding the
+# budget hostage on somebody else's clock.
+YIELD = "yield"
 
 
 class Step:
