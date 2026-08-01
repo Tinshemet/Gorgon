@@ -1698,6 +1698,46 @@ def test_there_is_one_constrained_model_call():
           sig.parameters["schema"].default is inspect.Parameter.empty)
 
 
+def test_the_lab_engine_claims_by_nouns_and_medusa_over_claims():
+    """TWO ENGINES, TWO POLICIES, and the difference has to be said out loud because one
+    inherits from the other.
+
+    Medusa over-claims ON PURPOSE — it is what runs when nothing more specific fits. The LAB
+    engine is something specific. Deleting its duplicate noun match silently promoted it to
+    the general fallback, and it began claiming "bake a cake".
+    """
+    print("[routing] specific engines claim narrowly; the fallback claims widely")
+    from orchestrator.ai.engines import QemuEngine
+
+    class FakeLab:
+        _vms = {}
+        _networks = {}
+
+        def vms(self):
+            return {}
+
+        def by_network(self):
+            return {}
+
+        def known_names(self):
+            return set()
+
+    lab = QemuEngine(FakeLab(), lambda t, a: {"success": False})
+    check("the lab engine answers to a machine", lab.claims("create a machine"))
+    check("and to the manifest's other nouns", lab.claims("make a subnet"))
+    check("but not to a cake", not lab.claims("bake a cake"))
+    check("while Medusa, the fallback, takes it",
+          MedusaEngine(World(KITCHEN)).claims("bake a cake"))
+
+    # AND NOBODY HAND-ROLLS THE MATCH ANY MORE. Counted rather than eyeballed: an earlier
+    # edit claimed to delete this duplicate and silently did not match anything.
+    import inspect
+
+    from orchestrator.ai.engines import qemu as _qemu
+    check("the lab engine defines no claims of its own",
+          "def claims" not in inspect.getsource(_qemu))
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "engines"))

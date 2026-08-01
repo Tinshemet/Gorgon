@@ -185,18 +185,20 @@ class QemuEngine(MedusaEngine):
                    "in the lab")
     intents = ("fetch", "ensure", "achieve")
 
-    def __init__(self, library, execute, findings=None):
-        super().__init__(LabWorld(library, execute, findings))
+    def __init__(self, library, execute, findings=None,
+                 author=None, route=None):
+        # `author`/`route` ARE STAGED LOWERING'S SEAMS, passed straight through. Without
+        # them a granted promotion reaches for a decomposer that is not there —
+        # recorded, inert, and indistinguishable from an escalation that worked.
+        super().__init__(LabWorld(library, execute, findings),
+                         author=author, route=route)
 
-    def claims(self, request: str) -> bool:
-        """Claims anything naming a machine, a network or a snapshot — by the MANIFEST'S OWN
-        NOUNS, never a list written here. `kinds.<k>.nouns` already records what an operator
-        calls these things ("machine", "box", "subnet"), and a second list would drift from
-        it by the end of the week."""
-        words = {w.strip(".,!?;:'\"").lower() for w in request.split()}
-        for kind, spec in (self.manifest or {}).items():
-            if kind in words or (set(spec.get("nouns") or ()) & words):
-                return True
-            if {f"{kind}s", *(f"{n}s" for n in (spec.get("nouns") or ()))} & words:
-                return True
-        return False
+    # THE CONTRACT'S NOUN MATCH, NOT MEDUSA'S OVER-CLAIM, and it has to be said explicitly
+    # because this class inherits from Medusa. Its own copy of the noun match was deleted as
+    # a duplicate — correctly, the base does exactly that now — and deleting it silently
+    # promoted this engine to the GENERAL FALLBACK, which claimed "bake a cake". Medusa
+    # over-claims ON PURPOSE, being the thing that runs when nothing more specific fits; the
+    # LAB engine is something specific, and it should be tried when a machine is mentioned.
+    claims = Engine.claims
+
+

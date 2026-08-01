@@ -95,13 +95,42 @@ class Plan(Shortcut):
                 return _insession.Verdict(_insession.STOP, "dry run — nothing was done")
             return _insession.Verdict(step.kind)
 
+        # STAGED LOWERING'S TWO SEAMS, so a PROMOTION CAN ACTUALLY BUY SOMETHING. Without
+        # them the engine asks for the tree regime, is granted it, and reaches for a
+        # decomposer that is not there — a recorded-but-inert escalation, which is the exact
+        # shape this project has found in three separate places.
+        #
+        # THEY LIVE IN THE BENCH FOR THE SAME REASON THE EXTRACTOR DOES, and it is a
+        # measurement rather than an accident: the model-driven tree scores 4/13 where the
+        # deterministic writer scores 13/13. Moving them into production would say they had
+        # arrived. They are the FALLBACK for a goal the writer refuses, reached only after
+        # `Unsolvable` and only inside a granted tree session, so their cost is paid by
+        # whoever holds the budget.
+        def _staged_seams():
+            try:
+                from tests.bench.ladder import BENCH_MODEL
+                from tests.bench.sim_world import SimWorld
+                from tests.bench.tree_probe import make_emit, make_route
+            except Exception:
+                return None, None
+            stats = {"route_calls": 0, "emit_calls": 0, "route_channel": 0,
+                     "emit_channel": 0}
+            # THE PROMPTS THOSE BUILDERS WRITE DESCRIBE A WORLD, and the one they describe
+            # here is a MODEL of the lab rather than the lab — the same scratch the writer
+            # plans against. A decomposer that could reach the real executor would be a
+            # second door.
+            model_world = SimWorld()
+            return (make_emit(BENCH_MODEL, model_world, None, stats),
+                    make_route(BENCH_MODEL, model_world, stats))
+
+        author, route = _staged_seams()
         registry = Registry()
         # BOTH LOAD-BEARING ENGINES, floor first. The executor provides the box — one call,
         # one answer — and Medusa turns a prompt into a program when one call is not enough.
         # Mounting only the planner meant every request, however small, went to the thing
         # that writes programs; the rerouting handles the handover with nobody watching.
         registry.mount(ExecutorEngine(LIBRARY, guarded))
-        registry.mount(QemuEngine(LIBRARY, guarded))
+        registry.mount(QemuEngine(LIBRARY, guarded, author=author, route=route))
         # TRY THE FLOOR FIRST. `route` is the one decision a model makes here and there is
         # no model in this path yet, so the rule is the ladder's own: gravity points down,
         # and an engine that cannot serve a request says so cheaply.
