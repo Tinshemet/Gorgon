@@ -72,6 +72,26 @@ def floor_first(request, menu, engines):
                 engines[0].name if engines else None)
 
 
+def packages() -> Tuple:
+    """Capabilities a Medusa program may CALL, loaded into the world engine.
+
+    A PACKAGE IS NOT MOUNTED AND CANNOT BE ROUTED TO — it has no `run` and no `intents`, so
+    the orchestrator has no way to send a request here. What loading one does is join its
+    KINDS to the engine's manifest, which is what lets the extractor NAME a search and the
+    writer PLAN one.
+
+    LOADING IT IS WHAT MAKES IT ASKABLE. Before this, mounting the engine extended what the
+    system could DO and never what it could be ASKED for: the schema and the prompt are built
+    from the manifest in force, so a package that never joined it was invisible to the front
+    seam however complete its own code was.
+    """
+    try:
+        from ..packages.camoufox import CamoufoxPackage
+    except Exception:
+        return ()
+    return (CamoufoxPackage(),)
+
+
 def build(execute: Callable, library=None, narrate: bool = True,
           decide: Optional[Callable] = None) -> Any:
     """The whole production mount: two engines, a channel, a reporter, a router.
@@ -97,7 +117,8 @@ def build(execute: Callable, library=None, narrate: bool = True,
     # Medusa turns a prompt into a program when one call is not enough. Mounting only the
     # planner sent every request, however small, to the thing that writes programs.
     registry.mount(ExecutorEngine(lib, execute))
-    registry.mount(QemuEngine(lib, execute, author=author, route=route))
+    registry.mount(QemuEngine(lib, execute, author=author, route=route,
+                              packages=packages()))
 
     return Orchestrator(registry, Channel([translator()]), decide=decide,
                         route=floor_first,

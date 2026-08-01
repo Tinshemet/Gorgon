@@ -194,7 +194,17 @@ class Orchestrator:
         if components is None:
             session.record("English -> goals", filed_by="orchestrator",
                            caught_by="channel", executed=f"ask({request[:40]!r})")
-            answer = self.channel.ask(request, engine.world())
+            # TRANSLATE UNDER THE ROUTED ENGINE'S MANIFEST. The extractor builds its schema
+            # and its prompt from the manifest IN FORCE, so asking outside this scope offers
+            # the model the DEFAULT kinds — and a package's kinds, which joined the engine's
+            # manifest when it was loaded, stay invisible to the front seam.
+            #
+            # THAT IS THE WHOLE OF "a capability that cannot be requested is not mounted".
+            # The writer could plan a search, the engine could run one, and the model could
+            # not say the word.
+            from ..planner.ir import config as _config
+            with _config.use_kinds(getattr(engine, "manifest", None)):
+                answer = self.channel.ask(request, engine.world())
             session.record(f"{len(answer.components or ())} goal(s)",
                            filed_by=answer.source or "channel", caught_by="orchestrator",
                            executed="translate", data=answer.components,

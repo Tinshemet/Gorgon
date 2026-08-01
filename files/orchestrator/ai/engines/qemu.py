@@ -186,12 +186,12 @@ class QemuEngine(MedusaEngine):
     intents = ("fetch", "ensure", "achieve")
 
     def __init__(self, library, execute, findings=None,
-                 author=None, route=None):
+                 author=None, route=None, packages=()):
         # `author`/`route` ARE STAGED LOWERING'S SEAMS, passed straight through. Without
         # them a granted promotion reaches for a decomposer that is not there —
         # recorded, inert, and indistinguishable from an escalation that worked.
         super().__init__(LabWorld(library, execute, findings),
-                         author=author, route=route)
+                         author=author, route=route, packages=packages)
 
     # THE CONTRACT'S NOUN MATCH, NOT MEDUSA'S OVER-CLAIM, and it has to be said explicitly
     # because this class inherits from Medusa. Its own copy of the noun match was deleted as

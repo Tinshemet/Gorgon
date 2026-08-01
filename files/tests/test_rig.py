@@ -99,6 +99,44 @@ def test_building_the_rig_touches_nothing():
     check("and the world is readable without acting", world.names() == set())
 
 
+def test_a_loaded_package_is_askable_not_just_runnable():
+    """"A CAPABILITY THAT CANNOT BE REQUESTED IS NOT MOUNTED."
+
+    Loading a package joins its KINDS to the engine's manifest. That is only half: the
+    extractor builds its schema and its prompt from the manifest IN FORCE, so a translation
+    asked outside the routed engine's scope offers the model the DEFAULT kinds — and the
+    package's stay invisible. The writer could plan a search, the engine could run one, and
+    the model could not say the word.
+    """
+    print("[rig] the package's kinds reach the front seam")
+    orch = rig.build(_refuses, library=FakeLibrary(), narrate=False)
+    lab = next(e for e in orch.registry.engines if e.name == "qemu")
+    check("the package is loaded", [p.name for p in lab.packages] == ["camoufox"])
+    check("its kinds joined the engine's manifest",
+          {"search", "browser"} <= set(lab.manifest))
+
+    # THE TRANSLATION HAPPENS UNDER THAT MANIFEST, asserted by watching what the schema
+    # offers at the moment the channel is asked.
+    from orchestrator.ai.engines.channel import Answer
+    from tests.bench import extract as _extract
+    seen = {}
+
+    def spy(request, world=None):
+        seen["kinds"] = set(_extract.schema()["properties"]["goals"]["items"]
+                            ["properties"]["select"]["properties"]["kind"]["enum"])
+        return Answer(None, "spy", "not translating, just looking")
+    spy.name = "spy"
+
+    from orchestrator.ai.engines.channel import Channel
+    orch.channel = Channel([spy])
+    orch.handle("search the web for something", intent="ensure")
+    check(f"the model is offered the package's kinds too ({sorted(seen.get('kinds', ()))})",
+          {"search", "browser"} <= seen.get("kinds", set()))
+    check("and the default kinds are back afterwards, outside the scope",
+          "search" not in set(_extract.schema()["properties"]["goals"]["items"]
+                              ["properties"]["select"]["properties"]["kind"]["enum"]))
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "the production rig"))
