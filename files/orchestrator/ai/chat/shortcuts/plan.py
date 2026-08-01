@@ -69,7 +69,7 @@ class Plan(Shortcut):
         result = Orchestrator(registry, Channel([translate])).handle(request)
 
         outcome = result.get("outcome")
-        colour = {"DONE": "ok"}.get(outcome, "warn")
+        colour = {"DONE": "ok", "REFUSED": "warn"}.get(outcome, "warn")
         console.print(f"[{colour}]{outcome}[/{colour}]  {result.get('why') or ''}")
         for line in result.get("log", []):
             console.print(f"  [dim]{line}[/dim]")
@@ -77,6 +77,14 @@ class Plan(Shortcut):
             console.print("\n[bold]the program it wrote[/bold]")
             for line in result["rendered"].splitlines():
                 console.print(f"  {line}")
+        tree = result.get("tree")
+        if tree and tree.get("verdict") != "clear":
+            # ONLY WHEN IT IS NOT CLEAR. A book keeper that printed a clean tree on every
+            # request would train the reader to skip the line it exists to be read on.
+            console.print(f"\n[warn]the tree was served against a moving world[/warn]  "
+                          f"{tree['infected']} of {tree['nodes']} node(s)")
+            for line in (result.get("tree_report") or "").splitlines()[1:]:
+                console.print(f"  [dim]{line}[/dim]")
         if result.get("grounded") is not None:
             console.print(f"\n  grounded: {result['grounded']} · "
                           f"{len(result.get('calls') or [])} call(s)")

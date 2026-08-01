@@ -176,6 +176,13 @@ class Orchestrator:
         out = session.close("DONE", result.get("why") or "")
         out["rendered"] = result.get("rendered", "")
         out["grounded"] = result.get("grounded")
+        # THE TREE'S OWN VERDICT TRAVELS LIKE GROUNDING DOES — beside the answer, not inside
+        # it. A run served against a set that changed underneath a split succeeded and is not
+        # the same thing as one served against a set that held still, and the reporter must
+        # not be the thing that decides whether to mention it: it is handed findings only.
+        if result.get("tree"):
+            out["tree"] = result["tree"]
+            out["tree_report"] = result.get("tree_report", "")
         if self._narrate is not None:
             from . import reporter as _reporter
             said = _reporter.report(session.findings, self._narrate)

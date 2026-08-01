@@ -552,8 +552,12 @@ def test_the_in_session_grain_is_the_regime():
     many, out2 = count("tree")
     check("translation is a single exchange", len(one) == 1)
     check("and it declares the whole program's cost up front", one[0].cost == 2)
-    check("a tree is one exchange per goal", len(many) == len(RISOTTO))
-    check("each declaring only its own cost", all(s.cost == 1 for s in many))
+    # PLUS ONE FOR THE REQUEST AS A WHOLE. Goals interact — a later one can undo an
+    # earlier one — so the tree grain closes with the same fixpoint `cover` uses.
+    check("a tree is one exchange per goal, plus one for the whole request",
+          len(many) == len(RISOTTO) + 1)
+    check("each goal declaring only its own cost", all(s.cost == 1 for s in many[:-1]))
+    check("and the closing witness has nothing left to do", many[-1].cost == 0)
     check("both close the work", out1.get("ok") and out2.get("ok"))
     check("and both make the same calls", len(out1["calls"]) == len(out2["calls"]) == 2)
 
@@ -755,8 +759,9 @@ def test_a_decomposed_goal_is_still_witnessed_by_its_parent():
 
     out = insession.drive(eng, goals, sess, decide)
     witness = [c for w, c in seen if "witness" in w]
-    check("the parent came back as a witness", len(witness) == 1)
+    check("the parent came back as a witness", len(witness) >= 1)
     check("and it had work to do — the split was stale", witness[0] > 0)
+    check("re-visiting until it settles is what ends it", witness[-1] == 0)
     check("the goal now actually holds", out.get("ok") and
           all(d.get("serves") == "4" for d in world.state["dish"].values()))
     check("including the dish that arrived late",
@@ -822,6 +827,77 @@ def test_a_goal_of_any_shape_can_be_named_in_one_line():
     check("every goal names its kind, and the bare call names its tool",
           all("vm" in t for t in said if not t.startswith("call "))
           and said[3] == "call guest_ping(name=alpha)")
+
+
+def test_a_step_declares_what_it_would_destroy():
+    """The reason the protocol asks per node at all — and it was unenforceable until now.
+
+    The claim has been that "a destructive node gets a verdict of its own rather than riding
+    in on the back of a program granted as a whole". Until the step SAID which nodes those
+    were, nobody reading a step could act on it.
+    """
+    print("[in-session] a step names what it would destroy")
+    from orchestrator.ai.engines import insession
+    from tests.bench.sim_world import SimWorld
+
+    world = SimWorld()
+    for name in ("alpha", "beta", "gamma"):
+        world.execute("create_vm", {"name": name, "os_type": "linux"})
+    eng = MedusaEngine(world)
+    sess = Session("just one", eng, intent="ensure")
+    goals = [{"shape": "count", "select": {"kind": "vm"}, "eq": 1}]
+    seen = []
+
+    def refuse_destruction(step, s):
+        seen.append(step)
+        if step.destroys:
+            return insession.Verdict(insession.STOP,
+                                     f"{len(step.destroys)} machine(s) would be destroyed")
+        return insession.Verdict(insession.RUN)
+
+    out = insession.drive(eng, goals, sess, refuse_destruction)
+    check("the step named the deletions", len(seen[0].destroys) == 2)
+    check("and named them as calls, not a flag",
+          all(t == "delete_vm" for t, _ in seen[0].destroys))
+    check("a policy that reads it can refuse", out.get("refused") is True)
+    check("and nothing was destroyed", len(world.vms) == 3)
+
+
+def test_the_opened_grain_acts_before_it_knows_the_request_is_impossible():
+    """THE TREE REGIME'S INTRINSIC COST, measured rather than asserted.
+
+    "Every machine can reach the others, AND end up with exactly one machine" cannot be
+    satisfied. The whole-program grain refuses WITHOUT TOUCHING ANYTHING — `cover` reviews an
+    inert artifact before it runs. The opened grain reaches the same refusal having already
+    deleted machines, because it acts as it goes.
+
+    That is not a defect to fix. It is what the intent ladder means by gravity pointing down,
+    and it is why `Step.destroys` exists: the verdict is the only place it can be caught.
+    """
+    print("[in-session] the program regime reviews BEFORE; the tree corrects AFTER")
+    from orchestrator.ai.engines import insession
+    from tests.bench.sim_world import SimWorld
+
+    def serve(regime):
+        world = SimWorld()
+        for name in ("alpha", "beta", "gamma"):
+            world.execute("create_vm", {"name": name, "os_type": "linux"})
+        eng = MedusaEngine(world)
+        sess = Session("", eng, intent="ensure")
+        sess.regime = regime
+        out = insession.drive(eng, [{"shape": "reach", "select": {"kind": "vm"}, "min": 3},
+                                    {"shape": "count", "select": {"kind": "vm"}, "eq": 1}],
+                              sess, lambda st, s: insession.Verdict(insession.RUN))
+        return out, world
+
+    whole, w1 = serve("translation")
+    opened, w2 = serve("tree")
+    check("neither claims success on an impossible request",
+          not whole.get("ok") and not opened.get("ok"))
+    check("both ask to be promoted rather than inventing an answer",
+          whole.get("promote") == "tree" and opened.get("promote") == "tree")
+    check("the whole-program grain destroyed nothing", len(w1.vms) == 3)
+    check("the opened grain had already acted", len(w2.vms) < 3)
 
 
 def main():

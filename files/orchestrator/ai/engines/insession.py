@@ -41,7 +41,7 @@ class Step:
     """
 
     def __init__(self, kind: str, node: Any, why: str = "", cost: int = 1,
-                 divisible: bool = True):
+                 divisible: bool = True, destroys: Optional[List] = None):
         self.kind = kind
         self.node = node
         self.why = why
@@ -53,10 +53,27 @@ class Step:
         # told no is the inference this project keeps replacing with a declaration. A decider
         # that reads this never asks for a split that cannot exist.
         self.divisible = divisible
+        # WHAT IT WOULD DESTROY IF GRANTED — [(tool, args), ...], empty when nothing.
+        #
+        # THIS IS WHY THE PROTOCOL ASKS PER NODE AT ALL. The claim was that "a destructive
+        # node gets a verdict of its own rather than riding in on the back of a program
+        # granted as a whole" — and until this field existed the step said nothing about
+        # which nodes those were, so the claim was unenforceable by anyone reading it.
+        #
+        # MEASURED, on the fuzz corpus: a request that CANNOT be satisfied ("every machine
+        # can reach the others, and end up with exactly one machine") is refused by the
+        # whole-program grain WITHOUT TOUCHING ANYTHING, because `cover` reviews an inert
+        # artifact before it runs. The opened grain reaches the same refusal having already
+        # deleted two machines, because it acts as it goes. That is not a defect in the
+        # opened grain; it is what the ladder means by "gravity points down", and the only
+        # place to catch it is here, before the verdict.
+        self.destroys = list(destroys or ())
 
     def __repr__(self) -> str:
         return (f"<Step {self.kind} cost={self.cost}"
-                f"{'' if self.divisible else ' atomic'} {str(self.node)[:48]}>")
+                f"{'' if self.divisible else ' atomic'}"
+                f"{f' destroys={len(self.destroys)}' if self.destroys else ''}"
+                f" {str(self.node)[:48]}>")
 
 
 class Verdict:

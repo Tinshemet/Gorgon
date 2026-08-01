@@ -138,10 +138,27 @@ class MedusaEngine(Engine):
             # translation and tree are one loop rather than two code paths that drift.
             queue = [(list(components), "the whole program", "0")] if whole else \
                     [([g], "one goal", str(i)) for i, g in enumerate(components)]
+            if not whole:
+                # THE TOP-LEVEL WITNESS, and it is not optional.
+                #
+                # `cover` closes the whole request under a FIXPOINT — four rounds, because
+                # goals interact and a later one can undo an earlier one. Serving the goals
+                # as separate root nodes threw that away: each node closed, nothing re-read
+                # the others, and the run reported success.
+                #
+                # MEASURED on the fuzz corpus: "every machine can reach the others, and end
+                # up with exactly one machine" put three machines on a network, pinged them,
+                # then DELETED TWO — and answered OK. Every node was locally correct and the
+                # request was false. Without this the tree grain is not a more expensive way
+                # to get the same answer, it is a cheaper way to get a wrong one.
+                whole_goals = [g for g in components if _gw.groundable(g)]
+                if whole_goals:
+                    queue.append((whole_goals, "the request · witness", "*"))
             calls, done, opened, ran_nodes = [], [], 0, []
             # THE TREE, AS THE BOOK KEEPER WANTS IT — one row per node, keyed by path so a
             # parent's re-visit updates the parent's own row rather than adding a second.
             rows: Dict[str, Dict[str, Any]] = {}
+            settling: Dict[str, int] = {}
             while queue:
                 goals, label, path = queue.pop(0)
                 rows.setdefault(path, {
@@ -169,7 +186,9 @@ class MedusaEngine(Engine):
                                      # whole content is the witness, and there is nothing
                                      # finer inside a verification — splitting one would
                                      # discard the very check it exists to make.
-                                     divisible=finer is not None and bool(planned["plan"]))
+                                     divisible=finer is not None and bool(planned["plan"]),
+                                     destroys=[c for c in planned["plan"]
+                                               if c[0] in _effects.deleters(self.manifest)])
                 action = verdict.action if verdict is not None else STOP
 
                 if action == STOP:
@@ -235,11 +254,33 @@ class MedusaEngine(Engine):
                 # length already said it.
                 if label.endswith("· witness"):
                     stale = bool(planned["plan"])
-                    rows[path]["state"] = _keeper.INFECTED if stale else _keeper.SOUND
-                    rows[path]["why"] = (
-                        f"the set it was split over changed — {len(planned['plan'])} further "
-                        f"call(s) were needed after its children closed" if stale
-                        else "re-planned after its children and had nothing left to do")
+                    # ONCE INFECTED, IT STAYS INFECTED. The settling loop re-visits until the
+                    # goals stop moving, and the LAST pass is sound by construction — writing
+                    # that over the first pass's verdict would report a run served against a
+                    # moving world as clear, which is the single thing this keeper exists to
+                    # say. A correction that worked is still a correction that was needed.
+                    if stale:
+                        rows[path]["state"] = _keeper.INFECTED
+                        rows[path]["why"] = (
+                            f"the set it was split over changed — {len(planned['plan'])} "
+                            f"further call(s) were needed after its children closed")
+                    elif rows[path]["state"] != _keeper.INFECTED:
+                        rows[path]["state"] = _keeper.SOUND
+                        rows[path]["why"] = ("re-planned after its children and had nothing "
+                                             "left to do")
+                    # A WITNESS THAT HAD WORK HAS NOT SETTLED. It just changed the world, so
+                    # the goals it shares a request with may have moved again — the same
+                    # reason `cover` re-covers rather than passing once. Four rounds, and
+                    # the number is `cover`'s: a witness that out-loops the writer's own
+                    # fixpoint is chasing something the writer already gave up on.
+                    if stale:
+                        settling[path] = settling.get(path, 0) + 1
+                        if settling[path] < 4:
+                            queue.append((goals, label, path))
+                        else:
+                            rows[path]["why"] = (
+                                "re-planned four times and never settled — the goals are "
+                                "pulling against each other")
                 else:
                     # A LEAF THAT RAN CARRIES ITS OWN CLOSING ENSURE, so it witnessed itself.
                     rows[path]["state"] = _keeper.SOUND

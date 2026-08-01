@@ -30,8 +30,15 @@ from . import config
 
 def _K(kinds):
     """The manifest in force. A TARGET is a manifest plus a world that can read and act;
-    everything else here is domain-free and always was."""
-    return kinds if kinds is not None else (config.KINDS or {})
+    everything else here is domain-free and always was.
+
+    AN EMPTY MANIFEST MEANS "THE ONE IN FORCE", not "a domain with no kinds". An engine
+    running on Gorgon's own manifest carries `{}` — it has nothing of its own to declare —
+    and reading that literally answered every question with silence: no tools, no kinds, no
+    deleters. Silence is the dangerous default here, because the caller asking "what would
+    this destroy?" got "nothing".
+    """
+    return kinds if kinds else (config.KINDS or {})
 
 
 def _kind_of(tool: str, kinds=None) -> Optional[str]:
@@ -297,6 +304,16 @@ def tools_of(kinds=None) -> set:
         out |= {c["tool"] for c in (spec.get("creators") or {}).values() if c.get("tool")}
         out |= {o["by"] for o in (spec.get("observed") or {}).values() if o.get("by")}
     return out
+
+
+def deleters(kinds=None) -> Dict[str, str]:
+    """Every tool that DESTROYS a member, mapped to its kind. Derived, never listed.
+
+    The manifest already names each kind's deleter, so a hand-kept list of "dangerous tools"
+    would be a second source that drifts the first time a kind is added — and it would drift
+    SILENTLY, in the direction of calling a destructive tool safe.
+    """
+    return {spec["delete"]: kind for kind, spec in _K(kinds).items() if spec.get("delete")}
 
 
 def declared(kinds=None) -> Dict[str, str]:
