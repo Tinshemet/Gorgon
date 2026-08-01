@@ -76,6 +76,34 @@ class LabWorld:
         rows = self._library.vms()
         for name, rec in (rows or {}).items():
             model.state.setdefault("vm", {})[name] = self._as_manifest_row("vm", rec)
+
+        # EVERY KIND THE LIBRARY CAN ANSWER FOR, not just the one somebody happened to seed.
+        #
+        # Only `vm` was seeded, so the model believed the lab had NO NETWORKS — and the
+        # writer, asked to put machines on one, planned `create_network(network1)` over a lab
+        # that already holds five. An empty set is not a neutral default when the plan's next
+        # move is to CREATE what is missing.
+        nets = getattr(self._library, "by_network", None)
+        members_of = nets() if callable(nets) else {}
+        for net, members in (members_of or {}).items():
+            model.state.setdefault("network", {})[net] = {"net_name": net,
+                                                          "members": set(members or ())}
+            # THE MEMBERSHIP LIVES ON THE NETWORK RECORD AND THE FILTER ASKS THE MACHINE.
+            # A vm record carries no network field at all, so `select(vm where network=x)`
+            # could never match — the relation has to be inverted here, once, into the
+            # attribute `add_vm_to_network` writes. Without it a `reach` goal over machines
+            # ALREADY on a shared network plans the whole thing again.
+            for m in members or ():
+                row = model.state.get("vm", {}).get(m)
+                if row is not None:
+                    row.setdefault("network", set()).add(net)
+
+        # SNAPSHOTS CANNOT BE SEEDED — the library does not track them, so the model would
+        # say "there are none" to a question nobody asked. That is the difference between
+        # UNKNOWN and EMPTY, and it is recorded rather than papered over: a `per ... make
+        # snapshot` goal planned here will re-create restore points that may exist. Fixing
+        # it needs a snapshot listing in the library, not a change to this file.
+        model.unseeded = {k for k in (self.kinds or {}) if not model.state.get(k)} - {"vm"}
         return model
 
     def _as_manifest_row(self, kind: str, rec) -> dict:

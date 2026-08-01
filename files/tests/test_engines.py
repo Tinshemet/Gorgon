@@ -1030,6 +1030,9 @@ def test_the_lab_mount_speaks_the_manifest_not_the_library():
                     "blue": {"name": "blue", "labels": ["fleet"], "status": "running",
                              "os_type": "windows", "_internal": "ignore me"}}
 
+        def by_network(self):
+            return {"lab": ["red", "blue"], "dmz": ["red"], "stale": ["gone"]}
+
         def known_names(self):
             return {"red", "blue"}
 
@@ -1051,6 +1054,22 @@ def test_the_lab_mount_speaks_the_manifest_not_the_library():
           and "memory_mb" not in set(extract_attr_enum()))
     check("and an underscore field never reaches the model", "_internal" not in
           eng.world().scratch().state["vm"]["blue"])
+
+    # EVERY KIND THE LIBRARY CAN ANSWER FOR. Seeding only `vm` had the model believe the lab
+    # held no networks, so the writer planned `create_network` over a lab that already had
+    # five — an empty set is not a neutral default when the plan's next move is to create
+    # what is missing.
+    model = eng.world().scratch()
+    check("networks are seeded too", set(model.state["network"]) == {"lab", "dmz", "stale"})
+    check("and membership is INVERTED onto the machine, where the filter asks",
+          select({"kind": "vm", "network": "lab"}) == ["blue", "red"]
+          and select({"kind": "vm", "network": "dmz"}) == ["red"])
+    check("a member the lab no longer has is not conjured into existence",
+          "gone" not in model.state["vm"])
+    # UNKNOWN IS NOT EMPTY. The library tracks no snapshots, so the model must not answer
+    # "there are none" to a question nobody asked.
+    check("a kind nothing could seed is named, not silently empty",
+          model.unseeded == {"snapshot"})
 
 
 def test_a_world_that_cannot_ask_still_plans_a_reach():
