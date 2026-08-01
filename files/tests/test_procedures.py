@@ -476,6 +476,123 @@ def test_a_due_routine_runs_through_the_ordinary_engine():
         check("the procedure's body actually ran", "web" in world.vms)
 
 
+def _network_setup():
+    """The operator's own example, at the size they wrote it.
+
+        NetworkSetup.medusa
+          attach(vms, net_name)   ·  add(vm, net_name)
+    """
+    member = {"shape": "count", "eq": 1,
+              "select": {"kind": "vm", "name": "$vm", "network": "$net_name"}}
+    return {"name": "NetworkSetup", "methods": {
+        "attach": {"params": {"vms": "set", "net_name": "string"},
+                   "body": [{"op": "foreach", "in": "$vms",
+                             "call": {"op": "call", "tool": "add_vm_to_network",
+                                      "args": {"vm_name": "$item",
+                                               "net_name": "$net_name"}}},
+                            {"op": "ensure", "predicate": {
+                                "shape": "count", "eq": 0,
+                                "select": {"kind": "vm", "network": "none"}}}]},
+        "add": {"params": {"vm": "string", "net_name": "string"},
+                "achieves": member,
+                "body": [{"op": "call", "tool": "add_vm_to_network",
+                          "args": {"vm_name": "$vm", "net_name": "$net_name"}},
+                         {"op": "ensure", "predicate": member}]}}}
+
+
+def test_a_set_is_declarable_at_last():
+    """EVERY PARAM TYPE WAS A SCALAR, and that was a limit rather than a gap nobody reached:
+    `attach(vms, net_name)` could not declare its first argument at all."""
+    print("[classes] a parameter may be a set")
+    from orchestrator.ai.planner.ir import config
+
+    check("the manifest declares it", "set" in config.PARAM_TYPES)
+    loop = {"name": "over", "params": {"vms": "set"},
+            "body": [{"op": "foreach", "in": "$vms",
+                      "call": {"op": "call", "tool": "add_label",
+                               "args": {"name": "$item", "label": "seen"}}},
+                     {"op": "ensure", "predicate": {
+                         "shape": "count", "select": {"kind": "vm", "label": "seen"},
+                         "gte": 1}}]}
+    ok, problems = validate(loop)
+    check(f"a FOREACH over a declared set validates ({problems[:1]})", ok)
+    scalar = {**loop, "params": {"vms": "string"}}
+    ok2, problems2 = validate(scalar)
+    check(f"and the same loop over a STRING does not ({problems2[:1]})", not ok2)
+
+
+def test_a_class_is_a_file_with_several_entry_points():
+    print("[classes] one file, several procedures")
+    with _Library() as lib:
+        at = lib.save(_network_setup())
+        check("it is kept under the class's name", at.endswith("NetworkSetup.medusa"))
+        check("and the methods are what is CALLABLE",
+              lib.names() == ["NetworkSetup.add", "NetworkSetup.attach"])
+        check("the class itself is not callable — it has no body",
+              "NetworkSetup" not in lib.names())
+        got = lib.get("NetworkSetup.add")
+        check("a method comes back as an ordinary program",
+              got and got["name"] == "NetworkSetup.add" and got["body"])
+        check("a method nobody defined is absent, not an error",
+              lib.get("NetworkSetup.teleport") is None)
+        text = lib.text("NetworkSetup")
+        check("the artifact renders every method",
+              text.count("PROCEDURE") == 2 and "NetworkSetup.attach(SET vms" in text)
+
+
+def test_a_method_that_vouches_for_nothing_is_not_kept():
+    """THE LINE BETWEEN A CLASS AND A BAG OF MACROS. A method that expands into tool calls
+    and asserts nothing inherits the false-success class the system refuses everywhere, and
+    its caller cannot trust the result without re-checking — which is the work a class exists
+    to have done ONCE."""
+    print("[classes] verified once means verified")
+    with _Library() as lib:
+        bare = _network_setup()
+        bare["methods"]["add"]["body"] = [
+            {"op": "call", "tool": "add_vm_to_network",
+             "args": {"vm_name": "$vm", "net_name": "$net_name"}}]
+        try:
+            lib.save(bare)
+            check("an ungrounded method is refused", False)
+        except ValueError as e:
+            check("an ungrounded method is refused, and named",
+                  "NetworkSetup.add" in str(e) and "vouches for nothing" in str(e))
+        check("and nothing was written", lib.names() == [])
+
+
+def test_a_class_method_is_reached_for_and_run_like_anything_else():
+    """NOTHING DOWNSTREAM LEARNS A NEW WORD. That is the whole design: `covering`, `validate`
+    and the visitor keep asking the one question they already asked."""
+    print("[classes] the rest of the system does not know it is a class")
+    with _Library() as lib:
+        lib.save(_network_setup())
+        world = SimWorld()
+        world.execute("create_vm", {"name": "web", "os_type": "linux"})
+        world.execute("create_network", {"net_name": "dmz"})
+
+        goal = {"shape": "count", "eq": 1,
+                "select": {"kind": "vm", "name": "web", "network": "dmz"}}
+        found = lib.covering(goal)
+        check("the writer can reach for a METHOD",
+              found and found["name"] == "NetworkSetup.add")
+        check("binding both of its parameters",
+              found["params"] == {"vm": "web", "net_name": "dmz"})
+
+        program = {"body": [{"op": "call", "tool": "NetworkSetup.add",
+                             "args": {"vm": "web", "net_name": "dmz"}},
+                            {"op": "ensure", "predicate": goal}]}
+        ok, problems = validate(program, known_names=world.names(),
+                                known_tools={"add_vm_to_network"})
+        check(f"a call to a method validates ({problems[:1]})", ok)
+        select, holds = seams(world)
+        res = ir_run(program, world.execute, select=select, holds=holds,
+                     known_names=world.names(), known_tools={"add_vm_to_network"},
+                     consent=True, intent="achieve")
+        check(f"and it runs ({res.get('why')})", res["ok"])
+        check("the method's body reached the world",
+              "dmz" in world.vms["web"]["nets"])
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "procedures"))

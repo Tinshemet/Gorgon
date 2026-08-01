@@ -59,6 +59,11 @@
       "sql": "BYTES",
       "py": "str",
       "doc": "a size \u2014 512MB, 20GB. Disk and memory, with the unit kept"
+    },
+    "set": {
+      "sql": "SET",
+      "py": "list",
+      "doc": "a set of NAMES \u2014 Medusa's one collection, what FOREACH iterates and what a SELECT binds. Every other type here is a scalar, and that was a real limit rather than a gap nobody had reached: a class method like `attach(vms, net_name)` cannot declare its first argument, and `follow_up` hit the same wall from the other side \u2014 a bound set could not be declared as a param, so the abandoned tail had to be inlined by resolving refs instead."
     }
   },
   "_ops_doc": "The statement types. `one_of` means exactly one of those fields must be present \u2014 foreach names its set EITHER by querying state (`select`) OR by referring to a set already bound (`in`). Those are different things and conflating them was a real gap: `new` with a count binds a SET, and until `in` existed there was no way to act on it before its members had an attribute to query by. \"Create X vms and label them\" was inexpressible. `required` is what validate() insists on; `doc` is what the model is shown. Adding an op here does NOT make it executable \u2014 the visitor must learn it too \u2014 so this table is the contract between the two, not a switch. `in` accepts a LITERAL LIST as well as a bound reference, because a correction usually acts on specific things the last attempt left behind \u2014 the model reached for exactly that on rung 7, naming three VMs it had read off current state, and the language had no way to say it. `new` carries `args` because a resource is rarely just a name: create_vm alone accepts 47 arguments and REQUIRES os_type. Without them `new` could not build a real VM at all \u2014 it passed only because the bench world is lenient about missing required fields, which is exactly the kind of gap a simulator hides.",

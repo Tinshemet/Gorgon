@@ -150,6 +150,13 @@ def validate(program: Any, known_tools=None, known_names=None,
             problems.append(f"parameter {name!r}: unknown type {typ!r} "
                             f"(known: {', '.join(sorted(config.PARAM_TYPES))})")
         bound.add(str(name))
+        # A DECLARED SET IS A SET, and this is the whole reason the type exists. `sets` is
+        # what tells a `FOREACH ... IN $vms` apart from a filter comparing an attribute to
+        # one value — rung 9 walked into that with a bound set and no way to say so. Every
+        # other param type is a scalar, so until now a parameter could never be the thing a
+        # loop iterates, and `attach(vms, net_name)` was not declarable.
+        if config.PARAM_TYPES.get(typ, {}).get("py") == "list":
+            sets.add(str(name))
     for i, st in enumerate(body):
         where = f"statement {i + 1}"
         if not isinstance(st, dict):
@@ -392,6 +399,22 @@ def validate(program: Any, known_tools=None, known_names=None,
                 if src[len(config.SIGIL):] not in bound:
                     problems.append(f"{where}: foreach in {src} refers to something "
                                     f"never created")
+                elif (params or {}).get(src[len(config.SIGIL):]) is not None \
+                        and src[len(config.SIGIL):] not in sets:
+                    # A DECLARED SCALAR IS NOT A SET, and iterating one walks its
+                    # CHARACTERS. `refs.resolve` hands back the string, `foreach` iterates
+                    # it, and the first tool argument gets `"w"` where a machine name
+                    # belongs — a TypeError out of the executor rather than a rejected call,
+                    # which is the failure mode the bracket rule above was written for.
+                    #
+                    # ONLY WHERE THE TYPE WAS DECLARED. `sets` also holds names bound by
+                    # `new` and `fetch select`, and a name it does not hold may simply be
+                    # one this walk has not reached yet — so this fires on PARAMS, where
+                    # the author stated the type and the statement contradicts it.
+                    problems.append(
+                        f"{where}: foreach in {src}, which is declared "
+                        f"{params[src[len(config.SIGIL):]]!r} — a scalar. Iterating one "
+                        f"walks its characters. Declare it `set`.")
             elif src is not None:
                 problems.append(f"{where}: foreach `in` must be a ${'{'}name{'}'} "
                                 f"reference or a list of names, got {src!r}")

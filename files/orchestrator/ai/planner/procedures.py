@@ -46,7 +46,27 @@ def _home() -> str:
     return os.path.join(base, "procedures")
 
 
-_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
+_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(\.[a-z][a-z0-9_]*)?$")
+
+# A CLASS IS A FILE WITH SEVERAL ENTRY POINTS, and that is the only thing separating it from
+# a procedure. The operator's example is the right size:
+#
+#     NetworkSetup.medusa
+#       attach(vms, net_name)   ·  add(vm, net_name)  ·  remove(vm, net_name)
+#
+# EACH METHOD IS A PROCEDURE, so nothing downstream learns a new word: `names()` lists
+# `NetworkSetup.attach`, `covering()` may reach for it, `validate` accepts the call, and
+# `run` executes the body through the same visitor. A class that needed its own lookup,
+# its own validator and its own call op would be three mechanisms for one idea.
+#
+# WHAT IS DELIBERATELY NOT BUILT: the three-layer prompt machinery — a separate
+# intermediate vocabulary a model consults to CHOOSE a method. Its argument was that
+# authoring is where everything fails and tool calling is where nothing does, which was
+# true and is now beside the point: the writer is deterministic and covers 13/13 with no
+# model, while the model-authoring path measures 7/78. The design note's own instruction
+# was not to build the machinery until an experiment answered; the architecture answered
+# it instead.
+_METHODS = "methods"
 
 # `procedure build_box: make a machine from a template` — the operator DECLARING that this
 # request is to be kept rather than done, and what to call it.
@@ -94,6 +114,26 @@ def seconds(span: Any) -> Optional[int]:
     """
     m = _SPAN.match(str(span or ""))
     return int(m.group(1)) * _SECONDS[m.group(2).lower()] if m else None
+
+
+def _consent():
+    from .ir import consent
+    return consent
+
+
+def render_stored(program: Dict[str, Any]) -> str:
+    """The readable artifact — one `PROCEDURE` block, or one per method of a class.
+
+    A CLASS FILE IS STILL A `.medusa` A PERSON READS, which is the entire reason both forms
+    are kept. Rendering the wrapper would print a header and no code.
+    """
+    from .ir.render import render as _render
+    methods = program.get(_METHODS)
+    if not methods:
+        return _render(program)
+    name = program.get("name")
+    return "\n\n".join(_render({**spec, "name": f"{name}.{m}"})
+                        for m, spec in methods.items())
 
 
 def legal_name(name: str) -> bool:
@@ -166,14 +206,39 @@ class Store:
         # may refer to what it declares and to what it binds, and to nothing else. That is
         # the same rule the caller's program lives under, applied at the moment the artifact
         # becomes reusable.
-        ok, problems = validate(program)
-        if not ok:
-            raise ValueError(
-                f"{name} is not a program that could run, so it is not kept: {problems[0]}")
+        methods = program.get(_METHODS)
+        if methods:
+            # A CLASS IS VALIDATED METHOD BY METHOD, because a class HAS no body — it is a
+            # file where several programs live, and validating the wrapper would be
+            # validating a container.
+            if "." in str(name):
+                raise ValueError(f"{name!r} names a method; save the CLASS it belongs to")
+            for m, spec in methods.items():
+                if not legal_name(m):
+                    raise ValueError(f"{name}.{m}: a method name must be an identifier")
+                ok, problems = validate({**spec, "name": f"{name}.{m}"})
+                if not ok:
+                    raise ValueError(f"{name}.{m} could not run, so the class is not kept: "
+                                     f"{problems[0]}")
+                # AND EVERY METHOD CARRIES ITS OWN VERDICT. This is the line between a class
+                # and a bag of macros: a method that expands into tool calls and asserts
+                # nothing inherits the false-success class the whole system refuses, and a
+                # caller cannot trust its result without re-checking — which is exactly the
+                # work a class exists to have done ONCE.
+                if not _consent().survey(spec)["grounded"]:
+                    raise ValueError(
+                        f"{name}.{m} acts and vouches for nothing. A class method ends in an "
+                        f"ENSURE or ACHIEVE over its own postcondition — that is what makes "
+                        f"'verified once' a fact its callers can rely on")
+        else:
+            ok, problems = validate(program)
+            if not ok:
+                raise ValueError(
+                    f"{name} is not a program that could run, so it is not kept: "
+                    f"{problems[0]}")
         os.makedirs(self.path, exist_ok=True)
         if not rendered:
-            from .ir.render import render as _render
-            rendered = _render(program)
+            rendered = render_stored(program)
         text_at = os.path.join(self.path, f"{name}.medusa")
         with open(text_at, "w") as fh:
             fh.write(rendered.rstrip() + "\n")
@@ -183,6 +248,18 @@ class Store:
 
     # ── reading ──────────────────────────────────────────────────────────────
     def get(self, name: str) -> Optional[Dict[str, Any]]:
+        """A stored program by name. `Class.method` reaches into a class file.
+
+        A METHOD COMES BACK AS AN ORDINARY PROGRAM, named `Class.method`, so every consumer
+        — the validator, the writer's tile search, the visitor — keeps asking the one
+        question it already asked. A class is a FILE with several entry points, not a new
+        kind of thing to look up.
+        """
+        whole, _, method = str(name).partition(".")
+        if method:
+            got = self.get(whole)
+            spec = ((got or {}).get(_METHODS) or {}).get(method)
+            return {**spec, "name": str(name)} if spec else None
         at = os.path.join(self.path, f"{str(name)}.json")
         try:
             stamp = os.stat(at)
@@ -212,9 +289,32 @@ class Store:
         return open(at).read() if os.path.exists(at) else None
 
     def names(self) -> List[str]:
+        """Every CALLABLE name — a procedure's own, and one per method of a class.
+
+        A CLASS FILE'S OWN NAME IS NOT CALLABLE. `NetworkSetup` is not a program; it is
+        where four of them live, and offering it as a tool would let a caller invoke a body
+        that does not exist.
+        """
         if not os.path.isdir(self.path):
             return []
-        return sorted(f[:-5] for f in os.listdir(self.path) if f.endswith(".json"))
+        out, bad = [], []
+        for f in os.listdir(self.path):
+            if not f.endswith(".json"):
+                continue
+            stem = f[:-5]
+            try:
+                got = self.get(stem)
+            except Exception:
+                # A DAMAGED FILE IS SKIPPED AND NAMED, here rather than in `all()`, because
+                # this is now the walk that opens them — a class has to be read before its
+                # methods can be listed. Losing the name would make a corrupt library
+                # indistinguishable from a small one.
+                bad.append(stem)
+                continue
+            methods = (got or {}).get(_METHODS)
+            out += [f"{stem}.{m}" for m in methods] if methods else [stem]
+        self.broken = bad
+        return sorted(out)
 
     def all(self) -> List[Dict[str, Any]]:
         """Every readable procedure. A damaged one is SKIPPED AND NAMED, never raised.
@@ -229,16 +329,15 @@ class Store:
         procedure asked for by name — and rightly, because there the caller said which one
         they meant.
         """
-        out, bad = [], []
-        for n in self.names():
+        out = []
+        for n in self.names():          # `names()` records what it could not read
             try:
                 got = self.get(n)
             except Exception:
-                bad.append(n)
+                self.broken = sorted(set(self.broken) | {n})
                 continue
             if got:
-                out.append(got)
-        self.broken = bad
+                out.append({**got, "name": n})
         return out
 
     # ── when it runs, if anything but a caller decides ───────────────────────
