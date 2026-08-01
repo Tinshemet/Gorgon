@@ -185,10 +185,18 @@ def invert(pred: Dict[str, Any], kinds=None) -> Optional[tuple]:
         for tool, s in (spec.get("setters") or {}).items():
             if s["attr"] != attr:
                 continue
+            # CONSTANT ARGUMENTS THE MANIFEST ATTACHES TO A SETTER. Some tools take an
+            # option that is not part of the state being written and still has to be right —
+            # `launch_vm` takes a DISPLAY MODE, and the shipped default opens a graphical
+            # window. A program that starts a machine so a package can work inside it wants
+            # a shell and nothing else; a VNC or SDL session there is pure cost, on every
+            # machine, forever. Declaring it beside the setter puts the choice where the
+            # manifest already describes the tool rather than in the writer.
+            fixed = dict(s.get("args") or {})
             if "value_arg" in s:
-                return (tool, {s["member_arg"]: member, s["value_arg"]: value})
+                return (tool, {**fixed, s["member_arg"]: member, s["value_arg"]: value})
             if s.get("value") == value:
-                return (tool, {s["member_arg"]: member})
+                return (tool, {**fixed, s["member_arg"]: member})
 
     # NO SETTER WRITES IT — SO IT IS SET AT BIRTH. A snapshot's `vm` is not an attribute
     # anyone changes later; it is what the snapshot IS, supplied when it is created. So a
