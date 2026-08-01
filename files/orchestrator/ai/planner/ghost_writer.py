@@ -192,18 +192,28 @@ def _lower(goal: Dict[str, Any], select, world) -> List[Dict[str, Any]]:
                      if s_.get("refs")), None)
         connector = link["attr"] if link else None
         ref_kind = link["refs"] if link else None
-        if connector and not world.common_networks(members):
-            # PREFER A NETWORK THEY MOSTLY ALREADY SHARE. Rung 9 is the case: two of three
-            # sit on `mesh0` and one does not, and the work is finding WHICH is wrong. A
-            # writer that created a fresh network and moved all three would pass the
-            # checker while doing three times the work and discarding what was already
-            # right. Ties break on the name so the same world yields the same program.
-            tally: Dict[str, int] = {}
+        # HOW MANY MEMBERS SIT ON EACH CANDIDATE, computed once and used for both questions:
+        # do they ALREADY share one, and if not, which is the cheapest to move them onto.
+        #
+        # IT USED TO ASK `world.common_networks(members)` FOR THE FIRST — a bespoke method the
+        # SIM happened to have and the real lab's scratch did not, so the first `reach` goal
+        # ever planned against the QEMU mount died with AttributeError. A world seam that only
+        # one world implements is not a seam, it is a dependency on one implementation. The
+        # tally below answers it from `select` alone, which every world already provides.
+        tally: Dict[str, int] = {}
+        if connector:
             for cand in select({"kind": ref_kind}):
                 n_on = len([m for m in members
                             if m in select({"kind": kind, connector: cand})])
                 if n_on:
                     tally[cand] = n_on
+        shared = members and any(n == len(members) for n in tally.values())
+        if connector and not shared:
+            # PREFER A NETWORK THEY MOSTLY ALREADY SHARE. Rung 9 is the case: two of three
+            # sit on `mesh0` and one does not, and the work is finding WHICH is wrong. A
+            # writer that created a fresh network and moved all three would pass the
+            # checker while doing three times the work and discarding what was already
+            # right. Ties break on the name so the same world yields the same program.
             net = (max(sorted(tally), key=lambda n: tally[n]) if tally
                    else _fresh_names(ref_kind, 1, set(select({"kind": ref_kind})))[0])
             subs.append({"every": dict(sel), "must": {connector: net}})
@@ -458,7 +468,12 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None) -> Dic
     nothing, and DEMANDING it in the prompt made the ladder worse while breaking the decoder.
     Here it is a list comprehension.
     """
-    scratch = copy.deepcopy(world) if world is not None else None
+    # THE SAME SCRATCH `cover` USES, AND FOR THE SAME REASON. This deep-copied instead, which
+    # is the exact bug `_scratch_of` was written for — a deep copy of a world whose hands
+    # reach OUTSIDE ITSELF copies a reference to the real executor, so WRITING THE PROGRAM
+    # PERFORMS IT. Fixed in `cover` on 2026-08-01 and missed here; found the first time a
+    # QEMU mount met a real library, by an executor that refused to act.
+    scratch = _scratch_of(world) if world is not None else None
     if scratch is not None:
         for tool, args in plan:
             scratch.execute(tool, args)

@@ -23,6 +23,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
 
+from orchestrator.ai.planner.ir import config as _config
+from orchestrator.ai.planner.ir import observe as _observe
+
 
 def _single(spec: Dict[str, Any], setter: Dict[str, Any]) -> bool:
     """Is this attribute single-valued? DERIVED, not declared.
@@ -38,6 +41,20 @@ def _single(spec: Dict[str, Any], setter: Dict[str, Any]) -> bool:
     return setter["attr"] in (spec.get("attr_values") or {})
 
 
+class Ledger(dict):
+    """What has been ASKED and answered. A dict, plus the `has` the real ledger offers.
+
+    `observe.value` asks `ledger.has(fact)` — the interface production's ledger provides —
+    while `_findings_of` and the reporter treat findings as a mapping. A plain dict failed
+    the first and a bespoke object would fail the second, so it is both. THE POINT IS THAT
+    `unknown` AND `false` STAY DIFFERENT: nobody asked is not the same as it said no, which
+    is decision 6 and the reason `reach` demands an answer rather than a success flag.
+    """
+
+    def has(self, fact) -> bool:
+        return fact in self
+
+
 class World:
     """State as `{kind: {key: {attr: value}}}`, and a manifest that says how to change it."""
 
@@ -45,7 +62,7 @@ class World:
         self.kinds = kinds
         self.state: Dict[str, Dict[str, Dict[str, Any]]] = {k: {} for k in kinds}
         self.calls: List[Tuple[str, Dict[str, Any]]] = []
-        self.findings: Dict[str, Any] = {}
+        self.findings: Ledger = Ledger()
 
     # ── the executor, derived ──────────────────────────────────────────────────────────
     def execute(self, tool: str, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -60,6 +77,27 @@ class World:
         for kind, spec in self.kinds.items():
             key = spec.get("key")
             rows = self.state.setdefault(kind, {})
+
+            # ASKING — the branch that was missing, and the manifest declares it like any
+            # other. `observed.<fact>.by` names the tool; without this an observer tool fell
+            # through to "unknown tool" and wrote nothing, so a `reach` goal could never be
+            # satisfied against this world and every one of them promoted to tree.
+            #
+            # A MODEL ASSUMES ITS PROBES ARE ANSWERED, and says so here rather than
+            # pretending to know. This world cannot ping anything; what it is for is deciding
+            # whether a plan WOULD close its goals. The real run overwrites these with real
+            # answers, and the program's own closing ENSURE is what catches the difference —
+            # which is exactly why the writer grounds every goal it plans.
+            for fact_name, o in (spec.get("observed") or {}).items():
+                if tool != o.get("by"):
+                    continue
+                member = args.get(key)
+                if member not in rows:
+                    return {"success": False, "error": f"no {kind} {member}"}
+                fact = _config.fact_key(kind, fact_name, member)
+                if fact is not None:
+                    self.findings[fact] = True
+                return {"success": True, key: member, fact_name: True}
 
             if tool == spec.get("create"):
                 name = args.get(key)
@@ -152,7 +190,52 @@ def seams(world: World):
                       if _match(row, n, key, sel)
                       and not (carve and _match(row, n, key, carve)))
 
+    def _shared_value(kind, members):
+        """A value of the CONNECTIVE attribute that every member holds, or None.
+
+        What connects members is a manifest fact — the setter whose value `refs` another
+        kind — not the word "network". Derived here for the same reason the writer derives
+        it: a world method only one world implements is a dependency, not a seam.
+        """
+        spec = (world.kinds or {}).get(kind) or {}
+        link = next((s_ for s_ in (spec.get("setters") or {}).values()
+                     if s_.get("refs")), None)
+        if not link or not members:
+            return None
+        connector, ref_kind = link["attr"], link["refs"]
+        for cand in select({"kind": ref_kind}):
+            on = select({"kind": kind, connector: cand})
+            if all(m in on for m in members):
+                return cand
+        return None
+
     def holds(pred, scope=None):
+        if pred.get("shape") == "reach":
+            # THE SAME TWO DEMANDS PRODUCTION MAKES: every member has ANSWERED, and there is
+            # a path between them. A5 tightened this once already because the bench and
+            # production had drifted — a checker weaker than the runtime silently certifies
+            # programs the real lab refuses.
+            kind = (pred.get("select") or {}).get("kind")
+            members = select(pred.get("select") or {})
+            floor = int(pred.get("min", 2))
+            if len(members) < floor:
+                return False, f"reach over {len(members)} member(s), floor {floor}"
+            unknown = [m for m in members
+                       if _observe.value(world.findings, kind, "alive", m)
+                       == _observe.unknown()]
+            if unknown:
+                return False, (f"reach is unestablished: {len(unknown)} of {len(members)} "
+                               f"have not been probed")
+            dead = [m for m in members
+                    if _observe.value(world.findings, kind, "alive", m) == _observe.FALSE]
+            if dead:
+                return False, f"no answer from {', '.join(sorted(dead))}"
+            spec = (world.kinds or {}).get(kind) or {}
+            connective = any(s_.get("refs") for s_ in (spec.get("setters") or {}).values())
+            if connective and not _shared_value(kind, members):
+                return False, (f"all {len(members)} answered, but they share no "
+                               f"connection — reach also means a path between them")
+            return True, f"all {len(members)} member(s) answered and are connected"
         if pred.get("shape") == "count":
             n = len(select(pred.get("select") or {}))
             for c, op in (("eq", "=="), ("gte", ">="), ("lte", "<=")):

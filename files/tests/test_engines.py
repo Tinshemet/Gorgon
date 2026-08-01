@@ -1003,6 +1003,78 @@ def test_a_queue_where_everything_waits_is_a_deadlock_and_says_so():
     check("nothing ran", not world.state.get("dish"))
 
 
+def extract_attr_enum():
+    """The attributes a MODEL may name, straight from the extractor's schema."""
+    from tests.bench.extract import SCHEMA
+    return (SCHEMA["properties"]["goals"]["items"]["properties"]["select"]["properties"]
+            ["where"]["items"]["properties"]["attr"]["enum"])
+
+
+def test_the_lab_mount_speaks_the_manifest_not_the_library():
+    """A SILENT WRONG ANSWER, found the first time the QEMU mount met a real lab.
+
+    The library says `labels`; the manifest's attribute is `label`. Rows were copied
+    verbatim, so `select(vm where label=x)` matched NOTHING over a lab where machines carried
+    it — and the writer answered "nothing to do" rather than failing. A wrong answer that
+    looks like a finished job is the worst shape this can take.
+    """
+    print("[mount] library field names are translated, not copied")
+    from orchestrator.ai.engines import QemuEngine
+
+    class FakeLibrary:
+        """Speaks the LIBRARY'S vocabulary — plural `labels`, plus fields no predicate has."""
+
+        def vms(self):
+            return {"red": {"name": "red", "labels": ["fleet", "prod"], "status": "stopped",
+                            "os_type": "linux", "memory_mb": 8192},
+                    "blue": {"name": "blue", "labels": ["fleet"], "status": "running",
+                             "os_type": "windows", "_internal": "ignore me"}}
+
+        def known_names(self):
+            return {"red", "blue"}
+
+    eng = QemuEngine(FakeLibrary(), lambda t, a: {"success": False})
+    select, _ = eng.world().scratch().seams
+    check("an aliased attribute matches", select({"kind": "vm", "label": "fleet"})
+          == ["blue", "red"])
+    check("and discriminates within it", select({"kind": "vm", "label": "prod"}) == ["red"])
+    check("a canonical attribute still matches",
+          select({"kind": "vm", "status": "running"}) == ["blue"])
+    check("and one the manifest shares a name for",
+          select({"kind": "vm", "os_type": "linux"}) == ["red"])
+    row = eng.world().scratch().state["vm"]["red"]
+    check("a multi-valued attribute is stored as a set", isinstance(row["label"], set))
+    check("a field with no predicate keeps its own name", row.get("memory_mb") == 8192)
+    check("it is reachable only by a hand-written selector, never by a goal — "
+          "the extractor's attribute enum is the manifest's and closed",
+          select({"kind": "vm", "memory_mb": 8192}) == ["red"]
+          and "memory_mb" not in set(extract_attr_enum()))
+    check("and an underscore field never reaches the model", "_internal" not in
+          eng.world().scratch().state["vm"]["blue"])
+
+
+def test_a_world_that_cannot_ask_still_plans_a_reach():
+    """`observed.<fact>.by` is a manifest row like any other, and the model executor ignored
+    it — so every reach goal against a mounted lab promoted to tree instead of planning."""
+    print("[mount] the model records what it was asked, and evaluates reach")
+    world = World(config.KINDS)
+    for name in ("alpha", "beta"):
+        world.execute("create_vm", {"name": name, "os_type": "linux"})
+    _, holds = world.seams
+    goal = {"shape": "reach", "select": {"kind": "vm"}, "min": 2}
+    ok, why = holds(goal)
+    check("unprobed is not reachable, and says which", not ok and "probed" in why)
+    for name in ("alpha", "beta"):
+        world.execute("guest_ping", {"name": name})
+    ok, why = holds(goal)
+    check("asked but unconnected is still not reachable", not ok and "connection" in why)
+    world.execute("create_network", {"net_name": "lab"})
+    for name in ("alpha", "beta"):
+        world.execute("add_vm_to_network", {"vm_name": name, "net_name": "lab"})
+    ok, why = holds(goal)
+    check("answered and connected is reachable", ok)
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "engines"))

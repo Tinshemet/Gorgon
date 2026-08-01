@@ -75,9 +75,51 @@ class LabWorld:
         # and guarded, because an unreachable library must not read as an empty lab.
         rows = self._library.vms()
         for name, rec in (rows or {}).items():
-            row = {k: v for k, v in (rec or {}).items() if not str(k).startswith("_")}
-            model.state.setdefault("vm", {})[name] = row
+            model.state.setdefault("vm", {})[name] = self._as_manifest_row("vm", rec)
         return model
+
+    def _as_manifest_row(self, kind: str, rec) -> dict:
+        """One library record in the MANIFEST'S vocabulary.
+
+        THE LIBRARY AND THE MANIFEST DO NOT SPELL THINGS THE SAME WAY, and copying rows
+        verbatim meant every attribute filter silently matched NOTHING. The library says
+        `labels`; the manifest's attribute is `label`, with `labels` listed as an alias — so
+        `select(vm where label=benchfleet)` returned zero over a lab where two machines carry
+        it, and the writer answered "nothing to do" rather than failing. A wrong answer that
+        looks like a finished job is the worst shape this can take.
+
+        THE ALIASES ARE ALREADY THE MAPPING. They exist so an operator may say `tag` or `os`,
+        and the library's own field names are the same question asked from the other side.
+        Reading them here rather than writing a second table is what stops the two drifting.
+
+        A MULTI-VALUED ATTRIBUTE ARRIVES AS A LIST AND IS STORED AS A SET, because that is
+        what the model's `_match` compares against for membership — the same shape its own
+        setters produce, so a seeded row and a planned one are indistinguishable.
+        """
+        spec = (self.kinds or {}).get(kind) or {}
+        alias = spec.get("aliases") or {}
+        known = set(spec.get("attrs") or ())
+        out = {}
+        for field, value in (rec or {}).items():
+            field = str(field)
+            if field.startswith("_"):
+                continue
+            attr = alias.get(field, field)
+            if attr not in known:
+                # NOT A LIE, JUST NOT THE MANIFEST'S BUSINESS. `arch`, `memory_mb` and
+                # `guest_agent` are real facts the planner has no predicate for, and they are
+                # kept under their own names so anyone reading a scratch row sees the machine
+                # rather than a redacted version of it.
+                #
+                # THEY ARE STILL MATCHABLE by a hand-written selector — `_match` compares
+                # whatever attribute it is handed. Nothing in production can reach one, since
+                # the extractor's attribute enum is the manifest's and closed, so this is a
+                # property of the model rather than a hole in the language. Said plainly
+                # because the first version of this comment claimed the opposite.
+                out[field] = value
+                continue
+            out[attr] = set(value) if isinstance(value, (list, tuple, set)) else value
+        return out
 
     def names(self) -> set:
         """Every name the lab already knows. `known_names`, not `names`.
