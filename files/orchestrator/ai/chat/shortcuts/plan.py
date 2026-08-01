@@ -127,9 +127,21 @@ class Plan(Shortcut):
         outcome = result.get("outcome")
         colour = {"DONE": "ok", "REFUSED": "warn"}.get(outcome, "warn")
         console.print(f"[{colour}]{outcome}[/{colour}]  {result.get('why') or ''}")
-        for line in result.get("log", []):
-            console.print(f"  [dim]{line}[/dim]")
-        if result.get("rendered"):
+
+        # THE LEDGER, NOT A SUMMARY. This path exists to be READ — it is where a wrong
+        # answer gets traced to the stage that caused it — and a list of sentences cannot
+        # say who asked whom. Every line names both ends, the program goes at the end whole,
+        # and `-v` attaches the evidence each line carries.
+        ledger = result.get("events")
+        if ledger is not None:
+            for line in ledger.render(show_data=verbose).splitlines():
+                console.print(f"  [dim]{line}[/dim]" if line.startswith("2") else f"  {line}")
+        else:
+            for line in result.get("log", []):
+                console.print(f"  [dim]{line}[/dim]")
+        if result.get("rendered") and result.get("events") is None:
+            # ONLY WHEN THERE IS NO LEDGER. The ledger already prints the program in full at
+            # the end; printing it twice would teach the reader to skip one of them.
             console.print("\n[bold]the program it wrote[/bold]")
             for line in result["rendered"].splitlines():
                 console.print(f"  {line}")
