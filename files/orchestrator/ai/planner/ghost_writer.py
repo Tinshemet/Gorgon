@@ -334,6 +334,41 @@ def _holds(goal, holds, select):
     return holds(g, {})
 
 
+def _named_in(goals, kinds) -> set:
+    """Every `(kind, name)` the REQUEST itself mentions.
+
+    A member the operator named is theirs whatever the writer had to do to bring it about;
+    one they never mentioned, created only so their request could happen, is the program's.
+    That is the whole of the temp/fetched distinction and it needs no guess about intent.
+    """
+    out = set()
+    for goal in goals or ():
+        for holder in ("select", "every", "observe", "per"):
+            sel = goal.get(holder)
+            if not isinstance(sel, dict):
+                continue
+            kind = sel.get("kind")
+            key = (effects._K(kinds).get(kind) or {}).get("key")
+            if kind and key and sel.get(key):
+                out.add((kind, sel[key]))
+            # A NAME MENTIONED AS AN ATTRIBUTE IS STILL A NAME. "a snapshot of web" names
+            # `web` as plainly as "the machine web" does — the operator said it, so the
+            # machine is theirs and the program does not take it down afterwards. Missing
+            # this had the writer create `web`, snapshot it, and then DELETE THE MACHINE THE
+            # OPERATOR HAD NAMED. Same convention `precondition` uses: an attribute whose
+            # name is a declared kind refers to a member of it.
+            for attr, value in sel.items():
+                if attr in ("kind", "not") or not isinstance(value, str):
+                    continue
+                if attr in effects._K(kinds):
+                    out.add((attr, value))
+        for extra in ("make",):
+            made = goal.get(extra)
+            if isinstance(made, str) and made in effects._K(kinds):
+                out.add((made, None))
+    return out
+
+
 def _scratch_of(world):
     """A world safe to PLAN against — a model of it, never the thing itself.
 
@@ -354,14 +389,21 @@ def _scratch_of(world):
     return maker() if callable(maker) else copy.deepcopy(world)
 
 
-def cover(goals: List[Dict[str, Any]], world, trace: List[str] = None) -> List[Call]:
-    """The calls that make every goal hold, in an order that runs."""
+def cover(goals: List[Dict[str, Any]], world, trace: List[str] = None,
+          temps: List = None) -> List[Call]:
+    """The calls that make every goal hold, in an order that runs.
+
+    `temps` collects `(kind, name)` for every member this plan CREATES as a precondition —
+    something nobody asked for, made so the request could happen. `as_program` takes them
+    down at the end.
+    """
     scratch = _scratch_of(world)
+    asked = _named_in(goals, _kinds(scratch))
     plan: List[Call] = []
     for _round in range(4):
         before = len(plan)
         for goal in goals:
-            _achieve(goal, scratch, plan, trace, 0)
+            _achieve(goal, scratch, plan, trace, 0, temps=temps, asked=asked)
         if len(plan) == before:
             return plan
         if trace is not None:
@@ -371,7 +413,7 @@ def cover(goals: List[Dict[str, Any]], world, trace: List[str] = None) -> List[C
     raise Unsolvable("goals do not settle — they may be pulling against each other")
 
 
-def _achieve(goal, scratch, plan, trace, depth):
+def _achieve(goal, scratch, plan, trace, depth, internal=False, temps=None, asked=None):
     if depth > 12:
         raise Unsolvable("lowering too deep — a goal probably depends on itself")
     say = (lambda m: trace.append("  " * depth + m)) if trace is not None else lambda m: None
@@ -397,7 +439,7 @@ def _achieve(goal, scratch, plan, trace, depth):
         subs = _lower(goal, sel, scratch)
         say(f"observe {goal['observe']} — {len(subs)} probe(s)")
         for s_ in subs:
-            _achieve(s_, scratch, plan, trace, depth + 1)
+            _achieve(s_, scratch, plan, trace, depth + 1, internal=internal, temps=temps, asked=asked)
         return
 
     ok, why = _holds(goal, holds, sel)
@@ -405,7 +447,7 @@ def _achieve(goal, scratch, plan, trace, depth):
         say(f"{_short(goal)} — ALREADY HOLDS ({why})")
         return
 
-    tile = effects.invert(goal, _kinds(scratch))
+    tile = effects.invert(goal, _kinds(scratch), internal=internal)
     if tile:
         tool, args = tile
         say(f"{_short(goal)} — not yet -> {tool}")
@@ -419,12 +461,31 @@ def _achieve(goal, scratch, plan, trace, depth):
                 raise Unsolvable(
                     f"{tool} cannot be placed here ({why}) — and nothing may act to "
                     f"change that: {goal}")
+        # A PRECONDITION IS THE PROGRAM'S OWN BUSINESS. Nobody asked for it; it exists so
+        # the thing that WAS asked for can happen. That provenance decides two things the
+        # writer would otherwise have to guess: whether a machine gets a display, and
+        # whether it is the program's to clean up afterwards.
         for need in effects.precondition(tool, args, _kinds(scratch)):
-            _achieve(need, scratch, plan, trace, depth + 1)
+            _achieve(need, scratch, plan, trace, depth + 1, internal=True, temps=temps, asked=asked)
         if (tool, args) not in plan:
             plan.append((tool, args))
             scratch.execute(tool, args)
             say(f"  place {tool}({', '.join(f'{k}={v}' for k, v in args.items())})")
+            if internal and temps is not None:
+                # CREATED BY THIS PROGRAM AND NAMED BY NOBODY — that is what makes a member
+                # temporary, and the second half is the part I got wrong first.
+                #
+                # A precondition that creates the very member the goal is ABOUT is not
+                # scaffolding, it IS the goal: "alpha is running" needs alpha to exist, and
+                # the first version recorded alpha as temp and had the program DELETE THE
+                # MACHINE THE OPERATOR ASKED FOR. Scaffolding is a member nobody mentioned,
+                # brought into being only so the request could happen.
+                kind = effects._kind_of(tool, _kinds(scratch))
+                spec = effects._K(_kinds(scratch)).get(kind) or {}
+                name = args.get(spec.get("key"))
+                if kind and name and tool == spec.get("create") \
+                        and (kind, name) not in (asked or set()):
+                    temps.append((kind, name))
         return
 
     subs = _lower(goal, sel, scratch)
@@ -433,7 +494,10 @@ def _achieve(goal, scratch, plan, trace, depth):
         raise Unsolvable(f"nothing reaches: {goal}")
     say(f"{_short(goal)} — lowered into {len(subs)} sub-goal(s)")
     for s in subs:
-        _achieve(s, scratch, plan, trace, depth + 1)
+        # LOWERING IS NOT A PRECONDITION. A sub-goal is part of what the operator asked for,
+        # said more precisely — "every machine running" becomes one goal per machine, and
+        # each is still theirs. Only `precondition` marks work nobody requested.
+        _achieve(s, scratch, plan, trace, depth + 1, internal=internal, temps=temps, asked=asked)
 
     ok, why = _holds(goal, holds, sel)
     if not ok:
@@ -478,7 +542,8 @@ def groundable(goal: Dict[str, Any]) -> bool:
     return not ("_call" in goal or "observe" in goal)
 
 
-def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None) -> Dict[str, Any]:
+def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
+               temps: List = None) -> Dict[str, Any]:
     """The plan as a grounded Medusa program.
 
     Grounding is not requested from anyone: each goal becomes the program's own closing
@@ -506,4 +571,22 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None) -> Dic
             continue
         w = _ground(g, select)
         body += [{"op": "ensure", "predicate": p} for p in (w if isinstance(w, list) else [w])]
+
+    # TEARDOWN LAST, AFTER THE WITNESS. A machine this program made so something else could
+    # happen is the program's to take down — the operator never asked for it and will never
+    # look for it. A member that already existed is left alone, always: the difference is
+    # PROVENANCE, and it is the only line that can be drawn here without guessing intent.
+    #
+    # AFTER the closing ENSUREs, never before. The witness asserts that what was asked for
+    # actually happened, and tearing the scaffolding down first would leave it asserting
+    # against a world the program had just dismantled.
+    #
+    # IN REVERSE ORDER OF CREATION, because a later temp may sit on an earlier one — a
+    # browser on a machine — and removing the host first orphans the guest.
+    kinds = _kinds(scratch)
+    for kind, name in reversed(list(temps or ())):
+        spec = effects._K(kinds).get(kind) or {}
+        deleter, key = spec.get("delete"), spec.get("key")
+        if deleter and key and name:
+            body.append({"op": "call", "tool": deleter, "args": {key: name}})
     return {"body": body}

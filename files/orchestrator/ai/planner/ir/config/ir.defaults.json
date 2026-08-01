@@ -341,10 +341,10 @@
           "attr": "status",
           "member_arg": "name",
           "value": "running",
-          "args": {
+          "why_headless": "WHO THE MACHINE IS FOR DECIDES. An operator who asked to launch a machine wants to SEE it, so that launch keeps the shipped default and a viewer can attach. A machine the WRITER starts because something else needs a host is the program's own: the work inside it is a shell, and a graphical session there is cost with no reader \u2014 worse for VNC, which is a port, a password and a listener per machine. `internal_args` applies only when the call is a precondition of another call, which is exactly when nobody asked for a machine at all.",
+          "internal_args": {
             "display": "none"
-          },
-          "why_headless": "A PROGRAM STARTS A MACHINE SO WORK CAN HAPPEN INSIDE IT, and that work is a shell. The shipped default is `sdl`, which opens a graphical window on the host for every machine a program ever launches \u2014 pure cost, repeated forever, for a session nobody looks at. VNC and SPICE are worse: a port, a password and a listener per machine. Display is for when the OPERATOR asks to use a machine themselves, and that request comes through the tool path where they can say so, not through a program that only needs a command to run. Declared here rather than in the writer because it is a fact about the TOOL."
+          }
         }
       },
       "unsetters": {

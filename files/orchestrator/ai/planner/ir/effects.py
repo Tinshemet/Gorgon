@@ -119,10 +119,32 @@ def precondition(tool: str, args: Dict[str, Any], kinds=None) -> list:
     """
     kind = _kind_of(tool, kinds)
     spec = _K(kinds).get(kind) or {}
+    out = []
+
+    # A CREATOR'S ARGUMENTS CAN NAME OTHER THINGS, and until now none of them were
+    # requirements. A snapshot is OF a machine and a search runs IN a browser; those members
+    # must exist before the creator runs, and `precondition` only ever looked at setters —
+    # so `snapshot_create(snap_name: s1)` planned with no machine anywhere, and the Camoufox
+    # package's three-level chain stopped after one.
+    #
+    # THE TIE IS THE ATTRIBUTE'S NAME, which is this codebase's stated convention and not a
+    # new one: "a snapshot's `vm`, a page's `crawl` — the tie is an attribute of the thing
+    # being made, named for the thing it belongs to" (`extract._link_between`). Guarded on
+    # the name being a DECLARED KIND, so an ordinary attribute never becomes a dependency.
+    if tool == spec.get("create"):
+        rename = spec.get("create_args") or {}
+        for attr in (spec.get("attrs") or ()):
+            ref_spec = _K(kinds).get(attr)
+            if not ref_spec or not ref_spec.get("key"):
+                continue
+            value = args.get(rename.get(attr, attr))
+            if value is not None:
+                out.append(_exists(attr, ref_spec["key"], value))
+        return out
+
     setter = (spec.get("setters") or {}).get(tool)
     if not setter:
-        return []
-    out = []
+        return out
     member = args.get(setter.get("member_arg"))
     if member is not None and spec.get("key"):
         out.append(_exists(kind, spec["key"], member))
@@ -135,7 +157,7 @@ def precondition(tool: str, args: Dict[str, Any], kinds=None) -> list:
     return out
 
 
-def invert(pred: Dict[str, Any], kinds=None) -> Optional[tuple]:
+def invert(pred: Dict[str, Any], kinds=None, internal: bool = False) -> Optional[tuple]:
     """Given a predicate, the tool that MAKES IT TRUE, and with what arguments.
 
     The tile-selection step, and it needs no search: for the `count` shapes these tiles
@@ -185,14 +207,18 @@ def invert(pred: Dict[str, Any], kinds=None) -> Optional[tuple]:
         for tool, s in (spec.get("setters") or {}).items():
             if s["attr"] != attr:
                 continue
-            # CONSTANT ARGUMENTS THE MANIFEST ATTACHES TO A SETTER. Some tools take an
-            # option that is not part of the state being written and still has to be right —
-            # `launch_vm` takes a DISPLAY MODE, and the shipped default opens a graphical
-            # window. A program that starts a machine so a package can work inside it wants
-            # a shell and nothing else; a VNC or SDL session there is pure cost, on every
-            # machine, forever. Declaring it beside the setter puts the choice where the
-            # manifest already describes the tool rather than in the writer.
+            # CONSTANT ARGUMENTS THE MANIFEST ATTACHES TO A SETTER, and `internal_args`
+            # only when the call is the PROGRAM'S OWN rather than the operator's.
+            #
+            # `launch_vm` takes a DISPLAY MODE and the shipped default opens a graphical
+            # window. WHO THE MACHINE IS FOR decides: an operator who asked to launch a
+            # machine wants to see it, and a machine started so a package can work inside it
+            # wants a shell and nothing else — a VNC session there is cost with no reader.
+            # The writer knows which it is placing, so the manifest states the fact and the
+            # writer states the provenance; neither has to know the other's business.
             fixed = dict(s.get("args") or {})
+            if internal:
+                fixed.update(s.get("internal_args") or {})
             if "value_arg" in s:
                 return (tool, {**fixed, s["member_arg"]: member, s["value_arg"]: value})
             if s.get("value") == value:
