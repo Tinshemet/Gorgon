@@ -277,9 +277,11 @@ def test_a_DELETION_and_a_CREATION_are_currently_indistinguishable():
 
     from orchestrator.ai.engines.extract import extract, to_goals
     remove = to_goals(extract("delete the vm called doomed"), "")
-    create = to_goals(extract("create a vm named doomed"), "")
-    assert remove == create, (
-        "THE HOLE IS CLOSED — a deletion and a creation now differ. Rewrite this test's "
-        f"note.\n  delete -> {remove}\n  create -> {create}")
-    assert remove and remove[0].get("eq") == 1, (
-        "and the shared reading is COUNT = 1, which is the creation")
+    # ASSERTED ON THE CONTROLLING GOAL, not on the whole list. The deletion also produces a
+    # trailing `reach` goal, so the two answers are not byte-identical — and an equality
+    # assertion read that as "the hole is closed" while the hazard was completely intact.
+    # A test about a dangerous reading must assert THE READING.
+    assert remove, "a deletion translated to nothing at all, which is a different hole"
+    assert remove[0].get("eq") == 1, (
+        "THE HOLE IS CLOSED — a deletion no longer asks for the machine to EXIST. Rewrite "
+        f"this test's note.\n  delete -> {remove}")
