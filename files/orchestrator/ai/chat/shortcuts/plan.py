@@ -99,6 +99,14 @@ class Plan(Shortcut):
         granted = _intent.resolve(request, asked=self._ask_intent)
         request = _intent.strip_prefix(request)
 
+        # `plan procedure build_box: make a machine from a template` — KEEP this, do not do
+        # it. Declared for the same reason the intent is: the alternative was a word blinder
+        # sniffing {save, store, keep, reuse, …} out of the sentence, which fires on "save a
+        # snapshot of web" and on 5 of 7 realistic requests. An operator who wants a snippet
+        # can say so in four characters.
+        from orchestrator.ai.planner import procedures as _procs
+        keep_as, request = _procs.declared_in(request)
+
         # IMPORTED HERE, NOT AT MODULE LOAD. A shortcut registers itself at class-definition
         # time, so every import in this file is paid by every chat session that never types
         # `plan`. The engine layer pulls in the planner, the manifest and the tool registry;
@@ -158,7 +166,7 @@ class Plan(Shortcut):
         # offering one would train the operator to answer a question that decides nothing.
         result = _rig.build(guarded, narrate=not dry, decide=decide,
                             consent=None if dry else self._ask_consent).handle(
-                                request, intent=granted)
+                                request, intent=granted, procedure=keep_as)
 
         if offered:
             console.print("\n[bold]what it would do[/bold]" if dry
@@ -176,6 +184,15 @@ class Plan(Shortcut):
         outcome = result.get("outcome")
         colour = {"DONE": "ok", "REFUSED": "warn"}.get(outcome, "warn")
         console.print(f"[{colour}]{outcome}[/{colour}]  {result.get('why') or ''}")
+
+        kept = result.get("procedure")
+        if kept:
+            # THE ARTIFACT AND WHERE IT LIVES. An authoring request whose answer was "DONE"
+            # and nothing else would be indistinguishable from one that ran — which is the
+            # confusion that put a machine called `default` on the lab.
+            console.print(f"\n[bold]kept as {kept['name']}[/bold]  [dim]{kept['at']}[/dim]")
+            for line in (kept.get("rendered") or "").splitlines():
+                console.print(f"  {line}")
 
         # THE LEDGER, NOT A SUMMARY. This path exists to be READ — it is where a wrong
         # answer gets traced to the stage that caused it — and a list of sentences cannot

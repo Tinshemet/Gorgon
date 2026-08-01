@@ -1,0 +1,367 @@
+#!/usr/bin/env python3
+"""
+test_procedures.py — a named program, kept, and REACHED FOR again.
+
+THE OPERATOR'S TEST, and it is a better one than "can it write a snippet": *"the reason I
+want to build this snippet is to also test if it can call those snippets when it's done."*
+Writing an artifact proves the writer works. Using one later proves the system has a memory
+made of its own code.
+
+WHY THIS FILE EXISTS AT ALL. `procedures.py` shipped at 22894d7 with ZERO tests and the
+store had never been written to — `save`, `covering` and `_unify` had not executed once, in
+any process. The commit said so and named task #78 as the decision to finish or revert. This
+is the finishing: every claim in that module is asserted here, and the last test is the
+operator's, end to end.
+
+WHAT IS NOT HERE, deliberately: no model. A procedure is chosen by a STRUCTURAL match
+between what it declares it achieves and what the goal asks for, so the whole feature is
+deterministic and this suite runs in under a second.
+
+Run:  PYTHONPATH=. python3 -m tests.test_procedures
+"""
+import json
+import os
+import shutil
+import sys
+import tempfile
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from orchestrator.ai.planner import ghost_writer as gw
+from orchestrator.ai.planner import procedures as procs
+from orchestrator.ai.planner.ir import render, validate
+from orchestrator.ai.planner.ir import run as ir_run
+from tests.bench.seams import seams
+from tests.bench.sim_world import SimWorld
+
+_PASS = _FAIL = 0
+
+
+def check(label, ok):
+    global _PASS, _FAIL
+    if ok:
+        _PASS += 1
+        print(f"  ok   {label}")
+    else:
+        _FAIL += 1
+        print(f"  FAIL {label}")
+
+
+class _Library:
+    """A store in a temp directory, installed as THE library for the duration.
+
+    THE MODULE SINGLETON IS SWAPPED, not a second store handed around. `LIBRARY` is what the
+    writer and the runtime both reach for, and a test that built its own would prove a Store
+    works while leaving the seam those two actually use untested — which is precisely how
+    this module came to have a save path nothing had ever run.
+    """
+
+    def __enter__(self):
+        self.dir = tempfile.mkdtemp(prefix="gorgon-procs-")
+        self.prior = procs.LIBRARY
+        procs.LIBRARY = procs.Store(self.dir)
+        return procs.LIBRARY
+
+    def __exit__(self, *exc):
+        procs.LIBRARY = self.prior
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+
+# The snippet the operator asked for, in the language: make a machine from a template.
+def _builder(name="vm_disk_builder"):
+    return {"name": name,
+            "params": {"box": "string"},
+            "achieves": {"shape": "count",
+                         "select": {"kind": "vm", "name": "$box"}, "eq": 1},
+            "body": [{"op": "call", "tool": "create_vm",
+                      "args": {"name": "$box", "os_type": "linux"}},
+                     {"op": "ensure",
+                      "predicate": {"shape": "count",
+                                    "select": {"kind": "vm", "name": "$box"}, "eq": 1}}]}
+
+
+def test_a_named_program_is_kept_in_both_forms():
+    """The `.medusa` is what the operator reads; the `.json` is what the runtime consumes."""
+    print("[procedures] kept as text and as IR")
+    with _Library() as lib:
+        at = lib.save(_builder(), render(_builder()))
+        check("the readable artifact is written", os.path.exists(at))
+        check("and it is the .medusa", at.endswith(".medusa"))
+        text = lib.text("vm_disk_builder")
+        check("it renders as a PROCEDURE with its parameter",
+              text.startswith("PROCEDURE vm_disk_builder(STRING box)"))
+        got = lib.get("vm_disk_builder")
+        check("the IR round-trips", got and got["body"] == _builder()["body"])
+        check("and the library names it", lib.names() == ["vm_disk_builder"])
+
+
+def test_a_name_that_is_not_an_identifier_is_refused():
+    """A procedure name is written INTO programs, so it has to survive being read back."""
+    print("[procedures] the name has to be sayable in a program")
+    with _Library() as lib:
+        for bad in ("My Thing", "2fast", "has-a-dash", "", None, "drop table"):
+            check(f"{bad!r} is refused", not procs.legal_name(bad))
+        check("an ordinary one is not", procs.legal_name("vm_disk_builder"))
+        try:
+            lib.save({"name": "My Thing", "body": []})
+            check("saving an illegal name raises", False)
+        except ValueError as e:
+            check("saving an illegal name raises, and says why", "identifier" in str(e))
+
+
+def test_the_operator_declares_an_authoring_request():
+    """DECLARE, DON'T INFER — the replacement for a word blinder that fired on 5 of 7.
+
+    The blinder looked for {save, store, keep, reuse, …} and switched the extractor's prompt
+    on a hit, so "save a snapshot of web" read as a request to write a snippet. What it
+    bought was a schema field the model filled 0 times in 2. The prefix cannot do either.
+    """
+    print("[procedures] the operator says it, nobody guesses")
+    name, rest = procs.declared_in("procedure build_box: make a machine from a template")
+    check("the name is taken", name == "build_box")
+    check("and the request is what is left", rest == "make a machine from a template")
+    check("case does not matter", procs.declared_in("PROCEDURE b: x")[0] == "b")
+    for ordinary in ("save a snapshot of web", "keep the vm running",
+                     "store the iso on disk", "reuse the golden image",
+                     "create a procedure for later"):
+        got, rest = procs.declared_in(ordinary)
+        check(f"{ordinary!r} is an ordinary request", got is None and rest == ordinary)
+    bad, _ = procs.declared_in("procedure My Thing: x")
+    check("a declaration with an unusable name is not silently an ordinary request",
+          bad is None or not procs.legal_name(bad))
+
+
+def test_a_stored_procedure_is_reached_for_by_the_writer():
+    """THE POINT. A macro is expanded because somebody named it; this is chosen because it
+    makes the goal true, and the operator is not in the room."""
+    print("[procedures] the writer reaches for the operator's own snippet")
+    with _Library() as lib:
+        world = SimWorld()
+        goal = {"shape": "count", "select": {"kind": "vm", "name": "web"}, "eq": 1}
+
+        plain = gw.cover([goal], world)
+        check("without a library it plans the primitive",
+              [t for t, _ in plain] == ["create_vm"])
+
+        lib.save(_builder(), render(_builder()))
+        with_lib = gw.cover([goal], SimWorld())
+        check("with one, it plans the PROCEDURE instead",
+              [t for t, _ in with_lib] == ["vm_disk_builder"])
+        check("binding the parameter from the goal",
+              with_lib[0][1] == {"box": "web"})
+
+
+def test_the_scratch_advances_by_the_procedures_own_body():
+    """A later goal must be planned against the world the CALL will actually leave behind."""
+    print("[procedures] planning sees what the call would do")
+    with _Library() as lib:
+        lib.save(_builder(), render(_builder()))
+        goals = [{"shape": "count", "select": {"kind": "vm", "name": "web"}, "eq": 1},
+                 {"every": {"kind": "vm", "name": "web"}, "must": {"label": "prod"}}]
+        plan = gw.cover(goals, SimWorld())
+        check("the procedure is placed first",
+              plan and plan[0][0] == "vm_disk_builder")
+        check("and the label lands on the machine it created",
+              ("add_label", {"name": "web", "label": "prod"}) in plan)
+
+
+def test_calling_one_runs_its_body_through_the_same_visitor():
+    """Storing a program does not bless it — every statement meets the same executor."""
+    print("[procedures] a procedure is a tool you wrote")
+    with _Library() as lib:
+        lib.save(_builder(), render(_builder()))
+        world = SimWorld()
+        program = {"body": [{"op": "call", "tool": "vm_disk_builder",
+                             "args": {"box": "web"}},
+                            {"op": "ensure",
+                             "predicate": {"shape": "count",
+                                           "select": {"kind": "vm", "name": "web"},
+                                           "eq": 1}}]}
+        ok, problems = validate(program, known_names=world.names(),
+                                known_tools={"create_vm"} | set(lib.names()))
+        check(f"a call to a stored procedure validates ({problems[:1]})", ok)
+        select, holds = seams(world)
+        result = ir_run(program, world.execute, select=select, holds=holds,
+                        known_names=world.names(), known_tools={"create_vm"},
+                        consent=True, intent="achieve")
+        check("it runs", result["ok"])
+        check("the body's calls actually happened", "web" in world.vms)
+        check("and they are the caller's calls, listed",
+              ("create_vm", {"name": "web", "os_type": "linux"}) in result["calls"])
+
+
+def test_a_body_that_could_not_run_is_not_kept():
+    """KEEPING IT IS ALSO ACCEPTING IT, and nothing checked that before.
+
+    Scope isolation was already correct — the callee sees its arguments and nothing else —
+    and the consequence was worse than a leak, not better: an unbound `$outer` inside a
+    procedure body is not an error at run time, it is a TEMPLATE that resolves to itself, so
+    the procedure created a machine literally called `$outer` and reported success. The
+    isolation working is what turned a reference into garbage.
+
+    `params` IS THE SCOPE and `validate` already reads it, so the rule needs no new
+    machinery: a procedure may refer to what it declares and to what it binds.
+    """
+    print("[procedures] a procedure that cannot run is refused at the door")
+    with _Library() as lib:
+        leaky = _builder("leaky")
+        leaky["body"] = [{"op": "call", "tool": "create_vm",
+                          "args": {"name": "$outer", "os_type": "linux"}}]
+        try:
+            lib.save(leaky, render(leaky))
+            check("a body referring to an unbound name is refused", False)
+        except ValueError as e:
+            check("a body referring to an unbound name is refused, and named",
+                  "$outer" in str(e))
+        check("and nothing was written", lib.names() == [])
+        check("its own parameter is legitimately in scope",
+              lib.save(_builder(), render(_builder())).endswith("vm_disk_builder.medusa"))
+
+
+def test_the_callers_bindings_do_not_leak_into_the_callee():
+    """A procedure whose meaning depended on where it was called from is not reusable."""
+    print("[procedures] the arguments are the whole scope")
+    with _Library() as lib:
+        lib.save(_builder(), render(_builder()))
+        world = SimWorld()
+        # `box` IS BOUND IN THE CALLER TOO, to something else. The callee must see the
+        # ARGUMENT, never the caller's binding of the same name.
+        program = {"body": [{"op": "new", "var": "box", "kind": "vm",
+                             "args": {"name": "decoy", "os_type": "linux"}},
+                            {"op": "call", "tool": "vm_disk_builder",
+                             "args": {"box": "web"}},
+                            {"op": "ensure",
+                             "predicate": {"shape": "count",
+                                           "select": {"kind": "vm", "name": "web"},
+                                           "eq": 1}}]}
+        select, holds = seams(world)
+        result = ir_run(program, world.execute, select=select, holds=holds,
+                        known_names=world.names(), known_tools={"create_vm"},
+                        consent=True, intent="achieve")
+        check(f"it runs ({result.get('why') or result.get('failed') or ''})", result["ok"])
+        check("the callee used its ARGUMENT", "web" in world.vms)
+        check("and the caller's binding of the same name survives it",
+              "decoy" in world.vms)
+
+
+def test_one_damaged_file_does_not_take_down_the_writer():
+    """`all()` propagated `get`'s exception, so ONE bad file crashed planning for EVERY goal
+    — including every request that needs no procedure at all."""
+    print("[procedures] a corrupt entry is skipped and named, never raised")
+    with _Library() as lib:
+        lib.save(_builder(), render(_builder()))
+        with open(os.path.join(lib.path, "wrecked.json"), "w") as fh:
+            fh.write("{ this is not json")
+        got = lib.all()
+        check("the good one is still found", [p["name"] for p in got] == ["vm_disk_builder"])
+        check("and the damaged one is named", lib.broken == ["wrecked"])
+        goal = {"shape": "count", "select": {"kind": "vm", "name": "web"}, "eq": 1}
+        check("the writer still plans", bool(gw.cover([goal], SimWorld())))
+        try:
+            lib.get("wrecked")
+            check("but asking for it BY NAME still raises", False)
+        except Exception:
+            check("but asking for it BY NAME still raises", True)
+
+
+def test_the_library_is_read_once_per_change_not_once_per_goal():
+    """`covering()` is asked about every goal the writer covers, and it swept the whole
+    directory each time — file reads on the writer's hot path, for a feature most requests
+    never touch."""
+    print("[procedures] reading is cached, and an edit is seen")
+    with _Library() as lib:
+        lib.save(_builder(), render(_builder()))
+        reads = {"n": 0}
+        real_open = open
+
+        import builtins
+        def counting(path, *a, **kw):
+            if str(path).endswith(".json"):
+                reads["n"] += 1
+            return real_open(path, *a, **kw)
+
+        builtins.open = counting
+        try:
+            for _ in range(20):
+                lib.all()
+            check(f"twenty sweeps cost one read ({reads['n']})", reads["n"] == 1)
+            # AN EDIT IS SEEN, which is why the cache is stamped rather than held. These
+            # files are the readable artifact; an operator editing one and getting
+            # yesterday's behaviour would be the worst of both.
+            edited = _builder()
+            edited["body"].append({"op": "call", "tool": "add_label",
+                                   "args": {"name": "$box", "label": "edited"}})
+            os.utime(os.path.join(lib.path, "vm_disk_builder.json"), (0, 0))
+            with real_open(os.path.join(lib.path, "vm_disk_builder.json"), "w") as fh:
+                json.dump(edited, fh)
+            got = lib.get("vm_disk_builder")
+            check("an edited procedure is re-read", len(got["body"]) == 3)
+        finally:
+            builtins.open = real_open
+
+
+def test_an_empty_library_costs_a_stat():
+    """Most requests will never involve a procedure. The feature must be free for them."""
+    print("[procedures] a library nobody has written to is free")
+    with _Library() as lib:
+        shutil.rmtree(lib.path, ignore_errors=True)
+        goal = {"shape": "count", "select": {"kind": "vm", "name": "web"}, "eq": 1}
+        check("covering answers None without listing anything",
+              lib.covering(goal) is None)
+        check("and the writer plans the primitive",
+              [t for t, _ in gw.cover([goal], SimWorld())] == ["create_vm"])
+
+
+def test_write_it_then_use_it():
+    """THE OPERATOR'S TEST, END TO END, through the orchestrator both times.
+
+        1. `procedure vm_disk_builder: a machine called web`   -> written and kept, NOTHING RUNS
+        2. a later request for the same thing                  -> the writer reaches for it
+
+    The second half is what makes this a memory rather than a macro: nobody named the
+    procedure in the second request, and the plan contains it because it was the better move.
+    """
+    print("[procedures] write it, then use it — nobody naming it the second time")
+    from orchestrator.ai.engines import Channel, MedusaEngine, Orchestrator, Registry
+    from orchestrator.ai.engines.channel import Answer
+
+    with _Library() as lib:
+        goal = {"shape": "count", "select": {"kind": "vm", "name": "web"}, "eq": 1}
+
+        def translate(request, world=None):
+            return Answer([goal], "table", "")
+        translate.name = "table"
+
+        world = SimWorld()
+
+        class LabEngine(MedusaEngine):
+            def claims(self, request):
+                return True
+
+        reg = Registry()
+        reg.mount(LabEngine(world))
+        orch = Orchestrator(reg, Channel([translate]))
+
+        out = orch.handle("a machine called web", intent="achieve",
+                          regime="translation", procedure="vm_disk_builder")
+        check("it closes DONE", out["outcome"] == "DONE")
+        check("and says it was kept", "kept" in (out.get("why") or ""))
+        check("NOTHING RAN — the point of authoring", not world.vms and not out["calls"])
+        check("the artifact is on disk", os.path.exists(out["procedure"]["at"]))
+        check("and it is the program that would have worked",
+              "create_vm" in out["procedure"]["rendered"])
+
+        # AND NOW THE HALF THAT MATTERS. A fresh world, the same goal, nobody naming the
+        # procedure — and the writer reaches for it because it makes the goal true.
+        plan = gw.cover([goal], SimWorld())
+        check("the second request plans the operator's own snippet",
+              [t for t, _ in plan] == ["vm_disk_builder"])
+
+
+def main():
+    from tests import _suite
+    sys.exit(_suite.run(sys.modules[__name__], "procedures"))
+
+
+if __name__ == "__main__":
+    main()

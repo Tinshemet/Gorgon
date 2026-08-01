@@ -94,8 +94,15 @@ class Orchestrator:
 
     def handle(self, request: str, intent: Optional[str] = None,
                components: Optional[List[Dict[str, Any]]] = None,
-               regime: Optional[str] = None) -> Dict[str, Any]:
+               regime: Optional[str] = None,
+               procedure: Optional[str] = None) -> Dict[str, Any]:
         """One request, start to finish.
+
+        `procedure` IS A DISPOSITION, NOT A GOAL. Named, the engine plans exactly as it would
+        to act and the program is KEPT instead of run — same components, same writer, same
+        world, one step withheld. It arrives from the operator (`procedure build_box: …`)
+        rather than from the model, because the model was measured filling that field 0 times
+        in 2 while the blinder that offered it fired on 5 of 7 ordinary requests.
 
         `intent` IS THE OPERATOR'S, AND IT IS ENFORCED — see `ir/intent.py`. A `fetch` or an
         `ensure` may not change the lab, and a step that would is refused in the in-session
@@ -151,9 +158,11 @@ class Orchestrator:
         # THE REST OF THE CLAIMANTS ARE FALLBACKS, in the order the registry mounted them.
         # The router picks first; being wrong about that is a routing mistake, not a dead end.
         order = [engine] + [e for e in claimants if e.name != engine.name]
-        return self._serve(request, order, state, intent, components, regime)
+        return self._serve(request, order, state, intent, components, regime,
+                           procedure)
 
-    def _serve(self, request, order, state, intent, components, regime=None):
+    def _serve(self, request, order, state, intent, components, regime=None,
+               procedure=None):
         """Try each claimant in turn until one serves it, refuses it, or all are spent.
 
         REROUTING HAPPENS ON INABILITY, NEVER ON REFUSAL, and the distinction is the whole
@@ -187,7 +196,7 @@ class Orchestrator:
             session.record(f"{len(state)} claimant(s) synced",
                            filed_by="registry", caught_by="orchestrator",
                            executed="sync(claimants)", data=state)
-            out = self._attempt(request, engine, session, components)
+            out = self._attempt(request, engine, session, components, procedure)
             spent += len(out.get("calls") or [])
             last = out
             # DONE and REFUSED both END IT. So does an unanswerable translation: the request
@@ -251,7 +260,7 @@ class Orchestrator:
         out["procedure"] = {"name": name, "at": at, "rendered": rendered}
         return out
 
-    def _attempt(self, request, engine, session, components):
+    def _attempt(self, request, engine, session, components, procedure=None):
         """One engine's whole turn: translate, run the in-session, close."""
         if components is None:
             session.record("English -> goals", filed_by="orchestrator",
@@ -278,16 +287,23 @@ class Orchestrator:
                 # the wrong half.
                 return session.close("UNTRANSLATED", answer.why)
             components = answer.components
+            # A DECLARED NAME WINS; the channel's is a fallback nothing currently fills.
+            procedure = procedure or getattr(answer, "procedure", None)
 
-            # AUTHORING, NOT ACTING. The operator asked for a reusable snippet, so the engine
-            # WRITES the program for these goals and the orchestrator keeps it — nothing runs.
-            # Doing otherwise is what put a machine called `default` on the lab in answer to a
-            # request for a script.
-            #
-            # PLANNED, NOT SIMULATED: the real writer against the real world, so the artifact
-            # is one that would actually work. Only the last step — doing it — is withheld.
-            if getattr(answer, "procedure", None):
-                return self._author(engine, session, answer.procedure, components)
+        # AUTHORING, NOT ACTING. The operator asked for a reusable snippet, so the engine
+        # WRITES the program for these goals and the orchestrator keeps it — nothing runs.
+        # Doing otherwise is what put a machine called `default` on the lab in answer to a
+        # request for a script.
+        #
+        # PLANNED, NOT SIMULATED: the real writer against the real world, so the artifact is
+        # one that would actually work. Only the last step — doing it — is withheld.
+        #
+        # OUTSIDE THE TRANSLATION BRANCH, and it was inside it. So a caller supplying
+        # `components` directly — which is every measured result to date, and the only shape a
+        # test can drive without a model — could not author at all: the one path this feature
+        # can be PROVEN on was the one path it did not reach.
+        if procedure:
+            return self._author(engine, session, procedure, components)
 
         result = _insession.drive(engine, components, session, self._decide)
         session.calls = result.get("calls") or []

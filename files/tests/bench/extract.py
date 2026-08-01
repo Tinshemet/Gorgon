@@ -118,24 +118,17 @@ def schema(kinds=None) -> Dict[str, Any]:
             #
             # A schema that forbids the honest answer does not get honesty. It gets a
             # confident answer to a question nobody asked.
-            # AN AUTHORING REQUEST IS NOT A WORLD REQUEST, and until this field existed the
-            # extractor had no way to say so. "Create a reusable snippet for a temporary vm"
-            # came back as `count vm = 1` with the placeholder name `default`, the executor
-            # served it in one call, a real machine was created on the lab, and the run
-            # closed DONE. Every layer was truthful about what it did and none of them was
-            # asked to do it.
+            # AN AUTHORING REQUEST IS NOT A WORLD REQUEST, and there WAS a `procedure` field
+            # here for the model to say so. It is gone, and the reason is measurement: asked
+            # outright to "create a reusable medusa procedure called vm_disk_builder" the
+            # model answered `procedure: null` twice out of two, and the word blinder that
+            # switched the instruction on fired on "save a snapshot of web", "keep the vm
+            # running" and "store the iso on disk" — 5 of 7 realistic requests.
             #
-            # THE GOALS STAY THE GOALS. What changes is the DISPOSITION: the same components
-            # describe what the procedure must achieve, and naming one here says "write this
-            # and keep it" rather than "do this now". That keeps one translation path instead
-            # of two, which is the defect #26 already records.
-            "procedure": {
-                "type": "string",
-                "description": ("ONLY if the operator asked you to SAVE this as a reusable "
-                                "snippet, procedure or script: the name to save it under, "
-                                "lowercase with underscores. Leave this out for an ordinary "
-                                "request to do something now."),
-            },
+            # A field the model never fills is schema surface on every extraction for nothing,
+            # and a trigger that fires on ordinary requests is a regression waiting for a
+            # ladder run. The operator DECLARES it instead: `procedure build_box: ...`. See
+            # `planner/procedures.declared_in`.
             "cannot": {
                 "type": "string",
                 "description": ("say WHY, if this is not a request you can express as goals — "
@@ -211,22 +204,6 @@ def _relevant(spec: Dict[str, Any], request: str) -> bool:
     return bool(nouns & words) or bool({n + "s" for n in nouns} & words)
 
 
-def _authoring(request: str) -> bool:
-    """Is the operator asking for something KEPT, rather than something done?
-
-    A word match, deliberately — the same shape as the kind blinder, and for the same
-    reason: this decides what the model is SHOWN, and a decision about what to show cannot
-    itself depend on the model. The words are the ones an operator actually uses for it.
-
-    THE LIMIT, SAID PLAINLY: an authoring request phrased without any of these words gets
-    the ordinary prompt and will be read as a request to act. Widening the list puts the
-    authoring instruction in front of requests that measurably do worse for seeing it.
-    """
-    words = {w.strip(".,!?;:'\"").lower() for w in str(request or "").split()}
-    return bool(words & {"procedure", "snippet", "script", "reusable", "routine",
-                         "template-script", "save", "store", "keep", "reuse"})
-
-
 def prompt(kinds=None, request: str = "") -> str:
     """The system prompt, with the DOMAIN named from the manifest in force.
 
@@ -265,25 +242,17 @@ def prompt(kinds=None, request: str = "") -> str:
     subject = ", ".join(sorted(nouns)) or "virtual machines"
     out = PROMPT.replace("about virtual machines", f"about {subject}")
 
-    # AN AUTHORING REQUEST HAS TO BE SHOWN, NOT MERELY ALLOWED. The `procedure` field went
-    # into the schema with a description naming "snippet, procedure or script", and asked to
-    # "create a reusable medusa procedure called vm_disk_builder ... and save it so it can be
-    # called later" the model returned `procedure: null` 2/2 and two goals about snapshots.
-    # A field this model has never seen used is a field it does not use.
+    # THE AUTHORING INSTRUCTION THAT USED TO BE INJECTED HERE IS GONE, and it is worth
+    # recording why rather than leaving a clean file that looks like it was never tried.
+    # The prompt was switched on by a word blinder — {procedure, snippet, script, reusable,
+    # save, store, keep, reuse} — which fires on "save a snapshot of web" and "keep the vm
+    # running", 5 of 7 realistic requests. It bought a schema field the model filled 0 times
+    # in 2. Prompt text is paid for on every request that sees it, and unconditional text was
+    # measured at five broken rungs to buy one capability, so this was the shape of a
+    # regression with nothing on the other side of the trade.
     #
-    # BLINDED, for the reason the worked examples are: this line is paid for on every request
-    # that sees it, and unconditional prompt text was measured at five broken rungs to buy
-    # one capability. It appears only when the operator used an authoring word, which makes
-    # it BYTE-IDENTICAL on every ordinary request — provable without spending a model call.
-    if _authoring(request):
-        out = out.replace(
-            "IF IT IS NOT A REQUEST YOU CAN EXPRESS THIS WAY",
-            "THIS OPERATOR IS ASKING YOU TO SAVE SOMETHING REUSABLE. Put the name they gave\n"
-            "it in `procedure`, and let the goals say what it must achieve when it is called.\n"
-            '"save a script called build_box that makes a machine from a template"\n'
-            "  -> procedure: build_box, and a goal for the machine it makes.\n\n"
-            "IF IT IS NOT A REQUEST YOU CAN EXPRESS THIS WAY")
-
+    # The operator says it instead: `procedure build_box: ...`. No prompt, no schema, no
+    # inference, and it cannot false-positive.
     shown = []
     for kind, spec in (config.KINDS or {}).items():
         ex = (spec or {}).get("example") or {}

@@ -57,11 +57,6 @@ def translator() -> Callable:
         goals = _extract.to_goals(raw, str(gap))
         got = (Answer(goals, "extractor", "") if goals
                else Answer(None, "extractor", "no usable goal"))
-        # THE DISPOSITION TRAVELS WITH THE GOALS. Naming a procedure does not change WHAT
-        # must be true; it changes whether the answer is a program that runs or a program
-        # that is kept. Losing it here would leave the orchestrator unable to tell an
-        # authoring request from an ordinary one, which is the failure this exists to end.
-        got.procedure = (raw or {}).get("procedure")
         return got
     translate.name = "extractor"
     return translate

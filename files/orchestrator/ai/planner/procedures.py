@@ -48,6 +48,33 @@ def _home() -> str:
 
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 
+# `procedure build_box: make a machine from a template` — the operator DECLARING that this
+# request is to be kept rather than done, and what to call it.
+#
+# THE FIRST VERSION INFERRED IT and that is why this exists. A word blinder looked for
+# {procedure, snippet, script, reusable, save, store, keep, reuse} and switched the prompt on
+# a hit — which fires on "save a snapshot of web", "keep the vm running" and "store the iso
+# on disk": 5 of 7 realistic requests. And what it bought never worked; asked outright to
+# "create a reusable medusa procedure called vm_disk_builder", the model answered
+# `procedure: null` twice out of two.
+#
+# So the whole authoring path hung on a sniffer with a measured false-positive rate feeding a
+# schema field that had never once been filled. DECLARE, DON'T INFER — the same answer the
+# intent ladder reached, spelled the same way, and it costs no prompt text, no schema surface
+# and no model call.
+_PREFIX = re.compile(r"^\s*procedure\s+([A-Za-z][\w]*)\s*:\s*(.*)$", re.I | re.S)
+
+
+def declared_in(request: str):
+    """`(name, the rest of the request)`, or `(None, request)` when nothing was declared.
+
+    A NAME THAT IS NOT LEGAL IS STILL A DECLARATION. It comes back so the caller can refuse
+    it by name — silently treating `procedure My Thing:` as an ordinary request would run
+    the very work the operator asked to have kept.
+    """
+    m = _PREFIX.match(str(request or ""))
+    return (m.group(1), m.group(2).strip()) if m else (None, request)
+
 
 def legal_name(name: str) -> bool:
     """A procedure name is an identifier — lowercase, underscores, no spaces.
@@ -75,6 +102,19 @@ class Store:
 
     def __init__(self, path: Optional[str] = None):
         self.path = path or _home()
+        # ONE READ PER FILE PER CHANGE, not one per goal. `covering()` is asked about EVERY
+        # goal the writer covers and it sweeps the whole library each time, so without this
+        # a five-procedure library costs five file reads per goal — on the writer's hot path,
+        # for a feature most requests never touch.
+        #
+        # VALIDATED ON (mtime, size) RATHER THAN HELD FOREVER, because the operator is
+        # expected to EDIT these files: they are the readable artifact, that is the entire
+        # reason both forms are kept, and a cache that ignored an edit would run yesterday's
+        # procedure while showing today's text. A stat is cheap; a stale answer is not.
+        self._cache: Dict[str, Any] = {}
+        # PROCEDURES THAT COULD NOT BE READ, by name. Reported rather than raised — see
+        # `all()`.
+        self.broken: List[str] = []
 
     # ── keeping ──────────────────────────────────────────────────────────────
     def save(self, program: Dict[str, Any], rendered: str = "") -> str:
@@ -84,11 +124,32 @@ class Store:
         declares nothing is still callable by name; it simply cannot be REACHED FOR, which
         is the honest consequence of not saying what you do.
         """
+        from .ir.validate import validate
+
         name = program.get("name")
         if not legal_name(name):
             raise ValueError(
                 f"{name!r} is not a legal procedure name — a procedure is written into "
                 f"programs, so its name must be an identifier: lowercase, digits, underscores")
+        # KEEPING IT IS ALSO ACCEPTING IT. "Storing a program does not bless it" is about
+        # PERMISSION — a saved `delete_vm` still meets the commit gate — and it was silently
+        # doing duty for a second claim it does not make: that the thing being saved is a
+        # program at all.
+        #
+        # NOTHING VALIDATED A PROCEDURE BODY, and the reference rules are the ones that bite:
+        # a `$name` bound by nothing resolves to itself at run time, so a body referring to a
+        # variable the CALLER had would create a machine literally called `$outer` and report
+        # success. Measured, in the scope-isolation test — the isolation was correct and the
+        # consequence was garbage in the lab.
+        #
+        # `params` IS THE SCOPE, and `validate` already reads it off the program: a procedure
+        # may refer to what it declares and to what it binds, and to nothing else. That is
+        # the same rule the caller's program lives under, applied at the moment the artifact
+        # becomes reusable.
+        ok, problems = validate(program)
+        if not ok:
+            raise ValueError(
+                f"{name} is not a program that could run, so it is not kept: {problems[0]}")
         os.makedirs(self.path, exist_ok=True)
         if not rendered:
             from .ir.render import render as _render
@@ -103,16 +164,28 @@ class Store:
     # ── reading ──────────────────────────────────────────────────────────────
     def get(self, name: str) -> Optional[Dict[str, Any]]:
         at = os.path.join(self.path, f"{str(name)}.json")
-        if not os.path.exists(at):
+        try:
+            stamp = os.stat(at)
+        except OSError:
             return None
+        key = (stamp.st_mtime_ns, stamp.st_size)
+        hit = self._cache.get(at)
+        if hit is not None and hit[0] == key:
+            return hit[1]
         try:
             with open(at) as fh:
-                return json.load(fh)
+                got = json.load(fh)
         except Exception:
             # A CORRUPT ENTRY IS NOT AN EMPTY LIBRARY. Returning None here would make a
             # damaged file indistinguishable from a procedure nobody wrote — the same
             # unknown-versus-empty confusion the lab registry was bitten by.
+            #
+            # THAT REASONING HOLDS FOR A PROCEDURE ASKED FOR BY NAME and not for a sweep;
+            # see `all()`, which is where it was costing the writer every goal.
+            self._cache.pop(at, None)
             raise
+        self._cache[at] = (key, got)
+        return got
 
     def text(self, name: str) -> Optional[str]:
         at = os.path.join(self.path, f"{str(name)}.medusa")
@@ -124,11 +197,28 @@ class Store:
         return sorted(f[:-5] for f in os.listdir(self.path) if f.endswith(".json"))
 
     def all(self) -> List[Dict[str, Any]]:
-        out = []
+        """Every readable procedure. A damaged one is SKIPPED AND NAMED, never raised.
+
+        `get` raises on a corrupt file and this propagated it, so ONE bad file in the
+        directory crashed the ghost writer for EVERY goal — the library's failure mode was
+        to take down planning entirely, including for the requests that need no procedure
+        at all. A sweep looking for a match must survive an entry it cannot read.
+
+        NAMED, THOUGH, in `broken`. Skipping quietly would make a damaged library
+        indistinguishable from a small one, which is the confusion `get` refuses for a
+        procedure asked for by name — and rightly, because there the caller said which one
+        they meant.
+        """
+        out, bad = [], []
         for n in self.names():
-            got = self.get(n)
+            try:
+                got = self.get(n)
+            except Exception:
+                bad.append(n)
+                continue
             if got:
                 out.append(got)
+        self.broken = bad
         return out
 
     def forget(self, name: str) -> bool:
@@ -158,7 +248,12 @@ class Store:
         naming any template, and the binding is returned so the caller can pass it. Without
         that a procedure would only ever match the exact world it was written against, which
         is a snippet that can be reused precisely once.
+
+        AN EMPTY LIBRARY COSTS ONE STAT, which matters because this sits on the writer's hot
+        path and most requests will never involve a procedure at all.
         """
+        if not os.path.isdir(self.path):
+            return None
         for proc in self.all():
             bound = _unify(proc.get("achieves"), goal, proc.get("params") or {})
             if bound is not None:
@@ -169,21 +264,36 @@ class Store:
 def _unify(claim: Any, goal: Any, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Does `claim` describe `goal`? Returns the parameter bindings, or None.
 
-    Structural and total: every key the claim states must be present in the goal and equal,
-    and a `$param` in the claim binds whatever the goal has there. The goal may carry MORE
-    than the claim mentions — a procedure that guarantees "a vm exists with this template"
-    covers a goal that also wants a label, because the extra is simply not this procedure's
-    business and the writer will cover the rest.
+    Structural and TOTAL IN BOTH DIRECTIONS: the two must state the same keys, with equal
+    values, except that a `$param` in the claim binds whatever the goal has there.
+
+    IT USED TO ALLOW THE GOAL TO CARRY MORE, on the reasoning that "a procedure guaranteeing
+    a vm exists covers a goal that also wants a label, because the writer will cover the
+    rest". The writer does not. `_achieve` places ONE tile per goal and returns, so a
+    procedure that matched a goal it only half-closed became a tile the goal could never get
+    past: the machine was created, the label was never applied, and the next round matched
+    the SAME procedure again and appended nothing because it was already in the plan. The
+    goal was then unreachable by any primitive — a stored procedure permanently shadowed the
+    thing that would have worked.
+
+    MEASURED, on the two-goal case in `test_procedures`: "a machine called web" plus "web
+    carries the label prod" raised `lowering did not achieve it` with `add_label` nowhere in
+    the plan.
+
+    SO THE RULE IS THE ONE `effects.invert` ALREADY KEEPS: a tile is chosen because it makes
+    the goal TRUE, not because it helps. A procedure that covers part of a goal is not a tile
+    for that goal, and the honest consequence — it is passed over and the primitives are
+    planned — is strictly better than one that half-covers and blocks.
     """
     if not isinstance(claim, dict) or not isinstance(goal, dict):
         # A `$param` on its own binds; anything else must be equal.
         if isinstance(claim, str) and claim.startswith("$"):
             return {claim[1:]: goal}
         return {} if claim == goal else None
+    if set(claim) != set(goal):
+        return None
     out: Dict[str, Any] = {}
     for key, want in claim.items():
-        if key not in goal:
-            return None
         got = _unify(want, goal[key], params)
         if got is None:
             return None

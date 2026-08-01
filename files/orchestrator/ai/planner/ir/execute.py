@@ -294,7 +294,8 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
         op = st.get("op")
         before = len(failures)
 
-        if op == "call" and _procs.LIBRARY.get(st.get("tool")) is not None:
+        proc = _procs.LIBRARY.get(st.get("tool")) if op == "call" else None
+        if proc is not None:
             # A PROCEDURE IS A TOOL YOU WROTE, and this is where that stops being a slogan.
             # `CALL setup_temp_vm(template: ...)` runs the stored body with its parameters
             # bound, through THIS SAME VISITOR — so every statement inside meets the guarded
@@ -305,9 +306,8 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
             # procedure that could read the caller's bindings would be a program whose
             # meaning depends on where it was called from, which is the opposite of the
             # reusability it exists for.
-            proc = _procs.LIBRARY.get(st.get("tool"))
             inner_scope = dict(_resolve(st.get("args") or {}, scope))
-            saved, scope_backup = dict(scope), dict(scope)
+            scope_backup = dict(scope)
             scope.clear()
             scope.update(inner_scope)
             try:
