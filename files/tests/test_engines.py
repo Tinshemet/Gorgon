@@ -661,6 +661,63 @@ def test_an_atomic_node_says_so_instead_of_inventing_a_split():
     check("nothing ran without a grant", not world.state.get("dish"))
 
 
+def test_a_step_declares_whether_there_is_anything_finer_inside_it():
+    """Declared, not guessed — so a decider never asks for a split that cannot exist."""
+    print("[in-session] the step declares its own grain")
+    from orchestrator.ai.engines import insession
+
+    seen = []
+    eng = MedusaEngine(World(KITCHEN))
+    sess = Session("risotto", eng, intent="ensure")
+    sess.regime = "tree"
+    insession.drive(eng, RISOTTO, sess,
+                    lambda st, s: (seen.append(st) or insession.Verdict(insession.RUN)))
+    check("a lone count goal is atomic", seen[0].divisible is False)
+    check("and a quantified one is not", seen[1].divisible is True)
+
+
+def test_the_grain_does_not_change_the_work_on_any_rung():
+    """THE INVARIANCE THAT MAKES THE VERDICTS SAFE TO GIVE.
+
+    A request served as one program and the same request opened all the way down must make
+    the same calls. If it did not, the orchestrator's verdicts would silently change WHAT
+    HAPPENS rather than only how often it is consulted — and nobody would see it, because
+    every grain reports success.
+
+    Thirteen rungs, three grains: whole program, one node per goal, and opened until nothing
+    is divisible.
+    """
+    print("[in-session] thirteen rungs, three grains, one set of calls")
+    from orchestrator.ai.engines import insession
+    from tests.bench.rungs import RUNGS
+    from tests.bench.sim_world import SimWorld
+    from tests.test_ghost_writer import GOALS
+
+    def served(n, regime, open_everything):
+        rung = next(r for r in RUNGS if r.n == n)
+        world = SimWorld()
+        if rung.setup:
+            rung.setup(world)
+        eng = MedusaEngine(world)
+        sess = Session("", eng, intent="ensure")
+        sess.regime = regime
+        out = insession.drive(eng, GOALS[n], sess, lambda st, s: insession.Verdict(
+            insession.DECOMPOSE if (open_everything and st.divisible) else insession.RUN))
+        return out.get("ok"), sorted(f"{t}{sorted((a or {}).items())}"
+                                     for t, a in out.get("calls") or [])
+
+    same = 0
+    for n in sorted(GOALS):
+        grains = {str(served(n, r, o)) for r, o in
+                  (("translation", False), ("tree", False), ("translation", True))}
+        if len(grains) == 1:
+            same += 1
+        else:
+            print(f"  rung {n} differs by grain")
+    check(f"all {len(GOALS)} rungs make the same calls at every grain "
+          f"({same}/{len(GOALS)})", same == len(GOALS))
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "engines"))

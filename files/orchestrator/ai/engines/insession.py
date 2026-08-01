@@ -40,16 +40,23 @@ class Step:
     asymmetry is the point — an engine that could only be told "yes" would be deciding.
     """
 
-    def __init__(self, kind: str, node: Any, why: str = "", cost: int = 1):
+    def __init__(self, kind: str, node: Any, why: str = "", cost: int = 1,
+                 divisible: bool = True):
         self.kind = kind
         self.node = node
         self.why = why
         # WHAT IT WILL COST IF GRANTED, declared before the verdict rather than discovered
         # after. A budget holder that learns the price afterwards is not holding a budget.
         self.cost = cost
+        # WHETHER THERE IS ANYTHING FINER INSIDE IT — DECLARED, NOT GUESSED. The engine has
+        # already planned this node, so it knows; making the orchestrator ask and then be
+        # told no is the inference this project keeps replacing with a declaration. A decider
+        # that reads this never asks for a split that cannot exist.
+        self.divisible = divisible
 
     def __repr__(self) -> str:
-        return f"<Step {self.kind} cost={self.cost} {str(self.node)[:48]}>"
+        return (f"<Step {self.kind} cost={self.cost}"
+                f"{'' if self.divisible else ' atomic'} {str(self.node)[:48]}>")
 
 
 class Verdict:

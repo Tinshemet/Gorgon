@@ -149,8 +149,13 @@ class MedusaEngine(Engine):
                 if not planned.get("ok", True):
                     return {**planned.get("result", planned), "calls": calls}
 
+                # PLANNED, SO IT IS ALREADY KNOWN. Computing this before the yield rather
+                # than after a DECOMPOSE means the step can DECLARE its own grain, and a
+                # decider that reads the declaration never asks for a split that cannot exist.
+                finer = self._open(goals)
                 verdict = yield Step(RUN, goals[0] if len(goals) == 1 else planned["program"],
-                                     label, cost=len(planned["plan"]))
+                                     label, cost=len(planned["plan"]),
+                                     divisible=finer is not None)
                 action = verdict.action if verdict is not None else STOP
 
                 if action == STOP:
@@ -167,15 +172,14 @@ class MedusaEngine(Engine):
                         return {"ok": False, "refused": True, "calls": calls, "partial": done,
                                 "why": f"decomposed {opened} times without ever being granted "
                                        f"a node to run"}
-                    finer = self._open(goals)
                     if finer is None:
-                        # NOTHING LOWERS IT, so the honest answer is to say the node is atomic
-                        # rather than quietly run what was not granted. The orchestrator asked
-                        # for something the engine does not have, and inventing a split to
-                        # satisfy the request is how a decomposer starts producing fragments.
+                        # THE STEP SAID IT WAS ATOMIC AND WAS TOLD TO SPLIT ANYWAY. The engine
+                        # will not invent a split to satisfy the ask — that is how a
+                        # decomposer starts producing fragments — and it will not quietly run
+                        # what was not granted either. It says which of the two happened.
                         return {"ok": False, "refused": True, "calls": calls, "partial": done,
-                                "why": f"asked to decompose an atomic node, and nothing "
-                                       f"lowers it: {_gw._short(goals[0])}"}
+                                "why": f"told to decompose a node declared atomic, and "
+                                       f"nothing lowers it: {_gw._short(goals[0])}"}
                     queue = finer + queue
                     continue
 
