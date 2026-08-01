@@ -267,6 +267,11 @@ def _unwrap(v: Any) -> Any:
     return hit.group(1) if hit else v
 
 
+def placeholder(v: Any) -> bool:
+    """Is this the prompt's own placeholder handed back as an answer?"""
+    return bool(_PLACEHOLDER.match(str(_unwrap(v)).strip()))
+
+
 def _coerce(v: str) -> Any:
     """`"false"` is not `False`, and an observed attribute compared against a string never
     matches. The extractor emits strings because a grammar cannot type a free value."""
@@ -350,6 +355,8 @@ def _name_shaped(v: Any, kind: str = None) -> bool:
     text = str(_unwrap(v)).strip()
     if not text or len(text) > 200:
         return False
+    if _PLACEHOLDER.match(text):
+        return False
     if kind and ((config.KINDS or {}).get(kind) or {}).get("key_freetext"):
         # A PHRASE, BUT STILL NOT A SHRUG. Residue and shell syntax are refused for a
         # free-text key exactly as they are for a token one; what is allowed is spaces.
@@ -358,6 +365,17 @@ def _name_shaped(v: Any, kind: str = None) -> bool:
 
 
 _NAME_OK = __import__("re").compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+# `<n>`, `<name>` — a placeholder handed back as an answer. The same argument as `${lab}`:
+# notation the model reached for, never a value the operator wrote.
+#
+# THE GUARD SURVIVED AN EXPERIMENT THE PROMPT CHANGE DID NOT. Replacing the examples' concrete
+# values with `<n>` placeholders was meant to stop the model COPYING them — measured, and it
+# only changed WHAT it copied: the crawler request came back with `value: "<n>"` three times
+# out of three, and rung 4, which had been clean, started leaking placeholders too. Trading
+# plausible contamination for placeholder contamination is not an improvement, so the prompt
+# went back. This stays: it costs nothing and catches the shape if it ever appears.
+_PLACEHOLDER = __import__("re").compile(r"^<[^>]*>$")
 
 
 def _enumerated(kind: str) -> set:
@@ -496,7 +514,8 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
                 continue
             out.append({"shape": "reach", "select": sel,
                         "min": int(g.get("amount") or 2)})
-        elif shape == "every" and g.get("attr") and g.get("value") is not None:
+        elif (shape == "every" and g.get("attr") and g.get("value") is not None
+                and not placeholder(g["value"])):
             spec = (config.KINDS or {}).get(sel["kind"]) or {}
             attr = (spec.get("aliases") or {}).get(g["attr"], g["attr"])
             if attr == spec.get("key"):
