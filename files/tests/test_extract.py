@@ -201,3 +201,50 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def test_a_value_slot_filled_with_prose_is_refused():
+    """THE WORST OUTCOME THE PRODUCTION PROBE MEASURES, and its cause.
+
+    A prose value does not crash. The writer plans faithfully for it, the program grounds
+    itself against that goal, and the run closes DONE while the world disagrees — 16 of 39
+    literal and 21 of 39 paraphrase runs came back `DONE_BUT_FALSE`, which the probe calls
+    the only unacceptable outcome on that path.
+
+    EVERY EXAMPLE HERE WAS OBSERVED. "put the red ones on their own network" names no
+    network and came back `network: "Not specified"`, so the writer created one CALLED
+    `Not specified`; "launch all of them" came back as a machine named `all`; "clone golden
+    into 3" as one named `clone of golden`.
+    """
+    from orchestrator.ai.engines.extract import unusable
+
+    for sel, why in (
+            ({"kind": "vm", "name": "all"}, "a quantifier is not a name"),
+            ({"kind": "vm", "name": "All"}, "and case does not launder it"),
+            ({"kind": "vm", "network": "Not specified"}, "nor does a placeholder"),
+            ({"kind": "vm", "name": "clone of golden"}, "nor a description")):
+        assert unusable(sel), why
+
+    # DECLINING WHEN UNSURE, which is the half that keeps this from becoming a vocabulary.
+    # Two signals only — a listed word, and whitespace inside a value that NAMES a member —
+    # because a false accusation refuses a correct request.
+    for sel in ({"kind": "vm", "name": "web"},
+                {"kind": "vm", "name": "vm-orchestrator"},
+                {"kind": "network", "net_name": "core"},
+                {"kind": "vm", "label": "red team"},      # a LABEL may be prose
+                {"kind": "vm", "status": "running"}):
+        assert not unusable(sel), f"{sel} is a request somebody could mean"
+
+
+def test_the_refusal_reaches_to_goals():
+    """A rule nothing applies is a rule that does not exist."""
+    from orchestrator.ai.engines.extract import to_goals
+
+    raw = {"goals": [
+        {"goal": "count", "select": {"kind": "vm", "where": [{"attr": "name",
+                                                              "value": "all"}]}},
+        {"goal": "count", "select": {"kind": "vm", "where": [{"attr": "name",
+                                                              "value": "web"}]}}]}
+    got = to_goals(raw, "launch all of them")
+    assert len(got) == 1, "the unusable goal is dropped and the real one survives"
+    assert got[0]["select"]["name"] == "web"

@@ -495,6 +495,53 @@ def declined(raw: Dict[str, Any]) -> Optional[str]:
     return said or None
 
 
+# WORDS THAT ARE NEVER A NAME, and every one was observed in a translation. The model fills
+# a value slot it has nothing for: "put the red ones on their own network" names no network,
+# and the extractor answered `network: "Not specified"` — so the writer created a network
+# CALLED `Not specified`. "launch all of them" came back as a machine named `all`; "clone
+# golden into 3" as one named `clone of golden`.
+#
+# THE FAILURE MODE THIS PREVENTS IS THE WORST ONE THE PROBE MEASURES. A prose value does not
+# crash: the writer plans faithfully for the wrong goal, the program grounds itself against
+# that goal, and the run closes DONE while the world disagrees — 16 of 39 literal and 21 of
+# 39 paraphrase runs. `DONE_BUT_FALSE` is the only unacceptable outcome on that path, and a
+# placeholder reaching the lab is how it happens.
+#
+# NARROW ON PURPOSE, and this is the deterministic-rules pattern: compute, and DECLINE WHEN
+# UNSURE. Two signals only — whitespace inside a value, and a word from this list — because
+# neither can fire on `web`, `db` or `vm-orchestrator`, and a false accusation here refuses a
+# correct request. Anything cleverer would be a vocabulary, which is what the language exists
+# to delete.
+_NOT_A_NAME = {
+    "all", "any", "every", "each", "none", "some", "both", "them", "they", "it",
+    "not specified", "unspecified", "n/a", "na", "null", "none specified", "tbd",
+    "default", "unknown", "whatever", "anything",
+}
+
+
+def unusable(sel: Dict[str, Any]) -> Optional[str]:
+    """Why this selector names something that cannot exist, or None.
+
+    ASKED OF THE KEY AND OF EVERY REFERENCE, because both become names in the world: a
+    kind's key IS the member's name, and an attribute whose name is a declared kind refers
+    to a member of it — the convention `precondition` and `_named_in` already use.
+    """
+    kind = sel.get("kind")
+    key = ((config.KINDS or {}).get(kind) or {}).get("key")
+    for attr, value in (sel or {}).items():
+        if attr in ("kind", "not") or not isinstance(value, str):
+            continue
+        names_a_member = attr == key or attr in (config.KINDS or {})
+        if not names_a_member:
+            continue
+        if value.strip().lower() in _NOT_A_NAME:
+            return (f"{attr} = {value!r} is a word, not a name — the request named no "
+                    f"{attr}, and inventing one puts it in the lab")
+        if any(c.isspace() for c in value.strip()):
+            return (f"{attr} = {value!r} reads as a description rather than a name")
+    return None
+
+
 def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
     """The model's answer, in the shape `ghost_writer.cover` takes.
 
@@ -502,11 +549,17 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
     shape requires is a goal the model did not actually state, and inventing the missing
     half here would put this module back in the business of deciding what the operator
     meant — which is the job it exists to not have.
+
+    AND A GOAL NAMING SOMETHING THAT CANNOT EXIST IS DROPPED TOO. See `unusable`: a value
+    slot filled with prose is not a smaller mistake than a missing field, it is a larger
+    one, because the writer plans faithfully for it and the run closes DONE.
     """
     out: List[Dict[str, Any]] = []
     for g in (raw or {}).get("goals") or []:
         shape, sel = g.get("goal"), _to_select(g.get("select") or {})
         if not sel.get("kind"):
+            continue
+        if unusable(sel):
             continue
         if shape == "count":
             # A MISSING NUMBER MEANS ONE. "Create a vm named alpha" is a count of one and the
