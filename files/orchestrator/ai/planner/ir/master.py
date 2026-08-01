@@ -42,6 +42,27 @@ from typing import Any, Dict, List, Optional
 from . import config, intent as _intent
 
 
+# ── FOUR QUANTIFIER ITEMS WHOSE SCOPE COLLAPSED — #13, #14, #15, #51 ───────────────────
+#
+# All four are about narrowing what a MODEL may emit for a clause: routing per-clause rather
+# than per-goal (#13), a blunt `any` taxonomy (#14), narrowing at FIELD level rather than
+# operator level (#15), and rolling a quantifier up over a closed set of split points (#51).
+#
+# THEY WERE MAIN-LINE PROBLEMS WHEN A MODEL AUTHORED PROGRAMS FROM PROSE. It does not any
+# more. `master.ops(want, quantifier)` is reached from exactly two places — `lower.py` and
+# `schema.py` — and the ghost writer touches neither: the quantifier arrives EXPLICIT in the
+# goal (`every` / `count` are shapes the extractor emits, not readings inferred from a
+# sentence), and `_lower` turns a statement about a set into statements about named members
+# deterministically.
+#
+# SO THEY ARE NOT DEAD, THEY ARE BOUNDED. Every one of them now matters exactly as much as
+# STAGED LOWERING matters, which is the fallback path measured at 4/13 and reached only after
+# the writer says `Unsolvable` inside a granted tree session. Worth doing when that path is
+# worth improving; not worth doing before it.
+#
+# WHAT WOULD RESTORE THEM: a model authoring on the main line again, or the staged path
+# becoming the main one because the writer's coverage stopped growing. Neither is true today.
+
 def ops(want: Optional[str] = None, quantifier: Optional[str] = None) -> List[str]:
     """The ops that may be offered under the operator's intent, and how many things the
     clause is about.
