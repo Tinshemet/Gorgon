@@ -68,6 +68,10 @@ _NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(\.[a-z][a-z0-9_]*)?$")
 # it instead.
 _METHODS = "methods"
 
+# WHERE THE PROGRAM RIDES, after the text a person reads. A comment line, because a `.medusa`
+# should still look like one to anything that opens it.
+_IR_MARK = "\n-- medusa:ir "
+
 # `procedure build_box: make a machine from a template` — the operator DECLARING that this
 # request is to be kept rather than done, and what to call it.
 #
@@ -150,14 +154,23 @@ def legal_name(name: str) -> bool:
 class Store:
     """The procedure library. A directory of `.medusa` files and their IR.
 
-    BOTH FORMS, DELIBERATELY. The `.medusa` file is what the operator reads, edits and
-    shares — "a medusa script that can be used by me and you" was the request, and a JSON
-    blob is not that. The `.json` is what the writer and the runtime consume, because
-    re-parsing the surface would mean building a parser to read back what we just printed,
-    and the two would drift the first time either changed.
+    ONE FILE PER PROCEDURE. The operator's instruction, and their question was the right one:
+    *"why are there two files? shouldnt it be 1?"*
 
-    THE PAIR IS WRITTEN TOGETHER OR NOT AT ALL. A `.medusa` with no IR is a file nothing can
-    run; IR with no text is a capability with no artifact.
+    IT WAS TWO, AND THE SECOND WAS A SYMPTOM. The `.medusa` was what a person reads and the
+    `.json` was what ran — and NOTHING IN PRODUCTION EVER READ THE `.medusa`. So the file the
+    operator was invited to read, edit and share was not the file that ran, and an edit to it
+    did nothing at all. That is worse than duplication: it is an artifact that looks live.
+
+    THE ROOT CAUSE IS THAT THERE IS NO PARSER — `render.py` goes IR -> text and nothing goes
+    back. Until one exists the IR has to travel WITH the text rather than beside it, so it
+    rides in a trailing block after the program a person reads.
+
+    AND AN EDIT IS REPORTED RATHER THAN IGNORED. On read the IR is re-rendered and compared
+    to the text above it; a mismatch means the operator changed the program and the runtime
+    would otherwise have run the old one silently. `drifted()` names those. That converts the
+    defect the two-file layout had into a visible one, which is the most that can be done
+    honestly before the surface can be parsed.
     """
 
     def __init__(self, path: Optional[str] = None):
@@ -241,12 +254,42 @@ class Store:
             rendered = render_stored(program)
         text_at = os.path.join(self.path, f"{name}.medusa")
         with open(text_at, "w") as fh:
-            fh.write(rendered.rstrip() + "\n")
-        with open(os.path.join(self.path, f"{name}.json"), "w") as fh:
-            json.dump(program, fh, indent=1)
+            fh.write(rendered.rstrip() + "\n" + _IR_MARK
+                     + json.dumps(program, separators=(",", ":")) + "\n")
+        # THE OLD SIDECAR, REMOVED. A stale `.json` beside a one-file procedure would be read
+        # by nothing and believed by anyone.
+        stale = os.path.join(self.path, f"{name}.json")
+        if os.path.exists(stale):
+            os.remove(stale)
         return text_at
 
     # ── reading ──────────────────────────────────────────────────────────────
+    def _read(self, at: str) -> Dict[str, Any]:
+        """The IR out of a one-file procedure. Raises if the trailing block is not there."""
+        with open(at) as fh:
+            body = fh.read()
+        head, mark, tail = body.rpartition(_IR_MARK)
+        if not mark:
+            raise ValueError(f"{at} carries no program — the trailing {_IR_MARK.strip()} "
+                             f"block is how a .medusa is run, and this one has none")
+        got = json.loads(tail)
+        got["_text"] = head.rstrip()
+        return got
+
+    def drifted(self, name: str) -> bool:
+        """Has the readable half been edited away from the program that runs?
+
+        THE ONE THING THE OLD TWO-FILE LAYOUT COULD NOT ANSWER. An operator who edits the
+        text is telling you something, and running the IR anyway is ignoring them silently.
+        Answered by RE-RENDERING rather than by parsing, which is what makes it possible at
+        all without the parser that does not exist.
+        """
+        got = self.get(name)
+        if not got or "_text" not in got:
+            return False
+        return render_stored({k: v for k, v in got.items()
+                              if k != "_text"}).rstrip() != got["_text"].rstrip()
+
     def get(self, name: str) -> Optional[Dict[str, Any]]:
         """A stored program by name. `Class.method` reaches into a class file.
 
@@ -260,7 +303,7 @@ class Store:
             got = self.get(whole)
             spec = ((got or {}).get(_METHODS) or {}).get(method)
             return {**spec, "name": str(name)} if spec else None
-        at = os.path.join(self.path, f"{str(name)}.json")
+        at = os.path.join(self.path, f"{str(name)}.medusa")
         try:
             stamp = os.stat(at)
         except OSError:
@@ -270,8 +313,7 @@ class Store:
         if hit is not None and hit[0] == key:
             return hit[1]
         try:
-            with open(at) as fh:
-                got = json.load(fh)
+            got = self._read(at)
         except Exception:
             # A CORRUPT ENTRY IS NOT AN EMPTY LIBRARY. Returning None here would make a
             # damaged file indistinguishable from a procedure nobody wrote — the same
@@ -285,8 +327,12 @@ class Store:
         return got
 
     def text(self, name: str) -> Optional[str]:
-        at = os.path.join(self.path, f"{str(name)}.medusa")
-        return open(at).read() if os.path.exists(at) else None
+        """The readable half — what a person opens the file to see."""
+        try:
+            got = self.get(name)
+        except Exception:
+            return None
+        return (got or {}).get("_text")
 
     def names(self) -> List[str]:
         """Every CALLABLE name — a procedure's own, and one per method of a class.
@@ -299,9 +345,9 @@ class Store:
             return []
         out, bad = [], []
         for f in os.listdir(self.path):
-            if not f.endswith(".json"):
+            if not f.endswith(".medusa"):
                 continue
-            stem = f[:-5]
+            stem = f[:-7]
             try:
                 got = self.get(stem)
             except Exception:

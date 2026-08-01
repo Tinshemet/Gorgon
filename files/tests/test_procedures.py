@@ -80,9 +80,16 @@ def _builder(name="vm_disk_builder"):
                                     "select": {"kind": "vm", "name": "$box"}, "eq": 1}}]}
 
 
-def test_a_named_program_is_kept_in_both_forms():
-    """The `.medusa` is what the operator reads; the `.json` is what the runtime consumes."""
-    print("[procedures] kept as text and as IR")
+def test_a_named_program_is_kept_in_ONE_file():
+    """ONE FILE, and the operator's question was the right one: *"why are there two files?
+    shouldnt it be 1?"*
+
+    It was two, and the second was a symptom: the `.medusa` was what a person read and the
+    `.json` was what RAN, and nothing in production ever read the `.medusa`. So the file the
+    operator was invited to read, edit and share was not the file that ran. That is worse
+    than duplication — it is an artifact that looks live.
+    """
+    print("[procedures] one file: the text a person reads, and the program it runs")
     with _Library() as lib:
         at = lib.save(_builder(), render(_builder()))
         check("the readable artifact is written", os.path.exists(at))
@@ -92,6 +99,9 @@ def test_a_named_program_is_kept_in_both_forms():
               text.startswith("PROCEDURE vm_disk_builder(STRING box)"))
         got = lib.get("vm_disk_builder")
         check("the IR round-trips", got and got["body"] == _builder()["body"])
+        check("ONE FILE, not two", os.listdir(lib.path) == ["vm_disk_builder.medusa"])
+        check("and an untouched program has not drifted",
+              lib.drifted("vm_disk_builder") is False)
         check("and the library names it", lib.names() == ["vm_disk_builder"])
 
 
@@ -250,8 +260,8 @@ def test_one_damaged_file_does_not_take_down_the_writer():
     print("[procedures] a corrupt entry is skipped and named, never raised")
     with _Library() as lib:
         lib.save(_builder(), render(_builder()))
-        with open(os.path.join(lib.path, "wrecked.json"), "w") as fh:
-            fh.write("{ this is not json")
+        with open(os.path.join(lib.path, "wrecked.medusa"), "w") as fh:
+            fh.write("PROCEDURE wrecked() {\n}\n-- medusa:ir { not json")
         got = lib.all()
         check("the good one is still found", [p["name"] for p in got] == ["vm_disk_builder"])
         check("and the damaged one is named", lib.broken == ["wrecked"])
@@ -276,7 +286,7 @@ def test_the_library_is_read_once_per_change_not_once_per_goal():
 
         import builtins
         def counting(path, *a, **kw):
-            if str(path).endswith(".json"):
+            if str(path).endswith(".medusa"):
                 reads["n"] += 1
             return real_open(path, *a, **kw)
 
@@ -291,9 +301,11 @@ def test_the_library_is_read_once_per_change_not_once_per_goal():
             edited = _builder()
             edited["body"].append({"op": "call", "tool": "add_label",
                                    "args": {"name": "$box", "label": "edited"}})
-            os.utime(os.path.join(lib.path, "vm_disk_builder.json"), (0, 0))
-            with real_open(os.path.join(lib.path, "vm_disk_builder.json"), "w") as fh:
-                json.dump(edited, fh)
+            at = os.path.join(lib.path, "vm_disk_builder.medusa")
+            os.utime(at, (0, 0))
+            with real_open(at, "w") as fh:
+                fh.write("PROCEDURE vm_disk_builder(STRING box)\n-- medusa:ir "
+                         + json.dumps(edited) + "\n")
             got = lib.get("vm_disk_builder")
             check("an edited procedure is re-read", len(got["body"]) == 3)
         finally:
@@ -450,6 +462,9 @@ def test_being_scheduled_earns_a_program_nothing():
         lib.remember("nightly", last_run=5.0)
         check("run state is kept beside it, not inside it",
               "last_run" not in (lib.text("nightly") or ""))
+        check("and the program is IN the .medusa, which is now the only file",
+              sorted(f.rsplit(".", 1)[1] for f in os.listdir(lib.path))
+              == ["medusa", "state"])
         check("and the IR is untouched", "last_run" not in json.dumps(lib.get("nightly")))
 
 
