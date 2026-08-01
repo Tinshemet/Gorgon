@@ -20,6 +20,20 @@ Same defect, opposite mechanism — which is what the correspondence rule predic
 reason neither is a port of the other. The tree has one thing the program regime lacks
 while authoring: LIVE STATE.
 
+## WIRED 2026-08-01, AND THE PREMISE LEDGER TURNED OUT NOT TO BE NEEDED
+
+The in-session (`engines/insession.py`) owns a real tree now, and it re-visits a decomposed
+parent behind its own children. That re-visit re-PLANS the parent against the world as it is,
+so a stale split announces itself as WORK STILL TO DO — no recorded predicate, no separate
+evaluator pass, nothing to keep in step. The plan length already said it.
+
+So the engine builds this module's ROWS directly and calls `drift`/`report`. `with_premise`
+and `inspect` remain for a tree somebody else builds — one whose nodes are not re-planned —
+and the design below is what they are for. **The correcting is done by re-planning; this
+module's job is telling somebody it was needed**, which is the half that was always the
+point: a run served against a moving set and one served against a set that held still both
+succeed, and they are not the same thing.
+
 ## THE FIRST REAL PIECE OF WORK, and it is why this file starts here
 
 The design note's own open question: *"What marks a node 'infected'? The premise a node was
@@ -129,5 +143,5 @@ def report(rows: List[dict]) -> str:
         lines.append(f"   [{mark}] {r['path'] or 'root':6} {r['goal']}  <- {r['why']}")
     if not d["infected"]:
         lines.append("   NOTHING PROVEN INFECTED — not the same as sound. "
-                     f"{d['unknown']} node(s) recorded no premise.")
+                     f"{d['unknown']} node(s) were never re-checked.")
     return "\n".join(lines)

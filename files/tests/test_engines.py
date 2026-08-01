@@ -763,6 +763,67 @@ def test_a_decomposed_goal_is_still_witnessed_by_its_parent():
           world.state["dish"]["pasta"]["serves"] == "4")
 
 
+def test_the_book_keeper_reports_a_split_served_against_a_moving_set():
+    """It corrected — now somebody has to be TOLD it was needed.
+
+    A run served against a set that changed and one served against a set that held still
+    both succeed, and they are not the same thing. The keeper reads and reports; the
+    correcting already happened when the parent was re-planned.
+    """
+    print("[keeper] the in-session tree, read by the book keeper")
+    from orchestrator.ai.engines import insession
+    from orchestrator.ai.planner import tree_keeper as tk
+
+    def serve(moving):
+        world = World(KITCHEN)
+        for name in ("risotto", "paella"):
+            world.execute("create_dish", {"dish_name": name})
+        eng = MedusaEngine(world)
+        sess = Session("four each", eng, intent="ensure")
+        opened = [False]
+
+        def decide(step, s):
+            if not opened[0]:
+                opened[0] = True
+                return insession.Verdict(insession.DECOMPOSE, "one dish at a time")
+            if moving and step.why == "sub-goal" and "pasta" not in world.state["dish"]:
+                world.execute("create_dish", {"dish_name": "pasta"})
+            return insession.Verdict(insession.RUN)
+
+        return insession.drive(eng, [{"every": {"kind": "dish"},
+                                      "must": {"serves": "4"}}], sess, decide)
+
+    still, moved = serve(False), serve(True)
+    check("both runs succeeded", still.get("ok") and moved.get("ok"))
+    check("a settled tree is clear", still["tree"]["verdict"] == "clear")
+    check("a moving one is not", moved["tree"]["verdict"] == tk.INFECTED)
+    check("and the infected node is the PARENT, not a child",
+          [r["path"] for r in moved["tree"]["origins"]] == ["0"])
+    check("the report says what changed",
+          "the set it was split over changed" in moved["tree_report"])
+    check("children stay sound — the fault was never in one of them",
+          moved["tree"]["infected"] == 1 and moved["tree"]["nodes"] == 3)
+
+
+def test_a_goal_of_any_shape_can_be_named_in_one_line():
+    """These strings are read by people, in refusals and in the keeper's report."""
+    print("[readability] _short speaks every shape the writer accepts")
+    from orchestrator.ai.planner import ghost_writer as gw
+
+    said = [gw._short(g) for g in (
+        {"every": {"kind": "vm", "alive": False}, "must": {"status": "stopped"}},
+        {"observe": {"kind": "vm"}, "fact": "alive"},
+        {"per": {"kind": "vm"}, "make": "snapshot", "link": "of"},
+        {"_call": ("guest_ping", {"name": "alpha"})},
+        {"shape": "count", "select": {"kind": "vm", "label": "prod"}, "eq": 2},
+    )]
+    check("none renders as an unknown shape", not any("?" in t or "None" in t for t in said))
+    # A BARE CALL HAS NO KIND — it names a tool, which is the honest thing to name.
+    check("every goal names its kind, and the bare call names its tool",
+          all("vm" in t for t in said if not t.startswith("call "))
+          and said[3] == "call guest_ping(name=alpha)")
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "engines"))

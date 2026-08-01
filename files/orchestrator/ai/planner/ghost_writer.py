@@ -60,11 +60,35 @@ class Unsolvable(Exception):
     """
 
 
+def _sel(sel: Dict[str, Any]) -> str:
+    return " ".join(f"{k}={v}" for k, v in (sel or {}).items() if k != "kind")
+
+
 def _short(p: Dict[str, Any]) -> str:
+    """One line for a goal of ANY shape, because these strings are read by people.
+
+    IT USED TO SPEAK ONLY `count` AND `reach`, so an `every` — the most common component the
+    extractor produces — rendered as `None:?[] >= ?` in refusal messages and in the book
+    keeper's report. A diagnostic that cannot name the thing it is diagnosing sends the
+    reader back to a debugger.
+    """
+    if "_call" in p:
+        tool, args = p["_call"]
+        return f"call {tool}({_sel(args)})"
+    for shape in ("every", "observe", "per"):
+        if shape in p:
+            sel = p[shape]
+            head = f"{shape} {sel.get('kind', '?')}"
+            if _sel(sel):
+                head += f"[{_sel(sel)}]"
+            if shape == "every":
+                return f"{head} must {_sel(p.get('must') or {})}"
+            if shape == "per":
+                return f"{head} -> one {p.get('make', '?')} ({p.get('link', '?')})"
+            return f"{head} · {p.get('fact', 'alive')}"
     sel = p.get("select") or {}
-    body = " ".join(f"{k}={v}" for k, v in sel.items() if k != "kind")
     tail = f"== {p['eq']}" if "eq" in p else f">= {p.get('min', '?')}"
-    return f"{p.get('shape')}:{sel.get('kind', '?')}[{body}] {tail}"
+    return f"{p.get('shape')}:{sel.get('kind', '?')}[{_sel(sel)}] {tail}"
 
 
 def _fresh_names(kind: str, n: int, taken: set) -> List[str]:

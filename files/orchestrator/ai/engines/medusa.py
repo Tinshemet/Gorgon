@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from ..planner import ghost_writer as _gw
+from ..planner import tree_keeper as _keeper
 from ..planner.ir import config as _config
 from ..planner.ir import consent as _consent
 from ..planner.ir import render as _render
@@ -135,11 +136,20 @@ class MedusaEngine(Engine):
             # THE QUEUE IS THE TREE, breadth-first and explicit. A node is (goals, label) —
             # the whole request is just the node whose goals are all of them, which is why
             # translation and tree are one loop rather than two code paths that drift.
-            queue = [(list(components), "the whole program")] if whole else \
-                    [([g], "one goal") for g in components]
+            queue = [(list(components), "the whole program", "0")] if whole else \
+                    [([g], "one goal", str(i)) for i, g in enumerate(components)]
             calls, done, opened, ran_nodes = [], [], 0, []
+            # THE TREE, AS THE BOOK KEEPER WANTS IT — one row per node, keyed by path so a
+            # parent's re-visit updates the parent's own row rather than adding a second.
+            rows: Dict[str, Dict[str, Any]] = {}
             while queue:
-                goals, label = queue.pop(0)
+                goals, label, path = queue.pop(0)
+                rows.setdefault(path, {
+                    "goal": _gw._short(goals[0]) if len(goals) == 1 else label,
+                    "path": path, "op": label,
+                    # UNKNOWN UNTIL SOMETHING ASKS. Decision 6's rule, and the keeper's own:
+                    # a node nobody re-checked is not sound, it is unexamined.
+                    "state": _keeper.UNKNOWN, "why": "no witness — nothing to re-check"})
                 planned = self._plan(goals)
                 if planned.get("promote"):
                     return {**planned, "calls": calls}
@@ -206,8 +216,9 @@ class MedusaEngine(Engine):
                     # thirteen times without ever being granted anything to run, because its
                     # whole-program witness dragged four pings around with it.
                     witnessed = [g for g in goals if _gw.groundable(g)]
-                    back = [(witnessed, f"{label} · witness")] if witnessed else []
-                    queue = finer + back + queue
+                    back = [(witnessed, f"{label} · witness", path)] if witnessed else []
+                    queue = [(g, l, f"{path}.{i}") for i, (g, l) in enumerate(finer)] \
+                        + back + queue
                     continue
 
                 ran = self._execute_plan(planned, goals)
@@ -216,9 +227,27 @@ class MedusaEngine(Engine):
                     return {**ran, "calls": calls, "partial": done}
                 ran_nodes.append((ran, goals))
                 done += goals
-            return self._joined(ran_nodes, calls)
+                # THE WITNESS IS THE VERDICT ON THE SPLIT. A re-visited parent with an empty
+                # plan means its children covered it — sound. A re-visited parent that STILL
+                # HAD WORK means the set it was split over moved underneath it: every child
+                # was locally correct and the parent goal was false anyway, which is the
+                # whole shape of root poisoning. Nothing new is measured here; the plan
+                # length already said it.
+                if label.endswith("· witness"):
+                    stale = bool(planned["plan"])
+                    rows[path]["state"] = _keeper.INFECTED if stale else _keeper.SOUND
+                    rows[path]["why"] = (
+                        f"the set it was split over changed — {len(planned['plan'])} further "
+                        f"call(s) were needed after its children closed" if stale
+                        else "re-planned after its children and had nothing left to do")
+                else:
+                    # A LEAF THAT RAN CARRIES ITS OWN CLOSING ENSURE, so it witnessed itself.
+                    rows[path]["state"] = _keeper.SOUND
+                    rows[path]["why"] = "ran with its own closing witness"
+            return self._joined(ran_nodes, calls, list(rows.values()))
 
-    def _joined(self, ran_nodes: List[Dict[str, Any]], calls: List) -> Dict[str, Any]:
+    def _joined(self, ran_nodes: List[Any], calls: List,
+                rows: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         """Several executed nodes as one result.
 
         THE GRAIN OF THE IN-SESSION MUST NOT CHANGE THE ANSWER. A request served as one
@@ -242,6 +271,13 @@ class MedusaEngine(Engine):
                "grounded": all(vouched) if vouched else None}
         if len(ran_nodes) == 1:
             out["program"] = ran_nodes[0][0].get("program")
+        if rows:
+            # THE BOOK KEEPER READS AND REPORTS; IT DOES NOT ACT. The correcting already
+            # happened — the parent was re-planned — so what is left is telling somebody it
+            # was needed. A run served against a moving set succeeded and is not the same
+            # thing as one served against a set that held still.
+            out["tree"] = _keeper.drift(sorted(rows, key=lambda r: r["path"]))
+            out["tree_report"] = _keeper.report(sorted(rows, key=lambda r: r["path"]))
         return out
 
     def _open(self, goals: List[Dict[str, Any]]) -> Optional[List]:
