@@ -101,8 +101,15 @@ class MedusaEngine(Engine):
 
         Over-claiming on purpose: this is the fallback when nothing more specific fits, and
         an engine never tried is worse than one tried and refused. `Unsolvable` is a cheap no.
+
+        THE MANIFEST IN FORCE, NOT THE OVERRIDE. `self.manifest` is `{}` for an engine
+        running on Gorgon's OWN manifest — it has nothing of its own to declare — so reading
+        it literally meant the GENERAL ENGINE, MOUNTED NORMALLY, CLAIMED NOTHING and every
+        request came back UNCLAIMED. Third place the empty-means-default trap has bitten
+        today, after `effects._K` and the mount's row translation; the pattern is that `{}`
+        reads as "no" wherever somebody asks a yes/no question of it.
         """
-        return bool(self.manifest)
+        return bool(self.manifest or _config.KINDS)
 
     def steps(self, components: List[Dict[str, Any]], session=None):
         """THE IN-SESSION: what this engine wants a verdict on before it acts.
