@@ -54,7 +54,8 @@ class Plan(Shortcut):
         # `plan`. The engine layer pulls in the planner, the manifest and the tool registry;
         # none of that should cost a session that is not using it.
         from orchestrator.ai.active_library import LIBRARY
-        from orchestrator.ai.engines import Channel, Orchestrator, QemuEngine, Registry
+        from orchestrator.ai.engines import (Channel, ExecutorEngine, Orchestrator,
+                                             QemuEngine, Registry)
         from orchestrator.ai.engines.channel import Answer
         from orchestrator.pipeline import execute_tool
 
@@ -95,9 +96,20 @@ class Plan(Shortcut):
             return _insession.Verdict(step.kind)
 
         registry = Registry()
+        # BOTH LOAD-BEARING ENGINES, floor first. The executor provides the box — one call,
+        # one answer — and Medusa turns a prompt into a program when one call is not enough.
+        # Mounting only the planner meant every request, however small, went to the thing
+        # that writes programs; the rerouting handles the handover with nobody watching.
+        registry.mount(ExecutorEngine(LIBRARY, guarded))
         registry.mount(QemuEngine(LIBRARY, guarded))
-        result = Orchestrator(registry, Channel([translate]),
-                              decide=decide).handle(request)
+        # TRY THE FLOOR FIRST. `route` is the one decision a model makes here and there is
+        # no model in this path yet, so the rule is the ladder's own: gravity points down,
+        # and an engine that cannot serve a request says so cheaply.
+        floor_first = lambda req, menu, engines: next(
+            (e.name for e in engines if e.name == "executor"),
+            engines[0].name if engines else None)
+        result = Orchestrator(registry, Channel([translate]), decide=decide,
+                              route=floor_first).handle(request)
 
         if offered:
             console.print("\n[bold]what it would do[/bold]" if dry

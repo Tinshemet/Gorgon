@@ -1419,6 +1419,39 @@ def test_findings_travel_as_publications_now():
           any("alpha" in str(f.get("fact")) for f in r["published"]))
 
 
+class FakeLab:
+    """A library-shaped stand-in that answers BOTH ways the code reads a library.
+
+    THE PRODUCTION SEAMS READ `library._vms` AND `library._networks` DIRECTLY, while the
+    lab mount's scratch calls `library.vms()` and `library.by_network()`. Two access paths
+    over one registry — fine for the real `ActiveLibrary`, which has both, and a trap for
+    anything standing in for it: a stub with only the public half reads as an EMPTY LAB and
+    every query quietly answers "nothing here". That is how three tests in this file passed
+    while asserting less than they appeared to.
+    """
+
+    def __init__(self, world):
+        self.world = world
+
+    @property
+    def _vms(self):
+        return {n: {"name": n, **r} for n, r in self.world.vms.items()}
+
+    @property
+    def _networks(self):
+        return {n: {"name": n, "members": sorted(m)}
+                for n, m in getattr(self.world, "nets", {}).items()}
+
+    def vms(self):
+        return dict(self._vms)
+
+    def by_network(self):
+        return {n: list(r["members"]) for n, r in self._networks.items()}
+
+    def known_names(self):
+        return set(self.world.vms)
+
+
 def test_the_executor_is_the_tool_regime_made_real():
     """THE FLOOR HAD NO ENGINE. `session.py` has described the tool regime since the day it
     was written — one call, one answer, close — and `rank("tool") == 0` was a number nothing
@@ -1427,26 +1460,17 @@ def test_the_executor_is_the_tool_regime_made_real():
     from orchestrator.ai.engines import ExecutorEngine
     from tests.bench.sim_world import SimWorld
 
-    class Lab:
-        def __init__(self, world):
-            self.world = world
-
-        def vms(self):
-            return {n: {"name": n, **r} for n, r in self.world.vms.items()}
-
-        def by_network(self):
-            return {}
-
-        def known_names(self):
-            return set(self.world.vms)
-
     world = SimWorld()
-    lab = Lab(world)
-    eng = ExecutorEngine(lab, world.execute)
+    eng = ExecutorEngine(FakeLab(world), world.execute)
 
     check("it declares only the floor", eng.intents == ("fetch",))
-    check("and offers NO in-session — the protocol must fit the floor",
-          not callable(getattr(eng, "steps", None)))
+    # ASKING IS THE PRICE OF ACTING, whatever regime you are in. The first version of this
+    # engine offered no in-session — "one call, no exchange" — and `plan --dry` created a
+    # machine on the real lab while claiming to preview one. "No exchange" means no
+    # back-and-forth: no decomposing, no re-planning, no promotion. It never meant acting
+    # unasked.
+    check("it still asks once per call, because it ACTS",
+          callable(getattr(eng, "steps", None)))
     check("it claims by the manifest's nouns, inherited from the contract",
           eng.claims("create a machine") and not eng.claims("bake a cake"))
 
@@ -1456,6 +1480,33 @@ def test_the_executor_is_the_tool_regime_made_real():
     check("and it actually happened", "alpha" in world.vms)
 
 
+def test_the_floor_asks_before_it_acts():
+    """FOUND BY POINTING `plan --dry` AT THE REAL LAB with an executor that refuses to act.
+
+    `drive` falls back to `engine.run()` for an engine with no in-session, so this engine
+    acted with no verdict, no budget check and no dry run. `delete_vm alpha` is exactly one
+    call and irreversible.
+    """
+    print("[executor] one call is still a call, and it is offered first")
+    from orchestrator.ai.engines import ExecutorEngine, insession
+    from tests.bench.sim_world import SimWorld
+
+    world = SimWorld()
+    world.execute("create_vm", {"name": "doomed", "os_type": "linux"})
+    eng = ExecutorEngine(FakeLab(world), world.execute)
+    sess = Session("delete it", eng, intent="fetch")
+    seen = []
+    out = insession.drive(
+        eng, [{"shape": "count", "select": {"kind": "vm", "name": "doomed"}, "eq": 0}],
+        sess, lambda st, s: (seen.append(st) or insession.Verdict(insession.STOP, "no")))
+    check("the call was offered before it happened", len(seen) == 1)
+    check("declaring what it would destroy", len(seen[0].destroys) == 1)
+    check("a refusal is honoured", out.get("refused") is True)
+    check("and the machine is still there", "doomed" in world.vms)
+    check("a single call is never divisible — there is nothing finer",
+          seen[0].divisible is False)
+
+
 def test_the_executor_refuses_to_plan_and_says_so():
     """WHAT MAKES IT THE FLOOR IS WHAT IT REFUSES TO DO. Naming a tool and knowing WHEN to
     call it are different jobs, and the second one is what Medusa is for."""
@@ -1463,21 +1514,8 @@ def test_the_executor_refuses_to_plan_and_says_so():
     from orchestrator.ai.engines import ExecutorEngine
     from tests.bench.sim_world import SimWorld
 
-    class Lab:
-        def __init__(self, world):
-            self.world = world
-
-        def vms(self):
-            return {n: {"name": n, **r} for n, r in self.world.vms.items()}
-
-        def by_network(self):
-            return {}
-
-        def known_names(self):
-            return set(self.world.vms)
-
     world = SimWorld()
-    eng = ExecutorEngine(Lab(world), world.execute)
+    eng = ExecutorEngine(FakeLab(world), world.execute)
     # A machine must exist before it can be put on a network — that ordering is planning.
     out = eng.run([{"every": {"kind": "vm", "name": "ghost"}, "must": {"network": "lab"}}])
     check("it asks for the translation regime", out.get("promote") == "translation")
@@ -1492,26 +1530,13 @@ def test_a_request_the_floor_cannot_serve_reroutes_up():
     from orchestrator.ai.engines import ExecutorEngine
     from tests.bench.sim_world import SimWorld
 
-    class Lab:
-        def __init__(self, world):
-            self.world = world
-
-        def vms(self):
-            return {n: {"name": n, **r} for n, r in self.world.vms.items()}
-
-        def by_network(self):
-            return {}
-
-        def known_names(self):
-            return set(self.world.vms)
-
     world = SimWorld()
 
     class Planner(MedusaEngine):
         name = "medusa"
 
     reg = Registry()
-    reg.mount(ExecutorEngine(Lab(world), world.execute))
+    reg.mount(ExecutorEngine(FakeLab(world), world.execute))
     reg.mount(Planner(world))
     goals = [{"shape": "count", "select": {"kind": "vm", "name": "web"}, "eq": 1},
              {"every": {"kind": "vm", "name": "web"}, "must": {"network": "lab"}}]

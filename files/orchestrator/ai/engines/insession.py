@@ -157,9 +157,15 @@ def drive(engine, components: List[Dict[str, Any]], session, decide) -> Dict[str
     whole loop is testable with a function that always says RUN, which is exactly how the
     ghost writer was proven before any model touched it.
 
-    A GENERATOR THAT DOES NOT OFFER STEPS IS NOT AN ERROR. An engine may simply do its work
-    and return, and that is the tool regime: one call, one answer, no exchange. The protocol
-    has to accommodate the floor or it stops being the floor.
+    AN ENGINE THAT OFFERS NO STEPS RUNS UNASKED, AND THAT IS THE PRICE OF THIS FALLBACK.
+    It exists so an engine is not FORCED to implement a generator — a pure reader has nothing
+    to ask about. But an engine that ACTS and offers no in-session acts with no verdict, no
+    budget check and no dry run, which was found the hard way: the executor engine shipped
+    without `steps()` and `plan --dry` created a machine on the real lab while claiming to
+    preview one.
+
+    So the rule is not "the floor needs no exchange" — it is that ASKING IS THE PRICE OF
+    ACTING, whatever regime you are in. An engine that only answers may skip it.
     """
     steps = getattr(engine, "steps", None)
     if not callable(steps):

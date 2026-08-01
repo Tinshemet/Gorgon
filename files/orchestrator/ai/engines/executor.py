@@ -21,10 +21,14 @@ else is handed back with `promote: translation`, which is the engine saying "thi
 program" rather than half-writing one. GRAVITY POINTS DOWN: most requests should end here,
 and the ones that cannot should leave quickly and cheaply.
 
-IT HAS NO `steps()`, DELIBERATELY. `insession.drive` already says an engine that offers no
-in-session simply runs — "one call, one answer, no exchange. The protocol has to accommodate
-the floor or it stops being the floor." This is the engine that proves that clause was not
-decoration.
+IT OFFERS ONE STEP PER CALL, AND THE FIRST VERSION DID NOT — that was a safety hole, found
+by pointing `plan --dry` at the real lab with an executor that refuses to act. `drive` falls
+back to `engine.run()` for an engine with no in-session, so this engine ACTED WITH NO VERDICT
+EVER ASKED FOR. `delete_vm alpha` is exactly one call and irreversible.
+
+"One call, one answer, no exchange" meant no BACK-AND-FORTH — no decomposing, no re-planning,
+no promotion. It never meant acting unasked. So the floor still asks, once per call, and a
+dry run can preview it and a policy can refuse it, while nothing here plans anything.
 
 WHY IT DOES NOT BUILD ITS OWN EXECUTOR. The same reason `LabWorld` does not: a program's
 statements and a single tool call reach the world through ONE door — legal filter, commit
@@ -37,6 +41,10 @@ from typing import Any, Dict, List, Optional
 from ..planner.ir import config as _config
 from ..planner.ir import effects as _effects
 from .base import Engine
+
+
+_NEEDS_A_PROGRAM = ("this needs a program, not a call — some goal here is not one "
+                    "already-reachable operation")
 
 
 class ExecutorEngine(Engine):
@@ -66,8 +74,49 @@ class ExecutorEngine(Engine):
         from .qemu import LabWorld
         return LabWorld(self._library, self._execute, self._findings)
 
+    def steps(self, components: List[Dict[str, Any]], session=None):
+        """ONE STEP PER CALL. Not a tree — there is no decomposing here and no second round.
+
+        The step declares its cost and what it would destroy, exactly as the planner's does,
+        because the operator's protection cannot depend on WHICH engine happened to serve
+        the request.
+        """
+        from .insession import RUN, STOP, Publish, Step
+
+        world = self.world()
+        kinds = self.manifest
+        _select, holds = world.seams
+        calls, findings = [], []
+
+        for goal in components or ():
+            tile = self._one_call(goal, kinds, holds)
+            if tile is None:
+                return {"ok": False, "promote": "translation", "calls": calls,
+                        "findings": findings, "why": _NEEDS_A_PROGRAM}
+            tool, args = tile
+            if not tool:
+                continue                      # already true — zero calls is a real answer
+            destroys = [(tool, args)] if tool in _effects.deleters(kinds) else []
+            verdict = yield Step(RUN, {"tool": tool, "args": args}, f"one call: {tool}",
+                                 cost=1, divisible=False, destroys=destroys)
+            if verdict is None or verdict.action == STOP:
+                return {"ok": False, "refused": True, "calls": calls, "findings": findings,
+                        "why": verdict.why if verdict is not None else "no verdict given"}
+            result = self._execute(tool, args)
+            calls.append((tool, args))
+            if not (result or {}).get("success", True):
+                return {"ok": False, "calls": calls, "findings": findings,
+                        "why": f"{tool} failed: {(result or {}).get('error')}"}
+            findings.append({"fact": f"did:{tool}", "value": args})
+            yield Publish(f"did:{tool}", args)
+        return {"ok": True, "calls": calls, "findings": findings, "why": None}
+
     def run(self, components: List[Dict[str, Any]], session=None) -> Dict[str, Any]:
         """Every goal that is already ONE call, run. Anything else, handed back.
+
+        FOR AN UNMOUNTED CALLER. Mounted, `steps()` is what the in-session drives, and it
+        asks before each call; this path exists for code holding the engine directly and
+        does not pretend to a verdict nobody gave.
 
         NO ORDERING, WHICH IS THE HARD PART TO LEAVE OUT. Two goals that each invert to a
         single call may still need one to happen before the other, and deciding that is
@@ -84,10 +133,10 @@ class ExecutorEngine(Engine):
             tile = self._one_call(goal, kinds, holds)
             if tile is None:
                 return {"ok": False, "promote": "translation", "calls": calls,
-                        "findings": findings,
-                        "why": "this needs a program, not a call — some goal here is not "
-                               "one already-reachable operation"}
+                        "findings": findings, "why": _NEEDS_A_PROGRAM}
             tool, args = tile
+            if not tool:
+                continue
             result = self._execute(tool, args)
             calls.append((tool, args))
             if not (result or {}).get("success", True):
