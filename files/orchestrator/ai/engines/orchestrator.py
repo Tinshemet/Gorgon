@@ -94,6 +94,17 @@ class Orchestrator:
                     "mounted": [e.name for e in self.registry.engines],
                     "capabilities": [p.name for p in self.registry.capabilities()]}
 
+        # SYNC THE RELEVANT ENGINES — the claimants, not all of them and not just the one
+        # about to be routed to.
+        #
+        # THE ORDER IN THE FLOW IS "/sync THEN ROUTE" AND THAT ORDER IS THE POINT: a router
+        # choosing between engines needs to know what each actually holds, and syncing only
+        # the winner means the choice was made blind and then informed. Syncing EVERY mounted
+        # engine would be the context overflow of 2026-07-31 one level up — it grows with the
+        # number of engines while nothing recomputes the budget — but the CLAIMANT list is
+        # short by construction, because claiming is a cheap manifest question asked first.
+        state = self.registry.sync([e.name for e in claimants])
+
         chosen = self._route(request, self.registry.menu(), claimants)
         engine = self.registry.get(chosen) if chosen else None
         if engine is None:
@@ -101,17 +112,59 @@ class Orchestrator:
                     "why": f"the router named {chosen!r}, which is not mounted",
                     "mounted": [e.name for e in self.registry.engines]}
 
-        session = Session(request, engine, intent=intent, budget=self.budget)
-        session.record(f"routed to {engine.name} · regime {session.regime}")
-        # SYNC ONLY WHAT WAS ROUTED TO. The flow says "/sync then route", and doing it in
-        # that order would ask EVERY mounted engine for state on EVERY prompt — the context
-        # overflow of 2026-07-31 one level up, growing with the number of engines while
-        # nothing recomputes the budget. Syncing the CHOSEN engine costs one lookup and
-        # answers the only question that matters: what is actually there, for the engine
-        # about to act. The capability ledger is what would let the order be reversed safely.
-        session.record(f"synced {engine.name}: "
-                       f"{self.registry.sync([engine.name]).get(engine.name)}")
+        # THE REST OF THE CLAIMANTS ARE FALLBACKS, in the order the registry mounted them.
+        # The router picks first; being wrong about that is a routing mistake, not a dead end.
+        order = [engine] + [e for e in claimants if e.name != engine.name]
+        return self._serve(request, order, state, intent, components)
 
+    def _serve(self, request, order, state, intent, components):
+        """Try each claimant in turn until one serves it, refuses it, or all are spent.
+
+        REROUTING HAPPENS ON INABILITY, NEVER ON REFUSAL, and the distinction is the whole
+        design. An engine that CANNOT do something has said nothing about whether the request
+        should happen; an engine that WON'T has, and letting the next engine overturn that
+        would make every gate advisory — ask enough engines and one will say yes.
+
+        THE BUDGET IS SHARED ACROSS ATTEMPTS. Giving each engine a fresh one would mean
+        mounting a third engine silently tripled what a request may spend.
+        """
+        spent, attempts, last, tried = 0, [], None, []
+        for engine in order:
+            tried.append(engine.name)
+            session = Session(request, engine, intent=intent,
+                              budget=None if self.budget is None
+                              else max(0, self.budget - spent))
+            for note in attempts:
+                session.record(note)
+            session.record(f"routed to {engine.name} · regime {session.regime}")
+            session.record(f"synced {len(state)} claimant(s): {state}")
+            out = self._attempt(request, engine, session, components)
+            spent += len(out.get("calls") or [])
+            last = out
+            # DONE and REFUSED both END IT. So does an unanswerable translation: the request
+            # never became one, and asking a second engine to translate the same English
+            # would be asking the same channel the same question.
+            if out["outcome"] in ("DONE", "REFUSED", "UNTRANSLATED"):
+                return self._name_the_route(out, tried)
+            attempts.append(f"{engine.name} could not: {out.get('why') or out['outcome']}")
+        return self._name_the_route(last, tried)
+
+    @staticmethod
+    def _name_the_route(out, tried):
+        """WHICH ENGINES WERE TRIED, on success as well as failure.
+
+        An earlier version attached this only when everything failed, so a reroute that
+        WORKED left no trace outside the log — and the log is internal. A result that says
+        `engine: medusa` while the router chose `thin` is a result that quietly rewrote its
+        own history; the operator's answer is the same either way, but anyone debugging the
+        router needs to know it was overruled.
+        """
+        if out is not None and len(tried) > 1:
+            out["tried"] = list(tried)
+        return out
+
+    def _attempt(self, request, engine, session, components):
+        """One engine's whole turn: translate, run the in-session, close."""
         if components is None:
             answer = self.channel.ask(request, engine.world())
             session.record(f"translated by {answer.source}: {len(answer.components)} goal(s)")

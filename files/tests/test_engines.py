@@ -497,16 +497,36 @@ def test_a_session_is_abandoned_rather_than_promoted_forever():
           bool(r["why"]))
 
 
-def test_sync_covers_the_engine_that_was_routed_to():
-    """/sync is in the flow, and syncing EVERY engine on EVERY prompt is the 2026-07-31
-    context overflow one level up — it grows with the number of engines while nothing
-    recomputes the budget. Syncing the chosen one costs a lookup."""
-    print("[sync] the routed engine, not all of them")
+def test_sync_covers_the_claimants_before_the_router_chooses():
+    """/sync THEN route, and that order is the point.
+
+    An earlier version synced only the WINNER, which meant the choice was made blind and then
+    informed — a router deciding between engines needs to know what each holds. Syncing every
+    MOUNTED engine would be the 2026-07-31 context overflow one level up, growing with the
+    number of engines while nothing recomputes the budget; the CLAIMANT list is short by
+    construction, because claiming is a cheap manifest question asked first.
+    """
+    print("[sync] the claimants, before the choice — not all engines, not just the winner")
     reg = _kitchen()
     r = Orchestrator(reg, Channel([stub({"risotto for four": RISOTTO})])).handle(
         "risotto for four")
     check("the session records a sync", any("synced" in l for l in r["log"]))
-    check("naming the engine it routed to", any("synced medusa" in l for l in r["log"]))
+    check("and it covers the claimants, with their state",
+          any("claimant" in l and "medusa" in l for l in r["log"]))
+
+    # AND NOT EVERY MOUNTED ENGINE. A second engine that claims nothing is never asked.
+    class Bystander(MedusaEngine):
+        name = "bystander"
+
+        def claims(self, request):
+            return False
+
+    reg2 = _kitchen()
+    reg2.mount(Bystander(World(KITCHEN)))
+    r2 = Orchestrator(reg2, Channel([stub({"risotto for four": RISOTTO})])).handle(
+        "risotto for four")
+    check("an engine that claims nothing is not synced",
+          not any("bystander" in l for l in r2["log"]))
 
 
 def test_the_operator_sees_the_ends_and_never_the_middle():
@@ -1137,6 +1157,88 @@ def test_a_kind_the_world_cannot_see_is_refused_not_assumed_empty():
     insession.drive(eng, [{"shape": "count", "select": {"kind": "vm"}, "eq": 2}], sess2,
                     lambda st, s: (seen.append(st) or insession.Verdict(insession.STOP, "x")))
     check("a vm goal still plans normally", seen and seen[0].cost == 1)
+
+
+def test_a_request_reroutes_to_another_engine_when_the_first_cannot():
+    """MULTI-ENGINE REROUTING. Being wrong about which engine is a routing mistake, not a
+    dead end — so the rest of the claimants are fallbacks in mount order."""
+    print("[routing] the router picks first; the others are fallbacks")
+
+    # A kitchen with no way to set `serves`, so the second goal is genuinely unreachable in
+    # it — and a full one that can. Same manifest KIND, different capability.
+    thin = {"dish": {**KITCHEN["dish"], "setters": {}}}
+
+    class Thin(MedusaEngine):
+        name = "thin"
+
+    reg = Registry()
+    reg.mount(Thin(World(thin)))
+    reg.mount(MedusaEngine(World(KITCHEN)))
+    # THE ROUTER IS INJECTED, SO THE TEST NAMES THE WRONG ENGINE ON PURPOSE. Depending on
+    # mount order would test the registry's iteration rather than the rerouting, and the
+    # registry does not promise one.
+    to_thin = lambda request, menu, engines: "thin"
+    r = Orchestrator(reg, Channel([stub({"risotto for four": RISOTTO})]),
+                     route=to_thin).handle("risotto for four")
+    check("it ended up served", r["outcome"] == "DONE")
+    check("by the engine that could, not the one the router named",
+          r["engine"] == "medusa")
+    check("and the first attempt is on the record",
+          any("thin could not" in l for l in r["log"]))
+    check("with the whole order named", r.get("tried") == ["thin", "medusa"])
+
+
+def test_a_refusal_is_never_overturned_by_rerouting():
+    """THE DISTINCTION THE WHOLE DESIGN RESTS ON.
+
+    An engine that CANNOT do something has said nothing about whether it should happen. An
+    engine that WON'T has. Letting the next engine overturn that would make every gate
+    advisory — ask enough engines and one says yes.
+    """
+    print("[routing] inability reroutes; refusal ends it")
+    from orchestrator.ai.engines import insession
+
+    class Second(MedusaEngine):
+        name = "second"
+
+    reg = Registry()
+    reg.mount(MedusaEngine(World(KITCHEN)))
+    reg.mount(Second(World(KITCHEN)))
+    seen = []
+
+    def refuse(step, session):
+        seen.append(session.engine.name)
+        return insession.Verdict(insession.STOP, "the operator said no")
+
+    r = Orchestrator(reg, Channel([stub({"risotto for four": RISOTTO})]),
+                     decide=refuse).handle("risotto for four")
+    check("the refusal stands", r["outcome"] == "REFUSED")
+    check("and no second engine was asked to overrule it", len(seen) == 1)
+
+
+def test_trying_three_engines_does_not_cost_three_budgets():
+    """A shared budget, or mounting a third engine silently triples what a request may
+    spend."""
+    print("[routing] the budget is the request's, not the engine's")
+
+    class Useless(MedusaEngine):
+        name = "useless"
+
+        def run(self, components, session=None):
+            return {"ok": False, "why": "not me", "calls": []}
+
+        steps = None
+
+    reg = Registry()
+    reg.mount(Useless(World(KITCHEN)))
+    reg.mount(MedusaEngine(World(KITCHEN)))
+    # RISOTTO costs two calls; one is all this request may spend, whoever serves it.
+    r = Orchestrator(reg, Channel([stub({"risotto for four": RISOTTO})]),
+                     budget=1).handle("risotto for four")
+    check("the fallback engine inherits the remaining budget, not a fresh one",
+          r["outcome"] != "DONE")
+    check("and the budget is what stopped it",
+          any("budget" in l for l in r["log"]) or "budget" in (r.get("why") or ""))
 
 
 def main():
