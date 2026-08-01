@@ -150,10 +150,19 @@ class Orchestrator:
             if regime:
                 session.regime = regime
                 session.record(f"regime set to {regime} by the caller")
-            for note in attempts:
-                session.record(note)
-            session.record(f"routed to {engine.name} · regime {session.regime}")
-            session.record(f"synced {len(state)} claimant(s): {state}")
+            for who, note in attempts:
+                # FILED BY THE ENGINE THAT COULD NOT, caught by the orchestrator. Recorded
+                # into the NEXT engine's ledger, so defaulting the sender to "this session's
+                # engine" attributed the executor's refusal to Medusa — the misattribution
+                # this ledger exists to prevent, in its own first line.
+                session.record(note, filed_by=who, caught_by="orchestrator",
+                               executed=f"{who}: cannot serve", level="warn")
+            session.record(f"routed to {engine.name} · regime {session.regime}",
+                           filed_by="orchestrator", caught_by=engine.name,
+                           executed=f"route -> {engine.name}")
+            session.record(f"{len(state)} claimant(s) synced",
+                           filed_by="registry", caught_by="orchestrator",
+                           executed="sync(claimants)", data=state)
             out = self._attempt(request, engine, session, components)
             spent += len(out.get("calls") or [])
             last = out
@@ -162,7 +171,8 @@ class Orchestrator:
             # would be asking the same channel the same question.
             if out["outcome"] in ("DONE", "REFUSED", "UNTRANSLATED"):
                 return self._name_the_route(out, tried)
-            attempts.append(f"{engine.name} could not: {out.get('why') or out['outcome']}")
+            attempts.append((engine.name,
+                             f"{engine.name} could not: {out.get('why') or out['outcome']}"))
         return self._name_the_route(last, tried)
 
     @staticmethod
@@ -182,8 +192,13 @@ class Orchestrator:
     def _attempt(self, request, engine, session, components):
         """One engine's whole turn: translate, run the in-session, close."""
         if components is None:
+            session.record("English -> goals", filed_by="orchestrator",
+                           caught_by="channel", executed=f"ask({request[:40]!r})")
             answer = self.channel.ask(request, engine.world())
-            session.record(f"translated by {answer.source}: {len(answer.components)} goal(s)")
+            session.record(f"{len(answer.components or ())} goal(s)",
+                           filed_by=answer.source or "channel", caught_by="orchestrator",
+                           executed="translate", data=answer.components,
+                           level="warn" if not answer else "info")
             if not answer:
                 # A REQUEST NOBODY COULD TRANSLATE IS NOT A FAILED REQUEST — it is one that
                 # never became a request. Naming the stage matters: this is the front seam,

@@ -105,7 +105,10 @@ class Registry:
         for e in want:
             try:
                 w = e.world()
-                out[e.name] = {"kinds": sorted((getattr(w, "kinds", {}) or {}).keys()),
+                # THE ENGINE'S MANIFEST, NOT THE WORLD'S ATTRIBUTE. A world may declare no
+                # kinds of its own — the VM sim does — and reading it directly reported the
+                # general engine as knowing NOTHING in the ledger the operator reads.
+                out[e.name] = {"kinds": sorted((e.manifest or {}).keys()),
                                "members": {k: len(v) for k, v in
                                            (getattr(w, "state", {}) or {}).items() if v}}
             except NotImplementedError:

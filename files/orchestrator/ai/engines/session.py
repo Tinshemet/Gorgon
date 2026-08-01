@@ -66,7 +66,12 @@ class Session:
         self.budget = budget
         self.calls: List = []
         self.findings: List[Dict[str, Any]] = []
-        self.log: List[str] = []
+        # THE LEDGER IS THE LOG, not a second one beside it. `record()` files an event and
+        # `log` renders those events as sentences, so the two cannot drift — an earlier
+        # design would have had a structured ledger and a prose log recording different
+        # things, which is how you end up trusting the one that happens to be wrong.
+        from .eventlog import EventLog
+        self.events = EventLog(request)
         # WHAT THE ENGINE SUBMITTED UPWARD, in order. Kept apart from `findings` until the
         # orchestrator has decided which of them the operator sees — a publication is a
         # thing an engine SAID, and a finding is a thing the operator is TOLD.
@@ -76,14 +81,27 @@ class Session:
         self.promotions = 0
 
     # ── the ledger of this session ────────────────────────────────────────────────────
-    def record(self, note: str) -> None:
-        self.log.append(note)
+    @property
+    def log(self) -> List[str]:
+        """The prose view, derived. Every existing caller keeps working."""
+        return [e.note or e.executed for e in self.events.events]
+
+    def record(self, note: str, filed_by: str = None, caught_by: str = None,
+               executed: str = "", level: str = "info", data=None) -> None:
+        """One interaction. `note` alone still works — the ends default to this session's
+        two parties, which is what almost every existing call site meant anyway."""
+        self.events.file(filed_by or getattr(self.engine, "name", "engine"),
+                         caught_by or "orchestrator",
+                         executed or note, note, level, data)
 
     def publish(self, pub) -> None:
-        """An engine's claim, submitted. Recorded in the internal log too, so a publication
-        that is later KEPT rather than forwarded still left a trace of having been made."""
+        """An engine's claim, submitted. Recorded in the ledger too, so a publication that
+        is later KEPT rather than forwarded still left a trace of having been made."""
         self.published.append(pub)
-        self.record(f"published {pub.what}")
+        self.record(f"claim: {pub.what} = {str(pub.value)[:40]}",
+                    filed_by=getattr(self.engine, "name", "engine"),
+                    caught_by="orchestrator", executed=f"PUBLISH {pub.what}",
+                    data=pub.value)
 
     def spent(self) -> int:
         return len(self.calls)
@@ -127,8 +145,12 @@ class Session:
     def close(self, outcome: str, why: str = "") -> Dict[str, Any]:
         self.closed = True
         self.outcome = outcome
-        self.record(f"closed {outcome} ({why})" if why else f"closed {outcome}")
+        self.record(f"closed {outcome}" + (f" ({why})" if why else ""),
+                    filed_by="orchestrator", caught_by="operator",
+                    executed=f"close({outcome})",
+                    level="error" if outcome not in ("DONE", "REFUSED") else "info")
         return {"outcome": outcome, "why": why, "regime": self.regime,
+                "events": self.events,
                 "engine": getattr(self.engine, "name", "?"), "calls": self.calls,
                 "findings": self.findings,
                 # INTERNAL. The back-and-forth that produced the result, kept under its own

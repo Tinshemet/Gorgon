@@ -511,8 +511,11 @@ def test_sync_covers_the_claimants_before_the_router_chooses():
     r = Orchestrator(reg, Channel([stub({"risotto for four": RISOTTO})])).handle(
         "risotto for four")
     check("the session records a sync", any("synced" in l for l in r["log"]))
-    check("and it covers the claimants, with their state",
-          any("claimant" in l and "medusa" in l for l in r["log"]))
+    # ASSERTED AGAINST THE LEDGER, NOT THE PROSE. The sentence is a rendering; the event
+    # names both ends and carries the state as data, which is what a reader actually needs.
+    synced = [e for e in r["events"].events if e.executed == "sync(claimants)"]
+    check("and it covers the claimants, with their state as data",
+          len(synced) == 1 and "medusa" in (synced[0].data or {}))
 
     # AND NOT EVERY MOUNTED ENGINE. A second engine that claims nothing is never asked.
     class Bystander(MedusaEngine):
@@ -1364,8 +1367,11 @@ def test_publish_is_how_an_engine_speaks_upward():
           {f["fact"] for f in r["findings"]} >= {"dish_count", "oven"})
     check("a publication carries its reason",
           any(f.get("why") for f in r["published"]))
+    filed = [e for e in r["events"].events if e.executed.startswith("PUBLISH")]
     check("submitting needed no verdict — the engine never waited",
-          any("published dish_count" in l for l in r["log"]))
+          {e.executed for e in filed} == {"PUBLISH dish_count", "PUBLISH oven"})
+    check("and each names who said it and who caught it",
+          all(e.filed_by == "talker" and e.caught_by == "orchestrator" for e in filed))
 
 
 def test_the_orchestrator_may_keep_a_publication_internal():
@@ -1389,7 +1395,8 @@ def test_the_orchestrator_may_keep_a_publication_internal():
     check("the kept one never becomes a finding",
           {f["fact"] for f in r["findings"]} == {"dish_count"})
     check("but it is still on the record as having been said",
-          any("published debug_trace" in l for l in r["log"]) and r["kept"] == 1)
+          any(e.executed == "PUBLISH debug_trace" for e in r["events"].events)
+          and r["kept"] == 1)
     check("and the operator's half never mentions it",
           "debug_trace" not in str(r["findings"]))
 
@@ -1546,6 +1553,107 @@ def test_a_request_the_floor_cannot_serve_reroutes_up():
     check("by the engine that plans", r["engine"] == "medusa")
     check("having tried the floor first", r.get("tried") == ["executor", "medusa"])
     check("and the work is real", "web" in world.vms and "lab" in world.vms["web"]["nets"])
+
+
+def test_the_ledger_names_both_ends_of_every_interaction():
+    """AN EVENT NAMES WHO SAID IT AND WHO CAUGHT IT, which is what a log of sentences cannot.
+
+    `session.log` could not answer "who asked whom", "what actually ran", or "which of these
+    two components was wrong" — and direction is what separates "the engine asked to
+    escalate" from "the orchestrator granted an escalation".
+
+    IT CAUGHT ITSELF MISATTRIBUTING ON ITS FIRST REAL RUN: a reroute note is recorded into
+    the NEXT engine's ledger, so defaulting the sender to "this session's engine" filed the
+    executor's refusal under Medusa's name.
+    """
+    print("[ledger] every line has a sender and a receiver")
+    from tests.bench.sim_world import SimWorld
+
+    class Thin(MedusaEngine):
+        name = "thin"
+
+        def run(self, components, session=None):
+            return {"ok": False, "why": "not mine", "calls": []}
+
+        steps = None
+
+    reg = Registry()
+    reg.mount(Thin(World(KITCHEN)))
+    reg.mount(MedusaEngine(World(KITCHEN)))
+    r = Orchestrator(reg, Channel([stub({"risotto for four": RISOTTO})]),
+                     route=lambda q, m, e: "thin").handle("risotto for four")
+    events = r["events"].events
+
+    check("the request completed", r["outcome"] == "DONE")
+    check("every event names both ends",
+          all(e.filed_by and e.caught_by for e in events))
+    check("every event is numbered in order",
+          [e.seq for e in events] == list(range(1, len(events) + 1)))
+
+    failed = [e for e in events if e.level == "warn"]
+    check("the engine that could not is the one filed against it",
+          len(failed) == 1 and failed[0].filed_by == "thin")
+    check("and the orchestrator is who caught it",
+          failed[0].caught_by == "orchestrator")
+
+    closed = [e for e in events if e.executed.startswith("close(")]
+    check("the close is filed to the OPERATOR — the only line meant for them",
+          len(closed) == 1 and closed[0].caught_by == "operator")
+
+
+def test_every_call_is_a_line_and_the_program_is_at_the_end():
+    """"each command, each decision, and the medusa code" — the operator's own list."""
+    print("[ledger] one line per call; the program in full, last")
+    from tests.bench.sim_world import SimWorld
+
+    world = SimWorld()
+
+    class Lab(MedusaEngine):
+        name = "medusa"
+
+    reg = Registry()
+    reg.mount(Lab(world))
+    goals = [{"shape": "count", "select": {"kind": "vm", "name": "alpha"}, "eq": 1},
+             {"every": {"kind": "vm", "name": "alpha"}, "must": {"status": "running"}}]
+    r = Orchestrator(reg, Channel([stub({"alpha, running": goals})])).handle("alpha, running")
+    log = r["events"]
+
+    calls = [e for e in log.events if e.caught_by == "world"]
+    check("every call is its own line", len(calls) == len(r["calls"]))
+    check("naming the tool and its arguments",
+          any(e.executed.startswith("create_vm(") for e in calls))
+    check("with the world as the receiver", all(e.filed_by == "medusa" for e in calls))
+
+    # THE PROGRAM GOES AT THE END, IN FULL. It is the one thing you cannot reconstruct from
+    # the lines, and truncating it into a column would make the ledger tidy and useless.
+    check("the program is attached", len(log.programs) == 1)
+    rendered = log.render()
+    check("and printed at the end, whole",
+          "THE MEDUSA PROGRAM" in rendered
+          and rendered.index("THE MEDUSA PROGRAM") > rendered.index("create_vm("))
+    check("the ledger also reads as JSON, one object per line",
+          len(log.jsonl().splitlines()) == len(log.events))
+
+
+def test_a_failure_is_an_event_not_an_absence():
+    """A ledger that records only successes is one you cannot debug from."""
+    print("[ledger] failures are first-class lines")
+    from orchestrator.ai.engines import insession
+
+    reg = _kitchen()
+    r = Orchestrator(reg, Channel([stub({"a risotto": RISOTTO})]),
+                     decide=lambda st, s: insession.Verdict(insession.STOP,
+                                                            "the operator said no")).handle(
+        "a risotto")
+    log = r["events"]
+    check("the refusal closed the session", r["outcome"] == "REFUSED")
+    check("and the ledger can list what a reader should look at",
+          isinstance(log.failures(), list))
+    unfound = [e for e in log.events if e.executed == "close(UNCLAIMED)"]
+    check("an outcome nobody wanted is filed as an error, not info", not unfound)
+
+    empty = Orchestrator(Registry(), Channel([stub({})])).handle("bake a cake")
+    check("an unclaimed request still returns an outcome", empty["outcome"] == "UNCLAIMED")
 
 
 def main():

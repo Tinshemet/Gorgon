@@ -340,7 +340,7 @@ class MedusaEngine(Engine):
                         + back + queue
                     continue
 
-                ran = self._execute_plan(planned, goals)
+                ran = self._execute_plan(planned, goals, getattr(session, 'events', None))
                 calls += ran.get("calls") or []
                 # WHAT THIS NODE OBSERVED, SAID RATHER THAN LEFT LYING IN THE WORLD. The
                 # orchestrator used to reach into the ledger and take what it found; an
@@ -567,7 +567,7 @@ class MedusaEngine(Engine):
         if planned.get("promote") or planned.get("done") or not planned.get("ok", True):
             return {k: v for k, v in planned.items() if k not in ("plan", "done", "ok")} \
                 if planned.get("promote") else planned.get("result", planned)
-        return self._execute_plan(planned, components)
+        return self._execute_plan(planned, components, getattr(session, 'events', None))
 
     def _plan(self, components: List[Dict[str, Any]], session=None) -> Dict[str, Any]:
         """Everything up to the first side effect. Returns a plan, or the reason there
@@ -638,12 +638,34 @@ class MedusaEngine(Engine):
         return {"ok": True, "plan": plan, "program": program}
 
     def _execute_plan(self, planned: Dict[str, Any],
-                      components: List[Dict[str, Any]]) -> Dict[str, Any]:
+                      components: List[Dict[str, Any]],
+                      session_events=None) -> Dict[str, Any]:
         """Run a plan that has already been granted. No decisions are made here."""
         world = self._world
         program = planned["program"]
         select, holds = _gw._seams_of(world)
-        result = _run(program, self._execute, select=select, holds=holds,
+        if session_events is not None:
+            session_events.program(f"{len(program.get('body') or ())} statement(s)",
+                                   _render(program))
+
+        def watched(tool, args):
+            """The engine's executor, with a ledger line per call.
+
+            WRAPPED RATHER THAN RECONSTRUCTED FROM THE RESULT. Filing these afterwards would
+            give every call the same timestamp and lose the ones that ran before a failure —
+            which are the calls you most want to see.
+            """
+            out = self._execute(tool, args)
+            if session_events is not None:
+                bad = not (out or {}).get("success", True)
+                session_events.file(
+                    self.name, "world",
+                    f"{tool}({', '.join(f'{k}={v}' for k, v in (args or {}).items())})",
+                    "call failed: " + str((out or {}).get("error")) if bad else "call",
+                    level="error" if bad else "info")
+            return out
+
+        result = _run(program, watched, select=select, holds=holds,
                       known_names=world.names(),
                       known_tools=_effects.tools_of(self.manifest) or None,
                       consent=True, intent="achieve")
