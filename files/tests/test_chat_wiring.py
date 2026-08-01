@@ -89,6 +89,65 @@ def test_the_shortcut_registry_still_holds_plan():
     check("and not an unrelated one", not plan.matches("planning the week"))
 
 
+def test_plan_has_a_dry_run_and_it_does_not_act():
+    """`plan --dry` — because this path is pointed at a REAL lab.
+
+    The first thing it computed against one was that "exactly two machines" needs seven
+    deletions, naming vm-orchestrator and vm-executor among them. That is a fine thing to be
+    told and a poor thing to discover.
+    """
+    print("[plan] a dry run stops at the first step and names what it would destroy")
+    from orchestrator.ai.chat.shortcuts.plan import Plan
+    from orchestrator.ai.engines import (Channel, Orchestrator, QemuEngine, Registry,
+                                         insession)
+    from orchestrator.ai.engines.channel import Answer
+
+    p = Plan()
+    check("the flag is recognised", p.matches("plan --dry make sure there are two"))
+    check("and a plain request still is", p.matches("plan create a vm named alpha"))
+
+    class Boom(Exception):
+        pass
+
+    class FakeLibrary:
+        def vms(self):
+            return {n: {"name": n, "status": "stopped"} for n in ("a", "b", "c", "d")}
+
+        def by_network(self):
+            return {}
+
+        def known_names(self):
+            return {"a", "b", "c", "d"}
+
+    def must_not_act(tool, args):
+        raise Boom(f"{tool} ran during a dry run")
+
+    def translate(gap, world=None):
+        return Answer([{"shape": "count", "select": {"kind": "vm"}, "eq": 2}], "stub", "")
+    translate.name = "stub"
+
+    offered = []
+
+    def decide(step, session):
+        offered.append(step)
+        return insession.Verdict(insession.STOP, "dry run — nothing was done")
+
+    reg = Registry()
+    reg.mount(QemuEngine(FakeLibrary(), must_not_act))
+    # THE REQUEST HAS TO BE ONE THE ENGINE CLAIMS. "exactly two" alone is UNCLAIMED — the
+    # router works off the manifest's nouns, so a request naming no kind reaches nobody. That
+    # is the routing layer behaving correctly, and a test that did not say so would look like
+    # a dry-run bug the first time it failed.
+    out = Orchestrator(reg, Channel([translate]),
+                       decide=decide).handle("make sure there are exactly two machines")
+    check("it closes as a refusal, not a failure", out["outcome"] == "REFUSED")
+    check("nothing ran — the executor would have raised", not out.get("calls"))
+    check("and the step named every deletion",
+          len(offered) == 1 and len(offered[0].destroys) == 2)
+    check("by name, because a count does not stop anybody",
+          {list(a.values())[0] for _, a in offered[0].destroys} <= {"a", "b", "c", "d"})
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "chat wiring"))

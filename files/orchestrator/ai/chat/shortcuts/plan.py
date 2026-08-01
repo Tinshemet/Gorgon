@@ -28,7 +28,15 @@ _PREFIX = "plan "
 
 
 class Plan(Shortcut):
-    """`plan create a vm named alpha` — the engine path, one request."""
+    """`plan create a vm named alpha` — the engine path, one request.
+
+    `plan --dry <request>` plans and shows, WITHOUT ACTING. It exists because this path is
+    pointed at a real lab: the first thing it did against one was compute that "exactly two
+    machines" needs seven deletions, naming vm-orchestrator and vm-executor among them. That
+    is a fine thing to be told and a poor thing to discover. A dry run answers the only
+    question worth asking first — WHAT WOULD THIS DO — and the in-session already knows,
+    because every step declares its cost and what it would destroy before the verdict.
+    """
 
     def matches(self, ui: str) -> bool:
         return ui.strip().lower().startswith(_PREFIX) and len(ui.strip()) > len(_PREFIX)
@@ -36,6 +44,10 @@ class Plan(Shortcut):
     def run(self, ui: str, messages: List[dict], runtime_drift_count: int,
             verbose: bool) -> None:
         request = ui.strip()[len(_PREFIX):].strip()
+        dry = False
+        for flag in ("--dry", "-n"):
+            if request.lower().startswith(flag + " "):
+                dry, request = True, request[len(flag):].strip()
 
         # IMPORTED HERE, NOT AT MODULE LOAD. A shortcut registers itself at class-definition
         # time, so every import in this file is paid by every chat session that never types
@@ -69,9 +81,36 @@ class Plan(Shortcut):
                                                                    "no usable goal")
         translate.name = "extractor"
 
+        from orchestrator.ai.engines import insession as _insession
+
+        offered = []
+
+        def decide(step, session):
+            offered.append(step)
+            if dry:
+                # STOPPING AT THE FIRST STEP IS THE WHOLE POINT. A dry run that granted the
+                # first node and refused the second would have ACTED — half a program is not
+                # a preview of one, it is a program.
+                return _insession.Verdict(_insession.STOP, "dry run — nothing was done")
+            return _insession.Verdict(step.kind)
+
         registry = Registry()
         registry.mount(QemuEngine(LIBRARY, guarded))
-        result = Orchestrator(registry, Channel([translate])).handle(request)
+        result = Orchestrator(registry, Channel([translate]),
+                              decide=decide).handle(request)
+
+        if offered:
+            console.print("\n[bold]what it would do[/bold]" if dry
+                          else "\n[bold]what it did[/bold]")
+            for st in offered:
+                mark = f"  · {st.why or 'node'}: {st.cost} call(s)"
+                if st.destroys:
+                    # NAMED, NOT COUNTED. "7 deletions" and "deletes vm-orchestrator" are
+                    # different sentences, and only one of them stops a person.
+                    gone = ", ".join(sorted(str(list(a.values())[0]) if a else "?"
+                                            for _, a in st.destroys))
+                    mark += f"  [warn]DESTROYS {len(st.destroys)}: {gone}[/warn]"
+                console.print(mark)
 
         outcome = result.get("outcome")
         colour = {"DONE": "ok", "REFUSED": "warn"}.get(outcome, "warn")
