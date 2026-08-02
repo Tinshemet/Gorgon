@@ -116,6 +116,16 @@ AWKWARD = {
     "a date, a size and a duration": {"body": [{
         "op": "call", "tool": "t",
         "args": {"a": "2026-08-02", "b": "512MB", "c": "30s"}}]},
+    # A SELECTOR VALUE THAT LOOKS LIKE SOMETHING ELSE. `render._select` quotes every term, so
+    # coercing them all rewrote the ones that matter: `template = 'true'` became a boolean
+    # where the manifest writes the string "true", and the selector stopped matching anything.
+    # Found by hand-writing a procedure; the corpus had no such value.
+    "a selector value that looks like a boolean": {"body": [{
+        "op": "ensure", "predicate": {"shape": "count", "eq": 1,
+                                      "select": {"kind": "vm", "template": "true"}}}]},
+    "a selector value that looks like a number": {"body": [{
+        "op": "ensure", "predicate": {"shape": "count", "eq": 1,
+                                      "select": {"kind": "vm", "name": "3"}}}]},
 }
 
 

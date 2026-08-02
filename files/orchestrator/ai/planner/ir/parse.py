@@ -563,6 +563,22 @@ def _args(cur: _Cursor) -> Dict[str, Any]:
     return out
 
 
+def _value(cur: _Cursor) -> Any:
+    """One value in a selector. QUOTES MEAN TEXT, and that is not a formality.
+
+    `render._select` prints EVERY term as `k = 'v'`, so every value here arrives quoted — and
+    coercing them all on the "what looks like a number is one" rule silently rewrote the ones
+    that matter. `template = 'true'` became the BOOLEAN true where the manifest says that
+    setter writes the STRING "true", so a selector that reads correctly on the page stopped
+    matching anything in the world. `name = '3'` had the same problem one type over.
+
+    FOUND BY HAND-WRITING A PROCEDURE, not by the round-trip suite, because the corpus had no
+    selector whose value looked like something else. The case is in the suite now.
+    """
+    t = cur.take()
+    return t.value if t.kind == STR else _coerce(str(t.value))
+
+
 def _select(cur: _Cursor) -> Dict[str, Any]:
     """`SELECT kind [WHERE a = 'x' AND …] [INCLUDE k = [..]] [EXCEPT a = 'x']`."""
     cur.take("SELECT")
@@ -573,7 +589,7 @@ def _select(cur: _Cursor) -> Dict[str, Any]:
                 break
             attr = str(cur.take().value)
             cur.take("=")
-            sel[attr] = _coerce(str(cur.take().value))
+            sel[attr] = _value(cur)
             if not cur.accept("AND"):
                 break
     while cur.at(_word("include")):
@@ -595,7 +611,7 @@ def _select(cur: _Cursor) -> Dict[str, Any]:
         while True:
             attr = str(cur.take().value)
             cur.take("=")
-            carve[attr] = _coerce(str(cur.take().value))
+            carve[attr] = _value(cur)
             if not cur.accept("AND"):
                 break
         sel["not"] = carve
