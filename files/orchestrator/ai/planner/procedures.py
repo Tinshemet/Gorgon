@@ -125,6 +125,70 @@ def _consent():
     return consent
 
 
+def contract(program: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """What a procedure ADVERTISES — read out of its body, never stored beside it.
+
+    THE OPERATOR SETTLED THIS ON 2026-08-02, and the reason is worth keeping: I proposed a new
+    keyword so a procedure could declare its contract in the header, and the answer was *"in
+    this scenario we dont even need the achieve … because new should cover it in the internal
+    achieve it has."* Which is right. A creation ALREADY SAYS WHAT IT MAKES — `NEW CALL
+    create_vm(os_type: linux, name: $box)` states that afterwards a linux vm called `$box`
+    exists — so a second declaration would be the same fact written twice, and the two would
+    disagree the day someone edited one of them.
+
+    THIS IS NOT THE INFERENCE `declare, don't infer` WARNS ABOUT. Nothing is being guessed
+    from prose or from a name: the body is a declaration, and this reads it. The rule that
+    matters is the one already built into `consent` — a `new` vouches for its own creation and
+    for nothing else — applied from the other direction.
+
+    TWO SOURCES, IN ORDER:
+      * A TRAILING `ensure`/`achieve` WINS. A procedure that ends by checking something is
+        saying that is the thing it is for, and the operator's placement rule says exactly
+        where such a check goes: after the code whose result has to hold.
+      * OTHERWISE, THE CREATIONS. A body that only makes things advertises what it made.
+
+    A PROCEDURE THAT DOES NEITHER ADVERTISES NOTHING, and that is the honest outcome rather
+    than a defect: it stays callable by name and simply cannot be REACHED FOR.
+    """
+    body = program.get("body") or []
+    for st in reversed(body):
+        if st.get("op") in ("ensure", "achieve") and st.get("predicate"):
+            return st["predicate"]
+    news = [st for st in body if st.get("op") == "new"]
+    if not news:
+        return None
+    kinds = {st.get("kind") for st in news}
+    if len(kinds) != 1:
+        # SEVERAL KINDS MADE IS NOT ONE CONTRACT, and picking one of them would advertise
+        # half of what the procedure does. Declining is what `covering` is built to handle.
+        return None
+    kind = news[0].get("kind")
+    from .ir import config
+    key = ((config.KINDS or {}).get(kind) or {}).get("key")
+    select = {"kind": kind}
+    if len(news) == 1 and key and key in (news[0].get("args") or {}):
+        # THE KEY, AND DELIBERATELY NOT THE OTHER ATTRIBUTES. A creation sets more than an
+        # identity — this vm is also linux — and advertising all of it looked more honest
+        # until you follow it through `_unify`, which is TOTAL in both directions.
+        #
+        # A CONTRACT NARROWER THAN THE GOAL IS THE DANGEROUS DIRECTION and #78 measured what
+        # it costs: a procedure covering PART of a goal becomes a tile the goal can never get
+        # past, permanently shadowing the primitive that would have worked. A contract WIDER
+        # than the goal does not block — it makes the goal true and more besides — but it only
+        # IMPLIES the goal here because `name` is the key and a kind has one member per key.
+        # For a non-key attribute the implication fails outright: "exactly one linux vm" says
+        # nothing about how many vms there are.
+        #
+        # So the contract is the identity the creation establishes, which is exactly what the
+        # hand-written `achieves` in the store has always said. A goal that asks for MORE than
+        # the identity is passed over and planned from primitives — the honest consequence the
+        # module already accepts, and the safe side of a rule whose unsafe side blocks.
+        select[key] = news[0]["args"][key]
+    total = sum(st.get("amount", 1) if isinstance(st.get("amount"), int) else 1
+                for st in news)
+    return {"shape": "count", "select": select, "eq": total}
+
+
 def render_stored(program: Dict[str, Any]) -> str:
     """The readable artifact — one `PROCEDURE` block, or one per method of a class.
 
@@ -254,8 +318,11 @@ class Store:
             rendered = render_stored(program)
         text_at = os.path.join(self.path, f"{name}.medusa")
         with open(text_at, "w") as fh:
-            fh.write(rendered.rstrip() + "\n" + _IR_MARK
-                     + json.dumps(program, separators=(",", ":")) + "\n")
+            # THE TEXT, AND NOTHING UNDER IT. The operator, 2026-08-02: *"i dont want it there
+            # because it makes the snippet have 2 SSOTs."* The `-- medusa:ir` trailer is gone,
+            # and with it the arrangement where the file a person reads was decorative and the
+            # JSON stapled beneath it was what ran.
+            fh.write(rendered.rstrip() + "\n")
         # THE OLD SIDECAR, REMOVED. A stale `.json` beside a one-file procedure would be read
         # by nothing and believed by anyone.
         stale = os.path.join(self.path, f"{name}.json")
@@ -265,30 +332,56 @@ class Store:
 
     # ── reading ──────────────────────────────────────────────────────────────
     def _read(self, at: str) -> Dict[str, Any]:
-        """The IR out of a one-file procedure. Raises if the trailing block is not there."""
+        """The IR, PARSED OUT OF THE TEXT. One file, one source of truth.
+
+        NO FALLBACK TO A TRAILER, DELIBERATELY. Files written before 2026-08-02 still carry
+        `-- medusa:ir …`, and the parser reads it as what it now is — a comment — so they load
+        from their text like everything else. Reading the trailer when parsing failed would be
+        a kinder migration and would put the second source of truth straight back: the file
+        would run something other than what it says, exactly when the two disagree, which is
+        the one moment it matters.
+        """
+        from .ir.parse import parse_many
         with open(at) as fh:
             body = fh.read()
-        head, mark, tail = body.rpartition(_IR_MARK)
-        if not mark:
-            raise ValueError(f"{at} carries no program — the trailing {_IR_MARK.strip()} "
-                             f"block is how a .medusa is run, and this one has none")
-        got = json.loads(tail)
-        got["_text"] = head.rstrip()
-        return got
+        got = parse_many(body)
+        if not got:
+            raise ValueError(f"{at} holds no program")
+        text = body.partition(_IR_MARK)[0].rstrip()
+        if len(got) == 1:
+            one = got[0]
+            one["_text"] = text
+            # THE CONTRACT IS COMPUTED, NOT STORED. It used to ride in the IR trailer; now it
+            # is read out of the body every time, which is the only way it cannot disagree
+            # with the code it describes.
+            found = contract(one)
+            if found:
+                one["achieves"] = found
+            return one
+        # SEVERAL BLOCKS IN ONE FILE IS A CLASS, reassembled the way `render_stored` took it
+        # apart: each block is named `Class.method`, so the class name and the method surface
+        # both come back out of the names themselves rather than from anything stored beside.
+        methods = {}
+        owner = None
+        for prog in got:
+            whole, _, method = str(prog.pop("name", "")).partition(".")
+            owner = owner or whole
+            found = contract(prog)
+            if found:
+                prog["achieves"] = found
+            methods[method or whole] = prog
+        return {"name": owner, _METHODS: methods, "_text": text}
 
     def drifted(self, name: str) -> bool:
-        """Has the readable half been edited away from the program that runs?
+        """Always False now, and the reason is the point: THERE IS NOTHING LEFT TO DRIFT FROM.
 
-        THE ONE THING THE OLD TWO-FILE LAYOUT COULD NOT ANSWER. An operator who edits the
-        text is telling you something, and running the IR anyway is ignoring them silently.
-        Answered by RE-RENDERING rather than by parsing, which is what makes it possible at
-        all without the parser that does not exist.
+        This asked whether the readable half had been edited away from the program that ran —
+        a real question while a file held both. Now the text IS the program: an edit to it
+        changes what runs, which is what the operator was asking for. Kept as a named False
+        rather than deleted so that a caller asking the question gets the answer *"that cannot
+        happen any more"* instead of an AttributeError that reads like a missing feature.
         """
-        got = self.get(name)
-        if not got or "_text" not in got:
-            return False
-        return render_stored({k: v for k, v in got.items()
-                              if k != "_text"}).rstrip() != got["_text"].rstrip()
+        return False
 
     def get(self, name: str) -> Optional[Dict[str, Any]]:
         """A stored program by name. `Class.method` reaches into a class file.

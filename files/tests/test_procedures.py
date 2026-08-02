@@ -261,7 +261,11 @@ def test_one_damaged_file_does_not_take_down_the_writer():
     with _Library() as lib:
         lib.save(_builder(), render(_builder()))
         with open(os.path.join(lib.path, "wrecked.medusa"), "w") as fh:
-            fh.write("PROCEDURE wrecked() {\n}\n-- medusa:ir { not json")
+            # DAMAGED IN THE TEXT, because the text is now the only thing there is. This used
+            # to be a well-formed block with broken JSON stapled under it — which stopped
+            # being damage the moment the trailer became a comment, so the fixture was
+            # asserting resilience against a file that loads perfectly well.
+            fh.write("PROCEDURE wrecked( {\n  WOBBLE;\n")
         got = lib.all()
         check("the good one is still found", [p["name"] for p in got] == ["vm_disk_builder"])
         check("and the damaged one is named", lib.broken == ["wrecked"])
@@ -303,9 +307,13 @@ def test_the_library_is_read_once_per_change_not_once_per_goal():
                                    "args": {"name": "$box", "label": "edited"}})
             at = os.path.join(lib.path, "vm_disk_builder.medusa")
             os.utime(at, (0, 0))
+            # WRITTEN AS TEXT, because that is now the only thing a file holds. This fixture
+            # used to write a signature with the real program stapled underneath in JSON —
+            # which was a faithful simulation of an operator's edit only while the JSON was
+            # what ran. Now an edit IS an edit to the text, which is the whole point of the
+            # change, and the fixture says so.
             with real_open(at, "w") as fh:
-                fh.write("PROCEDURE vm_disk_builder(STRING box)\n-- medusa:ir "
-                         + json.dumps(edited) + "\n")
+                fh.write(render(edited) + "\n")
             got = lib.get("vm_disk_builder")
             check("an edited procedure is re-read", len(got["body"]) == 3)
         finally:

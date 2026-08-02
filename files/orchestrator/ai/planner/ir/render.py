@@ -212,9 +212,18 @@ def _signature(program: dict) -> str:
     # kind of thing before its name, which is what you want when scanning a signature.
     args = ", ".join(f"{config.PARAM_TYPES.get(v, {}).get('sql', str(v).upper())} {k}"
                      for k, v in (program.get("params") or {}).items())
+    # THE SCHEDULE, WHEN THERE IS ONE. A routine is a procedure that also says WHEN, and that
+    # is the only fact about a stored program the body cannot state for itself — a contract is
+    # readable off the creations, a schedule follows from nothing. It rides in the header
+    # because it is not a step the program takes; it is a fact about when the program is taken.
+    tail = ""
+    if program.get("every"):
+        tail += f" {_w('every')} {program['every']}"
+    if program.get("when"):
+        tail += f" {_w('when')} {_pred(program['when'])}"
     # No trailing AS: the brace already opens the block, and two openers is one
     # more thing to get wrong when writing by hand.
-    return f"{_w('procedure')} {name}({args})"
+    return f"{_w('procedure')} {name}({args}){tail}"
 
 
 def _setlit(src) -> str:
@@ -227,7 +236,42 @@ def _setlit(src) -> str:
 def _args(args) -> str:
     if not isinstance(args, dict):
         return f"<not args: {args!r}>" if args is not None else ""
-    return ", ".join(f"{k}: {v}" for k, v in args.items())
+    return ", ".join(f"{k}: {_arg(v)}" for k, v in args.items())
+
+
+def _arg(v) -> str:
+    """A value, quoted ONLY where leaving it bare would make the line ambiguous.
+
+    BARE IS THE DEFAULT AND SHOULD STAY THAT WAY — `os_type: linux` reads better than
+    `os_type: 'linux'`, and every argument in the system is bare today. Two cases are not
+    readable bare, and both were found by round-tripping rather than by inspection:
+
+      * A VALUE CONTAINING A COMMA IS INDISTINGUISHABLE FROM TWO ARGUMENTS. `c: a, b` cannot
+        be read back as one value by any parser, including a person — the renderer was
+        emitting programs that are not programs.
+      * A STRING THAT LOOKS LIKE A NUMBER LOSES ITS TYPE. `n: 3` is `3` and `'3'` printed the
+        same way, so a machine named `3` came back as an integer. Quoting is what says which.
+
+    THIS IS THE SURFACE CHANGING, SLIGHTLY, and it is worth being explicit about that: some
+    values that used to print bare now print quoted. Nothing that was legible becomes less so,
+    and something that was AMBIGUOUS becomes exact.
+    """
+    if isinstance(v, bool) or v is None or isinstance(v, (int, float)):
+        return str(v)
+    s = str(v)
+    needs = any(c in s for c in ",()") or s.strip() != s or not s
+    if not needs:
+        low = s.lower()
+        needs = low in ("true", "false", "none", "null") or _numeric(s)
+    return f"'{s}'" if needs else s
+
+
+def _numeric(s: str) -> bool:
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
 
 
 def _select(sel) -> str:
