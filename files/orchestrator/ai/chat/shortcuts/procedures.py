@@ -298,7 +298,17 @@ class Procedures(Shortcut):
                 pass
             return result
 
-        orch = _rig.build(guarded, narrate=True, consent=Plan._ask_consent)
+        # THE SAME QUESTION `plan` ASKS, and for the same reason: a stored procedure is not
+        # more trusted for being stored. `Plan` owns the asking so there is one wording and
+        # one default (no) rather than two that drift.
+        from engines import insession as _insession
+
+        def decide(step, session):
+            if step.destroys and not Plan.ask_destroy(step):
+                return _insession.Verdict(_insession.STOP, "not granted — nothing was done")
+            return _insession.Verdict(step.kind)
+
+        orch = _rig.build(guarded, narrate=True, consent=Plan._ask_consent, decide=decide)
         shown = "".join(f" {k}={v}" for k, v in args.items())
         console.print(f"\n[bold]{name}[/bold]{shown}")
         out = orch.handle(name, intent="achieve",

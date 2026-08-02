@@ -346,6 +346,78 @@ def test_the_arguments_reach_the_program():
           seen.get("intent") == "achieve")
 
 
+class _Step:
+    """The one field the destruction guard reads, plus what a Verdict needs."""
+
+    def __init__(self, destroys, kind="run"):
+        self.destroys = destroys
+        self.kind = kind
+
+
+def test_destruction_is_asked_about_BEFORE_it_happens():
+    """MEASURED 2026-08-02, against the operator's own lab.
+
+    `create a vm` translates to an UNFILTERED `count(vm) = 1`. Against nine machines that
+    is a goal satisfied by DELETING EIGHT — `vm-orchestrator` and `vm-executor` among them,
+    the machines Gorgon runs on. The list was computed and printed under the heading
+    "what it did".
+
+    NOTHING IS WRONG WITH THE WRITER, and that is why this is a question rather than a rule.
+    `count(vm) = 1` genuinely means "one machine in total", and rung 14 pins exactly that
+    behaviour for *"make sure there are exactly two machines"*. Measured at n=3, the two
+    requests produce the SAME GOAL and differ only in the amount — so nothing downstream can
+    tell an increment from a population target, and a guess would break one of them.
+    """
+    print("[cli] a destructive step is asked about, and refused by default")
+    from orchestrator.ai.chat.shortcuts.plan import Plan
+
+    step = _Step([("delete_vm", {"name": "vm-orchestrator"}),
+                  ("delete_vm", {"name": "work-laptop"})])
+    check("the machines are NAMED, never counted",
+          Plan.names_destroyed(step) == ["vm-orchestrator", "work-laptop"])
+
+    prior = console.input
+    try:
+        # AN ABSENT TERMINAL IS A NO — the rule `intent` and `consent` already keep.
+        def _eof(*a, **k):
+            raise EOFError()
+        console.input = _eof
+        with console.capture() as cap:
+            granted = Plan.ask_destroy(step)
+        check("with nobody to ask, it is refused", granted is False)
+        check("and the question names them", "vm-orchestrator" in _flat(cap.get()))
+
+        console.input = lambda *a, **k: "n"
+        with console.capture():
+            check("'n' refuses", Plan.ask_destroy(step) is False)
+        console.input = lambda *a, **k: "y"
+        with console.capture():
+            check("'y' grants", Plan.ask_destroy(step) is True)
+    finally:
+        console.input = prior
+
+
+def test_a_step_that_destroys_nothing_is_never_asked_about():
+    """A QUESTION IN FRONT OF EVERY ORDINARY REQUEST IS A QUESTION NOBODY READS.
+
+    The guard fires on `step.destroys` alone, so creating, labelling and launching go
+    through untouched — which is what keeps the one question worth stopping for.
+    """
+    print("[cli] nothing destructive, nothing asked")
+    from orchestrator.ai.chat.shortcuts.plan import Plan
+    asked = []
+    prior = Plan.ask_destroy
+    try:
+        Plan.ask_destroy = staticmethod(lambda step: asked.append(step) or True)
+        # The guard's own condition, exercised the way `decide` uses it.
+        for step in (_Step([]), _Step(None)):
+            if step.destroys and not Plan.ask_destroy(step):
+                pass
+        check("a step with no destruction asks nothing", asked == [])
+    finally:
+        Plan.ask_destroy = prior
+
+
 def test_help_names_every_new_verb():
     """A VERB NOBODY CAN DISCOVER IS A VERB NOBODY TYPES.
 

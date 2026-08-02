@@ -58,6 +58,46 @@ class Plan(Shortcut):
         return said.strip().lower() or None
 
     @staticmethod
+    def names_destroyed(step) -> list:
+        """The members a step would destroy, BY NAME. Never a count.
+
+        *"7 deletions"* and *"deletes vm-orchestrator"* are different sentences and only one
+        of them stops a person.
+        """
+        return sorted({str(list(a.values())[0]) if a else "?" for _, a in step.destroys})
+
+    @staticmethod
+    def ask_destroy(step) -> bool:
+        """*This destroys these machines — go ahead?* Default NO.
+
+        WHY THIS EXISTS, MEASURED 2026-08-02. `create a vm` translates to an UNFILTERED
+        `count(vm) = 1`, and against a nine-machine lab that is a goal satisfied by DELETING
+        EIGHT. The dry run named them — `vm-orchestrator` and `vm-executor` among them, the
+        machines Gorgon itself runs on — and a real run did the same thing while printing
+        the list AFTERWARDS, under the heading "what it did".
+
+        NOTHING WAS WRONG WITH THE WRITER. `count(vm) = 1` genuinely means "one machine in
+        total", and rung 14 pins that behaviour deliberately: *"make sure there are exactly
+        two machines"* SHOULD delete three. Measured at n=3, the two requests translate to
+        the SAME GOAL — `create a vm` and `make sure there are exactly two machines` differ
+        only in the amount — so no rule downstream can tell an increment from a population
+        target. The language cannot say the difference.
+
+        SO THE FIX IS NOT A GUESS, IT IS A QUESTION, and it belongs here because this is the
+        one place with a person in it. An absent terminal is a NO, which is the same rule
+        `intent` and `consent` already keep: with nobody to ask, take the answer that
+        changes nothing.
+        """
+        gone = Plan.names_destroyed(step)
+        console.print(f"\n[warn]this destroys {len(gone)} machine(s): "
+                      f"{', '.join(gone)}[/warn]")
+        try:
+            said = console.input("[bold cyan]go ahead? (y/n):[/bold cyan] ")
+        except (EOFError, KeyboardInterrupt):
+            return False
+        return said.strip().lower() in ("y", "yes")
+
+    @staticmethod
     def _ask_consent(question: str) -> bool:
         """`consent.py`'s question — *this changes the world and nothing checks it, sure?*
 
@@ -183,6 +223,10 @@ class Plan(Shortcut):
                 # first node and refused the second would have ACTED — half a program is not
                 # a preview of one, it is a program.
                 return _insession.Verdict(_insession.STOP, "dry run — nothing was done")
+            # ASKED BEFORE, NOT REPORTED AFTER — see `ask_destroy`. The list was already
+            # being computed and printed; it was printed under "what it did".
+            if step.destroys and not self.ask_destroy(step):
+                return _insession.Verdict(_insession.STOP, "not granted — nothing was done")
             return _insession.Verdict(step.kind)
 
         # THE MOUNT LIVES IN `engines/rig.py` so a TEST CAN BUILD THE SAME ONE. Four
@@ -203,8 +247,7 @@ class Plan(Shortcut):
                 if st.destroys:
                     # NAMED, NOT COUNTED. "7 deletions" and "deletes vm-orchestrator" are
                     # different sentences, and only one of them stops a person.
-                    gone = ", ".join(sorted(str(list(a.values())[0]) if a else "?"
-                                            for _, a in st.destroys))
+                    gone = ", ".join(self.names_destroyed(st))
                     mark += f"  [warn]DESTROYS {len(st.destroys)}: {gone}[/warn]"
                 console.print(mark)
 
