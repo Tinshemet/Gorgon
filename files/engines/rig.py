@@ -94,7 +94,7 @@ def packages(findings=None) -> Tuple:
     seam however complete its own code was.
     """
     try:
-        from orchestrator.ai.packages.camoufox import CamoufoxPackage
+        from packages.camoufox import CamoufoxPackage
     except Exception:
         return ()
     # THE LEDGER GOES TO THE PACKAGE, so an observed answer lands where PUBLISH and the

@@ -44,7 +44,7 @@ MODULES = [
     "orchestrator.ai.chat.malformed",
     "orchestrator.ai.chat.shortcuts",
     "engines",
-    "orchestrator.ai.packages",
+    "packages",
 ]
 
 

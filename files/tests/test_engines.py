@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engines import (Channel, MedusaEngine, Orchestrator, Registry,
                                      Session, describe, stub)
-from orchestrator.ai.packages import WebCrawlPackage
+from packages import WebCrawlPackage
 from engines.session import INTENT_REGIME, rank
 from planner.ir import config
 from tests.bench.generic_world import World
