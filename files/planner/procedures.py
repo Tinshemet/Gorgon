@@ -291,12 +291,70 @@ class Store:
 
     # ── keeping ──────────────────────────────────────────────────────────────
     def save(self, program: Dict[str, Any], rendered: str = "") -> str:
-        """Write a named program. Returns the `.medusa` path.
+        """Write a named PROCEDURE — one program, one file. Returns the `.medusa` path.
 
         `achieves` RIDES ALONG IF IT IS THERE and is not invented here. A procedure that
         declares nothing is still callable by name; it simply cannot be REACHED FOR, which
         is the honest consequence of not saying what you do.
+
+        A CLASS IS NOT KEPT THROUGH THIS DOOR — `save_class` is its own method, and that is
+        the whole enforcement of *"the AI author does not make classes"* (operator, 2026-08-02).
+        The authoring path calls `save`, so a class is something it CANNOT reach rather than
+        something it happens not to emit. See `save_class` for why the rule is worth having.
         """
+        if program.get(_METHODS):
+            raise ValueError(
+                f"{program.get('name')!r} is a CLASS, and a class is not authored — it is "
+                f"written by a person, or kept deliberately through `save_class`. A class "
+                f"promises 'verified once' to every caller of every method, and that promise "
+                f"is the operator's to make")
+        # A DOTTED NAME NAMES A METHOD, and it was only refused for a program that carried
+        # methods — so `save({"name": "NetworkSetup.add"})` wrote a SECOND file whose stem had
+        # a dot in it, sitting beside the class and shadowing nothing legibly.
+        if "." in str(program.get("name") or ""):
+            raise ValueError(f"{program.get('name')!r} names a method; save the CLASS it "
+                             f"belongs to")
+        # AND IT MAY NOT OVERWRITE ONE EITHER, which is the same rule from the other side:
+        # `save` replaces the file at that name, so authoring `procedure NetworkSetup: …`
+        # would have turned a class of four verified methods into a one-body procedure and
+        # taken every caller of `NetworkSetup.add` with it. Refusing to MAKE a class while
+        # allowing it to be flattened would be a rule with a door in the back of it.
+        try:
+            standing = self.get(program.get("name"))
+        except Exception:
+            # A FILE THAT CANNOT BE READ IS NOT A CLASS THIS GUARD CAN VOUCH FOR. `verify`
+            # and `broken` are where an unreadable entry is reported; refusing the save here
+            # would make a corrupt file permanently unreplaceable.
+            standing = None
+        if standing and standing.get(_METHODS):
+            raise ValueError(
+                f"{program.get('name')!r} is already a CLASS with "
+                f"{len(standing[_METHODS])} method(s) — saving a procedure over it would "
+                f"delete them. Choose another name, or remove the class deliberately")
+        return self._keep(program, rendered)
+
+    def save_class(self, program: Dict[str, Any], rendered: str = "") -> str:
+        """Write a CLASS — one file, several entry points. Returns the `.medusa` path.
+
+        SEPARATE FROM `save` BY THE OPERATOR'S INSTRUCTION, 2026-08-02: *"make it so that the
+        medusa ai author cannot make classes."* The authoring path calls `save`; only a caller
+        that says the word `class` gets to keep one. [[gorgon-declare-dont-infer]] — the door
+        you walk through is the declaration, so the rule cannot be satisfied by accident and
+        cannot be lost by a writer that one day learns to emit a `methods` dict.
+
+        AND IT IS NOT ARBITRARY CAUTION. A class's contract is stronger than a procedure's: it
+        offers a method SURFACE that other programs reach for, and every method carries its own
+        verdict so a caller need not re-check. That is a promise about work done ONCE, made to
+        callers who are not in the room — the kind of thing the operator writes, reads back and
+        keeps, not the kind a translation of one English sentence should mint.
+        """
+        if not program.get(_METHODS):
+            raise ValueError(f"{program.get('name')!r} has no methods, so it is a procedure "
+                             f"and not a class — keep it with `save`")
+        return self._keep(program, rendered)
+
+    def _keep(self, program: Dict[str, Any], rendered: str = "") -> str:
+        """The write itself, shared by both doors. Which door was used is decided above."""
         from .ir.validate import validate
 
         name = program.get("name")

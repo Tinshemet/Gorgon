@@ -561,7 +561,7 @@ def test_a_set_is_declarable_at_last():
 def test_a_class_is_a_file_with_several_entry_points():
     print("[classes] one file, several procedures")
     with _Library() as lib:
-        at = lib.save(_network_setup())
+        at = lib.save_class(_network_setup())
         check("it is kept under the class's name", at.endswith("NetworkSetup.medusa"))
         check("and the methods are what is CALLABLE",
               lib.names() == ["NetworkSetup.add", "NetworkSetup.attach"])
@@ -577,6 +577,61 @@ def test_a_class_is_a_file_with_several_entry_points():
               text.count("PROCEDURE") == 2 and "NetworkSetup.attach(SET vms" in text)
 
 
+def test_the_authoring_path_cannot_make_a_class():
+    """THE OPERATOR'S RULE, 2026-08-02: *"make it so that the medusa ai author cannot make
+    classes."*
+
+    ENFORCED BY WHICH DOOR YOU WALK THROUGH, not by asking who is calling. `_author` calls
+    `save`; only a caller that says `save_class` keeps a class. So the rule holds today, when
+    the writer emits no `methods` dict, AND on the day it learns to — which is the difference
+    between a property and a guarantee.
+
+    DO NOT DELETE THIS TEST. It is the only thing standing between the authoring path and a
+    surface whose whole claim — "verified once, so callers need not re-check" — is the
+    operator's to make.
+    """
+    print("[classes] the authoring path writes procedures, never classes")
+    with _Library() as lib:
+        try:
+            lib.save(_network_setup())
+            check("a class handed to `save` is refused", False)
+        except ValueError as e:
+            check("a class handed to `save` is refused, and told where to go",
+                  "save_class" in str(e))
+        check("and nothing was written", lib.names() == [])
+
+        # THE SAME RULE FROM THE OTHER SIDE. Flattening a class is making one disappear.
+        lib.save_class(_network_setup())
+        one = {"name": "NetworkSetup", "params": {},
+               "body": [{"op": "call", "tool": "add_label",
+                         "args": {"name": "web", "label": "seen"}},
+                        {"op": "ensure", "predicate": {
+                            "shape": "count", "gte": 1,
+                            "select": {"kind": "vm", "label": "seen"}}}]}
+        try:
+            lib.save(one)
+            check("a procedure may not overwrite a class", False)
+        except ValueError as e:
+            check("a procedure may not overwrite a class, and the loss is counted",
+                  "already a CLASS" in str(e) and "2 method" in str(e))
+        check("the class survived the attempt",
+              lib.names() == ["NetworkSetup.add", "NetworkSetup.attach"])
+
+        # AND A METHOD IS NOT A FILE. This wrote `NetworkSetup.add.medusa` beside the class.
+        try:
+            lib.save({"name": "NetworkSetup.add", "params": {}, "body": []})
+            check("a dotted name is refused", False)
+        except ValueError as e:
+            check("a dotted name is refused as the method it names", "names a method" in str(e))
+
+        # A CLASS IS STILL A CLASS THROUGH ITS OWN DOOR, and a procedure is not.
+        try:
+            lib.save_class(one)
+            check("`save_class` refuses a bodied procedure", False)
+        except ValueError as e:
+            check("`save_class` refuses a bodied procedure", "not a class" in str(e))
+
+
 def test_a_method_that_vouches_for_nothing_is_not_kept():
     """THE LINE BETWEEN A CLASS AND A BAG OF MACROS. A method that expands into tool calls
     and asserts nothing inherits the false-success class the system refuses everywhere, and
@@ -589,7 +644,7 @@ def test_a_method_that_vouches_for_nothing_is_not_kept():
             {"op": "call", "tool": "add_vm_to_network",
              "args": {"vm_name": "$vm", "net_name": "$net_name"}}]
         try:
-            lib.save(bare)
+            lib.save_class(bare)
             check("an ungrounded method is refused", False)
         except ValueError as e:
             check("an ungrounded method is refused, and named",
@@ -602,7 +657,7 @@ def test_a_class_method_is_reached_for_and_run_like_anything_else():
     and the visitor keep asking the one question they already asked."""
     print("[classes] the rest of the system does not know it is a class")
     with _Library() as lib:
-        lib.save(_network_setup())
+        lib.save_class(_network_setup())
         world = SimWorld()
         world.execute("create_vm", {"name": "web", "os_type": "linux"})
         world.execute("create_network", {"net_name": "dmz"})
