@@ -133,6 +133,116 @@ def _parameterise(program: Dict[str, Any]) -> None:
                          **{ref.lstrip(_cfg.SIGIL): "string" for ref in promoted.values()}}
 
 
+def _declare(program: Dict[str, Any], declared: Optional[Dict[str, str]]) -> List[str]:
+    """Bind the parameters the OPERATOR declared into the program the writer just planned.
+
+    THE RULE, IN TWO PASSES, AND THE SPLIT BETWEEN THEM IS THE WHOLE SAFETY ARGUMENT:
+
+      1. IN A CREATION ONLY, an argument whose name matches a declared parameter becomes
+         that parameter. `create_vm(os_type: linux, name: box1)` under
+         `test(STRING name, STRING os_type)` becomes `create_vm(os_type: $os_type,
+         name: $name)`. The literal it replaced is REMEMBERED.
+      2. ELSEWHERE, only a literal PASS 1 REMEMBERED is replaced, and only in an argument of
+         the same name. So `add_label(name: box1)` follows the machine it labels, and
+         `delete_vm(name: web3)` — a machine this program never created — does not move.
+
+    WHY IT IS NOT ONE PASS, MEASURED THE HARD WAY 2026-08-02. The first version substituted
+    into every matching argument. `create a vm` translated to an UNFILTERED `count(vm) = 1`,
+    the writer planned EIGHT deletions to get a nine-machine lab down to one, and every one
+    of them had its target rewritten to `$name` — eight specific machines the planner had
+    chosen became "delete whatever the caller passes, eight times". A creator's arguments
+    describe WHAT TO MAKE; every other tool's arguments name something that already exists,
+    which the planner picked by reading the world. Those are not the same thing and a
+    parameter may only touch the first.
+
+    IT IS THE SAME DISCIPLINE `_parameterise` ALREADY KEEPS — promote a literal the request
+    supplied, then follow that literal through the body — applied to a declaration instead
+    of to the contract's key.
+
+    EXACT MATCH, AND IT DECLINES RATHER THAN GUESSES. `STRING os` does NOT bind, because the
+    argument is spelled `os_type`. An alias table mapping `os` -> `os_type` would be a
+    vocabulary keyed to nouns, which is the thing the language exists to delete — and it
+    would need a row per kind per synonym, maintained by whoever remembers. Being strict
+    costs the operator one word and costs nobody a maintenance burden.
+
+    A PARAMETER THAT MATCHED NOTHING IS STILL DECLARED. It goes into the signature and binds
+    no argument — the operator said the procedure takes it, and silently dropping it would
+    mean the signature they read back is not the one they wrote. The unbound ones are
+    RETURNED rather than written onto the program, because the program is about to be
+    rendered and parsed back: a field the parser cannot produce would fail the round-trip
+    check the save now runs. It is not an error either — a parameter used only by a later
+    hand edit is a legitimate thing to declare — so it is reported and nothing more.
+
+    THE CONTRACT MOVES TOO, and it has to. `achieves` is what the WRITER matches a future
+    goal against, so a procedure whose body takes `$os_type` while its contract still claims
+    `os_type = 'linux'` would advertise a promise narrower than it keeps — and would never
+    be reached for on any other OS. Same argument `_parameterise` makes for the key.
+
+    IT RUNS BEFORE `_parameterise`, which promotes the KEY of any selector still holding a
+    literal. Order matters: a declared `name` should be the operator's parameter, not one
+    the promoter minted, and running second would leave two parameters for one value.
+    """
+    if not declared:
+        return []
+    # IMPORTED IN THE BODY, like `_parameterise`'s, and for the reason `qemu.py:52` gives:
+    # `use_kinds` is a DYNAMIC SCOPE, so a config value captured at module load is a value
+    # from a different world than the one authoring is happening in.
+    from planner.ir import config as _cfg
+    from planner.ir import effects as _effects
+    refs = {p: f"{_cfg.SIGIL}{p}" for p in declared}
+    makers = set(_effects.creators())
+    used: set = set()
+    # THE LITERAL EACH PARAMETER REPLACED IN A CREATION, so pass 2 can follow that one value
+    # and nothing else. `{"box1": "$name", "linux": "$os_type"}`.
+    minted: Dict[str, str] = {}
+
+    def _walk(statements, creating_only: bool):
+        for st in statements or ():
+            args = st.get("args")
+            is_creation = st.get("op") == "new" or st.get("tool") in makers
+            if isinstance(args, dict):
+                for arg in list(args):
+                    if arg not in refs or not isinstance(args[arg], str):
+                        continue
+                    if str(args[arg]).startswith(_cfg.SIGIL):
+                        continue
+                    if creating_only:
+                        if is_creation:
+                            minted[args[arg]] = refs[arg]
+                            args[arg] = refs[arg]
+                            used.add(arg)
+                    elif args[arg] in minted and minted[args[arg]] == refs[arg]:
+                        args[arg] = refs[arg]
+                        used.add(arg)
+            # A BLOCK'S BODY IS PART OF THE PROGRAM. A parameter that bound only outside a
+            # FOREACH would substitute in some of the places the operator's value appears
+            # and not others, which is worse than binding nowhere.
+            for block in ("do", "then", "else", "ifails"):
+                _walk(st.get(block), creating_only)
+
+    _walk(program.get("body"), True)
+    _walk(program.get("body"), False)
+
+    def _bind_goal(node) -> None:
+        if isinstance(node, list):
+            for kid in node:
+                _bind_goal(kid)
+        elif isinstance(node, dict):
+            for field, val in node.items():
+                if field == "select" and isinstance(val, dict):
+                    for attr in list(val):
+                        if attr in refs and isinstance(val[attr], str) \
+                                and not str(val[attr]).startswith(_cfg.SIGIL):
+                            val[attr] = refs[attr]
+                            used.add(attr)
+                elif isinstance(val, (dict, list)):
+                    _bind_goal(val)
+
+    _bind_goal(program.get("achieves"))
+    program["params"] = {**(program.get("params") or {}), **declared}
+    return sorted(set(declared) - used)
+
+
 class Orchestrator:
     """One registry, one channel, and the loop between them."""
 
@@ -194,7 +304,8 @@ class Orchestrator:
     def handle(self, request: str, intent: Optional[str] = None,
                components: Optional[List[Dict[str, Any]]] = None,
                regime: Optional[str] = None,
-               procedure: Optional[str] = None) -> Dict[str, Any]:
+               procedure: Optional[str] = None,
+               declared: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         """One request, start to finish.
 
         `procedure` IS A DISPOSITION, NOT A GOAL. Named, the engine plans exactly as it would
@@ -271,10 +382,10 @@ class Orchestrator:
                     "REFUSED", f"nothing mounted can write a program down: "
                                f"{[e.name for e in claimants]}")
         return self._serve(request, order, state, intent, components, regime,
-                           procedure)
+                           procedure, declared)
 
     def _serve(self, request, order, state, intent, components, regime=None,
-               procedure=None):
+               procedure=None, declared=None):
         """Try each claimant in turn until one serves it, refuses it, or all are spent.
 
         REROUTING HAPPENS ON INABILITY, NEVER ON REFUSAL, and the distinction is the whole
@@ -308,7 +419,8 @@ class Orchestrator:
             session.record(f"{len(state)} claimant(s) synced",
                            filed_by="registry", caught_by="orchestrator",
                            executed="sync(claimants)", data=state)
-            out = self._attempt(request, engine, session, components, procedure)
+            out = self._attempt(request, engine, session, components, procedure,
+                                declared)
             spent += len(out.get("calls") or [])
             last = out
             # DONE and REFUSED both END IT. So does an unanswerable translation: the request
@@ -334,7 +446,7 @@ class Orchestrator:
             out["tried"] = list(tried)
         return out
 
-    def _author(self, engine, session, name, components):
+    def _author(self, engine, session, name, components, declared=None):
         """Write a named program for these goals and KEEP it. Nothing runs.
 
         THE ENGINE PLANS EXACTLY AS IT WOULD TO ACT, which is what makes the artifact worth
@@ -359,9 +471,11 @@ class Orchestrator:
         # is involved in.
         from planner.ir import config as _config
         with _config.use_kinds(getattr(engine, "manifest", None)):
-            return self._author_within(engine, session, name, components, _procs, _render)
+            return self._author_within(engine, session, name, components, _procs, _render,
+                                       declared)
 
-    def _author_within(self, engine, session, name, components, _procs, _render):
+    def _author_within(self, engine, session, name, components, _procs, _render,
+                       declared=None):
         if not _procs.legal_name(name):
             return session.close("REFUSED",
                                  f"{name!r} is not a legal procedure name — it is written "
@@ -380,17 +494,29 @@ class Orchestrator:
         # it does: written for three goals, it claims all three or the match is a lie.
         program["achieves"] = (components[0] if len(components) == 1
                                else {"all": list(components)})
+        unused = _declare(program, declared)
         _parameterise(program)
         rendered = _render(program)
         at = _procs.LIBRARY.save(program, rendered)
         session.record(f"kept as {name}", filed_by=engine.name, caught_by="orchestrator",
                        executed=f"PROCEDURE {name}", data={"at": at})
+        if unused:
+            # SAID, NOT SWALLOWED. A declared parameter that bound nothing means the writer
+            # never placed an argument by that name — usually a spelling (`os` where the
+            # argument is `os_type`). The procedure is still kept, because the signature is
+            # the operator's to state; but a parameter silently doing nothing is exactly the
+            # kind of quiet wrongness a signature is supposed to prevent.
+            session.record(f"declared but unused: {', '.join(unused)}",
+                           filed_by="orchestrator", caught_by="operator",
+                           executed="declare", data={"unused": unused})
         session.events.program(f"THE MEDUSA PROCEDURE — {name}", rendered)
         out = session.close("DONE", f"written and kept as {name}")
-        out["procedure"] = {"name": name, "at": at, "rendered": rendered}
+        out["procedure"] = {"name": name, "at": at, "rendered": rendered,
+                            "unused_params": unused}
         return out
 
-    def _attempt(self, request, engine, session, components, procedure=None):
+    def _attempt(self, request, engine, session, components, procedure=None,
+                 declared=None):
         """One engine's whole turn: translate, run the in-session, close."""
         if components is None:
             session.record("English -> goals", filed_by="orchestrator",
@@ -433,7 +559,7 @@ class Orchestrator:
         # test can drive without a model — could not author at all: the one path this feature
         # can be PROVEN on was the one path it did not reach.
         if procedure:
-            return self._author(engine, session, procedure, components)
+            return self._author(engine, session, procedure, components, declared)
 
         result = _insession.drive(engine, components, session, self._decide)
         session.calls = result.get("calls") or []

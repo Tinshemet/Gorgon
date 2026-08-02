@@ -141,16 +141,16 @@ def test_the_operator_declares_an_authoring_request():
     bought was a schema field the model filled 0 times in 2. The prefix cannot do either.
     """
     print("[procedures] the operator says it, nobody guesses")
-    name, rest = procs.declared_in("procedure build_box: make a machine from a template")
+    name, sig, rest = procs.declared_in("procedure build_box: make a machine from a template")
     check("the name is taken", name == "build_box")
     check("and the request is what is left", rest == "make a machine from a template")
     check("case does not matter", procs.declared_in("PROCEDURE b: x")[0] == "b")
     for ordinary in ("save a snapshot of web", "keep the vm running",
                      "store the iso on disk", "reuse the golden image",
                      "create a procedure for later"):
-        got, rest = procs.declared_in(ordinary)
+        got, _sig, rest = procs.declared_in(ordinary)
         check(f"{ordinary!r} is an ordinary request", got is None and rest == ordinary)
-    bad, _ = procs.declared_in("procedure My Thing: x")
+    bad, _sig, _rest = procs.declared_in("procedure My Thing: x")
     check("a declaration with an unusable name is not silently an ordinary request",
           bad is None or not procs.legal_name(bad))
 

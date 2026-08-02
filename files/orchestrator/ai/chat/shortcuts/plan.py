@@ -106,7 +106,15 @@ class Plan(Shortcut):
         # they wanted back. They had just said: they want it kept.
         from planner import procedures as _procs
         from planner.ir import intent as _intent
-        keep_as, request = _procs.declared_in(request)
+        # THE SIGNATURE COMES OFF WITH THE NAME, and is never handed to the translator — a
+        # parameter is a fact about the PROCEDURE, not about the world. See `declared_in`.
+        try:
+            keep_as, declared, request = _procs.declared_in(request)
+        except Exception as e:
+            # A MALFORMED DECLARATION MUST NOT FALL THROUGH AND RUN. The operator asked for
+            # this work to be KEPT; doing it instead is the one outcome they did not ask for.
+            console.print(f"[warn]{e}[/warn]")
+            return
 
         # AN AUTHORING REQUEST NEEDS NO RUNG, because nothing runs. The engine plans exactly
         # as it would to act and the program is kept instead — so there is no authority being
@@ -184,7 +192,8 @@ class Plan(Shortcut):
         # offering one would train the operator to answer a question that decides nothing.
         result = _rig.build(guarded, narrate=not dry, decide=decide,
                             consent=None if dry else self._ask_consent).handle(
-                                request, intent=granted, procedure=keep_as)
+                                request, intent=granted, procedure=keep_as,
+                                declared=declared)
 
         if offered:
             console.print("\n[bold]what it would do[/bold]" if dry

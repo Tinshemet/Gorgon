@@ -86,18 +86,50 @@ _IR_MARK = "\n-- medusa:ir "
 # schema field that had never once been filled. DECLARE, DON'T INFER — the same answer the
 # intent ladder reached, spelled the same way, and it costs no prompt text, no schema surface
 # and no model call.
-_PREFIX = re.compile(r"^\s*procedure\s+([A-Za-z][\w]*)\s*:\s*(.*)$", re.I | re.S)
+# `procedure NAME[(SIGNATURE)]: the request`. The signature is captured RAW and handed to
+# `parse.signature`, so the types live in the manifest and not in this regex — a pattern
+# listing type words here would be the 34th vocabulary, in the one file arguing against them.
+_PREFIX = re.compile(r"^\s*procedure\s+([A-Za-z][\w]*)\s*(\([^)]*\))?\s*:\s*(.*)$",
+                     re.I | re.S)
 
 
 def declared_in(request: str):
-    """`(name, the rest of the request)`, or `(None, request)` when nothing was declared.
+    """`(name, params, the rest)`, or `(None, {}, request)` when nothing was declared.
 
     A NAME THAT IS NOT LEGAL IS STILL A DECLARATION. It comes back so the caller can refuse
     it by name — silently treating `procedure My Thing:` as an ordinary request would run
     the very work the operator asked to have kept.
+
+    THE SIGNATURE IS OPTIONAL AND IT IS DECLARED, NOT INFERRED:
+
+        procedure test: a linux machine
+        procedure test(STRING name, STRING os_type): a machine with those parameters
+
+    WHY IT IS TYPED HERE RATHER THAN TRANSLATED. A parameter is a fact about the PROCEDURE,
+    not about the world, and the extractor turns English into goals about the world — so
+    "take a name and os type from the user" has nothing for it to translate and it does what
+    it always does with open prose: it puts the words in a slot. Measured 2026-08-02, from
+    the operator's own request: `create_vm(os_type: user input os type, name: $name)`.
+
+    SO THE OPERATOR WRITES THE SIGNATURE AND THE MODEL NEVER SEES IT. That is
+    [[gorgon-declare-dont-infer]] for the seventh time, and it is the same move that made
+    `procedure NAME:` itself work — the word blinder it replaced fired on 5 of 7 ordinary
+    requests to buy a schema field the model filled 0 of 2 times.
+
+    IT IS THE SAME GRAMMAR THE FILE USES. `parse.signature` is the reader `.medusa` files go
+    through, so what the operator types is what they will read back, and a type added to the
+    manifest is available in both places at once.
+
+    A MALFORMED SIGNATURE IS NOT SILENTLY AN ORDINARY REQUEST. `procedure t(STIRNG x): …`
+    raises, because the alternative is running the work the operator asked to have KEPT —
+    the same reason an illegal name comes back rather than being ignored.
     """
     m = _PREFIX.match(str(request or ""))
-    return (m.group(1), m.group(2).strip()) if m else (None, request)
+    if not m:
+        return (None, {}, request)
+    from .ir.parse import signature
+    sig = (m.group(2) or "").strip()
+    return (m.group(1), signature(sig) if sig else {}, m.group(3).strip())
 
 
 # A SPAN, IN THE FORM THE MANIFEST ALREADY DECLARES. `param_types.duration` says it in as

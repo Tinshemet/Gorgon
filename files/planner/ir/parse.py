@@ -353,6 +353,37 @@ def _params(cur: _Cursor) -> Dict[str, str]:
     return out
 
 
+def signature(text: str) -> Dict[str, str]:
+    """`"(STRING name, INT n)"` -> `{name: 'string', n: 'int'}`. Raises `ParseError`.
+
+    THE SAME READER THE FILE USES, exposed so a signature can be declared somewhere OTHER
+    than a `.medusa` — specifically in the operator's request
+    (`procedure test(STRING name, STRING os_type): …`). A second reader would be a second
+    spelling of a signature, and the two would disagree the day a type was added: the
+    operator would write what the reference showed them and the request would refuse it.
+
+    SO WHAT IS TYPED IN A REQUEST AND WHAT IS READ BACK OUT OF A FILE ARE ONE GRAMMAR, which
+    is also what makes the round trip honest — the signature the operator declared is
+    rendered into the file and parsed back by this same function.
+
+    AND THE TYPE IS CHECKED HERE, WHERE `_params` DOES NOT CHECK IT. Reading a file,
+    `_params` accepts an unknown type word and lower-cases it, which is the right
+    forgiveness for an artifact that already exists — refusing to load a program over a type
+    name would lose the program. A DECLARATION BEING TYPED FOR THE FIRST TIME is the
+    opposite case: `procedure t(STIRNG name)` is a typo, and accepting it would mint a
+    parameter of type `stirng` that nothing will ever check. A declaration nobody can check
+    is not a declaration.
+    """
+    got = _params(_Cursor(_tokens(text), text))
+    known = {k: v.get("sql", k.upper()) for k, v in (config.PARAM_TYPES or {}).items()}
+    for param, typ in got.items():
+        if typ not in known:
+            raise ParseError(
+                f"{param}: there is no type {typ.upper()!r}. "
+                f"Declared types are {', '.join(sorted(known.values()))}")
+    return got
+
+
 def _statement(cur: _Cursor) -> Dict[str, Any]:
     """One statement, and its `IFAILS` tail if it has one."""
     st = _bare_statement(cur)

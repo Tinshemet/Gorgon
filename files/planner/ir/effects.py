@@ -458,6 +458,29 @@ def deleters(kinds=None) -> Dict[str, str]:
     return {spec["delete"]: kind for kind, spec in _K(kinds).items() if spec.get("delete")}
 
 
+def creators(kinds=None) -> Dict[str, str]:
+    """Every tool that BRINGS A MEMBER INTO BEING, mapped to its kind. Derived, never listed.
+
+    The mirror of `deleters`, and it exists for the same reason: the manifest already names
+    each kind's constructors, so a hand-kept list would drift the first time a kind was
+    added — silently, and in the direction of treating a creation as an ordinary call.
+
+    WHY THE DISTINCTION IS LOAD-BEARING. A creator's arguments DESCRIBE WHAT TO MAKE; every
+    other tool's arguments NAME SOMETHING THAT ALREADY EXISTS, which the planner chose by
+    reading the world. Anything that rewrites arguments — parameterising a procedure, say —
+    must not touch the second kind: replacing the target of a `delete_vm` the planner picked
+    turns "remove this machine" into "remove whatever the caller passes".
+    """
+    out: Dict[str, str] = {}
+    for kind, spec in _K(kinds).items():
+        if spec.get("create"):
+            out[spec["create"]] = kind
+        for c in (spec.get("creators") or {}).values():
+            if c.get("tool"):
+                out[c["tool"]] = kind
+    return out
+
+
 def declared(kinds=None) -> Dict[str, str]:
     """Every tool that carries a postcondition, mapped to its kind — for drift tests."""
     out: Dict[str, str] = {}
