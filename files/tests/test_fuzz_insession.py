@@ -20,8 +20,8 @@ do not, and no grain may claim success at all while its goals are false.
 """
 import sys
 
-from orchestrator.ai.engines import MedusaEngine, Session
-from orchestrator.ai.engines import insession as ins
+from engines import MedusaEngine, Session
+from engines import insession as ins
 from tests.bench import fuzz
 
 _PASS = _FAIL = 0

@@ -135,7 +135,7 @@ def test_the_public_surface_is_small_and_is_not_in_the_big_prompt():
           "network:" not in text and "snapshot" not in text)
 
     # THE HOT PATH IS UNTOUCHED, proved by asking the two builders that feed a model.
-    from orchestrator.ai.engines import extract as _extract
+    from engines import extract as _extract
     import json as _json
     check("the extractor's schema does not carry a class surface",
           ".launch()" not in _json.dumps(_extract.schema()))

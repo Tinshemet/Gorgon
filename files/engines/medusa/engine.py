@@ -142,7 +142,7 @@ class MedusaEngine(_TreeMixin, _StagedMixin, _PlanMixin, _ExecuteMixin,
         Each was patched at the call site until it became obvious the call sites were not
         the problem. Answered once, here, where the question is actually asked.
         """
-        from ...packages.base import merge
+        from orchestrator.ai.packages.base import merge
         own = getattr(self._world, "kinds", None) or _config.KINDS or {}
         return merge(own, *(p.manifest for p in self.packages))
 

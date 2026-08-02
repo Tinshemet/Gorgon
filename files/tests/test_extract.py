@@ -19,7 +19,7 @@ import sys
 # `-m` and NO-RESULT under run_all, which is the shape of a suite that quietly stops running.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.engines.extract import to_goals
+from engines.extract import to_goals
 
 _PASS = _FAIL = 0
 
@@ -216,7 +216,7 @@ def test_a_value_slot_filled_with_prose_is_refused():
     `Not specified`; "launch all of them" came back as a machine named `all`; "clone golden
     into 3" as one named `clone of golden`.
     """
-    from orchestrator.ai.engines.extract import unusable
+    from engines.extract import unusable
 
     for sel, why in (
             ({"kind": "vm", "name": "all"}, "a quantifier is not a name"),
@@ -238,7 +238,7 @@ def test_a_value_slot_filled_with_prose_is_refused():
 
 def test_the_refusal_reaches_to_goals():
     """A rule nothing applies is a rule that does not exist."""
-    from orchestrator.ai.engines.extract import to_goals
+    from engines.extract import to_goals
 
     raw = {"goals": [
         {"goal": "count", "select": {"kind": "vm", "where": [{"attr": "name",
@@ -275,7 +275,7 @@ def test_a_DELETION_and_a_CREATION_are_currently_indistinguishable():
     if not os.environ.get("GORGON_LIVE_EXTRACT"):
         return                      # needs the model; opt in, like every other live arm
 
-    from orchestrator.ai.engines.extract import extract, to_goals
+    from engines.extract import extract, to_goals
     remove = to_goals(extract("delete the vm called doomed"), "")
     # ASSERTED ON THE CONTROLLING GOAL, not on the whole list. The deletion also produces a
     # trailing `reach` goal, so the two answers are not byte-identical — and an equality

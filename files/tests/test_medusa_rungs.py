@@ -19,9 +19,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.engines import (Channel, MedusaEngine, Orchestrator, Registry,
+from engines import (Channel, MedusaEngine, Orchestrator, Registry,
                                      insession)
-from orchestrator.ai.engines.channel import Answer
+from engines.channel import Answer
 from planner.ir import effects as _effects
 from tests.bench.rungs import RUNGS
 from tests.bench.seams import seams

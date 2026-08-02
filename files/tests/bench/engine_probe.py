@@ -23,10 +23,10 @@ import argparse
 import sys
 from collections import Counter
 
-from orchestrator.ai.engines import (Channel, MedusaEngine, Orchestrator, Registry,
+from engines import (Channel, MedusaEngine, Orchestrator, Registry,
                                      insession)
-from orchestrator.ai.engines.channel import Answer
-from orchestrator.ai.engines import extract as _extract
+from engines.channel import Answer
+from engines import extract as _extract
 from tests.bench.rungs import RUNGS
 from tests.bench.sim_world import SimWorld
 

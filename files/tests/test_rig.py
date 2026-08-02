@@ -20,7 +20,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.engines import rig
+from engines import rig
 
 _PASS = _FAIL = 0
 
@@ -71,7 +71,7 @@ def test_every_seam_has_a_provider():
 
     check("the channel has an answerer", bool(orch.channel._answerers))
     check("the reporter has a narrator", orch._narrate is not None)
-    from orchestrator.ai.engines.orchestrator import Orchestrator
+    from engines.orchestrator import Orchestrator
     check("the router is a real choice, not the first-claimant fallback",
           callable(orch._route) and orch._route is not Orchestrator._first_claimant)
     check("a verdict-giver exists", callable(orch._decide))
@@ -120,12 +120,12 @@ def test_production_does_not_import_the_test_tree():
                                  f"{path.read_text()[:m.start()].count(chr(10)) + 1}")
     # THE TWO STAGED-LOWERING IMPORTS, NAMED. An allowlist rather than a count, so a NEW
     # import cannot hide by replacing one of these.
-    allowed = {"orchestrator/ai/engines/rig.py:32", "orchestrator/ai/engines/rig.py:33"}
+    allowed = {"engines/rig.py:32", "engines/rig.py:33"}
     stray = sorted(set(offenders) - allowed)
     check(f"nothing shipped imports tests/ except the staged-lowering seam ({stray or 'none'})",
           not stray)
     check("and that seam survives the bench being absent",
-          "except Exception" in (root / "orchestrator/ai/engines/rig.py").read_text())
+          "except Exception" in (root / "engines/rig.py").read_text())
 
 
 def test_building_the_rig_touches_nothing():
@@ -156,8 +156,8 @@ def test_a_loaded_package_is_askable_not_just_runnable():
 
     # THE TRANSLATION HAPPENS UNDER THAT MANIFEST, asserted by watching what the schema
     # offers at the moment the channel is asked.
-    from orchestrator.ai.engines.channel import Answer
-    from orchestrator.ai.engines import extract as _extract
+    from engines.channel import Answer
+    from engines import extract as _extract
     seen = {}
 
     def spy(request, world=None):
@@ -165,7 +165,7 @@ def test_a_loaded_package_is_askable_not_just_runnable():
         return Answer(None, "spy", "not translating, just looking")
     spy.name = "spy"
 
-    from orchestrator.ai.engines.channel import Channel
+    from engines.channel import Channel
     orch.channel = Channel([spy])
     orch.handle("search the web for something", intent="ensure")
     check(f"the model is offered the package's kinds too ({sorted(seen.get('kinds', ()))})",
@@ -190,7 +190,7 @@ def test_unbuilt_library_is_unknown_not_empty():
     tables, the REPL happens to call `snapshot()` at startup and nothing else does, so a
     nine-machine lab planned as though it held nothing and closed UNMET on vacuous ENSUREs.
     """
-    from orchestrator.ai.engines.qemu import LabWorld
+    from engines.qemu import LabWorld
 
     class Lib:
         def __init__(self):
@@ -235,8 +235,8 @@ def test_package_tools_are_callable_through_the_engines_own_door():
     camoufox_launch`. A real machine was created and launched to host a browser that could
     never start.
     """
-    from orchestrator.ai.engines import rig
-    from orchestrator.ai.engines.qemu import QemuEngine
+    from engines import rig
+    from engines.qemu import QemuEngine
     from orchestrator.ai.active_library import LIBRARY
 
     seen = []
@@ -263,8 +263,8 @@ def test_a_packages_kinds_reach_the_planner_not_only_the_schema():
     kinds reached the schema and the prompt and never the writer: the model could name a
     search and the planner had never heard of one.
     """
-    from orchestrator.ai.engines import rig
-    from orchestrator.ai.engines.qemu import QemuEngine
+    from engines import rig
+    from engines.qemu import QemuEngine
     from orchestrator.ai.active_library import LIBRARY
     from planner.ir import config
 
@@ -280,11 +280,11 @@ def test_a_packages_kinds_reach_the_planner_not_only_the_schema():
 
 def test_the_worked_example_is_blinded_to_the_request():
     """Rendering every loaded kind's example cost five rungs at n=3 to buy one search."""
-    from orchestrator.ai.engines import rig
-    from orchestrator.ai.engines.qemu import QemuEngine
+    from engines import rig
+    from engines.qemu import QemuEngine
     from orchestrator.ai.active_library import LIBRARY
     from planner.ir import config
-    from orchestrator.ai.engines import extract as EX
+    from engines import extract as EX
 
     eng = QemuEngine(LIBRARY, lambda t, a: None, packages=rig.packages())
     with config.use_kinds(eng.manifest):
@@ -312,8 +312,8 @@ def test_a_program_calls_verifies_and_publishes():
     2. the answer is VERIFIED, not just the search's existence
     3. and it is PUBLISHED, by the program, rather than inferred from a ledger afterwards
     """
-    from orchestrator.ai.engines import rig, insession
-    from orchestrator.ai.engines.session import Session
+    from engines import rig, insession
+    from engines.session import Session
     from planner.ir import config
     from planner.ir.render import render
 
@@ -342,8 +342,8 @@ def test_a_program_calls_verifies_and_publishes():
 
 def test_an_ordinary_program_still_says_done():
     """Most programs have no findings to report and must not finish in silence."""
-    from orchestrator.ai.engines import rig
-    from orchestrator.ai.engines.qemu import QemuEngine
+    from engines import rig
+    from engines.qemu import QemuEngine
     from orchestrator.ai.active_library import LIBRARY
     from planner.ir import config
     from planner.ir.render import render
@@ -357,8 +357,8 @@ def test_an_ordinary_program_still_says_done():
 
 def test_the_same_claim_twice_is_one_claim():
     """A settling tree re-offers a node, and one search reported its answer five times."""
-    from orchestrator.ai.engines.insession import Publish
-    from orchestrator.ai.engines.session import Session
+    from engines.insession import Publish
+    from engines.session import Session
 
     sess = Session("q", None)
     sess.publish(Publish("alive(beta)", "false"))

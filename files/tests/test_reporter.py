@@ -17,7 +17,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.engines import reporter
+from engines import reporter
 
 _PASS = 0
 _FAIL = 0

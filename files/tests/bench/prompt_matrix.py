@@ -26,10 +26,10 @@ import json
 import sys
 from typing import Any, Dict, List, Optional
 
-from orchestrator.ai.engines import (Channel, MedusaEngine, Orchestrator, Registry,
+from engines import (Channel, MedusaEngine, Orchestrator, Registry,
                                      WebCrawlEngine)
 
-from orchestrator.ai.engines import extract as _extract
+from engines import extract as _extract
 from .seams import seams
 from .sim_world import SimWorld
 
@@ -111,7 +111,7 @@ class _SimAdapter:
 
 def _model_channel(model: str):
     def answer(gap, world=None):
-        from orchestrator.ai.engines.channel import Answer
+        from engines.channel import Answer
         try:
             raw = _extract.extract(str(gap), model)
         except Exception as e:

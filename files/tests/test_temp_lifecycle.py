@@ -189,7 +189,7 @@ def test_the_engine_collects_temps_so_teardown_can_fire():
     production. The search request created and launched a machine and emitted no delete; it
     was still on the lab afterwards.
     """
-    from orchestrator.ai.engines.medusa import MedusaEngine
+    from engines.medusa import MedusaEngine
     from planner.model_world import World
 
     KINDS = {

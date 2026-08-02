@@ -43,7 +43,7 @@ MODULES = [
     "orchestrator.ai.chat.ollama_client",
     "orchestrator.ai.chat.malformed",
     "orchestrator.ai.chat.shortcuts",
-    "orchestrator.ai.engines",
+    "engines",
     "orchestrator.ai.packages",
 ]
 
@@ -98,9 +98,9 @@ def test_plan_has_a_dry_run_and_it_does_not_act():
     """
     print("[plan] a dry run stops at the first step and names what it would destroy")
     from orchestrator.ai.chat.shortcuts.plan import Plan
-    from orchestrator.ai.engines import (Channel, Orchestrator, QemuEngine, Registry,
+    from engines import (Channel, Orchestrator, QemuEngine, Registry,
                                          insession)
-    from orchestrator.ai.engines.channel import Answer
+    from engines.channel import Answer
 
     p = Plan()
     check("the flag is recognised", p.matches("plan --dry make sure there are two"))
@@ -162,7 +162,7 @@ def test_the_plan_shortcut_settles_the_intent_before_it_builds_anything():
     """
     print("[plan] the operator's intent is resolved and passed on")
     from orchestrator.ai.chat.shortcuts.plan import Plan
-    from orchestrator.ai.engines import rig as _rig
+    from engines import rig as _rig
 
     seen = {}
 

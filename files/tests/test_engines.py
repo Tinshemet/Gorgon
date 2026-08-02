@@ -17,10 +17,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.engines import (Channel, MedusaEngine, Orchestrator, Registry,
+from engines import (Channel, MedusaEngine, Orchestrator, Registry,
                                      Session, describe, stub)
 from orchestrator.ai.packages import WebCrawlPackage
-from orchestrator.ai.engines.session import INTENT_REGIME, rank
+from engines.session import INTENT_REGIME, rank
 from planner.ir import config
 from tests.bench.generic_world import World
 
@@ -329,7 +329,7 @@ def test_findings_are_what_was_observed_not_what_was_asked():
     rather than a success flag.
     """
     print("[honesty] findings vs calls")
-    from orchestrator.ai.engines.medusa import _findings_of
+    from engines.medusa import _findings_of
 
     class Observed:
         findings = {"reachable(beta)": False}
@@ -438,7 +438,7 @@ def test_promotion_opens_an_in_session_rather_than_repeating_itself():
     asked = []
 
     def gap_answerer(gap, world=None):
-        from orchestrator.ai.engines.channel import Answer
+        from engines.channel import Answer
         asked.append(gap)
         # Answering with what unblocks it: the dish must exist before it can be served.
         return Answer([{"shape": "count", "select": {"kind": "dish", "dish_name": "risotto"},
@@ -489,7 +489,7 @@ def test_a_session_is_abandoned_rather_than_promoted_forever():
     already said it cannot close.
     """
     print("[promotion] bounded, not endless")
-    from orchestrator.ai.engines.channel import Answer
+    from engines.channel import Answer
 
     def unhelpful(gap, world=None):
         # Answers, but with something that never closes the gap — the shape that would loop.
@@ -571,7 +571,7 @@ def test_the_operator_sees_the_ends_and_never_the_middle():
 def test_the_in_session_grain_is_the_regime():
     """A tree asks per goal; a translation asks once. Not described — counted."""
     print("[in-session] the regime IS how often the orchestrator is consulted")
-    from orchestrator.ai.engines import insession
+    from engines import insession
 
     def count(regime):
         eng = MedusaEngine(World(KITCHEN))
@@ -599,7 +599,7 @@ def test_the_in_session_grain_is_the_regime():
 def test_an_engine_may_not_act_on_a_node_it_was_refused():
     """The verdict is load-bearing, and a decline keeps its reason."""
     print("[in-session] the engine proposes; the orchestrator disposes")
-    from orchestrator.ai.engines import insession
+    from engines import insession
 
     world = World(KITCHEN)
     eng = MedusaEngine(world)
@@ -615,7 +615,7 @@ def test_an_engine_may_not_act_on_a_node_it_was_refused():
 def test_a_refusal_closes_under_its_own_name():
     """REFUSED is a distinct outcome from UNMET: one is the system working."""
     print("[in-session] a decline is an outcome, not a gap")
-    from orchestrator.ai.engines import insession
+    from engines import insession
 
     orch = Orchestrator(_kitchen(), Channel([stub({"a risotto": RISOTTO})]),
                         decide=lambda st, s: insession.Verdict(insession.STOP,
@@ -628,7 +628,7 @@ def test_a_refusal_closes_under_its_own_name():
 def test_the_budget_refuses_before_the_act_not_after():
     """An engine told yes and then billed for it spent money nobody agreed to."""
     print("[in-session] cost is declared with the proposal")
-    from orchestrator.ai.engines import insession
+    from engines import insession
 
     world = World(KITCHEN)
     eng = MedusaEngine(world)
@@ -646,7 +646,7 @@ def test_the_budget_refuses_before_the_act_not_after():
 def test_an_engine_without_an_in_session_still_runs():
     """The tool regime is one call and no exchange, and the protocol must fit it."""
     print("[in-session] no steps is not an error")
-    from orchestrator.ai.engines import insession
+    from engines import insession
 
     class Plain:
         name = "plain"
@@ -662,7 +662,7 @@ def test_an_engine_without_an_in_session_still_runs():
 def test_decompose_is_a_verdict_that_does_something():
     """The grain is not fixed by the regime — being told to open a node refines it."""
     print("[in-session] 'no, decompose it' actually decomposes")
-    from orchestrator.ai.engines import insession
+    from engines import insession
 
     world = World(KITCHEN)
     eng = MedusaEngine(world)
@@ -687,7 +687,7 @@ def test_decompose_is_a_verdict_that_does_something():
 def test_an_atomic_node_says_so_instead_of_inventing_a_split():
     """Decomposing forever is a refusal that will not admit to being one."""
     print("[in-session] nothing lowers it -> say so")
-    from orchestrator.ai.engines import insession
+    from engines import insession
 
     world = World(KITCHEN)
     eng = MedusaEngine(world)
@@ -703,7 +703,7 @@ def test_an_atomic_node_says_so_instead_of_inventing_a_split():
 def test_a_step_declares_whether_there_is_anything_finer_inside_it():
     """Declared, not guessed — so a decider never asks for a split that cannot exist."""
     print("[in-session] the step declares its own grain")
-    from orchestrator.ai.engines import insession
+    from engines import insession
 
     seen = []
     eng = MedusaEngine(World(KITCHEN))
@@ -727,7 +727,7 @@ def test_the_grain_does_not_change_the_work_on_any_rung():
     is divisible.
     """
     print("[in-session] thirteen rungs, three grains, one set of calls")
-    from orchestrator.ai.engines import insession
+    from engines import insession
     from tests.bench.rungs import RUNGS
     from tests.bench.sim_world import SimWorld
     from tests.test_ghost_writer import GOALS
@@ -769,7 +769,7 @@ def test_a_decomposed_goal_is_still_witnessed_by_its_parent():
     against the world as it now is, and the work that reappeared shows up as work.
     """
     print("[in-session] the parent is re-visited, so a changed set cannot hide")
-    from orchestrator.ai.engines import insession
+    from engines import insession
 
     world = World(KITCHEN)
     for name in ("risotto", "paella"):
@@ -810,7 +810,7 @@ def test_the_book_keeper_reports_a_split_served_against_a_moving_set():
     correcting already happened when the parent was re-planned.
     """
     print("[keeper] the in-session tree, read by the book keeper")
-    from orchestrator.ai.engines import insession
+    from engines import insession
     from planner import tree_keeper as tk
 
     def serve(moving):
@@ -882,7 +882,7 @@ def test_a_step_declares_what_it_would_destroy():
     were, nobody reading a step could act on it.
     """
     print("[in-session] a step names what it would destroy")
-    from orchestrator.ai.engines import insession
+    from engines import insession
     from tests.bench.sim_world import SimWorld
 
     world = SimWorld()
@@ -920,7 +920,7 @@ def test_the_opened_grain_acts_before_it_knows_the_request_is_impossible():
     and it is why `Step.destroys` exists: the verdict is the only place it can be caught.
     """
     print("[in-session] the program regime reviews BEFORE; the tree corrects AFTER")
-    from orchestrator.ai.engines import insession
+    from engines import insession
     from tests.bench.sim_world import SimWorld
 
     def serve(regime):
@@ -958,7 +958,7 @@ def test_a_node_can_be_told_to_wait_and_comes_round_again():
     be treated as something that would never be ready.
     """
     print("[in-session] wait, then re-offer")
-    from orchestrator.ai.engines import insession
+    from engines import insession
 
     world = World(KITCHEN)
     eng = MedusaEngine(world)
@@ -988,7 +988,7 @@ def test_waiting_re_plans_against_the_world_it_comes_back_to():
     """THE ONLY KIND OF WAITING THAT CAN END. A yielded node is not a sleep — it is re-planned
     when it comes round, so what it was waiting for can actually have arrived."""
     print("[in-session] the wait is a re-plan, not a sleep")
-    from orchestrator.ai.engines import insession
+    from engines import insession
 
     world = World(KITCHEN)
     eng = MedusaEngine(world)
@@ -1017,7 +1017,7 @@ def test_waiting_re_plans_against_the_world_it_comes_back_to():
 def test_a_node_that_waits_forever_is_refused_by_name():
     """A decider that never says yes is refusing; the engine says so rather than spinning."""
     print("[in-session] waiting forever is a refusal that will not admit it")
-    from orchestrator.ai.engines import insession
+    from engines import insession
 
     world = World(KITCHEN)
     eng = MedusaEngine(world)
@@ -1033,7 +1033,7 @@ def test_a_queue_where_everything_waits_is_a_deadlock_and_says_so():
     """Running is the only thing that changes the world, so a queue that never runs never
     changes. Naming it beats spinning until a counter blames the last node to speak."""
     print("[in-session] every node waiting is a deadlock, not patience")
-    from orchestrator.ai.engines import insession
+    from engines import insession
 
     world = World(KITCHEN)
     eng = MedusaEngine(world)
@@ -1056,8 +1056,8 @@ def test_a_queue_where_everything_waits_is_a_deadlock_and_says_so():
 
 def extract_attr_enum():
     """The attributes a MODEL may name, straight from the extractor's schema."""
-    from orchestrator.ai.engines.extract import SCHEMA
-    from orchestrator.ai.engines import extract as _ex
+    from engines.extract import SCHEMA
+    from engines import extract as _ex
     return _ex.select_attrs()
 
 
@@ -1070,7 +1070,7 @@ def test_the_lab_mount_speaks_the_manifest_not_the_library():
     looks like a finished job is the worst shape this can take.
     """
     print("[mount] library field names are translated, not copied")
-    from orchestrator.ai.engines import QemuEngine
+    from engines import QemuEngine
 
     class FakeLibrary:
         """Speaks the LIBRARY'S vocabulary — plural `labels`, plus fields no predicate has."""
@@ -1161,7 +1161,7 @@ def test_a_kind_the_world_cannot_see_is_refused_not_assumed_empty():
     would plan to make every one of them again, against a lab that may already have them.
     """
     print("[mount] the planner declines a kind it cannot enumerate")
-    from orchestrator.ai.engines import QemuEngine, insession
+    from engines import QemuEngine, insession
     from planner import ghost_writer as gw
 
     check("a goal's kinds include what it SELECTS over",
@@ -1235,7 +1235,7 @@ def test_a_refusal_is_never_overturned_by_rerouting():
     advisory — ask enough engines and one says yes.
     """
     print("[routing] inability reroutes; refusal ends it")
-    from orchestrator.ai.engines import insession
+    from engines import insession
 
     class Second(MedusaEngine):
         name = "second"
@@ -1289,8 +1289,8 @@ def test_the_mount_contract_is_answerable_by_every_engine():
     and it is where a new engine finds out what it forgot.
     """
     print("[contract] every engine answers everything the orchestrator asks")
-    from orchestrator.ai.engines import QemuEngine
-    from orchestrator.ai.engines.session import REGIMES
+    from engines import QemuEngine
+    from engines.session import REGIMES
 
     class FakeLibrary:
         def vms(self):
@@ -1334,7 +1334,7 @@ def test_claiming_is_derived_from_the_manifest_not_written_twice():
     """Two engines had each hand-rolled the noun match, differently. A third would have made
     it three."""
     print("[contract] one noun match, in the contract, from the manifest")
-    from orchestrator.ai.engines.base import Engine
+    from engines.base import Engine
 
     class Kitchen(Engine):
         name = "kitchen"
@@ -1381,7 +1381,7 @@ def test_publish_is_how_an_engine_speaks_upward():
     the operator sees, which is the one thing the in-session exists to prevent.
     """
     print("[publish] the engine submits; the orchestrator keeps or forwards")
-    from orchestrator.ai.engines import insession
+    from engines import insession
 
     class Talker(MedusaEngine):
         name = "talker"
@@ -1413,7 +1413,7 @@ def test_publish_is_how_an_engine_speaks_upward():
 def test_the_orchestrator_may_keep_a_publication_internal():
     """The operator's boundary is the orchestrator's to hold, not the engine's."""
     print("[publish] kept is a decision, and a recorded one")
-    from orchestrator.ai.engines import insession
+    from engines import insession
 
     class Talker(MedusaEngine):
         name = "talker"
@@ -1500,7 +1500,7 @@ def test_the_executor_is_the_tool_regime_made_real():
     was written — one call, one answer, close — and `rank("tool") == 0` was a number nothing
     could occupy. A ladder whose bottom rung is a diagram."""
     print("[executor] one call, one answer, close")
-    from orchestrator.ai.engines import ExecutorEngine
+    from engines import ExecutorEngine
     from tests.bench.sim_world import SimWorld
 
     world = SimWorld()
@@ -1538,7 +1538,7 @@ def test_an_intent_that_may_not_act_is_refused_before_the_decider():
     not, and the refusal is filed in the session's own ledger instead.
     """
     print("[intent] a fetch may not change the lab, whichever engine is asked")
-    from orchestrator.ai.engines import ExecutorEngine, insession
+    from engines import ExecutorEngine, insession
     from planner.ir import effects as _effects
     from tests.bench.sim_world import SimWorld
 
@@ -1676,7 +1676,7 @@ def test_the_floor_asks_before_it_acts():
     call and irreversible.
     """
     print("[executor] one call is still a call, and it is offered first")
-    from orchestrator.ai.engines import ExecutorEngine, insession
+    from engines import ExecutorEngine, insession
     from tests.bench.sim_world import SimWorld
 
     world = SimWorld()
@@ -1699,7 +1699,7 @@ def test_the_executor_refuses_to_plan_and_says_so():
     """WHAT MAKES IT THE FLOOR IS WHAT IT REFUSES TO DO. Naming a tool and knowing WHEN to
     call it are different jobs, and the second one is what Medusa is for."""
     print("[executor] anything needing an order is handed back")
-    from orchestrator.ai.engines import ExecutorEngine
+    from engines import ExecutorEngine
     from tests.bench.sim_world import SimWorld
 
     world = SimWorld()
@@ -1715,7 +1715,7 @@ def test_a_request_the_floor_cannot_serve_reroutes_up():
     """THE PAIR THE REROUTING WAS BUILT FOR. The executor tries, cannot, and the orchestrator
     sends it to the engine that writes programs — one request, two engines, no operator."""
     print("[executor] floor first, then the engine that plans")
-    from orchestrator.ai.engines import ExecutorEngine
+    from engines import ExecutorEngine
     from tests.bench.sim_world import SimWorld
 
     world = SimWorld()
@@ -1819,7 +1819,7 @@ def test_every_call_is_a_line_and_the_program_is_at_the_end():
 def test_a_failure_is_an_event_not_an_absence():
     """A ledger that records only successes is one you cannot debug from."""
     print("[ledger] failures are first-class lines")
-    from orchestrator.ai.engines import insession
+    from engines import insession
 
     reg = _kitchen()
     r = Orchestrator(reg, Channel([stub({"a risotto": RISOTTO})]),
@@ -1848,9 +1848,9 @@ def test_there_is_one_constrained_model_call():
     print("[channel] every seam calls the model the same way")
     import inspect
 
-    from orchestrator.ai.engines import channel as _channel
-    from orchestrator.ai.engines import reporter as _reporter
-    from orchestrator.ai.engines import extract as _extract
+    from engines import channel as _channel
+    from engines import reporter as _reporter
+    from engines import extract as _extract
 
     check("the shared call exists", callable(getattr(_channel, "constrained", None)))
 
@@ -1877,7 +1877,7 @@ def test_the_lab_engine_claims_by_nouns_and_medusa_over_claims():
     the general fallback, and it began claiming "bake a cake".
     """
     print("[routing] specific engines claim narrowly; the fallback claims widely")
-    from orchestrator.ai.engines import QemuEngine
+    from engines import QemuEngine
 
     class FakeLab:
         _vms = {}
@@ -1903,7 +1903,7 @@ def test_the_lab_engine_claims_by_nouns_and_medusa_over_claims():
     # edit claimed to delete this duplicate and silently did not match anything.
     import inspect
 
-    from orchestrator.ai.engines import qemu as _qemu
+    from engines import qemu as _qemu
     check("the lab engine defines no claims of its own",
           "def claims" not in inspect.getsource(_qemu))
 

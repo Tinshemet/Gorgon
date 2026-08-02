@@ -129,8 +129,8 @@ class Plan(Shortcut):
         # time, so every import in this file is paid by every chat session that never types
         # `plan`. The engine layer pulls in the planner, the manifest and the tool registry;
         # none of that should cost a session that is not using it.
-        from orchestrator.ai.engines import insession as _insession
-        from orchestrator.ai.engines import rig as _rig
+        from engines import insession as _insession
+        from engines import rig as _rig
         from orchestrator.pipeline import execute_tool
 
         def guarded(tool, args):

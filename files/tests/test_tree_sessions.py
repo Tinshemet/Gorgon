@@ -20,10 +20,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.engines import (Channel, MedusaEngine, Orchestrator, Registry, Session,
+from engines import (Channel, MedusaEngine, Orchestrator, Registry, Session,
                                      insession)
-from orchestrator.ai.engines.channel import Answer
-from orchestrator.ai.engines.session import INTENT_REGIME
+from engines.channel import Answer
+from engines.session import INTENT_REGIME
 from tests.bench import fuzz
 from tests.bench.rungs import RUNGS
 from tests.bench.sim_world import SimWorld

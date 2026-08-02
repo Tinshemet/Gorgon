@@ -60,8 +60,8 @@ _UPPER = [
     "orchestrator.ai.agent.contract",
     "orchestrator.ai.chat.context_assistant",
     "orchestrator.ai.autonomous",
-    "orchestrator.ai.engines.medusa",
-    "orchestrator.ai.engines.orchestrator",
+    "engines.medusa",
+    "engines.orchestrator",
 ]
 
 

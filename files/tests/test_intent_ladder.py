@@ -36,10 +36,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.engines import (Channel, MedusaEngine, Orchestrator, Registry,
+from engines import (Channel, MedusaEngine, Orchestrator, Registry,
                                      insession)
-from orchestrator.ai.engines.channel import Answer
-from orchestrator.ai.engines.session import Session
+from engines.channel import Answer
+from engines.session import Session
 from planner.ir import effects as _effects
 from tests.bench.sim_world import SimWorld
 
@@ -281,7 +281,7 @@ def test_the_gate_is_still_behind_the_planner():
     made redundant by the first — an engine with no intent-aware planner still has to be
     stopped, which is what the floor engine is."""
     print("[ladder] the backstop is still there")
-    from orchestrator.ai.engines import ExecutorEngine
+    from engines import ExecutorEngine
     from tests.test_engines import FakeLab
 
     world = _world()

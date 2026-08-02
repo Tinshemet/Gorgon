@@ -342,8 +342,8 @@ def test_write_it_then_use_it():
     procedure in the second request, and the plan contains it because it was the better move.
     """
     print("[procedures] write it, then use it — nobody naming it the second time")
-    from orchestrator.ai.engines import Channel, MedusaEngine, Orchestrator, Registry
-    from orchestrator.ai.engines.channel import Answer
+    from engines import Channel, MedusaEngine, Orchestrator, Registry
+    from engines.channel import Answer
 
     with _Library() as lib:
         goal = {"shape": "count", "select": {"kind": "vm", "name": "web"}, "eq": 1}
@@ -480,7 +480,7 @@ def test_a_due_routine_runs_through_the_ordinary_engine():
     """THE SEAM THAT WOULD OTHERWISE BE LEFT AT None. A schedule nobody sweeps is a feature
     that does not fail because it does not run — the shape `rig.py` exists to prevent."""
     print("[routines] and the sweep actually runs one")
-    from orchestrator.ai.engines import Channel, MedusaEngine, Orchestrator, Registry
+    from engines import Channel, MedusaEngine, Orchestrator, Registry
 
     with _Library() as lib:
         lib.save(_builder("nightly_box"), render(_builder("nightly_box")))

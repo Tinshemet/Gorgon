@@ -72,7 +72,7 @@ class Routines(Shortcut):
             console.print("[dim]`routines run` to run them.[/dim]")
             return
 
-        from orchestrator.ai.engines import rig as _rig
+        from engines import rig as _rig
         from orchestrator.pipeline import execute_tool
 
         def guarded(tool, args):

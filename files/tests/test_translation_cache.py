@@ -18,8 +18,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.engines import TranslationCache
-from orchestrator.ai.engines.channel import Answer, Channel
+from engines import TranslationCache
+from engines.channel import Answer, Channel
 
 _PASS = 0
 _FAIL = 0
