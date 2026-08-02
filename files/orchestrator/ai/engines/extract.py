@@ -706,6 +706,22 @@ def unusable(sel: Dict[str, Any]) -> Optional[str]:
         if value.strip().lower() in _NOT_A_NAME | _echoed():
             return (f"{attr} = {value!r} is a word, not a name — the request named no "
                     f"{attr}, and inventing one puts it in the lab")
+        # UNLESS THE KIND SAYS ITS KEY IS PROSE. A `search` is keyed by its QUERY, and a query
+        # with no spaces in it is the rare one — so the space rule, which is right for every
+        # kind whose key is a handle, is exactly backwards here.
+        #
+        # `key_freetext` WAS ALREADY DECLARED FOR THIS AND ALREADY READ BY `_name_shaped`.
+        # This guard never asked. Two guards answering one question by different standards is
+        # the same defect as yesterday's intent gate refusing the writer's own output, and it
+        # cost the whole Camoufox path: the model DID capture the question, `to_goals` DID fold
+        # it onto the key, and then this line threw it away — leaving `COUNT(search) = 1` with
+        # nothing to search for, which `cover()` rightly refused to plan, which made an empty
+        # program, which closed DONE.
+        #
+        # THE REFERENCED KIND'S FLAG, NOT THIS ONE'S: `attr` may name another kind entirely.
+        owner = kind if attr == key else attr
+        if ((config.KINDS or {}).get(owner) or {}).get("key_freetext"):
+            continue
         if any(c.isspace() for c in value.strip()):
             return (f"{attr} = {value!r} reads as a description rather than a name")
     return None
