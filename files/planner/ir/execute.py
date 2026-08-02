@@ -18,7 +18,7 @@ the model invent names. Same rule here: position and index, never a counter or a
 
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import config, consent as _consent, intent as _intent, refs
+from . import config, consent as _consent, effects as _effects, intent as _intent, refs
 from .. import procedures as _procs
 
 
@@ -191,6 +191,8 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
         known_tools: Optional[set] = None,
         consent: Any = None,
         intent: Optional[str] = None,
+        legal: Optional[Callable[[str], bool]] = None,
+        permit: Any = None,
         acting_tools: Optional[set] = None) -> Dict[str, Any]:
     """Run a program. Returns {ok, scope, calls, failed}.
 
@@ -199,6 +201,14 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
     here: the registry lives in the Active Library and reachability lives in the findings
     ledger, and this module has no business reaching into either. It also means the bench
     world can drive the same visitor the orchestrator does.
+
+    `legal(tool) -> forbidden?` is the contract's RED LINES, injected the same way and for
+    the same reason: the language does not know who the active agent is. Supplied, a program
+    that names a banned tool does not run at all until `permit` says otherwise — see
+    `consent.forbidden`.
+
+    `permit(banned) -> bool` is the ONE WAY PAST a red line: the operator, re-authenticating.
+    Shaped like `consent` and read the same way, so absent an operator the answer is no.
     """
     # `known_tools` reaches the LAST check too. This re-validates deliberately — a program
     # about to touch the world is the right place to look again — but it was checking
@@ -214,6 +224,27 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
     ok, problems = validate(program, known_names=known_names, known_tools=known_tools)
     if not ok:
         return {"ok": False, "failed": "invalid", "problems": problems,
+                "scope": {}, "calls": []}
+
+    # THE RED LINES, BEFORE EVERYTHING ELSE — gauntlet A, where it is in the tree path too.
+    # A forbidden tool is not a rung or a matter of grounding: it is a fact about the whole
+    # program, knowable before the first call, so the operator's ruling is that the PROGRAM
+    # does not run rather than that the call is skipped. A half-run program leaves the lab in
+    # a state nobody authorised, built by statements that only ran because the refusal came
+    # later than it could have.
+    #
+    # AND THE ONE WAY PAST IT IS A PERSON, re-authenticating — the operator's ruling,
+    # 2026-08-02: *"procedures dont require operator password. ONLY WHEN IT CONTAINS BANNED
+    # TOOLS, then you require an operator password."* So a red line is not a wall, it is the
+    # highest gate in the building: an unattended run cannot pass it, and an operator can,
+    # deliberately, by proving they are the operator. `permit` absent is a NO, which is the
+    # same fail-closed rule `consent` and `intent` already keep.
+    banned = _consent.forbidden(program, legal)
+    if banned and not _consent.permitted(banned, permit):
+        return {"ok": False, "failed": "forbidden", "forbidden": banned,
+                "why": (f"{', '.join(banned)} {'is' if len(banned) == 1 else 'are'} a red "
+                        f"line for this agent, so this program does not run — not the call, "
+                        f"the program. It takes the operator's password to lift"),
                 "scope": {}, "calls": []}
 
     # AUTHORITY FIRST. A REQUEST was not given permission to change anything, so a
@@ -368,19 +399,11 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
             # Which creator runs is decided by whether `from` is present — a machine can
             # be built fresh or copied, and choosing between them by a field rather than a
             # keyword keeps the choice out of the language.
-            creators = spec.get("creators") or {}
             source = _resolve(st.get("from"), scope) if st.get("from") else None
-            # THE TOOL *AND* WHETHER IT COPIES. `create_vm` is the tool of TWO creators — a
-            # fresh machine, and one built from a golden image — so matching on the name alone
-            # found the fresh one first and silently dropped the `FROM`. The template was never
-            # passed, and what came out was an empty disk wearing the right name.
-            named = st.get("tool")
-            chosen = (next((c for c in creators.values()
-                            if c.get("tool") == named and bool(c.get("from")) == bool(source)),
-                           None) if named else None)
-            chosen = chosen or (next((c for c in creators.values() if c.get("from")), None)
-                                if source else None) \
-                or creators.get("create") or {"tool": spec.get("create")}
+            # THE TOOL *AND* WHETHER IT COPIES — resolved by `effects.creator_for`, which the
+            # forbidden-tool pre-flight reads too. Two readers of one rule; the alternative is
+            # a sweep that clears a program the visitor then runs with a different creator.
+            chosen = _effects.creator_for(kind, st.get("tool"), bool(source))
             key_arg = chosen.get("key") or spec["key"]
             n = _amount(st.get("amount", 1), scope)
             # Everything else the creator takes rides along — os_type, cpu_cores,

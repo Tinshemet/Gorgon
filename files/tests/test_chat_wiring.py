@@ -171,8 +171,9 @@ def test_the_plan_shortcut_settles_the_intent_before_it_builds_anything():
             seen["request"], seen["intent"] = request, intent
             return {"outcome": "DONE", "why": "", "log": [], "calls": []}
 
-    def fake_build(execute, library=None, narrate=True, decide=None, consent=None):
-        seen["consent"] = consent
+    def fake_build(execute, library=None, narrate=True, decide=None, consent=None,
+                   permit=None):
+        seen["consent"], seen["permit"] = consent, permit
         return StubOrchestrator()
 
     real, _rig.build = _rig.build, fake_build
@@ -185,6 +186,9 @@ def test_the_plan_shortcut_settles_the_intent_before_it_builds_anything():
               seen.get("request") == "create a vm named alpha")
         check("a consent surface is supplied, not left at None",
               callable(seen.get("consent")))
+        # AND THE RED-LINE SURFACE, which is a DIFFERENT question: consent asks whether the
+        # operator agrees, this asks whether they can prove they are the operator.
+        check("and a red-line surface too", callable(seen.get("permit")))
 
         seen.clear()
         # A DRY RUN NEVER REACHES THE WORLD, so it needs NEITHER a consent surface nor a rung.
@@ -194,6 +198,8 @@ def test_the_plan_shortcut_settles_the_intent_before_it_builds_anything():
         Plan().run("plan --dry fetch: how many machines are there", [], 0, False)
         check("a dry run asks for no authority", seen.get("intent") is None)
         check("and is offered no consent surface", seen.get("consent") is None)
+        check("nor a password prompt — a preview has nothing to lift",
+              seen.get("permit") is None)
 
         seen.clear()
         # THE SAME REQUEST WET still settles it, so the rung is withheld by the DRY flag

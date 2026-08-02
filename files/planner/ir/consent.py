@@ -229,6 +229,108 @@ def question(program: Any) -> Optional[str]:
              f"checks the result") + " Run it anyway?")
 
 
+def tools_named(program: Any, seen: Optional[set] = None) -> List[str]:
+    """Every tool this program would call, stored procedures expanded, in program order.
+
+    TRANSITIVE, BECAUSE A PROCEDURE IS A TOOL YOU WROTE. `CALL setup_temp_vm(...)` runs the
+    stored body through the same visitor, so a red line hidden two procedures deep is still
+    a red line this program crosses. `seen` breaks a cycle — a library that calls itself is
+    a bug for the validator to name, not a reason for this to hang.
+
+    A SET OF TOOLS, NOT A TALLY OF CALLS: a procedure called twice is expanded once, and a
+    caller counting cost rather than asking "which tools" wants a different function. What
+    this answers is the membership question, which is the one a red line asks.
+
+    A `NEW`'s TOOL IS RESOLVED, NOT GUESSED. `effects.creator_for` is the visitor's own
+    rule, so what is listed here is what will actually be called.
+    """
+    from . import effects as _effects
+    from .validate import coerce_body
+
+    seen = set() if seen is None else seen
+    out: List[str] = []
+    for st in _walk(coerce_body(program) or []):
+        op = st.get("op")
+        if op == "new" and st.get("kind"):
+            tool = _effects.creator_for(st["kind"], st.get("tool"),
+                                        bool(st.get("from"))).get("tool")
+            if tool:
+                out.append(tool)
+        elif op == "call" and st.get("tool"):
+            name = str(st["tool"])
+            if name in seen:
+                continue
+            seen.add(name)
+            inner = None
+            try:
+                from .. import procedures as _procs
+                inner = _procs.LIBRARY.get(name)
+            except Exception:
+                # A LIBRARY THAT CANNOT ANSWER IS NOT AN EMPTY ONE. The name stays on the
+                # list as itself, so a call nobody could expand is still something the
+                # red-line check gets to see rather than something it skips.
+                inner = None
+            if inner is None:
+                out.append(name)
+            else:
+                out += tools_named(inner, seen)
+    return out
+
+
+def forbidden(program: Any, legal: Optional[Any]) -> List[str]:
+    """The red-lined tools this program would call — empty when it may run.
+
+    THE OPERATOR'S RULING, 2026-08-02: *"a tool that is allowed but guarded should still run
+    normally because running procedures require operator password already, but banned tools
+    should still be banned"* — and *"not be ran at all, not just the tools but also the
+    entire program."*
+
+    SO THIS IS A PRE-FLIGHT, NOT A PER-CALL REFUSAL, and the difference is the whole point.
+    Refusing the banned call where it sits would run every statement before it and leave the
+    lab half-built by a program that was never allowed to start. A red line is a fact about
+    the PROGRAM, knowable before the first call, so it is answered before the first call.
+
+    IT IS THE LEGAL FILTER, THE SAME ONE — `is_forbidden`, gauntlet A, injected exactly as
+    the tree path injects it (`engine_core._guard`). The program regime had no counterpart:
+    the ban was enforced by leaving a tool out of the model's toolkit, which is a filter on
+    what a MODEL can ask for and no filter at all on a program that names the tool itself.
+    Measured 2026-08-02 — with every tool forbidden, a stored procedure's calls ran.
+
+    `legal` NONE MEANS NOBODY IS ANSWERING, and then nothing is forbidden. That is the
+    degraded arm of `_deps` (a sparse checkout with no contract), not a default policy —
+    a caller with red lines to enforce passes them.
+    """
+    if not callable(legal):
+        return []
+    out: List[str] = []
+    for tool in tools_named(program):
+        if tool not in out and legal(tool):
+            out.append(tool)
+    return out
+
+
+def permitted(banned: List[str], permit: Any) -> bool:
+    """Has the operator lifted these red lines? `permit` is shaped exactly like `consent`.
+
+    THE OPERATOR'S RULING, 2026-08-02: *"procedures dont require operator password. ONLY
+    WHEN IT CONTAINS BANNED TOOLS, then you require an operator password."* An ordinary
+    procedure runs on the consent and destruction questions it already meets; a banned tool
+    is the one thing that escalates to RE-AUTHENTICATION, which is the invariant's own words
+    for a high-impact act.
+
+    ABSENT AN OPERATOR THE ANSWER IS NO, and here `True` is deliberately NOT accepted as a
+    standing grant the way `consent` accepts it. A caller passing `consent=True` is saying
+    *"a person already said yes to this program"*; nothing should be able to say that in
+    advance about a red line, because the whole point is that a person is asked AT THE
+    MOMENT and proves who they are. Only a callable can answer.
+
+    NOTE WHAT THIS CHANGES, so nobody discovers it by reading the contract later:
+    `Contract.is_forbidden` calls a w:0 forbid *inviolable*. It is now liftable — by one
+    party, in person, with a password, and by nothing else.
+    """
+    return bool(permit(banned)) if callable(permit) else False
+
+
 def granted(program: Any, consent: Any) -> bool:
     """Has running this been authorised?
 

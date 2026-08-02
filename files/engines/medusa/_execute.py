@@ -86,6 +86,16 @@ class _ExecuteMixin:
                       # computed above rather than assumed — the answer, not a bypass.
                       consent=(getattr(session, "consent", None) if changes else True),
                       intent=getattr(session, "intent", None),
+                      # THE AGENT'S RED LINES. A program that names a banned tool is refused
+                      # WHOLE, before the first call — the operator's ruling, 2026-08-02, and
+                      # the counterpart the program regime was missing: a ban enforced by
+                      # leaving a tool out of the model's toolkit does nothing to a program
+                      # that names the tool itself.
+                      legal=self._legal(),
+                      # AND THE ONE WAY PAST IT: the operator, with their password. Off the
+                      # SESSION, like `consent` — the engine does not know who is at the
+                      # terminal and must not grow an opinion about it.
+                      permit=getattr(session, "permit", None),
                       # WHICH OF THE KNOWN TOOLS CHANGE SOMETHING. The engine holds the
                       # manifest, so the ladder gets the exact answer about a `CALL` rather
                       # than the safe one — which is the difference between a `fetch` that

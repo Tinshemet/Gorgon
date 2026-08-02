@@ -308,7 +308,8 @@ class Procedures(Shortcut):
                 return _insession.Verdict(_insession.STOP, "not granted — nothing was done")
             return _insession.Verdict(step.kind)
 
-        orch = _rig.build(guarded, narrate=True, consent=Plan._ask_consent, decide=decide)
+        orch = _rig.build(guarded, narrate=True, consent=Plan._ask_consent, decide=decide,
+                          permit=Plan.ask_banned)
         shown = "".join(f" {k}={v}" for k, v in args.items())
         console.print(f"\n[bold]{name}[/bold]{shown}")
         out = orch.handle(name, intent="achieve",

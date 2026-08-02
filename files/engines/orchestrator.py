@@ -251,7 +251,8 @@ class Orchestrator:
                  narrate: Optional[Callable] = None,
                  decide: Optional[Callable] = None,
                  forward: Optional[Callable] = None,
-                 consent: Optional[Callable] = None):
+                 consent: Optional[Callable] = None,
+                 permit: Optional[Callable] = None):
         self.registry = registry
         self.channel = channel or Channel()
         self.budget = budget
@@ -267,6 +268,12 @@ class Orchestrator:
         # DEFAULT None IS NOBODY THERE, and `consent.granted` reads that as no. Every grounded
         # program is unaffected — the question is only asked of one that vouches for nothing.
         self._consent = consent
+        # `permit(banned) -> bool`: the operator LIFTING A RED LINE, by proving they are the
+        # operator. A THIRD seam rather than a flag on `consent`, because it answers a
+        # different question — `consent` asks whether a person agrees, this asks WHO they
+        # are — and a callable that could answer both would let an agreement stand in for an
+        # identity. Absent, a red line simply refuses; see `consent.permitted`.
+        self._permit = permit
         # THE REPORTER'S CHANNEL, separate from the extractor's and deliberately so. It is
         # handed findings and NOTHING ELSE — never the request, never the program — because a
         # model that can see what was asked writes a fluent answer to the question, and one
@@ -402,7 +409,7 @@ class Orchestrator:
             session = Session(request, engine, intent=intent,
                               budget=None if self.budget is None
                               else max(0, self.budget - spent),
-                              consent=self._consent)
+                              consent=self._consent, permit=self._permit)
             if regime:
                 session.regime = regime
                 session.record(f"regime set to {regime} by the caller")
@@ -601,11 +608,17 @@ class Orchestrator:
             result = _insession.drive(engine, components, session, self._decide)
             session.calls = result.get("calls") or []
 
-        if result.get("refused"):
+        if result.get("refused") or result.get("failed") == "forbidden":
             # A REFUSAL IS NOT A FAILURE. The engine asked, something here said no, and that
             # is the system working — so it closes under its own name rather than being filed
             # with the gaps nothing could close. Whatever ran before the refusal is reported
             # as run, because those calls are facts.
+            #
+            # A RED LINE IS THE SAME KIND OF ANSWER AND CLOSED `UNMET` UNTIL 2026-08-02.
+            # UNMET is a GAP — something nothing could close — and it is what invites the
+            # next regime to try. A forbidden tool is not a gap: no engine, no promotion and
+            # no better program will make it allowed, and filing it with the gaps would send
+            # the request up the ladder looking for a way around the ban.
             return session.close("REFUSED", str(result.get("why") or ""))
         if not result.get("ok"):
             return session.close("UNMET", str(result.get("why") or ""))

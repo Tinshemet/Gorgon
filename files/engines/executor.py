@@ -87,6 +87,56 @@ class ExecutorEngine(Engine):
         except Exception:
             return False
 
+    def _red_line(self, components, kinds, holds) -> Optional[str]:
+        """The first RED-LINED tool this request would call, or None — asked before any of it.
+
+        THE OPERATOR'S RULING IS ABOUT THE WHOLE, 2026-08-02: *"not be ran at all, not just
+        the tools but also the entire program."* A request this engine serves is several
+        goals and one call each, so the equivalent of refusing the program is refusing
+        BEFORE THE FIRST CALL rather than at the goal that names the banned tool — otherwise
+        two of five goals have already changed the lab when the third is refused.
+
+        IT SWEEPS THE TILES AGAINST THE WORLD AS IT IS NOW, which is a real approximation:
+        a tile is chosen partly by what already holds, so a later goal could in principle
+        resolve differently once an earlier call has run. That is why the check is here AND
+        at the call — this one gives the all-or-nothing property in the ordinary case, and
+        the one at the call is the backstop that cannot be dodged. Same function, one
+        standard; two gates only matter when they can DISAGREE.
+        """
+        legal = self._legal()
+        if not callable(legal):
+            return None
+        for goal in components or ():
+            try:
+                tile = self._one_call(goal, kinds, holds)
+            except Exception:
+                # A GOAL THIS ENGINE CANNOT EVEN TILE IS NOT ITS WORK — `steps` will promote
+                # it. Refusing here on an exception would turn a routing decision into a
+                # security verdict.
+                continue
+            tool = (tile or (None, None))[0]
+            if tool and legal(tool):
+                return tool
+        return None
+
+    @staticmethod
+    def _refused(tool: str) -> Dict[str, Any]:
+        return {"ok": False, "failed": "forbidden", "forbidden": [tool],
+                "calls": [], "findings": [],
+                "why": f"{tool} is a red line for this agent, so nothing here runs. "
+                       f"It takes the operator's password to lift"}
+
+    @staticmethod
+    def _lifted(banned: str, session) -> bool:
+        """Has the operator lifted this red line, in person?
+
+        THE SAME SEAM AND THE SAME READER AS THE PROGRAM REGIME — `consent.permitted` off
+        `session.permit`. A second way to lift a ban, worded differently here, is how the two
+        regimes come to disagree about what the operator actually authorised.
+        """
+        from planner.ir import consent as _consent
+        return _consent.permitted([banned], getattr(session, "permit", None))
+
     def steps(self, components: List[Dict[str, Any]], session=None):
         """ONE STEP PER CALL. Not a tree — there is no decomposing here and no second round.
 
@@ -100,6 +150,14 @@ class ExecutorEngine(Engine):
         kinds = self.manifest
         _select, holds = world.seams
         calls, findings = [], []
+
+        # THE RED LINES FIRST, before a step is even proposed — a forbidden tool is not
+        # something to ask the operator about, and a decider that never sees it cannot be
+        # talked into it.
+        legal = self._legal()
+        banned = self._red_line(components, kinds, holds)
+        if banned and not self._lifted(banned, session):
+            return self._refused(banned)
 
         for goal in components or ():
             tile = self._one_call(goal, kinds, holds)
@@ -124,6 +182,11 @@ class ExecutorEngine(Engine):
             tool, args = tile
             if not tool:
                 continue                      # already true — zero calls is a real answer
+            # THE BACKSTOP. `_red_line` swept the tiles before anything ran; this is the same
+            # question asked of the tile that is ACTUALLY about to run, so a tool that only
+            # became the answer after an earlier call cannot slip through.
+            if callable(legal) and legal(tool) and not self._lifted(tool, session):
+                return {**self._refused(tool), "calls": calls, "findings": findings}
             destroys = [(tool, args)] if tool in _effects.deleters(kinds) else []
             # AND WHETHER IT CHANGES ANYTHING AT ALL, which is a wider question than whether it
             # destroys something and the one the intent ladder asks. This engine declares
@@ -162,6 +225,12 @@ class ExecutorEngine(Engine):
         kinds = self.manifest
         select, holds = world.seams
         calls, findings = [], []
+
+        # THE SAME SWEEP THE MOUNTED PATH DOES. An unmounted caller holding the engine
+        # directly gets no in-session and no decider, so it needs this MORE, not less.
+        banned = self._red_line(components, kinds, holds)
+        if banned and not self._lifted(banned, session):
+            return self._refused(banned)
 
         for goal in components or ():
             tile = self._one_call(goal, kinds, holds)

@@ -481,6 +481,31 @@ def creators(kinds=None) -> Dict[str, str]:
     return out
 
 
+def creator_for(kind: str, named: Optional[str] = None, copying: bool = False,
+                kinds=None) -> Dict[str, Any]:
+    """WHICH constructor a `NEW` runs — the tool, and whether it copies.
+
+    LIFTED OUT OF THE VISITOR, unchanged, because a second reader appeared: the pre-flight
+    that asks whether a program names a forbidden tool has to resolve a `new` to the same
+    tool the visitor will actually call, and a sweep that guessed differently would clear a
+    program the visitor then runs with a red-lined creator. One rule, two callers.
+
+    THE `from` TEST IS THE SUBTLE PART and it is why the name alone will not do:
+    `create_vm` is the tool of TWO creators — a fresh machine and one built from a golden
+    image — so matching on the name found the fresh one first and silently dropped the
+    `FROM`, passing no template and producing an empty disk wearing the right name.
+    """
+    spec = _K(kinds).get(kind) or {}
+    made = spec.get("creators") or {}
+    chosen = (next((c for c in made.values()
+                    if c.get("tool") == named and bool(c.get("from")) == copying), None)
+              if named else None)
+    return (chosen
+            or (next((c for c in made.values() if c.get("from")), None) if copying else None)
+            or made.get("create")
+            or {"tool": spec.get("create")})
+
+
 def declared(kinds=None) -> Dict[str, str]:
     """Every tool that carries a postcondition, mapped to its kind — for drift tests."""
     out: Dict[str, str] = {}

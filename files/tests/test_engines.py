@@ -53,8 +53,13 @@ RISOTTO = [{"shape": "count", "select": {"kind": "dish", "dish_name": "risotto"}
 
 
 def _kitchen():
+    return _one(MedusaEngine(World(KITCHEN)))
+
+
+def _one(engine):
+    """A registry holding exactly this engine — the mount, without the rig's opinions."""
     reg = Registry()
-    reg.mount(MedusaEngine(World(KITCHEN)))
+    reg.mount(engine)
     return reg
 
 
@@ -596,6 +601,35 @@ def test_the_in_session_grain_is_the_regime():
     check("and the closing witness has nothing left to do", many[-1].cost == 0)
     check("both close the work", out1.get("ok") and out2.get("ok"))
     check("and both make the same calls", len(out1["calls"]) == len(out2["calls"]) == 2)
+
+
+def test_the_engine_hands_the_red_lines_to_the_program():
+    """THE WIRING, not the rule — the rule is tested in `test_medusa`.
+
+    A LEGAL FILTER THAT NOBODY INJECTS IS [[gorgon-built-and-never-called]] in its first
+    shape: a seam nobody fills. `execute.run` grew a `legal` parameter and this asserts the
+    engine actually passes one, through the whole mounted path, by banning the creator the
+    plan needs and watching the world stay empty.
+    """
+    print("[legal] a banned tool refuses the program, not the call")
+    world = World(KITCHEN)
+
+    class Lawful(MedusaEngine):
+        legal_filter = staticmethod(lambda tool: tool == "create_dish")
+
+    orch = Orchestrator(_one(Lawful(world)), Channel([stub({"risotto for four": RISOTTO})]))
+    r = orch.handle("risotto for four")
+    check("the request does not close DONE", r["outcome"] != "DONE")
+    check("nothing was cooked", not world.state.get("dish"))
+    check("and the reason names the tool", "create_dish" in (r.get("why") or ""))
+
+    # THE SAME ENGINE WITHOUT THE BAN. Otherwise this test would pass on any engine that
+    # simply cannot cook, which is the check-that-cannot-fail the suite keeps catching.
+    clean = World(KITCHEN)
+    ok = Orchestrator(_one(MedusaEngine(clean)),
+                      Channel([stub({"risotto for four": RISOTTO})])).handle("risotto for four")
+    check("and the same request runs when nothing is forbidden",
+          ok["outcome"] == "DONE" and clean.state["dish"]["risotto"]["serves"] == "4")
 
 
 def test_an_engine_may_not_act_on_a_node_it_was_refused():
@@ -1695,6 +1729,77 @@ def test_the_floor_asks_before_it_acts():
     check("and the machine is still there", "doomed" in world.vms)
     check("a single call is never divisible — there is nothing finer",
           seen[0].divisible is False)
+
+
+def test_the_floor_refuses_a_red_line_before_it_offers_the_step():
+    """THE FLOOR IS WHERE `floor_first` ROUTES EVERYTHING, so a ban that held only in the
+    program regime would hold almost nowhere.
+
+    AND IT IS REFUSED BEFORE THE STEP IS OFFERED, not by the decider saying no. A decider
+    can be talked into a step; a red line is the answer that does not depend on who is
+    asking. The decider here would say YES to everything and the machine must survive it.
+    """
+    print("[executor] a red line is refused before anything is proposed")
+    from engines import ExecutorEngine, insession
+    from tests.bench.sim_world import SimWorld
+
+    world = SimWorld()
+    world.execute("create_vm", {"name": "doomed", "os_type": "linux"})
+    world.execute("create_vm", {"name": "spared", "os_type": "linux"})
+    world.calls.clear()
+
+    class Lawful(ExecutorEngine):
+        legal_filter = staticmethod(lambda tool: tool == "delete_vm")
+
+    eng = Lawful(FakeLab(world), world.execute)
+    sess = Session("delete it", eng, intent="achieve")
+    seen = []
+    out = insession.drive(
+        eng, [{"shape": "count", "select": {"kind": "vm", "name": "doomed"}, "eq": 0}],
+        sess, lambda st, s: (seen.append(st) or insession.Verdict(insession.RUN)))
+    check("no step was ever offered", not seen)
+    check("the machine is still there", "doomed" in world.vms)
+    check("and nothing was called at all", not world.calls)
+
+    # THE ALL-OR-NOTHING PROPERTY. The legal goal comes FIRST and is one this engine really
+    # does serve — checked below — so a per-goal refusal would have BUILT `newbox` on the way
+    # to declining the deletion.
+    build = {"shape": "count", "select": {"kind": "vm", "name": "newbox"}, "eq": 1}
+    out2 = eng.run([build,
+                    {"shape": "count", "select": {"kind": "vm", "name": "doomed"}, "eq": 0}])
+    check("the whole request is refused", out2.get("failed") == "forbidden")
+    check("naming the tool", out2.get("forbidden") == ["delete_vm"])
+    check("and the LEGAL goal before it never ran either",
+          not world.calls and "newbox" not in world.vms)
+
+    # THE OPERATOR LIFTS IT IN PERSON. `session.permit` is the password prompt, and it is
+    # the SAME seam the program regime reads — one answer about what was authorised.
+    granted = Session("delete it", eng, intent="achieve")
+    granted.permit = lambda tools: True
+    out3 = eng.steps([{"shape": "count", "select": {"kind": "vm", "name": "doomed"},
+                       "eq": 0}], granted)
+    # DRAINED BY HAND rather than through `drive`, so what is asserted is what the ENGINE
+    # yielded. It emits a `Publish` after the call as well as the `Step` before it, and
+    # counting both would make this pass for the wrong reason.
+    offered = []
+    try:
+        item = next(out3)
+        while True:
+            offered.append(item)
+            item = out3.send(insession.Verdict(insession.RUN))
+    except StopIteration:
+        pass
+    check("with the password the step IS offered",
+          len([i for i in offered if getattr(i, "kind", None)]) == 1)
+    check("and the deletion the red line was protecting went through",
+          "doomed" not in world.vms)
+
+    # AND THE SAME GOAL SERVED BY AN ENGINE WITH NO RED LINE, or the check above would pass
+    # against a goal this engine could never have served anyway.
+    plain = ExecutorEngine(FakeLab(world), world.execute)
+    ok = plain.run([build])
+    check("with no red line the same goal is served",
+          ok["ok"] and "newbox" in world.vms)
 
 
 def test_the_executor_refuses_to_plan_and_says_so():

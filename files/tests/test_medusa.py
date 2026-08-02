@@ -472,6 +472,111 @@ def test_an_ungrounded_program_asks_first():
           (s["acts"], s["asserts"], s["grounded"]) == (1, 0, False))
 
 
+def test_a_banned_tool_stops_the_whole_program():
+    """THE OPERATOR'S RULING, 2026-08-02: *"a tool that is allowed but guarded should still
+    run normally because running procedures require operator password already, but banned
+    tools should still be banned"* — and the program must *"not be ran at all, not just the
+    tools but also the entire program."*
+
+    WHY IT WAS NEEDED. `is_forbidden` was consulted in three production places, all of them
+    upstream of execution: the toolkit offered to the MODEL, `run_command`'s availability,
+    and `switch_agent`. That is a filter on what a model can ASK FOR and no filter at all on
+    a program that names the tool itself. Measured the same day: with every tool forbidden,
+    the dispatch ran `list_vms` regardless.
+    """
+    w = _world(names=("alpha", "doomed"))
+    sel, holds = _seams(w)
+    prog = {"body": [{"op": "call", "tool": "add_label",
+                      "args": {"name": "alpha", "label": "prod"}},
+                     {"op": "call", "tool": "delete_vm", "args": {"name": "doomed"}},
+                     {"op": "ensure", "predicate": {
+                         "shape": "count", "eq": 1,
+                         "select": {"kind": "vm", "label": "prod"}}}]}
+    banned = lambda tool: tool == "delete_vm"
+
+    res = run(prog, w.execute, select=sel, holds=holds, known_names=w.names(),
+              consent=True, legal=banned)
+    check("the program is refused", not res["ok"] and res.get("failed") == "forbidden")
+    check("the red line is NAMED", res.get("forbidden") == ["delete_vm"])
+    # THE WHOLE POINT, AND THE PART A PER-CALL REFUSAL WOULD FAIL: the legal statement
+    # standing BEFORE the banned one must not have run. A half-run program leaves the lab in
+    # a state nobody authorised.
+    check("and nothing ran at all — not even the legal statement before it",
+          res["calls"] == [] and "prod" not in w.vms["alpha"]["labels"])
+    check("the machine it was told not to touch is still there", "doomed" in w.names())
+
+    # THE ONE WAY PAST IT IS A PERSON. `permit` is the operator re-authenticating, and it is
+    # read exactly like `consent` — with one difference that is the whole point: `True` is
+    # NOT accepted. A caller can say in advance that a person agreed to a program; nobody
+    # can say in advance that a person will prove who they are.
+    asked = []
+    lifted = run(prog, w.execute, select=sel, holds=holds, known_names=w.names(),
+                 consent=True, legal=banned,
+                 permit=lambda tools: (asked.append(tools), True)[1])
+    check("the operator's password lifts it", lifted["ok"])
+    check("and they were told WHICH tools they were lifting", asked == [["delete_vm"]])
+    check("the whole program then ran", len(lifted["calls"]) == 2)
+
+    w2 = _world(names=("alpha", "doomed"))
+    sel2, holds2 = _seams(w2)
+    check("a wrong password is a no",
+          run(prog, w2.execute, select=sel2, holds=holds2, known_names=w2.names(),
+              consent=True, legal=banned, permit=lambda tools: False
+              ).get("failed") == "forbidden")
+    check("and a STANDING grant cannot answer it — only a callable, asked now",
+          run(prog, w2.execute, select=sel2, holds=holds2, known_names=w2.names(),
+              consent=True, legal=banned, permit=True).get("failed") == "forbidden")
+    check("nothing ran through either", "doomed" in w2.vms)
+
+    # A GUARDED TOOL IS NOT A BANNED ONE. The operator's other half: consent and the tier
+    # gate are elsewhere and are not weakened by this — nothing here refuses a destructive
+    # tool that no rule forbids.
+    ok = run(prog, w.execute, select=sel, holds=holds, known_names=w.names(),
+             consent=True, legal=lambda tool: False)
+    check("with nothing forbidden the same program runs", ok["ok"] and len(ok["calls"]) == 2)
+    check("no filter at all is the same answer as an empty one",
+          run({"body": [{"op": "call", "tool": "add_label",
+                         "args": {"name": "alpha", "label": "x"}},
+                        {"op": "ensure", "predicate": {
+                            "shape": "count", "eq": 1,
+                            "select": {"kind": "vm", "label": "x"}}}]},
+              w.execute, select=sel, holds=holds, known_names=w.names(),
+              consent=True)["ok"])
+
+
+def test_a_red_line_two_procedures_deep_is_still_a_red_line():
+    """A PROCEDURE IS A TOOL YOU WROTE, so a ban has to see through the name.
+
+    THE ATTACK THIS CLOSES IS NOT SUBTLE: if the sweep read only the top-level statements,
+    `CALL wrapper()` would launder any forbidden tool in the library. The expansion is the
+    same one the visitor performs at run time, so what is checked is what would run.
+    """
+    from planner.ir import consent as _consent
+    from planner import procedures as _procs
+
+    inner = {"name": "inner", "params": {},
+             "body": [{"op": "call", "tool": "delete_vm", "args": {"name": "doomed"}},
+                      {"op": "ensure", "predicate": {
+                          "shape": "count", "eq": 0,
+                          "select": {"kind": "vm", "name": "doomed"}}}]}
+    outer = {"body": [{"op": "call", "tool": "inner", "args": {}}]}
+
+    real = _procs.LIBRARY.get
+    _procs.LIBRARY.get = lambda n: inner if n == "inner" else None
+    try:
+        named = _consent.tools_named(outer)
+        check("the wrapper is expanded, not taken at its word", named == ["delete_vm"])
+        check("and the red line inside it is found",
+              _consent.forbidden(outer, lambda t: t == "delete_vm") == ["delete_vm"])
+        # A `NEW` RESOLVES TO THE CREATOR THAT WOULD ACTUALLY RUN — the visitor's own rule,
+        # so a ban on `create_vm` cannot be walked around by writing NEW instead of CALL.
+        made = {"body": [{"op": "new", "kind": "vm", "var": "box1", "args": {}}]}
+        check("a NEW is resolved to its creator",
+              _consent.forbidden(made, lambda t: t == "create_vm") == ["create_vm"])
+    finally:
+        _procs.LIBRARY.get = real
+
+
 def test_derivation_closes_a_countable_gap():
     w = _world(names=("a", "b", "c", "d", "e", "f"), label="prod")
     sel, _ = _seams(w)

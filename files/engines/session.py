@@ -73,7 +73,7 @@ class Session:
 
     def __init__(self, request: str, engine, intent: str = "fetch",
                  budget: Optional[int] = None, consent: Any = None,
-                 regime: Optional[str] = None):
+                 regime: Optional[str] = None, permit: Any = None):
         self.request = request
         self.engine = engine
         self.intent = intent
@@ -86,6 +86,11 @@ class Session:
         # a hardcoded `True` — an unattended run granting itself the permission a person was
         # supposed to give, which is the exact thing that module's docstring forbids.
         self.consent = consent
+        # THE SECOND OPERATOR SURFACE, and the only one that asks WHO you are rather than
+        # WHETHER you agree. `permit(banned) -> bool` lifts a red line, and nothing else can:
+        # see `consent.permitted`. Carried here for the same reason `consent` is — the engine
+        # is where a program meets the world — and `None` is a no.
+        self.permit = permit
         # THE GRAIN, WHICH THE INTENT CHOOSES AND A CALLER MAY NAME.
         #
         # THE TWO ARE NOT THE SAME QUESTION and only stopped looking alike once intent became

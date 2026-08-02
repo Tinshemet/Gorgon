@@ -106,7 +106,8 @@ def packages(findings=None) -> Tuple:
 
 def build(execute: Callable, library=None, narrate: bool = True,
           decide: Optional[Callable] = None,
-          consent: Optional[Callable] = None) -> Any:
+          consent: Optional[Callable] = None,
+          permit: Optional[Callable] = None) -> Any:
     """The whole production mount: two engines, a channel, a reporter, a router.
 
     `execute` is the caller's GUARDED executor — the same door a single tool call goes
@@ -117,6 +118,11 @@ def build(execute: Callable, library=None, narrate: bool = True,
     is: this module knows how to assemble a mount, not who is at the terminal. Left `None` it
     is the unattended answer, which `consent.granted` reads as no — and the fifth seam this
     file exists to keep visible.
+
+    `permit(banned) -> bool` IS THE SIXTH, and it is the only one that asks WHO rather than
+    WHETHER: a program naming a red-lined tool does not run until the operator lifts it with
+    their password. Left `None`, a red line simply refuses — which is the right unattended
+    answer, and the reason this is a seam rather than a prompt built in here.
     """
     from orchestrator.ai.active_library import LIBRARY
 
@@ -145,5 +151,5 @@ def build(execute: Callable, library=None, narrate: bool = True,
                               packages=packages(findings=found)))
 
     return Orchestrator(registry, Channel([translator()]), decide=decide,
-                        route=floor_first, consent=consent,
+                        route=floor_first, consent=consent, permit=permit,
                         narrate=_reporter.narrator() if narrate else None)

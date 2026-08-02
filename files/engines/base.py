@@ -70,6 +70,35 @@ class Engine:
     # ENGINE'S, so a package never holds hands of its own.
     packages: Tuple = ()
 
+    # THE AGENT'S RED LINES. An attribute so a mount can override it — a test, a bench, an
+    # engine answering to something other than the active agent — and None means "ask the
+    # contract". ON THE BASE RATHER THAN ON ONE ENGINE, for the reason the executor's own
+    # docstring already gives about consent: the operator's protection cannot depend on
+    # WHICH engine happened to serve the request.
+    legal_filter = None
+
+    def _legal(self):
+        """`is_forbidden`, or None when no contract is reachable.
+
+        THE SAME FILTER THE TREE PATH USES, resolved the same way — `engine_core` reads
+        `engine.legal_filter or _legal_default()` and so does this. One red line across
+        three regimes: the alternative is a ban that holds while a model picks tool calls
+        and lapses the moment the same goal is served by a program or by the floor.
+
+        WHY IT WAS MISSING EVERYWHERE BUT THE TREE. `is_forbidden` was consulted in three
+        production places, all upstream of execution — the toolkit offered to the MODEL,
+        `run_command`'s availability, `switch_agent`. That is a filter on what a model can
+        ASK FOR, and no filter at all on a caller that names the tool itself. Measured
+        2026-08-02: with every tool forbidden, dispatch ran `list_vms` regardless.
+
+        AN ACCESSOR THAT MUST BE CALLED, never a wrapper. `_deps` degrades to None in a
+        sparse checkout and a lazy wrapper is a function, so `x or _default` would turn
+        "no filter" into "a filter that raises at call time" — in the legal filter, which
+        is the one place that must not be approximately right.
+        """
+        from planner.score._deps import _legal_default
+        return self.legal_filter or _legal_default()
+
     @property
     def manifest(self) -> Dict[str, Any]:
         """The kinds this engine deals in, its packages' included."""

@@ -98,6 +98,53 @@ class Plan(Shortcut):
         return said.strip().lower() in ("y", "yes")
 
     @staticmethod
+    def ask_banned(banned) -> bool:
+        """*This program names a tool your agent forbids — password to lift it.* Default NO.
+
+        THE OPERATOR'S RULING, 2026-08-02: *"procedures dont require operator password. ONLY
+        WHEN IT CONTAINS BANNED TOOLS, then you require an operator password."* Everything
+        else a procedure meets is a QUESTION — y/n at a terminal. This is the one place that
+        asks WHO you are, because a red line is what the contract wrote down to stop this
+        exact agent, and a walk-up to an unlocked terminal must not be able to answer it.
+
+        THE SAME RE-AUTH THE HIGH-IMPACT CLI COMMANDS USE, deliberately: forging a contract,
+        switching the active agent, enacting a referendum. Lifting a red line belongs in that
+        list and nowhere weaker.
+
+        IT DEGRADES OPEN ONLY WHERE AUTH CANNOT APPLY — no auth package, or no operators yet
+        (pre-bootstrap) — which is `_require_operator_password`'s own rule, kept rather than
+        re-decided. Anywhere else: a logged-in operator AND a correct password, or no.
+        """
+        console.print(f"\n[bold red]RED LINE[/bold red] — this program calls "
+                      f"{', '.join(banned)}, which this agent is forbidden to use.")
+        try:
+            from orchestrator.auth import sessions as _sessions, store as _store
+        except ImportError:
+            # NO AUTH PACKAGE AT ALL. The same degrade-open arm the CLI keeps, and the same
+            # reason: a checkout without auth cannot ask, and refusing every red line there
+            # would make the feature untestable rather than safe.
+            return True
+        if not _store.operators_exist():
+            return True
+        user = _sessions.current_username()
+        if not user:
+            console.print("[bold red]Login required.[/bold red] Run "
+                          "[cyan]gorgon login[/cyan] first — nothing was run.")
+            return False
+        import getpass
+        try:
+            pw = getpass.getpass("Operator password to lift the red line: ")
+        except (EOFError, KeyboardInterrupt):
+            # AN ABSENT TERMINAL IS A NO, the rule `intent`, `consent` and `ask_destroy` all
+            # keep: with nobody to ask, take the answer that changes nothing.
+            return False
+        if _store.verify_password(user, pw):
+            console.print("[warn]red line lifted for this run.[/warn]")
+            return True
+        console.print("[bold red]Password incorrect — nothing was run.[/bold red]")
+        return False
+
+    @staticmethod
     def _ask_consent(question: str) -> bool:
         """`consent.py`'s question — *this changes the world and nothing checks it, sure?*
 
@@ -235,7 +282,12 @@ class Plan(Shortcut):
         # A DRY RUN NEEDS NO CONSENT SURFACE, because it never reaches the world — and
         # offering one would train the operator to answer a question that decides nothing.
         result = _rig.build(guarded, narrate=not dry, decide=decide,
-                            consent=None if dry else self._ask_consent).handle(
+                            consent=None if dry else self._ask_consent,
+                            # A DRY RUN TOUCHES NOTHING, so there is nothing to lift and no
+                            # password to ask for — offering one would teach the operator to
+                            # type it at a prompt that decides nothing, which is how a re-auth
+                            # stops meaning anything.
+                            permit=None if dry else self.ask_banned).handle(
                                 request, intent=granted, procedure=keep_as,
                                 declared=declared)
 
