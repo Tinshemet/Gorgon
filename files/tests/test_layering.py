@@ -9,20 +9,33 @@ import gate_action` at module level in `planner/score/_deps.py` pointed the arro
 and made the package unimportable on its own. A grep finds those on the day somebody
 looks; this suite finds them on the day they land.
 
-TWO PROPERTIES, AND THE SECOND IS THE SUBTLE ONE:
+THREE PROPERTIES, AND THE LAST TWO ARE THE SUBTLE ONES:
 
-  1. LAYERING — importing the lower package does not import the higher one. Checked in a
-     SUBPROCESS, because the property is about what an import PULLS IN and this process
-     has already imported everything.
-  2. THE DEGRADED PATH — `_deps` resolves its optional bundle lazily now, and a lazy
+  1. NO IMPORT-TIME UPWARD EDGE, read off the AST of every module in the four packages.
+     This is the whole rule, stated once and enforced. An import inside a FUNCTION BODY
+     is allowed — it costs nothing at import time and the layering it breaks is a
+     call-time one somebody chose — but the exact set of those is pinned below, so a new
+     one is a DECISION somebody records rather than a drift nobody notices.
+  2. LAYERING, OBSERVED — importing the lower package does not pull in the higher one.
+     The AST check says what the source declares; this says what the interpreter does.
+     Checked in a SUBPROCESS, because the property is about what an import PULLS IN and
+     this process has already imported everything.
+  3. THE DEGRADED PATH — `_deps` resolves its optional bundle lazily now, and a lazy
      wrapper is a FUNCTION, which is always truthy. `engine.gate or _gate_default()` is
      read for truthiness, so a wrapper where `None` belonged would silently turn "no
      gate" into "a gate that raises at call time" — in the legal filter and the consent
      gate, in the one path nobody exercises. So the sparse-checkout arm is asserted to
      yield None/empty, not merely to not crash.
 
+WHAT THIS SUITE CANNOT SEE, and it cost a debugging round on the day of the move: a
+dependency that is a FILESYSTEM PATH rather than an import. `clause_ledger._verbs()`
+found the chat config by walking up from `__file__`, which stopped resolving when the
+package changed depth, and a bare `except` turned the miss into an empty set. Nothing
+here would have caught that. `test_clause_ledger` did.
+
 Run:  PYTHONPATH=. python3 tests/test_layering.py
 """
+import ast
 import os
 import subprocess
 import sys
@@ -53,9 +66,102 @@ def _run(source: str):
     return proc.returncode, (proc.stdout + proc.stderr).strip()
 
 
-# The layers, low to high. A module in an earlier group may not pull in a later one AT
-# IMPORT TIME. Reaching up from inside a function body is allowed and deliberate — see
-# `ir/execute.py:_books`, which documents why the creation ledger sits above the language.
+# THE LAYERS, low number = lower layer. A package may import DOWN and SIDEWAYS freely;
+# importing UP at module level is the thing this file forbids. `shared` and `executor`
+# are placed low because they are what everything reads (a bundle format, a tool
+# registry) and they import none of these back.
+_LAYERS = {
+    "shared":       0,
+    "planner":      0,   # the language
+    "executor":     1,   # the tool registry / the executor server
+    "packages":     1,   # camoufox, webcrawl
+    "engines":      2,   # medusa, executor+qemu adapters, the rig, the engine-of-engines
+    "orchestrator": 3,   # the run loop, chat, the agent contract, the books
+    "client":       4,
+    "admin":        4,
+    "tests":        9,
+}
+
+# THE UPWARD EDGES THAT EXIST, ALL LAZY, EACH ONE A DECISION. Pinned as (package, module,
+# target) so adding one is an edit here — "declare, don't infer" applied to the dependency
+# graph itself. Line numbers are deliberately NOT pinned; they move for reasons nobody
+# should have to re-approve.
+_ALLOWED_LAZY = {
+    # The language reaching for the tool registry to check a tool exists / its fields.
+    ("planner", "planner/ir/derive.py",      "executor.command_catalog"),
+    ("planner", "planner/ir/validate.py",    "executor.command_catalog"),
+    ("planner", "planner/translator.py",     "executor.command_catalog"),
+    ("planner", "planner/score/_deps.py",    "executor.command_catalog"),
+    # The creation ledger sits ABOVE the language — see `ir/execute.py:_books`.
+    ("planner", "planner/ir/execute.py",     "orchestrator.ai.books"),
+    # The contract / consent gate defaults, resolved on first call — see `score/_deps.py`.
+    ("planner", "planner/score/_deps.py",    "orchestrator.ai.chat.context_assistant"),
+    ("planner", "planner/score/_deps.py",    "orchestrator.ai.agent.contract"),
+    # The engines ask the chat layer where the model lives, and the orchestrator's library.
+    ("engines",  "engines/channel.py",       "orchestrator.ai.chat.ollama_client"),
+    ("engines",  "engines/rig.py",           "orchestrator.ai.active_library"),
+    # PRODUCTION REACHING INTO THE BENCH, deliberately — `staged_seams` says why: the
+    # model-driven tree scores 4/13 against the writer's 13/13, so moving those builders
+    # into production would claim they had arrived. Noted here because it is the kind of
+    # edge that should stay uncomfortable to look at.
+    ("engines",  "engines/rig.py",           "tests.bench.sim_world"),
+    ("engines",  "engines/rig.py",           "tests.bench.tree_probe"),
+}
+
+_PACKAGES = ("planner", "packages", "engines", "orchestrator")
+
+
+def _edges():
+    """Every cross-package import in the four packages -> (pkg, relpath, target, lazy)."""
+    found = []
+    for pkg in _PACKAGES:
+        for dirpath, dirs, names in os.walk(os.path.join(_ROOT, pkg)):
+            dirs[:] = [d for d in dirs if d != "__pycache__"]
+            for fname in names:
+                if not fname.endswith(".py"):
+                    continue
+                path = os.path.join(dirpath, fname)
+                rel = os.path.relpath(path, _ROOT)
+                tree = ast.parse(open(path).read(), filename=rel)
+                top_level = set(map(id, tree.body))
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.ImportFrom):
+                        if node.level:            # relative — stays inside the package
+                            continue
+                        targets = [node.module or ""]
+                    elif isinstance(node, ast.Import):
+                        targets = [a.name for a in node.names]
+                    else:
+                        continue
+                    for target in targets:
+                        head = target.split(".")[0]
+                        if head == pkg or head not in _LAYERS:
+                            continue
+                        if _LAYERS[head] > _LAYERS[pkg]:
+                            found.append((pkg, rel, target, id(node) not in top_level,
+                                          node.lineno))
+    return found
+
+
+def test_no_import_time_upward_edge():
+    up = _edges()
+    eager = [e for e in up if not e[3]]
+    check("no package imports a higher layer at module level",
+          not eager,
+          "; ".join(f"{e[1]}:{e[4]} -> {e[2]}" for e in eager))
+
+    seen = {(e[0], e[1], e[2]) for e in up if e[3]}
+    surprise = sorted(seen - _ALLOWED_LAZY)
+    check("every lazy upward edge is one that was written down",
+          not surprise,
+          "undeclared: " + "; ".join(f"{s[1]} -> {s[2]}" for s in surprise))
+    gone = sorted(_ALLOWED_LAZY - seen)
+    check("no declared upward edge has silently disappeared",
+          not gone,
+          "stale entries: " + "; ".join(f"{s[1]} -> {s[2]}" for s in gone))
+
+
+# The higher layers, named as module paths for the observed-import check below.
 _UPPER = [
     "orchestrator.ai.agent.contract",
     "orchestrator.ai.chat.context_assistant",
@@ -148,6 +254,8 @@ def test_deps_wired_in_a_full_checkout():
 
 
 def main():
+    print("\n--- layering: no import-time upward edge, anywhere ---")
+    test_no_import_time_upward_edge()
     print("\n--- layering: planner does not import upward ---")
     test_planner_does_not_import_upward()
     print("\n--- _deps: the degraded (sparse checkout) arm ---")
