@@ -249,6 +249,20 @@ class Orchestrator:
         from ..planner import procedures as _procs
         from ..planner.ir.render import render as _render
 
+        # THE ENGINE'S KINDS, HELD FOR THE WHOLE OF AUTHORING. `_attempt` enters this scope
+        # around planning and leaves it before here, so `validate` — called by `save` — ran
+        # with only the core manifest and refused a perfectly good crawl program with
+        # "unknown kind 'browser'". THE WRITER HAD JUST PLANNED IT USING THAT KIND.
+        #
+        # FOURTH AND FIFTH INSTANCES OF ONE DEFECT, on the same day: a value read outside the
+        # dynamic scope is a value from a different world. The world now answers for its own
+        # packages, which fixes the planning half; this fixes the KEEPING half, which no world
+        # is involved in.
+        from ..planner.ir import config as _config
+        with _config.use_kinds(getattr(engine, "manifest", None)):
+            return self._author_within(engine, session, name, components, _procs, _render)
+
+    def _author_within(self, engine, session, name, components, _procs, _render):
         if not _procs.legal_name(name):
             return session.close("REFUSED",
                                  f"{name!r} is not a legal procedure name — it is written "

@@ -59,8 +59,28 @@ class LabWorld:
         domain line, now the world's kinds. Anything that reads the manifest must read it when
         it is used, because `use_kinds` is a dynamic scope and a value captured before it is a
         value from a different world.
+
+        FOURTH TIME, 2026-08-02, AND THIS IS THE FIX FOR IT. Reading the live manifest is
+        necessary and was not sufficient: a WORLD WITH PACKAGES MOUNTED IN IT still answered
+        with only the core kinds, because the package manifests are merged by whoever ENTERS
+        `use_kinds` and a caller that forgot got a world that had never heard of `search`. The
+        writer then honestly reported `nothing reaches: count(search …) = 1` — no bug in the
+        package, the manifest, the chain or the writer; the destination kind was invisible at
+        the one moment it mattered.
+
+        A WORLD KNOWS ITS OWN PACKAGES, so it can answer for their kinds without being told.
+        That removes the requirement that four call sites remember a dynamic scope, which is
+        what made this recur four times. The live scope still WINS where it is entered — this
+        only ensures the packages mounted here are never missing from the answer.
         """
-        return _config.KINDS
+        live = _config.KINDS or {}
+        if not self._packages:
+            return live
+        merged = dict(live)
+        for pkg in self._packages:
+            for kind, spec in (getattr(pkg, "manifest", None) or {}).items():
+                merged.setdefault(kind, spec)
+        return merged
 
     @property
     def unseeded(self) -> set:

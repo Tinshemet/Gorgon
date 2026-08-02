@@ -80,6 +80,18 @@ def _stored() -> set:
         return set()
 
 
+def _manifest_tools() -> set:
+    """Every tool the kinds in force name — creators, deleters, setters, observers.
+
+    FAILS OPEN like `_is_procedure`: a manifest that cannot be read must not turn every tool
+    into an unknown one.
+    """
+    try:
+        from . import config, effects
+        return set(effects.tools_of(config.KINDS))
+    except Exception:
+        return set()
+
 def _is_procedure(name: str) -> bool:
     """Is this the name of a stored procedure? Then it is callable.
 
@@ -145,7 +157,16 @@ def validate(program: Any, known_tools=None, known_names=None,
     # A PROCEDURE EXTENDS WHAT MAY BE CALLED AND NEVER LICENSES A TOOL THAT WAS REFUSED —
     # union, never replacement — and a caller that supplied nothing is asking about
     # well-formedness alone, where a library it cannot see has no bearing.
+    # THE LIVE MANIFEST'S TOOLS TOO, NOT ONLY THE EXECUTOR'S STATIC CATALOG. A mounted package
+    # brings kinds AND the tools that act on them — `camoufox_launch`, `camoufox_close` — and
+    # the catalog is the host executor's, compiled without them. So a program the writer had
+    # just planned using those tools was refused as naming tools that do not exist.
+    #
+    # DERIVED FROM `config.KINDS`, WHICH IS THE SCOPE. Inside `use_kinds` the package's rows
+    # are present and its tools come with them; outside, this adds nothing. That is the
+    # correct behaviour in both directions and needs no new argument to thread through.
     tools = _KNOWN_TOOLS if known_tools is None else set(known_tools) | _stored()
+    tools = set(tools) | _manifest_tools()
     body = coerce_body(program)
     if body is None:
         return False, ["program has no statements"]
