@@ -15,7 +15,7 @@ from .meta_tools import DECOMPOSE_TOOL, ALTERNATIVES_TOOL, _NODE_SYSTEM, _OPAQUE
 from .ledger_util import (_node, _norm, _progress_summary, _attach_steer, _first_tool_call,
                           _SET_VALUED_RE, _OBSERVER_TOOLS)
 from ._deps import (
-    _default_gate, _default_criterion, _default_legal, _consent_verb, _tool_risk,
+    _gate_default, _criterion_default, _legal_default, _consent_verb, _tool_risk,
     _yield_fact, _extract_value, _finding_probe_spec,
 )
 
@@ -98,11 +98,11 @@ def run_score(
         engine = Engine.from_kwargs(_legacy)
     # Unpack the policy bundle into the local names the body already uses (defaults
     # fall back to the active contract's functions), so the logic below is unchanged.
-    gate            = engine.gate or _default_gate
+    gate            = engine.gate or _gate_default()
     verify          = engine.verify
     verify_goal     = engine.verify_goal
-    criterion_of    = engine.criterion_of or _default_criterion
-    legal_filter    = engine.legal_filter or _default_legal
+    criterion_of    = engine.criterion_of or _criterion_default()
+    legal_filter    = engine.legal_filter or _legal_default()
     referendum      = engine.referendum
     watchdog        = engine.watchdog
     killswitch      = engine.killswitch

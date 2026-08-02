@@ -9,7 +9,7 @@ they hold no engine state, so they live outside the closure in engine_core.
 import re
 from typing import Any, Dict, List
 
-from ._deps import _POST_CREATE_ATTACH, _NARROW_CORE_TOOLS
+from ._deps import _post_create_attach, _narrow_core_tools
 
 
 def _node(goal: str, status: str, **kw) -> Dict[str, Any]:
@@ -74,11 +74,12 @@ def _attach_steer(base: List[Dict], node_goal: str, ledger: List[Dict[str, Any]]
     can't over-decompose it into a spurious 're-create then attach'. When nothing is
     referenced, returns (base, False) unchanged.
     """
-    if not _POST_CREATE_ATTACH:
+    attach_spec = _post_create_attach()
+    if not attach_spec:
         return base, False
     low = node_goal.lower()
     by_name = {t.get("function", {}).get("name"): t for t in tools}
-    for creator, spec in _POST_CREATE_ATTACH.items():
+    for creator, spec in attach_spec.items():
         made = [e["args"].get(spec["name_arg"]) for e in ledger
                 if e.get("tool") == creator and e.get("ok")]
         made = [n for n in made if n]
@@ -96,7 +97,7 @@ def _attach_steer(base: List[Dict], node_goal: str, ledger: List[Dict[str, Any]]
         referenced = spec["keyword"] in low or any(str(n).lower() in low for n in made)
         attach = by_name.get(spec["attach"])
         if referenced and attach is not None:
-            core = [t for t in tools if t.get("function", {}).get("name") in _NARROW_CORE_TOOLS]
+            core = [t for t in tools if t.get("function", {}).get("name") in _narrow_core_tools()]
             tight = [attach] + [t for t in core if t is not attach]
             # "steered" claims the node is ONE primitive, and the caller drops `decompose`
             # on the strength of that. True for "put red1 on rednet"; FALSE for a SET —
