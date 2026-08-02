@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engines import (Channel, MedusaEngine, Orchestrator, Registry,
                                      Session, describe, stub)
-from packages import WebCrawlPackage
+from tests.bench.fixture_package import GuestPackage
 from engines.session import INTENT_REGIME, rank
 from planner.ir import config
 from tests.bench.generic_world import World
@@ -123,7 +123,7 @@ def test_nobody_claiming_is_an_answer_not_a_crash():
             return "schedule" in request.lower()
 
     reg = Registry()
-    reg.mount(Narrow(World(KITCHEN), packages=(WebCrawlPackage(),)))
+    reg.mount(Narrow(World(KITCHEN), packages=(GuestPackage(),)))
     orch = Orchestrator(reg, Channel())
     r = orch.handle("defragment the mainframe")
     check("outcome is UNCLAIMED", r["outcome"] == "UNCLAIMED")
@@ -139,7 +139,7 @@ def test_nobody_claiming_is_an_answer_not_a_crash():
     check("a package is not routed to, however well it claims",
           r2["outcome"] == "UNCLAIMED")
     check("but it IS offered as a callable capability",
-          r2["capabilities"] == ["webcrawl"])
+          r2["capabilities"] == ["guest"])
 
 
 def test_an_untranslated_request_names_the_front_seam():
@@ -208,37 +208,39 @@ def test_the_intent_ladder_and_the_regimes_are_one_table():
 
 
 def test_a_new_engine_is_essentially_an_api():
-    """The mock crawl engine — a capability Gorgon has never had, mounted and run.
+    """A capability the system has never had, planned from nothing but its manifest.
 
-    Deliberately the HARD case: the crawling belongs inside virtual machines, so the engine's
-    world is its own while its HANDS are injected. That is what a real one would do, and it
+    Deliberately the HARD case: the work belongs inside virtual machines, so the engine's
+    world is its own while its HANDS are injected. That is what a real package does, and it
     is the property a local-only mock would not have tested.
+
+    NARROWED 2026-08-02 WHEN `webcrawl` WAS DELETED. This asserted a fetch/probe chain and a
+    reachability FINDING, both of which were that package's design rather than the loading
+    contract — `test_the_crawler_probes_rather_than_trusting_a_success_flag` is the test the
+    rework owes back, and it belongs with whatever replaces the crawler. What survives here
+    is what is true of ANY package: a dependency order the manifest declares, and hands that
+    cannot run a tool the manifest never named.
     """
     print("[mock] a capability Gorgon has never had")
     goals = [{"shape": "count", "select": {"kind": "crawl", "crawl_name": "sweep1"}, "eq": 1},
-             {"shape": "count", "select": {"kind": "page", "crawl": "sweep1"}, "eq": 3},
-             {"every": {"kind": "page", "crawl": "sweep1"}, "must": {"fetched": "yes"}},
-             {"observe": {"kind": "page", "crawl": "sweep1"}, "fact": "reachable"}]
+             {"shape": "count", "select": {"kind": "page", "crawl": "sweep1"}, "eq": 3}]
     # CALLED, NOT ROUTED TO. A guest capability is what a Medusa program reaches for once it
-    # has a machine — `CALL web_crawler_search(vm: $temp)` — so this exercises it the way it
-    # is actually reached, rather than through a door the orchestrator deliberately closed.
-    pkg = WebCrawlPackage()
+    # has a machine — so this exercises it the way it is actually reached, rather than
+    # through a door the orchestrator deliberately closed.
+    pkg = GuestPackage()
     r = MedusaEngine(pkg.world()).run(goals)
-    check("the crawl completes", r["ok"] is True)
+    check("the work completes", r["ok"] is True)
     check("it is grounded", r.get("grounded") is True)
     rendered = r.get("rendered", "")
+    # THE ORDER IS THE MANIFEST'S, not the goal list's. `page` declares `create_requires:
+    # crawl`, so a page cannot be recorded into a crawl that was never started — and nothing
+    # in the goals above says so.
     check("it starts the crawl before recording pages in it",
           rendered.index("start_crawl") < rendered.index("record_page"))
-    check("it records a page before fetching it",
-          rendered.index("record_page") < rendered.index("fetch_page"))
-    # REACHABILITY IS A FINDING. Nothing infers it from a fetch succeeding — the crawler that
-    # trusts its own success flags is the one that reports 400 pages and delivers 12.
-    check("and it PROBES rather than assuming", "probe_page" in rendered)
 
     seen = {t for t, _ in (r["calls"] or [])}
     check("the hands were injected — no tool ran that the manifest did not name",
-          seen <= {"start_crawl", "record_page", "fetch_page", "probe_page",
-                   "finish_crawl", "assign_runner", "abandon_crawl"})
+          seen <= {"start_crawl", "record_page", "finish_crawl"})
 
 
 def test_the_host_boundary_is_structural_not_a_check():
@@ -253,16 +255,16 @@ def test_the_host_boundary_is_structural_not_a_check():
     print("[safety] engines run the host; packages run inside one")
     reg = Registry()
     try:
-        reg.mount(WebCrawlPackage())
+        reg.mount(GuestPackage())
         check("a package cannot be mounted", False)
     except ValueError as e:
         check("a package cannot be mounted", "PACKAGE" in str(e))
         check("and the refusal explains the distinction", "LOADED" in str(e))
-    check("a package has no run()", not hasattr(WebCrawlPackage(), "run"))
-    check("and no intents to route on", not hasattr(WebCrawlPackage(), "intents"))
+    check("a package has no run()", not hasattr(GuestPackage(), "run"))
+    check("and no intents to route on", not hasattr(GuestPackage(), "intents"))
 
     # LOADED, and then its kinds are plannable by the engine that loaded it.
-    engine = MedusaEngine(World(KITCHEN), packages=(WebCrawlPackage(),))
+    engine = MedusaEngine(World(KITCHEN), packages=(GuestPackage(),))
     check("a loaded package's kinds join the engine's manifest",
           {"dish", "crawl", "page"} <= set(engine.manifest))
     check("and the engine still owns its own", "dish" in engine.manifest)
@@ -357,7 +359,7 @@ def test_an_engine_borrows_hands_without_knowing_whose():
         seen.append(tool)
         return {"success": True}
 
-    pkg = WebCrawlPackage()
+    pkg = GuestPackage()
     engine = MedusaEngine(pkg.world(), execute=borrowed)
     engine.run([{"shape": "count", "select": {"kind": "crawl", "crawl_name": "s"}, "eq": 1}])
     check("the injected executor was used", "start_crawl" in seen)

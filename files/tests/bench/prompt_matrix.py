@@ -26,8 +26,7 @@ import json
 import sys
 from typing import Any, Dict, List, Optional
 
-from engines import (Channel, MedusaEngine, Orchestrator, Registry,
-                                     WebCrawlEngine)
+from engines import Channel, MedusaEngine, Orchestrator, Registry
 
 from engines import extract as _extract
 from .seams import seams
@@ -82,7 +81,11 @@ def _rig(stub_table: Optional[Dict] = None):
         """Medusa over the bench's sim — the same engine, a test world."""
 
     reg.mount(SimMedusa(_SimAdapter(world)))
-    reg.mount(WebCrawlEngine())
+    # `WebCrawlEngine` USED TO BE MOUNTED HERE AND HAS NOT EXISTED FOR SOME TIME — this
+    # file could not be IMPORTED, let alone run, and nothing said so because a bench is not
+    # a suite (`run_all.NOT_SUITES`). Found 2026-08-02 while clearing the package deletion;
+    # it predates that deletion. A crawler was never a second engine anyway: it is a
+    # package, loaded by one.
     return world, reg
 
 

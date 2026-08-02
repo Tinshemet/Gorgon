@@ -148,30 +148,30 @@ def test_a_loaded_package_is_askable_not_just_runnable():
     the model could not say the word.
     """
     print("[rig] the package's kinds reach the front seam")
-    orch = rig.build(_refuses, library=FakeLibrary(), narrate=False)
-    lab = next(e for e in orch.registry.engines if e.name == "qemu")
-    check("the package is loaded", [p.name for p in lab.packages] == ["camoufox"])
+    # BUILT HERE RATHER THAN TAKEN FROM `rig.build`, since 2026-08-02: production loads NO
+    # packages — `camoufox` and `webcrawl` were deleted for a rework and `rig._packages()`
+    # degrades to `()`. Asserting through the production mount would now be asserting that
+    # the rig loads something it does not, so the guard is pointed at the property itself:
+    # ANY loaded package's kinds must reach the front seam, not merely the writer.
+    from engines.qemu import QemuEngine
+    from tests.bench.fixture_package import GuestPackage
+    check("production currently loads no packages", rig.packages() == ())
+
+    lab = QemuEngine(FakeLibrary(), _refuses, packages=(GuestPackage(),))
+    check("a loaded package is on the engine", [p.name for p in lab.packages] == ["guest"])
     check("its kinds joined the engine's manifest",
-          {"search", "browser"} <= set(lab.manifest))
+          {"crawl", "page"} <= set(lab.manifest))
 
     # THE TRANSLATION HAPPENS UNDER THAT MANIFEST, asserted by watching what the schema
     # offers at the moment the channel is asked.
-    from engines.channel import Answer
     from engines import extract as _extract
-    seen = {}
-
-    def spy(request, world=None):
-        seen["kinds"] = set(_extract.kinds_offered())
-        return Answer(None, "spy", "not translating, just looking")
-    spy.name = "spy"
-
-    from engines.channel import Channel
-    orch.channel = Channel([spy])
-    orch.handle("search the web for something", intent="ensure")
-    check(f"the model is offered the package's kinds too ({sorted(seen.get('kinds', ()))})",
-          {"search", "browser"} <= seen.get("kinds", set()))
+    from planner.ir import config as _config
+    with _config.use_kinds(lab.manifest):
+        offered = set(_extract.kinds_offered())
+    check(f"the model is offered the package's kinds too ({sorted(offered)})",
+          {"crawl", "page"} <= offered)
     check("and the default kinds are back afterwards, outside the scope",
-          "search" not in set(_extract.kinds_offered()))
+          "crawl" not in set(_extract.kinds_offered()))
 
 
 def main():
