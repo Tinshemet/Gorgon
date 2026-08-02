@@ -74,6 +74,19 @@ class ExecutorEngine(Engine):
         from .qemu import LabWorld
         return LabWorld(self._library, self._execute, self._findings)
 
+    @staticmethod
+    def _procedure_covers(goal) -> bool:
+        """Does a stored procedure claim this exact goal?
+
+        FAILS OPEN, DELIBERATELY. If the library cannot be read, the executor serves the goal
+        as it always did — a broken store must not stop the lab from running one call.
+        """
+        try:
+            from ..planner.procedures import LIBRARY
+            return LIBRARY.covering(goal) is not None
+        except Exception:
+            return False
+
     def steps(self, components: List[Dict[str, Any]], session=None):
         """ONE STEP PER CALL. Not a tree — there is no decomposing here and no second round.
 
@@ -90,7 +103,22 @@ class ExecutorEngine(Engine):
 
         for goal in components or ():
             tile = self._one_call(goal, kinds, holds)
-            if tile is None:
+            # A STORED PROCEDURE OUTRANKS THE PRIMITIVE, and this is the only place that can
+            # say so. Gravity points down — try the cheapest regime first — and that rule was
+            # right until the library existed. A procedure covering this exact goal is the
+            # OPERATOR'S OWN DECLARED ANSWER for it: they wrote it, signed it, and it does
+            # things the one call cannot. Serving the primitive instead is not cheaper, it is
+            # WRONG, and silently so.
+            #
+            # MEASURED 2026-08-02: `crawl_golden` cloned a 12G windows template, labelled the
+            # result and checked the templates list. The executor served `create_vm` instead
+            # and produced a BLANK LINUX MACHINE, closing DONE. The procedure was never
+            # consulted, because the request never reached the engine that consults it.
+            #
+            # IT IS A PROMOTION, NOT A REFUSAL. The goal goes to the regime that can write a
+            # program, which is where `covering()` is asked — so this engine stays ignorant of
+            # what a procedure IS, and only has to know that one exists.
+            if tile is None or self._procedure_covers(goal):
                 return {"ok": False, "promote": "translation", "calls": calls,
                         "findings": findings, "why": _NEEDS_A_PROGRAM}
             tool, args = tile
