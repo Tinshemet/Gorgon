@@ -31,7 +31,7 @@ from orchestrator.ai.chat.ollama_client import OLLAMA_URL, _OLLAMA
 # on — an ambient env var silently swapping the model would make every comparison a lie.
 # Pass --model to compare a different one on purpose.
 BENCH_MODEL = _OLLAMA["model"]
-from orchestrator.ai.planner.autonomous import run_autonomous, make_tool_selector
+from orchestrator.ai.autonomous import run_autonomous, make_tool_selector
 from orchestrator.ai.tools import TOOLS
 
 from . import pinned

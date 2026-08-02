@@ -30,7 +30,7 @@ class MissionCommand(Command):
         def _fire(goal: str, mission_obj=None) -> None:
             """Run the autonomous loop on a goal (optionally under a sealed mission)."""
             try:
-                from orchestrator.ai.planner.autonomous import run_autonomous_live, make_grant_handler
+                from orchestrator.ai.autonomous import run_autonomous_live, make_grant_handler
             except ImportError:
                 console.print("[bold red]Autonomous runner unavailable.[/bold red]")
                 return

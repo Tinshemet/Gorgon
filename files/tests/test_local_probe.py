@@ -12,7 +12,7 @@ import pytest
 from executor.tool_dispatch.tools.local_probe import LocalProbeTool
 from executor.api._vm_constants import WORKSPACE_DIR
 from executor.tool_dispatch.tool_executor import dispatch_tool
-from orchestrator.ai.planner.autonomous import make_probe
+from orchestrator.ai.autonomous import make_probe
 
 pytestmark = pytest.mark.skipif(
     shutil.which("bwrap") is None, reason="bubblewrap (bwrap) not installed"

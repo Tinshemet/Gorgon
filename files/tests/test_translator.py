@@ -82,7 +82,7 @@ def main():
 
     # The join is only useful if the EXISTING splitter recovers the clauses from it —
     # otherwise translation would quietly flatten a multi-action goal into one blob.
-    from orchestrator.ai.planner.autonomous import make_compound_splitter
+    from orchestrator.ai.autonomous import make_compound_splitter
     _split = make_compound_splitter()
     _clauses = ["create 5 vms", "put them all in a network",
                 "give them all the 'fleet' label"]
@@ -168,7 +168,7 @@ def main():
     # network" — _ANON_NET_RE then cannot see the unnamed shared network, none is minted,
     # and every member attaches to nothing. Rung 4 built 5 VMs and 0 networks that way.
     # Not translator-specific: an operator typing this has always hit it.
-    from orchestrator.ai.planner.autonomous import make_collective_expander
+    from orchestrator.ai.autonomous import make_collective_expander
     _vms = {f"fleet{i}": {"status": "stopped"} for i in range(1, 6)}
     _exp = make_collective_expander(lambda: _vms)
     _steps = _exp("attach all to a private network", []) or []
@@ -187,7 +187,7 @@ def main():
               and minted == expect_net)
 
     print("\nwired into run_autonomous: the PLANNER sees the canonical goal")
-    from orchestrator.ai.planner.autonomous import run_autonomous
+    from orchestrator.ai.autonomous import run_autonomous
 
     seen = {"planner_goals": []}
 

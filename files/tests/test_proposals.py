@@ -95,7 +95,7 @@ def main():
           and P.get("lab", "r-e2e")["status"] == "enacted")
 
     print("\nGRANT handler (the engine's per-leaf hook): grant proceeds; deny/unattended auto-drafts")
-    from orchestrator.ai.planner.autonomous import make_grant_handler
+    from orchestrator.ai.autonomous import make_grant_handler
     granted = make_grant_handler(agent="g1", prompt=lambda t, a, c: True)
     check("a GRANT proceeds (True) and drafts nothing",
           granted("delete_vm", {"name": "x"}, "delete") is True and P.pending("g1") == [])

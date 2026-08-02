@@ -14,7 +14,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.planner.autonomous import run_autonomous, make_library_verifier
+from orchestrator.ai.autonomous import run_autonomous, make_library_verifier
 from orchestrator.ai.mission.mission import Mission
 
 _PASS = 0
@@ -181,7 +181,7 @@ def main():
     check("the refusal carries the priced CE", "ce_est" in r["root"])
 
     print("\ncompound decomposition (Track 2): the HARNESS splits a fused 'do X and do Y' sub-goal")
-    from orchestrator.ai.planner.autonomous import make_compound_splitter
+    from orchestrator.ai.autonomous import make_compound_splitter
     sp = make_compound_splitter()
     check("an action-conjunction splits into its clauses",
           sp("create a vm named a and put it on lab network", []) == ["create a vm named a", "put it on lab network"])
@@ -217,7 +217,7 @@ def main():
           "web" in cw.vms and cw.vms.get("web", {}).get("nets") == {"lab"})
 
     print("\ncollective decomposition (Track 1.1): the HARNESS loops a distributive op over the live set")
-    from orchestrator.ai.planner.autonomous import make_collective_expander
+    from orchestrator.ai.autonomous import make_collective_expander
     ex = make_collective_expander(lambda: {"a": 1, "b": 1, "c": 1})
     check("distributive collective → one atomic step per member",
           ex("put them all on the lab network", []) ==
@@ -270,7 +270,7 @@ def main():
           nw.vms.get("alpha", {}).get("nets") == {"net0"} and nw.vms.get("beta", {}).get("nets") == {"net0"})
 
     print("\nstate grounding: the planner context names the GROUPS, at parity with the chat digest")
-    from orchestrator.ai.planner.autonomous import render_state
+    from orchestrator.ai.autonomous import render_state
     _s = render_state({"vm1": {"status": "stopped", "labels": ["fleet"], "flags": []},
                        "vm2": {"status": "running", "labels": ["fleet"], "flags": ["stealth"]},
                        "solo": {"status": "stopped"}})
@@ -288,7 +288,7 @@ def main():
           render_state({}).startswith("CURRENT STATE: no VMs exist yet"))
 
     print("\nstate check: is a leaf goal's effect ALREADY in place? (state answers, not the model)")
-    from orchestrator.ai.planner.autonomous import make_state_check
+    from orchestrator.ai.autonomous import make_state_check
     _vms = {"web": {"status": "running", "labels": ["fleet"], "flags": []},
             "db":  {"status": "stopped", "labels": [], "flags": ["stealth"]}}
     _nets = {"success": True, "networks": [{"name": "lab", "members": ["web"]},
@@ -334,7 +334,7 @@ def main():
     # The bug this guards: "create 3 vms labelled 'red'" minted three bare creates and
     # threw the label away. Each create then succeeded, so the clause closed `done` having
     # labelled nothing — the harness manufacturing a false success.
-    from orchestrator.ai.planner.autonomous import _cardinal_create_steps as _card
+    from orchestrator.ai.autonomous import _cardinal_create_steps as _card
     check("a label qualifier becomes real steps",
           _card("create 3 vms labelled 'red'") ==
           ["create a vm named red1", "create a vm named red2", "create a vm named red3",
@@ -414,7 +414,7 @@ def main():
           aw.vms.get("a", {}).get("nets") == {"net1"} and aw.vms.get("b", {}).get("nets") == {"net1"})
 
     print("\ndependency completion (Track 1.4): the harness injects a dropped prerequisite (create the network)")
-    from orchestrator.ai.planner.autonomous import make_prereq_completer
+    from orchestrator.ai.autonomous import make_prereq_completer
     pc = make_prereq_completer()
     check("plan references 'lab' but no step creates it → prepend the create",
           pc("g", ["create a vm named a and put it on lab network"])
@@ -451,7 +451,7 @@ def main():
           "lab" in dw.nets and dw.vms.get("web", {}).get("nets") == {"lab"})
 
     print("\nreference grounding (Track 1.2): bind a bare reference in a step to the parent's named entity")
-    from orchestrator.ai.planner.autonomous import make_step_grounder
+    from orchestrator.ai.autonomous import make_step_grounder
     gr = make_step_grounder()
     check("bare 'vm' bound to the parent's single named entity",
           gr("create a vm named a and put it on lab network", ["create a vm named a", "add vm to lab network"])
@@ -498,7 +498,7 @@ def main():
 
     print("\ngoal-level honesty rule: an assurance goal must be GROUNDED, or it closes unverified")
     from orchestrator.ai.planner.findings import Findings
-    from orchestrator.ai.planner.autonomous import make_goal_verifier
+    from orchestrator.ai.autonomous import make_goal_verifier
     f = Findings()
     vg = make_goal_verifier(lambda: {}, findings=f)
     check("an ordinary goal keeps structural acceptance (None)",

@@ -22,22 +22,22 @@ actually change the world.
 import re
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from .score import run_score, _first_tool_call, _NODE_SYSTEM, DECOMPOSE_TOOL
-from ..agent import contract as _contract
-from .method_cache import MethodCache as _MethodCache, seeded as _seeded_cache
-from .ir import EMIT_PROGRAM_TOOL as _EMIT_PROGRAM_TOOL
-from .program import make_run_program as _make_run_program
-from .translator import normalize_goal as _normalize_goal
-from .findings import Findings, DEFAULT_SCHEMA
-from .reward_cost import (economics as _economics, p_self_estimate as _p_self, dials as _dials,
+from .planner.score import run_score, _first_tool_call, _NODE_SYSTEM, DECOMPOSE_TOOL
+from .agent import contract as _contract
+from .planner.method_cache import MethodCache as _MethodCache, seeded as _seeded_cache
+from .planner.ir import EMIT_PROGRAM_TOOL as _EMIT_PROGRAM_TOOL
+from .planner.program import make_run_program as _make_run_program
+from .planner.translator import normalize_goal as _normalize_goal
+from .planner.findings import Findings, DEFAULT_SCHEMA
+from .planner.reward_cost import (economics as _economics, p_self_estimate as _p_self, dials as _dials,
                           cfg_with as _cfg_with, leaf_cost as _leaf_cost, ce as _ce,
                           tool_counts as _tool_counts, merge_counts as _merge_counts,
                           p_world_estimate as _p_world_estimate, p_world_lookup as _p_world_lookup,
                           compound_ce as _compound_ce, economics_tree as _economics_tree,
                           should_commit as _should_commit)
-from .watchdog import Watchdog
-from .engine import Engine
-from .killswitch import KillSwitch, DeadMansSwitch
+from .planner.watchdog import Watchdog
+from .planner.engine import Engine
+from .planner.killswitch import KillSwitch, DeadMansSwitch
 
 
 def _is_running(rec: Optional[Dict[str, Any]]) -> bool:
@@ -266,7 +266,7 @@ def make_state_verdict(vms_getter: Callable[[], Dict[str, Dict[str, Any]]],
         # splitter's own atomicity test: two or more parts that each name an action means
         # this goal is not one effect, and one satisfied clause says nothing about the rest.
         try:
-            from ..chat.context_assistant import scan_tool_hints
+            from .chat.context_assistant import scan_tool_hints
             parts = [p.strip() for p in _COORD_RE.split(g) if p and p.strip()]
             if len(parts) > 1 and sum(1 for p in parts if scan_tool_hints(p)) > 1:
                 return None                    # compound: not one effect to read
@@ -769,7 +769,7 @@ def make_compound_splitter():
     more ACTIONS ("do X and do Y") into one atomic clause per action; None for an atomic
     goal or a mere noun-conjunction. Reuses scan_tool_hints so only clauses that name a real
     action count — a part that hints no tool ('named a', 'b') is not a step."""
-    from ..chat.context_assistant import scan_tool_hints
+    from .chat.context_assistant import scan_tool_hints
     def split(goal: str, path: List[str]) -> Optional[List[str]]:
         parts = [p.strip() for p in _COORD_RE.split(goal or "") if p and p.strip()]
         if len(parts) < 2:
@@ -958,7 +958,7 @@ def make_grant_handler(agent: Optional[str] = None, prompt=None):
         if tool not in drafted:                       # denied or unattended → draft a referendum
             drafted.add(tool)
             try:
-                from ..agent import proposals as _proposals
+                from .agent import proposals as _proposals
                 a = agent or _contract.active_agent_key()
                 _proposals.propose(
                     a, kind="delegation", origin="ai", proposed_weight=2,
@@ -1045,7 +1045,7 @@ def _harvest_failures(root: Dict[str, Any]) -> List[Dict[str, Any]]:
     """The PLANS this run tried that did not close, generalized for reuse. Composites
     only: a plan is the reusable unit, while a leaf's failure ("no network lab") is a
     fact about that moment's state, not about the approach."""
-    from .method_cache import _generalize
+    from .planner.method_cache import _generalize
     out: List[Dict[str, Any]] = []
 
     def walk(n: Dict[str, Any]) -> None:
@@ -1237,8 +1237,8 @@ def run_autonomous(
     # store must never brick a run.
     if persist_claims:
         try:
-            from ..agent.contract import active_agent_key as _agent_key
-            from . import findings_store as _store
+            from .agent.contract import active_agent_key as _agent_key
+            from .planner import findings_store as _store
             agent_key = agent_key or _agent_key()
             findings.merge(_store.load(agent_key))
         except Exception:
@@ -1283,8 +1283,8 @@ def run_autonomous(
         _stored = []
         if persist_claims:
             try:
-                from . import method_store as _mstore
-                from ..agent.contract import active_agent_key as _agent_key
+                from .planner import method_store as _mstore
+                from .agent.contract import active_agent_key as _agent_key
                 agent_key = agent_key or _agent_key()
                 _stored = _mstore.load(agent_key)
             except Exception:
@@ -1295,8 +1295,8 @@ def run_autonomous(
     _prior_failures = []
     if persist_claims:
         try:
-            from . import method_store as _mstore
-            from ..agent.contract import active_agent_key as _agent_key
+            from .planner import method_store as _mstore
+            from .agent.contract import active_agent_key as _agent_key
             agent_key = agent_key or _agent_key()
             _prior_failures = _mstore.load_failures(agent_key)
         except Exception:
@@ -1337,8 +1337,8 @@ def run_autonomous(
     prior_dials = dict(prior) if prior else None
     if prior_dials is None and persist_claims:
         try:
-            from ..agent.contract import active_agent_key as _agent_key
-            from . import findings_store as _store
+            from .agent.contract import active_agent_key as _agent_key
+            from .planner import findings_store as _store
             agent_key = agent_key or _agent_key()
             prior_dials = _store.load_reliability(agent_key) or None
         except Exception:
@@ -1351,8 +1351,8 @@ def run_autonomous(
         prior_counts = prior_dials.get("tool_counts") or {}   # only an in-memory prior= carries these
     if not prior_counts and persist_claims:       # no in-memory forward-feed → the durable
         try:                                       # per-agent store IS the cross-run p_world memory
-            from ..agent.contract import active_agent_key as _agent_key
-            from . import findings_store as _store
+            from .agent.contract import active_agent_key as _agent_key
+            from .planner import findings_store as _store
             agent_key = agent_key or _agent_key()
             prior_counts = _store.load_tool_counts(agent_key)
         except Exception:
@@ -1500,7 +1500,7 @@ def run_autonomous(
     # a human can review/confirm them AFTER the run — and the next run inherits them.
     if persist_claims:
         try:
-            from . import findings_store as _store
+            from .planner import findings_store as _store
             _store.merge_into(agent_key, findings.persistable())
         except Exception:
             pass
@@ -1514,7 +1514,7 @@ def run_autonomous(
     result["p_world"] = _p_world_estimate(all_counts, rc_cfg or None)
     if persist_claims:                            # persist THIS run's OWN counts (not the merged
         try:                                       # total — the store already holds the prior)
-            from . import findings_store as _store
+            from .planner import findings_store as _store
             _store.merge_tool_counts(agent_key, run_counts)
         except Exception:
             pass
@@ -1541,7 +1541,7 @@ def run_autonomous(
     result["reliability"]["tool_counts"] = all_counts
     if persist_claims:                            # durably chain the p_self dials forward too, so
         try:                                       # the live drivers self-tighten without prior=
-            from . import findings_store as _store
+            from .planner import findings_store as _store
             _store.save_reliability(agent_key, result["reliability"])
         except Exception:
             pass
@@ -1552,7 +1552,7 @@ def run_autonomous(
     result["methods_learned"] = method_cache.proven() if hasattr(method_cache, "proven") else []
     if persist_claims and result["methods_learned"]:
         try:
-            from . import method_store as _mstore
+            from .planner import method_store as _mstore
             _mstore.merge_into(agent_key, result["methods_learned"])
         except Exception:
             pass
@@ -1561,7 +1561,7 @@ def run_autonomous(
     result["plans_failed"] = _harvest_failures(result.get("root") or {})
     if persist_claims and result["plans_failed"]:
         try:
-            from . import method_store as _mstore
+            from .planner import method_store as _mstore
             _mstore.record_failures(agent_key, result["plans_failed"])
         except Exception:
             pass
@@ -1576,9 +1576,9 @@ def run_autonomous_live(goal: str, **kw) -> Dict[str, Any]:
     runtime. Requires a running Ollama and executor; the active agent is whatever
     GORGON_AGENT points at (a Conductor .grgn for a real autonomous run).
     """
-    from ..chat.ollama_client import _call_ollama
-    from ..tools import TOOLS
-    from ..active_library import LIBRARY
+    from .chat.ollama_client import _call_ollama
+    from .tools import TOOLS
+    from .active_library import LIBRARY
     from orchestrator.executor_client import execute_tool
 
     kw.setdefault("persist_claims", True)              # the real runtime persists claims

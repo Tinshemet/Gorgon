@@ -15,7 +15,7 @@ def mission_worker(goal, mission_name, verbose) -> None:
     autonomous loop is long-running, so it can't block the curses draw loop; the
     result is rendered on the main thread from the drain (see render_mission_result)."""
     try:
-        from orchestrator.ai.planner.autonomous import run_autonomous_live
+        from orchestrator.ai.autonomous import run_autonomous_live
         from orchestrator.ai.mission import mission as M
         if mission_name:
             mobj, st = M.load(mission_name)

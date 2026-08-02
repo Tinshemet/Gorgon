@@ -17,7 +17,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.planner.autonomous import run_autonomous
+from orchestrator.ai.autonomous import run_autonomous
 from orchestrator.ai.agent import contract as C
 
 # Autonomous handling over the loaded agent's (full innate) tiers — simulates the

@@ -527,7 +527,7 @@ def test_every_mutating_tool_says_what_done_means():
     gap is a position somebody took rather than a row nobody filled in.
     """
     from orchestrator.ai.agent.contract.core import _CONTRACT
-    from orchestrator.ai.planner.autonomous import _criterion_holds
+    from orchestrator.ai.autonomous import _criterion_holds
     tools = (_CONTRACT or {}).get("tools") or {}
     try:
         from executor.command_catalog import TOOL_SPECS

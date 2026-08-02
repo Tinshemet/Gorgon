@@ -117,7 +117,7 @@ def main():
     check("a critical mission books strictly more reward than a normal one", crit_m.reward() > base_m.reward())
 
     print("\nmission plan: declared sub_goals seed the reward-bearing decomposition")
-    from orchestrator.ai.planner.autonomous import render_mission_plan
+    from orchestrator.ai.autonomous import render_mission_plan
     plan = render_mission_plan(["recon the subnet", "harden web01"])
     check("each declared step is enumerated in the plan", "1. recon the subnet" in plan and "2. harden web01" in plan)
     check("the plan frames steps as reward-bearing closures", "earns its share of the reward" in plan)
