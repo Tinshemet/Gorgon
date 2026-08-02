@@ -23,6 +23,9 @@ level. Both remove a step a human has to remember rather than asking them to rem
 Every suite keeps its own `check()` and its own `_PASS`/`_FAIL`, because the counters are
 what `check()` closes over. This only finds the functions and reports the total.
 """
+import os
+import shutil
+import tempfile
 from typing import Optional
 
 
@@ -32,15 +35,46 @@ def run(module, unit: str = "tests", extra: Optional[str] = None) -> int:
     `module` is the suite itself — `sys.modules[__name__]` from inside it. Definition order
     matters: these suites are written to be read top to bottom, and a failure is easier to
     place when the output follows the file.
+
+    AND IT SANDBOXES `GORGON_HOME`, WHICH IS THE LAST DOOR THAT WAS OPEN. `run_all.py`
+    points every suite it spawns at a disposable home, and `conftest.py` does the same for
+    the pytest bucket — so both of the ways the suite is run IN BULK were covered, and
+    `python3 -m tests.test_whatever` was not. That is the way a person runs a suite while
+    DEBUGGING one, which is to say: often, and while paying attention to something else.
+
+    MEASURED 2026-08-02: a few direct runs put **164 files** of fixture named
+    `a-risotto`, `nightly-box`, `make-a-dish-somehow` into the operator's real
+    `~/.gorgon/logs` — the directory whose whole purpose is to be the grounding record of
+    what this system actually did. The same escape at a larger scale is what put 329,111
+    files there on 2026-07-30. `eventlog` reads the variable at WRITE time, so setting it
+    here covers everything the tests go on to import.
+
+    THE SANDBOX IS KEPT ON FAILURE and named, because the artifacts a failing suite wrote
+    are usually the evidence.
     """
     found = [v for k, v in vars(module).items()
              if k.startswith("test_") and callable(v)]
     found.sort(key=lambda f: f.__code__.co_firstlineno)
-    for fn in found:
-        print(f"\n── {fn.__name__}")
-        fn()
+
+    home = tempfile.mkdtemp(prefix="gorgon-suite-")
+    prior = os.environ.get("GORGON_HOME")
+    os.environ["GORGON_HOME"] = home
+    try:
+        for fn in found:
+            print(f"\n── {fn.__name__}")
+            fn()
+    finally:
+        if prior is None:
+            os.environ.pop("GORGON_HOME", None)
+        else:
+            os.environ["GORGON_HOME"] = prior
+
     passed = getattr(module, "_PASS", 0)
     failed = getattr(module, "_FAIL", 0)
     print(f"\n{passed}/{passed + failed} passed  ({len(found)} {unit})"
           + (f"  {extra}" if extra else ""))
+    if failed:
+        print(f"   what it wrote: {home}")
+    else:
+        shutil.rmtree(home, ignore_errors=True)
     return 1 if failed else 0
