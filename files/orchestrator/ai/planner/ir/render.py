@@ -182,6 +182,9 @@ def _creator(st) -> str:
     A `new` statement carries its KIND; which constructor that implies is a manifest fact,
     and `FROM` picks the copying one where a kind declares two.
     """
+    # THE AUTHOR'S OWN CHOICE FIRST, when the statement carries one.
+    if st.get("tool"):
+        return st["tool"]
     spec = (config.KINDS or {}).get(st.get("kind")) or {}
     if st.get("from"):
         for c in (spec.get("creators") or {}).values():

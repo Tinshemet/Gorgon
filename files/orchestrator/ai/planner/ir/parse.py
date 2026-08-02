@@ -466,6 +466,16 @@ def _new(cur: _Cursor, var: str) -> Dict[str, Any]:
         if not kind:
             raise ParseError(f"no kind is created by {tool!r}", cur.tok.line)
         st["kind"] = kind
+        # KEEP WHICH CONSTRUCTOR, BUT ONLY WHEN IT CANNOT BE DERIVED. A vm can be copied two
+        # ways — `clone_vm` from another machine, `create_vm(template: …)` from a golden image
+        # — so `FROM` alone is ambiguous and re-deriving picks whichever creator is listed
+        # first. The author wrote the tool on the line, so the ambiguity is already resolved
+        # in the text and this keeps that resolution.
+        #
+        # RECORDED ONLY WHEN IT ADDS SOMETHING. Storing it unconditionally would put a field in
+        # every `new` that the renderer would have worked out anyway — noise in the IR, and it
+        # breaks `parse(render(ir)) == ir` for every program written before this existed.
+        st["written_tool"] = tool
     else:
         # THE BARE FORM IS STILL READ. A kind with no declared creator renders as `NEW vm(…)`,
         # and a hand-written file may use it; refusing it here would make the parser stricter
@@ -473,8 +483,20 @@ def _new(cur: _Cursor, var: str) -> Dict[str, Any]:
         st["kind"] = str(cur.take().value)
     if cur.at("("):
         st["args"] = _args(cur)
+    written = st.pop("written_tool", None)
     if cur.accept("FROM"):
-        st["from"] = str(cur.take().value)
+        # SLICED FROM THE SOURCE, not taken as one token. `FROM template-windows` is THREE
+        # tokens — the tokeniser splits on `-` because `--` opens a comment — and reading one
+        # of them silently yielded `template`, a name that does not exist. Every template in
+        # the lab is hyphenated (`template-kali`, `template-ubuntu`, `template-windows`), so
+        # this was not an edge case; it was the only case.
+        start = cur.tok.pos
+        end = start
+        while not cur.done() and not cur.at(";"):
+            end = cur.take().end
+        st["from"] = cur.src[start:end].strip()
+    if written and written != _derived_creator(st):
+        st["tool"] = written
     cur.take(";")
     if var:
         cur.binds[var] = st.get("kind")
@@ -527,6 +549,21 @@ def _method(cur: _Cursor) -> Dict[str, Any]:
     value = values[0] if values else None
     tool, args = method.call(f"{config.SIGIL}{var}", value)
     return {"op": "call", "tool": tool, "args": args}
+
+
+def _derived_creator(st: Dict[str, Any]) -> Optional[str]:
+    """Which constructor `render` would work out for this statement, with no `tool` recorded.
+
+    THE INVERSE OF `render._creator`, and it exists so the parser can stay silent about
+    anything the renderer already knows. Written out rather than imported to keep `render`
+    free of a dependency on its own reader.
+    """
+    spec = (config.KINDS or {}).get(st.get("kind")) or {}
+    if st.get("from"):
+        for c in (spec.get("creators") or {}).values():
+            if c.get("from") and c.get("tool"):
+                return c["tool"]
+    return spec.get("create")
 
 
 def _call(cur: _Cursor, graft: Optional[str]) -> Dict[str, Any]:

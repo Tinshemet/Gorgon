@@ -365,8 +365,17 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
             # keyword keeps the choice out of the language.
             creators = spec.get("creators") or {}
             source = _resolve(st.get("from"), scope) if st.get("from") else None
-            chosen = (next((c for c in creators.values() if c.get("from")), None)
-                      if source else None) or creators.get("create") or {"tool": spec.get("create")}
+            # THE TOOL *AND* WHETHER IT COPIES. `create_vm` is the tool of TWO creators — a
+            # fresh machine, and one built from a golden image — so matching on the name alone
+            # found the fresh one first and silently dropped the `FROM`. The template was never
+            # passed, and what came out was an empty disk wearing the right name.
+            named = st.get("tool")
+            chosen = (next((c for c in creators.values()
+                            if c.get("tool") == named and bool(c.get("from")) == bool(source)),
+                           None) if named else None)
+            chosen = chosen or (next((c for c in creators.values() if c.get("from")), None)
+                                if source else None) \
+                or creators.get("create") or {"tool": spec.get("create")}
             key_arg = chosen.get("key") or spec["key"]
             n = _amount(st.get("amount", 1), scope)
             # Everything else the creator takes rides along — os_type, cpu_cores,

@@ -80,6 +80,29 @@ def _stored() -> set:
         return set()
 
 
+def _is_procedure(name: str) -> bool:
+    """Is this the name of a stored procedure? Then it is callable.
+
+    THE WRITER HAS ALWAYS BEEN ABLE TO PLAN ONE — `covering()` matches a goal to a stored
+    procedure and `cover()` puts it in the plan — AND THE PROGRAM IT BUILT WAS THEN REFUSED
+    HERE, because the tool catalog holds primitives and knows nothing about the library. So
+    "write it, then use it" worked up to the last step and failed at it, every time.
+
+    IT SURVIVED BECAUSE THE TEST ASSERTS ON THE PLAN, NOT THE PROGRAM. `cover()` returning the
+    procedure is what `test_write_it_then_use_it` checks; nothing asked whether the resulting
+    program validates. [[gorgon-built-and-never-called]], one step further along than usual —
+    not unreachable code, but code reached and then rejected.
+
+    IMPORTED LAZILY AND FAILING OPEN. Validation must not depend on a library being present:
+    if the store cannot be read, an unknown name is still an unknown name.
+    """
+    try:
+        from ..procedures import LIBRARY
+        return name in set(LIBRARY.names())
+    except Exception:
+        return False
+
+
 def validate(program: Any, known_tools=None, known_names=None,
              bound: Optional[set] = None,
              sets: Optional[set] = None,
@@ -194,7 +217,11 @@ def validate(program: Any, known_tools=None, known_names=None,
                     f"letters, digits and underscores: "
                     f"{str(nm).lstrip(config.SIGIL).replace('-', '_')!r}.")
         for field in spec["required"]:
-            if st.get(field) in (None, "", {}):
+            # `{}` IS A VALUE, NOT AN ABSENCE. A tool that takes no arguments — `list_vms()`,
+            # and every stored procedure with no parameters — carries `args: {}`, and treating
+            # that as missing made those calls unvalidatable. `None` still catches a field that
+            # is genuinely absent, because `.get` returns it.
+            if st.get(field) is None or st.get(field) == "":
                 problems.append(f"{where}: {op} is missing {field!r}")
         # A field this op does not declare is an ERROR, not something to ignore. Renaming
         # `count` to `amount` showed why: the old spelling was silently dropped and `new`
@@ -843,9 +870,9 @@ def _check_call(st: Dict[str, Any], where: str, tools, bound,
     """
     out = []
     tool = st.get("tool")
-    if tool and tools and tool not in tools:
+    if tool and tools and tool not in tools and not _is_procedure(tool):
         out.append(f"{where}: no such tool {tool!r}")
-    if not st.get("args"):
+    if st.get("args") is None:
         out.append(f"{where}: call to {tool or '?'} has no args")
     # A call's REQUIRED arguments, read off the live catalog — the same check `new`
     # already got, and its absence here was an inconsistency: rung 12 emitted

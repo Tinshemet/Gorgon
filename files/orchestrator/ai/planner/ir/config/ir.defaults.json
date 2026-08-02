@@ -77,14 +77,15 @@
    "required": [
     "kind"
    ],
-   "doc": "create a resource. NEW ISSUES THE CREATION ITSELF \u2014 it calls create_vm / create_network for you. Fields: kind, var (OPTIONAL \u2014 bind a name only when a later line refers to it; the operator, 2026-08-02: \"you dont need the STORE golden = NEW CALL ... because all you are doing is marking it as a template you dont need to store it\"), amount (optional, default 1), args (optional \u2014 anything else the creator takes), `from` (optional \u2014 create by COPYING the named resource instead of making a fresh one).",
+   "doc": "create a resource. NEW ISSUES THE CREATION ITSELF \u2014 it calls create_vm / create_network for you. Fields: kind, var (OPTIONAL \u2014 bind a name only when a later line refers to it; the operator, 2026-08-02: \"you dont need the STORE golden = NEW CALL ... because all you are doing is marking it as a template you dont need to store it\"), amount (optional, default 1), args (optional \u2014 anything else the creator takes), `from` (optional \u2014 create by COPYING the named resource instead of making a fresh one). `tool` (optional \u2014 WHICH constructor, when the kind has more than one that copies. `FROM` alone cannot say whether a source is a machine to clone or a template to build from, and both are legal; the author already writes the tool in `NEW CALL <tool>`, so it is kept rather than re-derived.)",
    "fields": [
-    "var",
-    "kind",
     "amount",
     "args",
     "from",
-    "ifails"
+    "ifails",
+    "kind",
+    "tool",
+    "var"
    ],
    "acts": true
   },
@@ -330,6 +331,12 @@
      "key": "new_name",
      "from": "source_name",
      "doc": "a copy of an existing machine"
+    },
+    "from_template": {
+     "tool": "create_vm",
+     "key": "name",
+     "from": "template",
+     "doc": "a machine built from a golden image \u2014 no install, so nothing is wiped"
     }
    },
    "create_defaults": {
