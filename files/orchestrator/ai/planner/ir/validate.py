@@ -144,6 +144,9 @@ def validate(program: Any, known_tools=None, known_names=None,
     # the duplicate it is. Keying only on LITERAL names missed the commoner form: the
     # model refers to the variable it just bound, not to the name behind it.
     created_by_var: Dict[str, List[str]] = {}
+    # WHICH KIND EACH BOUND `new` MADE, so a same-named member of another kind is not read as
+    # the same object. See the (kind, name) note below.
+    created_kind: Dict[str, Any] = {}
     everywhere = _all_bindings(body) | bound
     for name, typ in (params or {}).items():
         if typ not in config.PARAM_TYPES:
@@ -247,9 +250,15 @@ def validate(program: Any, known_tools=None, known_names=None,
                 # correct — the re-run case this whole shape exists for.
                 problems.append(f"{where}: amount must be a non-negative integer or a "
                                 f"$parameter, got {n!r}")
-            created.update(_minted(st))
+            # KEYED BY (KIND, NAME), NOT BY NAME. A vm and a template may share a name —
+            # `mark_as_template` deliberately gives the template the machine's own name — and
+            # a bare-name set made those one object, so a perfectly legal pair of statements
+            # was refused as creating the same thing twice. Identity in this language is the
+            # kind AND the key, everywhere else; it has to be here too.
+            created.update((st.get("kind"), n) for n in _minted(st))
             if st.get("var"):
                 created_by_var[str(st["var"]).lstrip(config.SIGIL)] = _minted(st)
+                created_kind[str(st["var"]).lstrip(config.SIGIL)] = st.get("kind")
                 bound.add(str(st["var"]).lstrip(config.SIGIL))
                 # An amount that is not literally one binds the LIST of what was made —
                 # that is what lets `FOREACH ... IN $vms` act on machines before they have
@@ -353,20 +362,20 @@ def validate(program: Any, known_tools=None, known_names=None,
                 # A reference to a var a `new` bound names what that `new` created.
                 ref = refs.names(nm)[0] if isinstance(nm, str) and refs.is_reference(nm) \
                     and refs.names(nm) else None
-                if ref and ref in created_by_var:
+                if ref and ref in created_by_var and created_kind.get(ref) == kind:
                     problems.append(
                         f"{where}: {st['tool']} creates {kind} {config.SIGIL}{ref}, which "
                         f"`new` already created — `new` calls the creator itself, so a "
                         f"separate call makes it twice and the second is refused. Drop "
                         f"this statement, or drop the `new`.")
                 elif isinstance(nm, str) and nm and not refs.names(nm):
-                    if nm in created:
+                    if (kind, nm) in created:
                         problems.append(
                             f"{where}: {st['tool']} creates {kind} {nm!r}, which this "
                             f"program already creates — `new` calls the creator itself, so "
                             f"a separate call makes it twice and the second is refused. "
                             f"Drop this statement, or drop the `new`.")
-                    created.add(nm)
+                    created.add((kind, nm))
         elif op == "foreach":
             if st.get("select") is not None:
                 problems += _check_select(st.get("select"), where, sets)

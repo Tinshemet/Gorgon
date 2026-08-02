@@ -373,6 +373,11 @@ def _bare_statement(cur: _Cursor) -> Dict[str, Any]:
 
     if head == _word("bind").upper():
         return _bound(cur)
+    # AN UNBOUND CREATION. `NEW CALL mark_as_template(…)` makes something nothing refers to,
+    # so there is no name to give it and inventing one would put a variable in the program
+    # that no line reads.
+    if head == _word("new").upper():
+        return _new(cur, None)
     if head == _word("publish").upper():
         cur.take()
         cur.take("(")
@@ -429,7 +434,9 @@ def _new(cur: _Cursor, var: str) -> Dict[str, Any]:
     """
     from . import effects
     cur.take()                                   # NEW
-    st: Dict[str, Any] = {"op": "new", "var": var}
+    st: Dict[str, Any] = {"op": "new"}
+    if var is not None:
+        st["var"] = var
     if cur.at(_word("amount")):
         cur.take()
         cur.take("(")

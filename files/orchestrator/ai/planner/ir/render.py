@@ -92,7 +92,13 @@ def _statement(st: Any, indent: str) -> list:
         maker = _creator(st)
         head = f"{_w('new')} {many}" + (f"{config.SURFACE.get('call', 'CALL')} {maker}"
                                         if maker else f"{st.get('kind')}")
-        return _with_tail([f"{indent}{config.SURFACE['bind']} {st.get('var')} = {head}"
+        # THE BINDING IS OPTIONAL, and the operator struck it on sight: *"you dont need the
+        # STORE golden = NEW CALL … just fold it to a NEW CALL … because all you are doing is
+        # marking it as a template you dont need to store it."* A name is worth having when
+        # something REFERS to it; binding a result nobody reads is noise on the one line where
+        # a reader is trying to see what the program touches.
+        lead = f"{config.SURFACE['bind']} {st['var']} = " if st.get("var") else ""
+        return _with_tail([f"{indent}{lead}{head}"
                            f"{f'({extra})' if extra else ''}{src};"], st, indent)
 
     if op == "publish":
@@ -256,7 +262,13 @@ def _arg(v) -> str:
     values that used to print bare now print quoted. Nothing that was legible becomes less so,
     and something that was AMBIGUOUS becomes exact.
     """
-    if isinstance(v, bool) or v is None or isinstance(v, (int, float)):
+    # A BOOLEAN PRINTS LOWERCASE. `str(True)` is Python's spelling, not Medusa's — a file
+    # written with `unattended: true` re-rendered as `unattended: True`, so a round trip
+    # changed the operator's text without changing its meaning. Harmless until someone diffs
+    # a stored procedure against what they wrote.
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if v is None or isinstance(v, (int, float)):
         return str(v)
     s = str(v)
     needs = any(c in s for c in ",()") or s.strip() != s or not s

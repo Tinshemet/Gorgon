@@ -75,10 +75,9 @@
  "ops": {
   "new": {
    "required": [
-    "var",
     "kind"
    ],
-   "doc": "create a resource and bind a name to it. NEW ISSUES THE CREATION ITSELF \u2014 it calls create_vm / create_network for you. Fields: var, kind, amount (optional, default 1), args (optional \u2014 anything else the creator takes), `from` (optional \u2014 create by COPYING the named resource instead of making a fresh one).",
+   "doc": "create a resource. NEW ISSUES THE CREATION ITSELF \u2014 it calls create_vm / create_network for you. Fields: kind, var (OPTIONAL \u2014 bind a name only when a later line refers to it; the operator, 2026-08-02: \"you dont need the STORE golden = NEW CALL ... because all you are doing is marking it as a template you dont need to store it\"), amount (optional, default 1), args (optional \u2014 anything else the creator takes), `from` (optional \u2014 create by COPYING the named resource instead of making a fresh one).",
    "fields": [
     "var",
     "kind",
@@ -298,8 +297,7 @@
     "status",
     "label",
     "os_type",
-    "network",
-    "template"
+    "network"
    ],
    "aliases": {
     "tag": "label",
@@ -373,12 +371,6 @@
      "member_arg": "name",
      "value": "stopped"
     },
-    "mark_as_template": {
-     "_doc": "A TEMPLATE IS A STATE A MACHINE IS IN, not a thing that is created. `mark_as_template` takes the name of a vm that already exists and `remove_template` takes it back, so this is a SETTER on `vm` and not a kind of its own \u2014 modelling it as a kind gave it no creator and left it uninvertible, which is the shape saying it was the wrong object. A writer asked for a template now reaches for a machine and marks it, rather than trying to make one.",
-     "attr": "template",
-     "member_arg": "name",
-     "value": "true"
-    },
     "launch_vm": {
      "attr": "status",
      "member_arg": "name",
@@ -394,11 +386,6 @@
      "attr": "label",
      "member_arg": "name",
      "value_arg": "label"
-    },
-    "remove_template": {
-     "_doc": "NO `value_arg`, AND THAT IS THE POINT. `remove_vm_from_network` needs to be told WHICH network to leave; `remove_template` needs only the machine, because there is one thing to stop being. Declaring `value_arg: name` to fill the slot produced `remove_template(name: 'true')` \u2014 the value overwriting the member, because both named the same argument.",
-     "attr": "template",
-     "member_arg": "name"
     },
     "remove_vm_from_network": {
      "attr": "network",
@@ -493,6 +480,29 @@
    "create_args": {
     "vm": "name"
    }
+  },
+  "template": {
+   "package": "core",
+   "create": "mark_as_template",
+   "delete": "remove_template",
+   "list": "list_templates",
+   "key": "name",
+   "attrs": [
+    "name",
+    "os_type"
+   ],
+   "creators": {
+    "create": {
+     "tool": "mark_as_template",
+     "doc": "snapshot a stopped machine's disks into a reusable golden image"
+    }
+   },
+   "nouns": [
+    "template",
+    "golden image",
+    "image"
+   ],
+   "_doc": "A TEMPLATE IS A THING, NOT A STATE A MACHINE IS IN \u2014 and the executor settles it in its own words: mark_as_template flattens each disk into ~/.gorgon/_templates/<name>/ 'SO THE TEMPLATE NEVER DEPENDS ON THE SOURCE VM'S OWN DISK SURVIVING'. Own storage, own lifetime, a creator, a deleter and an enumerator, all three already tools. THE VM-SIDE MARKER IS A BACK-REFERENCE to something that outlives it. THE ROW THIS REPLACES ARGUED THE OPPOSITE ON A FALSE PREMISE: that modelling a template as a kind 'gave it no creator and left it uninvertible'. mark_as_template IS a creator and remove_template IS its inverse. THE OPERATOR'S RULE, 2026-08-02, is what decided it: 'to check if a vm exist, yeah go over the vm list, but for templates or profiles, you need to go over the templates/profiles list.' A KIND IS WHATEVER HAS ITS OWN LIST \u2014 and note `profile`'s own note already said six tools 'for profiles and templates' were unreachable from the language. Profile was fixed and template was not; this finishes it. WHY IT IS NOT COSMETIC: a check written against the vm \u2014 COUNT(SELECT vm WHERE name=X AND template='true') \u2014 FAILS once the source machine is deleted, while the template it was guarding is still there and still clonable. It asserted the wrong object."
   }
  },
  "_predicates_doc": "What ENSURE can assert. `comparators` maps each comparator to the SYMBOL it renders as, so adding one is a data change \u2014 it used to be a dict in render.py, which meant a new comparator printed as `?`. EVERY shape carries its operand under `select` \u2014 the same key foreach uses \u2014 and names itself under `shape`. That regularity was measured, not chosen: an earlier form keyed the shape and operand together ({count: <select>, eq: N}) and llama3.1 put the NUMBER where the SET belongs on every attempt, while getting foreach's select right in the same programs. `source` records WHERE the truth comes from: `registry` is current state; `findings` is the probe ledger, because reachability is not registry state and is deliberately never inferred from a tool's success flag. `not`/`all`/`any` are COMPOSITE: their operand is other predicates rather than a set, which is why `source` is neither registry nor findings \u2014 they read whatever their children read. All three take parentheses in the written form, so a reader never has to know operator precedence, because there is none. `is` reads a GRAFTED RESULT rather than the world \u2014 IS($answer.reachable) = false. It is the only shape whose source is neither the registry nor findings, and it exists because rung 11's condition is a call's answer: which machines are unreachable is knowable only by asking.",
