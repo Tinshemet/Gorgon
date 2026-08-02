@@ -41,4 +41,11 @@ def show_help() -> None:
     _add("  Built-in: drift · clear/clear session · help/? · q/quit/exit", _cp(C_DIM))
     _add("  Operator: mission [list|run <name>|\"<goal>\"] · claim [list|confirm <fact>|reject <fact>]",
          _cp(C_DIM))
+    # WRITTEN DOWN WHERE IT IS TYPED. `plan` was reachable from a shell and from the
+    # orchestrator REPL, and an operator who typed it here got the model's guess at what the
+    # sentence meant. A door nobody is told about is the door nobody uses.
+    _add("  Medusa:   plan procedure NAME(STRING arg): <what it should do>   (writes it, runs nothing)",
+         _cp(C_DIM))
+    _add("            plan --dry <request>  ·  procedures [show|verify] — acting plans need a shell",
+         _cp(C_DIM))
     _add_sep()

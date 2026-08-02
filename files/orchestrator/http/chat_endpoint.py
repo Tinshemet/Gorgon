@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional
 
 from . import session_store
 from orchestrator.ai.chat.gates import answer as _answer
+from orchestrator.ai.chat.shortcuts import headless as _headless
 
 _CANCELLED = "Cancelled — nothing was done."
 
@@ -127,6 +128,21 @@ def handle_chat(req: Any, operator: Optional[str]) -> Dict[str, Any]:
         _redirect = forge_chat.contract_cli_redirect(req.message)
         if _redirect:
             return {"session_id": sid, "text": _redirect,
+                    "tool_results": [], "needs_input": None}
+
+    # ── REPL shortcuts, from the chat ─────────────────────────────────────────
+    # `plan` and `procedures` are words with a meaning, and until now they had it everywhere
+    # except where the operator types. Handled deterministically and BEFORE the model, for the
+    # reason the grant commands above are: a command that the AI gets to interpret is a
+    # command that can be interpreted into something else. See shortcuts/headless.py for what
+    # the chat may run (nothing that acts) and why.
+    #
+    # GUARDED WITH THE REDIRECT ABOVE: mid-confirmation the operator is ANSWERING, not
+    # commanding, and a reply that happens to start with a verb must stay an answer.
+    if forge_wizard is None and not (req.auto_confirm and pending_tool):
+        _shortcut_reply = _headless.run(req.message, req.verbose)
+        if _shortcut_reply is not None:
+            return {"session_id": sid, "text": _shortcut_reply,
                     "tool_results": [], "needs_input": None}
 
     # ── Fast-path: confirmed action — skip Ollama ─────────────────────────────
