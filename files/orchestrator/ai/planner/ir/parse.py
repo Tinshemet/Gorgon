@@ -393,7 +393,23 @@ def _bare_statement(cur: _Cursor) -> Dict[str, Any]:
     if head == _word("publish").upper():
         cur.take()
         cur.take("(")
-        fact = str(cur.take().value)
+        # THE FACT IS A SLICE, NOT A TOKEN. A kind's `fact` template embeds the member —
+        # `answer(how fast is lightning)`, and once parameterised `answer($query)` — so it
+        # carries spaces AND its own parentheses. Reading one token took `answer` and then
+        # failed on the `(` that followed, which made every published deliverable unparseable
+        # the moment it stopped being a bare word like `done`.
+        start = cur.tok.pos
+        end, depth = start, 0
+        while not cur.done():
+            if depth == 0 and cur.at(")"):
+                break
+            t = cur.take()
+            if t.kind == PUNCT and t.value in "([{":
+                depth += 1
+            elif t.kind == PUNCT and t.value in ")]}":
+                depth -= 1
+            end = t.end
+        fact = cur.src[start:end].strip()
         cur.take(")")
         cur.take(";")
         return {"op": "publish", "fact": fact}

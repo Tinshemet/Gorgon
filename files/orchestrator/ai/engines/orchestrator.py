@@ -34,6 +34,105 @@ from .registry import Registry
 from .session import Session
 
 
+
+def _parameterise(program: Dict[str, Any]) -> None:
+    """Turn the MEMBER NAMES the request supplied into parameters, in place.
+
+    WITHOUT THIS EVERY STORED PROCEDURE IS A MACRO WITH A LIBRARY'S FILING SYSTEM. `_unify` is
+    total, so a contract reading `count(vm where name='box1') = 1` covers exactly one goal —
+    the one it was written from — and `covering()` passes it over for every other. Measured
+    2026-08-02: Gorgon authored `webcrawler` end to end and reached for NEITHER stored
+    procedure, because both named literal members and the chain had invented its own.
+
+    A `$param` BINDS WHATEVER THE GOAL HAS THERE, which is what makes one procedure serve any
+    request of that shape. The fixture that predates all of this already had it —
+    `vm_disk_builder(STRING box)` achieving `count(vm where name = $box) = 1` — so this is the
+    authoring path catching up with a contract the language always supported.
+
+    EVERY SELECTOR, NOT JUST A TOP-LEVEL ONE. A procedure written for two goals advertises
+    `{"all": [...]}`, which has no `select` of its own — the first version of this function
+    checked for one, found none, and silently did nothing for exactly the programs that need it
+    most. The crawler was one: `{"all": [count(search where query=…), observe(search)]}`.
+
+    THE KEY ONLY, AND THAT NARROWNESS IS THE POINT. Promoting `os_type` too would let a
+    procedure that builds LINUX match a request for WINDOWS and quietly serve it: `_unify` would
+    bind the parameter and the body would carry on with its own value. A name is the one slot
+    where "whatever you called it" is always the right reading. Same rule, same reason, as
+    `procedures.contract()` advertising the identity and nothing else.
+
+    DETERMINISTIC AND MODEL-FREE: the goal states the kind, the manifest states its key, and the
+    value in that slot is what the operator named. Nothing is guessed.
+    """
+    from ..planner.ir import config as _cfg
+
+    goal = program.get("achieves")
+    if not isinstance(goal, dict):
+        return
+
+    def _selectors(node):
+        """Every `select` in a goal, however it is nested."""
+        if isinstance(node, list):
+            for kid in node:
+                yield from _selectors(kid)
+        elif isinstance(node, dict):
+            for field, val in node.items():
+                if field == "select" and isinstance(val, dict):
+                    yield val
+                elif isinstance(val, (dict, list)):
+                    yield from _selectors(val)
+
+    # ONE PARAMETER PER DISTINCT NAME, so a program naming the same machine twice binds it
+    # once — two parameters for one thing would let a caller pass values that disagree.
+    promoted: Dict[str, str] = {}
+    taken: set = set(program.get("params") or {})
+    for sel in _selectors(goal):
+        key = ((_cfg.KINDS or {}).get(sel.get("kind")) or {}).get("key")
+        named = sel.get(key) if key else None
+        if not isinstance(named, str) or not named.strip():
+            continue
+        if named.startswith(_cfg.SIGIL) or named in promoted:
+            sel[key] = promoted.get(named, named)
+            continue
+        param = key if str(key).isidentifier() else "name"
+        while param in taken:
+            param += "_"
+        taken.add(param)
+        promoted[named] = f"{_cfg.SIGIL}{param}"
+        sel[key] = promoted[named]
+
+    if not promoted:
+        return
+    # EVERY PLACE THE BODY WROTE THAT LITERAL. A contract promising `$query` while the body
+    # still searches for the original string would be a procedure that LIES about what it does
+    # — worse than the macro it replaces, because the lie is checkable and wrong.
+    for st in program.get("body") or ():
+        args = st.get("args")
+        if isinstance(args, dict):
+            for arg, val in list(args.items()):
+                if isinstance(val, str) and val in promoted:
+                    args[arg] = promoted[val]
+        if isinstance(st.get("from"), str) and st["from"] in promoted:
+            st["from"] = promoted[st["from"]]
+        # THE CLOSING WITNESS TOO. `as_program` appends an ENSURE over the deliverable AFTER
+        # the body is planned, and it carries a SELECTOR rather than args — so a parameterised
+        # program still checked the ORIGINAL string: search for `$query`, then assert something
+        # about "how fast is lightning". The check would pass only for the one request the
+        # procedure was written from, which is the very failure being fixed.
+        for sel in _selectors(st.get("predicate")):
+            key = ((_cfg.KINDS or {}).get(sel.get("kind")) or {}).get("key")
+            if key and isinstance(sel.get(key), str) and sel[key] in promoted:
+                sel[key] = promoted[sel[key]]
+        # A FACT EMBEDS THE NAME RATHER THAN EQUALLING IT — `answer(how fast is lightning)`
+        # comes from the kind's own `fact` template, so this is a substring, not a value.
+        fact = st.get("fact")
+        if isinstance(fact, str):
+            for literal, ref in promoted.items():
+                if literal in fact:
+                    st["fact"] = fact = fact.replace(literal, ref)
+    program["params"] = {**(program.get("params") or {}),
+                         **{ref.lstrip(_cfg.SIGIL): "string" for ref in promoted.values()}}
+
+
 class Orchestrator:
     """One registry, one channel, and the loop between them."""
 
@@ -281,6 +380,7 @@ class Orchestrator:
         # it does: written for three goals, it claims all three or the match is a lie.
         program["achieves"] = (components[0] if len(components) == 1
                                else {"all": list(components)})
+        _parameterise(program)
         rendered = _render(program)
         at = _procs.LIBRARY.save(program, rendered)
         session.record(f"kept as {name}", filed_by=engine.name, caught_by="orchestrator",
