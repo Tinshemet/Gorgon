@@ -280,6 +280,72 @@ def test_it_degrades_where_the_orchestrator_is_not_installed():
     check("and does not raise", True)
 
 
+def _parameterised(name="mk"):
+    return {"name": name, "params": {"name": "string", "os_type": "string"},
+            "achieves": {"shape": "count",
+                         "select": {"kind": "vm", "name": "$name"}, "eq": 1},
+            "body": [{"op": "new", "kind": "vm", "var": "v", "tool": "create_vm",
+                      "args": {"os_type": "$os_type", "name": "$name"}},
+                     {"op": "publish", "fact": "v"}]}
+
+
+def test_running_a_parameterised_procedure_demands_its_arguments():
+    """AN UNBOUND `$name` RESOLVES TO ITSELF, so a procedure run with no arguments creates
+    a machine literally called `$name` and reports success.
+
+    That is the failure `validate`'s own docstring warns about, and before this it was
+    reachable through the front door: `procedures run` passed `{}` however many parameters
+    the signature declared.
+    """
+    print("[cli] a parameterised procedure cannot be run bare")
+    with _Library() as lib:
+        lib.save(_parameterised())
+
+        out = _flat(_say(["procedures", "run", "mk"]))
+        check("no arguments is refused", "no value for name" in out)
+        check("and the signature is shown", "STRING os_type" in out)
+
+        out = _flat(_say(["procedures", "run", "mk", "name=box9", "os=linux"]))
+        check("a misspelt parameter is refused, not ignored",
+              "'os' is not a parameter" in out)
+        out = _flat(_say(["procedures", "run", "mk", "box9"]))
+        check("a bare word is refused", "not key=value" in out)
+
+
+def test_the_arguments_reach_the_program():
+    """A refusal that never let anything through would satisfy the test above and be useless.
+
+    So the happy path is asserted where it can be seen without touching a lab: the values
+    arrive as the CALL's arguments, which is what `execute` binds the callee's scope from.
+    """
+    print("[cli] and the values reach the call")
+    import engines.rig as rig
+    seen = {}
+
+    class _Orch:
+        def handle(self, request, **kw):
+            seen["components"] = kw.get("components")
+            seen["intent"] = kw.get("intent")
+            return {"outcome": "DONE", "why": "stubbed"}
+
+    prior = rig.build
+    rig.build = lambda *a, **k: _Orch()
+    try:
+        with _Library() as lib:
+            lib.save(_parameterised())
+            _say(["procedures", "run", "mk", "name=box9", "os_type=windows"])
+    finally:
+        rig.build = prior
+
+    check("the procedure is called by name with its arguments",
+          seen.get("components") == [{"_call": ("mk", {"name": "box9",
+                                                       "os_type": "windows"})}])
+    # THE OPERATOR NAMED A PROGRAM THEY WROTE AND SAID RUN IT — that is the authority the
+    # intent ladder is asking about, so it is granted here rather than asked again.
+    check("and it runs under the intent the operator's own act implies",
+          seen.get("intent") == "achieve")
+
+
 def test_help_names_every_new_verb():
     """A VERB NOBODY CAN DISCOVER IS A VERB NOBODY TYPES.
 

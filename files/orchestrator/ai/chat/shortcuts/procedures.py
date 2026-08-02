@@ -8,7 +8,7 @@ listed, showed, ran, verified or deleted them.
     procedures                 what is stored, and whether each one is well
     procedures show <name>     the program — the text a person reads IS the program
     procedures verify <name>   read it back and check it, or all of them with no name
-    procedures run <name>      run it, through the ordinary engine path
+    procedures run <name> k=v  run it, through the ordinary engine path
     procedures delete <name>   forget it, after showing what would go
 
 A PROCEDURE IS A TOOL YOU WROTE, so none of this is a second way to run things. `run` calls
@@ -21,7 +21,7 @@ procedure it cannot read, which is right for planning and silent for the person 
 it — so a library can quietly hold a file that no longer parses. Here the broken ones are
 named first.
 """
-from typing import List
+from typing import Dict, List
 
 from shared.display import console
 
@@ -52,6 +52,7 @@ class Procedures(Shortcut):
         said = ui.strip().split()
         verb = said[1].lower() if len(said) > 1 else ""
         name = said[2] if len(said) > 2 else ""
+        rest = said[3:]
         lib = _procs.LIBRARY
 
         if verb == "show":
@@ -61,7 +62,7 @@ class Procedures(Shortcut):
         if verb == "delete":
             return self._delete(lib, name)
         if verb == "run":
-            return self._run_one(lib, name, verbose)
+            return self._run_one(lib, name, rest, verbose)
         if verb == "syntax":
             return self._syntax(lib)
         return self._list(lib)
@@ -210,7 +211,38 @@ class Procedures(Shortcut):
 
     # ── run ──────────────────────────────────────────────────────────────────
     @staticmethod
-    def _run_one(lib, name: str, verbose: bool) -> None:
+    def _arguments(given: List[str], wanted: Dict[str, str]):
+        """`['name=box9']` + the signature -> `({'name': 'box9'}, [complaints])`.
+
+        `key=value`, NOT `key: value`. The language writes a call the second way and this
+        is the one place the two diverge on purpose: a colon needs quoting in a shell and
+        reads as a path, and `procedures run mk name: box9` would arrive as three words with
+        the colon glued to the wrong one. The signature it fills is the same signature.
+
+        MISSING IS REFUSED, AND THAT IS THE POINT OF WRITING THIS AT ALL. An unbound `$name`
+        resolves to itself, so a procedure run with no arguments CREATES A MACHINE CALLED
+        `$name` and reports success — the exact failure `validate`'s own docstring warns
+        about, arriving through the front door. UNKNOWN is refused too: a caller who spells
+        `os` where the signature says `os_type` has said something false about the procedure,
+        and silently ignoring it would run a program missing the value they meant to give.
+        """
+        got, bad = {}, []
+        for pair in given:
+            key, sep, val = pair.partition("=")
+            if not sep or not key:
+                bad.append(f"{pair!r} is not key=value")
+            elif key not in wanted:
+                bad.append(f"{key!r} is not a parameter of this procedure")
+            else:
+                got[key] = val
+        missing = [p for p in wanted if p not in got]
+        if missing:
+            bad.append("no value for " + ", ".join(f"{p} ({wanted[p].upper()})"
+                                                   for p in missing))
+        return got, bad
+
+    @staticmethod
+    def _run_one(lib, name: str, given: List[str], verbose: bool) -> None:
         """Run a stored procedure BY NAME, through the ordinary path.
 
         THE SAME DOOR AS EVERYTHING ELSE, and the shape is `routines run`'s: a stored
@@ -237,6 +269,17 @@ class Procedures(Shortcut):
             console.print(f"[warn]nothing called {name}.[/warn]")
             return
 
+        wanted = found.get("params") or {}
+        args, bad = Procedures._arguments(given, wanted)
+        if bad:
+            for line in bad:
+                console.print(f"[warn]{line}[/warn]")
+            sig = ", ".join(f"{t.upper()} {p}" for p, t in wanted.items())
+            console.print(f"[dim]procedures run {name}"
+                          + "".join(f" {p}=…" for p in wanted)
+                          + (f"   [{sig}][/dim]" if sig else "[/dim]"))
+            return
+
         from engines import rig as _rig
         from orchestrator.pipeline import execute_tool
         from orchestrator.ai.active_library import LIBRARY
@@ -256,9 +299,10 @@ class Procedures(Shortcut):
             return result
 
         orch = _rig.build(guarded, narrate=True, consent=Plan._ask_consent)
-        console.print(f"\n[bold]{name}[/bold]")
+        shown = "".join(f" {k}={v}" for k, v in args.items())
+        console.print(f"\n[bold]{name}[/bold]{shown}")
         out = orch.handle(name, intent="achieve",
-                          components=[{"_call": (name, {})}])
+                          components=[{"_call": (name, args)}])
         colour = {"DONE": "ok", "REFUSED": "warn"}.get(out.get("outcome"), "warn")
         console.print(f"  [{colour}]{out.get('outcome')}[/{colour}]  {out.get('why') or ''}")
         for line in (out.get("log") or []):
