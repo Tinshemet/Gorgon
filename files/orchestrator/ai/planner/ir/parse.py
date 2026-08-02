@@ -212,6 +212,11 @@ class _Cursor:
 
     def __init__(self, toks: List[_Tok], src: str = ""):
         self.toks, self.i = toks, 0
+        # WHAT KIND EACH BOUND NAME HOLDS, so `source.launch()` can be resolved against the
+        # right class. Filled by `_new` as the program is read, which is the only place a
+        # binding's kind is stated — and it is stated BEFORE any method call on it can appear,
+        # because a name has to be bound before it is used.
+        self.binds: Dict[str, str] = {}
         # THE ORIGINAL TEXT, kept so a free-text value can be sliced out of it verbatim.
         self.src = src
 
@@ -378,6 +383,13 @@ def _bare_statement(cur: _Cursor) -> Dict[str, Any]:
     # that no line reads.
     if head == _word("new").upper():
         return _new(cur, None)
+    # A METHOD ON A BOUND NAME — `source.launch();`. SUGAR, and deliberately nothing more: it
+    # DESUGARS to the call the class already says it is, so there is no second execution path
+    # and no method that can mean something a tool call cannot. `classes.py` derives the whole
+    # mapping from the manifest, so a kind that grows a setter grows a method the same day and
+    # this reads it without an edit.
+    if cur.toks[cur.i + 1].kind == PUNCT and cur.toks[cur.i + 1].value == ".":
+        return _method(cur)
     if head == _word("publish").upper():
         cur.take()
         cur.take("(")
@@ -464,7 +476,39 @@ def _new(cur: _Cursor, var: str) -> Dict[str, Any]:
     if cur.accept("FROM"):
         st["from"] = str(cur.take().value)
     cur.take(";")
+    if var:
+        cur.binds[var] = st.get("kind")
     return st
+
+
+def _method(cur: _Cursor) -> Dict[str, Any]:
+    """`$var.method(args)` -> the call that method IS, with `$var` as the receiver.
+
+    THE RECEIVER IS THE POINT AND THE WHOLE ARGUMENT FOR CLASSES: a method cannot be asked
+    about the wrong scope, because the scope is what it is called on. `classes.Method.call`
+    returns the same `(tool, args)` pair the writer already plans and the executor already
+    runs, so nothing new exists underneath this line.
+    """
+    from . import classes
+    var = str(cur.take().value).lstrip(config.SIGIL)
+    cur.take(".")
+    name = str(cur.take().value)
+    kind = cur.binds.get(var)
+    if not kind:
+        raise ParseError(f"{var!r} is not bound to anything, so {name!r} has no receiver",
+                         cur.tok.line)
+    surface = classes.methods(kind)
+    method = surface.get(name)
+    if method is None:
+        raise ParseError(f"{kind} has no method {name!r} — it has "
+                         f"{sorted(surface)}", cur.tok.line)
+    extra = _args(cur) if cur.at("(") else {}
+    cur.take(";")
+    # THE VALUE ARGUMENT, WHEN THE METHOD TAKES ONE. `label('prod')` writes a value;
+    # `launch()` writes a fixed one the manifest already names, so it takes nothing.
+    value = next(iter(extra.values())) if extra else None
+    tool, args = method.call(f"{config.SIGIL}{var}", value)
+    return {"op": "call", "tool": tool, "args": args}
 
 
 def _call(cur: _Cursor, graft: Optional[str]) -> Dict[str, Any]:

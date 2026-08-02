@@ -84,8 +84,24 @@ class LabWorld:
         known = set()
         for p in self._packages:
             known |= set((getattr(p, "manifest", None) or {}).keys())
+        # ASK THE LIBRARY WHAT IT HOLDS, rather than naming two kinds here. `("vm", "network")`
+        # was written when those were the only tables, and it silently stopped being true:
+        # `_refresh_templates` and `_refresh_profiles` have been filling `_templates` and
+        # `_profiles` for as long as they have existed, and this line went on declaring both
+        # unenumerable. So a check over a profile — a kind added precisely SO it could be
+        # checked — closed UNMET with "nothing here can enumerate profile", and the tables that
+        # would have answered were sitting right there.
+        #
+        # FOUND VIA `template`, which hit it the day it became a kind. The guard itself is
+        # right and stays: unknown is not empty. What was wrong is WHICH kinds it called
+        # unknown, and hardcoding that is what let the answer rot behind the code that fixed it.
+        # `vm` AND `network` STAY UNCONDITIONAL: they are what a lab IS, and `select` reads
+        # them through their own branches rather than a table lookup. Everything else earns
+        # its way off this list by having a table the library actually fills.
+        lib = self._library
         return {k for k in (self.kinds or {})
-                if k not in ("vm", "network") and k not in known}
+                if k not in ("vm", "network") and k not in known
+                and getattr(lib, f"_{k}s", None) is None}
 
     def _ensure_built(self):
         """An UNBUILT LIBRARY IS UNKNOWN, NOT EMPTY — and it read as empty for a whole session.
