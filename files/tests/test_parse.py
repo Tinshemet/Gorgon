@@ -206,6 +206,47 @@ def test_a_file_still_carrying_the_old_ir_trailer_reads():
           parse(text) == ir)
 
 
+def test_a_method_desugars_to_the_call_its_class_says_it_is():
+    """`source.launch()` — the operator's own line, 2026-08-02.
+
+    NOT COVERED BY THE ROUND TRIP, and that is why it has its own test: this is SUGAR, so
+    `render` prints the desugared call and `parse(render(ir))` never sees the method form.
+    The property that matters is not that it round-trips but that it produces EXACTLY the call
+    the class already says it is — no second execution path, no method meaning something a
+    tool call cannot.
+    """
+    print("[parse] a method is the call its class already declares")
+    body = """PROCEDURE p() {
+  STORE v = NEW CALL create_vm(name: box1, os_type: linux);
+  v.launch();
+  v.stop();
+  v.label(prod);
+  v.network(lab);
+  v.delete();
+  PUBLISH(v);
+}"""
+    calls = [(st["tool"], st["args"]) for st in parse(body)["body"] if st["op"] == "call"]
+    check("a fixed-value setter takes no argument",
+          ("launch_vm", {"name": "$v"}) in calls and ("stop_vm", {"name": "$v"}) in calls)
+    check("a valued setter takes one, POSITIONALLY — the manifest names the slot",
+          ("add_label", {"name": "$v", "label": "prod"}) in calls)
+    # THE RECEIVER ARGUMENT IS THE MANIFEST'S, NOT A GUESS. `add_vm_to_network` calls it
+    # `vm_name` where `add_label` calls it `name`, and assuming one spelling would be a second
+    # authority for something already stated per setter.
+    check("and the receiver argument is whatever THAT setter calls it",
+          ("add_vm_to_network", {"vm_name": "$v", "net_name": "lab"}) in calls)
+    check("a destructor is a method too", ("delete_vm", {"name": "$v"}) in calls)
+
+    for bad, why in (("PROCEDURE p() {\n  nope.launch();\n}", "an unbound receiver"),
+                     ("PROCEDURE p() {\n  STORE v = NEW CALL create_vm(name: b, os_type: linux);"
+                      "\n  v.fly();\n}", "a method the kind does not have")):
+        try:
+            parse(bad)
+            check(f"{why} is refused", False)
+        except ParseError as exc:
+            check(f"{why} is refused, and says what is available ({str(exc)[:40]}…)", True)
+
+
 def test_a_broken_file_says_where():
     print("[parse] a failure names the line")
     for text, why in (("PROCEDURE p( {\n  PUBLISH(x);\n}", "a malformed signature"),

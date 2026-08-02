@@ -502,11 +502,29 @@ def _method(cur: _Cursor) -> Dict[str, Any]:
     if method is None:
         raise ParseError(f"{kind} has no method {name!r} — it has "
                          f"{sorted(surface)}", cur.tok.line)
-    extra = _args(cur) if cur.at("(") else {}
+    # POSITIONAL, NOT NAMED. `v.label(prod)` — the manifest already says which argument that
+    # value goes into, so naming it at the call site would be the caller repeating what the
+    # class knows. That is the whole economy of a method: the receiver and the argument names
+    # are both implied by WHAT IT IS CALLED ON.
+    values = []
+    if cur.at("("):
+        cur.take("(")
+        while not cur.at(")"):
+            start, end = cur.tok.pos, cur.tok.pos
+            quoted = cur.tok.kind == STR
+            while not cur.done() and not cur.at(",") and not cur.at(")"):
+                t = cur.take()
+                end = t.end
+                quoted = quoted and (cur.at(",") or cur.at(")"))
+            raw = cur.src[start:end].strip()
+            values.append(raw[1:-1] if quoted and len(raw) >= 2 else _coerce(raw))
+            if not cur.accept(","):
+                break
+        cur.take(")")
     cur.take(";")
-    # THE VALUE ARGUMENT, WHEN THE METHOD TAKES ONE. `label('prod')` writes a value;
+    # THE VALUE ARGUMENT, WHEN THE METHOD TAKES ONE. `label(prod)` writes a value;
     # `launch()` writes a fixed one the manifest already names, so it takes nothing.
-    value = next(iter(extra.values())) if extra else None
+    value = values[0] if values else None
     tool, args = method.call(f"{config.SIGIL}{var}", value)
     return {"op": "call", "tool": tool, "args": args}
 
