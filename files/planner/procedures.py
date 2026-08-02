@@ -252,6 +252,10 @@ class Store:
         # PROCEDURES THAT COULD NOT BE READ, by name. Reported rather than raised — see
         # `all()`.
         self.broken: List[str] = []
+        # THE LAST SAVE'S POST-WRITE REPORT. Kept so a caller that wants to SHOW the
+        # non-fatal findings can, without `save` having to return two things or refuse a
+        # keep over a question about meaning. None until something has been saved.
+        self.last_report: Optional[Dict[str, Any]] = None
 
     # ── keeping ──────────────────────────────────────────────────────────────
     def save(self, program: Dict[str, Any], rendered: str = "") -> str:
@@ -317,17 +321,63 @@ class Store:
         if not rendered:
             rendered = render_stored(program)
         text_at = os.path.join(self.path, f"{name}.medusa")
-        with open(text_at, "w") as fh:
+
+        # WRITTEN BESIDE, VERIFIED, THEN MOVED INTO PLACE — and the order is the whole point.
+        #
+        # EVERYTHING ABOVE CHECKS THE IR THE CALLER HANDED IN. Nothing checked the FILE, and
+        # the file is what every later reader loads: `_read` parses the text back, so a
+        # renderer that emits something the parser cannot take, or takes differently, produces
+        # an artifact that passed validation and is not the program that passed it. That gap
+        # is invisible by construction — the only way to see it is to read the file back.
+        #
+        # AND A FAILED RE-SAVE MUST NOT DESTROY A WORKING PROCEDURE. Writing in place and
+        # checking afterwards would leave the operator with neither the old program nor a
+        # usable new one, on the one path where they are least able to recover it. The
+        # temporary file is removed on failure and the previous version is never touched.
+        tmp_at = text_at + ".writing"
+        with open(tmp_at, "w") as fh:
             # THE TEXT, AND NOTHING UNDER IT. The operator, 2026-08-02: *"i dont want it there
             # because it makes the snippet have 2 SSOTs."* The `-- medusa:ir` trailer is gone,
             # and with it the arrangement where the file a person reads was decorative and the
             # JSON stapled beneath it was what ran.
             fh.write(rendered.rstrip() + "\n")
+        try:
+            report = self.verify_file(tmp_at, expected=program)
+        except Exception:
+            os.remove(tmp_at)
+            raise
+        if not report["ok"]:
+            os.remove(tmp_at)
+            bad = "; ".join(f"{c['check']}: {c['why']}" for c in report["checks"]
+                            if not c["ok"] and c["fatal"])
+            raise ValueError(
+                f"{name} was written and did not read back as the program that was "
+                f"written, so it is not kept: {bad}")
+        os.replace(tmp_at, text_at)
+        # THE READ CACHE IS KEYED ON (mtime, size) AND `os.replace` CHANGES BOTH, so the
+        # next `get` re-reads. Dropped anyway rather than relied on: a same-second rewrite
+        # of identical length is exactly the case a stat-based key cannot see.
+        self._cache.pop(text_at, None)
         # THE OLD SIDECAR, REMOVED. A stale `.json` beside a one-file procedure would be read
         # by nothing and believed by anyone.
         stale = os.path.join(self.path, f"{name}.json")
         if os.path.exists(stale):
             os.remove(stale)
+        # THE REFERENCE TRAVELS WITH THE LIBRARY. Written here rather than at install time
+        # because this is the moment the folder is known to exist and to be worth opening —
+        # and because it is generated, so a copy written once would be a copy going stale.
+        try:
+            self.write_reference()
+        except Exception:
+            # A SYNTAX GUIDE IS NOT WORTH LOSING A PROGRAM OVER. The save has already
+            # succeeded at this point; failing here would throw away work over a doc.
+            pass
+        # THE REPORT'S NON-FATAL FINDINGS SURVIVE THE SAVE, on the store, for the caller that
+        # wants to show them. They are about MEANING — does it still claim what it was asked
+        # to claim, does it vouch for what it does — and a save must not be refused for
+        # those: the crawler's contract genuinely does not survive the round trip today, and
+        # blocking on that would stop authoring rather than report it.
+        self.last_report = report
         return text_at
 
     # ── reading ──────────────────────────────────────────────────────────────
@@ -371,6 +421,178 @@ class Store:
                 prog["achieves"] = found
             methods[method or whole] = prog
         return {"name": owner, _METHODS: methods, "_text": text}
+
+    # ── the reference that sits beside them ──────────────────────────────────
+    def write_reference(self) -> str:
+        """Write the syntax + examples guide into the procedures folder. Returns its path.
+
+        BESIDE THE PROGRAMS, BECAUSE THAT IS WHERE THE PERSON IS. The `.medusa` files are
+        meant to be opened and edited — that is the whole reason the text IS the program —
+        and a grammar the operator has to go and look up somewhere else is a grammar they
+        will guess at instead.
+
+        `SYNTAX.md`, NOT `.medusa`, AND THAT IS LOAD-BEARING: `names()` lists every
+        `*.medusa` in this directory, so a reference file with the language's own extension
+        would arrive in the library as a program, be handed to the parser, and be reported
+        as broken.
+
+        GENERATED, AND REWRITTEN ON EVERY SAVE. It is derived from the language definition,
+        so the alternative to overwriting it is letting it drift — and a stale syntax guide
+        is worse than none, because it is believed.
+        """
+        from .ir.reference import render_reference
+        os.makedirs(self.path, exist_ok=True)
+        at = os.path.join(self.path, "SYNTAX.md")
+        with open(at, "w") as fh:
+            fh.write(render_reference())
+        return at
+
+    # ── reading it back, and asking whether it is what was written ───────────
+    def verify_file(self, at: str, expected: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Re-READ a `.medusa` and report whether it is the program it claims to be.
+
+        THE CHECKS ABOVE `save` ALL RAN AGAINST THE IR IN MEMORY. This one runs against the
+        FILE, which is the only thing any later reader sees: `_read` parses the text back, so
+        between "the IR validated" and "the artifact works" sits a renderer and a parser that
+        nothing had ever been asked to agree.
+
+        FIVE CHECKS, AND THEY SPLIT INTO TWO KINDS. The FATAL ones are about the WRITE — the
+        file cannot be loaded, or loads as a different program. Those mean the save did not
+        happen, whatever the disk says, and `save` rolls back on them. The REPORTED ones are
+        about MEANING — does it still claim what it was asked to claim, does it vouch for
+        what it does — and those must not block a save: the crawler's contract genuinely does
+        not survive the round trip today, and refusing to keep it would stop authoring rather
+        than tell anyone why.
+
+            reads back              the parser takes it at all
+            round trips             parse then render reproduces the file, so the text a
+                                    person edits and the program that runs are one thing
+            is the program saved    the text is the rendering of what the caller handed in,
+                                    not of something else it also had
+            validates               the RE-READ program could run — every tool real, every
+                                    `$name` bound, every FROM source named
+            keeps its contract      `achieves` survived the round trip. It does not always:
+                                    the contract is RECOMPUTED from the body on read, which
+                                    loses a goal that is more than its own last check
+            vouches for what it does  it acts and something could fail. A body that changes
+                                    the world and asserts nothing is the false-success class
+                                    this system spends its time on
+
+        `expected` is the IR that was saved. Without it — verifying a file the operator
+        edited by hand — the two checks that need an original are skipped and SAID to be
+        skipped, because a check that silently did not run reads exactly like one that passed.
+        """
+        checks: List[Dict[str, Any]] = []
+
+        def note(check: str, ok: Optional[bool], why: str = "", fatal: bool = False) -> None:
+            checks.append({"check": check, "ok": ok, "why": why, "fatal": fatal})
+
+        try:
+            got = self._read(at)
+        except Exception as exc:
+            note("reads back", False, f"{type(exc).__name__}: {exc}", fatal=True)
+            return {"at": at, "name": None, "ok": False, "clean": False, "checks": checks}
+        note("reads back", True)
+
+        name = got.get("name")
+        text = (got.get("_text") or "").strip()
+
+        # ROUND TRIP. `parse(render(ir)) == ir` was named as the acceptance test for the
+        # parser and only ever run over a corpus; this is the same equality, on every file
+        # that is written, in the direction a reader actually travels.
+        try:
+            again = render_stored(got).strip()
+        except Exception as exc:
+            again = None
+            note("round trips", False, f"re-rendering failed: {type(exc).__name__}: {exc}",
+                 fatal=True)
+        if again is not None:
+            note("round trips", again == text,
+                 "" if again == text else "the file does not render back to itself",
+                 fatal=True)
+
+        if expected is None:
+            note("is the program saved", None, "skipped — nothing to compare against")
+        else:
+            try:
+                wanted = render_stored(expected).strip()
+            except Exception as exc:
+                wanted = None
+                note("is the program saved", False,
+                     f"the saved program could not be rendered: {exc}", fatal=True)
+            if wanted is not None:
+                note("is the program saved", wanted == text,
+                     "" if wanted == text else "the text on disk is not this program",
+                     fatal=True)
+
+        # EVERY BODY, AND A CLASS HAS SEVERAL. A class file is where several programs live,
+        # so "does it validate" is asked once per method — the same split `save` already
+        # makes, applied to what came back rather than to what went in.
+        bodies = ([(f"{name}.{m}", spec) for m, spec in (got.get(_METHODS) or {}).items()]
+                  or [(name, got)])
+
+        from .ir.validate import validate
+        bad = []
+        for who, prog in bodies:
+            ok, problems = validate({**prog, "name": who})
+            if not ok:
+                bad.append(f"{who}: {problems[0]}")
+        note("validates", not bad, "; ".join(bad), fatal=True)
+
+        # KEEPS ITS CONTRACT. Compared only where the saved program declared one — a
+        # procedure that claims nothing has nothing to lose, and demanding a contract here
+        # would be a different rule wearing this one's clothes.
+        if expected is None:
+            note("keeps its contract", None, "skipped — nothing to compare against")
+        else:
+            wanted_c = expected.get("achieves")
+            if wanted_c is None:
+                note("keeps its contract", None, "skipped — it declared none")
+            else:
+                same = got.get("achieves") == wanted_c
+                note("keeps its contract", same,
+                     "" if same else
+                     f"declared {json.dumps(wanted_c, sort_keys=True)}, reads back as "
+                     f"{json.dumps(got.get('achieves'), sort_keys=True)}")
+
+        ungrounded = [who for who, prog in bodies
+                      if not _consent().survey(prog)["grounded"]]
+        note("vouches for what it does", not ungrounded,
+             "" if not ungrounded else
+             f"{', '.join(ungrounded)} act(s) and nothing could fail")
+
+        return {"at": at, "name": name, "ok": not any(c["fatal"] and c["ok"] is False
+                                                      for c in checks),
+                "clean": not any(c["ok"] is False for c in checks),
+                "checks": checks}
+
+    def verify(self, name: str) -> Dict[str, Any]:
+        """Verify a stored procedure BY NAME, as it sits on disk.
+
+        THE ONE THAT CATCHES A HAND EDIT. The `.medusa` is the artifact the operator is
+        invited to open and change, and an edit takes effect the moment it is saved — so the
+        library can hold a file that no longer parses, or that quietly stopped asserting
+        anything, and nothing would say so until a plan reached for it.
+        """
+        whole = str(name).partition(".")[0]
+        at = os.path.join(self.path, f"{whole}.medusa")
+        if not os.path.exists(at):
+            return {"at": at, "name": name, "ok": False, "clean": False,
+                    "checks": [{"check": "exists", "ok": False, "fatal": True,
+                                "why": f"no procedure called {whole!r}"}]}
+        report = self.verify_file(at)
+        # THE NAME THE CALLER ASKED ABOUT, when the file could not be read. `verify_file`
+        # takes the name out of the program, so a file that does not parse has none — and a
+        # report headed `None` is unreadable exactly when somebody most needs to read it.
+        report["name"] = report.get("name") or whole
+        return report
+
+    def verify_all(self) -> List[Dict[str, Any]]:
+        """Every stored procedure, verified. A CLASS IS VERIFIED ONCE, as the file it is."""
+        if not os.path.isdir(self.path):
+            return []
+        stems = sorted(f[:-7] for f in os.listdir(self.path) if f.endswith(".medusa"))
+        return [self.verify(s) for s in stems]
 
     def drifted(self, name: str) -> bool:
         """Always False now, and the reason is the point: THERE IS NOTHING LEFT TO DRIFT FROM.

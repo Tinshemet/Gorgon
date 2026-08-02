@@ -1,10 +1,11 @@
 {
  "_doc": "MEDUSA \u2014 the Gorgon procedure language, AS DATA. Named for one of the gorgons, because the platform is Gorgon and this is one of its own. Nothing here is a language feature written in code: the ops, the resource kinds, the predicate shapes and every string the model is shown all live in this manifest. That is the extensibility test the design note sets \u2014 adding a resource kind, a predicate or a tool must touch ZERO language code. ir.json holds a deployment's overrides and wins on merge.",
+ "_language_doc": "`extension` READ `.med` UNTIL 2026-08-02 AND THE STORE HAS ALWAYS WRITTEN `.medusa` — five hardcoded places in procedures.py, and NOTHING read this field, so the declared answer was both unused and wrong. Corrected rather than propagated: renaming the files would rename the operator's library, and the field is the one that was never right. It has exactly one reader now (ir/reference.py, which writes the syntax guide beside the procedures), so the two can no longer disagree unnoticed — a table nobody reads is how this came to be wrong in the first place.",
  "language": {
   "name": "Medusa",
   "of": "Gorgon",
   "version": "0.1",
-  "extension": ".med"
+  "extension": ".medusa"
  },
  "sigil": "$",
  "loop_var": "item",

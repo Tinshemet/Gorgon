@@ -67,6 +67,16 @@ class _Library:
         shutil.rmtree(self.dir, ignore_errors=True)
 
 
+def _procedure_files(lib):
+    """What the library holds ABOUT PROCEDURES — everything except the generated guide.
+
+    `SYNTAX.md` is written into this folder on every save, because the folder is where the
+    person reading a `.medusa` already is. It is not a procedure and not a second form of
+    one, so the "ONE FILE, not two" invariant is asked about the programs.
+    """
+    return sorted(f for f in os.listdir(lib.path) if f != "SYNTAX.md")
+
+
 # The snippet the operator asked for, in the language: make a machine from a template.
 def _builder(name="vm_disk_builder"):
     return {"name": name,
@@ -99,7 +109,11 @@ def test_a_named_program_is_kept_in_ONE_file():
               text.startswith("PROCEDURE vm_disk_builder(STRING box)"))
         got = lib.get("vm_disk_builder")
         check("the IR round-trips", got and got["body"] == _builder()["body"])
-        check("ONE FILE, not two", os.listdir(lib.path) == ["vm_disk_builder.medusa"])
+        # THE INVARIANT IS ABOUT THE PROCEDURE, so the folder's own generated guide is not
+        # counted. `SYNTAX.md` is not a second form of this program — it is the reference
+        # written beside the library, and it deliberately does not carry the `.medusa`
+        # extension precisely so that nothing mistakes it for one.
+        check("ONE FILE, not two", _procedure_files(lib) == ["vm_disk_builder.medusa"])
         check("and an untouched program has not drifted",
               lib.drifted("vm_disk_builder") is False)
         check("and the library names it", lib.names() == ["vm_disk_builder"])
@@ -471,7 +485,7 @@ def test_being_scheduled_earns_a_program_nothing():
         check("run state is kept beside it, not inside it",
               "last_run" not in (lib.text("nightly") or ""))
         check("and the program is IN the .medusa, which is now the only file",
-              sorted(f.rsplit(".", 1)[1] for f in os.listdir(lib.path))
+              sorted(f.rsplit(".", 1)[1] for f in _procedure_files(lib))
               == ["medusa", "state"])
         check("and the IR is untouched", "last_run" not in json.dumps(lib.get("nightly")))
 
@@ -614,6 +628,139 @@ def test_a_class_method_is_reached_for_and_run_like_anything_else():
         check(f"and it runs ({res.get('why')})", res["ok"])
         check("the method's body reached the world",
               "dmz" in world.vms["web"]["nets"])
+
+
+def _kept(name="make_box"):
+    """The two-line shape the operator asked for: a creation and what it produced."""
+    return {"name": name, "params": {},
+            "body": [{"op": "new", "kind": "vm", "var": "box1", "tool": "create_vm",
+                      "args": {"os_type": "linux", "name": "box1"}},
+                     {"op": "publish", "fact": "box1"}]}
+
+
+def test_a_saved_procedure_is_read_back_before_it_is_kept():
+    """EVERY CHECK IN `save` RAN AGAINST THE IR IN MEMORY. None ran against the FILE.
+
+    `_read` parses the text back, so between "the IR validated" and "the artifact works" sit
+    a renderer and a parser that nothing had ever been asked to agree. The only way to see
+    that gap is to read the file back, which is what `save` now does before keeping it.
+    """
+    print("[verify] the file is read back before the save counts")
+    with _Library() as lib:
+        lib.save(_kept())
+        rep = lib.last_report
+        check("the save reports on itself", rep is not None and rep["ok"])
+        check("and it is clean", rep["clean"])
+        by = {c["check"]: c for c in rep["checks"]}
+        check("it read back", by["reads back"]["ok"] is True)
+        check("it round trips — parse then render reproduces the file",
+              by["round trips"]["ok"] is True)
+        check("the text on disk is the program that was saved",
+              by["is the program saved"]["ok"] is True)
+        check("the RE-READ program validates", by["validates"]["ok"] is True)
+
+
+def test_a_file_that_is_not_the_program_is_refused_and_rolled_back():
+    """A FAILED RE-SAVE MUST NOT DESTROY A WORKING PROCEDURE.
+
+    Writing in place and checking afterwards would leave the operator with neither the old
+    program nor a usable new one — on the one path where they can least recover it. So the
+    text is written BESIDE, verified, and only then moved into place.
+    """
+    print("[verify] a bad write is refused and the previous version survives")
+    with _Library() as lib:
+        at = lib.save(_kept("keeper"))
+        first = open(at).read()
+
+        # THE CALLER'S OWN RENDERED TEXT, and not of this program. `save` accepts `rendered`,
+        # so "the text and the IR disagree" is reachable without corrupting anything.
+        try:
+            lib.save(_kept("keeper"),
+                     rendered="PROCEDURE keeper() {\n  CALL delete_vm(name: box1);\n}")
+            check("a text that is not the program is refused", False)
+        except ValueError as e:
+            check("a text that is not the program is refused", True)
+            check("and it says which check failed", "is the program saved" in str(e))
+        check("the previous version is untouched", open(at).read() == first)
+        check("and no half-written file is left behind",
+              not [f for f in os.listdir(lib.path) if f.endswith(".writing")])
+
+
+def test_a_contract_lost_on_read_is_reported_and_does_not_block_the_save():
+    """THE ONE THAT IS ABOUT MEANING RATHER THAN THE WRITE, so it must not refuse a keep.
+
+    The contract is RECOMPUTED from the body on read — `contract()` takes the trailing
+    ENSURE — which loses a goal that is MORE than its own last check. That is a real open
+    defect (the crawler's `achieves` is an `all` of two clauses and reads back as one), and
+    refusing to keep such a procedure would stop authoring rather than report it. So it is
+    reported: the save succeeds, `ok` is True, and `clean` is False.
+    """
+    print("[verify] a contract that does not survive the round trip is REPORTED")
+    two = {"name": "twofold", "params": {},
+           "achieves": {"all": [{"shape": "count",
+                                 "select": {"kind": "vm", "name": "box1"}, "eq": 1},
+                                {"shape": "count",
+                                 "select": {"kind": "vm", "label": "prod"}, "eq": 1}]},
+           "body": [{"op": "new", "kind": "vm", "var": "box1", "tool": "create_vm",
+                     "args": {"os_type": "linux", "name": "box1"}},
+                    {"op": "call", "tool": "add_label",
+                     "args": {"name": "box1", "label": "prod"}},
+                    {"op": "ensure", "predicate": {"shape": "count",
+                                                   "select": {"kind": "vm", "label": "prod"},
+                                                   "eq": 1}}]}
+    with _Library() as lib:
+        lib.save(two)
+        rep = lib.last_report
+        check("the procedure IS kept", rep["ok"] is True)
+        check("but the report is not clean", rep["clean"] is False)
+        by = {c["check"]: c for c in rep["checks"]}
+        check("and the check that failed is the contract",
+              by["keeps its contract"]["ok"] is False)
+        check("which is NOT fatal", by["keeps its contract"]["fatal"] is False)
+        check("the declared contract is quoted, not just named",
+              "label" in by["keeps its contract"]["why"])
+
+
+def test_verify_catches_a_hand_edit():
+    """THE `.medusa` IS THE ARTIFACT THE OPERATOR EDITS, and an edit takes effect on save.
+
+    So the library can hold a file that no longer parses, and nothing would say so until a
+    plan reached for it — `all()` skips what it cannot read, which is right for planning and
+    silent for the person who broke it.
+    """
+    print("[verify] a hand-edited file is caught by name")
+    with _Library() as lib:
+        at = lib.save(_kept("edited"))
+        check("clean before the edit", lib.verify("edited")["ok"] is True)
+
+        with open(at, "a") as fh:
+            fh.write("this is not medusa\n")
+        rep = lib.verify("edited")
+        check("and not after it", rep["ok"] is False)
+        check("the failure names the parse", "reads back" == rep["checks"][0]["check"])
+        check("a name nobody wrote is not a pass",
+              lib.verify("never_written")["ok"] is False)
+        # AND THE SWEEP SEES IT TOO, which is what makes `procedures verify` worth typing.
+        check("verify_all reports the whole library",
+              [r["name"] for r in lib.verify_all()] == ["edited"])
+
+
+def test_an_acting_program_that_vouches_for_nothing_is_reported():
+    """A body that changes the world and asserts nothing is the false-success class.
+
+    REPORTED, NOT REFUSED, for a plain procedure — `save` already REFUSES it for a class
+    METHOD, because "verified once" is the whole claim a class makes and a method that
+    proves nothing breaks it. A bare procedure makes no such claim, so this is a warning.
+    """
+    print("[verify] an ungrounded body is named")
+    bare = {"name": "bare", "params": {},
+            "body": [{"op": "call", "tool": "delete_vm", "args": {"name": "box1"}}]}
+    with _Library() as lib:
+        lib.save(bare)
+        by = {c["check"]: c for c in lib.last_report["checks"]}
+        check("it is kept", lib.last_report["ok"] is True)
+        check("and the grounding gap is named",
+              by["vouches for what it does"]["ok"] is False)
 
 
 def main():
