@@ -17,7 +17,7 @@ import sys
 
 sys.path.insert(0, "/home/tinshemet/Desktop/gorgon/files")
 
-from orchestrator.ai.planner.ir import derive, evaluate, render, run
+from planner.ir import derive, evaluate, render, run
 from tests.bench.author_probe import _seams, revise
 from tests.bench.rungs import RUNGS
 from tests.bench.sim_world import SimWorld

@@ -21,7 +21,7 @@ import argparse
 import sys
 from typing import List, NamedTuple, Optional
 
-from orchestrator.ai.planner.ir import render
+from planner.ir import render
 
 from .author_probe import author, render as _r  # noqa: F401  (render re-exported)
 from .sim_world import SimWorld

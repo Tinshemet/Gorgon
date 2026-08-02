@@ -137,7 +137,7 @@ def build(execute: Callable, library=None, narrate: bool = True,
     # ONE FINDINGS LEDGER for the whole mount. The engine plans and checks against it, the
     # package records observations into it, and the reporter is handed what it holds — three
     # readers of one book. Two books is how a program comes to assert a fact nobody can find.
-    from ..planner.findings import Findings
+    from planner.findings import Findings
     found = Findings()
 
     registry.mount(ExecutorEngine(lib, execute))

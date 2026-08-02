@@ -41,7 +41,7 @@ import sys
 from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
-from orchestrator.ai.planner.score import _first_tool_call
+from planner.score import _first_tool_call
 
 from .ladder import BENCH_MODEL, make_call_model
 

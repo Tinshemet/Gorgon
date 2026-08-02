@@ -31,10 +31,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.planner import ghost_writer as gw
-from orchestrator.ai.planner.ir import effects
-from orchestrator.ai.planner.ir import master
-from orchestrator.ai.planner.ir import render
+from planner import ghost_writer as gw
+from planner.ir import effects
+from planner.ir import master
+from planner.ir import render
 from tests.bench.sim_world import SimWorld
 
 _PASS = _FAIL = 0
@@ -190,7 +190,7 @@ def test_the_engine_collects_temps_so_teardown_can_fire():
     was still on the lab afterwards.
     """
     from orchestrator.ai.engines.medusa import MedusaEngine
-    from orchestrator.ai.planner.model_world import World
+    from planner.model_world import World
 
     KINDS = {
         "vm": {"key": "name", "attrs": ["name", "status"], "nouns": ["vm"],
@@ -229,7 +229,7 @@ def test_cleanup_runs_when_the_program_fails_midway():
     everything after it was abandoned, and the `delete_vm` for the machine it had minted
     lived in that tail. The operator who never asked for a machine was the one left with it.
     """
-    from orchestrator.ai.planner.ir import execute as EX
+    from planner.ir import execute as EX
 
     done = []
 
@@ -261,7 +261,7 @@ def test_cleanup_runs_when_the_program_fails_midway():
 
 def test_cleanup_only_covers_what_the_writer_marked():
     """A runtime guessing which trailing deletes are safe to force would eventually be wrong."""
-    from orchestrator.ai.planner.ir import execute as EX
+    from planner.ir import execute as EX
 
     done = []
     program = {"body": [

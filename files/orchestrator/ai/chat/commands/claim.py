@@ -16,7 +16,7 @@ class ClaimCommand(Command):
         # gorgon claim [list] | confirm <fact> | reject <fact> — review the per-agent
         # CLAIM store: unverifiable facts a run parked as `pending` for a human to judge.
         # confirm → the fact becomes USABLE (loaded into the next run); reject → dropped.
-        from orchestrator.ai.planner import findings_store as _store
+        from planner import findings_store as _store
         from orchestrator.ai.agent import contract as _contract
         agent = _contract.active_agent_key()
         sub   = rest[0] if rest else "list"

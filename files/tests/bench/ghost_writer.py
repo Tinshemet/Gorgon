@@ -5,7 +5,7 @@ domains) so it belongs beside the runtime it plans for. This shim exists so the 
 own suites keep importing one name, and so nothing in `tests/` quietly becomes the
 authority for a production component.
 """
-from orchestrator.ai.planner.ghost_writer import (  # noqa: F401
+from planner.ghost_writer import (  # noqa: F401
     Call, Unsolvable, as_program, cover, _achieve, _fresh_names, _ground, _holds, _lower,
     _short, groundable,
 )

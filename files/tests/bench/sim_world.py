@@ -18,7 +18,7 @@ requiring one would measure a different thing than the set-tracking this ladder 
 """
 from typing import Any, Dict, List, Optional, Set
 
-from orchestrator.ai.planner.findings import (DEFAULT_SCHEMA, Findings, extract_value,
+from planner.findings import (DEFAULT_SCHEMA, Findings, extract_value,
                                               yield_fact)
 
 

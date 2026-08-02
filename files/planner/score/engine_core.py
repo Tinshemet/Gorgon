@@ -93,7 +93,7 @@ def run_score(
     A node's status is one of: done / failed / partial / blocked / skipped /
     no_action / unverified. A recovered node carries retries/tried/recovered.
     """
-    from orchestrator.ai.planner.engine import Engine
+    from planner.engine import Engine
     if engine is None:                       # legacy kwargs (gate=…, verify=…) → Engine
         engine = Engine.from_kwargs(_legacy)
     # Unpack the policy bundle into the local names the body already uses (defaults

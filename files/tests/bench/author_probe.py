@@ -34,22 +34,22 @@ import json
 import sys
 import urllib.request
 
-from orchestrator.ai.planner.ir import (config, consent, derive, evaluate, gate,
+from planner.ir import (config, consent, derive, evaluate, gate,
                                        master, observe, refs, render, run, validate)
-from orchestrator.ai.planner import clause_ledger
-from orchestrator.ai.planner.ir import intent as _intent
-from orchestrator.ai.planner.score import _first_tool_call
-from orchestrator.ai.planner.ir import schema as _ir_schema
-from orchestrator.ai.planner.ir.validate import _one_of_groups
+from planner import clause_ledger
+from planner.ir import intent as _intent
+from planner.score import _first_tool_call
+from planner.ir import schema as _ir_schema
+from planner.ir.validate import _one_of_groups
 
-from orchestrator.ai.planner.ir.sanitize import kinds as _sanitize_kinds
-from orchestrator.ai.planner.ir.sanitize import sanitize_text as _sanitize_text
-from orchestrator.ai.planner.ir.sanitize import sanitize as _sanitize
+from planner.ir.sanitize import kinds as _sanitize_kinds
+from planner.ir.sanitize import sanitize_text as _sanitize_text
+from planner.ir.sanitize import sanitize as _sanitize
 from . import pinned
 from .ladder import BENCH_MODEL
 from .mutate import MUTATIONS, apply as _mutate
 from .rungs import RUNGS
-from orchestrator.ai.planner.ir import execute as _ir_execute
+from planner.ir import execute as _ir_execute
 from .sim_world import SimWorld
 # THE SEAMS LIVE IN `seams.py` — one authority. They were defined here and, in a
 # weaker form, a second time in `run_program`, where the missing `not`/`in`/`any`/

@@ -18,7 +18,7 @@ import argparse
 import json
 import sys
 
-from orchestrator.ai.planner.ir import render, run, validate
+from planner.ir import render, run, validate
 
 from .seams import seams
 from .sim_world import SimWorld

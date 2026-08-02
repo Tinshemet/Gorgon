@@ -29,7 +29,7 @@ from orchestrator.ai.books import keeper as _keeper
 from orchestrator.ai.books import ledger as _ledger
 from orchestrator.ai.books.ledger import (CLAIMED, DELETED, EXIST, FAILED, MISSING,
                                           PENDING, SEEN, Ledger, index)
-from orchestrator.ai.planner.ir import run as ir_run
+from planner.ir import run as ir_run
 from tests.bench.seams import seams
 from tests.bench.sim_world import SimWorld
 

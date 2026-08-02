@@ -27,8 +27,8 @@ Run:  PYTHONPATH=. python3 -m tests.bench.regime_probe
 import argparse
 import sys
 
-from orchestrator.ai.planner.ir import EMIT_PROGRAM_TOOL, coerce_body, render, validate
-from orchestrator.ai.planner.score import DECOMPOSE_TOOL, _first_tool_call
+from planner.ir import EMIT_PROGRAM_TOOL, coerce_body, render, validate
+from planner.score import DECOMPOSE_TOOL, _first_tool_call
 
 from .ladder import BENCH_MODEL, make_call_model
 from .rungs import RUNGS

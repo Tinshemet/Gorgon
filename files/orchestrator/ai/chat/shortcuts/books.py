@@ -33,7 +33,7 @@ class Books(Shortcut):
             verbose: bool) -> None:
         from orchestrator.ai.active_library import LIBRARY
         from orchestrator.ai.books import LEDGER, Keeper
-        from orchestrator.ai.planner.program import seams as _seams
+        from planner.program import seams as _seams
 
         rows = LEDGER.rows()
         if not rows:

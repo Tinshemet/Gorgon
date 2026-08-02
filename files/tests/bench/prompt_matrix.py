@@ -91,7 +91,7 @@ class _SimAdapter:
 
     def __init__(self, world):
         self._w = world
-        from orchestrator.ai.planner.ir import config
+        from planner.ir import config
         self.kinds = config.KINDS
 
     @property

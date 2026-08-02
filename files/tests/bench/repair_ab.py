@@ -30,9 +30,9 @@ import re
 import sys
 from collections import Counter
 
-from orchestrator.ai.planner.ghost_writer import Unsolvable, as_program, cover
-from orchestrator.ai.planner.ir import run as _run
-from orchestrator.ai.planner.ir import validate as _validate
+from planner.ghost_writer import Unsolvable, as_program, cover
+from planner.ir import run as _run
+from planner.ir import validate as _validate
 from orchestrator.ai.engines import extract as NEW
 from tests.bench.rungs import RUNGS
 from tests.bench.seams import seams

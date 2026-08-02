@@ -61,7 +61,7 @@ def test_a_value_as_the_OBJECT_is_not_a_filter():
 def test_the_head_noun_must_be_a_kind_and_kinds_come_from_the_manifest():
     """Add a kind to the manifest and the rule recognises it, with no edit here — the same
     claim every other builder in this codebase makes."""
-    from orchestrator.ai.planner.ir import config
+    from planner.ir import config
     nouns = qr.kind_nouns()
     for kind in config.KINDS:
         assert kind.lower() in nouns and kind.lower() + "s" in nouns

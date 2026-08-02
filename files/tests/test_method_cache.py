@@ -13,7 +13,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.planner.method_cache import MethodCache, seeded
+from planner.method_cache import MethodCache, seeded
 
 _PASS = 0
 _FAIL = 0
@@ -111,7 +111,7 @@ def main():
     print("\nthe durable store (per-agent, on disk)")
     import shared.bundle as _bundle
     _bundle.AGENTS_ROOT = tempfile.mkdtemp()      # isolate bundle storage from ~/.gorgon
-    from orchestrator.ai.planner import method_store as mstore
+    from planner import method_store as mstore
     check("no store yet → empty, never raises", mstore.load("doorman") == [])
     check("merge reports what is genuinely new", mstore.merge_into("doorman", rec) == 1)
     check("it round-trips through disk",

@@ -104,8 +104,8 @@ class Plan(Shortcut):
         # READ BEFORE THE INTENT, and the order is not cosmetic. `resolve` saw the whole
         # string — prefix included — found no marker word in it, and ASKED THE OPERATOR what
         # they wanted back. They had just said: they want it kept.
-        from orchestrator.ai.planner import procedures as _procs
-        from orchestrator.ai.planner.ir import intent as _intent
+        from planner import procedures as _procs
+        from planner.ir import intent as _intent
         keep_as, request = _procs.declared_in(request)
 
         # AN AUTHORING REQUEST NEEDS NO RUNG, because nothing runs. The engine plans exactly

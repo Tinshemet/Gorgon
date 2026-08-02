@@ -8,16 +8,16 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from ...planner import ghost_writer as _gw
-from ...planner import tree_keeper as _keeper
-from ...planner.ir import lower as _lower
-from ...planner.ir import observe as _observe
-from ...planner.ir import config as _config
-from ...planner.ir import consent as _consent
-from ...planner.ir import render as _render
-from ...planner.ir import run as _run
-from ...planner.ir import effects as _effects
-from ...planner.ir import validate as _validate
+from planner import ghost_writer as _gw
+from planner import tree_keeper as _keeper
+from planner.ir import lower as _lower
+from planner.ir import observe as _observe
+from planner.ir import config as _config
+from planner.ir import consent as _consent
+from planner.ir import render as _render
+from planner.ir import run as _run
+from planner.ir import effects as _effects
+from planner.ir import validate as _validate
 from ._shared import _MAX_OPENINGS, _MAX_WAITS, _findings_of, _prose_of
 
 

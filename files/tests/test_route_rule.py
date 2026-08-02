@@ -32,7 +32,7 @@ def test_the_discriminator_is_KIND_HOOD_not_the_verb():
     assert rr.classify("set up a network called dmz") == "new"
     assert rr.classify("build the lab network") == "new"
     # `snapshot` IS declared, which is what corrected the held-out key.
-    from orchestrator.ai.planner.ir import config
+    from planner.ir import config
     assert "snapshot" in config.KINDS
     assert rr.classify("create a snapshot of web", ["create a vm named web"]) == "new"
 
@@ -52,7 +52,7 @@ def test_a_goal_naming_an_earlier_sibling_s_work_is_acting_on_it():
 
 
 def test_kinds_come_from_the_manifest():
-    from orchestrator.ai.planner.ir import config
+    from planner.ir import config
     words = rr.kind_words()
     for kind in config.KINDS:
         assert kind.lower() in words and kind.lower() + "s" in words

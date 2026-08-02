@@ -37,7 +37,7 @@ def _bundle() -> Dict[str, Any]:
             from orchestrator.ai.chat.context_assistant import _NARROW_CORE_TOOLS
             from orchestrator.ai.agent.contract import (gate_action, success_criterion,
                                                         is_forbidden, consent_verb, tool_risk)
-            from orchestrator.ai.planner.findings import (yield_fact, extract_value,
+            from planner.findings import (yield_fact, extract_value,
                                                           finding_probe_spec)
             _BUNDLE = {
                 "post_create_attach": POST_CREATE_ATTACH,

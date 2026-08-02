@@ -44,10 +44,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.planner.findings import DEFAULT_SCHEMA
-from orchestrator.ai.planner.ir import config, derive, evaluate, refs, render, run, validate
-from orchestrator.ai.planner.ir import intent as intent_mod
-from orchestrator.ai.planner.ir.derive import _DERIVERS
+from planner.findings import DEFAULT_SCHEMA
+from planner.ir import config, derive, evaluate, refs, render, run, validate
+from planner.ir import intent as intent_mod
+from planner.ir.derive import _DERIVERS
 from tests.bench.author_probe import _seams, program_schema
 from tests.bench.sim_world import SimWorld
 
@@ -233,7 +233,7 @@ def test_cardinality_is_by_construction_and_never_by_member_count():
     a world argument, this is what would fail.
     """
     import inspect as _inspect
-    from orchestrator.ai.planner.ir import master as _master
+    from planner.ir import master as _master
     sig = _inspect.signature(_master.cardinality_of)
     check("cardinality_of takes ONLY a select — no world, no registry, no counts",
           list(sig.parameters) == ["sel"])
@@ -426,7 +426,7 @@ def test_the_surface_spells_every_word_it_owns():
               word in config.SURFACE)
     # And renaming one must actually change the output — the property all of this is for.
     import copy
-    from orchestrator.ai.planner.ir import config as _cfg
+    from planner.ir import config as _cfg
     original = _cfg.SURFACE["ensure"]
     try:
         _cfg.SURFACE["ensure"] = "VERIFY"
@@ -453,8 +453,8 @@ def test_the_two_selects_answer_the_same_question():
     or the number means nothing.
     """
     from orchestrator.ai.active_library import ActiveLibrary
-    from orchestrator.ai.planner.findings import Findings
-    from orchestrator.ai.planner.program import make_select
+    from planner.findings import Findings
+    from planner.program import make_select
 
     # One lab, built twice — once as the bench world, once as the registry.
     w = SimWorld()
@@ -607,7 +607,7 @@ def test_the_offer_never_exceeds_the_authority():
     more than the authority permits wastes a round; offering LESS makes a legal program
     undecodable, and there is no error message for a construct the model was never shown.
     """
-    from orchestrator.ai.planner.ir import intent as _intent, master, schema as _schema
+    from planner.ir import intent as _intent, master, schema as _schema
     from tests.bench.author_probe import _system
 
     for want in (_intent.FETCH, _intent.ENSURE, _intent.ACHIEVE, None):
@@ -677,7 +677,7 @@ def test_a_copy_source_is_offered_only_from_what_exists():
     a schema stricter than the validator makes a legal program undecodable, and a schema
     looser than it just moves the rejection back to where it already was.
     """
-    from orchestrator.ai.planner.ir import master, schema as _schema
+    from planner.ir import master, schema as _schema
 
     lab = {"golden", "web", "core"}
     field = _schema._field("from", lab)
@@ -752,7 +752,7 @@ def test_no_model_facing_string_still_teaches_a_retired_rule():
     here, which is the cheapest possible way to make the next straggler fail a suite
     instead of a benchmark.
     """
-    from orchestrator.ai.planner.ir import intent as _intent
+    from planner.ir import intent as _intent
 
     # Wording that the validator no longer enforces. Keep the phrases SHORT and
     # distinctive: this is matched against prose, and a long quote stops matching the
@@ -800,7 +800,7 @@ def test_no_model_facing_string_still_teaches_a_retired_rule():
     # PROMPT. Every ladder cell was therefore authored under a strictly richer prompt than
     # the orchestrator ships, which over-states production rather than under-stating it.
     # test_medusa already holds that the intent reaches the runtime; this is the other side.
-    from orchestrator.ai.planner.ir import schema as _sch
+    from planner.ir import schema as _sch
     for w in (_intent.FETCH, _intent.ENSURE, _intent.ACHIEVE):
         built = _sch.system_prompt(["create_vm"], want=w)
         check(f"the production prompt carries the {w} instruction",
@@ -833,7 +833,7 @@ def test_every_path_that_accepts_an_authored_program_sanitises_it():
     doors = [("tests/bench/author_probe.py", "author"),
              ("tests/bench/author_probe.py", "repair"),
              ("tests/bench/author_probe.py", "revise"),
-             ("orchestrator/ai/planner/program.py", "run_program")]
+             ("planner/program.py", "run_program")]
     for path, fn in doors:
         src = open(os.path.join(root, path)).read()
         body = re.search(rf"\ndef {fn}\(.*?(?=\ndef |\Z)", src, re.S) or \
@@ -844,7 +844,7 @@ def test_every_path_that_accepts_an_authored_program_sanitises_it():
     # AND IT IS ORDERED BEFORE THE VERDICT. Sanitising after validate would reject a
     # program over a statement that could never have run — the artifact would cost the
     # program its life and then be tidied off the corpse.
-    src = open(os.path.join(root, "orchestrator/ai/planner/program.py")).read()
+    src = open(os.path.join(root, "planner/program.py")).read()
     body = re.search(r"\n    def run_program\(.*?(?=\n    def |\Z)", src, re.S).group(0)
     check("production sanitises BEFORE it validates",
           body.index("_sanitize(") < body.index("validate("))
@@ -875,7 +875,7 @@ def test_the_predicate_schema_can_carry_every_operand_it_offers():
     The rule is the one this file exists for — the manifest is the authority, and a
     builder that offers a shape must offer what that shape takes.
     """
-    from orchestrator.ai.planner.ir.schema import _predicate_property
+    from planner.ir.schema import _predicate_property
     prop = _predicate_property()
     props = prop.get("properties") or {}
     if not props:
@@ -909,7 +909,7 @@ def test_both_schema_builders_offer_the_same_predicate_keys():
     key set; which BRANCH each uses is their own business.
     """
     import json as _json
-    from orchestrator.ai.planner.ir.schema import _predicate_property
+    from planner.ir.schema import _predicate_property
     mine = set((_predicate_property().get("properties") or {}))
     if not mine:
         check("production predicate is a bare object (knob off) — not comparable", True)
@@ -934,13 +934,13 @@ def test_both_paths_offer_the_SAME_select():
     without anyone noticing.
     """
     import json as _json
-    from orchestrator.ai.planner.ir import schema as _ir_schema
+    from planner.ir import schema as _ir_schema
     from tests.bench.author_probe import _select_spec
     check("the probe's select IS the ir schema's select",
           _json.dumps(_select_spec(), sort_keys=True)
           == _json.dumps(_ir_schema.select_spec(), sort_keys=True))
     # AND IT REACHES THE LEAF DECODER, which is the surface that was actually starved.
-    from orchestrator.ai.planner.ir import lower as _lower
+    from planner.ir import lower as _lower
     sel = _lower.leaf_schema("foreach", "achieve")["properties"]["select"]
     check("a foreach leaf can name a kind", bool(sel.get("properties", {}).get("kind")))
     check("a foreach leaf can write the carve-out", "not" in sel.get("properties", {}))
@@ -955,10 +955,10 @@ def test_the_quantifier_narrows_BOTH_paths_not_just_the_bench():
     nothing on production or the tree path. Every surface now takes it, and this holds them
     together the way `test_both_paths_offer_the_SAME_select` holds the select.
     """
-    from orchestrator.ai.planner.ir import config as _c
-    from orchestrator.ai.planner.ir import lower as _lower
-    from orchestrator.ai.planner.ir import master as _m
-    from orchestrator.ai.planner.ir import schema as _s
+    from planner.ir import config as _c
+    from planner.ir import lower as _lower
+    from planner.ir import master as _m
+    from planner.ir import schema as _s
 
     # THE ONE NARROWING THE MANIFEST ACTUALLY DECLARES. `all`, `any` and `not` license
     # every op, so `single` is the whole of the op-level payoff — see the note below.
@@ -1019,13 +1019,13 @@ def test_ONE_authority_per_fact_in_the_program_regime():
     """
     import importlib as _il
 
-    from orchestrator.ai.planner.ir import config as _c
-    from orchestrator.ai.planner.ir import consent as _consent
-    from orchestrator.ai.planner.ir import master as _m
+    from planner.ir import config as _c
+    from planner.ir import consent as _consent
+    from planner.ir import master as _m
     # THE MODULE, not the re-export. `ir/__init__` exports `validate` as a FUNCTION, so the
     # plain import binds the callable and `_v._ACTS` raises — reading something adjacent to
     # what actually holds the fact, which is the habit this whole test exists to catch.
-    _v = _il.import_module("orchestrator.ai.planner.ir.validate")
+    _v = _il.import_module("planner.ir.validate")
 
     check("acting ops are declared in the manifest, not in code",
           _m.acting_ops() == {op for op, spec in _c.OPS.items() if spec.get("acts")})
@@ -1126,7 +1126,7 @@ def test_an_ungrounded_program_is_detected_on_the_exact_shape_that_passed():
     its own finding — and the program does reach a world the rung's checker accepts. It
     fails because nothing in it ever asks whether it worked.
     """
-    from orchestrator.ai.planner.ir import consent as _consent
+    from planner.ir import consent as _consent
     para8 = {"body": [
         {"op": "new", "kind": "network", "args": {"net_name": "core"}, "store": "core_net"},
         {"op": "foreach", "in": ["app1", "app2", "app3"], "body": [
@@ -1165,7 +1165,7 @@ def test_a_witness_that_cannot_fail_does_not_ground_a_program():
     OUTSIDE a loop is a legitimate assertion about a named machine, and a count over an
     attribute the program changed must stay grounding.
     """
-    from orchestrator.ai.planner.ir import consent as _consent
+    from planner.ir import consent as _consent
     exists = {"shape": "count", "select": {"kind": "vm", "name": "$item"}, "eq": 1}
     rung11 = {"body": [{"op": "foreach", "select": {"kind": "vm"}, "do": [
         {"op": "call", "tool": "guest_ping", "args": {"name": "$item"}, "store": "answer"},
@@ -1236,7 +1236,7 @@ def test_work_abandoned_inside_a_block_is_named_not_silently_dropped():
              "args": {"name": "$item", "label": "fleet"}}]},
         {"op": "ensure", "predicate": {"shape": "count", "select": {"kind": "vm"}, "eq": 2}},
     ]}
-    from orchestrator.ai.planner.ir import run as _run
+    from planner.ir import run as _run
     res = _run(prog, w.execute, select=sel, holds=holds, known_names=w.names(),
                consent=True, intent="achieve")
     check("the run fails", res["ok"] is False)
@@ -1275,7 +1275,7 @@ def test_there_is_exactly_one_noun_lexicon():
     Both words were merged INTO the manifest rather than dropped, because losing a synonym
     makes a reader worse at the one job the second list existed for.
     """
-    from orchestrator.ai.planner.ir import master as _m
+    from planner.ir import master as _m
     import json as _json
     import os as _os
     here = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))

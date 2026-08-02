@@ -30,13 +30,13 @@ import sys
 import urllib.request
 from typing import Any, Dict, List, Optional
 
-from orchestrator.ai.planner import clause_ledger as _cl
-from orchestrator.ai.planner.ir import config, lower, render, validate
-from orchestrator.ai.planner.ir import derive as _derive
-from orchestrator.ai.planner.ir import run as _run
+from planner import clause_ledger as _cl
+from planner.ir import config, lower, render, validate
+from planner.ir import derive as _derive
+from planner.ir import run as _run
 
 from . import env_stamp, pinned
-from orchestrator.ai.planner.ir import execute as _ir_execute
+from planner.ir import execute as _ir_execute
 from . import route_rule as _route_rule
 from .author_probe import _OLLAMA, _OLLAMA_CTX, _messages
 from .seams import seams as _seams
@@ -149,7 +149,7 @@ def make_emit(model: str, world: SimWorld, want: str, stats: Dict[str, int], log
             msgs[-1]["content"] += (
                 "\n\nThis step is part of: " + " > ".join(a for a in ancestry if a))
         if context:
-            from orchestrator.ai.planner.ir import render as _render
+            from planner.ir import render as _render
             msgs[-1]["content"] += (
                 "\n\nThe program so far (do NOT repeat these — yours is the NEXT "
                 "statement):\n" + _render({"body": list(context)}))
@@ -183,7 +183,7 @@ def _goal_predicate(prog: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     wins, and loop-local predicates are excluded because taking one as the standing goal is
     how a rung came to be graded against `COUNT(SELECT vm WHERE name = '$item') = 1`.
     """
-    from orchestrator.ai.planner.ir import intent as _int
+    from planner.ir import intent as _int
     st = _int.standing_goal(prog)
     return st["predicate"] if st else None
 

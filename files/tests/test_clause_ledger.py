@@ -11,7 +11,7 @@ the atomicity router answered by dropping a clause, 3/3, on 2026-07-29.
 """
 import pytest
 
-from orchestrator.ai.planner import clause_ledger as cl
+from planner import clause_ledger as cl
 
 # ── The three measured failures ─────────────────────────────────────────────────────────
 # goal · demands (as an enumerator would record them) · what the router actually returned.

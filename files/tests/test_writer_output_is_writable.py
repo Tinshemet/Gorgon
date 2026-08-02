@@ -28,8 +28,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.planner import ghost_writer as gw
-from orchestrator.ai.planner.ir import config, validate
+from planner import ghost_writer as gw
+from planner.ir import config, validate
 from tests.bench.rungs import RUNGS
 from tests.bench.sim_world import SimWorld
 from tests.test_ghost_writer import GOALS

@@ -20,8 +20,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.planner.ir.parse import ParseError, parse
-from orchestrator.ai.planner.ir.render import render
+from planner.ir.parse import ParseError, parse
+from planner.ir.render import render
 
 _PASS = _FAIL = 0
 
@@ -169,7 +169,7 @@ def test_no_op_renders_to_something_unreadable():
     # `import_module`, NOT `from ... import render` — the `ir` package re-exports `render` the
     # FUNCTION, which shadows `render` the MODULE. It is a five-minute confusion every time
     # and the reason `tests/shared.py` shadowing is already on the untested-seams list.
-    _render = importlib.import_module("orchestrator.ai.planner.ir.render")
+    _render = importlib.import_module("planner.ir.render")
     src = inspect.getsource(_render._statement)
     emitted = set()
     for line in src.splitlines():

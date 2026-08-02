@@ -182,7 +182,7 @@ class SearchWorld:
     def __init__(self, execute: Optional[Callable] = None, vm_of=None):
         self.kinds = MANIFEST
         self.state: Dict[str, Dict[str, Dict[str, Any]]] = {"browser": {}, "search": {}}
-        from ..planner.model_world import Ledger
+        from planner.model_world import Ledger
         self.findings = Ledger()
         self._execute = execute
         # WHICH MACHINE A BROWSER SITS ON, asked of the engine rather than remembered here.
@@ -191,7 +191,7 @@ class SearchWorld:
 
     @property
     def seams(self):
-        from ..planner.model_world import seams as _generic
+        from planner.model_world import seams as _generic
         return _generic(self)
 
     def names(self) -> set:

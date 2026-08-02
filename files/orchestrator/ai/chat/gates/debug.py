@@ -44,5 +44,5 @@ def _render_debug_panel(tool_name: str, raw_args: dict) -> None:
 def _reward_cost_defaults() -> dict:
     """The reward-cost DEFAULTS, so the debug panel shows a full knob set even when the
     contract only overrides a few."""
-    from ...planner.reward_cost import DEFAULTS
+    from planner.reward_cost import DEFAULTS
     return dict(DEFAULTS)

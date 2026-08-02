@@ -95,7 +95,7 @@ def test_no_goal_survives_that_the_writer_could_not_read():
     """A goal that reaches the writer must be one it can speak about: a declared kind, and a
     shape the vocabulary has. Anything else should have been dropped here."""
     print("[corpus] what survives is sayable to the writer")
-    from orchestrator.ai.planner.ir import config
+    from planner.ir import config
     shapes = {"count", "reach"}
     holders = ("every", "observe", "per")
     strays = []

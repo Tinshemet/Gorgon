@@ -38,8 +38,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from ..planner.ir import config as _config
-from ..planner.ir import effects as _effects
+from planner.ir import config as _config
+from planner.ir import effects as _effects
 from .base import Engine
 
 
@@ -82,7 +82,7 @@ class ExecutorEngine(Engine):
         as it always did — a broken store must not stop the lab from running one call.
         """
         try:
-            from ..planner.procedures import LIBRARY
+            from planner.procedures import LIBRARY
             return LIBRARY.covering(goal) is not None
         except Exception:
             return False

@@ -266,7 +266,7 @@ def test_a_packages_kinds_reach_the_planner_not_only_the_schema():
     from orchestrator.ai.engines import rig
     from orchestrator.ai.engines.qemu import QemuEngine
     from orchestrator.ai.active_library import LIBRARY
-    from orchestrator.ai.planner.ir import config
+    from planner.ir import config
 
     eng = QemuEngine(LIBRARY, lambda t, a: None, packages=rig.packages())
     assert eng._foreign, "an engine with packages has a manifest of its own"
@@ -283,7 +283,7 @@ def test_the_worked_example_is_blinded_to_the_request():
     from orchestrator.ai.engines import rig
     from orchestrator.ai.engines.qemu import QemuEngine
     from orchestrator.ai.active_library import LIBRARY
-    from orchestrator.ai.planner.ir import config
+    from planner.ir import config
     from orchestrator.ai.engines import extract as EX
 
     eng = QemuEngine(LIBRARY, lambda t, a: None, packages=rig.packages())
@@ -314,8 +314,8 @@ def test_a_program_calls_verifies_and_publishes():
     """
     from orchestrator.ai.engines import rig, insession
     from orchestrator.ai.engines.session import Session
-    from orchestrator.ai.planner.ir import config
-    from orchestrator.ai.planner.ir.render import render
+    from planner.ir import config
+    from planner.ir.render import render
 
     orc = rig.build(_answering_world(), narrate=False)
     eng = orc.registry.get("qemu")
@@ -345,8 +345,8 @@ def test_an_ordinary_program_still_says_done():
     from orchestrator.ai.engines import rig
     from orchestrator.ai.engines.qemu import QemuEngine
     from orchestrator.ai.active_library import LIBRARY
-    from orchestrator.ai.planner.ir import config
-    from orchestrator.ai.planner.ir.render import render
+    from planner.ir import config
+    from planner.ir.render import render
 
     eng = QemuEngine(LIBRARY, lambda t, a: {"success": True}, packages=rig.packages())
     with config.use_kinds(eng.manifest):

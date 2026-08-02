@@ -22,7 +22,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from orchestrator.ai.engines import MedusaEngine, Session, insession
-from orchestrator.ai.planner.model_world import World
+from planner.model_world import World
 
 _PASS = _FAIL = 0
 

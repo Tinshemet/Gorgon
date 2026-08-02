@@ -162,14 +162,25 @@ _NOT_ANCHORS = {"them", "they", "that", "this", "these", "those", "there", "with
 
 
 def _verbs() -> set:
-    """The action verbs, from the chat config — read, never re-listed."""
+    """The action verbs, from the chat config — read, never re-listed.
+
+    THE PATH IS ANCHORED ON THE PROJECT ROOT, NOT ON `__file__`'s GRANDPARENT. It used to
+    be the latter, which was the same directory only for as long as this module lived at
+    `orchestrator/ai/planner/`. When `planner/` moved to the top level (2026-08-02) the
+    walk landed on the root itself, the open failed, the `except` below turned that into
+    an EMPTY VERB SET, and every verb in the request silently became an anchor — so
+    `reconcile` demanded that "create" appear in a program that names tools. A data
+    dependency the import graph cannot see, degrading quietly. Caught by
+    `test_clause_ledger`, which asserts anchors are names and never verbs.
+    """
     global _VERBS
     if _VERBS is None:
         import json as _json
         import os as _os
-        here = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
         try:
-            cfg = _json.load(open(_os.path.join(here, "chat", "config.json")))
+            with open(_os.path.join(root, "orchestrator", "ai", "chat", "config.json")) as fh:
+                cfg = _json.load(fh)
             _VERBS = set(cfg.get("action_words") or ()) | set(cfg.get("state_query_words") or ())
         except Exception:
             _VERBS = set()

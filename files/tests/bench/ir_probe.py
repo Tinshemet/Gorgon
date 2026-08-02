@@ -27,11 +27,11 @@ import argparse
 import json
 import sys
 
-from orchestrator.ai.planner.ir import (
+from planner.ir import (
     EMIT_PROGRAM_TOOL, coerce_body, render, statement_from, statement_tools,
     system_prompt, validate)
-from orchestrator.ai.planner.ir import config as ir_config
-from orchestrator.ai.planner.score import _first_tool_call
+from planner.ir import config as ir_config
+from planner.score import _first_tool_call
 
 from .ladder import BENCH_MODEL, make_call_model
 from .sim_world import SimWorld

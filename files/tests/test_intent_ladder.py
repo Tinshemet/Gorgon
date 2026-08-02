@@ -40,7 +40,7 @@ from orchestrator.ai.engines import (Channel, MedusaEngine, Orchestrator, Regist
                                      insession)
 from orchestrator.ai.engines.channel import Answer
 from orchestrator.ai.engines.session import Session
-from orchestrator.ai.planner.ir import effects as _effects
+from planner.ir import effects as _effects
 from tests.bench.sim_world import SimWorld
 
 _PASS = _FAIL = 0

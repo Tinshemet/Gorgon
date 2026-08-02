@@ -239,7 +239,7 @@ The system prompt (`orchestrator/ai/chat/ollama_client.py`, and the agent contra
 | `executor/tool_dispatch/tools/local_probe.py` | **new** — host probe |
 | `executor/command_catalog.json` | register both in `TOOL_SPECS` (req/vm/effect/rev), add help entries + `tool_triggers`; `run_command` effect = writes (rev? no), `local_probe` effect = None (read-only) |
 | `orchestrator/ai/tools.json` | **new** AI-facing schemas for both |
-| `orchestrator/ai/planner/autonomous.py` | `make_probe`: route `local:`/`host:` specs → `local_probe` |
+| `planner/autonomous.py` | `make_probe`: route `local:`/`host:` specs → `local_probe` |
 | `orchestrator/preflight/validator/run_command.py` | **new** `RunCommandCheck` (light gate §7 — net-grant confirm, bwrap-missing abort) |
 | `orchestrator/ai/chat/ollama_client.py` (+ contract core) | system-prompt diff §9 |
 | session-grant store (new, small) | in-memory per-session read/net grants (§4.2); operator-set via CLI/chat |

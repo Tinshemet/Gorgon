@@ -18,7 +18,7 @@ Run:  PYTHONPATH=. python3 -m tests.bench.translate_probe            # every run
 import argparse
 import sys
 
-from orchestrator.ai.planner.translator import normalize_goal
+from planner.translator import normalize_goal
 
 from .ladder import BENCH_MODEL, make_call_model
 from .rungs import RUNGS

@@ -3,7 +3,7 @@
 test_medusa.py — the first unit suite over MEDUSA, the procedure language.
 
 WHY THIS EXISTS. Until now nothing outside `tests/bench/` imported
-`orchestrator.ai.planner.ir` at all: 35 suites were green and not one of them touched the
+`planner.ir` at all: 35 suites were green and not one of them touched the
 language. Every defect in it was therefore found by running a probe against a live
 llama3.1 at temperature 0 — slow, needing a model to be up, and unable to attribute a
 regression to a commit. It also meant the defects that DID land were the silent kind:
@@ -28,9 +28,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.planner.findings import (DEFAULT_SCHEMA, Findings, extract_value,
+from planner.findings import (DEFAULT_SCHEMA, Findings, extract_value,
                                               yield_fact)
-from orchestrator.ai.planner.ir import (config, consent, derive, evaluate, intent,
+from planner.ir import (config, consent, derive, evaluate, intent,
                                         observe, refs, render, run, validate)
 from tests.bench.author_probe import _seams
 from tests.bench.sim_world import SimWorld
@@ -424,7 +424,7 @@ def test_a_failed_predicate_does_not_silently_swallow_the_rest_of_the_program():
           len(res.get("remaining") or []) == 1)
     check("the tagging genuinely did not happen", w.members("fleet") == [])
 
-    from orchestrator.ai.planner.ir import execute as _ex
+    from planner.ir import execute as _ex
     fixed = derive(prog["body"][3]["predicate"], sel, res.get("scope"), intent.ACHIEVE)
     body = _ex.follow_up(res, fixed or [])
     check("the follow-up carries the correction AND the tail", len(body["body"]) == 3)
@@ -808,7 +808,7 @@ def test_an_empty_then_is_told_it_is_an_unstated_inversion():
     # ACHIEVE ordering rules dropped in 62160da, and worth pinning so the next reader knows
     # this is a TEACHING choice about what a program should SAY, not a capability gap.
     import inspect
-    from orchestrator.ai.planner.ir import execute as _execute
+    from planner.ir import execute as _execute
     check("the runtime tolerates an absent branch, so this is a language choice",
           'st.get("then" if good else "else") or []' in inspect.getsource(_execute))
 
@@ -826,7 +826,7 @@ def test_the_sanitiser_drops_only_what_could_never_run():
     building this at all was that a cleaner could hide a reasoning fault, and the boundary
     is the whole answer to that objection.
     """
-    from orchestrator.ai.planner.ir.sanitize import sanitize, kinds, severity
+    from planner.ir.sanitize import sanitize, kinds, severity
 
     stop = {"op": "call", "tool": "stop_vm", "args": {"name": "$item"}}
     ping = {"op": "call", "tool": "guest_ping", "args": {"name": "$item"},
@@ -907,7 +907,7 @@ def test_the_sanitiser_reaches_the_reply_not_just_the_program():
     entirely safe to REMOVE while its RATE says the constrained decoder is not holding.
     Severity and symptom answer different questions and one field cannot hold both.
     """
-    from orchestrator.ai.planner.ir.sanitize import (kinds, sanitize_text, severity,
+    from planner.ir.sanitize import (kinds, sanitize_text, severity,
                                                      symptom_of)
 
     body = '{"body": [{"op": "call", "tool": "list_vms", "args": {}}]}'
@@ -984,8 +984,8 @@ def test_achieve_may_change_the_world_and_ensure_may_not():
     the intended"*. A kind with a required argument nobody declared cannot be derived into
     existence and the author is asked instead.
     """
-    from orchestrator.ai.planner.ir.derive import derive as _derive
-    from orchestrator.ai.planner.ir.derive import _creator_args
+    from planner.ir.derive import derive as _derive
+    from planner.ir.derive import _creator_args
 
     def seams(vms=()):
         w = SimWorld()                 # EMPTY — _world() seeds three, which is not the case
@@ -1023,7 +1023,7 @@ def test_achieve_may_change_the_world_and_ensure_may_not():
     # correction part of it." Refusing here treated derive() as the safety mechanism,
     # which it is not: a derived call meets consent, the contract tier and delete_vm's
     # double confirmation exactly as an authored one does.
-    from orchestrator.ai.planner.ir import intent as _intent
+    from planner.ir import intent as _intent
     _w, sel5 = seams(["a", "b", "c", "d", "e"])
     pred_down = {"shape": "count", "select": {"kind": "vm"}, "eq": 2}
     out = _derive(pred_down, sel5, {}, _intent.ACHIEVE)

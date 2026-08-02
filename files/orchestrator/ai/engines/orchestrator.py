@@ -63,7 +63,7 @@ def _parameterise(program: Dict[str, Any]) -> None:
     DETERMINISTIC AND MODEL-FREE: the goal states the kind, the manifest states its key, and the
     value in that slot is what the operator named. Nothing is guessed.
     """
-    from ..planner.ir import config as _cfg
+    from planner.ir import config as _cfg
 
     goal = program.get("achieves")
     if not isinstance(goal, dict):
@@ -345,8 +345,8 @@ class Orchestrator:
         and saying so in the goal's own vocabulary is what lets the WRITER match it later —
         so the operator's snippet enters a future plan without the operator being in the room.
         """
-        from ..planner import procedures as _procs
-        from ..planner.ir.render import render as _render
+        from planner import procedures as _procs
+        from planner.ir.render import render as _render
 
         # THE ENGINE'S KINDS, HELD FOR THE WHOLE OF AUTHORING. `_attempt` enters this scope
         # around planning and leaves it before here, so `validate` — called by `save` — ran
@@ -357,7 +357,7 @@ class Orchestrator:
         # dynamic scope is a value from a different world. The world now answers for its own
         # packages, which fixes the planning half; this fixes the KEEPING half, which no world
         # is involved in.
-        from ..planner.ir import config as _config
+        from planner.ir import config as _config
         with _config.use_kinds(getattr(engine, "manifest", None)):
             return self._author_within(engine, session, name, components, _procs, _render)
 
@@ -403,7 +403,7 @@ class Orchestrator:
             # THAT IS THE WHOLE OF "a capability that cannot be requested is not mounted".
             # The writer could plan a search, the engine could run one, and the model could
             # not say the word.
-            from ..planner.ir import config as _config
+            from planner.ir import config as _config
             with _config.use_kinds(getattr(engine, "manifest", None)):
                 answer = self.channel.ask(request, engine.world())
             session.record(f"{len(answer.components or ())} goal(s)",

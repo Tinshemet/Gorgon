@@ -168,8 +168,8 @@ def test_a_creation_that_did_not_happen_is_caught_by_the_world():
     two: it asks the registry rather than the caller.
     """
     print("[tree] a creation is proven by the world, not by the tool's return")
-    from orchestrator.ai.planner.ir import run as ir_run
-    from orchestrator.ai.planner.ir import validate
+    from planner.ir import run as ir_run
+    from planner.ir import validate
     from tests.bench.seams import seams as vm_seams
 
     world = SimWorld()

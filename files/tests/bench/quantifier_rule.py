@@ -42,7 +42,7 @@ from __future__ import annotations
 import re
 from typing import List, Optional, Tuple
 
-from orchestrator.ai.planner.ir import master
+from planner.ir import master
 
 # A whole is named and members subtracted. `but not` is included because it is the spoken
 # form of the same move; `without` is NOT — "a network without a name" is a description.

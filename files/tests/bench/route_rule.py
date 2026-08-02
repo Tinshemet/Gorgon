@@ -38,7 +38,7 @@ from __future__ import annotations
 import re
 from typing import List, Optional, Sequence, Tuple
 
-from orchestrator.ai.planner.ir import master
+from planner.ir import master
 
 # Bringing something into existence. VERBS ONLY, and that restriction is the rule's whole
 # point. My first version also listed the ADJECTIVE `new`, and it answered `new` for "launch

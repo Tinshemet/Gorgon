@@ -23,8 +23,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
 
-from orchestrator.ai.planner.ir import config as _config
-from orchestrator.ai.planner.ir import observe as _observe
+from planner.ir import config as _config
+from planner.ir import observe as _observe
 
 
 def _single(spec: Dict[str, Any], setter: Dict[str, Any]) -> bool:

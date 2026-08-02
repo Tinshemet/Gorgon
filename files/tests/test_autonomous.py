@@ -360,7 +360,7 @@ def main():
           _sp("create a vm with 4 cores and 8gb ram", []) is None)
 
     print("\nattach-steer must not hijack a node that says CREATE")
-    from orchestrator.ai.planner.score.ledger_util import _attach_steer
+    from planner.score.ledger_util import _attach_steer
     _led = [{"tool": "create_network", "args": {"net_name": "rednet"}, "ok": True}]
     _t2, steered = _attach_steer(_TOOLS2, "create a network called bluenet", _led, _TOOLS2)
     check("a create node is left alone (it needs the creator tool)",
@@ -461,8 +461,8 @@ def main():
           gr("wire web and db", ["start the vm", "stop the vm"]) == ["start the vm", "stop the vm"])
 
     print("\nthrashing bound (Track 1.5): max_steps stops a non-converging run instead of burning calls")
-    from orchestrator.ai.planner.score import run_score as _run_score
-    from orchestrator.ai.planner.engine import Engine as _Engine
+    from planner.score import run_score as _run_score
+    from planner.engine import Engine as _Engine
     calls = []
     def _fail_exec(t, a): calls.append(t); return {"success": False, "error": "nope"}
     # No estimator (so CE-abandon can't save us) + a leaf that always fails + a big retry
@@ -497,7 +497,7 @@ def main():
     check("the broken mesh is on the record", r["findings"].get("mesh(fleet)") is False)
 
     print("\ngoal-level honesty rule: an assurance goal must be GROUNDED, or it closes unverified")
-    from orchestrator.ai.planner.findings import Findings
+    from planner.findings import Findings
     from orchestrator.ai.autonomous import make_goal_verifier
     f = Findings()
     vg = make_goal_verifier(lambda: {}, findings=f)
@@ -518,7 +518,7 @@ def main():
     print("\np_self forward-feed loop: dials persist durably (no hand-fed prior=)")
     import tempfile
     import shared.bundle as _bundle
-    from orchestrator.ai.planner import findings_store as _store
+    from planner import findings_store as _store
     from orchestrator.ai.agent.contract import active_agent_key as _agent_key
     _bundle.AGENTS_ROOT = tempfile.mkdtemp()       # isolate the durable stores from ~/.gorgon
     w = World()
@@ -542,7 +542,7 @@ def main():
     check("a later run (no prior=) still closes the loop and re-persists", _store.load_reliability(agent) != {})
 
     print("\nstructural memory: a PROVEN decomposition outlives the process")
-    from orchestrator.ai.planner import method_store as _mstore
+    from planner import method_store as _mstore
     _mstore.clear(agent)
     def _goal_of(messages):
         return next((x["content"][6:] for x in messages

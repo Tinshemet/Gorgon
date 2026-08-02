@@ -36,7 +36,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional
 
-from ..planner.ir import config
+from planner.ir import config
 
 
 def _kinds() -> List[str]:

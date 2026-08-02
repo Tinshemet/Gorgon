@@ -11,7 +11,7 @@ class ClaimFindingTool(Tool):
     names = ("claim_finding",)
     def run(self, args, ctx):
         try:
-            from orchestrator.ai.planner.claim_types import claim_type as _ct
+            from planner.claim_types import claim_type as _ct
             spec = _ct(args.get("type"))
         except Exception:
             spec = None

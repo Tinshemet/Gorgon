@@ -25,7 +25,7 @@ import sys
 import urllib.request
 from typing import List, Optional, Tuple
 
-from orchestrator.ai.planner.ir import render, validate
+from planner.ir import render, validate
 
 from . import pinned
 from .author_probe import _OLLAMA, _OLLAMA_CTX, _messages, program_schema

@@ -47,7 +47,7 @@ class Package:
 
     def tools(self) -> List[str]:
         """Every tool this package's manifest names — derived, never listed twice."""
-        from ..planner.ir import effects
+        from planner.ir import effects
         return sorted(effects.tools_of(self.manifest))
 
     def claims(self, request: str) -> bool:

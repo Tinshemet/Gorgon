@@ -62,7 +62,7 @@ def _intent_words():
     #
     # The two words this file knew were merged INTO the manifest rather than dropped: losing
     # a synonym would make forge worse at the single job the second list existed for.
-    from ..planner.ir import master
+    from planner.ir import master
     nouns = set(master.kind_nouns("vm"))
     return verbs, nouns
 

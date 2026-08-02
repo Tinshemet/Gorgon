@@ -13,9 +13,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.planner.killswitch import KillSwitch
-from orchestrator.ai.planner.engine import Engine
-from orchestrator.ai.planner.score import run_score
+from planner.killswitch import KillSwitch
+from planner.engine import Engine
+from planner.score import run_score
 
 _PASS = 0
 _FAIL = 0
@@ -87,7 +87,7 @@ def main():
 
     print("\ndead-man's switch: unattended silence trips it")
     import time
-    from orchestrator.ai.planner.killswitch import DeadMansSwitch
+    from planner.killswitch import DeadMansSwitch
     ks = KillSwitch()
     dm = DeadMansSwitch(ks, timeout=0.30).start()
     check("not tripped immediately", ks.tripped is False)

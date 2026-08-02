@@ -40,7 +40,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.planner.ir import config, consent, gate
+from planner.ir import config, consent, gate
 
 _PASS = 0
 _FAIL = 0
@@ -464,7 +464,7 @@ def test_no_constrainable_rule_lives_only_in_the_gate():
     It lives beside the fixtures rather than in test_medusa_invariants because the second
     half needs a PROGRAM per factor, and the examples are here.
     """
-    from orchestrator.ai.planner.ir import validate
+    from planner.ir import validate
 
     examples = {"goal_unnamed": ABOUT_SOMETHING_ELSE, "dead_binding": DEAD_BINDING}
     factors = config.GATE["factors"]
@@ -493,7 +493,7 @@ def test_the_gate_is_actually_in_the_path_a_program_takes():
     ran the program anyway would be worse than no gate — it would report a safety
     behaviour it does not have.
     """
-    from orchestrator.ai.planner.program import make_run_program
+    from planner.program import make_run_program
 
     class _Lab:
         vms = {}

@@ -30,7 +30,7 @@ Run:  PYTHONPATH=. python3 -m tests.bench.router_agreement_probe
 import sys
 from collections import Counter
 
-from orchestrator.ai.planner.ir import lower, master          # noqa: E402
+from planner.ir import lower, master          # noqa: E402
 from tests.bench import tree_probe as tp                      # noqa: E402
 from tests.bench.author_probe import _route_quantifier        # noqa: E402
 from tests.bench.ladder import BENCH_MODEL                    # noqa: E402

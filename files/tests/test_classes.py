@@ -18,8 +18,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.planner.ir import classes as C
-from orchestrator.ai.planner.ir import config, effects
+from planner.ir import classes as C
+from planner.ir import config, effects
 
 _PASS = _FAIL = 0
 
@@ -140,7 +140,7 @@ def test_the_public_surface_is_small_and_is_not_in_the_big_prompt():
     check("the extractor's schema does not carry a class surface",
           ".launch()" not in _json.dumps(_extract.schema()))
     from tests.bench.author_probe import _system
-    from orchestrator.ai.planner.ir import intent as _intent
+    from planner.ir import intent as _intent
     check("and neither does the author prompt",
           ".launch()" not in _system(_intent.ACHIEVE))
 

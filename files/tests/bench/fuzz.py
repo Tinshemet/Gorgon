@@ -26,7 +26,7 @@ from __future__ import annotations
 import random
 from typing import Any, Dict, List, Tuple
 
-from orchestrator.ai.planner.ir import config
+from planner.ir import config
 
 from .seams import seams
 from .sim_world import SimWorld

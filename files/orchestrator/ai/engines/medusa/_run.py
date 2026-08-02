@@ -12,16 +12,16 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from ...planner import ghost_writer as _gw
-from ...planner import tree_keeper as _keeper
-from ...planner.ir import lower as _lower
-from ...planner.ir import observe as _observe
-from ...planner.ir import config as _config
-from ...planner.ir import consent as _consent
-from ...planner.ir import render as _render
-from ...planner.ir import run as _run
-from ...planner.ir import effects as _effects
-from ...planner.ir import validate as _validate
+from planner import ghost_writer as _gw
+from planner import tree_keeper as _keeper
+from planner.ir import lower as _lower
+from planner.ir import observe as _observe
+from planner.ir import config as _config
+from planner.ir import consent as _consent
+from planner.ir import render as _render
+from planner.ir import run as _run
+from planner.ir import effects as _effects
+from planner.ir import validate as _validate
 from ._shared import _MAX_OPENINGS, _MAX_WAITS, _findings_of, _prose_of
 
 
@@ -52,7 +52,7 @@ class _PlanMixin:
         same session, and a version where the writer planned a check while the reader
         expected a correction would report every verdict as a broken run.
         """
-        from ...planner.ir import intent as _intent
+        from planner.ir import intent as _intent
         want = getattr(session, "intent", None)
         return want is None or _intent.permits(want)
 
@@ -121,7 +121,7 @@ class _PlanMixin:
         # A FETCH ANSWERS WITH DATA AND NEVER WITH A VERDICT — `intent._PERMITS` does not
         # license it an `ensure`, because judging is the rung above reading. So the bottom
         # rung writes probes and a PUBLISH, and the findings carry what was seen.
-        from ...planner.ir import intent as _intent
+        from planner.ir import intent as _intent
         program = _gw.as_program(plan, components, world, temps=temps,
                                  witness=want != _intent.FETCH)
         if not program["body"]:
@@ -185,8 +185,8 @@ class _PlanMixin:
         refuse. This function never opens one — a tree accrues cost, and the thing asking for
         more is never the thing that should approve it.
         """
-        from ...planner.ir import derive as _derive
-        from ...planner.ir import execute as _exec
+        from planner.ir import derive as _derive
+        from planner.ir import execute as _exec
 
         # EVERY CALL, ACROSS EVERY ROUND. `run` reports the calls IT made, so replacing the
         # result with the correction's would drop the ones the first pass made — the operator

@@ -9,6 +9,6 @@ The ghost writer made this same move on 2026-08-01 for the same reason, recorded
 same words: nothing in `tests/` may quietly become the authority for a production component.
 This shim exists so the bench's own suites keep importing one name.
 """
-from orchestrator.ai.planner.model_world import (  # noqa: F401
+from planner.model_world import (  # noqa: F401
     Ledger, World, seams, _single,
 )

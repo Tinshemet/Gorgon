@@ -26,8 +26,8 @@ import json
 import sys
 from collections import Counter
 
-from orchestrator.ai.planner.ir import consent, render, validate
-from orchestrator.ai.planner.ir import run as ir_run
+from planner.ir import consent, render, validate
+from planner.ir import run as ir_run
 
 from orchestrator.ai.engines import extract as _extract
 from .ghost_writer import Unsolvable, as_program, cover

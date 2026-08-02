@@ -32,8 +32,13 @@ def _books():
     AND the findings, so importing it at module load would point the dependency arrow the
     wrong way through the whole planner — and would make `ir/` unimportable without it,
     which is the property that keeps the language testable on its own.
+
+    ABSOLUTE, NOT RELATIVE, SINCE `planner/` LEFT `orchestrator/ai/`: the two packages are
+    siblings now and no relative form reaches. The edge is unchanged — still upward, still
+    deliberate, still inside a function body so it costs nothing at import time. It is the
+    one exception `tests/test_layering.py` names.
     """
-    from ...books import ledger
+    from orchestrator.ai.books import ledger
     return ledger
 
 

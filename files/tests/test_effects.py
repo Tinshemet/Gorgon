@@ -19,7 +19,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from executor.command_catalog import KNOWN_TOOLS
-from orchestrator.ai.planner.ir import config, effects
+from planner.ir import config, effects
 from tests.bench.seams import seams
 from tests.bench.sim_world import SimWorld
 

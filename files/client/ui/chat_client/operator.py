@@ -54,7 +54,7 @@ def render_mission_result(m: dict) -> None:
 
 def apply_claim(action: str, fact: str) -> None:
     """Confirm/reject a claim in the active agent's store (post operator re-auth)."""
-    from orchestrator.ai.planner import findings_store as store
+    from planner import findings_store as store
     from orchestrator.ai.agent.contract import active_agent_key
     key = active_agent_key()
     ok = store.confirm(key, fact) if action == "confirm" else store.reject(key, fact)
@@ -66,7 +66,7 @@ def apply_claim(action: str, fact: str) -> None:
 
 def handle_claim(arg: str) -> None:
     """`claim [list] | confirm <fact> | reject <fact>` inside the chat."""
-    from orchestrator.ai.planner import findings_store as store
+    from planner import findings_store as store
     from orchestrator.ai.agent.contract import active_agent_key
     key = active_agent_key()
     parts = arg.split()

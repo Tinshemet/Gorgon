@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from orchestrator.ai.engines import Channel, MedusaEngine, Orchestrator, Registry, insession
 from orchestrator.ai.engines.channel import Answer
-from orchestrator.ai.planner.ir import config
+from planner.ir import config
 from tests.bench import fuzz
 from tests.bench.sim_world import SimWorld
 

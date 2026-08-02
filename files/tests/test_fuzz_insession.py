@@ -114,7 +114,7 @@ def test_the_cost_of_a_doomed_request_is_what_the_grain_changes():
 def test_a_destructive_step_says_so_before_the_verdict():
     """Over generated cases, not one hand-built world."""
     print(f"[fuzz] {CASES} cases — every deletion is declared before it happens")
-    from orchestrator.ai.planner.ir import effects
+    from planner.ir import effects
 
     undeclared = []
     for seed in range(CASES):

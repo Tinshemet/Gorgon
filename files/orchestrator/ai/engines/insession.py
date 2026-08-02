@@ -181,7 +181,7 @@ def _above_authority(step: Step, session) -> Optional[str]:
     granted = getattr(session, "intent", None)
     if granted is None:
         return None
-    from ..planner.ir import intent as _intent
+    from planner.ir import intent as _intent
     if _intent.permits(granted):
         return None
     tools = sorted({t for t, _ in step.acts})

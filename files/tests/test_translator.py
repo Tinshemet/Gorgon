@@ -22,7 +22,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.planner.translator import (
+from planner.translator import (
     RESTATE_TOOL, canonical_examples, join_clauses, normalize_goal, _system_prompt,
 )
 

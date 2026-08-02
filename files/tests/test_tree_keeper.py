@@ -8,7 +8,7 @@ below is the one it always asserted; only the fixture moved.
 """
 import copy
 
-from orchestrator.ai.planner import tree_keeper as tk
+from planner import tree_keeper as tk
 
 P_THREE = {"shape": "count", "select": {"kind": "vm"}, "eq": 3}
 

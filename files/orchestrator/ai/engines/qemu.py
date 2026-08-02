@@ -19,8 +19,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from ..planner.ir import config as _config
-from ..planner.ir import observe as _observe
+from planner.ir import config as _config
+from planner.ir import observe as _observe
 from .base import Engine
 from .medusa import MedusaEngine
 
@@ -184,7 +184,7 @@ class LabWorld:
         for it. `unseeded` already says a package is the authority for its kinds; this is
         what makes that claim true rather than merely asserted.
         """
-        from ..planner.program import seams as _prod_seams
+        from planner.program import seams as _prod_seams
         select, holds = _prod_seams(self._library, self._findings)
         owned = {}
         for p in self._packages:
@@ -287,7 +287,7 @@ class LabWorld:
         meets — which is the same division of labour `already_satisfied` relies on.
         """
         self._ensure_built()
-        from ..planner.model_world import World as _Model
+        from planner.model_world import World as _Model
         model = _Model(self.kinds)
         # `vms` is a METHOD on ActiveLibrary, not an attribute — the second interface
         # mistake this mount made against a library it had never been pointed at. Called,

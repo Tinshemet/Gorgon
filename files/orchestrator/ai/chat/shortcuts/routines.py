@@ -38,8 +38,8 @@ class Routines(Shortcut):
             verbose: bool) -> None:
         # IMPORTED HERE for the reason `plan` states: a shortcut registers at class
         # definition, so every import in this file is paid by a session that never types it.
-        from orchestrator.ai.planner import procedures as _procs
-        from orchestrator.ai.planner.program import seams as _seams
+        from planner import procedures as _procs
+        from planner.program import seams as _seams
         from orchestrator.ai.active_library import LIBRARY
 
         doing = ui.strip().lower().endswith(" run")

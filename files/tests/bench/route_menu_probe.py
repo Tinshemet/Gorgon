@@ -50,7 +50,7 @@ import collections
 import json
 import sys
 
-from orchestrator.ai.planner.ir import config
+from planner.ir import config
 
 from . import pinned
 from .author_probe import _OLLAMA_CTX, _TOOLS

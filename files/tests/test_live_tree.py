@@ -13,8 +13,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.planner.engine import Engine
-from orchestrator.ai.planner.score import run_score
+from planner.engine import Engine
+from planner.score import run_score
 from client.cli.live_tree import LivePlanTree
 
 _PASS = 0

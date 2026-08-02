@@ -21,7 +21,7 @@ from orchestrator.ai.engines import (Channel, MedusaEngine, Orchestrator, Regist
                                      Session, describe, stub)
 from orchestrator.ai.packages import WebCrawlPackage
 from orchestrator.ai.engines.session import INTENT_REGIME, rank
-from orchestrator.ai.planner.ir import config
+from planner.ir import config
 from tests.bench.generic_world import World
 
 _PASS = 0
@@ -407,7 +407,7 @@ def test_planning_never_touches_the_world_it_plans_against():
             from tests.bench.generic_world import World as _Model
             return _Model(KITCHEN)
 
-    from orchestrator.ai.planner import ghost_writer as _gw
+    from planner import ghost_writer as _gw
     plan = _gw.cover([{"shape": "count", "select": {"kind": "dish", "dish_name": "x"},
                        "eq": 1}], Reaching())
     check("a plan is still produced", plan == [("create_dish", {"dish_name": "x"})])
@@ -811,7 +811,7 @@ def test_the_book_keeper_reports_a_split_served_against_a_moving_set():
     """
     print("[keeper] the in-session tree, read by the book keeper")
     from orchestrator.ai.engines import insession
-    from orchestrator.ai.planner import tree_keeper as tk
+    from planner import tree_keeper as tk
 
     def serve(moving):
         world = World(KITCHEN)
@@ -858,7 +858,7 @@ def test_the_book_keeper_reports_a_split_served_against_a_moving_set():
 def test_a_goal_of_any_shape_can_be_named_in_one_line():
     """These strings are read by people, in refusals and in the keeper's report."""
     print("[readability] _short speaks every shape the writer accepts")
-    from orchestrator.ai.planner import ghost_writer as gw
+    from planner import ghost_writer as gw
 
     said = [gw._short(g) for g in (
         {"every": {"kind": "vm", "alive": False}, "must": {"status": "stopped"}},
@@ -1162,7 +1162,7 @@ def test_a_kind_the_world_cannot_see_is_refused_not_assumed_empty():
     """
     print("[mount] the planner declines a kind it cannot enumerate")
     from orchestrator.ai.engines import QemuEngine, insession
-    from orchestrator.ai.planner import ghost_writer as gw
+    from planner import ghost_writer as gw
 
     check("a goal's kinds include what it SELECTS over",
           gw.kinds_of({"shape": "count", "select": {"kind": "vm"}, "eq": 1}) == {"vm"})
@@ -1539,7 +1539,7 @@ def test_an_intent_that_may_not_act_is_refused_before_the_decider():
     """
     print("[intent] a fetch may not change the lab, whichever engine is asked")
     from orchestrator.ai.engines import ExecutorEngine, insession
-    from orchestrator.ai.planner.ir import effects as _effects
+    from planner.ir import effects as _effects
     from tests.bench.sim_world import SimWorld
 
     for granted in ("fetch", "ensure"):
@@ -1621,7 +1621,7 @@ def test_consent_is_the_operators_and_the_engine_stops_answering_it_for_them():
     print("[consent] the ungrounded program asks, and a no is honoured")
     from tests.bench.sim_world import SimWorld
 
-    from orchestrator.ai.planner import ghost_writer as _gw
+    from planner import ghost_writer as _gw
 
     world = SimWorld()
     eng = MedusaEngine(world)

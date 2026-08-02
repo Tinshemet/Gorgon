@@ -27,10 +27,10 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.planner import ghost_writer as gw
-from orchestrator.ai.planner import procedures as procs
-from orchestrator.ai.planner.ir import render, validate
-from orchestrator.ai.planner.ir import run as ir_run
+from planner import ghost_writer as gw
+from planner import procedures as procs
+from planner.ir import render, validate
+from planner.ir import run as ir_run
 from tests.bench.seams import seams
 from tests.bench.sim_world import SimWorld
 
@@ -527,7 +527,7 @@ def test_a_set_is_declarable_at_last():
     """EVERY PARAM TYPE WAS A SCALAR, and that was a limit rather than a gap nobody reached:
     `attach(vms, net_name)` could not declare its first argument at all."""
     print("[classes] a parameter may be a set")
-    from orchestrator.ai.planner.ir import config
+    from planner.ir import config
 
     check("the manifest declares it", "set" in config.PARAM_TYPES)
     loop = {"name": "over", "params": {"vms": "set"},

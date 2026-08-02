@@ -23,8 +23,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.planner.ir import consent, render, validate
-from orchestrator.ai.planner.ir import run as ir_run
+from planner.ir import consent, render, validate
+from planner.ir import run as ir_run
 from tests.bench.ghost_writer import Unsolvable, as_program, cover
 from tests.bench.rungs import RUNGS
 from tests.bench.seams import seams

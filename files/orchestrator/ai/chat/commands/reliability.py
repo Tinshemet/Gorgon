@@ -16,9 +16,9 @@ class ReliabilityCommand(Command):
         # gorgon reliability [agent] — inspect the LEARNED per-tool p_world (how often
         # each primitive actually succeeds), accumulated in the durable tool-stats store.
         # Read-only; defaults to the active agent, or pass an agent key to inspect another.
-        from orchestrator.ai.planner import findings_store as _store
+        from planner import findings_store as _store
         from orchestrator.ai.agent import contract as _contract
-        from orchestrator.ai.planner.reward_cost import p_world_estimate as _pwe, cfg_with as _cfgw
+        from planner.reward_cost import p_world_estimate as _pwe, cfg_with as _cfgw
         if rest and rest[0] == "reset":                # gorgon reliability reset [agent]
             agent = rest[1] if len(rest) >= 2 else _contract.active_agent_key()
             # Reset BOTH learned memories: per-tool p_world AND the p_self dials, so a

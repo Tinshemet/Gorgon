@@ -36,13 +36,13 @@ import json
 import sys
 from typing import Any, Dict, List, Optional
 
-from orchestrator.ai.planner.ir import config, lower, render, validate
+from planner.ir import config, lower, render, validate
 # THE FUNCTION, not the module — `ir/__init__` re-exports `validate` as a callable,
 # so `validate.coerce_body` raises. Same trap logged twice before; import it directly.
-from orchestrator.ai.planner.ir.validate import coerce_body
-from orchestrator.ai.planner.ir import derive as _derive
-from orchestrator.ai.planner.ir import execute as _ir_execute
-from orchestrator.ai.planner.ir import run as _run
+from planner.ir.validate import coerce_body
+from planner.ir import derive as _derive
+from planner.ir import execute as _ir_execute
+from planner.ir import run as _run
 
 from . import env_stamp
 from .author_probe import author, _seams

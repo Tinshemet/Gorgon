@@ -8,7 +8,7 @@ into this afterwards and is measured separately.
 """
 import pytest
 
-from orchestrator.ai.planner.ir import config, lower, render, validate
+from planner.ir import config, lower, render, validate
 
 N = lower.node
 
@@ -250,7 +250,7 @@ def test_a_tree_deeper_than_the_bound_is_REFUSED():
 
 
 # ── steps 04 + 05: fusion gates and whole-artifact review ───────────────────────────────
-from orchestrator.ai.planner import clause_ledger as _cl
+from planner import clause_ledger as _cl
 
 
 def _reconcile(led, body):

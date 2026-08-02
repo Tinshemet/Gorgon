@@ -14,8 +14,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.ai.planner.engine import Engine
-from orchestrator.ai.planner.score import run_score
+from planner.engine import Engine
+from planner.score import run_score
 from orchestrator.ai.autonomous import make_reason_gate
 
 _PASS = 0

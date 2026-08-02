@@ -21,7 +21,7 @@ The production pair in `planner/program.py` is deliberately NOT unified with thi
 reads different sources. What must not drift is the QUESTION the two answer, and
 `test_medusa_invariants` holds them to that directly, query by query.
 """
-from orchestrator.ai.planner.ir import config, observe, refs
+from planner.ir import config, observe, refs
 
 
 def seams(world):

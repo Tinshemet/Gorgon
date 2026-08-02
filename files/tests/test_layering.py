@@ -68,9 +68,9 @@ _UPPER = [
 def test_planner_does_not_import_upward():
     rc, out = _run(f"""
         import sys
-        import orchestrator.ai.planner.score          # the engine core + its deps
-        import orchestrator.ai.planner.procedures     # the store
-        import orchestrator.ai.planner.ir             # the language itself
+        import planner.score          # the engine core + its deps
+        import planner.procedures     # the store
+        import planner.ir             # the language itself
         leaked = [m for m in {_UPPER!r} if m in sys.modules]
         print("LEAKED:" + ",".join(leaked))
     """)
@@ -97,7 +97,7 @@ def test_deps_degrades_to_none():
 
         sys.meta_path.insert(0, Blocker())
 
-        from orchestrator.ai.planner.score import _deps
+        from planner.score import _deps
         bad = []
         # The three read for TRUTHINESS by `engine.<x> or <default>()`. These must be None.
         for name in ("_gate_default", "_criterion_default", "_legal_default"):
@@ -131,7 +131,7 @@ def test_deps_degrades_to_none():
 def test_deps_wired_in_a_full_checkout():
     """The other arm: with everything present, the defaults ARE the contract's."""
     from orchestrator.ai.agent import contract
-    from orchestrator.ai.planner.score import _deps
+    from planner.score import _deps
 
     check("_gate_default() is contract.gate_action",
           _deps._gate_default() is contract.gate_action)

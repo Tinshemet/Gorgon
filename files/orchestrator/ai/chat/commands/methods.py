@@ -16,7 +16,7 @@ class MethodsCommand(Command):
         # gorgon methods [agent] — the durable method cache: goal shapes this agent can
         # now decompose WITHOUT asking the model, learned from decompositions that
         # actually closed. Read-only; defaults to the active agent.
-        from orchestrator.ai.planner import method_store as _store
+        from planner import method_store as _store
         from orchestrator.ai.agent import contract as _contract
         if rest and rest[0] == "forget":               # gorgon methods forget [agent]
             agent = rest[1] if len(rest) >= 2 else _contract.active_agent_key()
