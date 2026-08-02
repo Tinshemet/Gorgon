@@ -241,8 +241,13 @@ def process_message(
                             "tool_name": tool_name,
                             "proposed":  None,
                         },
+                        # `confirm` IS THE QUESTION, CARRIED FORWARD. The reply comes back on
+                        # a later request with nothing to say which prompt it answers, so the
+                        # answering side judged it against a guess — or, until 2026-08-02,
+                        # against nothing at all. See gates/answer.py.
                         "pending_tool": {"tool_name": tool_name, "args": raw_args,
-                                         "critical": _is_critical(tool_name, raw_args)},
+                                         "critical": _is_critical(tool_name, raw_args),
+                                         "confirm": {"type": "preflight", "proposed": None}},
                     }
 
             if tool_name == "create_profile" and _pf_action in ("ok", "auto_fix"):
@@ -276,7 +281,9 @@ def process_message(
                                 "proposed":  _fa,
                             },
                             "pending_tool": {"tool_name": tool_name, "args": raw_args,
-                                             "critical": False},
+                                             "critical": False,
+                                             "confirm": {"type": "confirm_yn",
+                                                         "proposed": _fa}},
                         }
                     _confirmed_values.add(_fkey)
 
@@ -312,7 +319,9 @@ def process_message(
                                 "proposed":  proposed,
                             },
                             "pending_tool": {"tool_name": tool_name, "args": raw_args,
-                                             "critical": _is_critical(tool_name, raw_args)},
+                                             "critical": _is_critical(tool_name, raw_args),
+                                             "confirm": {"type": conf_type,
+                                                         "proposed": proposed}},
                         }
                     _confirmed_values.add((field, proposed))
 

@@ -13,6 +13,7 @@ from shared.display import console, render_vm_specs
 
 from ..chat_types import TurnState, GateOutcome, _build_vm_spec_rows
 from ...agent.contract import gate_action, confirm_meta
+from . import answer as _answer
 from .config import _FLEET_CONFIRM_ACTIONS
 
 
@@ -45,7 +46,7 @@ def _fleet_confirm(raw_args: dict, state: "TurnState", cancel) -> GateOutcome:
     except (KeyboardInterrupt, EOFError):
         console.print("\n[dim]Cancelled.[/dim]")
         return GateOutcome.EXIT
-    if answer not in ("y", "yes", "1"):
+    if not _answer.is_affirmative(answer):
         cancel()
         return GateOutcome.CANCELLED
     state.confirmed_values.add(key)
@@ -156,7 +157,7 @@ def _safety_gate(tool_name: str, raw_args: dict, state: "TurnState",
             except (KeyboardInterrupt, EOFError):
                 console.print("\n[dim]Cancelled.[/dim]")
                 return GateOutcome.EXIT
-            if answer not in ("y", "yes", "1"):
+            if not _answer.is_affirmative(answer):
                 cancel()
                 return GateOutcome.CANCELLED
             state.confirmed_tool_types.add(tool_name)

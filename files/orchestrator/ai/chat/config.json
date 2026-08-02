@@ -56,6 +56,32 @@
     "please exit",
     "please quit"
   ],
+  "_confirm_answers_doc": "The words that grant or refuse a pending confirmation. Read by gates/answer.py, which is the ONE rule both the terminal gate and the HTTP chat ask. Anything not listed as affirmative is NOT a grant.",
+  "confirm_answers": {
+    "affirmative": [
+      "y",
+      "yes",
+      "1",
+      "ok",
+      "okay",
+      "confirm",
+      "proceed",
+      "go ahead",
+      "do it"
+    ],
+    "negative": [
+      "n",
+      "no",
+      "cancel",
+      "abort",
+      "stop",
+      "nope",
+      "quit",
+      "exit",
+      "nevermind",
+      "never mind"
+    ]
+  },
   "shortcut_commands": {
     "list": [
       "list",

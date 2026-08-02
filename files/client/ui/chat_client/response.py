@@ -55,7 +55,12 @@ def process_response(result: dict, verbose: bool = False) -> None:
         if ni_type != "prompt":
             color = _cp(C_RED) if ni_type == "confirm_critical" else _cp(C_YELLOW)
             _add(f"  ▶ {question}", color | curses.A_BOLD)
-            if proposed:
+            # ONLY WHERE TYPING IT IS THE ANSWER. A yes/no confirm carries `proposed` too —
+            # it is the name being acted on, there to build the question — and printing
+            # "Type exactly" beside a Yes/Cancel menu told the operator to type a word that
+            # the yes/no rule reads as a REFUSAL. Two instructions, one prompt, and they
+            # disagreed. See gates/answer.py for what each type actually accepts.
+            if proposed and ni_type in ("confirm_name", "confirm_critical"):
                 _add(f"    Type exactly: {proposed}", _cp(C_RED))
             if opts:
                 _add(f"    Options: {' / '.join(opts)}", _cp(C_DIM))

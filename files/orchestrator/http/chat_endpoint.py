@@ -12,6 +12,25 @@ import uuid
 from typing import Any, Dict, Optional
 
 from . import session_store
+from orchestrator.ai.chat.gates import answer as _answer
+
+_CANCELLED = "Cancelled — nothing was done."
+
+
+def _cancelled(sid: str, session: dict, messages: list, said: str) -> Dict[str, Any]:
+    """The operator refused. Drop the pending tool and say so — plainly, and once.
+
+    THE REFUSAL GOES INTO THE TRANSCRIPT, both halves of it. A cancellation the model never
+    sees is a cancellation it will propose its way back into on the next turn, which is the
+    same failure as not cancelling — one turn later.
+    """
+    updated = messages + [
+        {"role": "user",      "content": said},
+        {"role": "assistant", "content": _CANCELLED},
+    ]
+    session_store.SESSIONS[sid] = {**session, "messages": updated,
+                                   "pending_tool": None, "critical_step2": False}
+    return {"session_id": sid, "text": _CANCELLED, "tool_results": [], "needs_input": None}
 
 
 def _handle_grant_command(message: str) -> Optional[str]:
@@ -115,6 +134,14 @@ def handle_chat(req: Any, operator: Optional[str]) -> Dict[str, Any]:
         tool_name = pending_tool["tool_name"]
         args      = pending_tool["args"]
         is_critical = pending_tool.get("critical", False)
+
+        # THE REPLY IS READ BEFORE ANYTHING RUNS. `auto_confirm` says only that the client
+        # was answering a confirmation — it is not the answer, and taking it for one meant
+        # "cancel" created a VM (2026-08-02). The client cannot be the one to decide this
+        # either: a flag from outside must never be the thing that authorises a mutating
+        # call. The rule is `gates/answer.py`, the same one the terminal gate asks.
+        if not _answer.reads_as_grant(pending_tool.get("confirm"), req.message):
+            return _cancelled(sid, session, messages, req.message)
 
         # Critical tools require a second confirmation: user must type the VM name.
         if is_critical and not critical_step2:
