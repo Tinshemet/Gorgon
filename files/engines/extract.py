@@ -117,6 +117,18 @@ def schema(kinds=None, request: str = "") -> Dict[str, Any]:
         # silence — "take a snapshot of every RUNNING vm" came back as `per vm make=snapshot`
         # over ALL of them, so the stopped machine was snapshotted too and the run reported
         # success. With the field required: `per vm[status=running] make=snapshot`.
+        # `except` IS NOT REQUIRED, AND THAT WAS MEASURED RATHER THAN ASSUMED. The evidence
+        # for requiring it looked overwhelming — offered as optional the model emitted it
+        # ZERO times in 28 runs, and required it immediately produced rung 8's carve-out for
+        # the first time: `every vm[] !{name=db} network=core`. It is still a NET LOSS:
+        # literal 29 -> 27/42 with DONE_BUT_FALSE 3 -> 9, paraphrase false 5 -> 8, breaking
+        # rungs 2 and 11 on the literal arm and 3 on the paraphrase — and rung 8 STILL failed,
+        # because the second clause ("db goes on dmz") came back carved out too.
+        #
+        # A REQUIRED FIELD GETS FILLED WHETHER OR NOT IT IS MEANT. That is what makes
+        # requiring `where` and `name` work — every request HAS members and most name one —
+        # and it is exactly what makes requiring an EXCEPTION wrong: most requests carve out
+        # nothing, so the model invents one to have something to say.
         "required": ["kind", "where"],
         "additionalProperties": False,
     }
