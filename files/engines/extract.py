@@ -1272,8 +1272,67 @@ def to_goals(raw: Dict[str, Any], request: str = "",
         if g not in seen:
             seen.append(g)
             unique.append(g)
-    out = _scoped(unique)
+    out = _partitioned(_scoped(unique))
     return _subject_survived(_one_statement_not_two(out), request)
+
+
+def _partitioned(goals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Two counts over one kind, one attribute, DIFFERENT values — they name different members.
+
+    THE WRITER ALREADY KNOWS HOW TO HONOUR THIS and was never told. `_lower`'s candidate
+    search respects `sel["not"]` and its comment names this exact rung: *"two blue ones that
+    are not red may not be satisfied by relabelling a red one… without this,
+    `count(vm label=blue)=2` cheerfully paints two of the three machines the previous goal
+    made red."* The guard is there; the goals carry no carve-out for it to read.
+
+    MEASURED, on the now-correct translation of rung 6:
+
+        count vm[label=red] = 3   +   count vm[label=blue] = 2
+          -> add_label(vm1, red) … add_label(vm1, blue) …
+
+    Three machines wearing both colours, on both networks, and the run closes DONE. The
+    counts are each satisfied; what nobody said is that they are about different machines.
+
+    IT IS A READING OF ENGLISH, AND THAT MAKES IT DIFFERENT FROM EVERY OTHER RULE HERE. The
+    rest compute from the manifest, the schema, or the model's own answer. `label` and
+    `network` are MULTI-VALUED — a machine legitimately carries several — so "3 red and 2
+    blue" permitting three double-labelled machines is not a contradiction, it is a
+    perfectly good second reading. This takes the first: "3 of X and 2 of Y" means five
+    things. Ruled by the operator 2026-08-03.
+
+    NARROW, AND IT DECLINES WHEN UNSURE — the deterministic-rules pattern:
+
+        exactly one filter each        two filters do not name one group; leave it
+        the same attribute             different attributes are not a partition
+        exactly one other value        three groups cannot be carved out pairwise here
+        never the identity key         a key already names one member, uniquely
+        no carve-out already present   the goal said its own exclusion; do not overwrite it
+    """
+    counts = [g for g in goals
+              if g.get("shape") == "count" and isinstance(g.get("select"), dict)]
+
+    def _one_filter(sel):
+        got = {k: v for k, v in sel.items() if k not in ("kind", "not")}
+        return next(iter(got.items())) if len(got) == 1 else (None, None)
+
+    for a in counts:
+        if a["select"].get("not"):
+            continue
+        attr, val = _one_filter(a["select"])
+        kind = a["select"].get("kind")
+        key = ((config.KINDS or {}).get(kind) or {}).get("key")
+        if attr is None or attr == key:
+            continue
+        others = set()
+        for b in counts:
+            if b is a or b["select"].get("kind") != kind:
+                continue
+            b_attr, b_val = _one_filter(b["select"])
+            if b_attr == attr and b_val != val:
+                others.add(b_val)
+        if len(others) == 1:
+            a["select"] = {**a["select"], "not": {attr: next(iter(others))}}
+    return goals
 
 
 def _subject_survived(goals: List[Dict[str, Any]], request: str) -> List[Dict[str, Any]]:
