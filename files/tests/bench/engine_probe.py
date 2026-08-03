@@ -27,6 +27,7 @@ from engines import (Channel, MedusaEngine, Orchestrator, Registry,
                                      insession)
 from engines.channel import Answer
 from engines import extract as _extract
+from engines import rig as _rig
 from tests.bench.rungs import RUNGS
 from tests.bench.sim_world import SimWorld
 
@@ -42,15 +43,14 @@ def one(rung, paraphrase: bool, intent: str = "achieve"):
     if rung.setup:
         rung.setup(world)
 
-    def translate(request, w=None):
-        try:
-            raw = _extract.extract(str(request))
-        except Exception as exc:
-            return Answer(None, "extractor", f"{type(exc).__name__}: {exc}")
-        goals = _extract.to_goals(raw, str(request))
-        return (Answer(goals, "extractor", "") if goals
-                else Answer(None, "extractor", "no usable goal"))
-    translate.name = "extractor"
+    # THE PRODUCTION TRANSLATOR ITSELF, not a copy of it. This file's whole claim is that it
+    # measures "what happens when somebody types this" — and it carried its OWN `translate`,
+    # a near-copy of `rig.translator()`'s that had already drifted: it never honoured
+    # `declined()`, so a model REFUSING a request was reported as a garbled reply, and when
+    # the front seam learned to report a component it could not read this arm went on
+    # measuring the version that could not. A second definition of the seam under test makes
+    # every number here a number about the copy.
+    translate = _rig.translator()
 
     registry = Registry()
     registry.mount(_Lab(world))

@@ -133,6 +133,23 @@ def _parameterise(program: Dict[str, Any]) -> None:
                          **{ref.lstrip(_cfg.SIGIL): "string" for ref in promoted.values()}}
 
 
+def _clarify(request: str, lost: List[str]) -> str:
+    """The refusal a person can act on: what was not read, and what to do about it.
+
+    A REFUSAL THAT DOES NOT SAY WHAT TO CHANGE TEACHES NOTHING. The operator gets the same
+    sentence back with no idea which clause failed, retypes it, and gets the same answer —
+    which is how a correct guard comes to be read as the system being broken.
+
+    IT NAMES THE UNREAD PART AND NOTHING ELSE. Guessing what they MEANT is the whole failure
+    class this refusal exists to stop: the extractor filling a slot it has nothing for is
+    what put a machine called `Not specified` on a lab.
+    """
+    said = "; ".join(lost)
+    return (f"part of this was not understood, and half a request is not a request — "
+            f"nothing was done. {said}. Say that part again in terms of what must be TRUE "
+            f"when it is finished (how many of a thing, or which property it must have).")
+
+
 def _declare(program: Dict[str, Any], declared: Optional[Dict[str, str]],
              stood_in: Optional[Dict[str, str]] = None) -> List[str]:
     """Bind the parameters the OPERATOR declared into the program the writer just planned.
@@ -584,14 +601,28 @@ class Orchestrator:
                 return session.close("UNTRANSLATED", answer.why)
             lost = list(getattr(answer, "dropped", ()) or ())
             if lost:
-                # A PARTIAL READ, SAID OUT LOUD. `to_goals` refuses components for reasons
-                # that are each correct, and the request is then served in part — which the
-                # ledger could not show and the outcome word cannot express. Recorded here
-                # so a DONE that covers half a request is at least visibly half.
+                # HALF A REQUEST IS NOT A REQUEST — the operator's ruling, 2026-08-03:
+                # *"it should refuse something it can not understand and ask to clarify."*
+                #
+                # `to_goals` refuses components for reasons that are each correct, and the
+                # request was then served in PART: the writer covered what survived, every
+                # layer below was honest about that half, and the run closed DONE over a
+                # sentence it had only partly read. Measured on rung 2 — a CONTROL rung —
+                # where "and then launch it" vanished and the run reported success over a
+                # machine that was not running.
+                #
+                # UNTRANSLATED RATHER THAN A NEW OUTCOME WORD, because that is exactly what
+                # happened and it names the LAYER that owns it: the front seam, not the
+                # engine. The vocabulary stays closed and the ledger stays readable.
+                #
+                # IT COSTS NO PASSING REQUEST. Measured across all 28 ladder runs before it
+                # was written: only 4 drop anything, every one a `reach` the request never
+                # asked for, and NO run that currently succeeds drops a thing.
                 session.record("could not read: " + "; ".join(lost),
                                filed_by=answer.source or "extractor",
                                caught_by="operator", executed="translate",
                                data={"dropped": lost}, level="warn")
+                return session.close("UNTRANSLATED", _clarify(request, lost))
             components = answer.components
             # A DECLARED NAME WINS; the channel's is a fallback nothing currently fills.
             procedure = procedure or getattr(answer, "procedure", None)
