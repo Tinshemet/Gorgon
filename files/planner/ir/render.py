@@ -160,7 +160,11 @@ def _statement(st: Any, indent: str) -> list:
         # The keyword comes from the surface table, so a word renamed there is renamed
         # here — the reason the surface is data in the first place.
         word = config.SURFACE.get(op, op.upper())
-        return [f"{indent}{word} {_pred(st.get('predicate'))};"]
+        # `_with_tail` HERE TOO, and its absence was a silent data loss: an ENSURE carrying
+        # an IFAILS parsed correctly and rendered WITHOUT it, so the block vanished on the
+        # first round trip — and `verify_file` compares the render against the file, so the
+        # program that loaded was not the program on disk.
+        return _with_tail([f"{indent}{word} {_pred(st.get('predicate'))};"], st, indent)
 
     if op == "if":
         out = [f"{indent}{_w('if')} {_pred(st.get('cond'))} {{"]

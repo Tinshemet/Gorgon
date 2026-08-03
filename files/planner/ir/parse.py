@@ -789,7 +789,20 @@ def _predicate(cur: _Cursor) -> Dict[str, Any]:
 
     if spec.get("operand") == "of":
         if spec.get("arity") == "value":
+            # A DOTTED REFERENCE IS ONE OPERAND — the SECOND time this exact bug has been
+            # found. `PROCEDURE Class.method` had it and every class file on disk failed to
+            # load; here it is `IS($answer.alive)`, which the RENDERER emits and the parser
+            # could not read, so any program that branched on a call's result rendered
+            # correctly, VALIDATED, and then failed `verify_file`'s round-trip on the way
+            # back in. Result-branching has been in the language and unusable.
+            #
+            # `refs` ALREADY DEFINES THIS SHAPE — `$answer.reachable` is one reference whose
+            # root is `answer` — so reading a single token was the parser disagreeing with
+            # the module that owns what a reference means.
             of = str(cur.take().value)
+            while cur.at("."):
+                cur.take(".")
+                of += "." + str(cur.take().value)
             cur.take(")")
             out: Dict[str, Any] = {"shape": shape, "of": of}
             return _comparator(cur, spec, out)

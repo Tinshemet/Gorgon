@@ -184,9 +184,10 @@
    "required": [
     "predicate"
    ],
-   "doc": "A SANITY CHECK: is this so, right here? Evaluated where it is written and it changes nothing — if it fails the program stops and the plan is rethought, because it was built on something false. The difference from ACHIEVE is CHECK versus MAKE: ensure asks 'do you exist', achieve says 'make sure you exist'.",
+   "doc": "A SANITY CHECK: is this so, right here? Evaluated where it is written and it changes nothing — if it fails the program stops and the plan is rethought, because it was built on something false. The difference from ACHIEVE is CHECK versus MAKE: ensure asks 'do you exist', achieve says 'make sure you exist'. IFAILS MAKES IT A SOFT ACHIEVE: where ACHIEVE has the harness compute the difference and close it, `ENSURE p; IFAILS { … }` lets the AUTHOR say what to do about a false premise — much freer, because the block is ordinary statements rather than something `derive` has to be able to plan. The predicate is CHECKED AGAIN afterwards, so a block that did not fix it cannot wave the program through: ensure's whole meaning is that nothing proceeds on something false.",
    "fields": [
-    "predicate"
+    "predicate",
+    "ifails"
    ]
   },
   "achieve": {

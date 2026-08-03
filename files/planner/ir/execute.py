@@ -606,6 +606,19 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
             # grafted result at all. Only `if` went through _holds, which is why the gap
             # stayed hidden — the conditional worked and the postcondition did not.
             good, why = _holds(_resolve(st["predicate"], scope), scope)
+            # A SOFT ACHIEVE. `ENSURE p; IFAILS { … }` lets the AUTHOR say what to do about a
+            # false premise, where ACHIEVE has the harness compute the difference and close
+            # it — much freer, because the block is ordinary statements rather than something
+            # `derive` must be able to plan. The operator's word for it, 2026-08-04.
+            #
+            # AND THE PREDICATE IS CHECKED AGAIN, which is what keeps it an ENSURE. A block
+            # that ran and did NOT fix it may not wave the program through: nothing proceeds
+            # on something false, and that rule is the only reason the word exists. So this
+            # is a correction, not a catch — the difference between compensating and
+            # concealing that the IFAILS below already draws for a failed CALL.
+            if not good and st.get("ifails"):
+                _block(st["ifails"])
+                good, why = _holds(_resolve(st["predicate"], scope), scope)
             if not good:
                 # A failed check is a PLAN failure with a reason, not a crash — the caller
                 # routes it to revision the way an unverified close already is. WHICH

@@ -259,6 +259,47 @@ def test_a_broken_file_says_where():
             check(f"{why} is refused, with a line ({exc.line})", exc.line > 0)
 
 
+def test_a_dotted_reference_is_one_operand():
+    """RESULT-BRANCHING WAS IN THE LANGUAGE AND UNUSABLE, and this is the check that says so.
+
+    `IS($answer.alive) = true` is what the RENDERER emits for a program that branches on a
+    call's result. The parser read a single token for the operand, stopped at the `.`, and
+    raised — so such a program rendered correctly, VALIDATED, and then failed `verify_file`'s
+    round-trip on the way back in. Never loadable, so never used.
+
+    THE SECOND TIME THIS EXACT BUG HAS BEEN FOUND. `PROCEDURE Class.method` had it, and every
+    class file on disk failed to load. `refs` already defines the shape — `$answer.alive` is
+    ONE reference whose root is `answer` — so a single-token read was the parser disagreeing
+    with the module that owns what a reference means.
+    """
+    print("[parse] a dotted reference survives the round trip")
+    from planner.ir import render as _render, validate as _validate
+    prog = {"name": "t", "params": {}, "body": [
+        {"op": "call", "tool": "guest_ping", "args": {"name": "alpha"}, "graft": "answer"},
+        {"op": "if", "cond": {"shape": "is", "of": "$answer.alive", "eq": True},
+         "then": [{"op": "call", "tool": "stop_vm", "args": {"name": "alpha"}}]},
+        {"op": "ensure", "predicate": {"shape": "count",
+                                       "select": {"kind": "vm", "status": "running"},
+                                       "eq": 0}},
+        {"op": "publish", "fact": "done"}]}
+    src = _render(prog)
+    check("it validates", _validate(prog)[0])
+    try:
+        back = parse(src)
+    except Exception as e:
+        check(f"it re-parses (got {type(e).__name__}: {e})", False)
+        return
+    check("it re-parses", True)
+    check("and RENDERS BACK TO ITSELF — the check `verify_file` runs", _render(back) == src)
+    got = back["body"][1]["cond"]
+    check("the whole dotted path survives, not just its root", got.get("of") == "$answer.alive")
+
+# THE ENTRY POINT BELONGS AT THE BOTTOM, and this is not style: `main()` ends in `sys.exit`,
+# so every test defined BELOW this guard was never even defined when the suite was run
+# directly — silently absent from the count, and from `run_all.py`. Found 2026-08-04 by a
+# sweep after the same trap was hit in `test_extract.py`; three suites carried it and eleven
+# tests had never run. `_suite.py` discovers by definition order, so placement is the only
+# thing keeping a test alive.
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "parse"))

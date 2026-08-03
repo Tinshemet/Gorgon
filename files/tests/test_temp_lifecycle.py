@@ -172,15 +172,6 @@ def test_the_teardown_comes_after_the_witness():
           temps or not [st for st in after if master.statement_acts(st)])
 
 
-def main():
-    from tests import _suite
-    sys.exit(_suite.run(sys.modules[__name__], "temp lifecycle"))
-
-
-if __name__ == "__main__":
-    main()
-
-
 def test_the_engine_collects_temps_so_teardown_can_fire():
     """`cover` fills a temps list and `as_program` empties it — the engine passed neither.
 
@@ -212,11 +203,21 @@ def test_the_engine_collects_temps_so_teardown_can_fire():
     eng = MedusaEngine(W())
     plan = eng._plan([{"shape": "count", "select": {"kind": "browser"}, "eq": 1}], None)
     body = ((plan.get("program") or {}).get("body")) or []
+    # A CREATION IS A `new`, NOT A `call`. This read `op == "call"` and could therefore
+    # never see one — written before `NEW` issued the creation itself, and never updated
+    # because the test was defined below the `__main__` guard and had never run.
     tools = [s.get("tool") for s in body if s.get("op") == "call"]
-    assert "create_vm" in tools, tools
+    made = [s.get("kind") for s in body if s.get("op") == "new"]
+    assert "vm" in made, (made, tools)
     # THE MACHINE NOBODY ASKED FOR GOES AWAY, and after the witness rather than before.
     assert "delete_vm" in tools, tools
-    ensure_at = next(i for i, s in enumerate(body) if s.get("op") == "ensure")
+    # THE WITNESS IS WHATEVER VOUCHES, and it is not always an `ensure` — a creation
+    # re-reads the world and files its own failure, so the writer's closing verdict here is
+    # a `publish`. Asserting the OP rather than the ROLE made this test read a program shape
+    # that has since changed; it never ran, so it was never corrected.
+    witnesses = [i for i, s in enumerate(body) if s.get("op") in ("ensure", "publish")]
+    assert witnesses, [s.get("op") for s in body]
+    ensure_at = witnesses[0]
     del_at = next(i for i, s in enumerate(body)
                   if s.get("op") == "call" and s.get("tool") == "delete_vm")
     assert del_at > ensure_at, "teardown must follow the witness, not precede it"
@@ -274,3 +275,17 @@ def test_cleanup_only_covers_what_the_writer_marked():
                  known_tools={"delete_vm"})
     assert "delete_vm" not in done, "an unmarked delete was forced"
     assert any(s.get("tool") == "delete_vm" for s in (out.get("remaining") or []))
+
+# THE ENTRY POINT BELONGS AT THE BOTTOM, and this is not style: `main()` ends in `sys.exit`,
+# so every test defined BELOW this guard was never even defined when the suite was run
+# directly — silently absent from the count, and from `run_all.py`. Found 2026-08-04 by a
+# sweep after the same trap was hit in `test_extract.py`; three suites carried it and eleven
+# tests had never run. `_suite.py` discovers by definition order, so placement is the only
+# thing keeping a test alive.
+def main():
+    from tests import _suite
+    sys.exit(_suite.run(sys.modules[__name__], "temp lifecycle"))
+
+
+if __name__ == "__main__":
+    main()
