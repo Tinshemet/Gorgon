@@ -382,12 +382,72 @@ def test_a_value_the_answer_calls_a_property_is_not_also_a_name():
     check("and the network keeps its own name",
           any(g.get("select", {}).get("net_name") == "lab" for g in both))
 
-    # NO EVIDENCE, NO REPAIR — it declines rather than guessing.
+    # NO EVIDENCE, NO REPAIR — this rule declines rather than guessing. Asserted at a count
+    # of ONE, because above one the arithmetic rule below catches it first for a different
+    # and stronger reason.
     alone = to_goals({"goals": [
-        {"goal": "count", "select": {"kind": "vm"}, "amount": 4, "name": "golden"},
-    ]}, "clone golden into 3 new vms")
+        {"goal": "count", "select": {"kind": "vm"}, "amount": 1, "name": "golden"},
+    ]}, "clone golden")
     check("a stray name the answer never explains is left alone",
           any(g.get("select", {}).get("name") == "golden" for g in alone))
+
+
+def test_a_count_above_one_cannot_pin_an_identity():
+    """MANY MEMBERS CANNOT SHARE ONE NAME, and that is arithmetic rather than vocabulary.
+
+    `name` is required on a count goal, so when a request names nobody the model lifts a
+    word out of the sentence. `unusable` knows quantifiers and kind nouns; these were all
+    MEASURED reaching the writer as machine names because they are neither:
+
+        "spin up five machines…"        -> NAME=reach   (the schema's own word)
+        "cut the lab down to two"       -> NAME=lab
+        "clone golden into 3 new vms"   -> NAME=golden
+
+    THE NAME IS STRIPPED AND THE COUNT IS KEPT — `_keep`'s own rule for an unusable name.
+    Refusing the component instead was tried the same day and cost rungs 4, 13 and 14: the
+    stray name sits beside a count that is perfectly good, and the rest of the request needs
+    it.
+    """
+    print("[repair] a count above one cannot pin an identity")
+    for word, n in (("reach", 5), ("lab", 2), ("golden", 4)):
+        got = to_goals({"goals": [
+            {"goal": "count", "select": {"kind": "vm"}, "amount": n, "name": word}]}, "")
+        counts = [g for g in got if g.get("shape") == "count"]
+        check(f"{word!r} does not become the name of {n} machines",
+              counts and "name" not in counts[0]["select"])
+        check(f"and the count of {n} survives", counts and counts[0]["eq"] == n)
+
+    one = to_goals({"goals": [
+        {"goal": "count", "select": {"kind": "vm"}, "amount": 1, "name": "box1"}]}, "")
+    check("a count of ONE still names its member", one[0]["select"].get("name") == "box1")
+
+
+def test_a_link_the_manifest_does_not_have_is_not_a_link():
+    """`per` took the model's `link` on trust, and the model supplies nonsense.
+
+    "launch every vm that is currently stopped" came back as `per vm make=vm link=status` —
+    one machine created per machine, tied by a STATUS. The manifest answers this exactly, so
+    a link it cannot derive is not a link the world has, whoever wrote it down.
+    """
+    print("[repair] a link is derived from the manifest, never taken on trust")
+    junk = to_goals({"goals": [
+        {"goal": "per", "select": {"kind": "vm"}, "make": "vm", "link": "status"}]}, "")
+    check("a link the manifest cannot derive is refused", junk == [])
+
+    good = to_goals({"goals": [
+        {"goal": "per", "select": {"kind": "vm"}, "make": "snapshot"}]}, "")
+    check("and one it CAN derive is supplied without being asked",
+          good and good[0].get("link") == "vm")
+
+
+def test_the_same_goal_twice_is_one_goal():
+    """Repairs converge, so duplicates arrive with neither half wrong."""
+    print("[repair] the same goal twice is one goal")
+    got = to_goals({"goals": [
+        {"goal": "count", "select": {"kind": "network"}, "amount": 1, "name": "lab"},
+        {"goal": "every", "select": {"kind": "network"}, "attr": "name", "value": "lab"},
+    ]}, "set up a network named lab")
+    check("two goals that repaired to the same shape become one", len(got) == 1)
 
 
 # THE ENTRY POINT BELONGS AT THE BOTTOM, and this is not style. It sat in the MIDDLE of this

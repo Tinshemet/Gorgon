@@ -179,6 +179,29 @@ def _run(stdscr: "curses.window", verbose: bool = False, color_hex: str = None, 
             # edge they walk the history. `Buffer.up()` returning False IS that edge — the
             # motion reports that it could not move and this reads the report.
             action = _keys.action_for(ch)
+            if action is None and ch == "\x1b":
+                # A CURSOR KEY NCURSES DID NOT ASSEMBLE. Read the rest of the sequence with
+                # the wait turned OFF, so a bare Escape — which sends nothing after it —
+                # costs nothing instead of hanging the loop for a tenth of a second.
+                stdscr.nodelay(True)
+                tail = ""
+                try:
+                    for _ in range(2):
+                        nxt = stdscr.get_wch()
+                        if not isinstance(nxt, str):
+                            break
+                        tail += nxt
+                except curses.error:
+                    pass  # nothing followed — it was a real Escape
+                finally:
+                    stdscr.nodelay(False)
+                    stdscr.timeout(100)
+                action = _keys.escaped(tail)
+                if action in ("left", "right", "home", "end"):
+                    _ON = {"left": input_buf.left, "right": input_buf.right,
+                           "home": input_buf.home, "end": input_buf.end}
+                    _ON[action]()
+                    continue
             if action == "up" and not input_buf.up():
                 was = recall.back(input_buf.text)
                 if was is not None:

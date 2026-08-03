@@ -679,6 +679,14 @@ def _enumerated(kind: str) -> set:
 _REACH_WORDS = {"ping", "reach", "reachable", "connect", "connected", "communicate",
                 "talk", "see", "mesh", "each"}
 
+# A REQUEST THAT CARVES SOMETHING OUT, read as SUBSTRINGS because "apart from" is two words
+# and "except" appears as "except db" with no space either side of the clause. Same rule as
+# `_REACH_WORDS`: the evidence is in the request, so it is checked there — and it is checked
+# there because the GOALS cannot hold it. The schema offers `except` on every branch and the
+# model has never once emitted it, so the exception survives only in the sentence.
+_EXCEPT_WORDS = ("except", "apart from", "other than", "aside from", "but not",
+                 "excluding", "leaving out")
+
 
 def declined(raw: Dict[str, Any]) -> Optional[str]:
     """The model's reason for refusing, or None. An answer, not an error."""
@@ -979,6 +987,30 @@ def to_goals(raw: Dict[str, Any], request: str = "",
             merged.append(g)
         goals = merged
 
+        # A NAMED MEMBER BESIDE AN EXCEPTION IS THE CARVE-OUT, NOT THE RECEIVER — and the
+        # fold below cannot tell those apart, so where the request says so it must not fold.
+        #
+        # MEASURED ON RUNG 8, and it produced the exact opposite of the request:
+        #
+        #   "put every vm on a network called core, EXCEPT db — db goes on dmz instead"
+        #     -> every vm network=core   +   count vm[name=db] = 1
+        #     -> folded: count vm[name=db AND network=core] = 1
+        #
+        # db is the one machine that must NOT be on core, and the fold put it there — then
+        # the run closed DONE over it. The rule reads a named member as the receiver of a
+        # property that escaped one, which is right for "a machine called box1 running
+        # linux" and inverted for a carve-out.
+        #
+        # THE EVIDENCE IS IN THE REQUEST, so it is read there — the same move `_REACH_WORDS`
+        # makes, and for the same reason: the goals cannot express the exception (the model
+        # has never once emitted the `except` the schema offers), so the only place the
+        # exception still exists is the sentence. Declining to fold is not a repair; it
+        # leaves the request UNMET, which is the honest outcome for something no goal shape
+        # currently says.
+        low = str(request or "").lower()
+        if any(w in low for w in _EXCEPT_WORDS):
+            return goals
+
         named = [g for g in goals
                  if "select" in g and g.get("eq") == 1
                  and len(g["select"]) == 2 and "kind" in g["select"]]
@@ -1069,6 +1101,24 @@ def to_goals(raw: Dict[str, Any], request: str = "",
             # `web` as the name of the MACHINE the same request creates, and the vm was never
             # made. A value being a network's member says nothing about what a vm is called.
             if named is not None and str(named).strip() in _said_property.get(sel.get("kind"), ()):
+                named = None
+            # MANY MEMBERS CANNOT SHARE ONE IDENTITY, so a name beside a count above one is
+            # not a name — the key IS the identity. THE NAME IS STRIPPED AND THE COUNT IS
+            # KEPT, which is `_keep`'s own rule for an unusable name and NOT the refusal
+            # tried earlier the same day: refusing the component cost rungs 4, 13 and 14,
+            # because the stray name sits beside a count that is perfectly good and the rest
+            # of the request depends on it.
+            #
+            # IT CATCHES WHAT THE WORD LISTS CANNOT. `unusable` knows quantifiers and kind
+            # nouns; these were all measured surviving as machine names:
+            #
+            #   "spin up five machines…"          -> NAME=reach   (the schema's own word)
+            #   "cut the lab down to two"         -> NAME=lab
+            #   "clone golden into 3 new vms"     -> NAME=golden
+            #
+            # and none of them is a quantifier or a noun. What they share is arithmetic: a
+            # count of five machines all called `reach` is not a world, whatever the word is.
+            if named is not None and eq is not None and eq > 1:
                 named = None
             if named is not None and str(named).strip():
                 spec = (config.KINDS or {}).get(sel.get("kind")) or {}
@@ -1162,7 +1212,13 @@ def to_goals(raw: Dict[str, Any], request: str = "",
             else:
                 _keep({"every": sel, "must": {attr: _coerce(g["value"])}})
         elif shape == "per" and g.get("make"):
-            link = g.get("link") or _link_between(sel.get("kind"), g["make"])
+            # DERIVED, NEVER TAKEN ON TRUST. The model's `link` was accepted whenever it
+            # supplied one, and it supplies nonsense: "launch every vm that is currently
+            # stopped" came back as `per vm make=vm link=status` — one machine created per
+            # machine, tied by a STATUS. The manifest answers this exactly (`_link_between`:
+            # the attribute of the made kind named for the source kind), so a value that
+            # cannot be derived is not a link the world has, whoever wrote it down.
+            link = _link_between(sel.get("kind"), g["make"])
             if link:
                 _keep({"per": sel, "make": g["make"], "link": link})
             else:
@@ -1174,7 +1230,21 @@ def to_goals(raw: Dict[str, Any], request: str = "",
             # module does not implement, or one whose required field the model omitted, left
             # the loop having produced nothing and said nothing.
             _lost("it is not a shape this translator can express", g)
-    out = _scoped(out)
+    # THE SAME GOAL TWICE IS ONE GOAL. Repairs converge — an `every` whose property was
+    # unusable is stripped back to the count it was built on, and a request that states a
+    # thing two ways lands on one shape — so duplicates arrive without either half being
+    # wrong. Measured on rung 3's paraphrase, which produced `count network[net_name=lab]
+    # = 1` twice, and on "a vm with the name and os based on user input", where stripping a
+    # prose name left two identical unfiltered counts. Harmless to the writer, which dedupes
+    # its own tiles, and noise to every reader of the ledger and every rule below that counts
+    # goals — `_one_statement_not_two` decides by comparing a total against the number of
+    # identity goals, and a duplicate is a miscount.
+    seen, unique = [], []
+    for g in out:
+        if g not in seen:
+            seen.append(g)
+            unique.append(g)
+    out = _scoped(unique)
     return _subject_survived(_one_statement_not_two(out), request)
 
 

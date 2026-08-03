@@ -43,6 +43,22 @@ BINDINGS: Dict[str, Set[Any]] = {
 }
 
 
+# WHAT AN ARROW KEY LOOKS LIKE WHEN NCURSES DID NOT ASSEMBLE IT. With `keypad(True)` a
+# cursor key arrives as ONE integer (`KEY_LEFT`); without it, or when the escape sequence
+# arrives split across reads, the terminal's raw bytes come through instead — ESC, then `[`
+# or `O`, then a letter. `curses.wrapper` does set keypad, so this is a fallback and not the
+# main path; it costs three dict lookups and removes a failure mode where the arrows appear
+# to do nothing while quietly typing `[D` into the operator's request.
+_ESCAPED = {"A": "up", "B": "down", "C": "right", "D": "left",
+            "H": "home", "F": "end"}
+
+
+def escaped(tail: str) -> Optional[str]:
+    """`"[D"` / `"OD"` -> `"left"`. The action a raw cursor-key sequence stands for."""
+    tail = (tail or "").lstrip("[O")
+    return _ESCAPED.get(tail[:1].upper()) if tail else None
+
+
 def action_for(ch: Any) -> Optional[str]:
     """The action this key performs, or None if it is not bound."""
     for action, keys in BINDINGS.items():
