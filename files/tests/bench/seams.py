@@ -24,6 +24,30 @@ reads different sources. What must not drift is the QUESTION the two answer, and
 from planner.ir import config, observe, refs
 
 
+def _legal(kind: str) -> set:
+    """Every attribute name this kind can be FILTERED on, from the manifest.
+
+    A FILTER THE WORLD CANNOT EVALUATE MUST NOT SILENTLY PASS — measured 2026-08-03, and it
+    was inflating the ladder underneath everything else:
+
+        {kind: network, net_name: lab, members: web}       -> ['lab']
+        {kind: network, net_name: lab, members: NOTHING}    -> ['lab']
+        {kind: vm,      name: web,     totally_made_up: z}  -> ['web']
+
+    So `EVERY network[net_name=lab] MUST members=web` was satisfied by the network merely
+    EXISTING. That is a DONE_BUT_FALSE generator of the first order: any property the seam
+    does not implement is a property every member already has. Rung 3 — a CONTROL rung —
+    closed DONE having put nothing on any network.
+
+    THE SNAPSHOT BRANCH ALREADY HAD IT RIGHT (`row.get(k) == v` over EVERY key, so an
+    unknown key compares against None and fails), which is what makes this a gap rather
+    than a design: two of three branches never got the rule.
+    """
+    spec = (config.KINDS or {}).get(kind) or {}
+    return (set(spec.get("attrs") or ()) | set((spec.get("aliases") or {}).keys())
+            | set((spec.get("observed") or {}).keys()) | {"kind", "not", "any", "all"})
+
+
 def seams(world):
     """Registry query + predicate evaluation over `world`. Returns `(select, holds)`."""
     def select(sel, scope=None):
@@ -45,6 +69,12 @@ def seams(world):
                         return False
             f = {alias.get(k, k): v for k, v in filters.items()
                  if k not in ("not", "any", "all")}
+            # AN ATTRIBUTE THIS KIND DOES NOT HAVE MATCHES NOTHING. Every branch below
+            # answers a NAMED attribute and anything unrecognised fell through all of them
+            # to `return True` — so a filter the seam could not evaluate was read as
+            # satisfied by every member. See `_legal`.
+            if any(a not in _legal(kind or "vm") for a in f):
+                return False
             # MEMBERSHIP — the attribute is ANY of these. Resolved through the same refs
             # the rest of the language uses, so a bound set works beside a literal list.
             for attr in list(f):
@@ -120,15 +150,40 @@ def seams(world):
             # and the attach silently did nothing — rungs 6 and 8, the only two rungs that
             # need a SECOND network, and both were being mis-evaluated. Any program handling
             # two networks was graded against a seam that could not tell them apart.
-            names = sorted(world.nets)
-            want = sel.get("net_name", sel.get("name"))
-            if want is not None:
-                names = [n for n in names if n == want]
+            # EVERY FILTER, NOT JUST THE NAME. This honoured `net_name` and DISCARDED every
+            # other key, so `SELECT network WHERE net_name='lab' AND members='web'` was
+            # answered by the existence of `lab` alone — and `EVERY network[lab] MUST
+            # members=web` therefore held before a single machine was attached. Rung 3, a
+            # control rung, closed DONE with nothing on any network.
+            #
+            # MEMBERSHIP IS DERIVED, not stored: a network's members are the machines whose
+            # `nets` contain it, which is the same fact `list_networks` already reports.
+            def _net_row(n):
+                return {"net_name": n, "name": n,
+                        "members": {v for v, r in world.vms.items() if n in r["nets"]}}
+
+            def _net_matches(n, filters):
+                if any(a not in _legal("network") for a in filters
+                       if a not in ("not", "any", "all")):
+                    return False
+                row = _net_row(n)
+                for attr, wanted in filters.items():
+                    if attr in ("kind", "not", "any", "all"):
+                        continue
+                    got = row.get(attr)
+                    # A SET-VALUED ATTRIBUTE IS ASKED ABOUT BY MEMBERSHIP, exactly as `network`
+                    # is on a machine — the operator says "is web on lab", not "are its
+                    # members precisely {web}".
+                    if isinstance(got, (set, frozenset)):
+                        if wanted not in got:
+                            return False
+                    elif got != wanted:
+                        return False
+                return True
+
             carve = sel.get("not") or {}
-            drop = carve.get("net_name", carve.get("name"))
-            if drop is not None:
-                names = [n for n in names if n != drop]
-            return names
+            return [n for n in sorted(world.nets)
+                    if _net_matches(n, sel) and not (carve and _net_matches(n, carve))]
         carve = sel.get("not") or {}
         return [n for n, vm in sorted(world.vms.items())
                 if _matches(n, vm, sel, scope)

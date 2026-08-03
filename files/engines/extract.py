@@ -223,6 +223,19 @@ def schema(kinds=None) -> Dict[str, Any]:
                                          "description": ("every member of a set must get a "
                                                          "property")},
                                 "select": _SELECT,
+                                # WITHDRAWN AFTER MEASUREMENT, and recorded so it is not
+                                # tried a third time. "A VERB IS USUALLY A PROPERTY:
+                                # starting or stopping something is `status`" was put here
+                                # as the CHEAP carrier for a hint that works — written into
+                                # the prompt's goal table the same sentence moved rungs 2
+                                # and 4 to passing on the paraphrase arm. In a field
+                                # description it did NOTHING: 17/42 and 9/42, byte-identical
+                                # to the run without it, not one rung changed at n=3.
+                                #
+                                # THE MODEL READS THE TABLE AND NOT THE FIELD DESCRIPTIONS,
+                                # which is the same finding as the `procedure` field it
+                                # filled 0 times in 2. A description is not a place to teach
+                                # from.
                                 "attr": {"type": "string", "enum": _attrs(),
                                          "description": "which property to give them"},
                                 "value": {"type": "string",
@@ -727,6 +740,37 @@ def unusable(sel: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+def _born_with(kind: str, must: Dict[str, Any]) -> bool:
+    """May EVERY attribute in `must` only be had by being CREATED with it?
+
+    THE FOLD IS FOR ATTRIBUTES NOTHING CAN CHANGE AFTERWARDS, and that is the whole of it.
+    `os_type` has no setter and is a creation default: a machine is born linux or born
+    windows, so "a vm named X" and "X runs windows" MUST become one creation or the second
+    goal is unreachable by construction — which is the failure the fold was written for.
+
+    EVERYTHING ELSE MUST STAY TWO GOALS, and folding it is actively worse:
+
+      A SETTABLE ATTRIBUTE ALREADY HAS A PLAN — create, then `add_label`. Folding it asks
+      the creator for something it cannot take, so the writer would have to claim it at
+      birth instead of doing the two steps that work.
+
+      AN ATTRIBUTE NOTHING WRITES AT ALL MUST FAIL HONESTLY. Measured 2026-08-03 on rung 3,
+      a CONTROL rung: the model read "put web on lab" as a property of the NETWORK —
+      `every network[name=lab] -> members=web` — and `network` has no setters and no
+      creation arguments, so nothing in the world can make that true. Folded, it became
+      `count(network WHERE net_name=lab AND members=web) = 1`, the writer created a network
+      that CLAIMED those members, and the run closed DONE over a machine that was on no
+      network. Unfolded, the goal simply cannot be met and says so.
+
+    DETERMINISTIC AND MANIFEST-ONLY: setters, creation arguments and creation defaults are
+    all declared, so nothing here is a judgement about meaning.
+    """
+    spec = (config.KINDS or {}).get(kind) or {}
+    settable = {s.get("attr") for s in (spec.get("setters") or {}).values()}
+    at_birth = set(spec.get("create_defaults") or {}) | set(spec.get("create_args") or ())
+    return bool(must) and all(a not in settable and a in at_birth for a in must)
+
+
 def to_goals(raw: Dict[str, Any], request: str = "",
              dropped: Optional[List[str]] = None) -> List[Dict[str, Any]]:
     """The model's answer, in the shape `ghost_writer.cover` takes.
@@ -839,7 +883,7 @@ def to_goals(raw: Dict[str, Any], request: str = "",
         merged = []
         for g in goals:
             want, must = g.get("every"), g.get("must")
-            if isinstance(want, dict) and must:
+            if isinstance(want, dict) and must and _born_with(want.get("kind"), must):
                 host = next((h for h in goals
                              if h is not g and h.get("eq") == 1
                              and isinstance(h.get("select"), dict)
