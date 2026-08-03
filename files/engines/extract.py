@@ -727,8 +727,22 @@ def unusable(sel: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
+def to_goals(raw: Dict[str, Any], request: str = "",
+             dropped: Optional[List[str]] = None) -> List[Dict[str, Any]]:
     """The model's answer, in the shape `ghost_writer.cover` takes.
+
+    `dropped` IS AN OUT-LIST, AND IT IS WHY A HALF-READ REQUEST STOPS BEING SILENT. Every
+    rule below that refuses a component is right to refuse it — but the caller was told
+    nothing, so a request whose second clause never survived translation went on to be
+    planned, run, and closed DONE over the half that did. Measured 2026-08-03 on rung 2, a
+    CONTROL rung: "create a vm named beta and then launch it" returns two goals every time,
+    the second arrives as a bogus `reach`, the reach guard correctly drops it, and the run
+    creates beta, never launches it, and reports success. DONE_BUT_FALSE, deterministically,
+    on the sentence the prompt uses as its own worked example.
+
+    IT REPORTS DROPS, NOT MERGES. `_scoped` folding two goals about one member into one is
+    not a loss and must not read as one, or the signal is noise on every request that
+    triggers the fold. Left `None`, nothing is collected and this behaves exactly as before.
 
     Anything malformed is DROPPED rather than repaired. A goal missing the field its own
     shape requires is a goal the model did not actually state, and inventing the missing
@@ -741,6 +755,13 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
     """
     out: List[Dict[str, Any]] = []
 
+    def _lost(why: str, g: Dict[str, Any] = None) -> None:
+        """Record that a component the model DID return did not survive translation."""
+        if dropped is None:
+            return
+        shape = str((g or {}).get("goal") or "?")
+        dropped.append(f"{shape}: {why}")
+
     def _keep(goal: Dict[str, Any]) -> None:
         """Admit a finished component, unless its selector names something that cannot exist.
 
@@ -750,6 +771,7 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
         """
         sel = goal.get("select") or goal.get("every") or goal.get("observe") or {}
         if not isinstance(sel, dict):
+            _lost("its selector is not a set of members")
             return
         why = unusable(sel)
         if why:
@@ -765,6 +787,7 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
                        if not (k == key or k in (config.KINDS or {}))
                        or not unusable({"kind": kind, k: v})}
             if not trimmed.get("kind") or unusable(trimmed):
+                _lost(f"it names something that cannot exist ({why})")
                 return
             goal = {**goal, ("select" if "select" in goal else
                              "every" if "every" in goal else "observe"): trimmed}
@@ -847,6 +870,7 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
     for g in (raw or {}).get("goals") or []:
         shape, sel = g.get("goal"), _to_select(g.get("select") or {})
         if not sel.get("kind"):
+            _lost("it says nothing about what kind of thing it is about", g)
             continue
         # NOTE: the usability check is at the END of this loop, on the FINAL selector — see
         # `_keep`. Checked here it ran BEFORE the repairs that fill the selector in, so a
@@ -956,6 +980,7 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
                 # `value: "running"`, where the value is a plausible token this module
                 # merely declined to read as an identity. What is left is the narrow case:
                 # no count anywhere, and a value that is not even a plausible token.
+                _lost("it states no number and its value names nothing", g)
                 continue
             _keep({"shape": "count", "select": sel, "eq": eq})
         elif shape == "reach":
@@ -968,6 +993,11 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
             # reaching keeps its goal untouched.
             if request and not (_REACH_WORDS & {w.strip(".,!?;:'\"").lower()
                                                 for w in request.split()}):
+                # THE GUARD IS RIGHT AND THE SILENCE WAS NOT. This is the single biggest
+                # source of a half-read request: the model reaches for `reach` when it has
+                # no shape for what a clause asks (rung 2's "and then launch it"), the goal
+                # is correctly refused, and the clause it stood for is gone with it.
+                _lost("the model asked for reachability and the request never mentions it", g)
                 continue
             _keep({"shape": "reach", "select": sel,
                         "min": int(g.get("amount") or 2)})
@@ -990,8 +1020,15 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
             link = g.get("link") or _link_between(sel.get("kind"), g["make"])
             if link:
                 _keep({"per": sel, "make": g["make"], "link": link})
+            else:
+                _lost(f"nothing links a {sel.get('kind')} to a {g['make']}", g)
         elif shape == "observe":
             _keep({"observe": sel, "fact": g.get("fact") or "alive"})
+        else:
+            # NO BRANCH MATCHED, which until now was the quietest exit of all: a shape this
+            # module does not implement, or one whose required field the model omitted, left
+            # the loop having produced nothing and said nothing.
+            _lost("it is not a shape this translator can express", g)
     out = _scoped(out)
     return _subject_survived(_one_statement_not_two(out), request)
 

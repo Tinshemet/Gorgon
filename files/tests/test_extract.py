@@ -194,15 +194,6 @@ def test_a_goal_the_model_did_not_state_is_dropped_not_completed():
     check("and so is None", to_goals(None) == [])
 
 
-def main():
-    from tests import _suite
-    sys.exit(_suite.run(sys.modules[__name__], "extract repairs"))
-
-
-if __name__ == "__main__":
-    main()
-
-
 def test_a_value_slot_filled_with_prose_is_refused():
     """THE WORST OUTCOME THE PRODUCTION PROBE MEASURES, and its cause.
 
@@ -285,3 +276,73 @@ def test_a_DELETION_and_a_CREATION_are_currently_indistinguishable():
     assert remove[0].get("eq") == 1, (
         "THE HOLE IS CLOSED — a deletion no longer asks for the machine to EXIST. Rewrite "
         f"this test's note.\n  delete -> {remove}")
+
+
+def test_a_clause_that_did_not_survive_is_reported():
+    """A HALF-READ REQUEST MUST NOT BE SILENT — measured on rung 2, a CONTROL rung.
+
+    "create a vm named beta and then launch it" returns two goals every time. The second
+    arrives as a bogus `reach`, the reach guard correctly refuses it, and until now the
+    clause it stood for vanished without a word: the writer covered "beta exists", every
+    layer below was honest about that half, and the run closed DONE having never launched
+    anything. DONE_BUT_FALSE, deterministically, on the sentence the prompt uses as its own
+    worked example.
+
+    THE GUARD IS RIGHT AND STAYS. What is asserted here is that refusing a component is now
+    REPORTABLE — the drop is the front seam's business, and what to DO about it belongs to
+    a caller that can see it happened.
+    """
+    print("[honesty] a component that did not survive translation is reported")
+
+    lost = []
+    kept = to_goals({"goals": [
+        {"goal": "count", "select": {"kind": "vm"}, "amount": 1, "name": "beta"},
+        {"goal": "reach", "select": {"kind": "vm", "where": [{"attr": "name",
+                                                              "value": "beta"}]}},
+    ]}, "create a vm named beta and then launch it", dropped=lost)
+    check("the goal that could be read survives", len(kept) == 1)
+    check("and the one that could not is REPORTED", len(lost) == 1)
+    check("the report names the shape that was lost", lost and lost[0].startswith("reach:"))
+
+    # A REQUEST THAT DOES ASK ABOUT REACHING KEEPS ITS GOAL, and reports nothing.
+    ok = []
+    to_goals({"goals": [{"goal": "reach", "select": {"kind": "vm"}}]},
+             "make sure they can all ping each other", dropped=ok)
+    check("a reach the request DID ask for is not a drop", ok == [])
+
+    # A MERGE IS NOT A LOSS. `_scoped` folding two goals about one member into one must not
+    # read as a dropped clause, or the signal is noise on every request that triggers it.
+    merged = []
+    out = to_goals({"goals": [
+        {"goal": "count", "select": {"kind": "vm"}, "amount": 1, "name": "box"},
+        {"goal": "every", "select": {"kind": "vm", "where": [{"attr": "name",
+                                                              "value": "box"}]},
+         "attr": "os_type", "value": "linux"},
+    ]}, "a vm named box with os linux", dropped=merged)
+    check("two goals about one member become one", len(out) == 1)
+    check("and a MERGE reports no loss", merged == [])
+
+    # A SHAPE NOTHING IMPLEMENTS WAS THE QUIETEST EXIT OF ALL.
+    unknown = []
+    to_goals({"goals": [{"goal": "teleport", "select": {"kind": "vm"}}]}, "", dropped=unknown)
+    check("an unimplemented shape is reported rather than skipped", len(unknown) == 1)
+
+    # AND NOTHING IS COLLECTED WHEN NOBODY ASKED — the old signature, unchanged.
+    check("with no out-list the behaviour is exactly as before",
+          len(to_goals({"goals": [{"goal": "reach", "select": {"kind": "vm"}}]}, "x")) == 0)
+
+
+# THE ENTRY POINT BELONGS AT THE BOTTOM, and this is not style. It sat in the MIDDLE of this
+# file, and `main()` ends in `sys.exit` — so when the suite was run directly every test
+# defined below it was never even defined, let alone called. Two were:
+# `test_a_value_slot_filled_with_prose_is_refused`, which guards the worst outcome the
+# production probe measures, and the drop-reporting test above. Found 2026-08-03 by adding a
+# test and watching the total not move — the exact symptom `_suite.py`'s own docstring names
+# as the only one this failure mode has.
+def main():
+    from tests import _suite
+    sys.exit(_suite.run(sys.modules[__name__], "extract repairs"))
+
+
+if __name__ == "__main__":
+    main()

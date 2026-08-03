@@ -62,9 +62,17 @@ def translator() -> Callable:
         said_no = _extract.declined(raw)
         if said_no:
             return Answer(None, "extractor", f"cannot translate: {said_no}")
-        goals = _extract.to_goals(raw, str(gap))
-        return (Answer(goals, "extractor", "") if goals
-                else Answer(None, "extractor", "no usable goal"))
+        # WHAT DID NOT SURVIVE IS PART OF THE ANSWER. A request whose second clause was
+        # refused by one of `to_goals`' rules used to arrive here indistinguishable from one
+        # that had no second clause — so the writer covered the half that made it, every
+        # layer below was honest about that half, and the run closed DONE over a request it
+        # had only partly read. See `to_goals`' own docstring for the measurement (rung 2).
+        lost: list = []
+        goals = _extract.to_goals(raw, str(gap), dropped=lost)
+        if not goals:
+            return Answer(None, "extractor", "; ".join(lost) or "no usable goal",
+                          dropped=lost)
+        return Answer(goals, "extractor", "", dropped=lost)
     translate.name = "extractor"
     return translate
 

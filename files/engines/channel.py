@@ -37,12 +37,18 @@ class Answer:
     """
 
     def __init__(self, components: Optional[List[Dict[str, Any]]], source: str, why: str = "",
-                 procedure: Optional[str] = None):
+                 procedure: Optional[str] = None, dropped: Optional[List[str]] = None):
         self.components = components or []
         self.source = source
         # AN AUTHORING REQUEST NAMES WHAT TO KEEP. `None` is an ordinary request: do it now.
         self.procedure = procedure
         self.why = why
+        # WHAT THE REQUEST SAID THAT THIS ANSWER DOES NOT COVER — its own field, because
+        # `why` already means two things. It is the reason there is no answer, and the stub
+        # uses it as a label ("written down"); a partial read is neither, and inferring one
+        # from a non-empty string made a descriptive label read as a complaint. An answer
+        # with components AND drops is a request served in part, which nothing could say.
+        self.dropped = list(dropped or ())
 
     def __bool__(self) -> bool:
         return bool(self.components)

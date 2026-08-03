@@ -582,6 +582,16 @@ class Orchestrator:
                 # and confusing it with an engine failure is how a day gets spent debugging
                 # the wrong half.
                 return session.close("UNTRANSLATED", answer.why)
+            lost = list(getattr(answer, "dropped", ()) or ())
+            if lost:
+                # A PARTIAL READ, SAID OUT LOUD. `to_goals` refuses components for reasons
+                # that are each correct, and the request is then served in part — which the
+                # ledger could not show and the outcome word cannot express. Recorded here
+                # so a DONE that covers half a request is at least visibly half.
+                session.record("could not read: " + "; ".join(lost),
+                               filed_by=answer.source or "extractor",
+                               caught_by="operator", executed="translate",
+                               data={"dropped": lost}, level="warn")
             components = answer.components
             # A DECLARED NAME WINS; the channel's is a fallback nothing currently fills.
             procedure = procedure or getattr(answer, "procedure", None)
