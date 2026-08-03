@@ -174,10 +174,46 @@ def schema(kinds=None) -> Dict[str, Any]:
                                 "amount": {"type": "integer",
                                            "description": ("HOW MANY there must be. Zero "
                                                            "means none may remain")},
+                                # NULL IS A LEGAL ANSWER, AND IT HAD TO BECOME ONE. This was
+                                # `{"type": "string"}` and REQUIRED, so a count goal could
+                                # not be written without naming a member — and most requests
+                                # name none. The model must answer, the only free string in
+                                # the branch is this one, and whatever qualifier is nearby
+                                # goes in it:
+                                #
+                                #   "exactly 3 vms carry the 'prod' label"  -> name=prod
+                                #   "3 vms labelled 'red'"                  -> name=red
+                                #   "clone golden into 3 new vms"           -> name=golden
+                                #
+                                # A NAME IS AN IDENTITY, so `count(vm WHERE name=prod) = 3`
+                                # asks for three members sharing one identity — a world that
+                                # cannot exist. The writer then honestly reports that nothing
+                                # reaches it, which names the ENGINE for a mistake the schema
+                                # forced. Three rungs fail this way and it is the single
+                                # commonest translation failure measured.
+                                #
+                                # THE GUARD THAT WAS SUPPOSED TO MAKE REQUIRING IT SAFE
+                                # CANNOT: `_keep`/`unusable` strips a name only on whitespace
+                                # or a word from a small list, and `red`, `prod` and `golden`
+                                # are none of those. A plausible token is exactly what it
+                                # cannot catch.
+                                #
+                                # MAKING null LEGAL IN THE TYPE WAS TRIED AND CHANGED
+                                # NOTHING — the model filled `name` with the label anyway,
+                                # 3 requests out of 3. It does not want a way out; it is
+                                # answering the question it was asked.
+                                #
+                                # THE ANSWER IS DOWNSTREAM, IN `_not_an_identity`, and the
+                                # evidence is the model's OWN reply: it emits the label goal
+                                # too. Told to name a member it repeats the qualifier, so
+                                # the same answer states the fact twice, once correctly.
                                 "name": {"type": "string",
                                          "description": ("the NAME of the member, when the "
                                                          "operator gave one — 'a vm called "
-                                                         "box1' puts box1 here")},
+                                                         "box1' puts box1 here. USE null WHEN "
+                                                         "NO MEMBER IS NAMED: a label, a "
+                                                         "group or a description is NOT a "
+                                                         "name, and belongs in select.where")},
                             },
                             # `amount` IS REQUIRED, and it is the last slot the model was
                             # skipping. Offered as optional it went unfilled on every counted
@@ -740,6 +776,55 @@ def unusable(sel: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+def _not_an_identity(raw: Dict[str, Any]) -> set:
+    """Values this answer ITSELF used as a non-key property. Those are not names.
+
+    THE MODEL CONTRADICTS ITSELF AND ONE SIDE IS EVIDENCE. `name` is REQUIRED on a count
+    goal — measured necessary, because offered as optional it went unfilled and box1 was
+    lost — and most requests name no member at all. So the model must answer, the only free
+    string in the branch is `name`, and it repeats whatever qualifier is nearby:
+
+        "make sure exactly 3 vms carry the 'prod' label"
+          -> count  vm  amount 3  name "prod"          <- forced, and impossible
+          -> every  vm  attr label  value "prod"       <- correct, in the same reply
+
+    A NAME IS AN IDENTITY, so the first goal asks for three members sharing one — a world
+    that cannot exist, which the writer honestly refuses. But the second goal is the model
+    SAYING what `prod` is. Nothing has to be guessed: a value the answer uses as a `label`
+    is not a name, because the answer said so.
+
+    THE KEY IS THE EXCEPTION, and it is what keeps real names. "a vm called box1 running
+    linux" comes back with `name: box1` AND `where: [{attr: name, value: box1}]` — box1 is
+    used as a value of the KEY attribute, which is agreement rather than contradiction.
+
+    DETERMINISTIC, AND IT DECLINES WHEN THERE IS NO EVIDENCE. A request whose stray name
+    appears nowhere else — "clone golden into 3 new vms" — is untouched, and fails as it did
+    before. This rule only ever fires on an answer that already told us the answer.
+    """
+    out: Dict[str, set] = {}
+
+    def _pairs(node):
+        if isinstance(node, list):
+            for kid in node:
+                yield from _pairs(kid)
+        elif isinstance(node, dict):
+            if node.get("attr") is not None and node.get("value") is not None:
+                yield node["attr"], node["value"]
+            for val in node.values():
+                if isinstance(val, (dict, list)):
+                    yield from _pairs(val)
+
+    for g in (raw or {}).get("goals") or []:
+        kind = ((g.get("select") or {}).get("kind"))
+        spec = (config.KINDS or {}).get(kind) or {}
+        key = spec.get("key")
+        alias = spec.get("aliases") or {}
+        for attr, value in _pairs(g):
+            if alias.get(attr, attr) != key and isinstance(value, str) and value.strip():
+                out.setdefault(kind, set()).add(value.strip())
+    return out
+
+
 def _born_with(kind: str, must: Dict[str, Any]) -> bool:
     """May EVERY attribute in `must` only be had by being CREATED with it?
 
@@ -911,6 +996,11 @@ def to_goals(raw: Dict[str, Any], request: str = "",
             out2.append(g)
         return out2
 
+    # COMPUTED ONCE OVER THE WHOLE ANSWER, before any goal is read, because the evidence for
+    # one goal lives in a DIFFERENT goal — the label statement that proves `prod` is a label
+    # may come after the count that misnames it.
+    _said_property = _not_an_identity(raw)
+
     for g in (raw or {}).get("goals") or []:
         shape, sel = g.get("goal"), _to_select(g.get("select") or {})
         if not sel.get("kind"):
@@ -968,6 +1058,17 @@ def to_goals(raw: Dict[str, Any], request: str = "",
                     and not any(c.isalpha() for c in str(named)):
                 if _as_count(g.get("amount")) is None:
                     eq = _as_count(named)
+                named = None
+            # A VALUE THIS ANSWER CALLED A PROPERTY IS NOT ALSO A NAME — see
+            # `_not_an_identity`. Dropped rather than moved: the model has already stated the
+            # property in its own goal, so the fact is not lost, and MOVING it would be
+            # inventing a second copy of a statement that is already there.
+            # SCOPED TO THIS KIND, and the first version was not — measured at n=3, it cost
+            # rung 3. "put web on lab" comes back as `every network -> attr members, value
+            # web`, so `web` is a value of a NETWORK property; read globally that disqualified
+            # `web` as the name of the MACHINE the same request creates, and the vm was never
+            # made. A value being a network's member says nothing about what a vm is called.
+            if named is not None and str(named).strip() in _said_property.get(sel.get("kind"), ()):
                 named = None
             if named is not None and str(named).strip():
                 spec = (config.KINDS or {}).get(sel.get("kind")) or {}

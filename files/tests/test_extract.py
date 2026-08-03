@@ -332,6 +332,64 @@ def test_a_clause_that_did_not_survive_is_reported():
           len(to_goals({"goals": [{"goal": "reach", "select": {"kind": "vm"}}]}, "x")) == 0)
 
 
+def test_a_value_the_answer_calls_a_property_is_not_also_a_name():
+    """THE COMMONEST TRANSLATION FAILURE, and the model hands over the evidence itself.
+
+    `name` is REQUIRED on a count goal — measured necessary, because offered as optional it
+    went unfilled and `box1` was lost — and most requests name no member. So the model must
+    answer, the only free string in the branch is `name`, and it repeats whatever qualifier
+    is nearby. A name is an IDENTITY, so `count(vm WHERE name=prod) = 3` asks for three
+    members sharing one, which no world can reach: the writer refuses, and refuses THE WHOLE
+    REQUEST including the goals it could have served.
+
+    NOTHING IS GUESSED HERE. The same answer states the fact correctly in its own `every`
+    goal, so a value the model called a `label` is not a name BECAUSE THE MODEL SAID SO.
+    """
+    print("[repair] a value this answer called a property is not also a name")
+
+    got = to_goals({"goals": [
+        {"goal": "count", "select": {"kind": "vm"}, "amount": 3, "name": "prod"},
+        {"goal": "every", "select": {"kind": "vm"}, "attr": "label", "value": "prod"},
+    ]}, "make sure exactly 3 vms carry the prod label")
+    counts = [g for g in got if g.get("shape") == "count"]
+    check("the impossible identity is gone", counts and "name" not in counts[0]["select"])
+    check("the count survives", counts and counts[0]["eq"] == 3)
+    check("and the property the model stated is kept",
+          any(g.get("must") == {"label": "prod"} for g in got))
+
+    # A REAL NAME IS UNTOUCHED — used as a value of the KEY, which is agreement, not
+    # contradiction.
+    kept = to_goals({"goals": [
+        {"goal": "count", "select": {"kind": "vm"}, "amount": 1, "name": "box1"},
+        {"goal": "every", "select": {"kind": "vm", "where": [{"attr": "name",
+                                                              "value": "box1"}]},
+         "attr": "os_type", "value": "linux"},
+    ]}, "a vm called box1 running linux")
+    check("a name the answer only ever uses AS a name survives",
+          any(g.get("select", {}).get("name") == "box1" for g in kept))
+
+    # SCOPED TO THE KIND THAT SAID IT. Read globally this cost rung 3: "put web on lab" makes
+    # `web` a value of a NETWORK property, which says nothing about what a MACHINE is called.
+    both = to_goals({"goals": [
+        {"goal": "count", "select": {"kind": "network"}, "amount": 1, "name": "lab"},
+        {"goal": "count", "select": {"kind": "vm"}, "amount": 1, "name": "web"},
+        {"goal": "every", "select": {"kind": "network", "where": [{"attr": "name",
+                                                                   "value": "lab"}]},
+         "attr": "members", "value": "web"},
+    ]}, "create a network called lab and a vm named web, then put web on lab")
+    check("a network's member does not disqualify a machine's NAME",
+          any(g.get("select", {}).get("name") == "web" for g in both))
+    check("and the network keeps its own name",
+          any(g.get("select", {}).get("net_name") == "lab" for g in both))
+
+    # NO EVIDENCE, NO REPAIR — it declines rather than guessing.
+    alone = to_goals({"goals": [
+        {"goal": "count", "select": {"kind": "vm"}, "amount": 4, "name": "golden"},
+    ]}, "clone golden into 3 new vms")
+    check("a stray name the answer never explains is left alone",
+          any(g.get("select", {}).get("name") == "golden" for g in alone))
+
+
 # THE ENTRY POINT BELONGS AT THE BOTTOM, and this is not style. It sat in the MIDDLE of this
 # file, and `main()` ends in `sys.exit` — so when the suite was run directly every test
 # defined below it was never even defined, let alone called. Two were:
