@@ -1300,7 +1300,30 @@ def to_goals(raw: Dict[str, Any], request: str = "",
                 _keep({"shape": "count",
                             "select": {**sel, attr: _coerce(g["value"])}, "eq": 1})
             else:
-                _keep({"every": sel, "must": {attr: _coerce(g["value"])}})
+                want = _coerce(g["value"])
+                # A GOAL THAT ASKS FOR WHAT IT ALREADY SELECTS IS VACUOUS, so it cannot be
+                # what the operator meant — it is a LOST NEGATION. Measured on rung 5's
+                # paraphrase:
+                #
+                #   "start up any machine that ISN'T already running"
+                #     -> every vm[status=running] must status=running
+                #
+                # Nothing is planned, nothing runs, and the goal holds the moment it is
+                # asked — so the run reports success over a lab it never touched. The
+                # request said the OPPOSITE set, and `effects.complement` already knows
+                # what that is because the manifest enumerates the attribute's values.
+                #
+                # IT DECLINES RATHER THAN GUESSES: `complement` returns None where a third
+                # legal value exists, because then the sentence genuinely did not say which.
+                if sel.get(attr) == want:
+                    from planner.ir import effects as _fx
+                    other = _fx.complement(sel["kind"], attr, want)
+                    if other is None:
+                        _lost(f"it asks every {sel['kind']} with {attr}={want} to have "
+                              f"{attr}={want}, which is already so", g)
+                        continue
+                    sel = {**sel, attr: other}
+                _keep({"every": sel, "must": {attr: want}})
         elif shape == "per" and g.get("make"):
             # A KIND THE REQUEST NEVER MENTIONS IS NOT BEING ASKED FOR. Same rule as
             # `reach`, same reason, and the evidence is in the same place — measured on
