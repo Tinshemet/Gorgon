@@ -65,7 +65,7 @@ def _facts() -> List[str]:
 # ONE BRANCH PER SHAPE OF GOAL, and the set is closed. A request that fits none of these is
 # one the writer could not build anyway, so the honest outcome is a refusal at this step
 # rather than a program nobody can trust.
-def schema(kinds=None) -> Dict[str, Any]:
+def schema(kinds=None, request: str = "") -> Dict[str, Any]:
     """The grammar the model is decoded against — BUILT FROM THE MANIFEST IN FORCE.
 
     IT USED TO BE A MODULE CONSTANT, frozen at import from the default manifest, and that
@@ -117,7 +117,7 @@ def schema(kinds=None) -> Dict[str, Any]:
     # have considered one. See the count branch below for the measurement.
     _COUNT_SELECT = {**_SELECT, "required": ["kind", "where"]}
 
-    return {
+    out = {
         "type": "object",
         "properties": {
             # DECLINING MUST BE LEGAL, or the model routes around the check. This carried
@@ -324,6 +324,28 @@ def schema(kinds=None) -> Dict[str, Any]:
         # none. Requiring `goals` is what made refusal unsayable in the first place.
         "additionalProperties": False,
     }
+
+    # `reach` IS NOT OFFERED TO A REQUEST THAT NEVER MENTIONS REACHING, which moves a guard
+    # that already existed from AFTER generation to BEFORE it. `to_goals` has always dropped
+    # such a goal — twenty of twenty-three extraction failures on 2026-08-01 were one — and a
+    # grammar that permits what the reader is guaranteed to throw away is a grammar that
+    # invites the answer nobody can use.
+    #
+    # WHAT IT COSTS THE MODEL IS A PLACE TO PUT A CLAUSE IT CANNOT SHAPE, and that is the
+    # point. "create a vm named beta AND THEN LAUNCH IT" and "put web on lab" both came back
+    # as `reach`, on both arms, every run: a clause that ACTS ON A NAMED MEMBER has no shape
+    # the model reliably reaches for, so it grabs the one that takes a bare set. Both are
+    # expressible — `every vm[name=beta] must status=running` — and with `reach` gone the
+    # model has to find it. MAKE THE WRONG ANSWER UNREPRESENTABLE RATHER THAN REJECT IT
+    # AFTERWARDS, which is `master.ops`' move and the one that has worked twice today.
+    #
+    # ONLY WHEN A REQUEST WAS GIVEN. Called bare — `SCHEMA`, the probes, `assert_enforced` —
+    # the full grammar is returned, because "no request" is not "a request about nothing".
+    if request and not asks_reach(request):
+        branches = out["properties"]["goals"]["items"]["oneOf"]
+        out["properties"]["goals"]["items"]["oneOf"] = [
+            b for b in branches if b["properties"]["goal"]["enum"] != ["reach"]]
+    return out
 
 
 # The default-manifest instance, for callers that only ever wanted that one.
@@ -685,6 +707,19 @@ def _enumerated(kind: str) -> set:
 
 _REACH_WORDS = {"ping", "reach", "reachable", "connect", "connected", "communicate",
                 "talk", "see", "mesh", "each"}
+
+
+def asks_reach(request: str) -> bool:
+    """Does the REQUEST mention reaching at all? The one authority, asked twice.
+
+    `to_goals` has always dropped a `reach` goal the request gives no evidence for — twenty
+    of twenty-three extraction failures on 2026-08-01 were exactly that. `schema()` now asks
+    the same question BEFORE generating, so the shape is not offered where it cannot be
+    meant. Two readers, one rule; the alternative is a grammar that permits what the reader
+    is guaranteed to throw away.
+    """
+    return bool(_REACH_WORDS & {w.strip(".,!?;:'\"").lower()
+                                for w in str(request or "").split()})
 
 # A REQUEST THAT CARVES SOMETHING OUT, read as SUBSTRINGS because "apart from" is two words
 # and "except" appears as "except db" with no space either side of the clause. Same rule as
@@ -1214,8 +1249,7 @@ def to_goals(raw: Dict[str, Any], request: str = "",
             # THE REQUEST, so it is checked there rather than argued with in a prompt. A
             # slot-level guard, not a judgement about meaning: a request that does mention
             # reaching keeps its goal untouched.
-            if request and not (_REACH_WORDS & {w.strip(".,!?;:'\"").lower()
-                                                for w in request.split()}):
+            if request and not asks_reach(request):
                 # THE GUARD IS RIGHT AND THE SILENCE WAS NOT. This is the single biggest
                 # source of a half-read request: the model reaches for `reach` when it has
                 # no shape for what a clause asks (rung 2's "and then launch it"), the goal
@@ -1449,7 +1483,8 @@ def extract(request: str, model: str = None, temp: float = 0.0,
     # was not: two paths deciding what a model call IS, differing on keep_alive and on how a
     # decode failure surfaces.
     from .channel import constrained
-    return constrained(prompt(request=request), request, schema(),
+    return constrained(prompt(request=request), request,
+                       schema(request=request),
                        model=model, temp=temp, timeout=timeout)
 
 
