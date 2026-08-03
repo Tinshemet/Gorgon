@@ -8,6 +8,8 @@
   "extension": ".medusa"
  },
  "sigil": "$",
+ "_stand_in_doc": "AUTHORING ONLY. When an operator declares `procedure p(STRING name): a vm called $name`, the goal layer has no bindings and strips `$name` as residue — correct for an acting request, ruinous for an authoring one: the identity filter vanishes, the goal collapses to `count(vm) = 1`, and any machine already in the lab satisfies it. Measured 2026-08-03: the writer answered with `launch_vm(name: work-laptop)`, the operator's real machine, and it was KEPT as a reusable procedure with both parameters inert. So a declared `$p` is replaced by a stand-in identity before translation and restored to `$p` after planning. DIGIT-FREE, and that is not cosmetic — `box2` in a request came back as `eq: 2`, the digit leaking out of a name and into the count.",
+ "stand_in_prefix": "param_",
  "loop_var": "item",
  "_params_doc": "Parameter types a procedure may declare, TYPE FIRST: (INT X, STRING name). Parameters are AUTHORED, not derived \u2014 unlike `imports`, which the harness computes: only the author knows which values are meant to vary per invocation. `sql` is how the type is written; `py` is what a supplied value is checked against. DURATION and BYTES exist because this domain keeps needing them and a bare int loses the unit \u2014 a routine says EVERY 1h, a disk check says 20GB, and 'is 3600 seconds or an hour?' is the kind of ambiguity that only shows up in production.",
  "param_types": {

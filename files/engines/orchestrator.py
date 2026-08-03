@@ -133,8 +133,15 @@ def _parameterise(program: Dict[str, Any]) -> None:
                          **{ref.lstrip(_cfg.SIGIL): "string" for ref in promoted.values()}}
 
 
-def _declare(program: Dict[str, Any], declared: Optional[Dict[str, str]]) -> List[str]:
+def _declare(program: Dict[str, Any], declared: Optional[Dict[str, str]],
+             stood_in: Optional[Dict[str, str]] = None) -> List[str]:
     """Bind the parameters the OPERATOR declared into the program the writer just planned.
+
+    THREE PASSES NOW, AND THE NEW ONE IS FIRST. `stood_in` maps the stand-in identities
+    `planner/stand_in.py` put into the request before translation back to the parameters
+    they came from — see that module for why a declared `$name` cannot cross the goal layer
+    as itself. Restoring by PROVENANCE is unconditional where the two passes below are
+    careful, because a minted identity can only be somewhere the operator put it.
 
     THE RULE, IN TWO PASSES, AND THE SPLIT BETWEEN THEM IS THE WHOLE SAFETY ARGUMENT:
 
@@ -189,9 +196,15 @@ def _declare(program: Dict[str, Any], declared: Optional[Dict[str, str]]) -> Lis
     # from a different world than the one authoring is happening in.
     from planner.ir import config as _cfg
     from planner.ir import effects as _effects
+    from planner import stand_in as _stand_in
     refs = {p: f"{_cfg.SIGIL}{p}" for p in declared}
     makers = set(_effects.creators())
-    used: set = set()
+    # PASS 0 — THE STAND-INS THE OPERATOR'S OWN `$p` BECAME, put back before either pass
+    # below runs. It goes first because it is the one substitution that needs no rule about
+    # WHERE it is safe: `stand_in.restore` matches a value this run minted, so every
+    # occurrence is one the operator wrote. Passes 1 and 2 then find their arguments already
+    # holding `$p` and skip them, which is what the `startswith(SIGIL)` guard is for.
+    used: set = set(_stand_in.restore(program, stood_in or {}))
     # THE LITERAL EACH PARAMETER REPLACED IN A CREATION, so pass 2 can follow that one value
     # and nothing else. `{"box1": "$name", "linux": "$os_type"}`.
     minted: Dict[str, str] = {}
@@ -453,7 +466,7 @@ class Orchestrator:
             out["tried"] = list(tried)
         return out
 
-    def _author(self, engine, session, name, components, declared=None):
+    def _author(self, engine, session, name, components, declared=None, stood_in=None):
         """Write a named program for these goals and KEEP it. Nothing runs.
 
         THE ENGINE PLANS EXACTLY AS IT WOULD TO ACT, which is what makes the artifact worth
@@ -479,10 +492,10 @@ class Orchestrator:
         from planner.ir import config as _config
         with _config.use_kinds(getattr(engine, "manifest", None)):
             return self._author_within(engine, session, name, components, _procs, _render,
-                                       declared)
+                                       declared, stood_in)
 
     def _author_within(self, engine, session, name, components, _procs, _render,
-                       declared=None):
+                       declared=None, stood_in=None):
         if not _procs.legal_name(name):
             return session.close("REFUSED",
                                  f"{name!r} is not a legal procedure name — it is written "
@@ -501,7 +514,7 @@ class Orchestrator:
         # it does: written for three goals, it claims all three or the match is a lie.
         program["achieves"] = (components[0] if len(components) == 1
                                else {"all": list(components)})
-        unused = _declare(program, declared)
+        unused = _declare(program, declared, stood_in)
         _parameterise(program)
         rendered = _render(program)
         at = _procs.LIBRARY.save(program, rendered)
@@ -525,7 +538,27 @@ class Orchestrator:
     def _attempt(self, request, engine, session, components, procedure=None,
                  declared=None):
         """One engine's whole turn: translate, run the in-session, close."""
+        stood_in: Dict[str, str] = {}
         if components is None:
+            # A DECLARED `$p` CANNOT CROSS THE GOAL LAYER AS ITSELF — `planner/stand_in.py`
+            # has the measurement. It travels as an ordinary name nothing can match and is
+            # restored by `_declare`. Only under a declaration: with no signature there is
+            # nothing to stand in for, and `$anything` is residue exactly as it was.
+            from planner import stand_in as _stand_in
+            request, stood_in, unknown = _stand_in.substitute(request, declared or {})
+            if stood_in:
+                session.record(
+                    "stood in for " + ", ".join(f"${p}" for p in sorted(stood_in.values())),
+                    filed_by="orchestrator", caught_by="channel", executed="stand in",
+                    data=stood_in)
+            if unknown:
+                # SAID, NOT GUESSED. `$foo` under a signature that never declared `foo` is a
+                # typo, and it is about to be silently stripped as residue — the operator
+                # would read a program missing the value they thought they had placed.
+                session.record(
+                    "referred to but never declared: " + ", ".join(f"${u}" for u in unknown),
+                    filed_by="orchestrator", caught_by="operator", executed="declare",
+                    data={"undeclared": unknown}, level="warn")
             session.record("English -> goals", filed_by="orchestrator",
                            caught_by="channel", executed=f"ask({request[:40]!r})")
             # TRANSLATE UNDER THE ROUTED ENGINE'S MANIFEST. The extractor builds its schema
@@ -566,7 +599,7 @@ class Orchestrator:
         # test can drive without a model — could not author at all: the one path this feature
         # can be PROVEN on was the one path it did not reach.
         if procedure:
-            return self._author(engine, session, procedure, components, declared)
+            return self._author(engine, session, procedure, components, declared, stood_in)
 
         result = _insession.drive(engine, components, session, self._decide)
         session.calls = result.get("calls") or []

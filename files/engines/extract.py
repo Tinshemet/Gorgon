@@ -793,6 +793,40 @@ def to_goals(raw: Dict[str, Any], request: str = "") -> List[Dict[str, Any]]:
         So "create 3 machines and make them all linux" is untouched (no member is named), and
         "create alpha, then launch every stopped vm" is untouched (the `every` is filtered).
         """
+        # FIRST, THE UNAMBIGUOUS CASE: an `every` whose selector is IDENTICAL to a count's.
+        # Both goals are about THE SAME MEMBER, said twice, so merging them cannot move a
+        # property onto anything the operator did not point at — no guess, no decline.
+        #
+        # THE FOLD BELOW COULD NOT DO IT, AND THE GAP OPENS WHEN TRANSLATION IS RIGHT. It
+        # requires the `every` to carry ONLY a kind, because it exists to give a receiver to
+        # a property that escaped one. An `every` the extractor already scoped has two keys
+        # and matches nothing here — so the better translation got the worse plan.
+        #
+        # MEASURED 2026-08-03 on `procedure p(STRING name, STRING os_name)`:
+        #
+        #   count:vm[name=X] == 1                  -> place create_vm(os_type=linux, name=X)
+        #   every vm[name=X] must os_type=Y        -> count:vm[name=X os_type=Y] == 1
+        #                                          -> create_vm AGAIN -> Unsolvable
+        #
+        # The writer creates the machine for the first goal, `create_defaults` gives it
+        # `os_type: linux`, and NOTHING CHANGES os_type AFTER BIRTH — so the second goal is
+        # unreachable by construction and the whole request dies. One `create_vm` carrying
+        # both attributes is the only plan that was ever possible, and merging is how the
+        # writer gets to see it.
+        merged = []
+        for g in goals:
+            want, must = g.get("every"), g.get("must")
+            if isinstance(want, dict) and must:
+                host = next((h for h in goals
+                             if h is not g and h.get("eq") == 1
+                             and isinstance(h.get("select"), dict)
+                             and h["select"] == want), None)
+                if host is not None:
+                    host["select"] = {**host["select"], **must}
+                    continue
+            merged.append(g)
+        goals = merged
+
         named = [g for g in goals
                  if "select" in g and g.get("eq") == 1
                  and len(g["select"]) == 2 and "kind" in g["select"]]

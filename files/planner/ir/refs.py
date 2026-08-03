@@ -44,6 +44,30 @@ def names(value: Any) -> List[str]:
     return [m.split(".", 1)[0] for m in _TOKEN.findall(value)]
 
 
+def substitute(text: Any, resolve) -> str:
+    """Rewrite every `$reference` in *text* through `resolve(root, whole) -> str | None`.
+
+    HERE BECAUSE THE TOKEN GRAMMAR IS HERE. The authoring stand-in needs to find the
+    references in an operator's REQUEST — free English, not an IR value — and the one thing
+    it must not do is write a second regex for what a `$name` is. `$item-snap` splits into
+    `$item` plus `-snap` for a reason rung 12 paid for, and a private copy of that rule in
+    another module is the copy that would not have been updated.
+
+    `resolve` RETURNING None LEAVES THE TEXT ALONE, which is what makes the caller able to
+    tell the difference between a reference it recognised and one it did not — an
+    undeclared `$foo` must survive intact so somebody can be told about it, not be silently
+    swallowed by the rewrite that was supposed to help.
+    """
+    if not isinstance(text, str):
+        return text
+
+    def _one(m: "re.Match") -> str:
+        got = resolve(m.group(1).split(".", 1)[0], m.group(0))
+        return m.group(0) if got is None else str(got)
+
+    return _TOKEN.sub(_one, text)
+
+
 def is_reference(value: Any) -> bool:
     """True if the string is exactly one reference and nothing else."""
     if not isinstance(value, str):
