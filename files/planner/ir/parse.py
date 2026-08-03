@@ -615,7 +615,20 @@ def _derived_creator(st: Dict[str, Any]) -> Optional[str]:
 
 def _call(cur: _Cursor, graft: Optional[str]) -> Dict[str, Any]:
     cur.take()                                   # CALL
+    # A DOTTED NAME IS ONE TOOL NAME — the THIRD time this bug has been found, and the most
+    # expensive: `PROCEDURE Class.method` had it (every class file failed to load),
+    # `IS($answer.alive)` had it (result-branching rendered, validated and would not re-parse),
+    # and here it meant A CLASS METHOD COULD NOT BE CALLED AT ALL. Classes save, reload with
+    # their method surface and verify clean — and `CALL NetworkSetup.attach(...)` stopped at
+    # the dot, so the whole class feature was write-only.
+    #
+    # `procedures.legal_name` ALREADY ALLOWS THE DOTTED FORM (`^[A-Za-z][A-Za-z0-9_]*(\.[a-z]
+    # [a-z0-9_]*)?$`) and `Store` files methods under `Class.method`, so every layer but this
+    # one agreed a method has a dotted name.
     tool = str(cur.take().value)
+    while cur.at("."):
+        cur.take(".")
+        tool += "." + str(cur.take().value)
     args = _args(cur) if cur.at("(") else {}
     cur.take(";")
     st: Dict[str, Any] = {"op": "call", "tool": tool, "args": args}
