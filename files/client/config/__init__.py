@@ -37,6 +37,7 @@ def _merged(defaults_name: str, override_name: str) -> dict:
 
 _UI   = _merged("CLI_config.defaults.json", "CLI_config.json")
 _CONN = _merged("connection_config.defaults.json", "connection_config.json")
+_ED   = _merged("editor_config.defaults.json", "editor_config.json")
 
 
 # ── connection (environment variables win over the config files) ────────────────
@@ -110,3 +111,9 @@ SC_DRIFT     = set(_UI["shortcut_drift"])
 SC_CLEAR     = set(_UI["shortcut_clear"])
 SC_HELP      = set(_UI["shortcut_help"])
 EXIT_CMDS    = set(_UI["exit_commands"])
+
+# ── the input editor (client/ui/chat_client/editor) ─────────────────────────────
+EDITOR_KEYS     = _ED["keys"]            # action -> [key names / literal characters]
+INPUT_MAX_ROWS  = _ED["input_max_rows"]  # how tall the input strip may grow
+INPUT_HISTORY   = _ED["history_size"]    # how far Up/Down can recall
+EDITOR_HINT     = _ED["hint_line"]

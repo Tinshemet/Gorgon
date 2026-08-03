@@ -14,8 +14,27 @@ from client.ui.chat_client.history import add as _add
 from client.ui.chat_client.vnc import vnc_host as _vnc_host, try_open_vnc as _try_open_vnc
 
 
-def draw(stdscr: "curses.window", input_buf: str) -> None:
-    """Redraw the full TUI — scrollback, separators, and the input/status line."""
+def input_rows(buf, width: int) -> int:
+    """How many screen rows the input strip needs. Pure, so the layout is testable.
+
+    THE STRIP GROWS AND THE SCROLLBACK PAYS FOR IT, which is the trade `input_max_rows`
+    exists to bound: past that the input scrolls inside itself rather than eating the
+    conversation. At least one row always, even for an empty buffer.
+    """
+    if buf is None:
+        return 1
+    return max(1, min(_cfg.INPUT_MAX_ROWS, buf.height(max(1, width))))
+
+
+def draw(stdscr: "curses.window", input_buf) -> None:
+    """Redraw the full TUI — scrollback, separators, and the input/status strip.
+
+    `input_buf` IS A BUFFER, not a string, and the layout is computed from its height. It
+    was a bare `str` drawn on one fixed row, clipped at the window edge — so a request
+    longer than the terminal was typed BLIND, which is what the operator hit while
+    prompt-testing (`…and os $os_na`, cut off in the echo, with no way to see it).
+    A str is still accepted: `_process_response` and the waiting branch pass one.
+    """
     h, w = stdscr.getmaxyx()
     stdscr.erase()
 
@@ -40,13 +59,22 @@ def draw(stdscr: "curses.window", input_buf: str) -> None:
     except curses.error:
         pass  # addstr fails past the screen edge — skip the separator
 
-    # Chat history (rows 2 .. h-5)
-    chat_rows = max(1, h - 6)
+    # THE INPUT STRIP DECIDES THE LAYOUT, so it is measured before anything is placed.
+    # The text column is `w - 4`: three for the " > " gutter and one the terminal will not
+    # let us write into.
+    text_w = max(1, w - 4)
+    is_buf = hasattr(input_buf, "wrapped")
+    rows = 1 if (state.waiting or not is_buf) else input_rows(input_buf, text_w)
+    in_top = max(3, h - 2 - rows)          # first input row
+    sep_row = in_top - 1
+
+    # Chat history (rows 2 .. sep_row-1)
+    chat_rows = max(1, sep_row - 2)
     with state.lock:
         visible = list(state.history[-chat_rows:])
     for i, (attr, text) in enumerate(visible):
         row = 2 + i
-        if row >= h - 4:
+        if row >= sep_row:
             break
         try:
             stdscr.addstr(row, 0, text[:w - 1], attr)
@@ -55,29 +83,66 @@ def draw(stdscr: "curses.window", input_buf: str) -> None:
 
     # Input separator
     try:
-        stdscr.addstr(h - 4, 0, "─" * (w - 1), _cp(C_DIM))
+        stdscr.addstr(sep_row, 0, "─" * (w - 1), _cp(C_DIM))
     except curses.error:
         pass  # addstr fails past the screen edge — skip the input separator
 
-    # Input / waiting line
+    # Input / waiting strip
+    cursor = None
     if state.waiting:
         try:
-            stdscr.addstr(h - 3, 0, f" ⟳ waiting for response...", _cp(C_DIM))
+            stdscr.addstr(in_top, 0, f" ⟳ waiting for response...", _cp(C_DIM))
         except curses.error:
             pass  # addstr fails past the screen edge — skip the waiting line
     else:
-        _shown = ("•" * len(input_buf)) if state.is_password else input_buf
-        prompt = f" > {_shown}"
-        try:
-            stdscr.addstr(h - 3, 0, prompt[:w - 1], _cp(C_CYAN) | curses.A_BOLD)
-        except curses.error:
-            pass  # addstr fails past the screen edge — skip the prompt
+        if is_buf:
+            lines, cur_row, cur_col = input_buf.wrapped(text_w)
+        else:
+            lines, cur_row, cur_col = [str(input_buf)], 0, len(str(input_buf))
+        # A PASSWORD IS MASKED BY LENGTH, per row, so a masked answer cannot be read off
+        # the screen and cannot be told apart from one by its shape either.
+        if state.is_password:
+            lines = ["•" * len(l) for l in lines]
+        # SCROLL TO KEEP THE CURSOR VISIBLE. Past `input_max_rows` the strip stops growing,
+        # so the window has to follow the caret or typing walks off the bottom of it.
+        top = max(0, min(cur_row - rows + 1, len(lines) - rows)) if len(lines) > rows else 0
+        for i in range(rows):
+            idx = top + i
+            body = lines[idx] if idx < len(lines) else ""
+            gutter = " > " if idx == 0 else "   "
+            try:
+                stdscr.addstr(in_top + i, 0, (gutter + body)[:w - 1],
+                              _cp(C_CYAN) | curses.A_BOLD)
+            except curses.error:
+                pass  # addstr fails past the screen edge — skip this input row
+        if top <= cur_row < top + rows:
+            # The gutter is three columns on every row — " > " then "   " — so the caret
+            # sits at the same offset whichever row of a wrapped request it landed on.
+            cursor = (in_top + cur_row - top, 3 + cur_col)
 
     # Hint line
     try:
-        stdscr.addstr(h - 2, 0, _cfg.HINT_LINE[:w - 1], _cp(C_DIM))
+        stdscr.addstr(h - 2, 0, _cfg.EDITOR_HINT[:w - 1], _cp(C_DIM))
     except curses.error:
         pass  # addstr fails past the screen edge — skip the hint line
+
+    # THE CARET IS PART OF THE EDITOR. Hidden, an operator cannot tell where an arrow key
+    # left them, which makes every motion a guess.
+    #
+    # MOVED FIRST, SHOWN SECOND, AND IN SEPARATE GUARDS. One try around both meant a
+    # terminal that refuses `curs_set` never reached `move` either — so the failure to make
+    # the caret VISIBLE also stopped it being in the right PLACE, which is the half that
+    # still matters when the cursor is drawn by the terminal itself.
+    want = bool(cursor and cursor[1] < w - 1)
+    if want:
+        try:
+            stdscr.move(*cursor)
+        except curses.error:
+            pass  # the caret landed off-screen — leave it where the terminal had it
+    try:
+        curses.curs_set(1 if want else 0)
+    except curses.error:
+        pass  # some terminals have no visibility control at all
 
     stdscr.refresh()
 

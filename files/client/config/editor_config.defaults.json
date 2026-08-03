@@ -1,0 +1,55 @@
+{
+ "_doc": "The chat input's editing surface. Its own pair rather than more keys in CLI_config because it is a different concern with a different reader: appearance is what the operator tunes, and these are BINDINGS — the thing somebody rebinds when their terminal sends something else. Every value here is data on purpose: a key map with literals in the code is a key map nobody can change without a diff.",
+ "_keys_doc": "action -> the keys that perform it. A name beginning KEY_ is resolved against the curses module at load; anything else is the literal character get_wch returns, which is how control characters arrive (\\u0001 is ^A). A name curses does not define is SKIPPED rather than raised — a terminal that lacks KEY_DC must not stop the client from starting.",
+ "keys": {
+  "left": [
+   "KEY_LEFT",
+   "\u0002"
+  ],
+  "right": [
+   "KEY_RIGHT",
+   "\u0006"
+  ],
+  "up": [
+   "KEY_UP"
+  ],
+  "down": [
+   "KEY_DOWN"
+  ],
+  "home": [
+   "KEY_HOME",
+   "\u0001"
+  ],
+  "end": [
+   "KEY_END",
+   "\u0005"
+  ],
+  "delete": [
+   "KEY_DC",
+   "\u0004"
+  ],
+  "backspace": [
+   "KEY_BACKSPACE",
+   "",
+   "\b"
+  ],
+  "kill_to_end": [
+   "\u000b"
+  ],
+  "kill_line": [
+   "\u0015"
+  ],
+  "kill_word": [
+   "\u0017"
+  ],
+  "newline": [
+   "\u000f"
+  ]
+ },
+ "_newline_doc": "^O, NOT Alt+Enter. In curses Ctrl-J IS \\n and Enter arrives as \\n, \\r or KEY_ENTER depending on the terminal, so 'Enter sends, Alt+Enter breaks the line' cannot be told apart reliably — and a binding that works on the author's terminal and not the operator's is worse than an unfamiliar one. ^O is unambiguous everywhere.",
+ "_rows_doc": "How tall the input strip may grow before it scrolls internally. The scrollback gives up a row for every row the input takes, so this is the trade between seeing what you are writing and seeing what was said.",
+ "input_max_rows": 8,
+ "_history_doc": "How many sent messages Up/Down can walk back through. Recall fires only when the cursor is already on the first row, so it never fights with moving inside a multi-line request.",
+ "history_size": 100,
+ "hint_line": "  ←→ move   ^A/^E ends   ^W word   ^O newline   ↑↓ recall   ⏎ send"
+}

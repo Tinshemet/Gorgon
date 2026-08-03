@@ -16,6 +16,8 @@ from client.ui.chat_client.colors import (
 )
 from client.ui.chat_client.conn import SERVER_URL, _auth_store, _auth_sessions
 from client.ui.chat_client.dispatch import dispatch as _dispatch
+from client.ui.chat_client.editor import Buffer as _Buffer, History as _History
+from client.ui.chat_client.editor import keys as _keys
 from client.ui.chat_client.history import add as _add
 from client.ui.chat_client.net import (
     execute as _execute, http_worker as _http_worker, is_localhost as _is_localhost,
@@ -83,7 +85,8 @@ def _run(stdscr: "curses.window", verbose: bool = False, color_hex: str = None, 
     _add('  Type a message or ask the AI anything. Type "help" for shortcuts.', _cp(C_DIM))
     _add("", 0)
 
-    input_buf = ""
+    input_buf = _Buffer()
+    recall = _History()
 
     while not state.quit_event.is_set():
         # Drain HTTP response queue
@@ -99,6 +102,7 @@ def _run(stdscr: "curses.window", verbose: bool = False, color_hex: str = None, 
 
         _draw(stdscr, input_buf if not state.waiting else "")
 
+
         if state.waiting:
             time.sleep(0.05)
             continue
@@ -113,8 +117,11 @@ def _run(stdscr: "curses.window", verbose: bool = False, color_hex: str = None, 
             break
 
         if ch in ("\n", "\r", curses.KEY_ENTER):
-            cmd = input_buf.strip()
-            input_buf = ""
+            # ENTER SENDS, AND THAT IS THIS LOOP'S RULING, NOT THE BUFFER'S. `^O` breaks the
+            # line; the file editor will make the opposite choice over the same Buffer.
+            cmd = input_buf.text.strip()
+            recall.remember(cmd)
+            input_buf = _Buffer()
             if not cmd and not state.allow_empty:      # empty Enter is a real answer when a wizard field allows blank
                 continue
 
@@ -166,11 +173,26 @@ def _run(stdscr: "curses.window", verbose: bool = False, color_hex: str = None, 
                 daemon=True,
             ).start()
 
-        elif ch in (curses.KEY_BACKSPACE, "\x7f", 8):
-            input_buf = input_buf[:-1]
-
-        elif isinstance(ch, str) and ch.isprintable():
-            input_buf += ch
+        else:
+            # UP AND DOWN MEAN TWO THINGS, and which one is decided by the buffer rather
+            # than by a mode: inside a multi-line request they move the caret, and at its
+            # edge they walk the history. `Buffer.up()` returning False IS that edge — the
+            # motion reports that it could not move and this reads the report.
+            action = _keys.action_for(ch)
+            if action == "up" and not input_buf.up():
+                was = recall.back(input_buf.text)
+                if was is not None:
+                    input_buf.set(was)
+            elif action == "down" and not input_buf.down():
+                was = recall.forward()
+                if was is not None:
+                    input_buf.set(was)
+            elif action == "newline":
+                input_buf.newline()
+            elif action:
+                _keys.apply(input_buf, ch)
+            elif _keys.printable(ch):
+                input_buf.insert(ch)
 
 
 def chat_loop(verbose: bool = False, color_hex: str = None, font_size: int = None) -> None:
