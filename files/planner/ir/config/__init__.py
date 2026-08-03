@@ -47,6 +47,7 @@ def _c(key: str):
 
 LANGUAGE   = _c("language")        # name, version, file extension
 SIGIL      = _c("sigil")           # marks a reference to a bound name
+REQUEST_EVIDENCE = _c("request_evidence")  # shape -> words the REQUEST must contain
 STAND_IN_PREFIX = _c("stand_in_prefix")  # authoring: what a declared `$p` becomes for the
                                    # extractor, and is restored from (planner/stand_in.py)
 LOOP_VAR   = _c("loop_var")        # the member inside a foreach

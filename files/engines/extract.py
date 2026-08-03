@@ -107,15 +107,19 @@ def schema(kinds=None, request: str = "") -> Dict[str, Any]:
             "except": {**_WHERE,
                        "description": "members to EXCLUDE — 'every vm except db' puts db here"},
         },
-        "required": ["kind"],
+        # EVERY GOAL MUST SAY WHICH MEMBERS IT IS ABOUT, in the one shape that cannot be
+        # abused: a list of (attr, value) where `attr` is an ENUM — the closed type this
+        # model is measurably good at. EMPTY IS LEGAL and means "all of them", so requiring
+        # the FIELD is not requiring a filter; it is requiring that a filter was CONSIDERED.
+        #
+        # MEASURED TWICE. On `count` it is what stopped every qualifier falling into `name`
+        # (see that branch). On `per` it is what recovers a filter that was being dropped in
+        # silence — "take a snapshot of every RUNNING vm" came back as `per vm make=snapshot`
+        # over ALL of them, so the stopped machine was snapshotted too and the run reported
+        # success. With the field required: `per vm[status=running] make=snapshot`.
+        "required": ["kind", "where"],
         "additionalProperties": False,
     }
-
-    # A COUNT MUST SAY WHICH MEMBERS IT IS COUNTING, in the one shape that cannot be abused:
-    # a list of (attr, value) where `attr` is an ENUM. Empty is legal and means "all of
-    # them" — requiring the FIELD is not requiring a filter, it is requiring the model to
-    # have considered one. See the count branch below for the measurement.
-    _COUNT_SELECT = {**_SELECT, "required": ["kind", "where"]}
 
     out = {
         "type": "object",
@@ -176,7 +180,7 @@ def schema(kinds=None, request: str = "") -> Dict[str, Any]:
                             "properties": {
                                 "goal": {"type": "string", "enum": ["count"],
                                          "description": "how many members must match"},
-                                "select": _COUNT_SELECT,
+                                "select": _SELECT,
                                 "amount": {"type": "integer",
                                            "description": ("HOW MANY there must be. Zero "
                                                            "means none may remain")},
@@ -392,7 +396,7 @@ def select_attrs(sc: Dict[str, Any] = None) -> List[str]:
     return list(b["properties"]["select"]["properties"]["where"]["items"]
                 ["properties"]["attr"]["enum"])
 
-def _relevant(spec: Dict[str, Any], request: str) -> bool:
+def _relevant(spec: Dict[str, Any], request: str, kind: str = None) -> bool:
     """Could this request be about this kind at all? A word match on the kind's own nouns.
 
     BLINDERS, AND THEY ARE NOT AN OPTIMISATION HERE — they are what makes the example safe to
@@ -411,9 +415,25 @@ def _relevant(spec: Dict[str, Any], request: str) -> bool:
     gets no example and will fail the way it failed before. Widening the match would put the
     example back in front of requests that measurably do worse for seeing it.
     """
-    words = {w.strip(".,!?;:'\"").lower() for w in str(request or "").split()}
+    said = str(request or "").lower()
+    words = {w.strip(".,!?;:'\"") for w in said.split()}
     nouns = {str(n).lower() for n in (spec.get("nouns") or ())}
-    return bool(nouns & words) or bool({n + "s" for n in nouns} & words)
+    # THE KIND'S OWN NAME COUNTS. `nouns` is the list of OTHER words for a thing — snapshot
+    # declares `restore point` and `checkpoint` and not `snapshot` — so asking only that list
+    # answered NO to "take a SNAPSHOT of every running vm", which is the plainest possible
+    # way to mention one.
+    if kind:
+        nouns.add(str(kind).lower())
+    # A NOUN MAY BE TWO WORDS, and `restore point` could never match a set of single ones.
+    # Matched as a substring where it contains a space, and as a whole word otherwise, so
+    # `net` still does not fire on `network`.
+    for n in nouns:
+        if " " in n:
+            if n in said:
+                return True
+        elif n in words or (n + "s") in words:
+            return True
+    return False
 
 
 def prompt(kinds=None, request: str = "") -> str:
@@ -469,7 +489,7 @@ def prompt(kinds=None, request: str = "") -> str:
     for kind, spec in (config.KINDS or {}).items():
         ex = (spec or {}).get("example") or {}
         req, goal = str(ex.get("request") or "").strip(), str(ex.get("goal") or "").strip()
-        if req and goal and _relevant(spec, request):
+        if req and goal and _relevant(spec, request, kind):
             shown.append(f'  "{req}"\n     -> {goal}')
     if shown:
         # PLACED AFTER THE TABLE, where a reader looks for more of the same. The five shapes
@@ -705,8 +725,25 @@ def _enumerated(kind: str) -> set:
     return out
 
 
-_REACH_WORDS = {"ping", "reach", "reachable", "connect", "connected", "communicate",
-                "talk", "see", "mesh", "each"}
+# THE EVIDENCE A SHAPE NEEDS, read from the language manifest rather than written here —
+# `config.REQUEST_EVIDENCE`. It is a vocabulary, which is the one thing this module keeps
+# deleting, so it lives as DATA beside every other list the language holds and not as a
+# literal somebody has to find.
+
+
+def _mentions(kind: str, request: str) -> bool:
+    """Does the REQUEST contain any of the words that make `kind` believable?
+
+    Whole words for single tokens, so `see` does not fire inside `seed`; substrings for the
+    multi-word ones, because `apart from` cannot match a set of single words.
+    """
+    said = str(request or "").lower()
+    words = {w.strip(".,!?;:'\"") for w in said.split()}
+    for w in (config.REQUEST_EVIDENCE.get(kind) or ()):
+        w = str(w).lower()
+        if (w in said) if " " in w else (w in words):
+            return True
+    return False
 
 
 def asks_reach(request: str) -> bool:
@@ -718,16 +755,7 @@ def asks_reach(request: str) -> bool:
     meant. Two readers, one rule; the alternative is a grammar that permits what the reader
     is guaranteed to throw away.
     """
-    return bool(_REACH_WORDS & {w.strip(".,!?;:'\"").lower()
-                                for w in str(request or "").split()})
-
-# A REQUEST THAT CARVES SOMETHING OUT, read as SUBSTRINGS because "apart from" is two words
-# and "except" appears as "except db" with no space either side of the clause. Same rule as
-# `_REACH_WORDS`: the evidence is in the request, so it is checked there — and it is checked
-# there because the GOALS cannot hold it. The schema offers `except` on every branch and the
-# model has never once emitted it, so the exception survives only in the sentence.
-_EXCEPT_WORDS = ("except", "apart from", "other than", "aside from", "but not",
-                 "excluding", "leaving out")
+    return _mentions("reach", request)
 
 
 def declined(raw: Dict[str, Any]) -> Optional[str]:
@@ -1049,14 +1077,14 @@ def to_goals(raw: Dict[str, Any], request: str = "",
         # property that escaped one, which is right for "a machine called box1 running
         # linux" and inverted for a carve-out.
         #
-        # THE EVIDENCE IS IN THE REQUEST, so it is read there — the same move `_REACH_WORDS`
+        # THE EVIDENCE IS IN THE REQUEST, so it is read there — the same move `asks_reach`
         # makes, and for the same reason: the goals cannot express the exception (the model
         # has never once emitted the `except` the schema offers), so the only place the
         # exception still exists is the sentence. Declining to fold is not a repair; it
         # leaves the request UNMET, which is the honest outcome for something no goal shape
         # currently says.
         low = str(request or "").lower()
-        if any(w in low for w in _EXCEPT_WORDS):
+        if _mentions("except", request):
             return goals
 
         named = [g for g in goals
@@ -1274,6 +1302,23 @@ def to_goals(raw: Dict[str, Any], request: str = "",
             else:
                 _keep({"every": sel, "must": {attr: _coerce(g["value"])}})
         elif shape == "per" and g.get("make"):
+            # A KIND THE REQUEST NEVER MENTIONS IS NOT BEING ASKED FOR. Same rule as
+            # `reach`, same reason, and the evidence is in the same place — measured on
+            # rung 11's paraphrase:
+            #
+            #   "check which machines respond and shut down whichever ones don't"
+            #     -> per vm make=snapshot
+            #
+            # The request names no snapshot, no restore point and no checkpoint; the model
+            # reached for `per` because "shut down whichever ones don't" has no shape, and
+            # the run then MADE SNAPSHOTS and reported success. `_relevant` already answers
+            # "could this request be about this kind" from the manifest's own nouns, so it
+            # is asked rather than restated — which is what keeps rung 12 ("make a RESTORE
+            # POINT for each machine") working, because that request does name one.
+            if request and not _relevant((config.KINDS or {}).get(g["make"]) or {},
+                                         request, g["make"]):
+                _lost(f"it makes a {g['make']}, which the request never mentions", g)
+                continue
             # DERIVED, NEVER TAKEN ON TRUST. The model's `link` was accepted whenever it
             # supplied one, and it supplies nonsense: "launch every vm that is currently
             # stopped" came back as `per vm make=vm link=status` — one machine created per

@@ -53,7 +53,12 @@ RAW = {
     "per":     {"goal": "per", "select": {"kind": "vm"}, "make": "snapshot", "link": "vm"},
     "observe": {"goal": "observe", "select": {"kind": "vm"}, "fact": "alive"},
 }
-_ASKING = "make sure the machines can reach each other and are up"
+# THE REQUEST MUST JUSTIFY EVERY FIXTURE BELOW, because `to_goals` now refuses a goal the
+# request gives no evidence for — a `reach` nobody asked about, and a `per` that MAKES a kind
+# the request never mentions. Both guards read the sentence, so a fixture set exercised
+# against a sentence that does not cover it is testing the guard, not the shape.
+_ASKING = ("make sure the machines can reach each other and are up, and take a snapshot "
+           "of each")
 
 
 def _world():

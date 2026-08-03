@@ -368,6 +368,21 @@ def _ground(goal, select):
     if "every" not in goal:
         return goal
     sel = dict(goal["every"])
+    # A GOAL THAT SETS WHAT IT SELECTS ON EMPTIES ITS OWN SET, and the witness below cannot
+    # say that. "launch every vm that is currently STOPPED" is
+    # `every vm[status=stopped] must status=running`: `{**sel, **must}` COLLAPSES the two —
+    # one `status` key, and the target wins — so the witness reads "count the RUNNING ones",
+    # while `eq` re-resolves `select(sel)` AFTER the plan has run, when nothing is stopped.
+    # Measured: `count is 3, wanted == 0`, on a plan that had correctly launched both
+    # machines. Rung 5 passed for as long as the model left the select UNFILTERED and broke
+    # the day it started filtering correctly.
+    #
+    # WHEN THE SET IS SELF-EMPTYING THE WITNESS IS THAT IT IS EMPTY. Nothing may still match
+    # the thing the goal set out to fix, which is true exactly when every member was moved,
+    # needs no count of a set that no longer exists, and is the same statement the operator
+    # made: no vm is left stopped.
+    if any(sel.get(a) not in (None, v) for a, v in goal["must"].items()):
+        return {"shape": "count", "select": sel, "eq": 0}
     return {"shape": "count", "select": {**sel, **goal["must"]},
             "eq": len(select(sel))}
 
