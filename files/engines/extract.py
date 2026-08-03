@@ -111,6 +111,12 @@ def schema(kinds=None) -> Dict[str, Any]:
         "additionalProperties": False,
     }
 
+    # A COUNT MUST SAY WHICH MEMBERS IT IS COUNTING, in the one shape that cannot be abused:
+    # a list of (attr, value) where `attr` is an ENUM. Empty is legal and means "all of
+    # them" — requiring the FIELD is not requiring a filter, it is requiring the model to
+    # have considered one. See the count branch below for the measurement.
+    _COUNT_SELECT = {**_SELECT, "required": ["kind", "where"]}
+
     return {
         "type": "object",
         "properties": {
@@ -170,50 +176,51 @@ def schema(kinds=None) -> Dict[str, Any]:
                             "properties": {
                                 "goal": {"type": "string", "enum": ["count"],
                                          "description": "how many members must match"},
-                                "select": _SELECT,
+                                "select": _COUNT_SELECT,
                                 "amount": {"type": "integer",
                                            "description": ("HOW MANY there must be. Zero "
                                                            "means none may remain")},
-                                # NULL IS A LEGAL ANSWER, AND IT HAD TO BECOME ONE. This was
-                                # `{"type": "string"}` and REQUIRED, so a count goal could
-                                # not be written without naming a member — and most requests
-                                # name none. The model must answer, the only free string in
-                                # the branch is this one, and whatever qualifier is nearby
-                                # goes in it:
+                                "name": {"type": "string",
+                                         "description": (
+                                             "the NAME of the member, when the operator gave "
+                                             "one — 'a vm called box1' puts box1 here. A "
+                                             "LABEL, A GROUP OR A DESCRIPTION IS NOT A NAME: "
+                                             "those belong in select.where. Empty string when "
+                                             "no member is named")},
+                                # `where` IS REQUIRED BESIDE THIS ONE, and the pair is the
+                                # whole fix. `name` alone was REQUIRED and `where` optional,
+                                # so this was the only free string in the branch and every
+                                # qualifier fell into it:
                                 #
                                 #   "exactly 3 vms carry the 'prod' label"  -> name=prod
                                 #   "3 vms labelled 'red'"                  -> name=red
-                                #   "clone golden into 3 new vms"           -> name=golden
+                                #   "spin up five machines…"                -> name=reach
                                 #
                                 # A NAME IS AN IDENTITY, so `count(vm WHERE name=prod) = 3`
-                                # asks for three members sharing one identity — a world that
-                                # cannot exist. The writer then honestly reports that nothing
-                                # reaches it, which names the ENGINE for a mistake the schema
-                                # forced. Three rungs fail this way and it is the single
-                                # commonest translation failure measured.
+                                # asks for three members sharing one — a world that cannot
+                                # exist — and the writer honestly refuses the WHOLE request.
+                                # It was the commonest translation failure measured.
                                 #
-                                # THE GUARD THAT WAS SUPPOSED TO MAKE REQUIRING IT SAFE
-                                # CANNOT: `_keep`/`unusable` strips a name only on whitespace
-                                # or a word from a small list, and `red`, `prod` and `golden`
-                                # are none of those. A plausible token is exactly what it
-                                # cannot catch.
+                                # REMOVING IT WAS TRIED AND IS WORSE: with nowhere to put an
+                                # identity the model left `where` EMPTY and the names went
+                                # with it — "create a network called lab and a vm named web"
+                                # came back as two unfiltered counts, and the writer minted
+                                # `network1` and `vm1`. That is the exact failure this field
+                                # was added for, and rung 3 — a CONTROL rung — went OK to
+                                # UNMET on it.
                                 #
-                                # MAKING null LEGAL IN THE TYPE WAS TRIED AND CHANGED
-                                # NOTHING — the model filled `name` with the label anyway,
-                                # 3 requests out of 3. It does not want a way out; it is
-                                # answering the question it was asked.
+                                # SO BOTH ARE REQUIRED. Given a home for the qualifier the
+                                # model USES it — `attr` is an enum, which this model is
+                                # measurably good at — and what lands here instead is PROSE
+                                # ("prod label on exactly 3 vms", "exactly two vms"), which
+                                # `unusable` already strips on whitespace. What survives as a
+                                # single junk word is a value the answer used as a property
+                                # elsewhere, which `_not_an_identity` already strips on the
+                                # model's own evidence. Every guard needed was already built.
                                 #
-                                # THE ANSWER IS DOWNSTREAM, IN `_not_an_identity`, and the
-                                # evidence is the model's OWN reply: it emits the label goal
-                                # too. Told to name a member it repeats the qualifier, so
-                                # the same answer states the fact twice, once correctly.
-                                "name": {"type": "string",
-                                         "description": ("the NAME of the member, when the "
-                                                         "operator gave one — 'a vm called "
-                                                         "box1' puts box1 here. USE null WHEN "
-                                                         "NO MEMBER IS NAMED: a label, a "
-                                                         "group or a description is NOT a "
-                                                         "name, and belongs in select.where")},
+                                # MEASURED: rungs 6 and 7 translate correctly for the first
+                                # time — count vm[label=red] = 3 beside count vm[label=blue]
+                                # = 2 — while rungs 1 and 3 keep their names.
                             },
                             # `amount` IS REQUIRED, and it is the last slot the model was
                             # skipping. Offered as optional it went unfilled on every counted
