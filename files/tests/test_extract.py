@@ -392,30 +392,35 @@ def test_a_value_the_answer_calls_a_property_is_not_also_a_name():
           any(g.get("select", {}).get("name") == "golden" for g in alone))
 
 
-def test_a_count_above_one_cannot_pin_an_identity():
-    """MANY MEMBERS CANNOT SHARE ONE NAME, and that is arithmetic rather than vocabulary.
+def test_a_word_the_model_was_shown_is_not_a_name():
+    """A GOAL SHAPE HANDED BACK AS AN IDENTITY. `reach` is an enum value the model is shown,
+    and it returns it the same way it returns a field name — `_echoed` named the field names
+    and the kind nouns and not the shapes, so "spin up five machines… confirm each can reach
+    the others" built a machine called `reach`.
 
-    `name` is required on a count goal, so when a request names nobody the model lifts a
-    word out of the sentence. `unusable` knows quantifiers and kind nouns; these were all
-    MEASURED reaching the writer as machine names because they are neither:
+    AND THE RULE THAT WAS WITHDRAWN, recorded so it is not re-derived. "A count above one
+    cannot pin an identity, so strip the name and keep the count" is ARITHMETICALLY SOUND —
+    the key is the identity — and measured 6 -> 12 DONE_BUT_FALSE on the literal arm:
 
-        "spin up five machines…"        -> NAME=reach   (the schema's own word)
-        "cut the lab down to two"       -> NAME=lab
-        "clone golden into 3 new vms"   -> NAME=golden
+        "make sure exactly 3 vms carry the 'prod' label"
+          name=prod stripped  ->  count(vm) = 3     satisfiable, and NOT the request
 
-    THE NAME IS STRIPPED AND THE COUNT IS KEPT — `_keep`'s own rule for an unusable name.
-    Refusing the component instead was tried the same day and cost rungs 4, 13 and 14: the
-    stray name sits beside a count that is perfectly good, and the rest of the request needs
-    it.
+    The impossible goal was refused by the writer and reported UNMET, which is honest.
+    Stripped, it can be MET — three machines, no label — so the run builds them and closes
+    DONE over a world the checker disagrees with. Stripping is only safe when what remains
+    is still the whole truth, and there the name carried the only copy of `prod`.
     """
-    print("[repair] a count above one cannot pin an identity")
-    for word, n in (("reach", 5), ("lab", 2), ("golden", 4)):
-        got = to_goals({"goals": [
-            {"goal": "count", "select": {"kind": "vm"}, "amount": n, "name": word}]}, "")
-        counts = [g for g in got if g.get("shape") == "count"]
-        check(f"{word!r} does not become the name of {n} machines",
-              counts and "name" not in counts[0]["select"])
-        check(f"and the count of {n} survives", counts and counts[0]["eq"] == n)
+    print("[repair] a word the model was shown is not a name")
+    got = to_goals({"goals": [
+        {"goal": "count", "select": {"kind": "vm"}, "amount": 5, "name": "reach"}]}, "")
+    check("a goal shape handed back as a name is stripped",
+          got and "name" not in got[0]["select"])
+    check("and the count survives it", got and got[0]["eq"] == 5)
+
+    kept = to_goals({"goals": [
+        {"goal": "count", "select": {"kind": "vm"}, "amount": 3, "name": "prod"}]}, "")
+    check("an UNEXPLAINED name is KEPT, so the goal fails honestly rather than falsely",
+          kept and kept[0]["select"].get("name") == "prod")
 
     one = to_goals({"goals": [
         {"goal": "count", "select": {"kind": "vm"}, "amount": 1, "name": "box1"}]}, "")

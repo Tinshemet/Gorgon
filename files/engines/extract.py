@@ -735,6 +735,12 @@ def _echoed() -> set:
     """
     out = {"name", "value", "amount", "attr", "fact", "link", "make", "goal",
            "select", "where", "kind", "count"}
+    # THE GOAL SHAPES TOO — they are an ENUM the model is shown, and it hands them back the
+    # same way it hands back a field name. Measured: "spin up five machines, wire them
+    # together… confirm each can reach the others" came back as `name: "reach"`, and a
+    # machine called `reach` is exactly the echo this function exists to name. `count` was
+    # already here by luck, as a field name; the rest were not.
+    out |= {str(s).lower() for s in goal_shapes()}
     for kind, spec in (config.KINDS or {}).items():
         out.add(kind)
         for n in (spec.get("nouns") or ()):
@@ -1118,8 +1124,23 @@ def to_goals(raw: Dict[str, Any], request: str = "",
             #
             # and none of them is a quantifier or a noun. What they share is arithmetic: a
             # count of five machines all called `reach` is not a world, whatever the word is.
-            if named is not None and eq is not None and eq > 1:
-                named = None
+            # WITHDRAWN AFTER MEASUREMENT — the rule was "a count above one cannot pin an
+            # identity, so strip the name and keep the count", and the arithmetic is sound.
+            # It still made things WORSE, 6 -> 12 DONE_BUT_FALSE on the literal arm:
+            #
+            #   "make sure exactly 3 vms carry the 'prod' label"
+            #     name=prod stripped  ->  count(vm) = 3   <- satisfiable, and NOT the request
+            #
+            # The impossible goal was refused by the writer and reported UNMET, which is
+            # honest. Stripped, it becomes a goal that CAN be met — three machines, no label
+            # — so the run builds them and closes DONE over a world the checker disagrees
+            # with. STRIPPING IS ONLY SAFE WHEN WHAT REMAINS IS STILL THE WHOLE TRUTH, and
+            # here the name was the only thing carrying `prod`.
+            #
+            # SO IT IS LEFT TO THE TWO RULES THAT HAVE EVIDENCE: `_not_an_identity`, which
+            # fires when the answer ITSELF calls the value a property, and `_echoed`, which
+            # names a word the model was shown. Where neither applies, the name stands and
+            # the goal fails honestly.
             if named is not None and str(named).strip():
                 spec = (config.KINDS or {}).get(sel.get("kind")) or {}
                 key = spec.get("key")
