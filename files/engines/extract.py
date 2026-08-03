@@ -1386,11 +1386,11 @@ def to_goals(raw: Dict[str, Any], request: str = "",
         if g not in seen:
             seen.append(g)
             unique.append(g)
-    out = _partitioned(_scoped(unique))
+    out = _partitioned(_scoped(unique), request)
     return _subject_survived(_one_statement_not_two(out), request)
 
 
-def _partitioned(goals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _partitioned(goals: List[Dict[str, Any]], request: str = "") -> List[Dict[str, Any]]:
     """Two counts over one kind, one attribute, DIFFERENT values — they name different members.
 
     THE WRITER ALREADY KNOWS HOW TO HONOUR THIS and was never told. `_lower`'s candidate
@@ -1428,6 +1428,42 @@ def _partitioned(goals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     def _one_filter(sel):
         got = {k: v for k, v in sel.items() if k not in ("kind", "not")}
         return next(iter(got.items())) if len(got) == 1 else (None, None)
+
+    # AN UNFILTERED `every` BESIDE A MEMBER-SPECIFIC ONE, ON THE SAME ATTRIBUTE, WITH THE
+    # REQUEST SAYING "EXCEPT". Rung 8 is the case and it needs all three signals:
+    #
+    #   "put every vm on a network called core, EXCEPT db — db goes on dmz instead"
+    #     -> every vm         must network=core     <- includes db
+    #        every vm[name=db] must network=dmz
+    #
+    # Both are kept, so db is put on core AND dmz and the run closes DONE. Neither goal is
+    # wrong on its own; what is missing is that the first does not mean db.
+    #
+    # THE THIRD SIGNAL IS WHY THIS IS NOT A GUESS. `network` is multi-valued — a machine may
+    # legitimately sit on two — so a collision alone proves nothing. The word `except` in the
+    # REQUEST is what says the operator meant one and not both, and it is read from
+    # `request_evidence` like every other piece of sentence evidence.
+    for g in goals:
+        want = g.get("every")
+        if not isinstance(want, dict) or not g.get("must") or want.get("not"):
+            continue
+        kind = want.get("kind")
+        key = ((config.KINDS or {}).get(kind) or {}).get("key")
+        if not key or len(want) != 1 or not _mentions("except", request):
+            continue
+        for other in goals:
+            o_sel, o_must = other.get("every"), other.get("must")
+            if other is g and True:
+                continue
+            if not isinstance(o_sel, dict) or not o_must or o_sel.get("kind") != kind:
+                continue
+            named = o_sel.get(key)
+            if not named:
+                continue
+            clash = [a for a, v in o_must.items() if a in g["must"] and g["must"][a] != v]
+            if clash:
+                g["every"] = {**want, "not": {key: named}}
+                break
 
     for a in counts:
         if a["select"].get("not"):
