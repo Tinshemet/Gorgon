@@ -210,8 +210,13 @@ def methods(kind: str, kinds=None) -> Dict[str, Method]:
 
     for fact, o in (spec.get("observed") or {}).items():
         if o.get("by"):
+            # THE MANIFEST'S OWN WORDS WHEN IT HAS ANY. `vm.alive` is documented where it is
+            # declared — *"whether the machine answers its guest agent"* — and generating a
+            # sentence beside it would be a second description of one row, in worse English
+            # than the row already has ("ask this vm for its alive").
             out[fact] = Method(kind, fact, ASK, o["by"], receiver_arg=key, attr=fact,
-                               doc=f"ask this {kind} for its {fact}")
+                               doc=(str(o.get("doc") or "").split(".")[0].strip()
+                                    or f"ask this {kind} for its {fact}"))
     return out
 
 

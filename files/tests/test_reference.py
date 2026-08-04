@@ -77,6 +77,28 @@ def test_the_reference_names_every_op_and_check():
               f"`{spec.get('sql', name.upper())}`" in text)
 
 
+def test_every_method_a_kind_has_is_in_the_guide():
+    """THE SURFACE EXISTED FOR TWO DAYS AND APPEARED IN NO DOCUMENT ANYONE READS.
+
+    `$box.launch()` parsed since 2026-08-02, and the generated reference — the only
+    description of the language a person or a model ever sees — never mentioned it. That is
+    the same defect the op table exists to prevent, one layer up: a capability nobody can
+    discover is a capability nobody has.
+
+    THE CONSTRUCTOR IS THE ONE THING DELIBERATELY ABSENT, because `$box.create()` is not a
+    form the parser accepts and documenting a line that does not parse is worse than
+    documenting nothing.
+    """
+    print("[reference] every method a kind has is written down")
+    from planner.ir import classes
+    text = render_reference()
+    for kind, methods in classes.surface().items():
+        for m in methods.values():
+            written = f"`${kind}.{m.name}(" in text
+            check(f"`${kind}.{m.name}()` is documented",
+                  written if m.verb != classes.MAKE else not written)
+
+
 def test_it_says_the_extension_the_store_actually_writes():
     """TWO ANSWERS TO "WHAT IS A MEDUSA FILE CALLED" IS HOW THIS WENT WRONG.
 

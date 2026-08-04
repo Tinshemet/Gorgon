@@ -80,6 +80,22 @@ _EXAMPLES: List[Dict[str, str]] = [
              "  }\n"
              "  ENSURE COUNT(SELECT vm WHERE status = 'running') = 0;\n"
              "}"},
+    {"title": "act on something the program is holding",
+     "why": "A name bound with `STORE` is an OBJECT, and what you can do to it is written "
+            "on its kind — see *Kinds, and what each one can do* below. The receiver says "
+            "WHICH thing, so a method cannot be asked about the wrong one; that is the "
+            "whole reason it exists. Where the program holds the thing, this is the only "
+            "form: `CALL launch_vm(name: $box)` is refused and tells you to write "
+            "`$box.launch()`. A name the program does NOT hold — one you typed, or a "
+            "parameter you were handed — has no receiver, so it stays an ordinary CALL.",
+     "code": "PROCEDURE lab_of_two() {\n"
+             "  STORE lab = NEW CALL create_network(net_name: lab);\n"
+             "  STORE box = NEW CALL create_vm(os_type: linux, name: web);\n"
+             "  $lab.add_vm($box);\n"
+             "  $box.label(prod);\n"
+             "  $box.launch();\n"
+             "  ENSURE COUNT(SELECT vm WHERE network = 'lab' AND status = 'running') = 1;\n"
+             "}"},
     {"title": "a routine — a procedure the clock calls",
      "why": "A routine is not a second kind of thing. It is a procedure carrying EVERY in "
             "its header, which is the one fact no statement in the body could state. WHEN "
@@ -147,6 +163,42 @@ def _types_section() -> List[str]:
     return out
 
 
+def _classes_section() -> List[str]:
+    """Every kind and what can be done to one. DERIVED, like the rest of this file.
+
+    IT COULD NOT BE TYPED HERE EVEN IF SOMEBODY WANTED TO. A method is read off the same
+    manifest row that names the tool, so a kind that grows a setter grows a method the same
+    day — and a hand-written list would be describing yesterday's surface with nothing to
+    say it was stale. Same argument as the ops table above, one layer up.
+
+    AND IT WAS REACHABLE BY NOBODY UNTIL THIS EXISTED. `$box.launch()` parsed since
+    2026-08-02 and appeared in no document a person or a model ever reads.
+    """
+    from . import classes
+    surface = classes.surface()
+    out = ["## Kinds, and what each one can do", "",
+           "A kind is a class: bind one with `STORE` and call its methods on it. The list "
+           "is derived from the tool manifest, so it is what the lab can actually do and "
+           "not a description of it.", ""]
+    for kind in sorted(surface):
+        # THE CONSTRUCTOR IS NOT A METHOD ON AN INSTANCE. `$box.create()` is not a form the
+        # parser accepts — a thing cannot be asked to make itself — so printing it here
+        # would document a line that does not parse. A kind with nothing BUT a constructor
+        # therefore has no table, and printing an empty one would say it can do nothing
+        # when what is true is that it can only be made.
+        rows = [m for m in sorted(surface[kind].values(), key=lambda x: x.name)
+                if m.verb != classes.MAKE]
+        if not rows:
+            continue
+        out += [f"**{kind}**", "", "| method | does |", "| --- | --- |"]
+        for m in rows:
+            # THE ARGUMENT IS NAMED, from the manifest row, because `(value)` tells a reader
+            # nothing they did not already know from the parentheses.
+            out.append(f"| `${kind}.{m.name}({m.value_arg or ''})` | {m.doc} |")
+        out.append("")
+    return out
+
+
 def _keywords_section() -> List[str]:
     plain = {k: v for k, v in config.SURFACE.items()
              if isinstance(v, str) and not k.startswith("_")}
@@ -191,7 +243,7 @@ def render_reference() -> str:
         "",
     ]
     return "\n".join(head + _examples_section() + _ops_section()
-                     + _predicates_section() + _types_section()
+                     + _predicates_section() + _classes_section() + _types_section()
                      + _keywords_section()).rstrip() + "\n"
 
 
