@@ -150,6 +150,18 @@ def methods(kind: str, kinds=None) -> Dict[str, Method]:
                                doc=f"remove this {kind}")
 
     for tool, s in (spec.get("setters") or {}).items():
+        # A SETTER WHOSE VALUE IS ANOTHER KIND'S KEY IS NOT THIS KIND'S METHOD. `refs` says
+        # the row describes a RELATION, and a relation has one receiver — the operator ruled
+        # on 2026-08-04 that it is the thing being joined, not the thing joining:
+        # `$lab.add_vm($web)`, never `$web.network($lab)`.
+        #
+        # WHY THAT END. The scope error a class exists to prevent is "which network?", and
+        # a method cannot be asked about the wrong scope because the scope IS the receiver.
+        # It also settles a question that has no other answer: ONE tool call has ONE
+        # rendering, so if both ends offered a method the renderer would have to pick, and
+        # the form it did not pick would be a spelling you could type and never save.
+        if s.get("refs"):
+            continue
         # THE VERB WHEN THERE IS ONE, THE ATTRIBUTE WHEN THERE IS NOT. `stop_vm` and
         # `launch_vm` both write `status`, so naming both `status` would collide — the tool's
         # own verb is what distinguishes them, and it is already in its name.
@@ -165,10 +177,36 @@ def methods(kind: str, kinds=None) -> Dict[str, Method]:
                                 + (f" to {s['value']}" if "value" in s else "")))
 
     for tool, s in (spec.get("unsetters") or {}).items():
+        if s.get("refs"):
+            continue                  # the other end's, exactly as for a setter
         name = "un" + (s.get("attr") or tool)
         out[name] = Method(kind, name, UNSET, tool, receiver_arg=s.get("member_arg"),
                            value_arg=s.get("value_arg"), attr=s.get("attr"),
                            doc=f"take this {kind}'s {s.get('attr')} away")
+
+    # THE OTHER END OF EVERY RELATION THAT POINTS HERE. Derived, like everything else: a row
+    # elsewhere saying `refs: network` IS the statement that a network can be joined, so the
+    # method falls out of it and there is nothing new to declare. `add_vm` / `remove_vm` —
+    # named for what is being joined, because the receiver already says what it joins.
+    #
+    # THE ARGUMENTS SWAP AND THAT IS THE WHOLE INVERSION. `add_vm_to_network` names the
+    # member with `vm_name` and the network with `net_name`; called on the network, the
+    # receiver is `net_name` and the value is `vm_name`. Both spellings come from the same
+    # row, so neither end can drift from the tool.
+    for other, ospec in (effects._K(kinds) or {}).items():
+        if other == kind:
+            continue
+        for verb, rows in ((SET, ospec.get("setters")), (UNSET, ospec.get("unsetters"))):
+            for tool, s in (rows or {}).items():
+                if s.get("refs") != kind or not s.get("value_arg"):
+                    continue
+                name = f"{'add' if verb == SET else 'remove'}_{other}"
+                out[name] = Method(kind, name, verb, tool,
+                                   receiver_arg=s["value_arg"],
+                                   value_arg=s.get("member_arg"),
+                                   attr=s.get("attr"),
+                                   doc=(f"{'add a' if verb == SET else 'take a'} {other} "
+                                        f"{'to' if verb == SET else 'out of'} this {kind}"))
 
     for fact, o in (spec.get("observed") or {}).items():
         if o.get("by"):
@@ -201,6 +239,45 @@ def public(kind: str, kinds=None) -> str:
         return ""
     return f"{kind}:\n" + "\n".join(f"  .{m.name}() — {m.doc}"
                                     for m in sorted(got.values(), key=lambda x: x.name))
+
+
+# ── the one question the parser and the renderer both ask ──────────────────────────────
+def receiver(tool: str, args: Dict[str, Any], binds: Dict[str, str],
+             kinds=None) -> Optional[tuple]:
+    """`(var, method, value)` when this call IS a method on a bound receiver. Else None.
+
+    ONE AUTHORITY, TWO READERS, and they must agree or the language is not writable. The
+    RENDERER prints `$box.launch()` wherever this answers, and the PARSER refuses the long
+    form wherever this answers — so what Gorgon prints is exactly what Gorgon accepts, by
+    construction rather than by two functions kept in step. Written once here for the same
+    reason `asks_reach` is written once: the day they disagree, a saved program stops
+    reading back as itself and the failure surfaces three layers away.
+
+    THE ARGUMENTS MUST MATCH EXACTLY, and that is the safety property. `launch_vm(name:
+    $box, display: none)` is NOT `$box.launch()` — the method form would silently drop
+    `display`, so it stays a long call. Asking the method to REBUILD the call and comparing
+    is what makes the resugaring lossless: a form that would lose an argument never appears.
+
+    A CONSTRUCTOR IS NOT A METHOD ON AN INSTANCE. `NEW CALL create_vm(...)` is how a thing
+    comes into being — the operator's own instruction, unchanged — and `$box.create()` would
+    be asking a machine to make itself.
+    """
+    if not isinstance(args, dict):
+        return None
+    for kind, ms in surface(kinds).items():
+        for m in ms.values():
+            if m.tool != tool or m.verb == MAKE or not m.receiver_arg:
+                continue
+            raw = args.get(m.receiver_arg)
+            if not isinstance(raw, str) or not raw.startswith(config.SIGIL):
+                continue
+            var = raw[len(config.SIGIL):]
+            if binds.get(var) != kind:
+                continue
+            value = args.get(m.value_arg) if m.value_arg else None
+            if m.call(raw, value) == (tool, args):
+                return var, m.name, value
+    return None
 
 
 # ── reach, split by receiver — the whole of #38 ────────────────────────────────────────

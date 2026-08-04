@@ -425,13 +425,16 @@
     "remove_vm_from_network": {
      "attr": "network",
      "member_arg": "vm_name",
-     "value_arg": "net_name"
+     "value_arg": "net_name",
+     "refs": "network"
     }
    }
   },
   "network": {
    "package": "core",
    "create": "create_network",
+   "delete": "delete_network",
+   "_why_delete": "THE TOOL WAS ALWAYS THERE AND THE LANGUAGE COULD NOT NAME IT. `delete_network` is in the executor, in the registry and on the CLI; the manifest row simply never declared it, so a network was the one kind Medusa could make and not unmake, and roadmap #4 recorded it as a MISSING TOOL when it was a missing ROW. [[gorgon-built-and-never-called]], in its cheapest form.",
    "list": "list_networks",
    "key": "net_name",
    "attrs": [

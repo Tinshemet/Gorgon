@@ -40,8 +40,13 @@ def test_every_kind_is_a_class():
     check(f"every declared kind has a surface ({sorted(surface)})",
           set(surface) == set(config.KINDS or {}))
     check("a vm can be made, changed, asked and unmade",
-          {"create", "delete", "launch", "stop", "label", "network", "alive"}
-          <= set(surface["vm"]))
+          {"create", "delete", "launch", "stop", "label", "alive"} <= set(surface["vm"]))
+    # A NETWORK IS A CLASS WITH SOMETHING TO DO, which it was not until 2026-08-04: it had
+    # `create` and nothing else, so it was the one kind Medusa could make and never unmake
+    # or join. `delete_network` was a real tool the whole time and the manifest row simply
+    # never named it.
+    check("a network can be made, joined, left and unmade",
+          set(surface["network"]) == {"create", "delete", "add_vm", "remove_vm"})
     # A KIND WITH NO CREATOR STILL HAS A CLASS. `file` is made by an arbitrary command, and
     # what it CAN do — be asked whether it is there — is exactly its surface.
     check("a kind with no creator still has what it does have",
@@ -84,14 +89,64 @@ def test_a_method_is_the_call_the_writer_already_plans():
     check("a valued setter takes one",
           vm["label"].call("web", "prod") == ("add_label", {"name": "web",
                                                             "label": "prod"}))
-    # THE RECEIVER ARGUMENT IS THE MANIFEST'S, NOT A GUESS. `add_vm_to_network` names it
-    # `vm_name` where `add_label` names it `name`, and a class assuming one spelling would
-    # be a second authority for something already stated per setter.
-    check("and the receiver argument is whatever that setter calls it",
-          vm["network"].call("web", "lab") == ("add_vm_to_network",
-                                               {"vm_name": "web", "net_name": "lab"}))
+    # THE RECEIVER ARGUMENT IS THE MANIFEST'S, NOT A GUESS. `add_vm_to_network` names the
+    # machine `vm_name` where `add_label` names it `name`, and a class assuming one spelling
+    # would be a second authority for something already stated per setter.
+    net = C.methods("network")
+    check("and the receiver argument is whatever that row calls it",
+          net["add_vm"].call("lab", "web") == ("add_vm_to_network",
+                                               {"net_name": "lab", "vm_name": "web"}))
     check("an observation is a call too",
           vm["alive"].call("web") == ("guest_ping", {"name": "web"}))
+
+
+def test_a_relation_has_one_receiver_and_it_is_the_thing_joined():
+    """THE OPERATOR'S RULING, 2026-08-04: membership belongs to the network.
+
+    IT IS NOT A PREFERENCE, IT IS FORCED. One tool call has ONE rendering, so if both ends
+    offered a method the renderer would have to choose — and the end it did not choose would
+    be a spelling you could type and never save, which is the defect the whole ruling exists
+    to remove. `refs` is what says a row describes a relation, so which end owns it is READ
+    rather than decided, and the inversion is the same row with its two arguments swapped.
+    """
+    print("[classes] a relation belongs to the thing being joined")
+    surface = C.surface()
+    check("the network owns joining and leaving",
+          {"add_vm", "remove_vm"} <= set(surface["network"]))
+    check("and the machine does not offer the same call under another name",
+          "network" not in surface["vm"] and "unnetwork" not in surface["vm"])
+    net = C.methods("network")
+    check("joining and leaving are the manifest's own two tools",
+          net["add_vm"].tool == "add_vm_to_network"
+          and net["remove_vm"].tool == "remove_vm_from_network")
+    check("a network can be unmade now, and the tool was always there",
+          net["delete"].call("lab") == ("delete_network", {"net_name": "lab"}))
+
+
+def test_one_authority_decides_the_form_and_both_sides_read_it():
+    """`receiver` is asked by the PARSER, to refuse the long form, and by the RENDERER, to
+    print the short one. The day they disagree a saved program stops reading back as itself
+    and the failure surfaces three layers away — so they ask the same function.
+    """
+    print("[classes] the form is decided in one place")
+    check("a call on something the program holds is a method on it",
+          C.receiver("launch_vm", {"name": "$b"}, {"b": "vm"}) == ("b", "launch", None))
+    check("a relation resolves to the end that owns it",
+          C.receiver("add_vm_to_network", {"net_name": "$lab", "vm_name": "$web"},
+                     {"lab": "network"}) == ("lab", "add_vm", "$web"))
+    check("a name the program does not hold has no receiver",
+          C.receiver("launch_vm", {"name": "web"}, {}) is None)
+    check("nor does one bound to something else",
+          C.receiver("launch_vm", {"name": "$b"}, {"b": "network"}) is None)
+    # AN ARGUMENT THE METHOD CANNOT CARRY KEEPS THE LONG FORM. `launch_vm(display: none)` is
+    # what the writer emits for a machine it minted for its own use, and a method form would
+    # silently drop it — so the method is asked to REBUILD the call and compared.
+    check("and a call carrying more than the method can say stays a call",
+          C.receiver("launch_vm", {"name": "$b", "display": "none"}, {"b": "vm"}) is None)
+    # A CONSTRUCTOR IS NOT A METHOD ON AN INSTANCE — the operator's instruction, unchanged:
+    # *"the way you create it stays the same with NEW CALL create_vm"*.
+    check("a constructor is never a method on the thing it would make",
+          C.receiver("create_vm", {"name": "$b"}, {"b": "vm"}) is None)
 
 
 def test_reach_splits_by_receiver_and_that_is_the_whole_of_38():

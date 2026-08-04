@@ -559,7 +559,17 @@ def _method(cur: _Cursor) -> Dict[str, Any]:
     runs, so nothing new exists underneath this line.
     """
     from . import classes
-    var = str(cur.take().value).lstrip(config.SIGIL)
+    raw = str(cur.take().value)
+    # THE SIGIL IS REQUIRED, because a receiver IS a reference and `$` is what a reference
+    # looks like everywhere else in the language. It used to be optional, and an optional
+    # spelling here is not a kindness: `render` prints `$v.launch()`, so a file written
+    # `v.launch()` parsed to the right program and then failed `verify_file`'s round trip —
+    # a form you can type and never save, which is the exact defect the method form was
+    # made the only way in to remove.
+    if not raw.startswith(config.SIGIL):
+        raise ParseError(f"a receiver is a reference — write "
+                         f"{config.SIGIL}{raw}.{cur.toks[cur.i + 1].value}()", cur.tok.line)
+    var = raw[len(config.SIGIL):]
     cur.take(".")
     name = str(cur.take().value)
     kind = cur.binds.get(var)
@@ -630,7 +640,25 @@ def _call(cur: _Cursor, graft: Optional[str]) -> Dict[str, Any]:
         cur.take(".")
         tool += "." + str(cur.take().value)
     args = _args(cur) if cur.at("(") else {}
+    line = cur.tok.line
     cur.take(";")
+    # THE LONG FORM IS NOT A SECOND WAY IN. The operator's ruling, 2026-08-04: *"the only
+    # way you can access a vm's method is through calling it with the method"*. Where this
+    # program HOLDS the thing being acted on, the method form is the form — and refusing
+    # the other one is what makes that true, rather than merely preferred.
+    #
+    # IT BITES ONLY ON A BOUND RECEIVER, which is the whole of the rule and also its limit:
+    # `CALL launch_vm(name: web)` names a machine this program does not hold, and
+    # `CALL launch_vm(name: $box)` where `$box` is a STRING PARAMETER is a procedure acting
+    # on a name it was handed. Neither has a receiver to go through, so neither is refused.
+    from . import classes
+    got = classes.receiver(tool, args, cur.binds)
+    if got:
+        var, method, value = got
+        shown = "" if value is None else str(value)
+        raise ParseError(
+            f"{tool} acts on the {cur.binds[var]} this program holds — write "
+            f"{config.SIGIL}{var}.{method}({shown})", line)
     st: Dict[str, Any] = {"op": "call", "tool": tool, "args": args}
     if graft:
         st["graft"] = graft

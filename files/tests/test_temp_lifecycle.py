@@ -107,6 +107,29 @@ def test_a_name_in_an_attribute_is_still_a_name():
     check("and the machine survives", not _deletes(program) and temps == [])
 
 
+def test_a_name_in_a_must_is_still_a_name():
+    """THE OTHER HALF OF THE SAME RULE, and it was missing until 2026-08-04.
+
+    "put every machine on lab" names `lab` in the goal's MUST, not in its selector — and
+    `_named_in` read only the selectors. So the writer minted the network, filed it as
+    scaffolding, and tore it down at the end: the closing witness passed and then the
+    program destroyed the very thing it had just asserted.
+
+    IT WAS HIDDEN BY A MISSING MANIFEST ROW, which is the part worth remembering. `network`
+    declared no deleter, so the teardown had nothing to emit and a wrong classification cost
+    nothing. The row was added the same day and the bug arrived with it, fully formed and
+    four rungs wide. A rule that cannot fire is not a rule that is right.
+    """
+    print("[lifecycle] named in a MUST -> still theirs")
+    program, temps, text = _plan([{"every": {"kind": "vm"}, "must": {"network": "lab"}},
+                                  {"shape": "count", "select": {"kind": "vm"}, "eq": 2}])
+    check("the network is brought into being",
+          len(_creates(program, "network")) == 1)
+    check("it is not scaffolding", ("network", "lab") not in temps)
+    check("and it is still there when the program ends",
+          "delete_network" not in text)
+
+
 def test_deleting_is_what_the_operator_asked_for():
     print("[lifecycle] told to remove it -> removed")
     program, temps, _text = _plan([{"shape": "count",

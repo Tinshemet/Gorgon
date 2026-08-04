@@ -209,20 +209,20 @@ def test_a_file_still_carrying_the_old_ir_trailer_reads():
 def test_a_method_desugars_to_the_call_its_class_says_it_is():
     """`source.launch()` — the operator's own line, 2026-08-02.
 
-    NOT COVERED BY THE ROUND TRIP, and that is why it has its own test: this is SUGAR, so
-    `render` prints the desugared call and `parse(render(ir))` never sees the method form.
-    The property that matters is not that it round-trips but that it produces EXACTLY the call
-    the class already says it is — no second execution path, no method meaning something a
-    tool call cannot.
+    THE PROPERTY THAT MATTERS is that it produces EXACTLY the call the class already says it
+    is — no second execution path, no method meaning something a tool call cannot. The round
+    trip is asserted separately, below: since 2026-08-04 this is the form `render` PRINTS, so
+    the two directions have to meet.
     """
     print("[parse] a method is the call its class already declares")
     body = """PROCEDURE p() {
   STORE v = NEW CALL create_vm(name: box1, os_type: linux);
-  v.launch();
-  v.stop();
-  v.label(prod);
-  v.network(lab);
-  v.delete();
+  STORE lab = NEW CALL create_network(net_name: lab);
+  $v.launch();
+  $v.stop();
+  $v.label(prod);
+  $lab.add_vm($v);
+  $v.delete();
   PUBLISH(v);
 }"""
     calls = [(st["tool"], st["args"]) for st in parse(body)["body"] if st["op"] == "call"]
@@ -230,21 +230,75 @@ def test_a_method_desugars_to_the_call_its_class_says_it_is():
           ("launch_vm", {"name": "$v"}) in calls and ("stop_vm", {"name": "$v"}) in calls)
     check("a valued setter takes one, POSITIONALLY — the manifest names the slot",
           ("add_label", {"name": "$v", "label": "prod"}) in calls)
-    # THE RECEIVER ARGUMENT IS THE MANIFEST'S, NOT A GUESS. `add_vm_to_network` calls it
-    # `vm_name` where `add_label` calls it `name`, and assuming one spelling would be a second
-    # authority for something already stated per setter.
-    check("and the receiver argument is whatever THAT setter calls it",
-          ("add_vm_to_network", {"vm_name": "$v", "net_name": "lab"}) in calls)
+    # THE RECEIVER ARGUMENT IS THE MANIFEST'S, NOT A GUESS. `add_vm_to_network` calls the
+    # machine `vm_name` and the network `net_name`, and assuming one spelling would be a
+    # second authority for something already stated per setter.
+    #
+    # AND THE RECEIVER IS THE NETWORK — the operator's ruling, 2026-08-04. A relation has one
+    # end that owns it, because ONE call has ONE rendering; the end that does not own it would
+    # be a spelling you could type and never save.
+    check("and a relation is a method of the thing being joined",
+          ("add_vm_to_network", {"net_name": "$lab", "vm_name": "$v"}) in calls)
     check("a destructor is a method too", ("delete_vm", {"name": "$v"}) in calls)
 
-    for bad, why in (("PROCEDURE p() {\n  nope.launch();\n}", "an unbound receiver"),
+    for bad, why in (("PROCEDURE p() {\n  $nope.launch();\n}", "an unbound receiver"),
                      ("PROCEDURE p() {\n  STORE v = NEW CALL create_vm(name: b, os_type: linux);"
-                      "\n  v.fly();\n}", "a method the kind does not have")):
+                      "\n  $v.fly();\n}", "a method the kind does not have")):
         try:
             parse(bad)
             check(f"{why} is refused", False)
         except ParseError as exc:
             check(f"{why} is refused, and says what is available ({str(exc)[:40]}…)", True)
+
+
+def test_the_method_form_is_the_only_way_in_and_it_survives_being_saved():
+    """THE OPERATOR'S RULING, 2026-08-04: *"the only way you can access a vm's method is
+    through calling it with the method, $vm.method()"*.
+
+    AND IT COST NOTHING UNTIL IT ROUND-TRIPPED. Before this, `$box.launch()` parsed and then
+    rendered back as `CALL launch_vm(name: $box)` — so a file that used the method form
+    FAILED `verify_file`'s round trip, which is fatal. The whole class surface was write-only:
+    usable in a program you throw away, never in one you keep. A restriction on a form nobody
+    could save would have been a restriction on nothing.
+    """
+    print("[parse] the method form is what is written, and what is read back")
+    src = """PROCEDURE p() {
+  STORE lab = NEW CALL create_network(net_name: lab);
+  STORE box = NEW CALL create_vm(os_type: linux, name: web);
+  $lab.add_vm($box);
+  $box.launch();
+  $box.label(prod);
+  ENSURE COUNT(SELECT vm WHERE name = 'web' AND status = 'running') = 1;
+}"""
+    ir = parse(src)
+    check("what the renderer prints is the method form", render(ir).strip() == src.strip())
+    check("and it reads back as the same program", parse(render(ir)) == ir)
+
+    # THE LONG FORM IS REFUSED WHERE THE PROGRAM HOLDS THE RECEIVER, and NOWHERE ELSE. The
+    # limit is the rule: a name this program does not hold has no receiver to go through.
+    held = ("PROCEDURE p() {\n  STORE box = NEW CALL create_vm(name: web);\n"
+            "  CALL launch_vm(name: $box);\n}")
+    try:
+        parse(held)
+        check("the long form on a bound receiver is refused", False)
+    except ParseError as exc:
+        check(f"the long form on a bound receiver is refused, and says the form to use "
+              f"($box.launch()) ({'$box.launch()' in str(exc)})",
+              "$box.launch()" in str(exc))
+
+    for ok_src, why in (
+            ("PROCEDURE p() {\n  CALL launch_vm(name: web);\n}",
+             "a literal name — nothing to be a receiver"),
+            ("PROCEDURE p(STRING box) {\n  CALL launch_vm(name: $box);\n}",
+             "a parameter — a name handed in, not a member held"),
+            ("PROCEDURE p() {\n  STORE box = NEW CALL create_vm(name: web);\n"
+             "  CALL launch_vm(name: $box, display: none);\n}",
+             "an argument the method cannot carry")):
+        try:
+            parse(ok_src)
+            check(f"{why} is still a plain call", True)
+        except ParseError as exc:
+            check(f"{why} is still a plain call ({exc})", False)
 
 
 def test_a_broken_file_says_where():

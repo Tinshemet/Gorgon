@@ -408,7 +408,18 @@ def _named_in(goals, kinds) -> set:
     """
     out = set()
     for goal in goals or ():
-        for holder in ("select", "every", "observe", "per"):
+        # `must` IS PART OF THE REQUEST, and leaving it out was a live bug that only the
+        # network's missing deleter was hiding. "put every machine on lab" names `lab` in
+        # the MUST, not in the selector — so the writer minted the network, called it
+        # scaffolding, and (the day `network` grew a `delete` row) tore it down after the
+        # witness had passed. The goal asserted the machines were on a network that no
+        # longer existed.
+        #
+        # THE HOLDERS ABOVE SELECT; `must` ASSERTS. Both are the operator talking, and this
+        # function's own question is only ever "did they say this name". A `must` carries no
+        # `kind` of its own, so the key branch below skips it and the attribute branch —
+        # already written for exactly this, for "a snapshot of web" — does the work.
+        for holder in ("select", "every", "observe", "per", "must"):
             sel = goal.get(holder)
             if not isinstance(sel, dict):
                 continue

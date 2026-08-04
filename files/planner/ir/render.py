@@ -1,17 +1,22 @@
 """
 render.py — the operator's view: SQL-shaped text, one direction only.
 
-The model never sees this and nothing parses it back. It exists so a human can READ a
-program before signing it — which is what makes a signed procedure reviewable rather
-than a blob of JSON. Kept small on purpose (design note §02: "about fifty lines, one
-direction"); a reader comes later, and only if operators want to type programs by hand.
+It exists so a human can READ a program before signing it — which is what makes a signed
+procedure reviewable rather than a blob of JSON.
+
+"ONE DIRECTION ONLY" HAS NOT BEEN TRUE SINCE `parse.py`, and a `.medusa` file IS its own
+program now, so this half has an obligation it did not have when it was written: EVERY
+LINE IT PRINTS MUST READ BACK AS THE STATEMENT IT CAME FROM. `verify_file` checks exactly
+that on every save. Where a call is a method on a bound receiver it must therefore print
+the method form, because the parser refuses the long one — `classes.receiver` is the one
+place that decides, and both sides ask it.
 
 It renders UNVALIDATED model output, so nothing here may raise. A renderer that crashes
 on a malformed program hides the very thing you opened it to look at — it did exactly
 that once, on a predicate holding a number where a set belonged.
 """
 
-from typing import Any
+from typing import Any, Dict, Optional
 
 from . import config
 from .validate import coerce_body, one_check
@@ -51,17 +56,25 @@ def render(program: Any) -> str:
             out += pre + [""]
 
     indent = "  " if named else ""
+    # WHAT EACH NAME IS, built as the walk goes — the renderer's half of the parser's
+    # `_Cursor.binds`, filled in the same order from the same statements. It is flat and
+    # program-wide because the parser's is: a `$box` bound inside an IF is still `$box`
+    # afterwards, and printing under a different scoping rule than the one that reads it
+    # back is how a program stops being its own text.
+    binds: Dict[str, str] = {}
     for st in body:
-        out += _statement(st, indent)
+        out += _statement(st, indent, binds)
     if named:
         out.append("}")
     return "\n".join(out)
 
 
-def _statement(st: Any, indent: str) -> list:
+def _statement(st: Any, indent: str, binds: Optional[Dict[str, str]] = None) -> list:
     """One statement, as one or more lines. Blocks recurse, so nesting indents itself."""
     if not isinstance(st, dict):
         return [f"{indent}<not a statement: {st!r}>"]
+    if binds is None:
+        binds = {}
     op = st.get("op")
 
     if op == "new":
@@ -98,8 +111,13 @@ def _statement(st: Any, indent: str) -> list:
         # something REFERS to it; binding a result nobody reads is noise on the one line where
         # a reader is trying to see what the program touches.
         lead = f"{config.SURFACE['bind']} {st['var']} = " if st.get("var") else ""
+        # AND THE NAME NOW MEANS SOMETHING TO THE REST OF THE WALK. This is the only
+        # statement that binds a name to a KIND, which is what makes every later line able
+        # to print as a method on it.
+        if st.get("var") and st.get("kind"):
+            binds[str(st["var"])] = st["kind"]
         return _with_tail([f"{indent}{lead}{head}"
-                           f"{f'({extra})' if extra else ''}{src};"], st, indent)
+                           f"{f'({extra})' if extra else ''}{src};"], st, indent, binds)
 
     if op == "publish":
         # THE ONE STATEMENT WHOSE EFFECT IS ON THE CONVERSATION. It names the fact and never
@@ -125,8 +143,19 @@ def _statement(st: Any, indent: str) -> list:
         verb = config.SURFACE.get("call")
         lead = f"{config.SURFACE['bind']} {st['graft']} = " if st.get("graft") else ""
         head = f"{verb} " if verb else ""
+        # A CALL ON SOMETHING THIS PROGRAM HOLDS IS A METHOD ON IT, and printing the long
+        # form would print text the parser refuses — the operator's ruling of 2026-08-04:
+        # *"the only way you can access a vm's method is through calling it with the
+        # method"*. `classes.receiver` answers only when the method rebuilds this call
+        # EXACTLY, so nothing is ever lost to the shorter spelling.
+        got = _receiver(st.get("tool"), st.get("args"), binds)
+        if got:
+            var, method, value = got
+            shown = "" if value is None else _arg(value)
+            return _with_tail([f"{indent}{lead}{config.SIGIL}{var}.{method}({shown});"],
+                              st, indent, binds)
         return _with_tail([f"{indent}{lead}{head}{st.get('tool')}({_args(st.get('args'))});"],
-                          st, indent)
+                          st, indent, binds)
 
     if op == "foreach":
         inner = st.get("call") if isinstance(st.get("call"), dict) else {}
@@ -143,11 +172,11 @@ def _statement(st: Any, indent: str) -> list:
         body = []
         if isinstance(st.get("do"), list):
             for kid in st["do"]:
-                body += _statement(kid, indent + "  ")
+                body += _statement(kid, indent + "  ", binds)
         else:
-            body = _statement({"op": "call", **inner}, indent + "  ")
+            body = _statement({"op": "call", **inner}, indent + "  ", binds)
         return _with_tail([f"{indent}{_w('foreach')} {member} {_w('in')} {src}{par} {{"]
-                          + body + [f"{indent}}}"], st, indent)
+                          + body + [f"{indent}}}"], st, indent, binds)
 
     if op == "fetch":
         q = st.get("count") or st.get("select")
@@ -164,16 +193,16 @@ def _statement(st: Any, indent: str) -> list:
         # an IFAILS parsed correctly and rendered WITHOUT it, so the block vanished on the
         # first round trip — and `verify_file` compares the render against the file, so the
         # program that loaded was not the program on disk.
-        return _with_tail([f"{indent}{word} {_pred(st.get('predicate'))};"], st, indent)
+        return _with_tail([f"{indent}{word} {_pred(st.get('predicate'))};"], st, indent, binds)
 
     if op == "if":
         out = [f"{indent}{_w('if')} {_pred(st.get('cond'))} {{"]
         for inner in (st.get("then") or []):
-            out += _statement(inner, indent + "  ")
+            out += _statement(inner, indent + "  ", binds)
         if st.get("else"):
             out.append(f"{indent}}} {_w('else')} {{")
             for inner in st["else"]:
-                out += _statement(inner, indent + "  ")
+                out += _statement(inner, indent + "  ", binds)
         out.append(f"{indent}}}")
         return out
 
@@ -197,7 +226,21 @@ def _creator(st) -> str:
     return spec.get("create") or ""
 
 
-def _with_tail(lines: list, st: dict, indent: str) -> list:
+def _receiver(tool, args, binds):
+    """`classes.receiver`, asked safely. None whenever it cannot answer.
+
+    NOTHING HERE MAY RAISE — this file renders unvalidated model output, and a renderer
+    that crashes hides the very thing it was opened to look at.
+    """
+    try:
+        from . import classes
+        return classes.receiver(tool, args, binds)
+    except Exception:
+        return None
+
+
+def _with_tail(lines: list, st: dict, indent: str,
+               binds: Optional[Dict[str, str]] = None) -> list:
     """Append `IFAILS { … }` to a statement's rendering, if it carries one."""
     recov = st.get("ifails")
     if not recov:
@@ -206,7 +249,7 @@ def _with_tail(lines: list, st: dict, indent: str) -> list:
     lines[-1] = (lines[-1].rstrip(";") + f"; {_w('ifails')} {{" if lines[-1].endswith(";")
                  else lines[-1] + f" {_w('ifails')} {{")
     for inner in recov:
-        lines += _statement(inner, indent + "  ")
+        lines += _statement(inner, indent + "  ", binds)
     lines.append(f"{indent}}}")
     return lines
 
