@@ -123,6 +123,39 @@ def test_a_relation_has_one_receiver_and_it_is_the_thing_joined():
           net["delete"].call("lab") == ("delete_network", {"net_name": "lab"}))
 
 
+def test_a_constructor_is_not_a_method_because_there_is_nothing_to_call_it_on():
+    """THE OPERATOR PUT IT BEST, 2026-08-04: *"the vm/network doesnt exist before the call"*.
+
+    A method needs a receiver and a constructor's whole precondition is that there ISN'T one.
+    `$lab.create()` used to PARSE — into `create_network(net_name: $lab)`, "the network I am
+    holding, make itself", which at run time re-creates it and gets 'already exists'. Worse,
+    it rendered back as the LONG call, so it did not round trip: a spelling you can type and
+    cannot save, which is the exact defect the method form was made the only way in to
+    remove. Found by the operator asking what it did.
+
+    THE ANSWER IS THE ONE THAT WAS ALWAYS THERE: *"just use CALL NEW method"* — creation is
+    `NEW CALL create_vm(...)`, unchanged since 2026-08-02.
+    """
+    print("[classes] a thing is not asked to make itself")
+    from planner.ir.parse import ParseError, parse
+    for src, what in (
+            ("PROCEDURE p() {\n  STORE lab = NEW CALL create_network(net_name: lab);\n"
+             "  $lab.create();\n}", "network.create()"),
+            ("PROCEDURE p() {\n  STORE b = NEW CALL create_vm(name: web);\n"
+             "  $b.clone(src);\n}", "vm.clone()")):
+        try:
+            parse(src)
+            check(f"{what} is refused", False)
+        except ParseError as exc:
+            check(f"{what} is refused, and points at the creation form",
+                  "not asked to make itself" in str(exc) and "NEW CALL" in str(exc))
+    # AND IT IS NOT OFFERED EITHER — not in the blinded surface a call would choose from, and
+    # not in the reference. A call narrowed to a receiver has, by definition, already got the
+    # thing.
+    check("no constructor is offered on the surface a caller chooses from",
+          not any(".create(" in C.public(k) for k in C.surface()))
+
+
 def test_an_act_is_reachable_and_promises_nothing():
     """THE OPERATOR'S REQUEST, 2026-08-04: *"to vm add: modify, getters about os_types,
     etc… kill, etc… everything"*, and *"its to replace the straight forward tool calls"*.

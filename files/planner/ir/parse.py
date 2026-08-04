@@ -584,7 +584,19 @@ def _method(cur: _Cursor) -> Dict[str, Any]:
     method = surface.get(name)
     if method is None:
         raise ParseError(f"{kind} has no method {name!r} — it has "
-                         f"{sorted(surface)}", cur.tok.line)
+                         f"{sorted(m for m, s in surface.items() if s.verb != classes.MAKE)}",
+                         cur.tok.line)
+    # A CONSTRUCTOR IS NOT A METHOD ON AN INSTANCE, and it had to be REFUSED rather than
+    # merely undocumented. `$lab.create()` parsed, meant "the network I am holding, make
+    # itself", and rendered back as the LONG call — so it did not round trip, which is the
+    # exact defect the method form was made the only way in to remove: a spelling you can
+    # type and cannot save. The operator's instruction is unchanged and it is the whole
+    # answer: *"the way you create it stays the same with NEW CALL create_vm"*.
+    if method.verb == classes.MAKE:
+        raise ParseError(
+            f"a {kind} is not asked to make itself — a constructor is a creation, so write "
+            f"{config.SURFACE.get('bind', 'STORE')} x = {_word('new').upper()} "
+            f"{config.SURFACE.get('call', 'CALL')} {method.tool}(...)", cur.tok.line)
     # POSITIONAL, NOT NAMED. `v.label(prod)` — the manifest already says which argument that
     # value goes into, so naming it at the call site would be the caller repeating what the
     # class knows. That is the whole economy of a method: the receiver and the argument names

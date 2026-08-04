@@ -298,11 +298,17 @@ def public(kind: str, kinds=None) -> str:
     has ALREADY been narrowed to one receiver — small by construction, because it sees one
     class and nothing else.
     """
-    got = methods(kind, kinds)
+    got = [m for m in methods(kind, kinds).values() if m.verb != MAKE]
     if not got:
         return ""
-    return f"{kind}:\n" + "\n".join(f"  .{m.name}() — {m.doc}"
-                                    for m in sorted(got.values(), key=lambda x: x.name))
+    # THE CONSTRUCTORS ARE NOT OFFERED, and the operator put the reason best: *"the vm/
+    # network doesnt exist before the call"*. This string answers "what do I do to THIS one",
+    # and there is no `this one` to make itself — a call that has been narrowed to a receiver
+    # has, by definition, already got the thing. Offering `create` here would be offering the
+    # one method whose precondition is that the receiver does not exist.
+    return f"{kind}:\n" + "\n".join(
+        f"  .{m.name}({', '.join(m.takes)}) — {m.doc}"
+        for m in sorted(got, key=lambda x: x.name))
 
 
 # ── the one question the parser and the renderer both ask ──────────────────────────────
