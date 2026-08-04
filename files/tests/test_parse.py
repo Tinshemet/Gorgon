@@ -301,6 +301,45 @@ def test_the_method_form_is_the_only_way_in_and_it_survives_being_saved():
             check(f"{why} is still a plain call ({exc})", False)
 
 
+def test_the_loop_variable_is_a_receiver_inside_the_loop_and_nowhere_else():
+    """`FOREACH $item IN SELECT vm` — inside the body, `$item` IS a vm.
+
+    THE KIND IS READ, not assumed: off the select, or off the binding when the loop walks a
+    set an earlier line made. A loop over a LITERAL LIST binds nothing, because a list of
+    strings says what its members are called and not what they are.
+
+    AND IT IS SCOPED, which is the one place this parser scopes anything. `$item` does not
+    exist after the loop, and leaving it bound would let a later line print as a method on a
+    variable the runtime has nothing for.
+    """
+    print("[parse] the loop variable is a member of what the loop ranges over")
+    src = """PROCEDURE p() {
+  STORE lab = NEW CALL create_network(net_name: lab);
+  FOREACH $item IN SELECT vm WHERE status = 'running' {
+    $item.stop();
+    $lab.add_vm($item);
+  }
+  FOREACH $item IN [a, b] {
+    CALL launch_vm(name: $item);
+  }
+  ENSURE COUNT(SELECT vm WHERE status = 'stopped') >= 1;
+}"""
+    ir = parse(src)
+    check("a loop over a SELECT makes its member a receiver",
+          render(ir).strip() == src.strip())
+    check("and it reads back as the same program", parse(render(ir)) == ir)
+    check("a loop over a literal list binds nothing, so the call stays a call",
+          "CALL launch_vm(name: $item);" in render(ir))
+
+    try:
+        parse("PROCEDURE p() {\n  FOREACH $item IN SELECT vm { $item.stop(); }\n"
+              "  $item.launch();\n}")
+        check("the loop variable does not leak past the loop", False)
+    except ParseError as exc:
+        check(f"the loop variable does not leak past the loop ({str(exc)[:44]}…)",
+              "not bound" in str(exc))
+
+
 def test_a_broken_file_says_where():
     print("[parse] a failure names the line")
     for text, why in (("PROCEDURE p( {\n  PUBLISH(x);\n}", "a malformed signature"),

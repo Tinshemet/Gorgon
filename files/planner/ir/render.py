@@ -22,6 +22,11 @@ from . import config
 from .validate import coerce_body, one_check
 
 
+# "NOT BOUND" IS NOT "BOUND TO NOTHING" — the loop restores whatever it found, and `None` is
+# a legal thing to have found. Same sentinel, same reason, as the parser's.
+_ABSENT = object()
+
+
 def _w(key: str) -> str:
     """A printed keyword, from the surface table.
 
@@ -169,12 +174,26 @@ def _statement(st: Any, indent: str, binds: Optional[Dict[str, str]] = None) -> 
         # A block body prints as its statements; the single-call shorthand prints as the
         # one call. Both wear the same braces, so the shorthand is invisible to a reader —
         # which is the point of having it.
+        # THE LOOP VARIABLE IS A MEMBER OF WHAT THE LOOP RANGES OVER, and inside the body it
+        # is a receiver like any other. Bound for the body and restored after — the parser
+        # scopes it exactly here and for exactly this reason, and the two halves have to
+        # agree or a printed loop stops reading back as itself.
+        kind = (st.get("select") or {}).get("kind") if isinstance(st.get("select"), dict) \
+            else (binds.get(str(st.get("in")).lstrip(config.SIGIL))
+                  if isinstance(st.get("in"), str) else None)
+        had = binds.get(config.LOOP_VAR, _ABSENT)
+        if kind:
+            binds[config.LOOP_VAR] = kind
         body = []
         if isinstance(st.get("do"), list):
             for kid in st["do"]:
                 body += _statement(kid, indent + "  ", binds)
         else:
             body = _statement({"op": "call", **inner}, indent + "  ", binds)
+        if had is _ABSENT:
+            binds.pop(config.LOOP_VAR, None)
+        else:
+            binds[config.LOOP_VAR] = had
         return _with_tail([f"{indent}{_w('foreach')} {member} {_w('in')} {src}{par} {{"]
                           + body + [f"{indent}}}"], st, indent, binds)
 

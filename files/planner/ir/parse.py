@@ -58,6 +58,10 @@ class ParseError(ValueError):
 # ── tokens ─────────────────────────────────────────────────────────────────────────────
 WORD, NUM, STR, PUNCT, END = "word", "num", "str", "punct", "end"
 
+# "NOT BOUND" IS NOT THE SAME AS "BOUND TO NOTHING", and a loop that restores the binding it
+# found has to tell them apart — `None` is a legal thing to have been bound to.
+_ABSENT = object()
+
 # THE ONLY MULTI-CHARACTER OPERATORS, longest first so `>=` is never read as `>` then `=`.
 _LONG = (">=", "<=", "==", "!=")
 _SINGLE = set("(){}[],;:=@.<>-+*/")
@@ -677,9 +681,28 @@ def _foreach(cur: _Cursor) -> Dict[str, Any]:
     if cur.accept(_word("async")):
         st["async"] = True
     cur.take("{")
+    # THE LOOP VARIABLE IS A MEMBER OF WHATEVER THE LOOP RANGES OVER, so inside the body it
+    # is a receiver like any other: `FOREACH $item IN SELECT vm { $item.stop(); }`. The kind
+    # is READ — off the select, or off the binding when the loop walks a set an earlier line
+    # made — and a loop over a literal list binds nothing, because a list of strings says
+    # what its members are called and not what they are.
+    #
+    # BOUND FOR THE BODY AND RESTORED AFTER, which is the one place this parser scopes
+    # anything. `$item` does not exist outside the loop, and leaving it bound would let a
+    # later line print as a method on a variable the runtime has nothing for.
+    kind = (st.get("select") or {}).get("kind") if isinstance(st.get("select"), dict) else None
+    if kind is None and isinstance(st.get("in"), str):
+        kind = cur.binds.get(str(st["in"]).lstrip(config.SIGIL))
+    had = cur.binds.get(config.LOOP_VAR, _ABSENT)
+    if kind:
+        cur.binds[config.LOOP_VAR] = kind
     do = []
     while not cur.at("}"):
         do.append(_statement(cur))
+    if had is _ABSENT:
+        cur.binds.pop(config.LOOP_VAR, None)
+    else:
+        cur.binds[config.LOOP_VAR] = had
     cur.take("}")
     st["do"] = do
     return st

@@ -73,10 +73,13 @@ _EXAMPLES: List[Dict[str, str]] = [
              "}"},
     {"title": "do the same thing to every member of a set",
      "why": "FOREACH names the set with SELECT (a query over the world now) or with IN (a "
-            "set you bound, or a literal list). Inside the body, $item is the current member.",
+            "set you bound, or a literal list). Inside the body, $item is the current "
+            "member — and when the loop ranges over a KIND, $item IS one, so it takes that "
+            "kind's methods. A loop over a literal list binds nothing: a list of strings "
+            "says what its members are called, not what they are.",
      "code": "PROCEDURE stop_all() {\n"
              "  FOREACH $item IN SELECT vm WHERE status = 'running' {\n"
-             "    CALL stop_vm(name: $item);\n"
+             "    $item.stop();\n"
              "  }\n"
              "  ENSURE COUNT(SELECT vm WHERE status = 'running') = 0;\n"
              "}"},
