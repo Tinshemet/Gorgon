@@ -113,6 +113,20 @@ def judge(row: Dict[str, Any], goals: List[Dict[str, Any]], cannot) -> tuple:
         return FORCED, (f"stated a request I judged unstateable, as "
                         f"{sorted(shapes_of(goals))}")
 
+    # A COUNT ABOVE ONE PINNED TO THE KEY CANNOT BE MET, ever: a kind has one member per
+    # key, so "two machines called attacker" describes no world. It is not a matter of
+    # taste and it is not visible to a shape check — the reading uses the right shape and
+    # says something impossible with it.
+    from planner.ir import config
+    for g in goals or ():
+        sel = g.get("select")
+        if not isinstance(sel, dict) or not isinstance(g.get("eq"), int) or g["eq"] <= 1:
+            continue
+        key = ((config.KINDS or {}).get(sel.get("kind")) or {}).get("key")
+        if key and isinstance(sel.get(key), str):
+            return FORCED, (f"{g['eq']} {sel.get('kind')}s pinned to one "
+                            f"{key} ({sel[key]!r}) — no world has that")
+
     got_shapes, got_names = shapes_of(goals), names_of(goals)
     missing = row["shapes"] - got_shapes
     if missing:

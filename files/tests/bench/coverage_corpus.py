@@ -49,8 +49,10 @@ def R(id: str, request: str, expect: str, shapes=(), names=(), why: str = "") ->
     """One row.
 
     `shapes` — what a CORRECT reading must claim, as goal shapes. Judged from the English.
-    `names`  — every identifier the request states. A reading that invents one is not this
-               request; a reading that drops one has read half of it.
+    `names`  — every MEMBER IDENTIFIER the request states: a machine, a network, a template.
+               NOT an attribute value — `target` in "tag them target" is a label, and a
+               label is not a name. A reading that invents an identifier is not this
+               request; one that drops it has read half of it.
     `expect` — "translate" or "decline". `decline` means: I do not believe these five shapes
                can state this, so the honest answer is `cannot`.
     """
@@ -67,7 +69,7 @@ CORPUS: List[Dict[str, Any]] = [
       "translate", ("every",), ("payload-test",),
       "removal of an attribute, not addition — the unsetter side"),
     R("label-fleet", "tag every windows machine as target",
-      "translate", ("every",), ("target",),
+      "translate", ("every",), (),
       "a filtered distributive write"),
     R("snapshot-before", "snapshot every machine on the range network",
       "translate", ("per",), ("range",),
@@ -76,16 +78,16 @@ CORPUS: List[Dict[str, Any]] = [
       "translate", ("count",), ("dmz",),
       "a pure question — no acting at all"),
     R("teardown", "delete every machine labelled scratch",
-      "translate", ("every", "count"), ("scratch",),
+      "translate", ("every", "count"), (),
       "destruction over a filtered set"),
     R("reachability", "confirm the machines on the range network can all see each other",
       "translate", ("reach",), ("range",),
       "the reach shape, said in the operator's own words"),
     R("clone-fleet", "make four copies of the golden image and label them all bench",
-      "translate", ("count", "every"), ("golden", "bench"),
+      "translate", ("count", "every"), ("golden",),
       "a derived set — the members do not exist until the program makes them"),
     R("ensure-running", "make sure every machine tagged core is running",
-      "translate", ("every",), ("core",),
+      "translate", ("every",), (),
       "convergence to a state over a filtered set"),
     R("probe-alive", "check which machines are answering",
       "translate", ("observe",), (),
