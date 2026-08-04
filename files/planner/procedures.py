@@ -46,27 +46,9 @@ def _home() -> str:
     return os.path.join(base, "procedures")
 
 
-_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(\.[a-z][a-z0-9_]*)?$")
-
-# A CLASS IS A FILE WITH SEVERAL ENTRY POINTS, and that is the only thing separating it from
-# a procedure. The operator's example is the right size:
-#
-#     NetworkSetup.medusa
-#       attach(vms, net_name)   ·  add(vm, net_name)  ·  remove(vm, net_name)
-#
-# EACH METHOD IS A PROCEDURE, so nothing downstream learns a new word: `names()` lists
-# `NetworkSetup.attach`, `covering()` may reach for it, `validate` accepts the call, and
-# `run` executes the body through the same visitor. A class that needed its own lookup,
-# its own validator and its own call op would be three mechanisms for one idea.
-#
-# WHAT IS DELIBERATELY NOT BUILT: the three-layer prompt machinery — a separate
-# intermediate vocabulary a model consults to CHOOSE a method. Its argument was that
-# authoring is where everything fails and tool calling is where nothing does, which was
-# true and is now beside the point: the writer is deterministic and covers 13/13 with no
-# model, while the model-authoring path measures 7/78. The design note's own instruction
-# was not to build the machinery until an experiment answered; the architecture answered
-# it instead.
-_METHODS = "methods"
+# ONE NAME, ONE FILE, ONE PROGRAM. The dotted form is gone with the namespace class it
+# existed for — see the note above `Store`.
+_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 
 # WHERE THE PROGRAM RIDES, after the text a person reads. A comment line, because a `.medusa`
 # should still look like one to anything that opens it.
@@ -222,18 +204,14 @@ def contract(program: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 
 def render_stored(program: Dict[str, Any]) -> str:
-    """The readable artifact — one `PROCEDURE` block, or one per method of a class.
+    """The readable artifact — one `PROCEDURE` block.
 
-    A CLASS FILE IS STILL A `.medusa` A PERSON READS, which is the entire reason both forms
-    are kept. Rendering the wrapper would print a header and no code.
+    ONE FILE, ONE PROGRAM. It used to fan out over a class's methods; the namespace class is
+    gone, so this is `render` and says so rather than being a second name for it that a
+    reader has to check.
     """
     from .ir.render import render as _render
-    methods = program.get(_METHODS)
-    if not methods:
-        return _render(program)
-    name = program.get("name")
-    return "\n\n".join(_render({**spec, "name": f"{name}.{m}"})
-                        for m, spec in methods.items())
+    return _render(program)
 
 
 def legal_name(name: str) -> bool:
@@ -249,6 +227,14 @@ def legal_name(name: str) -> bool:
 
 class Store:
     """The procedure library. A directory of `.medusa` files and their IR.
+
+    THE NAMESPACE CLASS IS GONE, 2026-08-04, on the operator's instruction — *"delete the
+    name spaces i dont even remmber what it does"*. It was a FILE of `PROCEDURE Class.method`
+    blocks with no instances and no state: a folder for procedures wearing a dot. What
+    replaced it is the thing a class was always supposed to be, and it is not in this file at
+    all — every KIND is a class (`ir/classes.py`), its methods are derived from the manifest,
+    and you call one on something you hold: `$lab.add_vm($web)`. That has a receiver, so it
+    can be scoped, which was the entire argument for classes. The dotted form had none.
 
     ONE FILE PER PROCEDURE. The operator's instruction, and their question was the right one:
     *"why are there two files? shouldnt it be 1?"*
@@ -297,64 +283,14 @@ class Store:
         declares nothing is still callable by name; it simply cannot be REACHED FOR, which
         is the honest consequence of not saying what you do.
 
-        A CLASS IS NOT KEPT THROUGH THIS DOOR — `save_class` is its own method, and that is
-        the whole enforcement of *"the AI author does not make classes"* (operator, 2026-08-02).
-        The authoring path calls `save`, so a class is something it CANNOT reach rather than
-        something it happens not to emit. See `save_class` for why the rule is worth having.
+        THE ONE DOOR. There used to be two — `save` and `save_class` — so that the authoring
+        path could not mint a namespace class. The namespace class is gone, so the rule it
+        enforced has nothing left to be about.
         """
-        if program.get(_METHODS):
-            raise ValueError(
-                f"{program.get('name')!r} is a CLASS, and a class is not authored — it is "
-                f"written by a person, or kept deliberately through `save_class`. A class "
-                f"promises 'verified once' to every caller of every method, and that promise "
-                f"is the operator's to make")
-        # A DOTTED NAME NAMES A METHOD, and it was only refused for a program that carried
-        # methods — so `save({"name": "NetworkSetup.add"})` wrote a SECOND file whose stem had
-        # a dot in it, sitting beside the class and shadowing nothing legibly.
-        if "." in str(program.get("name") or ""):
-            raise ValueError(f"{program.get('name')!r} names a method; save the CLASS it "
-                             f"belongs to")
-        # AND IT MAY NOT OVERWRITE ONE EITHER, which is the same rule from the other side:
-        # `save` replaces the file at that name, so authoring `procedure NetworkSetup: …`
-        # would have turned a class of four verified methods into a one-body procedure and
-        # taken every caller of `NetworkSetup.add` with it. Refusing to MAKE a class while
-        # allowing it to be flattened would be a rule with a door in the back of it.
-        try:
-            standing = self.get(program.get("name"))
-        except Exception:
-            # A FILE THAT CANNOT BE READ IS NOT A CLASS THIS GUARD CAN VOUCH FOR. `verify`
-            # and `broken` are where an unreadable entry is reported; refusing the save here
-            # would make a corrupt file permanently unreplaceable.
-            standing = None
-        if standing and standing.get(_METHODS):
-            raise ValueError(
-                f"{program.get('name')!r} is already a CLASS with "
-                f"{len(standing[_METHODS])} method(s) — saving a procedure over it would "
-                f"delete them. Choose another name, or remove the class deliberately")
-        return self._keep(program, rendered)
-
-    def save_class(self, program: Dict[str, Any], rendered: str = "") -> str:
-        """Write a CLASS — one file, several entry points. Returns the `.medusa` path.
-
-        SEPARATE FROM `save` BY THE OPERATOR'S INSTRUCTION, 2026-08-02: *"make it so that the
-        medusa ai author cannot make classes."* The authoring path calls `save`; only a caller
-        that says the word `class` gets to keep one. [[gorgon-declare-dont-infer]] — the door
-        you walk through is the declaration, so the rule cannot be satisfied by accident and
-        cannot be lost by a writer that one day learns to emit a `methods` dict.
-
-        AND IT IS NOT ARBITRARY CAUTION. A class's contract is stronger than a procedure's: it
-        offers a method SURFACE that other programs reach for, and every method carries its own
-        verdict so a caller need not re-check. That is a promise about work done ONCE, made to
-        callers who are not in the room — the kind of thing the operator writes, reads back and
-        keeps, not the kind a translation of one English sentence should mint.
-        """
-        if not program.get(_METHODS):
-            raise ValueError(f"{program.get('name')!r} has no methods, so it is a procedure "
-                             f"and not a class — keep it with `save`")
         return self._keep(program, rendered)
 
     def _keep(self, program: Dict[str, Any], rendered: str = "") -> str:
-        """The write itself, shared by both doors. Which door was used is decided above."""
+        """The write itself."""
         from .ir.validate import validate
 
         name = program.get("name")
@@ -377,36 +313,11 @@ class Store:
         # may refer to what it declares and to what it binds, and to nothing else. That is
         # the same rule the caller's program lives under, applied at the moment the artifact
         # becomes reusable.
-        methods = program.get(_METHODS)
-        if methods:
-            # A CLASS IS VALIDATED METHOD BY METHOD, because a class HAS no body — it is a
-            # file where several programs live, and validating the wrapper would be
-            # validating a container.
-            if "." in str(name):
-                raise ValueError(f"{name!r} names a method; save the CLASS it belongs to")
-            for m, spec in methods.items():
-                if not legal_name(m):
-                    raise ValueError(f"{name}.{m}: a method name must be an identifier")
-                ok, problems = validate({**spec, "name": f"{name}.{m}"})
-                if not ok:
-                    raise ValueError(f"{name}.{m} could not run, so the class is not kept: "
-                                     f"{problems[0]}")
-                # AND EVERY METHOD CARRIES ITS OWN VERDICT. This is the line between a class
-                # and a bag of macros: a method that expands into tool calls and asserts
-                # nothing inherits the false-success class the whole system refuses, and a
-                # caller cannot trust its result without re-checking — which is exactly the
-                # work a class exists to have done ONCE.
-                if not _consent().survey(spec)["grounded"]:
-                    raise ValueError(
-                        f"{name}.{m} acts and vouches for nothing. A class method ends in an "
-                        f"ENSURE or ACHIEVE over its own postcondition — that is what makes "
-                        f"'verified once' a fact its callers can rely on")
-        else:
-            ok, problems = validate(program)
-            if not ok:
-                raise ValueError(
-                    f"{name} is not a program that could run, so it is not kept: "
-                    f"{problems[0]}")
+        ok, problems = validate(program)
+        if not ok:
+            raise ValueError(
+                f"{name} is not a program that could run, so it is not kept: "
+                f"{problems[0]}")
         os.makedirs(self.path, exist_ok=True)
         if not rendered:
             rendered = render_stored(program)
@@ -487,30 +398,21 @@ class Store:
         got = parse_many(body)
         if not got:
             raise ValueError(f"{at} holds no program")
-        text = body.partition(_IR_MARK)[0].rstrip()
-        if len(got) == 1:
-            one = got[0]
-            one["_text"] = text
-            # THE CONTRACT IS COMPUTED, NOT STORED. It used to ride in the IR trailer; now it
-            # is read out of the body every time, which is the only way it cannot disagree
-            # with the code it describes.
-            found = contract(one)
-            if found:
-                one["achieves"] = found
-            return one
-        # SEVERAL BLOCKS IN ONE FILE IS A CLASS, reassembled the way `render_stored` took it
-        # apart: each block is named `Class.method`, so the class name and the method surface
-        # both come back out of the names themselves rather than from anything stored beside.
-        methods = {}
-        owner = None
-        for prog in got:
-            whole, _, method = str(prog.pop("name", "")).partition(".")
-            owner = owner or whole
-            found = contract(prog)
-            if found:
-                prog["achieves"] = found
-            methods[method or whole] = prog
-        return {"name": owner, _METHODS: methods, "_text": text}
+        # ONE FILE, ONE PROGRAM. Several blocks used to mean a namespace class, reassembled
+        # from the dots in their names; with that form gone, a second block is a file whose
+        # name says one thing and whose contents are two, and the honest answer is to say so
+        # rather than to pick one.
+        if len(got) > 1:
+            raise ValueError(f"{at} holds {len(got)} programs — one file, one procedure")
+        one = got[0]
+        one["_text"] = body.partition(_IR_MARK)[0].rstrip()
+        # THE CONTRACT IS COMPUTED, NOT STORED. It used to ride in the IR trailer; now it is
+        # read out of the body every time, which is the only way it cannot disagree with the
+        # code it describes.
+        found = contract(one)
+        if found:
+            one["achieves"] = found
+        return one
 
     # ── the reference that sits beside them ──────────────────────────────────
     def write_reference(self) -> str:
@@ -615,19 +517,9 @@ class Store:
                      "" if wanted == text else "the text on disk is not this program",
                      fatal=True)
 
-        # EVERY BODY, AND A CLASS HAS SEVERAL. A class file is where several programs live,
-        # so "does it validate" is asked once per method — the same split `save` already
-        # makes, applied to what came back rather than to what went in.
-        bodies = ([(f"{name}.{m}", spec) for m, spec in (got.get(_METHODS) or {}).items()]
-                  or [(name, got)])
-
         from .ir.validate import validate
-        bad = []
-        for who, prog in bodies:
-            ok, problems = validate({**prog, "name": who})
-            if not ok:
-                bad.append(f"{who}: {problems[0]}")
-        note("validates", not bad, "; ".join(bad), fatal=True)
+        ok, problems = validate(got)
+        note("validates", ok, "" if ok else f"{name}: {problems[0]}", fatal=True)
 
         # KEEPS ITS CONTRACT. Compared only where the saved program declared one — a
         # procedure that claims nothing has nothing to lose, and demanding a contract here
@@ -645,11 +537,9 @@ class Store:
                      f"declared {json.dumps(wanted_c, sort_keys=True)}, reads back as "
                      f"{json.dumps(got.get('achieves'), sort_keys=True)}")
 
-        ungrounded = [who for who, prog in bodies
-                      if not _consent().survey(prog)["grounded"]]
-        note("vouches for what it does", not ungrounded,
-             "" if not ungrounded else
-             f"{', '.join(ungrounded)} act(s) and nothing could fail")
+        note("vouches for what it does", _consent().survey(got)["grounded"],
+             "" if _consent().survey(got)["grounded"] else
+             f"{name} acts and nothing could fail")
 
         return {"at": at, "name": name, "ok": not any(c["fatal"] and c["ok"] is False
                                                       for c in checks),
@@ -664,21 +554,20 @@ class Store:
         library can hold a file that no longer parses, or that quietly stopped asserting
         anything, and nothing would say so until a plan reached for it.
         """
-        whole = str(name).partition(".")[0]
-        at = os.path.join(self.path, f"{whole}.medusa")
+        at = os.path.join(self.path, f"{name}.medusa")
         if not os.path.exists(at):
             return {"at": at, "name": name, "ok": False, "clean": False,
                     "checks": [{"check": "exists", "ok": False, "fatal": True,
-                                "why": f"no procedure called {whole!r}"}]}
+                                "why": f"no procedure called {name!r}"}]}
         report = self.verify_file(at)
         # THE NAME THE CALLER ASKED ABOUT, when the file could not be read. `verify_file`
         # takes the name out of the program, so a file that does not parse has none — and a
         # report headed `None` is unreadable exactly when somebody most needs to read it.
-        report["name"] = report.get("name") or whole
+        report["name"] = report.get("name") or name
         return report
 
     def verify_all(self) -> List[Dict[str, Any]]:
-        """Every stored procedure, verified. A CLASS IS VERIFIED ONCE, as the file it is."""
+        """Every stored procedure, verified."""
         if not os.path.isdir(self.path):
             return []
         stems = sorted(f[:-7] for f in os.listdir(self.path) if f.endswith(".medusa"))
@@ -696,18 +585,7 @@ class Store:
         return False
 
     def get(self, name: str) -> Optional[Dict[str, Any]]:
-        """A stored program by name. `Class.method` reaches into a class file.
-
-        A METHOD COMES BACK AS AN ORDINARY PROGRAM, named `Class.method`, so every consumer
-        — the validator, the writer's tile search, the visitor — keeps asking the one
-        question it already asked. A class is a FILE with several entry points, not a new
-        kind of thing to look up.
-        """
-        whole, _, method = str(name).partition(".")
-        if method:
-            got = self.get(whole)
-            spec = ((got or {}).get(_METHODS) or {}).get(method)
-            return {**spec, "name": str(name)} if spec else None
+        """A stored program by name."""
         at = os.path.join(self.path, f"{str(name)}.medusa")
         try:
             stamp = os.stat(at)
@@ -740,11 +618,11 @@ class Store:
         return (got or {}).get("_text")
 
     def names(self) -> List[str]:
-        """Every CALLABLE name — a procedure's own, and one per method of a class.
+        """Every CALLABLE name. One file, one program, one name.
 
-        A CLASS FILE'S OWN NAME IS NOT CALLABLE. `NetworkSetup` is not a program; it is
-        where four of them live, and offering it as a tool would let a caller invoke a body
-        that does not exist.
+        THE FILES ARE STILL OPENED rather than listed by stem, and a damaged one is SKIPPED
+        AND NAMED. Losing the name would make a corrupt library indistinguishable from a
+        small one — the same unknown-versus-empty confusion `get` refuses.
         """
         if not os.path.isdir(self.path):
             return []
@@ -754,16 +632,11 @@ class Store:
                 continue
             stem = f[:-7]
             try:
-                got = self.get(stem)
+                self.get(stem)
             except Exception:
-                # A DAMAGED FILE IS SKIPPED AND NAMED, here rather than in `all()`, because
-                # this is now the walk that opens them — a class has to be read before its
-                # methods can be listed. Losing the name would make a corrupt library
-                # indistinguishable from a small one.
                 bad.append(stem)
                 continue
-            methods = (got or {}).get(_METHODS)
-            out += [f"{stem}.{m}" for m in methods] if methods else [stem]
+            out.append(stem)
         self.broken = bad
         return sorted(out)
 
