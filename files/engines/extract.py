@@ -842,6 +842,27 @@ def unusable(sel: Dict[str, Any]) -> Optional[str]:
     """
     kind = sel.get("kind")
     key = ((config.KINDS or {}).get(kind) or {}).get("key")
+    # A VALUE OUTSIDE A CLOSED SET IS NOT A VALUE, and this is the worst shape it takes.
+    # `attr_values` declares the states an attribute can be IN — a machine's status is
+    # running or stopped — so a filter for `status = 'up'` matches nothing, for ever. And a
+    # goal about NOTHING is vacuously true: "a snapshot per machine that is up" plans zero
+    # snapshots, closes DONE, and the world disagrees. Measured on rung 12's paraphrase,
+    # deterministically, 3 of 3 — *"each machine that is currently up"*.
+    #
+    # REFUSED RATHER THAN TRANSLATED. `up` plainly means `running` to a person, and mapping
+    # it here would be this module guessing what the operator meant, which is the job it
+    # exists not to have. A declared synonym is a manifest row and the operator's call; an
+    # inferred one is how a vocabulary starts.
+    for attr, allowed in (((config.KINDS or {}).get(kind) or {})
+                          .get("attr_values") or {}).items():
+        value = sel.get(attr)
+        # A REFERENCE IS NOT A VALUE YET — `$state` is resolved at run time, so judging it
+        # here would refuse every procedure that takes its filter as a parameter.
+        if not isinstance(value, str) or value.startswith(config.SIGIL):
+            continue
+        if allowed and value.strip().lower() not in {str(a).lower() for a in allowed}:
+            return (f"{attr} = {value!r} is not one of "
+                    f"{', '.join(sorted(str(a) for a in allowed))}, so it matches nothing")
     for attr, value in (sel or {}).items():
         if attr in ("kind", "not") or not isinstance(value, str):
             continue
@@ -994,7 +1015,12 @@ def to_goals(raw: Dict[str, Any], request: str = "",
         REPAIR one — moving a value out of the wrong slot, reading a bare value as an
         identity — so the only selector worth judging is the one that comes out.
         """
-        sel = goal.get("select") or goal.get("every") or goal.get("observe") or {}
+        # `per` WAS NEVER JUDGED, and it is a selector like any other. "a snapshot per
+        # machine that is running" carries a set of members exactly as `every` does, so a
+        # selector this branch could not read was the one shape that reached the writer
+        # unexamined — which is why rung 12's `status = 'up'` had nothing to stop it.
+        sel = (goal.get("select") or goal.get("every") or goal.get("observe")
+               or goal.get("per") or {})
         if not isinstance(sel, dict):
             _lost("its selector is not a set of members")
             return
@@ -1015,7 +1041,8 @@ def to_goals(raw: Dict[str, Any], request: str = "",
                 _lost(f"it names something that cannot exist ({why})")
                 return
             goal = {**goal, ("select" if "select" in goal else
-                             "every" if "every" in goal else "observe"): trimmed}
+                             "every" if "every" in goal else
+                             "observe" if "observe" in goal else "per"): trimmed}
         out.append(goal)
 
     def _scoped(goals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

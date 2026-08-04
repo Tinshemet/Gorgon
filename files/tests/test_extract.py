@@ -462,6 +462,53 @@ def test_the_same_goal_twice_is_one_goal():
 # production probe measures, and the drop-reporting test above. Found 2026-08-03 by adding a
 # test and watching the total not move — the exact symptom `_suite.py`'s own docstring names
 # as the only one this failure mode has.
+
+
+def test_a_value_outside_a_closed_set_matches_nothing_and_is_refused():
+    """THE WORST SHAPE A BAD FILTER TAKES, measured on rung 12's paraphrase 3 of 3.
+
+    *"make a restore point for each machine that is currently up"* — the model answers
+    `status = 'up'`. But `attr_values` declares the states a machine can be IN, and `up` is
+    not one, so the filter matches NOTHING for ever. A goal about nothing is VACUOUSLY TRUE:
+    the run plans zero snapshots, closes DONE, and the world disagrees. DONE_BUT_FALSE, which
+    is the only outcome the production probe calls unacceptable.
+
+    REFUSED RATHER THAN TRANSLATED. `up` plainly means `running` to a person, and mapping it
+    would be this module guessing what the operator meant — the job it exists not to have. A
+    declared synonym is a manifest row and the operator's call; an inferred one is how a
+    vocabulary starts.
+
+    AND NOT REPAIRED BY STRIPPING IT, which is the trap next door: dropping the filter turns
+    "snapshot the RUNNING ones" into "snapshot every machine", a request that CAN be met and
+    is a different one. Measured 2026-08-03 at 6 -> 12 false successes.
+    """
+    print("[extract] a value the world cannot hold is not a filter")
+    from engines.extract import unusable
+    check("a state outside the declared set is refused",
+          "not one of" in (unusable({"kind": "vm", "status": "up"}) or ""))
+    check("and a declared one is not",
+          unusable({"kind": "vm", "status": "running"}) is None)
+    # A REFERENCE IS NOT A VALUE YET. `$state` resolves at run time, so judging it here would
+    # refuse every procedure that takes its own filter as a parameter.
+    check("a $reference is left alone", unusable({"kind": "vm", "status": "$state"}) is None)
+    # AN OPEN ATTRIBUTE IS STILL OPEN. Only an attribute the manifest CLOSES is judged.
+    check("a label may be any word, including that one",
+          unusable({"kind": "vm", "label": "up"}) is None)
+
+    # `per` WAS NEVER JUDGED AT ALL, which is why this reached the writer. It carries a set of
+    # members exactly as `every` does.
+    dropped = []
+    raw = {"goals": [{"goal": "per",
+                      "select": {"kind": "vm",
+                                 "where": [{"attr": "status", "value": "up"}]},
+                      "make": "snapshot"}]}
+    goals = to_goals(raw, "make a restore point for each machine that is currently up",
+                     dropped)
+    check("a `per` over an impossible filter is dropped, whole", goals == [])
+    check("and the drop is reported, so the request is not half-read",
+          len(dropped) == 1 and "matches nothing" in dropped[0])
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "extract repairs"))
