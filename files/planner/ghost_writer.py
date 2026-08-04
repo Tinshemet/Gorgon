@@ -28,6 +28,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Dict, List, Optional, Tuple
 
+from .ir import config
 from .ir import effects
 from .ir import observe as _observe
 from .ir import refs
@@ -817,6 +818,68 @@ def _as_statement(tool: str, args: Dict[str, Any], kinds) -> Dict[str, Any]:
     return {"op": "call", "tool": tool, "args": args}
 
 
+def _by_reference(body: List[Dict[str, Any]], kinds) -> List[Dict[str, Any]]:
+    """A member this program MADE is referred to by the name it was bound to, not repeated.
+
+    THE OTHER HALF OF `new`, and `_as_statement` says so in as many words: *"doing `new`
+    properly means binding real identifiers AND referring to them with the sigil — a whole
+    change, not half of one."* Half was done. The writer bound `STORE vm1 = …` and then
+    wrote the string `vm1` on every line after it, so the binding was read by NOBODY and the
+    program described its own work as a set of coincidentally matching strings.
+
+    THE OPERATOR'S REASON, 2026-08-04, and it is the better one: *"gorgon does deal with
+    objects, vms are objects, networks are objects … all it does is interact with objects."*
+    A program that holds the machine it made can say what it is doing to it. One that repeats
+    a literal is naming something it hopes is the same thing.
+
+    AND IT IS WHAT MAKES THE CLASS SURFACE REAL. `$lab.add_vm($vm1)` needs `lab` bound to a
+    KIND, which is exactly what a `new` establishes — so this is also the line between a
+    method form that exists and one that ever appears.
+
+    THREE THINGS IT WILL NOT DO, each of which was a way to get it wrong:
+
+      * A MEMBER THE PROGRAM DID NOT MAKE stays a literal. The writer plans over a world it
+        read; a machine that was already there is not this program's to name, and rewriting
+        it would claim provenance the program does not have.
+      * A VALUE THAT IS NOT A REFERENCE is untouched — `effects.member_slots` answers which
+        arguments name a member, so `add_label(name: web, label: web)` rewrites the first and
+        leaves the second.
+      * A `NEW` OF SEVERAL BINDS A LIST (`scope[var] = names` when the amount is above one),
+        and a list in a `name:` slot is not a name. Only a creation of exactly one is a
+        receiver.
+
+    A REUSED VARIABLE IS SKIPPED ENTIRELY. `_as_statement` falls back to `{kind}1` when a
+    member's name is not a legal identifier, so two such creations bind the same word — and a
+    reference then means whichever ran last. Ambiguous is not better than literal.
+    """
+    seen: Dict[str, int] = {}
+    for st in body:
+        if st.get("op") == "new" and st.get("var"):
+            seen[st["var"]] = seen.get(st["var"], 0) + 1
+
+    made: Dict[tuple, str] = {}
+    out: List[Dict[str, Any]] = []
+    for st in body:
+        if st.get("op") == "call" and st.get("tool"):
+            slots = effects.member_slots(st["tool"], kinds)
+            args = dict(st.get("args") or {})
+            for arg, kind in slots.items():
+                var = made.get((kind, args.get(arg)))
+                if var:
+                    args[arg] = f"{config.SIGIL}{var}"
+            st = {**st, "args": args}
+        out.append(st)
+        # RECORDED AFTER THE STATEMENT IS EMITTED, because a creation cannot refer to itself:
+        # the name arrives WITH the line that makes it.
+        if st.get("op") == "new" and st.get("var") and seen.get(st["var"]) == 1 \
+                and st.get("amount", 1) == 1:
+            spec = effects._K(kinds).get(st.get("kind")) or {}
+            member = (st.get("args") or {}).get(spec.get("key"))
+            if member:
+                made[(st["kind"], member)] = st["var"]
+    return out
+
+
 def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
                temps: List = None, witness: bool = True) -> Dict[str, Any]:
     """The plan as a grounded Medusa program.
@@ -844,7 +907,7 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
             scratch.execute(tool, args)
     select = _seams_of(scratch)[0] if scratch is not None else (lambda s, scope=None: [])
     kinds_now = _kinds(scratch)
-    body = [_as_statement(t, a, kinds_now) for t, a in plan]
+    body = _by_reference([_as_statement(t, a, kinds_now) for t, a in plan], kinds_now)
 
     # THE DELIVERABLE — ask the thing the member was CREATED IN ORDER TO ANSWER.
     #

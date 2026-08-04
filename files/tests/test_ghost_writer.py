@@ -270,6 +270,61 @@ def test_verified_costs_still_hold():
     check(f"the writer never costs more than a model is priced at ({len(over)} do)", not over)
 
 
+def test_a_member_the_program_made_is_referred_to_and_not_repeated():
+    """THE OTHER HALF OF `new`, and `_as_statement` had already named it as unfinished:
+    *"doing `new` properly means binding real identifiers AND referring to them with the
+    sigil — a whole change, not half of one."*
+
+    THE OPERATOR'S REASON, 2026-08-04: *"gorgon does deal with objects, vms are objects,
+    networks are objects … all it does is interact with objects."* A program that HOLDS the
+    machine it made can say what it is doing to it; one that repeats a literal is naming
+    something it hopes is the same thing. It is also what makes the class surface appear at
+    all — a method needs a receiver, and a receiver is a bound name.
+
+    THE THREE REFUSALS ARE THE TEST. Each is a way to turn a readable program into a wrong
+    one, and none of them is hypothetical.
+    """
+    print("[writer] what the program made, it refers to")
+    from planner.ghost_writer import _by_reference
+    from planner.ir import config
+
+    made = [{"op": "new", "var": "lab", "kind": "network", "args": {"net_name": "lab"}},
+            {"op": "new", "var": "web", "kind": "vm", "args": {"name": "web"}},
+            {"op": "call", "tool": "add_vm_to_network",
+             "args": {"net_name": "lab", "vm_name": "web"}},
+            {"op": "call", "tool": "add_label", "args": {"name": "web", "label": "web"}}]
+    out = _by_reference(made, config.KINDS)
+    check("both ends of a relation become references",
+          out[2]["args"] == {"net_name": "$lab", "vm_name": "$web"})
+    # A VALUE THAT IS NOT A REFERENCE IS UNTOUCHED, even when it is the same word. A label
+    # that happens to equal a machine name is still a label.
+    check("and a value that merely LOOKS like a member is left alone",
+          out[3]["args"] == {"name": "$web", "label": "web"})
+
+    # A MEMBER THE PROGRAM DID NOT MAKE STAYS A LITERAL. The writer plans over a world it
+    # READ; a machine that was already there is not this program's to name, and claiming it
+    # would be claiming provenance the program does not have.
+    found = [{"op": "call", "tool": "launch_vm", "args": {"name": "already-there"}}]
+    check("a member the program did not make stays a literal",
+          _by_reference(found, config.KINDS) == found)
+
+    # A `NEW` OF SEVERAL BINDS A LIST — `scope[var] = names` when the amount is above one —
+    # and a list in a `name:` slot is not a name.
+    many = [{"op": "new", "var": "vms", "kind": "vm", "amount": 3, "args": {"name": "vm"}},
+            {"op": "call", "tool": "launch_vm", "args": {"name": "vm"}}]
+    check("a creation of several is not a receiver",
+          _by_reference(many, config.KINDS)[1]["args"] == {"name": "vm"})
+
+    # AND A REUSED VARIABLE IS SKIPPED ENTIRELY. `_as_statement` falls back to `{kind}1` when
+    # a member's name is not a legal identifier, so two such creations bind the same word and
+    # a reference means whichever ran last. Ambiguous is not better than literal.
+    twice = [{"op": "new", "var": "vm1", "kind": "vm", "args": {"name": "a"}},
+             {"op": "new", "var": "vm1", "kind": "vm", "args": {"name": "b"}},
+             {"op": "call", "tool": "launch_vm", "args": {"name": "a"}}]
+    check("an ambiguous binding is not used",
+          _by_reference(twice, config.KINDS)[2]["args"] == {"name": "a"})
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "ghost writer"))

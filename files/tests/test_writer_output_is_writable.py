@@ -118,6 +118,33 @@ def test_every_program_the_writer_emits_validates():
     check(f"all thirteen validate ({bad or 'all clean'})", not bad)
 
 
+def test_every_program_the_writer_emits_READS_BACK():
+    """VALIDATING IS NOT THE SAME AS BEING READABLE, and the gap is where this suite lives.
+
+    `validate` reads the IR. A person reads the TEXT — and between them sit a renderer and a
+    parser that nothing had asked to agree about the writer's own output. The moment the
+    writer began referring to what it made (`$vm1` rather than the literal `vm1`) that gap
+    became load-bearing: those lines print as METHOD calls, and a method form that did not
+    re-parse would mean every program the system writes stops being its own text.
+
+    `parse(render(ir)) == ir`, on all thirteen, in the direction a reader travels.
+    """
+    print("[writable] and every one of them reads back as itself")
+    from planner.ir.parse import parse
+    from planner.ir.render import render
+    bad = []
+    for n, program in _programs():
+        text = render(program)
+        try:
+            again = parse(text)
+        except Exception as exc:
+            bad.append(f"rung {n}: {type(exc).__name__}: {exc}")
+            continue
+        if again.get("body") != program.get("body"):
+            bad.append(f"rung {n}: read back as a different program")
+    check(f"all thirteen round trip ({bad or 'all clean'})", not bad)
+
+
 def test_the_guard_actually_fires_on_the_shape_that_slipped_through():
     """A test that cannot fail is not a guard. This is the exact statement that shipped."""
     print("[writable] the guard is not decorative")

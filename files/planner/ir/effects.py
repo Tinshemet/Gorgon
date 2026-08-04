@@ -481,6 +481,56 @@ def creators(kinds=None) -> Dict[str, str]:
     return out
 
 
+def member_slots(tool: str, kinds=None) -> Dict[str, str]:
+    """`{argument: kind}` — which of this tool's arguments NAME AN EXISTING MEMBER.
+
+    THE QUESTION IS NARROWER THAN "which arguments are strings" AND THAT IS THE POINT. A
+    label, an os_type and a display mode are values; a `vm_name` is a REFERENCE to something
+    in the world. Only the second kind may be rewritten into `$box`, and getting that wrong
+    turns `add_label(name: web, label: web)` into a program that labels a machine with a
+    reference to itself.
+
+    DERIVED FROM ROWS THAT ALREADY EXIST, every one of them:
+
+        a setter's `member_arg`        the thing being changed
+        a setter's `value_arg` + refs  the thing it is being joined TO
+        a deleter's / observer's key   the thing being removed or asked
+        an attribute named for a kind  "a snapshot of web" — the convention `precondition`
+                                       and `_named_in` already read, stated once more here
+
+    A CREATOR IS ABSENT, deliberately: its arguments DESCRIBE WHAT TO MAKE rather than name
+    what exists (`creators`' own note), and `create_vm(name: web)` is where the name comes
+    FROM. Rewriting it would make a program refer to a thing before the line that makes it.
+    """
+    out: Dict[str, str] = {}
+    for kind, spec in _K(kinds).items():
+        key = spec.get("key")
+        for rows, is_setter in (((spec.get("setters") or {}), True),
+                                ((spec.get("unsetters") or {}), True)):
+            row = rows.get(tool)
+            if not row:
+                continue
+            if row.get("member_arg"):
+                out[row["member_arg"]] = kind
+            if row.get("refs") and row.get("value_arg"):
+                out[row["value_arg"]] = row["refs"]
+        if key and tool == spec.get("delete"):
+            out[key] = kind
+        for o in (spec.get("observed") or {}).values():
+            if key and o.get("by") == tool:
+                out[key] = kind
+        # AN ATTRIBUTE NAMED FOR A KIND REFERS TO A MEMBER OF IT — a snapshot's `vm`, a
+        # page's `crawl`. Read off the CREATOR's argument names, where the tie lives, and
+        # only for the tie itself: the key of the thing being made is not a reference.
+        if tool == spec.get("create"):
+            rename = spec.get("create_args") or {}
+            for attr in (spec.get("attrs") or ()):
+                if attr == key or attr not in _K(kinds):
+                    continue
+                out[rename.get(attr, attr)] = attr
+    return out
+
+
 def creator_for(kind: str, named: Optional[str] = None, copying: bool = False,
                 kinds=None) -> Dict[str, Any]:
     """WHICH constructor a `NEW` runs — the tool, and whether it copies.

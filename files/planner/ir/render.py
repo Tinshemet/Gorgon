@@ -349,6 +349,18 @@ def _select(sel) -> str:
             listed = ", ".join(str(x) for x in m) if isinstance(m, (list, tuple)) else m
             return (f"{_w('include')} {k} = [{listed}]" if isinstance(m, (list, tuple))
                     else f"{_w('include')} {k} = {listed}")
+        # QUOTED IS A STRING, BARE IS A VALUE, and this printed everything quoted. A REAL
+        # boolean in a selector — `alive: False`, which is what an observed attribute holds —
+        # came out as `alive = 'False'` and read back as the four-letter string, so a program
+        # the writer emitted was not the program it was: rung 11 asserted a machine whose
+        # liveness was the word "False".
+        #
+        # THE ASYMMETRY IS THE FIX AND IT IS ALREADY THE PARSER'S RULE. `alive = false` reads
+        # back a boolean and `template = 'true'` reads back the string the manifest writes —
+        # so quoting only what IS a string is what makes the two directions meet. Everything
+        # else stays quoted, which is what keeps `name = '3'` a name.
+        if isinstance(v, bool):
+            return f"{k} = {'true' if v else 'false'}"
         return f"{k} = '{v}'"
 
     groups = []
