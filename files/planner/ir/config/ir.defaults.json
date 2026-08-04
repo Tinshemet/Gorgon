@@ -13,16 +13,13 @@
  "_request_evidence_doc": "WORDS THE REQUEST MUST CONTAIN for a shape to be believable, read out of the SENTENCE because the goals cannot hold the evidence. Two readers each, and both ask the same list: `reach` gates the goal shape both at generation (it is not offered to a request that never mentions reaching) and at conversion; `except` stops `_scoped` folding a named member into an unfiltered `every`, because a member beside an exception is the CARVE-OUT and not the receiver — measured on rung 8, where 'every vm on core EXCEPT db' put db ON core. HERE RATHER THAN IN THE MODULE so the vocabulary is data like every other list the language holds; `reach` is matched as whole words, `except` as substrings because 'apart from' is two of them.",
  "request_evidence": {
   "reach": [
-   "ping",
    "reach",
    "reachable",
-   "connect",
-   "connected",
-   "communicate",
-   "talk",
-   "see",
    "mesh",
-   "each"
+   "each other",
+   "one another",
+   "between them",
+   "amongst themselves"
   ],
   "except": [
    "except",
@@ -32,7 +29,8 @@
    "but not",
    "excluding",
    "leaving out"
-  ]
+  ],
+  "_reach_doc": "REACH IS A MUTUAL RELATION, AND THE VERB IS NOT THE SIGNAL. This listed the networking VERBS — ping, see, talk, communicate, connect — and every one of them is distributive as often as it is mutual. 'ping every vm and stop the ones that do not answer' is a probe of each machine; 'connect web to it' is an attachment. Both got `reach` offered, and the model took it: rung 11 answered `reach vm min 2` for a clause that is `every vm[alive=false] must status=stopped`, and rung 3's paraphrase answered `reach network min 2` for an attach. MEASURED 2026-08-04, and 2026-08-03 had already recorded the shape — the model 'grabbed the one taking a bare set' when it had nothing else to say. WHAT MAKES A REQUEST MEAN REACH IS MUTUALITY: each other, one another, between them — or the word `reach` itself. A verb says what is done TO members; only the phrase says they must do it to EACH OTHER. This is the same narrowing that worked in 6e5896e: a shape a request cannot mean is not offered to it."
  },
  "loop_var": "item",
  "_params_doc": "Parameter types a procedure may declare, TYPE FIRST: (INT X, STRING name). Parameters are AUTHORED, not derived — unlike `imports`, which the harness computes: only the author knows which values are meant to vary per invocation. `sql` is how the type is written; `py` is what a supplied value is checked against. DURATION and BYTES exist because this domain keeps needing them and a bare int loses the unit — a routine says EVERY 1h, a disk check says 20GB, and 'is 3600 seconds or an hour?' is the kind of ambiguity that only shows up in production.",
