@@ -552,9 +552,34 @@ def _to_select(raw: Dict[str, Any]) -> Dict[str, Any]:
     """
     kind = raw.get("kind")
     alias = ((config.KINDS or {}).get(kind) or {}).get("aliases") or {}
+    key = ((config.KINDS or {}).get(kind) or {}).get("key")
     out: Dict[str, Any] = {"kind": kind}
     for pair in raw.get("where") or []:
-        out[alias.get(pair["attr"], pair["attr"])] = _coerce(pair["value"])
+        attr = alias.get(pair["attr"], pair["attr"])
+        value = _coerce(pair["value"])
+        # THE KEY SAID TWICE IS A LIST, NOT AN OVERWRITE. "make sure n1, n2 and n3 can all
+        # ping each other" comes back as three `where` pairs on `name`, and this line kept
+        # the last one — so a request about THREE machines became a goal about ONE, and a
+        # `reach` over one member is trivially true. Rung 9, DONE_BUT_FALSE, deterministically.
+        #
+        # IT IS A DERIVATION, NOT A GUESS, and that is what separates it from the repairs
+        # this module has had to withdraw. A member has exactly ONE key, so `name = n1 AND
+        # name = n2` is provably EMPTY as a conjunction — there is no world where it holds.
+        # Membership is the only reading under which the answer says anything at all, and it
+        # PRESERVES what was already being thrown away rather than inventing anything.
+        #
+        # THE KEY, AND ONLY THE KEY. `label` is multi-valued — a machine may carry `red` AND
+        # `blue`, so folding those to "either" would change what was asked. `status` is
+        # single-valued but CLOSED, and two states is a contradiction the value guard already
+        # reports. Neither is this rule's business.
+        if attr == key and attr in out and out[attr] != value:
+            held = out[attr]
+            members = list(held["in"]) if isinstance(held, dict) and "in" in held else [held]
+            if value not in members:
+                members.append(value)
+            out[attr] = {"in": members}
+            continue
+        out[attr] = value
     carve = {}
     for pair in raw.get("except") or []:
         carve[alias.get(pair["attr"], pair["attr"])] = _coerce(pair["value"])

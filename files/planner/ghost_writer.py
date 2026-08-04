@@ -427,7 +427,15 @@ def _named_in(goals, kinds) -> set:
             kind = sel.get("kind")
             key = (effects._K(kinds).get(kind) or {}).get("key")
             if kind and key and sel.get(key):
-                out.add((kind, sel[key]))
+                # A MEMBERSHIP LIST NAMES SEVERAL, AND THE OPERATOR SAID ALL OF THEM. "n1,
+                # n2 and n3" arrives as `{in: [...]}` since the day a repeated key stopped
+                # collapsing to its last value, and every one of those is a member the
+                # request mentioned — so every one is theirs, not the program's to tear down.
+                held = sel[key]
+                for one in (held["in"] if isinstance(held, dict)
+                            and isinstance(held.get("in"), list) else [held]):
+                    if isinstance(one, (str, int, float, bool)):
+                        out.add((kind, one))
             # A NAME MENTIONED AS AN ATTRIBUTE IS STILL A NAME. "a snapshot of web" names
             # `web` as plainly as "the machine web" does — the operator said it, so the
             # machine is theirs and the program does not take it down afterwards. Missing

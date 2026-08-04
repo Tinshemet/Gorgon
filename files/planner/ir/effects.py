@@ -256,6 +256,12 @@ def invert(pred: Dict[str, Any], kinds=None, internal: bool = False) -> Optional
     if not key or key not in sel:
         return None                       # no named member — a set-level goal, not a tile
     member = sel[key]
+    # A MEMBERSHIP LIST IS NOT ONE MEMBER, so it is not a tile either. `name IN [n1, n2, n3]`
+    # names three, and every branch below builds ONE call around ONE name — a creator handed
+    # the list would make a machine called `{'in': [...]}`. Declining sends it to `_lower`,
+    # which is the layer that turns a statement about a set into statements about members.
+    if not isinstance(member, (str, int, float, bool)):
+        return None
     rest = {k: v for k, v in sel.items() if k not in ("kind", key)}
 
     if pred.get("eq") == 0:
