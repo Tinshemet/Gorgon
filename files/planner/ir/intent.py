@@ -78,8 +78,11 @@ _PREFIXES = {"achieve:": ACHIEVE, "command:": ACHIEVE, "do:": ACHIEVE,
 # offering a fetch only the tools that ask — and that is a schema change nobody has measured,
 # so it is not made here on the strength of it sounding right.
 _PERMITS = {
-    FETCH:   {"fetch", "publish", "call", "foreach", "if"},
-    ENSURE:  {"fetch", "ensure", "publish", "call", "foreach", "if"},
+    # `break` SITS AT EVERY RUNG, like `if`. It reaches nothing, changes nothing and asserts
+    # nothing — it only shortens the loop it is inside — so withholding it from a FETCH would
+    # forbid a retrieval from stopping early, which is a restriction with no rung behind it.
+    FETCH:   {"fetch", "publish", "call", "foreach", "if", "break"},
+    ENSURE:  {"fetch", "ensure", "publish", "call", "foreach", "if", "break"},
     ACHIEVE: None,                # the whole language
 }
 

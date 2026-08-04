@@ -180,6 +180,11 @@
    ],
    "acts": true
   },
+  "break": {
+   "required": [],
+   "fields": [],
+   "doc": "leave the FOREACH you are inside, now. It takes nothing and touches nothing: it is the one statement whose whole effect is on the loop around it. Put it under an IF, or it stops the loop on the first member. WHAT IT DOES NOT DO is decide the outcome — the program's closing ENSURE still judges the world, so a loop that left early reports honestly rather than passing because it stopped trying."
+  },
   "ensure": {
    "required": [
     "predicate"
@@ -225,7 +230,8 @@
     "foreach",
     "ensure",
     "achieve",
-    "if"
+    "if",
+    "break"
    ],
    "doc": "every member of the kind, with NO condition — 'all the machines', 'every vm'"
   },
@@ -238,7 +244,8 @@
     "foreach",
     "ensure",
     "achieve",
-    "if"
+    "if",
+    "break"
    ],
    "doc": "the members matching a CONDITION — 'every vm that is stopped'. The condition may be negative ('the ones that do not answer') and it is STILL a condition, because nothing is subtracted from a named whole"
   },
@@ -263,7 +270,8 @@
     "foreach",
     "ensure",
     "achieve",
-    "if"
+    "if",
+    "break"
    ],
    "doc": "a named WHOLE, MINUS named members — 'every vm except db'. There must be a whole to subtract from; without one it is a condition, not an exclusion"
   }
@@ -273,7 +281,8 @@
    "new",
    "call",
    "foreach",
-   "if"
+   "if",
+   "break"
   ],
   "intent": [
    "fetch",
@@ -935,7 +944,8 @@
   "_doc": "`call` WAS deliberately absent — an invocation read as bare `tool(args)` on the argument that invocation needs no keyword. THE OPERATOR OVERRULED IT, twice: a tool call is the one statement that reaches the world, and a program where the acting lines are the only ones without a keyword makes the acts the quietest thing on the page. `CALL create_vm(...)` says what the line DOES before it says what it touches, and it reads the same way `ENSURE` and `ACHIEVE` do. Everything the renderer prints is here, so this was a one-word data change and the stored form never moved.",
   "every": "EVERY",
   "when": "WHEN",
-  "_schedule_doc": "A ROUTINE'S SCHEDULE IS THE ONE THING THE BODY CANNOT SAY, which is why it is the only new word here. The operator settled on 2026-08-02 that a procedure's CONTRACT needs no keyword — \"we dont even need the achieve ... because new should cover it in the internal achieve it has\" — and that is right: a creation already states what it makes, so declaring it again would be the same fact written twice, and the two would disagree the day one was edited. A SCHEDULE IS NOT LIKE THAT. Nothing in EVERY 1h follows from any statement in the body, so it cannot be derived from anything and has to be written down. It sits in the HEADER rather than the body because it is not a step the program takes; it is a fact about when the program is taken."
+  "_schedule_doc": "A ROUTINE'S SCHEDULE IS THE ONE THING THE BODY CANNOT SAY, which is why it is the only new word here. The operator settled on 2026-08-02 that a procedure's CONTRACT needs no keyword — \"we dont even need the achieve ... because new should cover it in the internal achieve it has\" — and that is right: a creation already states what it makes, so declaring it again would be the same fact written twice, and the two would disagree the day one was edited. A SCHEDULE IS NOT LIKE THAT. Nothing in EVERY 1h follows from any statement in the body, so it cannot be derived from anything and has to be written down. It sits in the HEADER rather than the body because it is not a step the program takes; it is a fact about when the program is taken.",
+  "break": "BREAK"
  },
  "intent": {
   "_doc": "What the operator wants BACK — data, a verdict, or the thing done — is theirs to say, not the author's to infer. The three intents are the three words: FETCH retrieves, ENSURE verifies, ACHIEVE commands. Authority nests (fetch < ensure < achieve) and is ENFORCED, see ir/intent.py. These markers are deliberately FEW: a marker set, not a vocabulary trying to parse English. A sentence using none is asked about, not guessed at.",

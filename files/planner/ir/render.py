@@ -127,6 +127,9 @@ def _statement(st: Any, indent: str, binds: Optional[Dict[str, str]] = None) -> 
         return _with_tail([f"{indent}{lead}{head}"
                            f"{f'({extra})' if extra else ''}{src};"], st, indent, binds)
 
+    if op == "break":
+        return [f"{indent}{_w('break')};"]
+
     if op == "publish":
         # THE ONE STATEMENT WHOSE EFFECT IS ON THE CONVERSATION. It names the fact and never
         # a value — the engine supplies what it actually observed — so a reader can tell at a

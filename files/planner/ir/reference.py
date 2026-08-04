@@ -115,6 +115,20 @@ _EXAMPLES: List[Dict[str, str]] = [
              "  ENSURE COUNT(SELECT vm WHERE label = 'red' AND status = 'running' "
              "IN $hosts) = 0;\n"
              "}"},
+    {"title": "stop looping once you have what you came for",
+     "why": "BREAK leaves the FOREACH it is inside. Put it under an IF, or it stops the loop "
+            "on the first member. It does NOT decide the outcome: the checks after the loop "
+            "still run, so a loop that left early is judged on the world it left behind "
+            "rather than credited for stopping. A BREAK with no loop around it is refused.",
+     "code": "PROCEDURE keep_two_running() {\n"
+             "  FOREACH $item IN SELECT vm WHERE status = 'running' {\n"
+             "    IF COUNT(SELECT vm WHERE status = 'running') = 2 {\n"
+             "      BREAK;\n"
+             "    }\n"
+             "    $item.stop();\n"
+             "  }\n"
+             "  ENSURE COUNT(SELECT vm WHERE status = 'running') = 2;\n"
+             "}"},
     {"title": "a routine — a procedure the clock calls",
      "why": "A routine is not a second kind of thing. It is a procedure carrying EVERY in "
             "its header, which is the one fact no statement in the body could state. WHEN "

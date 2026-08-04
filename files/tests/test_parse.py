@@ -68,6 +68,13 @@ CORPUS = {
         {"op": "call", "tool": "launch_vm", "args": {"name": "$item"}}]}]},
     "foreach over a literal list": {"body": [{"op": "foreach", "in": ["a", "b"], "do": [
         {"op": "call", "tool": "stop_vm", "args": {"name": "$item"}}]}]},
+    # A BREAK ONLY EXISTS INSIDE A LOOP, so its round-trip case carries the loop with it —
+    # the corpus renders and re-parses whole programs, and a bare BREAK is not one.
+    "break, under an if, inside a loop": {"body": [
+        {"op": "foreach", "select": {"kind": "vm"}, "do": [
+            {"op": "if", "cond": {"shape": "count", "select": {"kind": "vm"}, "eq": 1},
+             "then": [{"op": "break"}]},
+            {"op": "call", "tool": "stop_vm", "args": {"name": "$item"}}]}]},
     "if / else": {"body": [{"op": "if",
                             "cond": {"shape": "count", "select": {"kind": "vm"}, "gte": 1},
                             "then": [{"op": "publish", "fact": "ok"}],
@@ -180,11 +187,19 @@ def test_no_op_renders_to_something_unreadable():
     covered = {st.get("op")
                for ir in list(CORPUS.values()) + list(AWKWARD.values())
                for st in ir["body"]}
-    # Blocks nest, so an op that only ever appears INSIDE one still counts as covered.
-    for ir in CORPUS.values():
-        for st in ir["body"]:
+    # Blocks nest, so an op that only ever appears INSIDE one still counts as covered — and
+    # it has to DESCEND, not peek one level. `break` lives under an `if` under a `foreach`,
+    # which is two deep, and a shallow scan reported the one op that cannot appear at the top
+    # level as the one op with no case. Same lesson `validate._walk_stmts` records.
+    def _deep(stmts):
+        for st in stmts or ():
+            if not isinstance(st, dict):
+                continue
+            covered.add(st.get("op"))
             for key in ("then", "else", "do", "ifails"):
-                covered |= {k.get("op") for k in (st.get(key) or [])}
+                _deep(st.get(key))
+    for ir in list(CORPUS.values()) + list(AWKWARD.values()):
+        _deep(ir["body"])
     missing = sorted(emitted - covered)
     check(f"every rendered op has a round-trip case ({missing or 'all covered'})",
           not missing)
@@ -423,6 +438,57 @@ def test_select_within_a_set_the_program_holds():
     other = parse("ENSURE COUNT(SELECT vm INCLUDE label = [red, blue]) = 2;")
     check("membership of a non-key attribute is untouched",
           render(other).strip() == "ENSURE COUNT(SELECT vm INCLUDE label = [red, blue]) = 2;")
+
+
+def test_break_leaves_the_loop_and_the_witness_still_judges():
+    """The operator's addition, 2026-08-04: *"we can add a BREAK for FOREACH"*.
+
+    THE PROPERTY THAT MATTERS IS NOT THAT IT STOPS. It is that stopping early does not buy a
+    pass: the loop ends, the statements after it still run, and the program's closing ENSURE
+    still asks the world. A loop that gave up reports honestly rather than succeeding because
+    it stopped trying — which is the one rule this whole system is built on.
+
+    AND WHAT FOLLOWS A BREAK IS NOT `abandoned`. That field means "did not run because
+    something FAILED", and a break is not a failure; reporting it there would make a working
+    loop read as a program that quietly left work undone.
+    """
+    print("[parse] break leaves the loop, and proves nothing by it")
+    from planner.ir import run as ir_run
+    from planner.ir.validate import validate
+    from tests.bench.seams import seams
+    from tests.bench.sim_world import SimWorld
+
+    src = """PROCEDURE p() {
+  FOREACH $item IN SELECT vm WHERE status = 'running' {
+    IF COUNT(SELECT vm WHERE status = 'running') = 2 {
+      BREAK;
+    }
+    $item.stop();
+  }
+  ENSURE COUNT(SELECT vm WHERE status = 'running') = 2;
+}"""
+    ir = parse(src)
+    check("it round trips", render(ir).strip() == src.strip() and parse(render(ir)) == ir)
+
+    world = SimWorld()
+    for n in ("a", "b", "c", "d"):
+        world.execute("create_vm", {"name": n, "os_type": "linux"})
+        world.execute("launch_vm", {"name": n})
+    select, holds = seams(world)
+    res = ir_run(ir, world.execute, select=select, holds=holds,
+                 known_names=world.names(), consent=True, intent="achieve")
+    stopped = sorted(n for n, v in world.vms.items() if v["status"] == "stopped")
+    check(f"the loop stops when the condition says so ({stopped})", len(stopped) == 2)
+    check("the statement after the loop still runs, and its verdict stands", res["ok"])
+    check("and what follows a BREAK is not reported as abandoned work",
+          "abandoned" not in res)
+
+    # A BREAK WITH NO LOOP AROUND IT IS A PROGRAM ERROR, refused before anything runs. Asked
+    # of the SHAPE — an IF three deep inside a loop may break; the same IF at the top may not.
+    ok, problems = validate(parse("PROCEDURE p() {\n  IF COUNT(SELECT vm) = 1 { BREAK; }\n"
+                                  "  ENSURE COUNT(SELECT vm) >= 0;\n}"))
+    check(f"a break outside a loop is refused ({problems[:1]})",
+          not ok and any("not inside a loop" in p for p in problems))
 
 
 def test_a_broken_file_says_where():

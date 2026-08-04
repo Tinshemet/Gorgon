@@ -25,6 +25,13 @@ from .. import procedures as _procs
 from .validate import coerce_body, validate
 
 
+# LEAVING A LOOP IS NOT FAILING ONE, and the visitor's only channel out of a statement was a
+# failure dict — so a BREAK needed a signal of its own rather than a value that would be read
+# as "something went wrong". Compared by IDENTITY, never by contents, so no program can
+# produce one by accident.
+_LEAVE: Dict[str, Any] = {"leave": "break"}
+
+
 def _books():
     """The creation ledger, imported lazily.
 
@@ -336,6 +343,12 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
         """
         for i, st in enumerate(stmts):
             bad = _one(st)
+            # A BREAK IS NOT A FAILURE, so what follows it is not ABANDONED — it is
+            # deliberately not run, which is the whole point of the statement. Recording the
+            # tail here would report a working loop as a program that quietly did not finish
+            # its work, which is the one thing `abandoned` exists to make visible.
+            if bad is _LEAVE:
+                return bad
             if bad is not None:
                 dropped = list(stmts[i + 1:])
                 if dropped:
@@ -356,6 +369,12 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
     def _one(st: Dict) -> Optional[Dict]:
         op = st.get("op")
         before = len(failures)
+
+        # `BREAK` — hand the signal up. Whether there is a loop to catch it is `validate`'s
+        # question, asked before anything runs; if one ever escapes to the top level the
+        # visitor treats it as the program error it is rather than silently ending the run.
+        if op == "break":
+            return _LEAVE
 
         proc = _procs.LIBRARY.get(st.get("tool")) if op == "call" else None
         if proc is not None:
@@ -567,7 +586,10 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
             # would let programs be written against behaviour that does not exist yet.
             inner = st.get("call")
             block = st.get("do")
+            left = False
             for m in members:
+                if left:
+                    break
                 if inner is not None:
                     _do(inner["tool"],
                         _resolve(inner.get("args") or {}, {**scope, config.LOOP_VAR: m}))
@@ -584,6 +606,13 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
                 bad = _block(block)
                 scope.clear()
                 scope.update(outer)
+                # THE LOOP IS WHERE A BREAK STOPS. It is caught here and not propagated, so
+                # the statements AFTER the loop still run and the program's closing ENSURE
+                # still judges the world — a loop that left early reports honestly rather
+                # than passing because it stopped trying.
+                if bad is _LEAVE:
+                    left = True
+                    continue
                 if bad is not None:
                     return bad
 
@@ -674,6 +703,14 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
 
     for i, st in enumerate(body):
         bad = _one(st)
+        # A BREAK WITH NO LOOP AROUND IT is a program error, and `validate` refuses one before
+        # anything runs. This is the belt beside it: reported as a failure rather than
+        # silently ending the run, because a program that stops early and says nothing is the
+        # shape this whole system exists to refuse.
+        if bad is _LEAVE:
+            bad = {"ok": False, "failed": "break outside a loop",
+                   "why": "BREAK leaves a FOREACH, and there is none here",
+                   "scope": scope, "calls": calls, "failures": failures}
         if bad is not None:
             # WHAT NEVER RAN, reported rather than silently dropped. A failed predicate
             # returns from here, so every statement after it is abandoned — and nothing

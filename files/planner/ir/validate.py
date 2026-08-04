@@ -176,6 +176,9 @@ def validate(program: Any, known_tools=None, known_names=None,
     # AUTHORED — only the author knows what varies per invocation — where `imports` are
     # DERIVED by the harness. Different provenance, so different halves of the header.
     params = program.get("params") if isinstance(program, dict) else None
+    # WHETHER THIS IS A NESTED BLOCK, captured BEFORE `bound` is normalised — one line
+    # later it is a set either way and the question can no longer be asked.
+    nested = bound is not None
     bound = set(bound or ())        # a COPY — see the docstring on scoping
     # Which bound names hold a CALL RESULT. Only those have fields, so only those may
     # carry a dotted path.
@@ -646,7 +649,42 @@ def validate(program: Any, known_tools=None, known_names=None,
     # this is a restriction being removed, not a feature being added.
     problems += _check_precondition_is_not_the_goal(body)
     problems += _check_used_before_created(body, known_names)
+    # ASKED ONCE, FROM THE OUTSIDE. This check descends on its own, and a nested block is
+    # validated by a recursive call to `validate` — so running it there too would ask about a
+    # loop body IN ISOLATION, where the loop that makes its BREAK legal is invisible, and
+    # report every correct break as a stray one. `bound is None` is this function's existing
+    # signal for "not a nested block": the docstring says so, and every recursive call passes
+    # a set.
+    if not nested:
+        problems += _check_break_has_a_loop(body)
     return (not problems), problems
+
+
+def _check_break_has_a_loop(body: Any, inside: bool = False) -> List[str]:
+    """A `BREAK` leaves the FOREACH it is inside, so there has to be one.
+
+    ASKED OF THE SHAPE, NOT OF THE LINE, which is why it is here and not in the per-statement
+    loop: whether a statement is inside a loop is a fact about its ANCESTORS. An `IF` nested
+    three deep inside a body may break; the same `IF` at the top of a program may not.
+
+    A NESTED FOREACH SATISFIES ITS OWN CHILDREN and nothing further out — a break leaves the
+    innermost loop, which is what every language with the word means by it, and what the
+    visitor does.
+    """
+    out: List[str] = []
+    for st in body or []:
+        if not isinstance(st, dict):
+            continue
+        if st.get("op") == "break" and not inside:
+            out.append("BREAK leaves a FOREACH, and this one is not inside a loop")
+        # A LOOP'S OWN BODY IS INSIDE IT; everything else keeps whatever it already was, so
+        # an IF inside a loop may break and an IF outside one may not.
+        for field in ("do", "then", "else", "ifails"):
+            kids = st.get(field)
+            if isinstance(kids, list):
+                out += _check_break_has_a_loop(
+                    kids, inside or (st.get("op") == "foreach" and field == "do"))
+    return out
 
 
 def _creator_for(kind: str, st: Dict[str, Any], with_supplied: bool = False):

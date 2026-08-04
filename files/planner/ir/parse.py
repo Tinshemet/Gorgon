@@ -460,6 +460,14 @@ def _bare_statement(cur: _Cursor) -> Dict[str, Any]:
         return {"op": op, "predicate": pred}
     if head == _word("if").upper():
         return _if(cur)
+    # `BREAK;` — THE ONE STATEMENT WHOSE WHOLE EFFECT IS ON THE LOOP AROUND IT. It takes
+    # nothing, so there is nothing to parse but the semicolon; whether it is INSIDE a loop is
+    # `validate`'s question, because that is a fact about the program's shape rather than
+    # about this line.
+    if head == _word("break").upper():
+        cur.take()
+        cur.take(";")
+        return {"op": "break"}
     raise ParseError(f"not a statement: {t.value!r}", t.line)
 
 

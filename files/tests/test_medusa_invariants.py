@@ -145,6 +145,7 @@ _OP_EFFECT = {
     "ensure":  "produces a verdict",
     "achieve": "produces a verdict",
     "if":      "runs one branch",
+    "break":   "leaves the loop it is inside",
 }
 
 
