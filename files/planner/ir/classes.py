@@ -46,6 +46,22 @@ UNMAKE = "unmake"      # the destructor
 SET = "set"            # a setter: give this member an attribute
 UNSET = "unset"        # an unsetter: take one away
 ASK = "ask"            # an observation: establish a fact by asking
+ACT = "act"            # something you DO to it, whose effect the manifest cannot name
+
+# WHY `ACT` HAD TO EXIST, and it is the operator's request that forced it: *"to vm add:
+# modify, getters about os_types, etc… kill, etc… everything"*, and *"its to replace the
+# straight forward tool calls"*.
+#
+# THIRTY-FOUR OF THE LAB'S FIFTY-THREE TOOLS WERE UNREACHABLE FROM MEDUSA. Almost every one
+# takes `name` — a receiver — so almost every one is a method that had nowhere to be
+# declared: the manifest could say a tool CREATES, DELETES, WRITES AN ATTRIBUTE or ANSWERS A
+# QUESTION, and `open_shell`, `run_guest_command`, `resize_disk` and `update_config` are none
+# of those. They act, and what they change is not a fact the language names.
+#
+# AND THAT IS EXACTLY WHY AN ACT PROMISES NOTHING. `postcondition` returns None for one,
+# which the writer already reads as "this tool proves nothing" — the safe reading, and the
+# honest one. An act is reachable, auditable and gated like any call; what it is NOT is
+# evidence. A program that acts still has to ENSURE.
 
 
 class Method:
@@ -59,11 +75,27 @@ class Method:
 
     def __init__(self, kind: str, name: str, verb: str, tool: str,
                  receiver_arg: Optional[str] = None, value_arg: Optional[str] = None,
-                 attr: Optional[str] = None, value: Any = None, doc: str = ""):
+                 attr: Optional[str] = None, value: Any = None, doc: str = "",
+                 takes: Optional[List[str]] = None,
+                 fixed: Optional[Dict[str, Any]] = None,
+                 into: Optional[str] = None):
         self.kind = kind
         self.name = name
         self.verb = verb
         self.tool = tool
+        # WHAT ELSE THE CALL TAKES, in the order it is written. A setter takes one thing and
+        # says so with `value_arg`; `set_resource_limits(cpu_percent, memory_mb)` takes two
+        # and `open_shell()` takes none, so the general shape is a LIST and `value_arg` is
+        # the first of it. Positional, like every other method here — the manifest already
+        # says which slot each value goes into, so naming them at the call site would be the
+        # caller repeating what the class knows.
+        self.takes = list(takes) if takes else ([value_arg] if value_arg else [])
+        # ARGUMENTS THE METHOD ALWAYS SENDS AND THE CALLER NEVER CHOOSES. `$vm.kill()` is
+        # `stop_vm(force: true)` — the same tool as `$vm.stop()`, distinguished by an
+        # argument that IS the method's meaning rather than a parameter of it.
+        self.fixed = dict(fixed or {})
+        # THE OBJECT ARGUMENT THIS METHOD'S VALUES GO INSIDE, when the tool takes one.
+        self.into = into
         # WHICH ARGUMENT NAMES THE RECEIVER. `add_vm_to_network` takes `vm_name` where
         # `add_label` takes `name`, and a class that assumed one spelling would be a second
         # authority for something the manifest already states per setter.
@@ -73,20 +105,34 @@ class Method:
         self.value = value
         self.doc = doc
 
-    def call(self, receiver: str, value: Any = None) -> tuple:
+    def call(self, receiver: str, *values: Any) -> tuple:
         """`(tool, args)` — the call this method IS, for one member.
 
         THE SAME PAIR THE WRITER ALREADY PLANS AND THE EXECUTOR ALREADY RUNS. A method that
         produced something else would need a second runtime, and the whole argument for
         deriving these is that there is nothing new underneath.
+
+        A VALUE NOT SUPPLIED IS NOT SENT, rather than sent as null. Most of these arguments
+        are optional in the tool that receives them — `get_vm_logs(lines)`, `resize_disk
+        (disk_index)` — and a null in an optional slot is a caller saying "none of them"
+        where they meant "you choose".
         """
         args: Dict[str, Any] = {}
         if self.receiver_arg:
             args[self.receiver_arg] = receiver
-        if self.value_arg is not None and value is not None:
-            args[self.value_arg] = value
-        elif self.value is not None and self.value_arg is None and self.verb == SET:
-            pass                      # a fixed-value setter takes no value argument
+        for slot, value in zip(self.takes, values):
+            if value is None:
+                continue
+            # A VALUE THAT GOES INSIDE AN OBJECT ARGUMENT. `update_config` takes `updates`,
+            # an OBJECT, and Medusa has no object literal — so `$vm.modify(memory_mb=8192)`
+            # could only ever hand it a string, which is a method that always fails. Declared
+            # per act with `into`, the value is placed where the tool wants it and the caller
+            # writes what they mean: `$vm.memory(8192)`.
+            if self.into:
+                args.setdefault(self.into, {})[slot] = value
+            else:
+                args[slot] = value
+        args.update(self.fixed)
         return self.tool, args
 
     def __repr__(self) -> str:
@@ -208,6 +254,19 @@ def methods(kind: str, kinds=None) -> Dict[str, Method]:
                                    doc=(f"{'add a' if verb == SET else 'take a'} {other} "
                                         f"{'to' if verb == SET else 'out of'} this {kind}"))
 
+    # THINGS YOU DO TO IT. Keyed by METHOD rather than by tool, which is the one place this
+    # map differs from `setters` and it is what lets `stop` and `kill` be the same tool told
+    # apart by an argument. The row names the tool, which argument is the receiver, what else
+    # it takes in order, and anything it always sends.
+    for mname, a in (spec.get("acts") or {}).items():
+        if not a.get("tool"):
+            continue
+        out[mname] = Method(kind, mname, ACT, a["tool"],
+                            receiver_arg=a.get("member_arg") or key,
+                            takes=a.get("takes"), fixed=a.get("args"),
+                            into=a.get("into"),
+                            doc=a.get("doc") or f"act on this {kind}")
+
     for fact, o in (spec.get("observed") or {}).items():
         if o.get("by"):
             # THE MANIFEST'S OWN WORDS WHEN IT HAS ANY. `vm.alive` is documented where it is
@@ -249,7 +308,7 @@ def public(kind: str, kinds=None) -> str:
 # ── the one question the parser and the renderer both ask ──────────────────────────────
 def receiver(tool: str, args: Dict[str, Any], binds: Dict[str, str],
              kinds=None) -> Optional[tuple]:
-    """`(var, method, value)` when this call IS a method on a bound receiver. Else None.
+    """`(var, method, values)` when this call IS a method on a bound receiver. Else None.
 
     ONE AUTHORITY, TWO READERS, and they must agree or the language is not writable. The
     RENDERER prints `$box.launch()` wherever this answers, and the PARSER refuses the long
@@ -269,6 +328,7 @@ def receiver(tool: str, args: Dict[str, Any], binds: Dict[str, str],
     """
     if not isinstance(args, dict):
         return None
+    hits = []
     for kind, ms in surface(kinds).items():
         for m in ms.values():
             if m.tool != tool or m.verb == MAKE or not m.receiver_arg:
@@ -279,10 +339,25 @@ def receiver(tool: str, args: Dict[str, Any], binds: Dict[str, str],
             var = raw[len(config.SIGIL):]
             if binds.get(var) != kind:
                 continue
-            value = args.get(m.value_arg) if m.value_arg else None
-            if m.call(raw, value) == (tool, args):
-                return var, m.name, value
-    return None
+            # A TRAILING ARGUMENT NOBODY PASSED IS NOT WRITTEN. `get_vm_logs(name: $b)` is
+            # `$b.logs()` and `get_vm_logs(name: $b, lines: 50)` is `$b.logs(50)`; the values
+            # are read in the method's own order and the empty tail is dropped, so the two
+            # print differently and both rebuild exactly.
+            nest = args.get(m.into) if m.into else None
+            held = nest if isinstance(nest, dict) else args
+            values = [held.get(slot) for slot in m.takes]
+            while values and values[-1] is None:
+                values.pop()
+            if m.call(raw, *values) == (tool, args):
+                hits.append((var, m.name, values))
+    if not hits:
+        return None
+    # ONE CALL, ONE RENDERING. Two methods can rebuild the same call — `$vm.stop()` and a
+    # would-be `$vm.kill()` differ only by an argument, and a row that forgot to say so would
+    # make the printed form depend on dictionary order. The SHORTEST spelling wins and ties
+    # break by name, so the choice is stable and the parser's answer cannot drift from it.
+    hits.sort(key=lambda h: (len(h[2]), h[1]))
+    return hits[0]
 
 
 # ── reach, split by receiver — the whole of #38 ────────────────────────────────────────

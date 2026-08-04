@@ -155,8 +155,8 @@ def _statement(st: Any, indent: str, binds: Optional[Dict[str, str]] = None) -> 
         # EXACTLY, so nothing is ever lost to the shorter spelling.
         got = _receiver(st.get("tool"), st.get("args"), binds)
         if got:
-            var, method, value = got
-            shown = "" if value is None else _arg(value)
+            var, method, values = got
+            shown = ", ".join(_arg(v) for v in values)
             return _with_tail([f"{indent}{lead}{config.SIGIL}{var}.{method}({shown});"],
                               st, indent, binds)
         return _with_tail([f"{indent}{lead}{head}{st.get('tool')}({_args(st.get('args'))});"],
@@ -380,6 +380,13 @@ def _select(sel) -> str:
         # else stays quoted, which is what keeps `name = '3'` a name.
         if isinstance(v, bool):
             return f"{k} = {'true' if v else 'false'}"
+        # AND A REAL NUMBER, for the same reason. `memory_mb` and `cpu_cores` became
+        # selectable the day the machine's own record stopped being half-hidden, and
+        # `memory_mb = '8192'` reads back as the four-character string — so a goal about
+        # memory would compare a string to an integer and match nothing, for ever, quietly.
+        # `name = '3'` still keeps its quotes and stays a name.
+        if isinstance(v, (int, float)):
+            return f"{k} = {v}"
         return f"{k} = '{v}'"
 
     groups = []

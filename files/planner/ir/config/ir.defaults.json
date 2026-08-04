@@ -326,7 +326,10 @@
     "status",
     "label",
     "os_type",
-    "network"
+    "network",
+    "cpu_cores",
+    "memory_mb",
+    "description"
    ],
    "aliases": {
     "tag": "label",
@@ -334,7 +337,11 @@
     "os": "os_type",
     "net": "network",
     "net_name": "network",
-    "on": "network"
+    "on": "network",
+    "cpu": "cpu_cores",
+    "cores": "cpu_cores",
+    "memory": "memory_mb",
+    "ram": "memory_mb"
    },
    "attr_values": {
     "status": [
@@ -428,6 +435,155 @@
      "value_arg": "net_name",
      "refs": "network"
     }
+   },
+   "_why_acts": "THINGS YOU DO TO A MACHINE WHOSE EFFECT THE LANGUAGE CANNOT NAME. Thirty-four of the lab's fifty-three tools were unreachable from Medusa, and almost every one takes `name` — a receiver — so almost every one was a method with nowhere to be declared. A row here makes the tool callable as `$vm.method()` and NOTHING MORE: `postcondition` returns None for an act, which the writer reads as 'this tool proves nothing'. That is the honest reading and the safe one — an act is reachable, gated and audited like any call, but it is not evidence, so a program that acts still has to ENSURE. KEYED BY METHOD, not by tool, which is what lets `stop` and `kill` be the same tool told apart by an argument that IS the method's meaning rather than a parameter of it.",
+   "acts": {
+    "kill": {
+     "tool": "stop_vm",
+     "member_arg": "name",
+     "args": {
+      "force": true
+     },
+     "doc": "stop it NOW, with no clean shutdown — the hammer, not `stop`"
+    },
+    "memory": {
+     "tool": "update_config",
+     "member_arg": "name",
+     "takes": [
+      "memory_mb"
+     ],
+     "into": "updates",
+     "doc": "give it this much memory, in MB"
+    },
+    "cores": {
+     "tool": "update_config",
+     "member_arg": "name",
+     "takes": [
+      "cpu_cores"
+     ],
+     "into": "updates",
+     "doc": "give it this many cpu cores"
+    },
+    "describe": {
+     "tool": "update_config",
+     "member_arg": "name",
+     "takes": [
+      "description"
+     ],
+     "into": "updates",
+     "doc": "say what it is for"
+    },
+    "limit": {
+     "tool": "set_resource_limits",
+     "member_arg": "name",
+     "takes": [
+      "cpu_percent",
+      "memory_mb"
+     ],
+     "doc": "cap what it may use while it runs"
+    },
+    "resize": {
+     "tool": "resize_disk",
+     "member_arg": "name",
+     "takes": [
+      "new_size_gb",
+      "disk_index"
+     ],
+     "doc": "grow one of its disks"
+    },
+    "run": {
+     "tool": "run_guest_command",
+     "member_arg": "name",
+     "takes": [
+      "command",
+      "timeout"
+     ],
+     "doc": "run a command INSIDE it, through the guest agent"
+    },
+    "shell": {
+     "tool": "open_shell",
+     "member_arg": "name",
+     "doc": "open a shell on it"
+    },
+    "display": {
+     "tool": "open_display",
+     "member_arg": "name",
+     "doc": "open its screen"
+    },
+    "logs": {
+     "tool": "get_vm_logs",
+     "member_arg": "name",
+     "takes": [
+      "lines"
+     ],
+     "doc": "read its log"
+    },
+    "watch": {
+     "tool": "monitor_vm",
+     "member_arg": "name",
+     "doc": "watch what it is doing right now"
+    },
+    "state": {
+     "tool": "vm_status",
+     "member_arg": "name",
+     "doc": "ask the process what state it is in"
+    },
+    "disk": {
+     "tool": "check_disk",
+     "member_arg": "name",
+     "doc": "check its disks"
+    },
+    "qmp": {
+     "tool": "send_monitor_cmd",
+     "member_arg": "name",
+     "takes": [
+      "cmd"
+     ],
+     "doc": "send one command to the QEMU monitor"
+    },
+    "fingerprint": {
+     "tool": "fingerprint_vm",
+     "member_arg": "name",
+     "takes": [
+      "summary"
+     ],
+     "doc": "read what it looks like from outside — how identifiable it is"
+    },
+    "agent": {
+     "tool": "provision_guest_agent_offline",
+     "member_arg": "name",
+     "doc": "install the guest agent while it is off"
+    },
+    "agent_setup": {
+     "tool": "generate_guest_agent_setup",
+     "member_arg": "name",
+     "doc": "write the script that installs the guest agent"
+    },
+    "snapshots": {
+     "tool": "snapshot_list",
+     "member_arg": "name",
+     "doc": "list the restore points taken of it"
+    },
+    "check": {
+     "tool": "guest_probe",
+     "member_arg": "name",
+     "takes": [
+      "assertion",
+      "target",
+      "value"
+     ],
+     "doc": "ask something about the inside of it"
+    },
+    "config": {
+     "tool": "show_config",
+     "member_arg": "name",
+     "doc": "read its configuration back"
+    },
+    "command": {
+     "tool": "print_command",
+     "member_arg": "name",
+     "doc": "show the command line it is launched with"
+    }
    }
   },
   "network": {
@@ -495,7 +651,15 @@
     "hardware profile",
     "spec"
    ],
-   "_doc": "A NAMED HARDWARE SPEC. Six tools for profiles and templates have been in the executor's registry for as long as the lab has, and a Medusa program could name none of them — the same shape as `run_command`: real capability, unreachable from the language, so nothing could plan with it and nobody noticed because a tool nobody can ask for also never fails."
+   "_doc": "A NAMED HARDWARE SPEC. Six tools for profiles and templates have been in the executor's registry for as long as the lab has, and a Medusa program could name none of them — the same shape as `run_command`: real capability, unreachable from the language, so nothing could plan with it and nobody noticed because a tool nobody can ask for also never fails.",
+   "_why_acts": "A PROFILE IS A NAMED HARDWARE SPEC, and the one thing you do to one is ask whether a machine could actually run on it.",
+   "acts": {
+    "compatible": {
+     "tool": "check_profile_compatibility",
+     "member_arg": "profile_name",
+     "doc": "ask whether this spec is one the host can honour"
+    }
+   }
   },
   "snapshot": {
    "package": "core",
@@ -517,6 +681,25 @@
    ],
    "create_args": {
     "vm": "name"
+   },
+   "_why_acts": "A RESTORE POINT IS SOMETHING YOU DO THINGS TO, and both of its tools need TWO names — the snapshot and the machine it was taken of — so neither fits the `delete` row, which passes the key alone. As acts they take the machine as an argument, which is what they are.",
+   "acts": {
+    "restore": {
+     "tool": "snapshot_restore",
+     "member_arg": "snap_name",
+     "takes": [
+      "name"
+     ],
+     "doc": "put the machine back to this point"
+    },
+    "remove": {
+     "tool": "snapshot_delete",
+     "member_arg": "snap_name",
+     "takes": [
+      "name"
+     ],
+     "doc": "throw this restore point away"
+    }
    }
   },
   "template": {

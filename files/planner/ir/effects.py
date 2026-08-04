@@ -42,13 +42,23 @@ def _K(kinds):
 
 
 def _kind_of(tool: str, kinds=None) -> Optional[str]:
-    """Which kind this tool acts on, from the manifest alone."""
+    """Which kind this tool acts on, from the manifest alone.
+
+    AN ACT COUNTS, AND IT COSTS NOTHING TO SAY SO. `postcondition` finds no setter, creator
+    or deleter for one and returns None — "this tool proves nothing", which is what an act
+    is — while `precondition` gains the half that matters: the member has to EXIST before
+    you can open a shell on it. Read LAST, so a tool that is also a setter keeps its stronger
+    reading.
+    """
     for kind, spec in _K(kinds).items():
         if tool == spec.get("create") or tool == spec.get("delete"):
             return kind
         if tool in (spec.get("setters") or {}):
             return kind
         if any(c.get("tool") == tool for c in (spec.get("creators") or {}).values()):
+            return kind
+    for kind, spec in _K(kinds).items():
+        if any(a.get("tool") == tool for a in (spec.get("acts") or {}).values()):
             return kind
     return None
 
@@ -194,6 +204,20 @@ def precondition(tool: str, args: Dict[str, Any], kinds=None) -> list:
             if member is not None:
                 out.append({"shape": "count", "eq": 1,
                             "select": {"kind": kind, spec["key"]: member, attr: value}})
+        return out
+
+    # AN ACT REQUIRES THE MEMBER IT ACTS ON, and that is the ONE thing derivable about it.
+    # You cannot open a shell on a machine that is not there, resize a disk it does not have,
+    # or read the logs of nothing — and unlike its EFFECT, which the manifest deliberately
+    # cannot name, its subject is written in the row. Placed before the setter branch so a
+    # tool that is both (`stop_vm`, which is `stop` and `kill`) still takes the setter's
+    # richer reading.
+    for mname, a in (spec.get("acts") or {}).items():
+        if a.get("tool") != tool or tool in (spec.get("setters") or {}):
+            continue
+        member = args.get(a.get("member_arg") or spec.get("key"))
+        if member is not None and spec.get("key"):
+            out.append(_exists(kind, spec["key"], member))
         return out
 
     setter = (spec.get("setters") or {}).get(tool)
@@ -421,6 +445,10 @@ def tools_of(kinds=None) -> set:
         out |= set(spec.get("unsetters") or {})
         out |= {c["tool"] for c in (spec.get("creators") or {}).values() if c.get("tool")}
         out |= {o["by"] for o in (spec.get("observed") or {}).values() if o.get("by")}
+        # AND THE ACTS. A tool you can only DO — open a shell, resize a disk, change a
+        # config — inverts no goal and answers no question, so it is derivable from no other
+        # row; without this the language could not name thirty-four of the lab's tools.
+        out |= {a["tool"] for a in (spec.get("acts") or {}).values() if a.get("tool")}
     return out
 
 

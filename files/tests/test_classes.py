@@ -123,6 +123,60 @@ def test_a_relation_has_one_receiver_and_it_is_the_thing_joined():
           net["delete"].call("lab") == ("delete_network", {"net_name": "lab"}))
 
 
+def test_an_act_is_reachable_and_promises_nothing():
+    """THE OPERATOR'S REQUEST, 2026-08-04: *"to vm add: modify, getters about os_types,
+    etc… kill, etc… everything"*, and *"its to replace the straight forward tool calls"*.
+
+    THIRTY-FOUR OF FIFTY-THREE TOOLS WERE UNREACHABLE FROM MEDUSA, and almost every one takes
+    `name` — a receiver — so almost every one was a method with nowhere to be declared. The
+    manifest could say a tool CREATES, DELETES, WRITES AN ATTRIBUTE or ANSWERS A QUESTION,
+    and `open_shell`, `resize_disk` and `update_config` are none of those.
+
+    AND AN ACT MUST PROMISE NOTHING, which is the whole of why it is safe to add so many at
+    once. `postcondition` returns None for one — "this tool proves nothing" — so no goal is
+    ever closed by having acted. That is the rule the system is built on, applied to the
+    surface that would otherwise break it.
+    """
+    print("[classes] you can do it, and it proves nothing")
+    from planner.ir import effects
+    vm = C.methods("vm")
+    check("a machine can be killed, and it is `stop_vm` with the hammer set",
+          vm["kill"].call("web") == ("stop_vm", {"name": "web", "force": True}))
+    check("and `stop` is the same tool WITHOUT it — one row each, told apart by the argument",
+          vm["stop"].call("web") == ("stop_vm", {"name": "web"}))
+    check("a method may take several values, in the order the row lists them",
+          vm["limit"].call("web", 80, 4096)
+          == ("set_resource_limits", {"name": "web", "cpu_percent": 80,
+                                      "memory_mb": 4096}))
+    # A VALUE THE TOOL WANTS INSIDE AN OBJECT. Medusa has no object literal, so a raw
+    # `modify(updates)` could only ever hand `update_config` a string — a method that always
+    # fails. `into` puts the value where the tool wants it and the caller writes what they mean.
+    check("a value the tool wants nested is nested",
+          vm["memory"].call("web", 8192)
+          == ("update_config", {"name": "web", "updates": {"memory_mb": 8192}}))
+    check("a trailing value nobody passed is not sent as null",
+          vm["logs"].call("web") == ("get_vm_logs", {"name": "web"}))
+
+    # THE PROMISE, OR RATHER ITS ABSENCE — for every act whose tool is not ALSO something the
+    # manifest already understands. `kill` is the exception and it is a real one: `stop_vm`
+    # is a declared setter, so what it makes true is already known and `kill` inherits it
+    # rightly. Everything else proves nothing, which is what makes adding sixteen of them at
+    # once safe.
+    setters = set((config.KINDS.get("vm") or {}).get("setters") or {})
+    claims = [m.name for m in vm.values()
+              if m.verb == C.ACT and m.tool not in setters
+              and effects.postcondition(*m.call("web")) is not None]
+    check(f"no act invents a postcondition ({claims or 'none'})", not claims)
+    check("and the one that HAS one has it from a setter row, not from being an act",
+          effects.postcondition(*vm["kill"].call("web"))
+          == effects.postcondition(*vm["stop"].call("web")))
+    # BUT THE RECEIVER STILL HAS TO EXIST, which is the half that IS derivable: you cannot
+    # open a shell on a machine that is not there.
+    needs = effects.precondition(*vm["shell"].call("web"))
+    check("and an act still requires the member it acts on",
+          any(p.get("select", {}).get("name") == "web" for p in needs))
+
+
 def test_one_authority_decides_the_form_and_both_sides_read_it():
     """`receiver` is asked by the PARSER, to refuse the long form, and by the RENDERER, to
     print the short one. The day they disagree a saved program stops reading back as itself
@@ -130,10 +184,10 @@ def test_one_authority_decides_the_form_and_both_sides_read_it():
     """
     print("[classes] the form is decided in one place")
     check("a call on something the program holds is a method on it",
-          C.receiver("launch_vm", {"name": "$b"}, {"b": "vm"}) == ("b", "launch", None))
+          C.receiver("launch_vm", {"name": "$b"}, {"b": "vm"}) == ("b", "launch", []))
     check("a relation resolves to the end that owns it",
           C.receiver("add_vm_to_network", {"net_name": "$lab", "vm_name": "$web"},
-                     {"lab": "network"}) == ("lab", "add_vm", "$web"))
+                     {"lab": "network"}) == ("lab", "add_vm", ["$web"]))
     check("a name the program does not hold has no receiver",
           C.receiver("launch_vm", {"name": "web"}, {}) is None)
     check("nor does one bound to something else",
@@ -186,8 +240,11 @@ def test_the_public_surface_is_small_and_is_not_in_the_big_prompt():
     print("[classes] the black box stays shut on the hot path")
     text = C.public("vm")
     check("it names the class and its methods", text.startswith("vm:") and ".launch()" in text)
-    check("and nothing else — no other kind leaks in",
-          "network:" not in text and "snapshot" not in text)
+    # NO OTHER CLASS LEAKS IN — asked of the HEADERS, because a vm method may legitimately
+    # mention another kind in its own description (`$vm.snapshots()` lists restore points).
+    # What must not appear is a second class's surface.
+    check("and nothing else — no other kind's surface leaks in",
+          not any(f"{other}:" in text for other in C.surface() if other != "vm"))
 
     # THE HOT PATH IS UNTOUCHED, proved by asking the two builders that feed a model.
     from engines import extract as _extract

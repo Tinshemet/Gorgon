@@ -1113,7 +1113,7 @@ def test_the_lab_mount_speaks_the_manifest_not_the_library():
 
         def vms(self):
             return {"red": {"name": "red", "labels": ["fleet", "prod"], "status": "stopped",
-                            "os_type": "linux", "memory_mb": 8192},
+                            "os_type": "linux", "memory_mb": 8192, "arch": "x86_64"},
                     "blue": {"name": "blue", "labels": ["fleet"], "status": "running",
                              "os_type": "windows", "_internal": "ignore me"}}
 
@@ -1134,11 +1134,21 @@ def test_the_lab_mount_speaks_the_manifest_not_the_library():
           select({"kind": "vm", "os_type": "linux"}) == ["red"])
     row = eng.world().scratch().state["vm"]["red"]
     check("a multi-valued attribute is stored as a set", isinstance(row["label"], set))
-    check("a field with no predicate keeps its own name", row.get("memory_mb") == 8192)
-    check("it is reachable only by a hand-written selector, never by a goal — "
-          "the extractor's attribute enum is the manifest's and closed",
+    # `memory_mb` USED TO BE THE EXAMPLE HERE and it is not one any more: on 2026-08-04 it
+    # became a declared attribute, because `list_vms` returns it on every record and the
+    # language had no way to ask about a machine's memory. A field the manifest DOES name is
+    # reachable by a goal, which is the whole point of naming it.
+    check("a declared attribute is matchable AND reachable by a goal",
           select({"kind": "vm", "memory_mb": 8192}) == ["red"]
-          and "memory_mb" not in set(extract_attr_enum()))
+          and "memory_mb" in set(extract_attr_enum()))
+    # THE RULE ITSELF STILL HOLDS, on a field that genuinely has no predicate. `_as_manifest_
+    # row` keeps such a fact under its own name rather than dropping it — not a lie, just not
+    # the manifest's business — so a hand-written selector can reach it and nothing the
+    # extractor emits can, because its attribute enum is the manifest's and closed.
+    check("a field with no predicate keeps its own name", row.get("arch") == "x86_64")
+    check("and is reachable only by a hand-written selector, never by a goal",
+          select({"kind": "vm", "arch": "x86_64"}) == ["red"]
+          and "arch" not in set(extract_attr_enum()))
     check("and an underscore field never reaches the model", "_internal" not in
           eng.world().scratch().state["vm"]["blue"])
 

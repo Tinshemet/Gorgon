@@ -605,10 +605,13 @@ def _method(cur: _Cursor) -> Dict[str, Any]:
                 break
         cur.take(")")
     cur.take(";")
-    # THE VALUE ARGUMENT, WHEN THE METHOD TAKES ONE. `label(prod)` writes a value;
-    # `launch()` writes a fixed one the manifest already names, so it takes nothing.
-    value = values[0] if values else None
-    tool, args = method.call(f"{config.SIGIL}{var}", value)
+    # AS MANY VALUES AS THE METHOD TAKES. `label(prod)` writes one, `limit(80, 4096)` writes
+    # two, `launch()` writes a fixed one the manifest already names and so takes none.
+    if len(values) > len(method.takes):
+        raise ParseError(
+            f"{kind}.{name}() takes {len(method.takes)} "
+            f"({', '.join(method.takes) or 'nothing'}), not {len(values)}", cur.tok.line)
+    tool, args = method.call(f"{config.SIGIL}{var}", *values)
     return {"op": "call", "tool": tool, "args": args}
 
 
@@ -649,8 +652,8 @@ def _call(cur: _Cursor, graft: Optional[str]) -> Dict[str, Any]:
     from . import classes
     got = classes.receiver(tool, args, cur.binds)
     if got:
-        var, method, value = got
-        shown = "" if value is None else str(value)
+        var, method, values = got
+        shown = ", ".join(str(v) for v in values)
         raise ParseError(
             f"{tool} acts on the {cur.binds[var]} this program holds — write "
             f"{config.SIGIL}{var}.{method}({shown})", line)
