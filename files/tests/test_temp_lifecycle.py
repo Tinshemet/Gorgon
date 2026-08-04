@@ -130,6 +130,54 @@ def test_a_name_in_a_must_is_still_a_name():
           "delete_network" not in text)
 
 
+def test_scaffolding_that_the_goal_IS_MADE_OF_is_not_scaffolding():
+    """PROVENANCE SAYS WHO MADE IT; IT DOES NOT SAY WHETHER ANYTHING STILL NEEDS IT.
+
+    "make these three machines reach each other" names no network, so the one the writer
+    mints to connect them is, by provenance, pure scaffolding — and deleting it after the
+    witness falsifies the goal the program has just asserted. The machines are left holding a
+    network that is gone, which is also what the executor does to them: `delete_network`
+    drops the record and leaves every member's NIC pointing at nothing.
+
+    FOUND BY MEASUREMENT, not by reading. All 84 ladder runs were outcome-for-outcome
+    identical before and after the day's changes; ONE line differed, rung 9 literal costing
+    one call more, and that one call was this deletion. The rung was already failing for an
+    unrelated reason, so the verdict hid it.
+    """
+    print("[lifecycle] the thing the goal is made of stays")
+    program, temps, text = _plan([{"shape": "reach", "select": {"kind": "vm"}, "min": 3}],
+                                 seed=("n1", "n2", "n3"))
+    check("the network is still marked temporary — nobody named it",
+          any(k == "network" for k, _n in temps))
+    check("but it is NOT torn down, because the machines still sit on it",
+          "delete_network" not in text)
+
+
+def test_still_needed_answers_all_four_ways():
+    """A GUARD THAT ONLY EVER SAYS "KEEP IT" IS NOT A GUARD, it is a disabled teardown. So
+    the rule is asserted in both directions, and on the case that would quietly break it:
+    a network whose only member is ALSO being removed is not needed by anything that
+    survives, or a browser would pin the machine it runs on forever."""
+    print("[lifecycle] needed by what survives, and only that")
+    from planner.ghost_writer import _still_needed
+    from planner.ir import config
+    from tests.bench.seams import seams
+    world = SimWorld()
+    world.execute("create_vm", {"name": "host", "os_type": "linux"})
+    world.execute("create_network", {"net_name": "n1"})
+    world.execute("create_network", {"net_name": "empty"})
+    world.execute("add_vm_to_network", {"net_name": "n1", "vm_name": "host"})
+    select = seams(world)[0]
+    check("a network something sits on is needed",
+          _still_needed("network", "n1", select, config.KINDS, set()))
+    check("an empty one is not — it goes",
+          not _still_needed("network", "empty", select, config.KINDS, set()))
+    check("and a machine nothing points at is not",
+          not _still_needed("vm", "host", select, config.KINDS, set()))
+    check("a reference from something ALSO being removed does not count",
+          not _still_needed("network", "n1", select, config.KINDS, {("vm", "host")}))
+
+
 def test_deleting_is_what_the_operator_asked_for():
     print("[lifecycle] told to remove it -> removed")
     program, temps, _text = _plan([{"shape": "count",

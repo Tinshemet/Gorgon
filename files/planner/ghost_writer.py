@@ -818,6 +818,36 @@ def _as_statement(tool: str, args: Dict[str, Any], kinds) -> Dict[str, Any]:
     return {"op": "call", "tool": tool, "args": args}
 
 
+def _still_needed(kind: str, name: str, select, kinds, going: set) -> bool:
+    """Does anything the program LEAVES BEHIND still refer to this member?
+
+    THE SECOND HALF OF THE TEARDOWN QUESTION. `_named_in` answers who MADE it; this answers
+    whether anything still NEEDS it. A member can be scaffolding by provenance and still be
+    the thing a goal is made of — "these three machines reach each other" names no network,
+    so the one that connects them is nobody's by provenance and is the whole of the goal.
+
+    DERIVED FROM `refs`, which already says which attributes are relations, so the rule is
+    read rather than judged. A reference from another member being removed in the same pass
+    does not count, or a browser would pin the machine it runs on.
+
+    UNSURE MEANS NO. A seam that cannot answer returns True — do not remove it — because the
+    cost of leaving something standing is a stray resource and the cost of removing it is a
+    goal that was true when it was witnessed and false a line later.
+    """
+    for other, ospec in (effects._K(kinds) or {}).items():
+        attrs = {s.get("attr") for rows in ((ospec.get("setters") or {}),
+                                            (ospec.get("unsetters") or {}))
+                 for s in rows.values() if s.get("refs") == kind and s.get("attr")}
+        for attr in attrs:
+            try:
+                holders = select({"kind": other, attr: name}) or []
+            except Exception:
+                return True
+            if any((other, h) not in going for h in holders):
+                return True
+    return False
+
+
 def _by_reference(body: List[Dict[str, Any]], kinds) -> List[Dict[str, Any]]:
     """A member this program MADE is referred to by the name it was bound to, not repeated.
 
@@ -1032,9 +1062,29 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
     # IN REVERSE ORDER OF CREATION, because a later temp may sit on an earlier one — a
     # browser on a machine — and removing the host first orphans the guest.
     kinds = _kinds(scratch)
+    going = {(k, n) for k, n in (temps or ())}
     for kind, name in reversed(list(temps or ())):
         spec = effects._K(kinds).get(kind) or {}
         deleter, key = spec.get("delete"), spec.get("key")
+        # AND NOT IF SOMETHING THE PROGRAM LEAVES BEHIND STILL POINTS AT IT. Provenance says
+        # who MADE it; this asks whether anything still NEEDS it, and the two are different
+        # questions with different answers.
+        #
+        # THE CASE THAT FOUND IT: "make these three machines reach each other" names no
+        # network, so the one the writer mints to connect them is, by provenance, pure
+        # scaffolding — and deleting it falsifies the goal the program has just witnessed.
+        # The machines are left holding a network that is gone, which is also what the
+        # executor does with them: `delete_network` drops the record and leaves every
+        # member's NIC pointing at nothing.
+        #
+        # SCAFFOLDING IS WHAT THE GOAL DOES NOT DEPEND ON. A machine minted to host a browser
+        # goes, because the answer the operator wanted survives its removal. A network minted
+        # so five machines can reach each other stays, because the goal IS that relation.
+        # `refs` already says which attributes are relations, so this is read rather than
+        # judged — and a reference from another temp being removed in the same pass does not
+        # count, or a browser would pin the machine it runs on.
+        if deleter and key and name and _still_needed(kind, name, select, kinds, going):
+            continue
         if deleter and key and name:
             # WHAT MUST BE TRUE BEFORE IT CAN GO. `delete_vm` refuses a running machine, so a
             # teardown that emitted the bare deleter emitted a call that could never succeed —
