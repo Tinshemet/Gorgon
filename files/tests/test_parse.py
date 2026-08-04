@@ -340,6 +340,91 @@ def test_the_loop_variable_is_a_receiver_inside_the_loop_and_nowhere_else():
               "not bound" in str(exc))
 
 
+def test_a_name_knows_whether_it_holds_ONE_or_SEVERAL():
+    """THE FIRST PIECE OF MEDUSA'S VALUE MODEL, and it arrived as a bug.
+
+    The visitor writes `scope[var] = names[0] if n == 1 else names`, so an amount above one
+    binds a LIST — and nothing recorded that. `STORE five = NEW AMOUNT(5) …` followed by
+    `$five.launch()` parsed straight into `launch_vm(name: $five)`: five machines made, one
+    name slot, a list poured into it. A `FETCH SELECT` binds a set for the same reason and
+    recorded it just as little, so `FOREACH $item IN $reds` could not give `$item` a kind.
+    """
+    print("[parse] one, or several, and the difference is in the language")
+    from planner.ir import classes
+    src = """PROCEDURE p() {
+  STORE reds = FETCH SELECT vm WHERE label = 'red';
+  STORE blues = FETCH SELECT vm WHERE label = 'blue';
+  FOREACH $item IN $reds {
+    $item.stop();
+  }
+  ENSURE DISJOINT($reds, $blues);
+}"""
+    ir = parse(src)
+    check("a set bound by FETCH gives its members their kind inside a loop",
+          render(ir).strip() == src.strip() and parse(render(ir)) == ir)
+
+    for bad, why in (
+            ("PROCEDURE p() {\n  STORE five = NEW AMOUNT(5) CALL create_vm(os_type: linux);"
+             "\n  $five.launch();\n}", "several created"),
+            ("PROCEDURE p() {\n  STORE reds = FETCH SELECT vm WHERE label = 'red';"
+             "\n  $reds.stop();\n}", "several fetched")):
+        try:
+            parse(bad)
+            check(f"a set is refused as a receiver ({why})", False)
+        except ParseError as exc:
+            check(f"a set is refused as a receiver ({why}), and the loop is offered",
+                  "SEVERAL" in str(exc) and "FOREACH" in str(exc))
+
+    # A COUNT IS A NUMBER, WHICH IS NEITHER. Binding it as a set would make `$n.launch()`
+    # complain about the wrong thing.
+    try:
+        parse("PROCEDURE p() {\n  STORE n = FETCH COUNT(SELECT vm);\n  $n.launch();\n}")
+        check("a count is not a set", False)
+    except ParseError as exc:
+        check("a count binds a number, so it is not bound to a kind at all",
+              "not bound to anything" in str(exc))
+    check("and the marker never collides with a real kind",
+          classes.in_set("vm") is None and classes.in_set(classes.set_of("vm")) == "vm")
+
+
+def test_select_within_a_set_the_program_holds():
+    """`SELECT vm WHERE label = 'red' IN $hosts` — the operator's instruction, 2026-08-04:
+    *"it should be allowed, its a set of set, group theory allows it"*, and the answer to
+    *"how do you select the reds just from hosts"*, which had none.
+
+    IT IS A SPELLING AND NOTHING MORE, which is exactly why it is safe. A set holds the
+    NAMES of its members, so "within this set" is membership of the KEY — a filter the
+    selector already carried and the seams already evaluate. Nothing new runs.
+
+    AND THE OTHER SPELLING IS REFUSED, because `INCLUDE name = $hosts` builds the identical
+    selector: two ways in means the renderer prints one and the other is a form you can type
+    and cannot save.
+    """
+    print("[parse] select within a set you already hold")
+    src = """PROCEDURE p() {
+  STORE hosts = FETCH SELECT vm WHERE label = 'host';
+  STORE reds = FETCH SELECT vm WHERE label = 'red' IN $hosts;
+  ENSURE COUNT(SELECT vm WHERE label = 'red' IN $hosts) = 2;
+}"""
+    ir = parse(src)
+    check("it parses to membership of the key",
+          ir["body"][1]["select"] == {"kind": "vm", "label": "red",
+                                      "name": {"in": "$hosts"}})
+    check("and round trips", render(ir).strip() == src.strip())
+    check("and reads back as the same program", parse(render(ir)) == ir)
+    try:
+        parse("ENSURE COUNT(SELECT vm INCLUDE name = $hosts) = 1;")
+        check("the second spelling is refused", False)
+    except ParseError as exc:
+        check("the second spelling is refused, and names the first",
+              "IN $hosts" in str(exc))
+    # MEMBERSHIP OF ANOTHER ATTRIBUTE IS STILL AN ORDINARY INCLUDE. `IN` is about the set of
+    # MEMBERS; a list of labels is a different question and keeps its own word.
+    other = parse("ENSURE COUNT(SELECT vm INCLUDE label = [red, blue]) = 2;")
+    check("membership of a non-key attribute is untouched",
+          render(other).strip() == "ENSURE COUNT(SELECT vm INCLUDE label = [red, blue]) = 2;")
+
+
 def test_a_broken_file_says_where():
     print("[parse] a failure names the line")
     for text, why in (("PROCEDURE p( {\n  PUBLISH(x);\n}", "a malformed signature"),

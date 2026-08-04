@@ -480,6 +480,13 @@ def _bound(cur: _Cursor) -> Dict[str, Any]:
             cur.take(")")
         else:
             st["select"] = _select(cur)
+            # A PLAIN SELECT BINDS THE MATCHING NAMES — a SET, however many match. A `COUNT`
+            # beside it binds a NUMBER, which is neither a member nor a set and so binds
+            # nothing here: asking `$n.launch()` should say "not bound", not "a set of vms".
+            from . import classes
+            kind = (st["select"] or {}).get("kind")
+            if kind:
+                cur.binds[var] = classes.set_of(str(kind))
         cur.take(";")
         return st
     if cur.at(_word("call")):
@@ -550,7 +557,16 @@ def _new(cur: _Cursor, var: str) -> Dict[str, Any]:
         st["tool"] = written
     cur.take(";")
     if var:
-        cur.binds[var] = st.get("kind")
+        # ONE OR SEVERAL, AND THE LANGUAGE HAS TO KNOW WHICH. The visitor writes
+        # `scope[var] = names[0] if n == 1 else names`, so an amount above one binds a LIST —
+        # and until this line said so, `$five.launch()` parsed into `launch_vm(name: $five)`
+        # and poured five names into one slot. An amount that is a `$reference` is not known
+        # until run time, so it is read as SEVERAL: the safe half, since a set refuses to be
+        # a receiver and a lone member wrongly called a set only costs a FOREACH.
+        from . import classes
+        n = st.get("amount", 1)
+        cur.binds[var] = (st.get("kind") if n == 1
+                          else classes.set_of(str(st.get("kind"))))
     return st
 
 
@@ -580,6 +596,16 @@ def _method(cur: _Cursor) -> Dict[str, Any]:
     if not kind:
         raise ParseError(f"{var!r} is not bound to anything, so {name!r} has no receiver",
                          cur.tok.line)
+    # SEVERAL OF A THING IS NOT ONE OF IT. A method acts on a member, and a set poured into a
+    # member's slot is five names where one belongs — which is what `$five.launch()` did,
+    # silently, until the language started recording what a name holds.
+    several = classes.in_set(kind)
+    if several:
+        raise ParseError(
+            f"{config.SIGIL}{var} holds SEVERAL {several}s, and {name!r} acts on one — "
+            f"{_word('foreach').upper()} {config.SIGIL}{config.LOOP_VAR} "
+            f"{_word('in').upper()} {config.SIGIL}{var} "
+            f"{{ {config.SIGIL}{config.LOOP_VAR}.{name}(); }}", cur.tok.line)
     surface = classes.methods(kind)
     method = surface.get(name)
     if method is None:
@@ -707,7 +733,11 @@ def _foreach(cur: _Cursor) -> Dict[str, Any]:
     # later line print as a method on a variable the runtime has nothing for.
     kind = (st.get("select") or {}).get("kind") if isinstance(st.get("select"), dict) else None
     if kind is None and isinstance(st.get("in"), str):
-        kind = cur.binds.get(str(st["in"]).lstrip(config.SIGIL))
+        # THE MEMBER OF A SET IS ONE OF WHAT THE SET HOLDS, which is the whole reason a
+        # binding records the kind and not merely "a set". `STORE reds = FETCH SELECT vm …`
+        # then `FOREACH $item IN $reds` gives `$item` a vm's methods.
+        from . import classes
+        kind = classes.in_set(cur.binds.get(str(st["in"]).lstrip(config.SIGIL)))
     had = cur.binds.get(config.LOOP_VAR, _ABSENT)
     if kind:
         cur.binds[config.LOOP_VAR] = kind
@@ -802,6 +832,11 @@ def _value(cur: _Cursor) -> Any:
     return t.value if t.kind == STR else _coerce(str(t.value))
 
 
+def _key_of(kind) -> Optional[str]:
+    """The attribute that IDENTIFIES a member of this kind, from the manifest."""
+    return ((config.KINDS or {}).get(str(kind)) or {}).get("key")
+
+
 def _select(cur: _Cursor) -> Dict[str, Any]:
     """`SELECT kind [WHERE a = 'x' AND …] [INCLUDE k = [..]] [EXCEPT a = 'x']`."""
     cur.take("SELECT")
@@ -828,7 +863,35 @@ def _select(cur: _Cursor) -> Dict[str, Any]:
             cur.take("]")
             sel[attr] = {"in": members}
         else:
-            sel[attr] = {"in": str(cur.take().value)}
+            ref = str(cur.take().value)
+            # ONE SPELLING FOR ONE MEANING. `INCLUDE name = $hosts` and `IN $hosts` produce
+            # the identical selector, so if both were accepted the renderer would print one
+            # of them and the other would be a form you can type and cannot save — the
+            # defect the whole day has been removing. `IN` is the operator's own word and
+            # the shorter one, so it is the one that survives.
+            if attr == _key_of(sel.get("kind")) and ref.startswith(config.SIGIL):
+                raise ParseError(
+                    f"a set of {sel.get('kind')}s is written "
+                    f"{_word('in').upper()} {ref}, not "
+                    f"{_word('include').upper()} {attr} = {ref}", cur.tok.line)
+            sel[attr] = {"in": ref}
+    # `SELECT vm WHERE label = 'red' IN $hosts` — SELECT WITHIN A SET YOU ALREADY HOLD.
+    #
+    # THE OPERATOR RULED IT IN ON GROUP-THEORETIC GROUNDS, 2026-08-04: *"it should be
+    # allowed, its a set of set, group theory allows it"* — a subset selection, and the
+    # answer to *"how do you select the reds just from hosts"*, which had none.
+    #
+    # IT IS A SPELLING AND NOTHING MORE, which is why it is safe. A set holds the NAMES of
+    # its members, so "within this set" is membership of the KEY — a filter the selector
+    # already had and the seams already evaluate, resolving the reference through scope and
+    # matching NOTHING when it is unbound. Nothing new runs.
+    if cur.at(_word("in")):
+        cur.take()
+        key = _key_of(sel.get("kind"))
+        if not key:
+            raise ParseError(f"{sel.get('kind')!r} has no key, so it has no members to "
+                             f"select from a set", cur.tok.line)
+        sel[key] = {"in": str(cur.take().value)}
     if cur.accept(_word("except")):
         carve: Dict[str, Any] = {}
         while True:

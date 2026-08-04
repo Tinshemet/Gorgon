@@ -120,7 +120,10 @@ def _statement(st: Any, indent: str, binds: Optional[Dict[str, str]] = None) -> 
         # statement that binds a name to a KIND, which is what makes every later line able
         # to print as a method on it.
         if st.get("var") and st.get("kind"):
-            binds[str(st["var"])] = st["kind"]
+            # ONE OR SEVERAL — the parser's rule, mirrored, because the two halves decide the
+            # same thing and a printed program has to read back as itself.
+            binds[str(st["var"])] = (st["kind"] if st.get("amount", 1) == 1
+                                     else _classes().set_of(str(st["kind"])))
         return _with_tail([f"{indent}{lead}{head}"
                            f"{f'({extra})' if extra else ''}{src};"], st, indent, binds)
 
@@ -179,7 +182,7 @@ def _statement(st: Any, indent: str, binds: Optional[Dict[str, str]] = None) -> 
         # scopes it exactly here and for exactly this reason, and the two halves have to
         # agree or a printed loop stops reading back as itself.
         kind = (st.get("select") or {}).get("kind") if isinstance(st.get("select"), dict) \
-            else (binds.get(str(st.get("in")).lstrip(config.SIGIL))
+            else (_classes().in_set(binds.get(str(st.get("in")).lstrip(config.SIGIL)))
                   if isinstance(st.get("in"), str) else None)
         had = binds.get(config.LOOP_VAR, _ABSENT)
         if kind:
@@ -198,6 +201,11 @@ def _statement(st: Any, indent: str, binds: Optional[Dict[str, str]] = None) -> 
                           + body + [f"{indent}}}"], st, indent, binds)
 
     if op == "fetch":
+        # A PLAIN SELECT BINDS A SET; a COUNT binds a number and so binds nothing here.
+        if st.get("select") and st.get("var"):
+            kind = (st["select"] or {}).get("kind")
+            if kind:
+                binds[str(st["var"])] = _classes().set_of(str(kind))
         q = st.get("count") or st.get("select")
         inner = _select(q)
         body = f"{_w('count')}({inner})" if st.get("count") else inner
@@ -243,6 +251,12 @@ def _creator(st) -> str:
             if c.get("from") and c.get("tool"):
                 return c["tool"]
     return spec.get("create") or ""
+
+
+def _classes():
+    """`classes`, imported late — `render` is reached from inside it during a resugar."""
+    from . import classes
+    return classes
 
 
 def _receiver(tool, args, binds):
@@ -398,6 +412,16 @@ def _select(sel) -> str:
             if inner:
                 groups.append("(" + f" {word} ".join(inner) + ")")
     plain = [(k, v) for k, v in sel.items() if k not in ("kind", "not", "any", "all")]
+    # WITHIN A SET THIS PROGRAM HOLDS reads as `IN $hosts` — the operator's own word for it,
+    # and the shorter of the two spellings the parser used to accept. A set holds the NAMES
+    # of its members, so "within this set" is membership of the KEY; membership of any OTHER
+    # attribute is an ordinary INCLUDE and still prints as one.
+    key = ((config.KINDS or {}).get(str(kind)) or {}).get("key")
+    within = [v["in"] for k, v in plain
+              if k == key and isinstance(v, dict)
+              and isinstance(v.get("in"), str) and v["in"].startswith(config.SIGIL)]
+    plain = [(k, v) for k, v in plain if not (k == key and v in
+                                              [{"in": w} for w in within])]
     includes = [_term(k, v) for k, v in plain if isinstance(v, dict) and "in" in v]
     terms = [_term(k, v) for k, v in plain if not (isinstance(v, dict) and "in" in v)]
     terms += groups
@@ -411,6 +435,8 @@ def _select(sel) -> str:
     # said: this kind, narrowed by these conditions, restricted to these, minus those.
     if includes:
         out += " " + " ".join(includes)
+    for held in within:
+        out += f" {_w('in')} {held}"
     # EXCEPT is its OWN clause, not another WHERE term — `WHERE EXCEPT name = 'db'` is
     # not English and not SQL. It follows WHERE when both are present, so the sentence
     # reads in the order the operator said it: this set, minus these.

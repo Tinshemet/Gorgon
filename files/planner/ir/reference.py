@@ -99,6 +99,22 @@ _EXAMPLES: List[Dict[str, str]] = [
              "  $box.launch();\n"
              "  ENSURE COUNT(SELECT vm WHERE network = 'lab' AND status = 'running') = 1;\n"
              "}"},
+    {"title": "hold a set, and select within it",
+     "why": "A name holds ONE thing or SEVERAL, and the language knows which: `STORE box = "
+            "NEW CALL create_vm(…)` holds one machine, `FETCH SELECT` and `NEW AMOUNT(5)` "
+            "hold a set of them. A set is not a member — `$reds.stop()` is refused, because "
+            "stopping acts on one machine — so you loop over it. `IN $set` narrows a query "
+            "to members of a set you already hold, which is how you ask for *the red ones "
+            "among the hosts* rather than all the red ones.",
+     "code": "PROCEDURE stop_the_red_hosts() {\n"
+             "  STORE hosts = FETCH SELECT vm WHERE label = 'host';\n"
+             "  STORE reds = FETCH SELECT vm WHERE label = 'red' IN $hosts;\n"
+             "  FOREACH $item IN $reds {\n"
+             "    $item.stop();\n"
+             "  }\n"
+             "  ENSURE COUNT(SELECT vm WHERE label = 'red' AND status = 'running' "
+             "IN $hosts) = 0;\n"
+             "}"},
     {"title": "a routine — a procedure the clock calls",
      "why": "A routine is not a second kind of thing. It is a procedure carrying EVERY in "
             "its header, which is the one fact no statement in the body could state. WHEN "

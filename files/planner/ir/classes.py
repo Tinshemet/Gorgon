@@ -48,6 +48,29 @@ UNSET = "unset"        # an unsetter: take one away
 ASK = "ask"            # an observation: establish a fact by asking
 ACT = "act"            # something you DO to it, whose effect the manifest cannot name
 
+# ── what a NAME HOLDS ──────────────────────────────────────────────────────────────────
+# A binding is a kind — `box` holds one vm — or a SET of a kind, and the language could not
+# tell them apart. `STORE five = NEW AMOUNT(5) CALL create_vm(...)` binds a LIST (the visitor
+# writes `scope[var] = names` above an amount of one), and `$five.launch()` parsed straight
+# into `launch_vm(name: $five)`: five machines made, one name slot, a list poured into it.
+#
+# WRITTEN AS A PREFIXED STRING so that everything which compares a binding to a kind keeps
+# working untouched — `binds.get(var) != kind` is never accidentally true for a set — and so
+# an error message can say what it found. This is the first piece of Medusa's VALUE MODEL:
+# the difference between a thing and several of them.
+OF_SET = "set:"
+
+
+def set_of(kind: str) -> str:
+    """The binding a name gets when it holds SEVERAL of a kind."""
+    return f"{OF_SET}{kind}"
+
+
+def in_set(bound) -> Optional[str]:
+    """The kind a set-binding holds, or None if this binding is not a set."""
+    return (bound[len(OF_SET):]
+            if isinstance(bound, str) and bound.startswith(OF_SET) else None)
+
 # WHY `ACT` HAD TO EXIST, and it is the operator's request that forced it: *"to vm add:
 # modify, getters about os_types, etc… kill, etc… everything"*, and *"its to replace the
 # straight forward tool calls"*.
