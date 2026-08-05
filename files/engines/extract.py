@@ -1456,43 +1456,32 @@ def to_goals(raw: Dict[str, Any], request: str = "",
                   f"{sel.get('kind')} is identified by its {key_of} — no world has that")
             return
 
-        # AND THE `must` CLAUSE IS JUDGED TOO, which it never was. `_keep` read the SELECTOR
-        # and stopped — so `every network[net_name=core] must members = 'all machines'` walked
-        # past every guard in this file, because the prose was on the WRITE side of the goal
-        # rather than the read side. The writer had nothing to plan and the run reported DONE
-        # having made ZERO calls: rung 8's paraphrase, DONE_BUT_FALSE, measured 2026-08-05.
+        # ## THE `must` CLAUSE WAS JUDGED HERE, AND IT WAS WITHDRAWN — 2026-08-05
         #
-        # THE SAME OMISSION AS `per`, one clause over. That one was "the one shape reaching
-        # the writer unexamined" on 2026-08-04; this is the other half of the same goal.
+        # `_keep` reads the SELECTOR and stops, so a value on the WRITE side of a goal is not
+        # held to being a name. That let rung 8's paraphrase through as `every network[core]
+        # must members = 'all machines'` — prose where member names belong — and the run
+        # reported DONE having made ZERO calls.
         #
-        # ONLY WHERE THE ATTRIBUTE NAMES MEMBERS, asked of `names_members` so the rule is the
-        # one authority and not a fifth copy of the convention. `must: {label: 'prod'}` is
-        # free text and is left alone; `must: {members: ...}` and `must: {network: ...}` hold
-        # NAMES and are held to what a name is.
+        # JUDGING IT WITH `unusable` FIXED THAT ROW AND COST A PASSING ONE. Rung 13 answers
+        # "put them all in a network" with `must network = 'the network they are all in'`,
+        # which is also prose — and the writer does something SENSIBLE with it, creating a
+        # network under that clumsy name. The rung never names a network, so the checker is
+        # satisfied and it closes DONE with 11 calls. Judged, the goal is dropped, the
+        # half-a-request rule fires, and a working rung becomes UNTRANSLATED.
         #
-        # ## `unusable` YES, `invented` NO — READING NAMES, WRITING MAY MINT
+        #     literal 12/14 -> 11/14 · paraphrase 8/14, DONE_BUT_FALSE 2 -> 1
         #
-        # A SELECTOR REFERS and a `must` ASSIGNS, and only the first needs the operator to
-        # have said the name. Applying the invented-identifier rule here as well cost rung 6's
-        # paraphrase, measured immediately: *"the red group must share ONE PRIVATE NETWORK,
-        # and the blue group A SEPARATE ONE"* names neither network ON PURPOSE, so the model
-        # minted `private-red` and `private-blue` — which is exactly right, and both were
-        # refused for not appearing in a sentence that deliberately left them out.
+        # ONE PASSING RUNG FOR ONE HONEST REFUSAL IS NOT A TRADE WORTH TAKING.
         #
-        # SO THE ASYMMETRY IS THE RULE: you cannot SELECT members the operator never named,
-        # because there is nothing to point at; you CAN be told to put them somewhere new,
-        # because that is what "on their own network" means. What a written value still has to
-        # be is a NAME — `unusable` catches `members = 'all machines'`, which is a description
-        # wherever it appears.
-        must = goal.get("must")
-        if isinstance(must, dict):
-            for attr, value in must.items():
-                if not names_members(sel.get("kind"), attr):
-                    continue
-                bad = unusable({"kind": sel.get("kind"), attr: value})
-                if bad:
-                    _lost(f"what it asks for is not a name ({bad})")
-                    return
+        # AND THE DISTINCTION THAT WOULD SAVE IT DOES NOT EXIST IN THE MANIFEST. What
+        # separates the two is single-valued versus MANY: `network` is one name to MINT, and
+        # any string serves; `members` is a list of members that already exist, which prose
+        # cannot denote. Nothing declares that difference — there is no multi-value marker on
+        # any kind — so enforcing it would mean inventing a distinction in code and adding a
+        # fifteenth special case to a function whose implicit ordering already cost four
+        # rungs today. DECLARE IT IN THE MANIFEST FIRST, then this becomes a rule rather than
+        # a guess.
         out.append(goal)
 
     def _scoped(goals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
