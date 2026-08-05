@@ -203,6 +203,29 @@ def contract(program: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return {"shape": "count", "select": select, "eq": total}
 
 
+def same_program(a: Optional[Dict[str, Any]], b: Optional[Dict[str, Any]]) -> bool:
+    """Two programs compared as PROGRAMS rather than as text.
+
+    ## THIS IS WHERE THE TWO HALVES OF MEDUSA WERE MARRIED
+
+    `verify_file` compared `render(parse(text))` to `text` as STRINGS, and that one assertion
+    forced ONE SURFACE FORM PER IR FORM across the whole language — no synonyms, no sugar,
+    nothing an operator might type that the writer would not emit. It is why `ALL` was a
+    spelling you could type and never save, and why the method form cost a day.
+
+    THE SAFETY PROPERTY WAS NEVER ABOUT SPELLING. What a save must guarantee is that the file
+    MEANS the program that was saved — that a later reader parses back the same thing. Text
+    equality implies that and is far stronger than it, and the surplus is exactly the freedom
+    the surface needs.
+
+    THE COMPARISON IS `parse.canonical`'s, not this function's — the parser normalises as it
+    reads, so the module that decides what to drop owns the function that says what was
+    dropped. See its docstring for the two reductions and why each is meaning-preserving.
+    """
+    from .ir.parse import canonical
+    return canonical(a) == canonical(b)
+
+
 def render_stored(program: Dict[str, Any]) -> str:
     """The readable artifact — one `PROCEDURE` block.
 
@@ -499,23 +522,36 @@ class Store:
             note("round trips", False, f"re-rendering failed: {type(exc).__name__}: {exc}",
                  fatal=True)
         if again is not None:
-            note("round trips", again == text,
-                 "" if again == text else "the file does not render back to itself",
-                 fatal=True)
+            # ROUND TRIP, AS MEANING RATHER THAN AS SPELLING. `parse(render(ir)) == ir` was
+            # named as the parser's acceptance test; this is that equality, on every file
+            # written, in the direction a reader travels. It compared TEXT until 2026-08-06 —
+            # see `same_program` for what that cost and why the weaker check is the right one.
+            from .ir.parse import parse_many as _parse_many
+            try:
+                reparsed = _parse_many(again)[0]
+            except Exception as exc:
+                reparsed = None
+                note("round trips", False,
+                     f"re-parsing failed: {type(exc).__name__}: {exc}", fatal=True)
+            if reparsed is not None:
+                ok_rt = same_program(reparsed, got)
+                note("round trips", ok_rt,
+                     "" if ok_rt else "the file does not read back as the same program",
+                     fatal=True)
 
         if expected is None:
             note("is the program saved", None, "skipped — nothing to compare against")
         else:
-            try:
-                wanted = render_stored(expected).strip()
-            except Exception as exc:
-                wanted = None
-                note("is the program saved", False,
-                     f"the saved program could not be rendered: {exc}", fatal=True)
-            if wanted is not None:
-                note("is the program saved", wanted == text,
-                     "" if wanted == text else "the text on disk is not this program",
-                     fatal=True)
+            # IS THE PROGRAM SAVED — asked of the FILE'S MEANING, not of its characters.
+            # This rendered `expected` and compared strings, which asks whether the file is
+            # spelled the way this renderer spells it. What matters is whether the file READS
+            # BACK as the program the caller handed in, and that is a direct comparison with
+            # no rendering in the middle at all.
+            ok_saved = same_program(got, expected)
+            note("is the program saved", ok_saved,
+                 "" if ok_saved else "the file does not read back as the program that was "
+                                     "handed in",
+                 fatal=True)
 
         from .ir.validate import validate
         ok, problems = validate(got)

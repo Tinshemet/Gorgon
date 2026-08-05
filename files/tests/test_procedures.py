@@ -564,6 +564,41 @@ def test_a_saved_procedure_is_read_back_before_it_is_kept():
         check("the RE-READ program validates", by["validates"]["ok"] is True)
 
 
+def test_a_file_is_verified_as_a_program_and_not_as_text():
+    """THE CHECK THAT MARRIED THE TWO HALVES OF MEDUSA, and what replaced it.
+
+    `verify_file` compared the file to `render(parse(file))` AS STRINGS. That is far stronger
+    than the property a save needs — that the file MEANS the program — and the surplus was
+    paid for in surface: one spelling per IR form, no synonyms, no sugar, and an operator who
+    reindented their own procedure got a fatal error saying it "does not render back to
+    itself". It is why `ALL` was a word you could type and never save.
+
+    THE WEAKER CHECK STILL HAS TEETH, which is the half that matters: a file that means
+    something else is still refused, fatally, and `save` still rolls back.
+    """
+    print("[verify] a file is verified by what it means, not by how it is spelled")
+    with _Library() as lib:
+        at = lib.save(_kept())
+        written = open(at).read()
+
+        # SPELLING THE SAME PROGRAM DIFFERENTLY. Both of these were fatal before the check
+        # asked about meaning: the renderer indents with two spaces and prints no comments,
+        # so any file a person touched stopped verifying.
+        for why, text in (("reindented", written.replace("  ", "      ")),
+                          ("commented", "-- what this is for\n" + written),
+                          ("blank lines", written.replace(";", ";\n"))):
+            open(at, "w").write(text)
+            check(f"a {why} file is still the program it was", lib.verify_file(at)["ok"])
+
+        # AND A FILE THAT MEANS SOMETHING ELSE IS STILL REFUSED. The relaxation is about
+        # spelling; changing the machine the program creates is not a spelling.
+        open(at, "w").write(written.replace("box1", "box2"))
+        report = lib.verify_file(at, expected=_kept())
+        check("a file that is a different program is refused", not report["ok"])
+        check("and refusing it is fatal",
+              any(not c["ok"] and c["fatal"] for c in report["checks"]))
+
+
 def test_a_file_that_is_not_the_program_is_refused_and_rolled_back():
     """A FAILED RE-SAVE MUST NOT DESTROY A WORKING PROCEDURE.
 

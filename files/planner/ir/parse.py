@@ -661,6 +661,44 @@ def _method(cur: _Cursor) -> Dict[str, Any]:
     return {"op": "call", "tool": tool, "args": args}
 
 
+def canonical(program: Dict[str, Any]) -> Dict[str, Any]:
+    """A program reduced to the form the PARSER produces, so two of them can be compared.
+
+    ## WHY A PROGRAM CANNOT SIMPLY BE COMPARED TO ITSELF
+
+    `verify_file` asks whether the file reads back as the program that was handed in, and the
+    handed-in IR is NOT what comes back — the parser normalises on the way through, on purpose
+    and losslessly. Comparing raw dicts fails on programs that are the same program.
+
+    **EVERY REDUCTION HERE MUST BE MEANING-PRESERVING, and each one is stated with its reason.
+    A reduction that drops something the run would notice is a bug in this function, not a
+    convenience.** There are two:
+
+      * **an empty `params`** is no parameters, which is what an absent `params` is.
+      * **a `tool` the renderer would work out anyway.** `_new` records the constructor ONLY
+        when it cannot be derived, and this asks the same question through the same function,
+        so the rule lives in one place and cannot drift from its reader. A NON-derivable tool
+        is kept and compared, which is the case that carries meaning (`clone_vm` and
+        `create_vm(template: …)` both copy a vm, and which one ran is not recoverable).
+
+    IT IS NOT `parse(render(x))`. That would make the comparison vacuous from `save`, where
+    the read-back side is already `parse(render(program))` — the two would agree by
+    construction and a renderer that lost a field on its FIRST pass would go unseen. This
+    reduces both sides WITHOUT rendering, so the render is still the thing under test.
+    """
+    def stmt(st: Any) -> Any:
+        if not isinstance(st, dict):
+            return [stmt(x) for x in st] if isinstance(st, list) else st
+        out = {k: stmt(v) for k, v in st.items()}
+        if out.get("op") == "new" and out.get("tool") == _derived_creator(out):
+            out.pop("tool")
+        return out
+
+    keep = {k: v for k, v in (program or {}).items()
+            if k not in ("_text", "achieves") and not (k == "params" and not v)}
+    return {k: stmt(v) for k, v in keep.items()}
+
+
 def _derived_creator(st: Dict[str, Any]) -> Optional[str]:
     """Which constructor `render` would work out for this statement, with no `tool` recorded.
 
