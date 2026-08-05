@@ -150,6 +150,34 @@ def _settable() -> List[str]:
     return [a for a in _attrs() if a not in observed]
 
 
+def _states() -> List[str]:
+    """Every value a CLOSED attribute may take, across all kinds — the states a member is IN.
+
+    DERIVED FROM `attr_values`, which already enumerates them because `unusable` needs the
+    closed set to refuse a value the world cannot hold. A package that declares a kind with
+    states gets them here without an edit.
+    """
+    out = set()
+    for spec in (config.KINDS or {}).values():
+        for allowed in (spec.get("attr_values") or {}).values():
+            out |= {str(v) for v in (allowed or ())}
+    return sorted(out)
+
+
+def _attr_holding(kind: str, value: Any) -> Optional[str]:
+    """Which attribute of `kind` declares `value` as one of its states, or None.
+
+    THE SLOT SAYS *running*; THE SELECTOR NEEDS *status = running*. The manifest already
+    knows which attribute owns a value, so the mapping is read rather than written — a kind
+    with two closed attributes gets the right one without this function learning about it.
+    """
+    for attr, allowed in (((config.KINDS or {}).get(kind) or {}).get("attr_values") or
+                          {}).items():
+        if any(str(v).lower() == str(value).strip().lower() for v in (allowed or ())):
+            return attr
+    return None
+
+
 def _facts() -> List[str]:
     out = set()
     for spec in (config.KINDS or {}).values():
@@ -360,6 +388,35 @@ def schema(kinds=None, request: str = "") -> Dict[str, Any]:
                                              "LABEL, A GROUP OR A DESCRIPTION IS NOT A NAME: "
                                              "those belong in select.where. Empty string when "
                                              "no member is named")},
+                                # THE STATE GETS ITS OWN HOME, because until now it had none
+                                # and landed in `name`. `name` is the only free string this
+                                # branch offers, so every clause the model cannot shape has
+                                # been going there — `reach`, `prod`, `launch`, `running`,
+                                # `unresponsive`, `every`, `exactly two vms` — and each has
+                                # been met with its own guard.
+                                #
+                                # RUNG 2 IS THE CLEAREST CASE AND IT IS THE PROMPT'S OWN
+                                # WORKED EXAMPLE. "Create a vm named beta AND THEN LAUNCH IT"
+                                # comes back, 4 runs in 5, as two goals differing only in a
+                                # name of "launch" and "running" — the model DID translate the
+                                # second clause and had nowhere true to put it. The identity
+                                # repair then refuses to overwrite `beta`, both goals collapse
+                                # to the same count, and the machine is never launched.
+                                #
+                                # A CLOSED ENUM, DERIVED FROM `attr_values`, which already
+                                # enumerates the states because `unusable` needs them. So this
+                                # is not a sixth guard on the sink — it is the true home the
+                                # value was looking for, and the one thing this model is
+                                # measurably good at is picking from a closed set.
+                                #
+                                # OPTIONAL, NEVER REQUIRED. "A required field gets filled
+                                # whether or not it is meant" is what made `except` a net
+                                # loss; most requests name no state at all.
+                                "state": {"type": "string", "enum": _states(),
+                                          "description": (
+                                              "the state the member must be IN at the end — "
+                                              "'and then launch it' puts running here. Leave "
+                                              "it out when the request names no state")},
                                 # `where` IS REQUIRED BESIDE THIS ONE, and the pair is the
                                 # whole fix. `name` alone was REQUIRED and `where` optional,
                                 # so this was the only free string in the branch and every
@@ -1958,6 +2015,56 @@ def to_goals(raw: Dict[str, Any], request: str = "",
                 key = spec.get("key")
                 if key and key not in sel:
                     sel = {**sel, key: _coerce(str(named).strip())}
+                elif key and str(sel.get(key)).strip().lower() != str(named).strip().lower():
+                    # THE MODEL SAID SOMETHING AND IT WENT NOWHERE. The selector already
+                    # carries the key, so the repair above rightly refuses to overwrite a
+                    # real name with this one — and until now the value simply VANISHED.
+                    #
+                    # IT IS RUNG 2, THE SIMPLEST TWO-CLAUSE REQUEST THERE IS, and it is the
+                    # last false success on the literal arm. "Create a vm named beta AND THEN
+                    # LAUNCH IT" comes back, 4 runs in 5, as TWO goals that differ only here:
+                    #
+                    #     count vm[name=beta] amount 1  name: "launch"
+                    #     count vm[name=beta] amount 1  name: "running"
+                    #
+                    # The model DID translate the second clause — it put the STATE in the
+                    # only free string the count branch offers. Both goals then repair to the
+                    # identical `count(vm WHERE name=beta) = 1`, dedup folds them into one,
+                    # and the run creates beta, never launches it, and reports DONE.
+                    #
+                    # SO IT WAS NEVER "A CLAUSE NOBODY TRANSLATED" HERE. It is a clause
+                    # translated into the wrong slot and thrown away in silence, which is the
+                    # defect class this file has been paying for all day. Reporting it is the
+                    # whole fix: `orchestrator` closes UNTRANSLATED on anything dropped, so a
+                    # lie becomes a request the operator is told was not fully read.
+                    #
+                    # ONLY WHEN IT DIFFERS. A model that repeats the name it already gave —
+                    # `where name=beta` beside `name: beta` — has said one thing twice, and
+                    # discarding the copy loses nothing.
+                    _lost(f"it also says {named!r}, which is not the {key} it already has "
+                          f"({sel.get(key)!r}) and fits nowhere else in a count", g)
+                    continue
+            # THE STATE, FOLDED ONTO THE ATTRIBUTE THAT DECLARES IT. The slot says `running`
+            # and the selector needs `status = running`; `_attr_holding` reads which
+            # attribute owns the value out of `attr_values`, so a kind with two closed
+            # attributes is handled without this line knowing about it.
+            #
+            # THIS IS WHAT THE `name` SINK WAS SWALLOWING. Rung 2's second clause — "and then
+            # launch it" — arrived as `name: "running"`, was refused by the identity repair
+            # for not being the name the goal already had, and vanished. With a home to go
+            # to it becomes `count(vm WHERE name=beta AND status=running) = 1`, which is
+            # exactly the hand-written goal `test_ghost_writer` has always used for this rung.
+            #
+            # A STATE THE KIND DOES NOT DECLARE IS IGNORED RATHER THAN FORCED. The enum is
+            # global across kinds, so `running` can reach a `network` goal, and writing it
+            # onto a kind that has no such attribute would invent a filter matching nothing —
+            # the vacuous-truth defect this file keeps closing.
+            state = g.get("state")
+            if state:
+                holder = _attr_holding(sel.get("kind"), state)
+                if holder and holder not in sel:
+                    sel = {**sel, holder: config.canonical_value(
+                        sel.get("kind"), holder, str(state).strip())}
             stray = g.get("value")
             if stray and "=" in str(stray) and len(sel) == 1:
                 a, _, v = str(stray).partition("=")
