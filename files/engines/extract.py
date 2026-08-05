@@ -81,6 +81,38 @@ def _attrs(kind: str = None) -> List[str]:
     return sorted(out)
 
 
+def _can_reach() -> List[str]:
+    """The kinds that can be asked to reach each other — DERIVED, never listed.
+
+    `ghost_writer` needs exactly two things to plan a reach: a PROBE that asks whether a
+    member is alive, and a CONNECTIVE setter whose value `refs` another kind, so members can
+    be put somewhere together. A kind with neither cannot be made to reach anything, ever.
+
+    ONLY `vm` HAS BOTH, and every other kind has NEITHER — no probe and no connector. So a
+    reach over a network is not a hard goal, it is an unplannable one, and the schema was
+    offering it: rung 9's paraphrase came back `reach(network WHERE net_name IN [n1,n2,n3])`
+    for a request about machines, the writer looked for networks by those names, found none,
+    and planned ZERO calls. UNMET 3/3.
+
+    THE LITERAL ARM PROVES THE REST OF THE READING IS FINE. It answers the same request with
+    the same pairwise decomposition and the same `min: 1`, differing only in the KIND, and it
+    passes — so the kind is the whole of the failure.
+
+    DERIVED FROM THE MANIFEST RATHER THAN NAMED, because a package that mounts a kind with a
+    probe and a connector should get `reach` without an edit here, and one without them
+    should never be offered it. Same rule as `asks_reach` one layer up: a shape a request
+    cannot mean is not offered to it — here, a shape a KIND cannot satisfy.
+    """
+    from planner.ir import effects as _effects
+    out = []
+    for kind, spec in (config.KINDS or {}).items():
+        probe = _effects.probe_for(kind, "alive", config.KINDS)
+        link = next((s for s in (spec.get("setters") or {}).values() if s.get("refs")), None)
+        if probe and link:
+            out.append(kind)
+    return sorted(out) or _kinds()
+
+
 def _facts() -> List[str]:
     out = set()
     for spec in (config.KINDS or {}).values():
@@ -356,7 +388,12 @@ def schema(kinds=None, request: str = "") -> Dict[str, Any]:
                             "properties": {
                                 "goal": {"type": "string", "enum": ["reach"],
                                          "description": "these must be able to reach each other"},
-                                "select": _SELECT,
+                                # A KIND THAT CANNOT REACH IS NOT OFFERED ONE. Only a kind
+                                # with a probe AND a connective setter can be planned into a
+                                # reach; every other kind has neither. See `_can_reach`.
+                                "select": {**_SELECT, "properties": {
+                                    **_SELECT["properties"],
+                                    "kind": {"type": "string", "enum": _can_reach()}}},
                                 "amount": {"type": "integer",
                                            "description": "how few is too few"},
                             },
