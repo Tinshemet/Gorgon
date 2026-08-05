@@ -16,6 +16,36 @@ sees. UNTRANSLATED is not a failure of the engine and must not be counted as one
 the front seam, which is the whole point of a code that says which layer owns it.
 
     PYTHONPATH=. python3 -m tests.bench.engine_probe [-n 3] [-r 4] [-p]
+
+## WHERE THIS STANDS, MEASURED n=3 ON 2026-08-06 — and n=1 IS NOT A RESULT
+
+    literal      32/42   32 DONE ·  8 UNTRANSLATED · 2 DONE_BUT_FALSE
+    paraphrase   29/42   29 DONE ·  9 UNTRANSLATED · 3 DONE_BUT_FALSE · 1 UNMET
+    total        61/84   with 5 false successes
+
+Against the figure recorded on 2026-08-04 — literal 31/42 with ONE false success, paraphrase
+24/42 with FOUR, 55/84 in total — that is +6 on the ladder and FLAT on false successes: rung
+9's was fixed and rung 2's was exposed.
+
+THE n=1 TRAP, WALKED INTO THE SAME DAY IT WAS QUOTED. Every single-sample run on 2026-08-06
+showed the literal arm at 12/14 with ZERO false successes, repeatedly. At n=3 rung 2 fails 2
+of 3. The passing sample was luck, and it looked like a stable result because it recurred.
+`ladder_is_not_a_feedback_loop` says this in as many words; quoting it is not the same as
+obeying it.
+
+BOTH REMAINING FALSE SUCCESSES ARE ONE DEFECT — A CLAUSE NOBODY TRANSLATED:
+
+    rung 2  literal    2/3   DONE, 1 call    "and then launch it" never becomes a goal
+    rung 3  paraphrase 3/3   DONE, 2 calls   "and connect web to it" never becomes a goal
+
+Nothing is dropped and the surviving goals assert real things, so no guard can see either.
+Rung 2 is a CONTROL rung, which is why 2026-08-04 recorded it coming back 1-of-3 in three of
+four runs — that was never harness flakiness, it is this defect firing intermittently. The
+same defect blocks rung 11, and five mechanisms have been measured against it and failed.
+
+THIS IS NOT `ladder_gate`'S BASELINE. That file measures the AUTHORING path and stores a rate
+per cell; this is the production path and has no baseline file. Re-measure rather than trust
+the numbers above — they are a record of one day, not a gate.
 """
 from __future__ import annotations
 
