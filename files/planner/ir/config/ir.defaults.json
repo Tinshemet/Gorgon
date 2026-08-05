@@ -11,7 +11,20 @@
  "_stand_in_doc": "AUTHORING ONLY. When an operator declares `procedure p(STRING name): a vm called $name`, the goal layer has no bindings and strips `$name` as residue — correct for an acting request, ruinous for an authoring one: the identity filter vanishes, the goal collapses to `count(vm) = 1`, and any machine already in the lab satisfies it. Measured 2026-08-03: the writer answered with `launch_vm(name: work-laptop)`, the operator's real machine, and it was KEPT as a reusable procedure with both parameters inert. So a declared `$p` is replaced by a stand-in identity before translation and restored to `$p` after planning. DIGIT-FREE, and that is not cosmetic — `box2` in a request came back as `eq: 2`, the digit leaking out of a name and into the count.",
  "stand_in_prefix": "param_",
  "_request_evidence_doc": "WORDS THE REQUEST MUST CONTAIN for a shape to be believable, read out of the SENTENCE because the goals cannot hold the evidence. Two readers each, and both ask the same list: `reach` gates the goal shape both at generation (it is not offered to a request that never mentions reaching) and at conversion; `except` stops `_scoped` folding a named member into an unfiltered `every`, because a member beside an exception is the CARVE-OUT and not the receiver — measured on rung 8, where 'every vm on core EXCEPT db' put db ON core. HERE RATHER THAN IN THE MODULE so the vocabulary is data like every other list the language holds; `reach` is matched as whole words, `except` as substrings because 'apart from' is two of them.",
- "request_evidence": {
+ "_regime_doc": "WHICH HALF OF MEDUSA EACH OP AND PREDICATE BELONGS TO, declared 2026-08-06 at the operator's direction: *\"first make the writer version work and then build the user end on top of it through a post translator.\"* The WRITER emits four ops and two predicates and nothing else — measured across every rung's known-good goals, with no model in the loop. Everything else exists for the OPERATOR to type, and more than half the language is in that second group. That split was an observation somebody made once; declaring it here makes it a fact the suite can check, so `core` cannot quietly grow a dependency on a surface form and the surface cannot quietly become load-bearing. PHASE 2 lowers the surface INTO the core rather than marrying the two — which is what dissolves `verify_file`'s text-exact round trip, the one assertion forcing one surface form per IR form.",
+  "regime": {
+   "core": {
+    "ops": ["new", "publish", "call", "ensure"],
+    "predicates": ["count", "reach"],
+    "doc": "what the deterministic writer emits. The floor Phase 1 is taking to 14/14."
+   },
+   "surface": {
+    "ops": ["achieve", "break", "fetch", "foreach", "if"],
+    "predicates": ["all", "any", "disjoint", "is", "not"],
+    "doc": "what only an operator writes. Frozen during Phase 1; rebuilt as an interpreter over core in Phase 2."
+   }
+  },
+  "request_evidence": {
   "reach": [
    "reach",
    "reachable",

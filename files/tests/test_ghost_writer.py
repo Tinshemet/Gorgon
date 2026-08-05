@@ -380,6 +380,56 @@ def test_an_open_attribute_leaves_a_value_by_being_unset():
     check("a goal already true still writes nothing", cover(zero(label="scratch"), lab(0)) == [])
 
 
+def test_the_writer_only_ever_emits_the_core():
+    """PHASE 2'S BOUNDARY, MADE A FACT THE SUITE CHECKS.
+
+    The operator, 2026-08-06: *"first make the writer version work and then build the user end
+    on top of it through a post translator."* That split rests on a measurement — the writer
+    emits FOUR ops and TWO predicates and nothing else, across every rung's known-good goals,
+    with no model in the loop:
+
+        core     new · publish · call · ensure          count · reach
+        surface  achieve · break · fetch · foreach · if  all · any · disjoint · is · not
+
+    MORE THAN HALF THE LANGUAGE IS SURFACE, which is the empirical case for freezing it while
+    the writer path is what fails. That was an observation somebody made once; the manifest
+    now DECLARES it and this asserts it, so `core` cannot quietly grow a dependency on a
+    surface form and the surface cannot quietly become load-bearing.
+
+    IT WILL FAIL THE DAY THE WRITER LEARNS A NEW OP, and that is the point — the boundary
+    should move by a manifest edit somebody meant, not by a code change nobody noticed.
+    """
+    print("[regime] the writer emits the core and nothing else")
+    from planner.ir import config
+
+    check("the partition covers every op", config.CORE_OPS | config.SURFACE_OPS == set(config.OPS))
+    check("and every predicate",
+          config.CORE_PREDICATES | config.SURFACE_PREDICATES == set(config.PREDICATES))
+    check("with nothing in both", not (config.CORE_OPS & config.SURFACE_OPS)
+          and not (config.CORE_PREDICATES & config.SURFACE_PREDICATES))
+
+    seen_ops, seen_preds = set(), set()
+    for n in sorted(GOALS):
+        rung, world, plan, _ = _write(n)
+        temps = []
+        prog = as_program(cover(GOALS[n], world, temps=temps), GOALS[n], world, temps=temps)
+        for st in prog.get("body") or ():
+            seen_ops.add(st.get("op"))
+            shape = (st.get("predicate") or {}).get("shape")
+            if shape:
+                seen_preds.add(shape)
+
+    stray_ops = seen_ops - config.CORE_OPS
+    stray_preds = seen_preds - config.CORE_PREDICATES
+    check(f"every op the writer emits is core (saw {sorted(seen_ops)})", not stray_ops)
+    check(f"every predicate it emits is core (saw {sorted(seen_preds)})", not stray_preds)
+
+    # AND THE CORE IS NOT LARGER THAN IT NEEDS TO BE. A core op nothing emits is surface
+    # wearing the wrong label, and the freeze would be protecting the wrong half.
+    unused = config.CORE_OPS - seen_ops
+    check(f"and no core op is unused across the rungs ({sorted(unused)})", not unused)
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "ghost writer"))

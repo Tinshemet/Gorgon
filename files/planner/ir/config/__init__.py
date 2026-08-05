@@ -70,6 +70,15 @@ NOT_OPS    = _c("not_ops")         # a word written as a statement that is not o
 SANITIZE   = _c("sanitize")        # artifact kinds the sanitiser removes -> {severity, why, evidence}
 KINDS      = _c("kinds")           # THE RESOURCE MANIFEST: kind -> {package, create, list, key, attrs}
 PREDICATES = _c("predicates")      # shape -> {source, operand, comparators, doc}
+# WHICH HALF OF THE LANGUAGE EACH OP AND PREDICATE BELONGS TO — the operator's Phase 2 split,
+# declared in the manifest rather than inferred: the WRITER emits four ops and two predicates
+# and nothing else, and everything beyond that exists for a person to type. Kept as data so
+# `test_layering` can check the boundary instead of a comment asserting it.
+REGIME = _c("regime")
+CORE_OPS = set((REGIME.get("core") or {}).get("ops") or ())
+CORE_PREDICATES = set((REGIME.get("core") or {}).get("predicates") or ())
+SURFACE_OPS = set((REGIME.get("surface") or {}).get("ops") or ())
+SURFACE_PREDICATES = set((REGIME.get("surface") or {}).get("predicates") or ())
 PROMPT     = _c("prompt")          # every string the model is shown
 # WHEN each fragment is worth sending — `needs` (any of these ops offered) and
 # `whole` (only when authoring a whole program). A fragment with no entry is
