@@ -544,6 +544,63 @@ def test_a_dotted_reference_is_one_operand():
 # sweep after the same trap was hit in `test_extract.py`; three suites carried it and eleven
 # tests had never run. `_suite.py` discovers by definition order, so placement is the only
 # thing keeping a test alive.
+def test_a_check_has_one_spelling_and_it_is_the_one_that_prints():
+    """A SPELLING YOU COULD TYPE AND NEVER SAVE — the third instance of this defect.
+
+    `all` prints as `AND` and `any` as `OR`, out of `SURFACE.combinators`. `_shape_named`
+    then fell through to "is the lower-cased word a predicate?", which is right for `COUNT`
+    and `REACH` and was also letting the composites' MANIFEST KEYS through. So `ENSURE
+    ALL(…)` parsed, ran, and rendered back as `AND(…)` — and `verify_file` compares TEXT TO
+    TEXT, so the file failed verification and the program could not be kept.
+
+    THE SAME SHAPE AS THE METHOD-FORM RULING (`CALL launch_vm(name: $box)` refused in favour
+    of `$box.launch()`) and as the namespace class before it: ONE THING, ONE RENDERING, or
+    the spelling the renderer did not choose is a trap. Confirmed against a real `Store` on
+    2026-08-05 — identical programs, `AND` verifies and `ALL` does not.
+
+    NOTHING STORED COULD BREAK, which is what made this a fix rather than a language change:
+    a saved `.medusa` cannot contain `ALL(` because verification is what stops it being
+    written.
+    """
+    print("[surface] a check has one spelling, and it is the one that prints")
+    from planner.ir import config
+
+    one = "COUNT(SELECT vm WHERE name = 'web') = 1"
+    two = f"{one}, COUNT(SELECT vm WHERE name = 'db') = 1"
+    prog = lambda body: "PROCEDURE t() {\n  ENSURE %s;\n}" % body
+
+    combinators = config.SURFACE.get("combinators") or {}
+    for shape, printed in combinators.items():
+        body = two if (config.PREDICATES.get(shape) or {}).get("arity") == "many" else one
+        src = prog(f"{printed}({body})")
+        ir = parse(src)
+        check(f"`{printed}` is the spelling, and it round trips",
+              ir["body"][0]["predicate"]["shape"] == shape and parse(render(ir)) == ir)
+
+        # THE KEY IS REFUSED — unless it happens to BE the printed word, as `not`/`NOT` is.
+        if shape.upper() == printed.upper():
+            continue
+        try:
+            parse(prog(f"{shape.upper()}({body})"))
+            check(f"`{shape.upper()}` is refused as a spelling", False)
+        except ParseError as exc:
+            check(f"`{shape.upper()}` is refused as a spelling", True)
+            check(f"and the refusal names `{printed}` rather than saying 'unknown'",
+                  printed in str(exc))
+
+    # A GENUINELY UNKNOWN CHECK STILL READS AS UNKNOWN. The helpful message must not swallow
+    # the case it was not written for.
+    try:
+        parse(prog("WOMBAT(SELECT vm)"))
+        check("an unknown check is still an error", False)
+    except ParseError as exc:
+        check("an unknown check is still an error", "unknown check" in str(exc))
+
+    # AND THE NON-COMBINATOR CHECKS ARE NAMED BY THEIR OWN SHAPE, untouched by any of this.
+    ir = parse(prog(one))
+    check("`COUNT` is still spelled by its shape", parse(render(ir)) == ir)
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "parse"))

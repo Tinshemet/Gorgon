@@ -30,6 +30,26 @@ def _w(key: str) -> str:
     return config.SURFACE.get(key, key.upper())
 
 
+def _pred_w(name: str) -> str:
+    """A CHECK's printed keyword. The composites do not print under their manifest key.
+
+    THIS FILE DOCUMENTED A SPELLING THAT CANNOT BE SAVED. `_ops_section` has always asked
+    `_w`, but the checks section printed `name.upper()` — the manifest key — and for the
+    composites the key and the printed word are different things: `all` prints as `AND` and
+    `any` as `OR`, out of `SURFACE.combinators`, which is what `render._pred` reads.
+
+    SO THE ONE DOCUMENT ANYBODY READS SAID `ALL(…)`, AND A FILE WRITTEN THAT WAY IS LOST.
+    The parser accepts both spellings, so it parses and it runs; the renderer prints only
+    `AND`; and `verify_file` compares TEXT TO TEXT, so saving it fails. Confirmed against
+    the real store 2026-08-05: identical programs, `AND` verifies and `ALL` does not.
+
+    Exactly the defect the method form was ruled on for — *"a spelling you could type and
+    never save"* — reappearing in the reference that exists to stop the grammar having two
+    descriptions.
+    """
+    return (config.SURFACE.get("combinators") or {}).get(name) or name.upper()
+
+
 # ── the examples, WRITTEN, and every one parsed by tests/test_reference.py ────────────────
 #
 # ORDERED BY WHAT A PERSON REACHES FOR FIRST, not by which op is most interesting. The first
@@ -172,7 +192,7 @@ def _predicates_section() -> List[str]:
         spec = config.PREDICATES[name] or {}
         comps = spec.get("comparators") or {}
         shown = ", ".join(f"`{v}`" for v in comps.values()) or "—"
-        out += [f"### `{name.upper()}`", "",
+        out += [f"### `{_pred_w(name)}`", "",
                 f"- reads: {spec.get('source', '—')}",
                 f"- compares with: {shown}"]
         doc = (spec.get("doc") or "").strip()

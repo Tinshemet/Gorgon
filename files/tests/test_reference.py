@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from planner.ir import config
 from planner.ir.parse import parse_many
-from planner.ir.reference import examples, render_reference
+from planner.ir.reference import _pred_w, examples, render_reference
 
 _PASS = _FAIL = 0
 
@@ -70,8 +70,20 @@ def test_the_reference_names_every_op_and_check():
     for op in config.OPS:
         word = config.SURFACE.get(op, op.upper())
         check(f"`{word}` is documented", f"`{word}`" in text)
+    # A CHECK IS DOCUMENTED UNDER THE WORD IT PRINTS, and this line asserted the manifest KEY
+    # instead — which is why it went green for months while the guide named a spelling that
+    # cannot be saved. `all` prints as `AND` and `any` as `OR`, out of `SURFACE.combinators`;
+    # the parser takes both, the renderer emits only one, and `verify_file` compares text to
+    # text, so a file written `ALL(…)` parses, runs and is LOST on save (confirmed against a
+    # real store, 2026-08-05).
+    #
+    # THE LINE ABOVE ALREADY GOT THIS RIGHT FOR OPS. The asymmetry is the whole story: a test
+    # that asks a different authority than the thing it checks cannot fail when they disagree,
+    # and these two disagreed exactly where the surface word is not the key.
     for pred in config.PREDICATES:
-        check(f"the {pred.upper()} check is documented", f"`{pred.upper()}`" in text)
+        word = _pred_w(pred)
+        check(f"the {word} check is documented under the word it PRINTS",
+              f"`{word}`" in text)
     for name, spec in config.PARAM_TYPES.items():
         check(f"the {spec.get('sql', name)} type is documented",
               f"`{spec.get('sql', name.upper())}`" in text)

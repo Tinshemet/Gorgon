@@ -923,6 +923,17 @@ def _predicate(cur: _Cursor) -> Dict[str, Any]:
     word = str(t.value).upper()
     shape = _shape_named(word)
     if shape is None:
+        # A COMBINATOR'S KEY GETS THE WORD IT SHOULD HAVE USED, not a bare "unknown". It is
+        # the one wrong spelling somebody will actually type — it is what the shape is called
+        # everywhere except on the page — and an error that just says "unknown check 'ALL'"
+        # when `ALL` is in the manifest sends the reader to look for a missing feature.
+        printed = (config.SURFACE.get("combinators") or {}).get(word.lower())
+        if printed:
+            raise ParseError(
+                f"{t.value!r} is the internal name for this check — write {printed!r}. "
+                f"Only the printed form can be saved: the renderer emits {printed!r}, and a "
+                f"file is verified by comparing what it says against what it renders back to",
+                t.line)
         raise ParseError(f"unknown check {t.value!r}", t.line)
     cur.take()
     spec = config.PREDICATES.get(shape) or {}
@@ -1002,9 +1013,29 @@ def _shape_named(word: str) -> Optional[str]:
     TWO TABLES BECAUSE THERE ARE TWO KINDS OF NAME. A combinator's printed word is a surface
     decision (`all` prints as `AND`); a check's is its own shape, upper-cased. Reading both
     from where they are declared is what stops this function becoming the list of predicates.
+
+    ## AND A COMBINATOR'S KEY IS NOT A SPELLING — that was a hole, not a feature
+
+    The fallback below asks whether the lower-cased word is a predicate, which is right for
+    `COUNT`, `REACH`, `DISJOINT` and `IS` and was ALSO letting `ALL` and `ANY` through — the
+    manifest keys of the two shapes whose printed words are `AND` and `OR`. The rule this
+    docstring already states was simply not enforced.
+
+    IT WAS A SPELLING YOU COULD TYPE AND NEVER SAVE, which is the exact defect the operator
+    ruled on for the method form. `ENSURE ALL(…)` parsed, ran, and printed back as `AND(…)`,
+    and `verify_file` compares TEXT TO TEXT — so the file failed verification and the program
+    was lost. Confirmed against a real store on 2026-08-05: two identical programs, `AND`
+    verifies and `ALL` does not.
+
+    NOTHING STORED CAN BREAK, and that is what makes this a fix rather than a language
+    change. A saved `.medusa` cannot contain `ALL(` — verification is what stops it being
+    written in the first place — so the only programs this refuses are ones that could never
+    have been kept. The refusal names the word to use, as the long-call refusal does.
     """
     for shape, printed in (config.SURFACE.get("combinators") or {}).items():
         if printed.upper() == word:
             return shape
     low = word.lower()
+    if low in (config.SURFACE.get("combinators") or {}):
+        return None
     return low if low in (config.PREDICATES or {}) else None
