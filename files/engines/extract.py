@@ -113,6 +113,43 @@ def _can_reach() -> List[str]:
     return sorted(out) or _kinds()
 
 
+def _settable() -> List[str]:
+    """The attributes an `every … must` may name — everything EXCEPT what is merely OBSERVED.
+
+    A FINDING IS NOT A STATE YOU BRING ABOUT. `alive` and `exists` are answers the world
+    GIVES; nothing sets them, and no plan can make a machine answer a ping. Asking for
+    `every vm must alive=true` is asking the world to become something no tool can make it —
+    it is not a hard goal, it is an unsatisfiable one.
+
+    AND THE MODEL EMITS IT INSTEAD OF THE THING THAT WORKS. Rung 11 — "ping every vm and stop
+    the ones that do not answer" — comes back as TWO independent assertions:
+
+        every vm[] must alive  = true      <- unsatisfiable, and the condition in disguise
+        every vm[] must status = stopped   <- right pair, EMPTY selector
+
+    The condition belongs in the SELECTOR: `every vm[alive=false] must status=stopped`, which
+    the language already accepts and the writer already plans (verified end to end — it emits
+    `guest_ping` for each member, then `stop_vm` for the ones that did not answer). Blinded to
+    the `every` shape the model produces `status=stopped` correctly and leaves the selector
+    empty, so the pair is not the difficulty; the CONDITION having a legal home elsewhere is.
+
+    SO THE WRONG HOME IS CLOSED. Four attempts to TEACH the construction failed on 2026-08-05
+    — a filtered example, a second example, its own table row, and the whole provenance family
+    — and this is the move that has worked instead every time: make the wrong shape
+    unrepresentable and leave the right one as the only place the clause can go.
+
+    OBSERVED ONLY, AND NOT `setters`. Restricting to what a setter can write would take
+    `memory_mb`, `cpu_cores` and `os_type` with it — the coverage corpus asks "give the
+    machine called burner 8192 MB of memory" and means it. Those are attributes the world
+    HOLDS and a creator or an act can establish; they are simply not findings. The line is
+    between what the world is TOLD and what the world is ASKED.
+    """
+    observed = set()
+    for spec in (config.KINDS or {}).values():
+        observed |= set((spec.get("observed") or {}).keys())
+    return [a for a in _attrs() if a not in observed]
+
+
 def _facts() -> List[str]:
     out = set()
     for spec in (config.KINDS or {}).values():
@@ -420,7 +457,12 @@ def schema(kinds=None, request: str = "") -> Dict[str, Any]:
                                 # which is the same finding as the `procedure` field it
                                 # filled 0 times in 2. A description is not a place to teach
                                 # from.
-                                "attr": {"type": "string", "enum": _attrs(),
+                                # A FINDING IS NOT A STATE YOU BRING ABOUT — see
+                                # `_settable`. `alive` is an answer the world gives, so
+                                # `every vm must alive=true` is unsatisfiable, and it is
+                                # exactly what the model reaches for instead of putting the
+                                # condition in the SELECTOR where rung 11 needs it.
+                                "attr": {"type": "string", "enum": _settable(),
                                          "description": "which property to give them"},
                                 "value": {"type": "string",
                                           "description": "what to set that property to"},
