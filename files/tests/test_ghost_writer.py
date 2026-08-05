@@ -325,6 +325,61 @@ def test_a_member_the_program_made_is_referred_to_and_not_repeated():
           _by_reference(twice, config.KINDS)[2]["args"] == {"name": "a"})
 
 
+def test_an_open_attribute_leaves_a_value_by_being_unset():
+    """A CAPABILITY THE WRITER HAD THE TOOLS FOR AND COULD NOT REACH, found 2026-08-05.
+
+    `count(vm WHERE label=scratch) = 0` — the canonical teardown — asked `effects.complement`
+    for the OTHER legal value of a label. A label is open-valued, so there is none, and the
+    lowering returned `[]`. An empty lowering means "nothing to do", so `cover` raised
+    `Unsolvable: nothing reaches` and DELETING BY LABEL WAS IMPOSSIBLE — while `remove_label`
+    sat in the manifest as a declared unsetter the entire time.
+
+    FLIPPING AND UNSETTING ARE DIFFERENT ANSWERS AND ONLY ONE NEEDS A COMPLEMENT. A closed
+    attribute leaves a value by taking the other one; an open attribute leaves it by being
+    unset. The complement is an OPPORTUNITY, not a precondition.
+
+    THE HOLE WAS INVISIBLE UNTIL A SEPARATE BUG WAS FIXED. While the extractor was turning
+    `amount: -1` into `eq: 1`, the writer was handed a goal it COULD plan, so nothing ever
+    asked it for `eq: 0` on a label. Two defects, and the first hid the second.
+    """
+    print("[lowering] an open attribute is left by being unset, not flipped")
+
+    def lab(n, label=True, stopped=False):
+        w = SimWorld()
+        for i in range(n):
+            w.execute("create_vm", {"name": f"s{i}"})
+            if label:
+                w.execute("add_label", {"name": f"s{i}", "label": "scratch"})
+            if not stopped:
+                w.execute("launch_vm", {"name": f"s{i}"})
+        return w
+
+    zero = lambda **f: [{"shape": "count", "select": {"kind": "vm", **f}, "eq": 0}]
+
+    calls = cover(zero(label="scratch"), lab(3))
+    check("a label-scoped zero is now plannable at all",
+          len(calls) == 3 and all(t == "remove_label" for t, _ in calls))
+    check("and it names the value being dropped, not just the member",
+          all(a.get("label") == "scratch" for _, a in calls))
+
+    # THE CLOSED-ATTRIBUTE PATH MUST NOT HAVE MOVED. `status` HAS a complement, so "no
+    # machine may be stopped" still means START them — it must never fall through to an
+    # unsetter, and it must never mean delete.
+    calls = cover(zero(status="stopped"), lab(3, label=False, stopped=True))
+    check("a closed attribute still flips to its complement",
+          len(calls) == 3 and all(t == "launch_vm" for t, _ in calls))
+
+    # AND AN UNFILTERED ZERO IS STILL THE ONLY THING THAT DESTROYS MEMBERS.
+    calls = cover(zero(), lab(3, label=False))
+    check("an unfiltered zero still deletes the members",
+          [t for t, _ in calls].count("delete_vm") == 3)
+    check("a label-scoped zero destroys NOTHING",
+          not any(t == "delete_vm"
+                  for t, _ in cover(zero(label="scratch"), lab(3))))
+
+    check("a goal already true still writes nothing", cover(zero(label="scratch"), lab(0)) == [])
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "ghost writer"))

@@ -248,13 +248,53 @@ def _lower(goal: Dict[str, Any], select, world) -> List[Dict[str, Any]]:
     # "NO MEMBER MAY MATCH" — flip each one that does. The value to flip TO is the
     # attribute's other legal value, and `complement` returns None when there are three or
     # more, because the goal genuinely did not say which. Declining beats picking.
+    #
+    # NO COMPLEMENT IS NOT NO PLAN, and treating it as one was a dead end that swallowed a
+    # whole capability. `count(vm WHERE label=scratch) = 0` — the canonical teardown — asked
+    # `complement` for the OTHER legal value of a label, which does not exist because a label
+    # is open-valued, and this returned `[]`. An empty lowering is "nothing to do", so
+    # `cover` reported `Unsolvable: nothing reaches`, and DELETING BY LABEL WAS SIMPLY
+    # IMPOSSIBLE — while `remove_label` sat in the manifest as a declared unsetter the whole
+    # time. The writer had the tool and never reached it.
+    #
+    # FLIPPING AND UNSETTING ARE DIFFERENT ANSWERS TO THE SAME QUESTION, and only the first
+    # needs a complement. A closed attribute (`status`) leaves a value by taking the other
+    # one; an open attribute (`label`, `network`) leaves it by being unset. So the complement
+    # is now an OPPORTUNITY rather than a precondition: take it when it exists, and otherwise
+    # fall through to the per-member lowering below, which is already the path that reaches
+    # `effects`' unsetter table.
+    #
+    # ## AND IT UNSETS RATHER THAN DELETES — EVALUATED 2026-08-05 AND DECIDED, NOT DEFAULTED
+    #
+    # `count(vm WHERE label=scratch) = 0` is satisfied by removing the LABEL or by removing
+    # the MACHINES, and the goal cannot tell those apart: "delete every machine labelled
+    # scratch" and "make sure no machine carries the scratch label" compile to exactly this.
+    # The obvious fix is to have the extractor mark the goal when the request says "delete",
+    # in the manner of `REQUEST_EVIDENCE`. IT WAS TRIED ON PAPER AND REJECTED ON ONE
+    # COUNTEREXAMPLE:
+    #
+    #     "delete every machine labelled scratch"      -> word `delete`, means the MACHINES
+    #     "delete the prod label from every machine"   -> word `delete`, means the LABEL
+    #
+    # Same word, opposite objects, and the destructive reading of the second one deletes a
+    # lab. Telling them apart needs the verb's OBJECT, which is a parser for English — the
+    # vocabulary this project keeps deleting — and the cost of being wrong is not symmetric:
+    # an unset that should have been a delete leaves a label on a machine, a delete that
+    # should have been an unset is unrecoverable. This module's own rule, written for `clean
+    # up the lab`: AN IRREVERSIBLE READING OF A VAGUE SENTENCE MUST NEVER BE CHOSEN
+    # CONFIDENTLY.
+    #
+    # SO THE AMBIGUITY IS LEFT VISIBLE INSTEAD OF GUESSED. The program says `remove_label` in
+    # as many words, and it is read before it runs; an operator who meant destruction can see
+    # that it did not happen. Deletion IS sayable and unambiguously so — name the members
+    # ("delete web and db" filters on the key, which no member can stop matching, so
+    # `effects` reaches `delete_vm`), or say it in Medusa directly with `$vm.delete()`.
     if want == 0 and len(filters) == 1:
         attr, bad = next(iter(filters.items()))
         good = effects.complement(kind, attr, bad, _kinds(world))
-        if good is None:
-            return []
-        return [{"shape": "count", "select": {"kind": kind, key: m, attr: good}, "eq": 1}
-                for m in members]
+        if good is not None:
+            return [{"shape": "count", "select": {"kind": kind, key: m, attr: good}, "eq": 1}
+                    for m in members]
 
     if want is None:
         return []
