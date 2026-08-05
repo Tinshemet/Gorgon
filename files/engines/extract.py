@@ -1427,6 +1427,35 @@ def to_goals(raw: Dict[str, Any], request: str = "",
             _lost(made_up)
             return
 
+        # SEVERAL MEMBERS CANNOT SHARE ONE IDENTITY, and this refuses the goal at the seam
+        # that OWNS the error rather than three layers down. A kind has one member per key,
+        # so `count(vm WHERE name='golden') = 3` describes no world at all — it is rung 10's
+        # literal answer to "clone golden into 3 new vms", where the clone relation is lost
+        # and three machines end up sharing a name.
+        #
+        # IT WAS ALREADY CAUGHT, IN THE WRONG PLACE. `ghost_writer.cover` raises `Unsolvable:
+        # nothing reaches`, so the run is honest — and it closes UNMET, which BLAMES THE
+        # ENGINE for a front-seam mistake. `engine_probe`'s own docstring is explicit that
+        # UNTRANSLATED exists so that cannot happen: "it names the front seam, and confusing
+        # it with an engine failure is how a day gets spent debugging the wrong half."
+        # Nothing changes about whether the request works; what changes is which layer is
+        # told to look.
+        #
+        # THE RULE IS `coverage_probe.judge`'S, which has counted this as FORCED since the
+        # corpus was written while production had no equivalent — the bench asking a
+        # different question than production, one more time.
+        #
+        # A MEMBERSHIP LIST IS NOT THIS. `name IN [n1, n2, n3]` with a count of three is
+        # three members with three names, which is an ordinary request; only a SCALAR key
+        # bound beside a count above one is impossible.
+        key_of = ((config.KINDS or {}).get(sel.get("kind")) or {}).get("key")
+        pinned = sel.get(key_of) if key_of else None
+        if (isinstance(goal.get("eq"), int) and goal["eq"] > 1
+                and isinstance(pinned, (str, int, float))):
+            _lost(f"it asks for {goal['eq']} {sel.get('kind')}s all called {pinned!r}, and a "
+                  f"{sel.get('kind')} is identified by its {key_of} — no world has that")
+            return
+
         # AND THE `must` CLAUSE IS JUDGED TOO, which it never was. `_keep` read the SELECTOR
         # and stopped — so `every network[net_name=core] must members = 'all machines'` walked
         # past every guard in this file, because the prose was on the WRITE side of the goal

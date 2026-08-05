@@ -66,11 +66,16 @@ def shapes_of(goals: List[Dict[str, Any]]) -> set:
 def names_of(goals: List[Dict[str, Any]]) -> set:
     """Every identifier a reading commits to.
 
-    THE KEY AND THE REFERENCES, which is the same convention `unusable` and `_named_in`
-    already use: a kind's key IS a member's name, and an attribute named for a kind refers to
-    a member of it. A membership list names several.
+    THE KEY AND THE REFERENCES, and it asks `extract.names_members` rather than repeating
+    the rule. It used to inline the CONVENTION — an attribute is a reference when its name IS
+    a declared kind — which is silent about `network.members`, so this probe could not see a
+    name that production now can. THE BENCH ASKING A DIFFERENT QUESTION THAN PRODUCTION is a
+    defect this codebase keeps finding under other names; the two must share the authority or
+    a coverage number measures the probe rather than the seam. A membership list names several.
     """
     from planner.ir import config
+
+    from engines.extract import names_members
     out: set = set()
 
     def _add(v: Any) -> None:
@@ -88,12 +93,14 @@ def names_of(goals: List[Dict[str, Any]]) -> set:
             kind = sel.get("kind")
             key = ((config.KINDS or {}).get(kind) or {}).get("key")
             for attr, value in sel.items():
-                if attr == key or attr in (config.KINDS or {}):
+                if attr == key or names_members(kind, attr):
                     _add(value)
         must = g.get("must")
         if isinstance(must, dict):
+            holder = next((g[h] for h in ("select", "every", "observe", "per")
+                           if isinstance(g.get(h), dict)), {})
             for attr, value in must.items():
-                if attr in (config.KINDS or {}):
+                if names_members(holder.get("kind"), attr):
                     _add(value)
     return out
 

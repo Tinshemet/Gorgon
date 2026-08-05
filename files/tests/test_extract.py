@@ -440,10 +440,39 @@ def test_a_word_the_model_was_shown_is_not_a_name():
           got and "name" not in got[0]["select"])
     check("and the count survives it", got and got[0]["eq"] == 5)
 
+    # AN UNEXPLAINED NAME BESIDE A COUNT ABOVE ONE IS REFUSED — and refusing is NOT the
+    # withdrawn rule above, which is the distinction the whole docstring turns on.
+    #
+    #   STRIP the name  -> `count(vm) = 3`, SATISFIABLE and not the request. The run builds
+    #                      three machines and closes DONE. That is the 6 -> 12 disaster.
+    #   KEEP  the name  -> impossible goal, writer says `Unsolvable: nothing reaches`,
+    #                      run closes UNMET. Honest, and it blames the ENGINE.
+    #   REFUSE the goal -> the front seam says WHY, and closes UNTRANSLATED. Honest, and it
+    #                      blames the layer that actually got it wrong.
+    #
+    # Nothing about whether the request works changes between the last two; what changes is
+    # which half a reader is sent to debug. `engine_probe` is explicit that this matters —
+    # "confusing it with an engine failure is how a day gets spent debugging the wrong half"
+    # — and the rule is `coverage_probe.judge`'s own, which has flagged it as FORCED since
+    # the corpus was written while production had no equivalent.
+    dropped = []
     kept = to_goals({"goals": [
-        {"goal": "count", "select": {"kind": "vm"}, "amount": 3, "name": "prod"}]}, "")
-    check("an UNEXPLAINED name is KEPT, so the goal fails honestly rather than falsely",
-          kept and kept[0]["select"].get("name") == "prod")
+        {"goal": "count", "select": {"kind": "vm"}, "amount": 3, "name": "prod"}]}, "",
+        dropped)
+    check("several members cannot share one identity, so the goal is refused", kept == [])
+    check("and the refusal says so in the operator's terms, not the writer's",
+          len(dropped) == 1 and "no world has that" in dropped[0])
+    check("the name is never STRIPPED to leave a satisfiable count — the withdrawn rule",
+          not any(g.get("eq") == 3 and "name" not in g.get("select", {}) for g in kept))
+
+    # A MEMBERSHIP LIST IS NOT THIS. Three names for three members is an ordinary request.
+    trio = to_goals({"goals": [{"goal": "count", "select": {"kind": "vm", "where": [
+        {"attr": "name", "value": "n1"}, {"attr": "name", "value": "n2"},
+        {"attr": "name", "value": "n3"}]}, "amount": 3, "name": ""}]},
+        "make sure n1, n2 and n3 exist")
+    check("three members with three names is untouched",
+          trio and trio[0]["eq"] == 3 and isinstance(
+              trio[0]["select"].get("name"), dict))
 
     one = to_goals({"goals": [
         {"goal": "count", "select": {"kind": "vm"}, "amount": 1, "name": "box1"}]}, "")
