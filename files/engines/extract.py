@@ -516,6 +516,28 @@ def schema(kinds=None, request: str = "") -> Dict[str, Any]:
     # selector commits to that does not appear in the request is not a name the operator
     # gave. `coverage_probe.judge` already counts exactly that as FORCED, and production has
     # no equivalent. Build and measure that FIRST; the gate is not the thing in the way.
+
+    # ## THIRD ATTEMPT, WITH `invented` BEHIND IT — the guard now exists
+    #
+    # The clause moved to `count(vm WHERE name='unresponsive') = 0`, and `extract.invented`
+    # drops exactly that: a well-formed name the request never says. So rung 11 with `per`
+    # gated should now DROP a goal and close UNTRANSLATED honestly, rather than assert a
+    # thing about a machine nobody mentioned.
+    if request:
+        mentioned = [k for k, spec in (config.KINDS or {}).items()
+                     if _relevant(spec or {}, request, k)]
+        makeable = [k for k in mentioned
+                    if any(s != k and _link_between(s, k) for s in (config.KINDS or {}))]
+        if len(mentioned) < 2:
+            makeable = []
+        branches = out["properties"]["goals"]["items"]["oneOf"]
+        if makeable:
+            for b in branches:
+                if b["properties"]["goal"]["enum"] == ["per"]:
+                    b["properties"]["make"]["enum"] = makeable
+        else:
+            out["properties"]["goals"]["items"]["oneOf"] = [
+                b for b in branches if b["properties"]["goal"]["enum"] != ["per"]]
     return out
 
 
