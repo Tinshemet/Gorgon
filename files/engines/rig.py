@@ -59,6 +59,14 @@ def translator() -> Callable:
         # is the translator saying the request cannot be read, in its own words, and the other
         # is the translator failing to be read. Reporting them alike throws away the one piece
         # of information the operator can act on, which is WHY.
+        # A REFUSAL WINS OVER GOALS THE SAME ANSWER CARRIED, and that is asserted here
+        # rather than assumed: this returns BEFORE `to_goals` runs, so a model that says "I
+        # cannot do this part" while translating the rest has its goals DISCARDED. Measured
+        # on 2026-08-05 at 2 of 66 readings, and `coverage_probe` counts it on every run so
+        # the rate is visible rather than remembered. It is the safe direction — half a
+        # request planned and closed DONE is the DONE_BUT_FALSE this seam exists to stop —
+        # but it is a CHOICE, and the day it stops being the right one it should be one that
+        # was made on purpose.
         said_no = _extract.declined(raw)
         if said_no:
             return Answer(None, "extractor", f"cannot translate: {said_no}")
