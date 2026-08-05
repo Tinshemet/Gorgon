@@ -337,10 +337,43 @@ def _lower(goal: Dict[str, Any], select, world) -> List[Dict[str, Any]]:
         pool = {"kind": kind}
         if sel.get("not"):
             pool["not"] = sel["not"]
+        # A CANDIDATE MUST ALREADY BE WHAT IT CANNOT BECOME. The pool was every member of
+        # the kind, so a goal naming an attribute FIXED AT BIRTH recruited members that could
+        # never satisfy it: `COUNT(vm WHERE cloned_from = golden AND status = running) = 3`
+        # took `golden` itself and emitted "make golden a clone of golden", which `invert`
+        # turned into `clone_vm(new_name: golden, source_name: golden)` and `forbids` refused
+        # because the name is taken — an Unsolvable for a goal three creations would satisfy.
+        #
+        # `forbids` ALREADY NAMES THIS CLASS for `os_type` — *"no tool CHANGES os_type after
+        # birth"* — and stops the bad call at the last moment. Narrowing the pool stops the
+        # writer reaching for it at all, which is the difference between refusing a program
+        # and writing the right one.
+        #
+        # SO THE UNWRITABLE FILTERS JOIN THE POOL QUERY. A member already cut from `golden`
+        # is a candidate for "cloned from golden AND running" because only `status` is left
+        # to change, and `status` has a setter. One that is not is excluded, and if none
+        # qualifies the deficit falls through to minting below — the only way such a member
+        # can come to exist. Asking the pool query is also what stops this from being a
+        # blanket refusal: the three clones made a moment ago are exactly what it finds.
+        for fixed, value in filters.items():
+            if fixed not in ("not", key) and not effects.writable(kind, fixed):
+                pool[fixed] = value
+        # AND A RECRUITED MEMBER IS ASKED ONLY FOR WHAT IS LEFT TO DO. The pool query above
+        # already guaranteed the unwritable attributes — that is WHY this member was picked —
+        # so repeating them here states something already true, and `invert` reads a member
+        # named beside attributes as a CREATION: `COUNT(vm WHERE name = vm1 AND cloned_from =
+        # golden AND status = running) = 1` became `create_vm(name: vm1, …)` on a machine
+        # that exists. Carrying only the writable half leaves exactly `status = running`,
+        # which is `launch_vm`.
+        #
+        # THE ASSERTION IS NOT WEAKENED. These are sub-goals for choosing tiles; the ENSURE
+        # `as_program` writes comes from the ORIGINAL goal and still asserts the whole
+        # condition, provenance included.
         for m in [x for x in select(pool) if x not in matched][:deficit]:
             subs.append({"shape": "count",
                          "select": {"kind": kind, key: m,
-                                    **{k: v for k, v in filters.items() if k != "not"}},
+                                    **{k: v for k, v in filters.items()
+                                       if k != "not" and effects.writable(kind, k)}},
                          "eq": 1})
         deficit -= len(subs)
     plain = {k: v for k, v in filters.items() if k != "not"}

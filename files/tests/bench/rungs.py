@@ -106,7 +106,7 @@ class Rung(NamedTuple):
 
 
 def _vm(w: SimWorld, name: str, status: str = "stopped", labels=(), nets=()):
-    w.vms[name] = {"status": status, "labels": set(labels), "nets": set(nets)}
+    w.vms[name] = w.blank_vm(status=status, labels=labels, nets=nets)
     for n in nets:
         w.nets.add(n)
 

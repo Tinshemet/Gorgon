@@ -1468,7 +1468,8 @@ def _born_with(kind: str, must: Dict[str, Any]) -> bool:
 # repair refuse when nothing usable survives it.
 
 
-def _repair_unusable(goal: Dict[str, Any], sel: Dict[str, Any], request: str) -> tuple:
+def _repair_unusable(goal: Dict[str, Any], sel: Dict[str, Any], request: str,
+                     world=None) -> tuple:
     """STRIP WHAT CANNOT EXIST, KEEP THE GOAL. The one repair, and it runs first.
 
     Dropping the whole component threw away a perfectly good count because the model had
@@ -1494,7 +1495,8 @@ def _repair_unusable(goal: Dict[str, Any], sel: Dict[str, Any], request: str) ->
     return {**goal, holder: trimmed}, trimmed, None
 
 
-def _refuse_invented(goal: Dict[str, Any], sel: Dict[str, Any], request: str) -> tuple:
+def _refuse_invented(goal: Dict[str, Any], sel: Dict[str, Any], request: str,
+                     world=None) -> tuple:
     """A NAME THE REQUEST NEVER SAYS. Judged on what the repairs LEFT, never before them.
 
     PUT FIRST, IT COST FOUR RUNGS — every one for a name `_repair_unusable` was about to fix:
@@ -1513,7 +1515,8 @@ def _refuse_invented(goal: Dict[str, Any], sel: Dict[str, Any], request: str) ->
     return goal, sel, invented(sel, request)
 
 
-def _refuse_shared_identity(goal: Dict[str, Any], sel: Dict[str, Any], request: str) -> tuple:
+def _refuse_shared_identity(goal: Dict[str, Any], sel: Dict[str, Any], request: str,
+                            world=None) -> tuple:
     """SEVERAL MEMBERS CANNOT SHARE ONE IDENTITY, refused at the seam that owns the error.
 
     A kind has one member per key, so `count(vm WHERE name='golden') = 3` describes no world
@@ -1528,6 +1531,33 @@ def _refuse_shared_identity(goal: Dict[str, Any], sel: Dict[str, Any], request: 
 
     A MEMBERSHIP LIST IS NOT THIS: `name IN [n1, n2, n3]` with a count of three is three
     members with three names. Only a SCALAR key beside a count above one is impossible.
+
+    ## AND A REPAIR IN FRONT OF THIS WAS BUILT, MEASURED AND WITHDRAWN — 2026-08-06
+
+    `count(vm WHERE name = golden) = 3` describes no world, so refusing costs nothing that a
+    correct reading would have gained — and the manifest DETERMINES one: `cloned_from` is the
+    only relation between several vms and one named vm, so "3 vms whose sole stated fact is
+    golden" has exactly one satisfiable meaning. Gated on the WORLD saying `golden` is a
+    machine, so the label case that killed the strip rule (`name='prod'`, no such machine)
+    could not fire. It worked: rung 10's first goal became three correct clones.
+
+    **RUNG 10 PARAPHRASE WENT UNTRANSLATED 3/3 -> DONE_BUT_FALSE 3/3.** The repair was not
+    wrong; it removed a SAFETY NET. "take a copy of golden three times over and boot every
+    copy" translates its second clause as `every vm[name=golden] must status=running` — it
+    boots GOLDEN, not the copies. While the first goal was impossible the whole request was
+    refused under the half-a-request rule and the run was honest. Repair the first goal and
+    the second one, still wrong and now satisfiable, closes DONE over a world the checker
+    disagrees with.
+
+    **AN IMPOSSIBLE GOAL WAS DOING A REFUSAL'S JOB** — the same shape as the invented `per`
+    that once covered rung 11's missing clause, and the reason [[gorgon-hallucination-was-
+    load-bearing]] says a missing clause and an invented one are not symmetric. Fixing the
+    visible half of a request first can make the invisible half dangerous.
+
+    SO THE ORDER MATTERS: this may only be reconsidered once the SECOND clause translates.
+    The provenance it depended on is built and kept — `cloned_from` is declared, `clone_vm`
+    records it, the writer plans it and the seam evaluates it — so the language half is ready
+    the day the front seam can say the rest.
     """
     key = ((config.KINDS or {}).get(sel.get("kind")) or {}).get("key")
     pinned = sel.get(key) if key else None
@@ -1694,8 +1724,96 @@ _BUILDERS = {"reach": _build_reach, "every": _build_every,
              "per": _build_per, "observe": _build_observe}
 
 
+# ── THE CLAUSE SPLIT ──────────────────────────────────────────────────────────────────────
+#
+# THE ONE MECHANISM THAT IS A PRODUCER. Everything else built against the missing-clause
+# defect — the clause ledger, `intent.vacuous`, `extract.invented`, the reconcilers, the
+# provenance schemes — DETECTS it. A detector turns a lie into an honest refusal, which is
+# worth having and has taken literal false successes to zero. It can never close a rung,
+# because the clause still does not exist. This asks for it.
+#
+# WHY ASKING TWICE SHOULD BEAT ASKING ONCE, and it is the record's own evidence:
+#
+#   * the model picks a named thing from a menu reliably and decides SHAPE unreliably
+#   * leaf emission had ZERO decode failures across 404 emissions, while the whole-program
+#     path failed at the decoder
+#   * grammar enforcement DEGRADES WITH BRANCH COUNT
+#   * the whole-request prompt has no headroom — three replications
+#
+# A clause asked for on its own is one shape to decide, which is the regime every one of
+# those says works.
+#
+# ADDITIVE, NOT A REPLACEMENT, and the splitter is why. `enumerate_clauses` over-splits:
+# rung 9's "make sure n1, n2 and n3 can all ping each other" cuts into three, and rung 7's
+# paraphrase leaves the fragments "no more" and "no fewer". Per-clause ALONE would lose
+# those requests. Unioned with the whole-request reading it cannot lose anything the current
+# path already gets — the worst case is goals that repairs and refusals then judge exactly
+# as they judge any other.
+#
+# NOT ONE WORD IS ADDED TO THE SYSTEM PROMPT. The framing rides in the REQUEST, so the
+# whole-request call stays byte-identical to today's and the measured baselines keep meaning
+# what they meant. That matters more here than anywhere: this file's own history is four
+# prompt levers that each cost more than they bought.
+#
+# AND THE WHOLE REQUEST TRAVELS WITH EVERY CLAUSE, because a clause is not self-contained:
+# "launch all of them" and "stop the ones that do not answer" have no referent without the
+# sentence around them, and resolving referents is the one job the record says stays the
+# model's. So the CONTEXT is whole and only the ASK is narrow.
+_ONLY = "\n\nTRANSLATE ONLY THIS PART OF IT, and nothing else in the request: "
+
+
+def by_clause(request: str, world=None, model: str = None, temp: float = 0.0,
+              timeout: int = 300) -> List[Dict[str, Any]]:
+    """Goals from each clause of `request`, asked for one clause at a time.
+
+    Returns [] when there is nothing to split — a single-clause request is already what the
+    ordinary path asks for, and asking again would buy a second identical draw at the price
+    of a call.
+
+    JUDGED AGAINST THE WHOLE REQUEST. `to_goals` is handed the FULL text, never the clause:
+    `_refuse_invented` asks whether a name appears in what the operator said, and a clause
+    is not what the operator said — a name introduced in clause one and used in clause three
+    would be refused as invented by a rule that was right about a question nobody asked.
+
+    A CLAUSE THAT YIELDS NOTHING IS NOT AN ERROR HERE. Fragments like "no fewer" are real
+    output from the splitter and mean nothing on their own; the union is what is judged.
+    """
+    from planner import clause_ledger as _ledger
+    clauses = _ledger.enumerate_clauses(request)
+    if len(clauses) < 2:
+        return []
+    out: List[Dict[str, Any]] = []
+    for clause in clauses:
+        text = str(clause.get("text") or "").strip()
+        if not text:
+            continue
+        try:
+            raw = extract(f"{request}{_ONLY}{text}", model=model, temp=temp, timeout=timeout)
+        except Exception:
+            continue                      # one clause failing must not lose the others
+        out.extend(to_goals(raw, request, world=world) or [])
+    return out
+
+
+def merge(*groups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Goals from several readings, in order, with duplicates dropped.
+
+    ORDER IS KEPT because the writer plans in the order it is given and a creation must
+    precede the act on what it created. First reading first, so adding a second source can
+    only APPEND — the existing plan's shape is untouched.
+    """
+    seen, out = set(), []
+    for group in groups:
+        for goal in group or ():
+            key = json.dumps(goal, sort_keys=True, default=str)
+            if key not in seen:
+                seen.add(key)
+                out.append(goal)
+    return out
+
+
 def to_goals(raw: Dict[str, Any], request: str = "",
-             dropped: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+             dropped: Optional[List[str]] = None, world=None) -> List[Dict[str, Any]]:
     """The model's answer, in the shape `ghost_writer.cover` takes.
 
     `dropped` IS AN OUT-LIST, AND IT IS WHY A HALF-READ REQUEST STOPS BEING SILENT. Every
@@ -1759,11 +1877,22 @@ def to_goals(raw: Dict[str, Any], request: str = "",
         if not isinstance(sel, dict):
             _lost("its selector is not a set of members")
             return
+        slot = next((k for k in ("select", "every", "observe", "per")
+                     if isinstance(goal.get(k), dict)), None)
         for rule in _REPAIRS + _REFUSALS:
-            goal, sel, why = rule(goal, sel, request)
+            goal, sel, why = rule(goal, sel, request, world)
             if why:
                 _lost(why)
                 return
+            # THE SELECTOR A RULE RETURNS IS THE ONE THAT COUNTS. This appended `goal` and
+            # never re-attached `sel`, so the contract was silently "mutate the dict in
+            # place" — which every rule so far happened to do. A rule returning a NEW
+            # selector had its work discarded and the goal went out unrepaired, with the
+            # signature still saying, in three places, that returning one is how it is done.
+            #
+            # RE-ATTACHED HERE so the returned value is what it looks like: the answer.
+            if slot is not None and sel is not goal.get(slot):
+                goal = {**goal, slot: sel}
         out.append(goal)
 
     def _scoped(goals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

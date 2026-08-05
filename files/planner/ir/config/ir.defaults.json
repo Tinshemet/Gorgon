@@ -349,7 +349,8 @@
     "network",
     "cpu_cores",
     "memory_mb",
-    "description"
+    "description",
+    "cloned_from"
    ],
    "aliases": {
     "tag": "label",
@@ -392,6 +393,7 @@
      "tool": "clone_vm",
      "key": "new_name",
      "from": "source_name",
+     "records": "cloned_from",
      "doc": "a copy of an existing machine"
     },
     "from_template": {

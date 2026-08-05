@@ -106,6 +106,7 @@ class ActiveLibrary:
             "labels":      list(cfg.labels),
             "flags":       _config_flags(cfg),
             "template":    cfg.template,          # golden image this VM cloned from
+            "cloned_from": cfg.cloned_from,       # the MACHINE it was cloned from (see MachineConfig)
             "guest_agent": cfg.guest_agent,
         }
 

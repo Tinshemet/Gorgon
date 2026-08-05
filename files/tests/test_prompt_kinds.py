@@ -14,6 +14,7 @@ Those are different questions and the model-shaped one cannot be asked determini
 
 A CRASH IS ALWAYS WRONG. Somebody typing nonsense is entitled to a refusal, not a traceback.
 """
+import copy
 import os
 import sys
 
@@ -111,10 +112,14 @@ def test_an_impossible_request_never_reports_success():
     print("[kinds] unreachable is refused, not improvised")
     kind, text, answer, _ = CASES[4]
     orch, world = _rig(answer)
+    # UNTOUCHED MEANS UNCHANGED, not equal to a dict written out here. This compared against
+    # a literal `{"status", "labels", "nets"}`, so adding `cloned_from` to a vm record failed
+    # a test about whether the machine was MODIFIED — a false alarm that reads exactly like
+    # a real one. A copy taken before the call cannot go stale as the record grows.
+    before = copy.deepcopy(world.vms["alpha"])
     out = orch.handle(text)
     check("it does not claim DONE", out["outcome"] != "DONE")
-    check("and the machine was not touched",
-          world.vms["alpha"] == {"status": "stopped", "labels": set(), "nets": set()})
+    check("and the machine was not touched", world.vms["alpha"] == before)
     check("nothing ran at all", not out.get("calls"))
 
 

@@ -16,6 +16,8 @@ called it done, which is the failure that actually kept happening.
 """
 from __future__ import annotations
 
+import os as _os
+
 from typing import Any, Callable, Dict, Optional, Tuple
 
 
@@ -76,7 +78,26 @@ def translator() -> Callable:
         # layer below was honest about that half, and the run closed DONE over a request it
         # had only partly read. See `to_goals`' own docstring for the measurement (rung 2).
         lost: list = []
-        goals = _extract.to_goals(raw, str(gap), dropped=lost)
+        goals = _extract.to_goals(raw, str(gap), dropped=lost, world=world)
+        # THE CLAUSE SPLIT, ADDITIVE AND OFF BY DEFAULT. Each clause of the request is asked
+        # for on its own and the readings are unioned — see `extract.by_clause` for why a
+        # narrower ASK with the same CONTEXT is the one lever the record supports.
+        #
+        # BEHIND A SWITCH BECAUSE IT IS AN EXPERIMENT AND COSTS A CALL PER CLAUSE. Off, this
+        # path is byte-identical to the measured baseline; on, the difference is one union.
+        # It is an env var rather than a manifest row on purpose — the manifest is for things
+        # that have been decided, and this has been measured once at most.
+        if _os.environ.get("GORGON_CLAUSE_SPLIT") == "1":
+            extra = _extract.by_clause(str(gap), world=world)
+            if extra:
+                goals = _extract.merge(goals, extra)
+                # `lost` IS NOT CLEARED, though a clause the whole-request pass dropped may
+                # well have been answered by its own call. Clearing it would suppress the
+                # half-a-request rule, and suppressing that rule is precisely how the
+                # withdrawn derived-set repair turned an honest UNTRANSLATED into
+                # DONE_BUT_FALSE 3/3 on 2026-08-06. Matching a loss report to the goal that
+                # answered it needs a correspondence nothing here has, so the safe reading
+                # stands: the run is refused, and the recovery shows up as goals nobody used.
         if not goals:
             return Answer(None, "extractor", "; ".join(lost) or "no usable goal",
                           dropped=lost)

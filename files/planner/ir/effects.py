@@ -101,7 +101,24 @@ def postcondition(tool: str, args: Dict[str, Any], kinds=None) -> Optional[Dict[
     for c in (spec.get("creators") or {}).values():
         if c.get("tool") == tool:
             name = args.get(c.get("key") or key)
-            return _exists(kind, key, name) if name is not None else None
+            if name is None:
+                return None
+            # WHAT THE CREATOR RECORDS IS PART OF WHAT IT PROVES. A creator declaring
+            # `records` establishes an attribute no setter can write — `clone_vm` makes a
+            # machine that IS a copy of its source — and returning bare existence threw that
+            # away, so the writer's scratch world learned `vm1 exists` and never
+            # `vm1.cloned_from = golden`. It then re-read its own goal as unmet and gave up
+            # on a plan it had just written correctly.
+            #
+            # BOTH HALVES, for the reason the setter branch above gives in full: the member
+            # alone says only that the machine exists, and the attribute alone says only that
+            # SOMETHING was cut from that source.
+            recorded, origin = c.get("records"), c.get("from")
+            if recorded and origin and args.get(origin) is not None:
+                return {"shape": "count",
+                        "select": {"kind": kind, key: name, recorded: args[origin]},
+                        "eq": 1}
+            return _exists(kind, key, name)
     if tool == spec.get("create"):
         name = args.get(key)
         return _exists(kind, key, name) if name is not None else None
@@ -333,6 +350,28 @@ def invert(pred: Dict[str, Any], kinds=None, internal: bool = False) -> Optional
             if s.get("value") == value:
                 return (tool, {**fixed, s["member_arg"]: member})
 
+    # PROVENANCE IS ESTABLISHED BY A CREATOR, NEVER BY A SETTER, and a creator that
+    # establishes one says so with `records`. `COUNT(SELECT vm WHERE cloned_from = golden)
+    # = 1` is the `clone` creator with `golden` as its `from` — the machine's origin is
+    # fixed by the act that made it, so there is deliberately no tool that rewrites it and
+    # the setter loop above will never answer this.
+    #
+    # AHEAD OF THE GENERIC set-at-birth BRANCH BELOW, which reaches for `spec["create"]` —
+    # the DEFAULT creator. That would answer a provenance goal with `create_vm`, producing a
+    # fresh machine that is not a copy of anything while the count it was meant to close
+    # reads as satisfied. A recorded attribute names its own creator and must win.
+    #
+    # NO `create_defaults` AND NO `_mint_required`: this creator's contract is exactly two
+    # arguments, the new name and the source, and defaults belonging to `create_vm`
+    # (os_type, memory) are not arguments `clone_vm` takes.
+    if len(rest) == 1:
+        attr, value = next(iter(rest.items()))
+        for maker in (spec.get("creators") or {}).values():
+            if maker.get("records") != attr or not maker.get("from"):
+                continue
+            return (maker["tool"], {maker.get("key", key): member,
+                                    maker["from"]: value})
+
     # NO SETTER WRITES IT — SO IT IS SET AT BIRTH. A snapshot's `vm` is not an attribute
     # anyone changes later; it is what the snapshot IS, supplied when it is created. So a
     # goal naming a member that does not exist yet, with attributes no setter owns, is the
@@ -384,6 +423,25 @@ def forbids(tool: str, args: Dict[str, Any], kinds=None) -> list:
     # guard ends up not guarding.
     return [_exists(kind, key, args[key], count=0)]
     return None
+
+
+def writable(kind: str, attr: str, kinds=None) -> bool:
+    """Can any tool write `attr` on an EXISTING member, or is it fixed at birth?
+
+    THE KEY IS NOT WRITABLE and neither is anything only a creator records. `cloned_from`
+    is what a machine WAS CUT FROM: `clone_vm` establishes it and nothing rewrites it, the
+    same way nothing changes `os_type` after birth.
+
+    WHY A CALLER NEEDS THIS SEPARATELY FROM `setter_for`: that answers "which tool writes
+    this VALUE", so it needs a value, and a caller asking whether an attribute is reachable
+    AT ALL does not have one. Asking with a placeholder would answer "no setter" for a
+    perfectly writable attribute whose enumerated values simply do not include the
+    placeholder — a wrong answer that looks like a right one.
+    """
+    spec = _K(kinds).get(kind) or {}
+    if attr == spec.get("key"):
+        return False
+    return any(s.get("attr") == attr for s in (spec.get("setters") or {}).values())
 
 
 def setter_for(kind: str, attr: str, value: Any, kinds=None) -> Optional[tuple]:

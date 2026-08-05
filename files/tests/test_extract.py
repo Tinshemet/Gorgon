@@ -460,6 +460,7 @@ def test_a_word_the_model_was_shown_is_not_a_name():
         {"goal": "count", "select": {"kind": "vm"}, "amount": 3, "name": "prod"}]}, "",
         dropped)
     check("several members cannot share one identity, so the goal is refused", kept == [])
+
     check("and the refusal says so in the operator's terms, not the writer's",
           len(dropped) == 1 and "no world has that" in dropped[0])
     check("the name is never STRIPPED to leave a satisfiable count — the withdrawn rule",
@@ -769,6 +770,9 @@ def test_repairs_run_before_refusals_and_the_order_is_declared():
     from engines.extract import (_REFUSALS, _REPAIRS, _refuse_invented,
                                  _refuse_shared_identity, _repair_unusable)
 
+    # THE EXACT TUPLE, on purpose. Adding a rule should be a line somebody wrote here, not a
+    # thing that happened — the ordering this file exists to protect cost four rungs the day
+    # it was implicit.
     check("the repair phase holds the repair", _REPAIRS == (_repair_unusable,))
     check("and the refusals are declared separately",
           _REFUSALS == (_refuse_invented, _refuse_shared_identity))

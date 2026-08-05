@@ -140,6 +140,11 @@ def seams(world):
                 "status": lambda: vm["status"] == f["status"],
                 "name": lambda: name == f["name"],
                 "os_type": lambda: vm.get("os_type") == f["os_type"],
+                # PROVENANCE. A machine nothing cloned has None here, so
+                # `cloned_from = golden` is FALSE for it rather than unevaluable —
+                # which is the difference between a filter that selects and one that
+                # silently matches everything. See the note above this table.
+                "cloned_from": lambda: vm.get("cloned_from") == f["cloned_from"],
                 # Membership, not equality: a machine sits on a SET of networks. Written as
                 # equality (`network = 'core'`) because that is how the operator says it —
                 # "is it on core" — and the query language should not make a reader learn

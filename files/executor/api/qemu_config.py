@@ -112,6 +112,9 @@ class MachineConfig:
     extra_args:      List[str]     = field(default_factory=list)
     labels:          List[str]     = field(default_factory=list)  # user-defined tags (work_vm, test_vm, …)
     template:        Optional[str] = None  # golden-image name under ~/.gorgon/_templates/ to clone disks from
+    cloned_from:     Optional[str] = None  # the VM this one was cloned FROM. `template` is a golden IMAGE;
+                                           # this is machine-to-machine provenance, which nothing recorded,
+                                           # so "the three I cloned from golden" was unaskable of the world.
     randomize_root_password: bool = False  # offline-edit the cloned disk's root password (Linux templates only)
     root_password:   Optional[str] = None  # set when randomize_root_password succeeds — the ONLY record of it
     randomize_user_password: bool = False  # offline-edit the cloned disk's primary user's password too

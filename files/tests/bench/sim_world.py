@@ -154,7 +154,7 @@ class SimWorld:
             # program look free and idempotent when in production every creation fails.
             # A sim that is kinder than the world it stands in measures nothing.
             return {"success": False, "error": f"VM '{n}' already exists — delete it first."}
-        self.vms[n] = {"status": "stopped", "labels": set(), "nets": set()}
+        self.vms[n] = self.blank_vm()
         return {"success": True, "name": n}
 
     def _t_clone_vm(self, a):
@@ -168,8 +168,26 @@ class SimWorld:
         if not dst:
             return {"success": False, "error": "new_name is required"}
         rec = self.vms[src]
-        self.vms[dst] = {"status": "stopped", "labels": set(rec["labels"]), "nets": set(rec["nets"])}
+        # PROVENANCE, mirroring the real `clone_vm`. ASSIGNED rather than copied from
+        # `rec`: a clone of a clone records its immediate source, not its grandparent.
+        self.vms[dst] = self.blank_vm(labels=rec["labels"], nets=rec["nets"],
+                                      cloned_from=src)
         return {"success": True, "name": dst}
+
+    @staticmethod
+    def blank_vm(status="stopped", labels=(), nets=(), cloned_from=None):
+        """ONE shape for a vm record, because there were THREE builders and they drifted.
+
+        `_t_create_vm`, `_t_clone_vm` and `rungs._vm` each wrote the dict by hand, so adding
+        `cloned_from` to two of them left machines built by the third with no such key —
+        and `vm.get("cloned_from")` is None either way, which reads as "not a clone" whether
+        the field is absent or genuinely empty. That is the same silence this attribute
+        exists to remove, reappearing one layer down.
+
+        EVERY KEY THE SEAM CAN MATCH ON MUST BE PRESENT, not merely usually present.
+        """
+        return {"status": status, "labels": set(labels), "nets": set(nets),
+                "cloned_from": cloned_from}
 
     def _t_delete_vm(self, a):
         n = self._vm(a)

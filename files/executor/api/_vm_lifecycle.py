@@ -419,6 +419,16 @@ class _VmLifecycleMixin:
         # generate_guest_agent_setup is re-run and the setup script re-served.
         src_cfg.guest_agent_psk = ""
 
+        # WHERE THIS MACHINE CAME FROM, RECORDED BY THE ACT THAT MADE IT. `src_cfg` is the
+        # SOURCE's config being mutated into the clone's, so this must be ASSIGNED and not
+        # merely defaulted: a clone of a clone would otherwise inherit its parent's
+        # provenance and claim to be a copy of its grandparent.
+        #
+        # PROVENANCE IS ESTABLISHED BY A CREATOR, NEVER BY A SETTER — there is deliberately
+        # no tool that changes it afterwards. What a machine was cut from is a fact about
+        # its birth, and a settable one would let a program claim an origin it does not have.
+        src_cfg.cloned_from = source_name
+
         src_cfg.save()
         return {"success": True,
                 "message": f"VM '{source_name}' cloned to '{new_name}'.",
