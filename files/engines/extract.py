@@ -488,6 +488,34 @@ def schema(kinds=None, request: str = "") -> Dict[str, Any]:
     # TRANSLATED has no detector at all. `planner/clause_ledger` is precisely that mechanism
     # and it has NO PRODUCTION CALLER (`built and never called`, again). Wire that first,
     # measure it, and only then take away the accident that is standing in for it.
+    #
+    # ## THE GATE WAS RETRIED WITH VACUITY BEHIND IT, AND IT FAILED AGAIN — 2026-08-05
+    #
+    # The withdrawal note above says to build the detector first and then take away the
+    # accident standing in for it. `intent.vacuous` was built, and the gate was retried on
+    # exactly that reasoning. **Rung 11 went DONE_BUT_FALSE 3/3 a second time**, and the
+    # cause is worth more than the gate was:
+    #
+    #     with `per` offered   observe + an invented `per` -> per DROPPED -> UNTRANSLATED
+    #     with `per` gated     observe + count(vm WHERE name='unresponsive') = 0 -> DONE
+    #
+    # THE MODEL MOVED THE CLAUSE IT CANNOT EXPRESS INTO A THIRD SHAPE. `unresponsive` appears
+    # NOWHERE in "ping every vm and stop the ones that do not answer" — it is an invented
+    # identifier — and a `count` with a name in it is neither VACUOUS (it asserts something)
+    # nor DROPPED (no rule refuses it), so both new guards stay silent and the writer plans
+    # four calls for it.
+    #
+    # THE HALLUCINATION IS CONSERVED, and that is the finding. `reach` was closed on
+    # 2026-08-04, the pressure moved to `per`; close `per` and it moves to `count`. Each hop
+    # lands somewhere HARDER to detect — a spurious `reach` and a spurious `per` were both
+    # droppable, and an invented name is not. CLOSING SHAPES ONE AT A TIME IS A LOSING GAME
+    # while the clause has nowhere legitimate to go: rung 11's second half is `every
+    # vm[alive=false] must status=stopped`, which no model size has ever produced.
+    #
+    # WHAT WOULD ACTUALLY MAKE THIS SAFE is a guard on the INVENTED IDENTIFIER — a `name` a
+    # selector commits to that does not appear in the request is not a name the operator
+    # gave. `coverage_probe.judge` already counts exactly that as FORCED, and production has
+    # no equivalent. Build and measure that FIRST; the gate is not the thing in the way.
     return out
 
 
