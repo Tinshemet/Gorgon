@@ -50,10 +50,24 @@ def test_the_number_is_read_from_either_slot():
 
 
 def test_a_number_that_is_not_a_number_does_not_crash():
-    """`int("One")` raises, and a raising extractor loses the whole request."""
+    """`int("One")` raises, and a raising extractor loses the whole request.
+
+    THE ASSERTION CHANGED ON 2026-08-05 AND THE PURPOSE DID NOT. This used to require the
+    goal to SURVIVE with `eq: 1`, which is the same "said and unreadable becomes said and
+    ignored" collapse that let `amount: -1` become `eq: 1` and turned a deletion into a
+    creation — see `test_a_count_is_a_total_and_never_a_change`. `lots` is a quantity the
+    operator stated and this reader cannot read, so defaulting it to ONE answers a request
+    nobody made, silently. What this test was actually written to protect is that the
+    extractor DEGRADES rather than raises, and that is asserted below unchanged.
+    """
     print("[repair] an unparseable amount degrades, it does not explode")
-    out = to_goals(g(goal="count", select={"kind": "vm"}, amount="lots"))
-    check("the goal survives", len(out) == 1 and out[0]["eq"] == 1)
+    dropped = []
+    out = to_goals(g(goal="count", select={"kind": "vm"}, amount="lots"), "make lots of vms",
+                   dropped)
+    check("it does not raise", isinstance(out, list))
+    check("the unreadable quantity is refused rather than invented", out == [])
+    check("and the request is not half-read in silence",
+          len(dropped) == 1 and "lots" in dropped[0])
 
 
 def test_a_bare_value_on_a_count_of_one_is_an_identity():
@@ -507,6 +521,86 @@ def test_a_value_outside_a_closed_set_matches_nothing_and_is_refused():
     check("a `per` over an impossible filter is dropped, whole", goals == [])
     check("and the drop is reported, so the request is not half-read",
           len(dropped) == 1 and "matches nothing" in dropped[0])
+
+
+def test_a_count_is_a_total_and_never_a_change():
+    """THE WORST PROGRAM THIS SEAM HAS WRITTEN, and it was three characters of arithmetic.
+
+    Asked to *"delete every machine labelled scratch"* the model answers `amount: -1` — a
+    DELTA. `_as_count` stripped everything that was not a digit, which strips a MINUS SIGN,
+    so -1 came back as 1 and the goal became `count(vm WHERE label=scratch) = 1`. Run
+    against a real world by `ghost_writer.cover`:
+
+        3 scratch machines exist  ->  remove the LABEL from 2, delete nothing, report DONE
+        0 scratch machines exist  ->  CREATE a machine and label it `scratch`, report DONE
+
+    A DELETION REQUEST THAT CREATES A MACHINE. Nothing reached `dropped`, so no layer below
+    could know, and `coverage_probe` judges shapes and names so it read the row as merely
+    the wrong shape.
+
+    THE DEFECT UNDERNEATH IS THE GENERAL ONE: a value that was SAID AND NOT UNDERSTOOD was
+    treated as a value that was NOT SAID. The `amount is None -> 1` default is correct and
+    stays — "create a vm named alpha" really is a count of one — but it must not swallow a
+    quantity the model stated and this reader could not read.
+    """
+    print("\n[count] a count is a total, never a change")
+
+    from engines.extract import _as_count
+
+    check("a signed token is not a count", _as_count("-1") is None)
+    check("nor is a negative integer", _as_count(-3) is None)
+    # A RANGE IS DECLINED BY THE SAME CLAUSE AND THAT IS ALSO RIGHT: `3-5` is not 35.
+    check("nor is a range", _as_count("3-5") is None)
+    # AND THE CASE THE DIGIT-STRIP EXISTS FOR STILL WORKS — `/2` is how this model writes
+    # "exactly two", and it carries no sign.
+    check("`/2` is still two", _as_count("/2") == 2)
+    check("zero is a number, not an absence", _as_count(0) == 0)
+    check("and an ordinary count is untouched", _as_count("3") == 3)
+
+    def one(amount, request="delete every machine labelled scratch"):
+        g = {"goal": "count", "select": {"kind": "vm",
+                                         "where": [{"attr": "label", "value": "scratch"}]},
+             "name": ""}
+        if amount is not None:
+            g["amount"] = amount
+        lost = []
+        return to_goals({"goals": [g]}, request, lost), lost
+
+    goals, lost = one(-1)
+    check("a goal asking for -1 of something is refused, not rounded", goals == [])
+    check("and the refusal names the value that defeated it",
+          len(lost) == 1 and "-1" in lost[0])
+
+    # ZERO IS THE SHAPE THE GRAMMAR NOW FORCES, and it is the correct reading of a deletion.
+    goals, lost = one(0)
+    check("zero survives, because that is how deletion is said",
+          goals == [{"shape": "count", "select": {"kind": "vm", "label": "scratch"},
+                     "eq": 0}])
+
+    # THE DEFAULT IS NOT COLLATERAL DAMAGE. An ABSENT amount still means one.
+    goals, lost = one(None, "create a vm labelled scratch")
+    check("an amount nobody stated still defaults to one",
+          len(goals) == 1 and goals[0]["eq"] == 1 and lost == [])
+
+
+def test_the_grammar_forbids_a_negative_count():
+    """MAKE THE WRONG ANSWER UNREPRESENTABLE, which is the half a repair cannot do.
+
+    `minimum: 0` is asserted on the schema the model is actually sent. It was verified to
+    REACH the decoder rather than assumed — asked point blank for -1 under this constraint,
+    ollama returns 0 — and that check matters here more than usual, because this file's own
+    history is a `pattern` that ollama accepted and ignored for a month.
+    """
+    from engines.extract import schema
+
+    sc = schema(request="delete every machine labelled scratch")
+    branches = ((sc.get("properties") or {}).get("goals") or {}).get("items") or {}
+    counts = [b for b in (branches.get("oneOf") or ())
+              if "count" in (((b.get("properties") or {}).get("goal") or {}).get("enum") or ())]
+    check("the count branch is offered", len(counts) == 1)
+    amount = (counts[0].get("properties") or {}).get("amount") or {}
+    check("and its amount cannot be negative", amount.get("minimum") == 0)
+    check("and it is still an integer", amount.get("type") == "integer")
 
 
 def main():

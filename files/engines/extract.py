@@ -157,6 +157,40 @@ def schema(kinds=None, request: str = "") -> Dict[str, Any]:
             # and a trigger that fires on ordinary requests is a regression waiting for a
             # ladder run. The operator DECLARES it instead: `procedure build_box: ...`. See
             # `planner/procedures.declared_in`.
+            # REFUSAL IS UNGUIDED AND TWO FIXES HAVE NOW BEEN MEASURED AND WITHDRAWN. The
+            # field is a FREE STRING: legal to fill, never chosen, and its description says
+            # to use it when the request "asks for something these goals cannot say" — which
+            # names nothing. 0 of 8 unstateable requests are declined (`coverage_probe`).
+            # The model is shown every shape the goals HAVE and never what they lack, and a
+            # model cannot decline against an absence.
+            #
+            # ATTEMPT 1, ENUMERATE THE REASONS (2026-08-04). A closed `refusals` table —
+            # order, branch, over_time, compare, cause, unclear — bought 0/8 -> 4/8 honest
+            # refusals and cost 2 of 14 ordinary requests, then deterministically refused `a
+            # vm named param_name with os param_os_name` as `order`, 3 of 3, which is the
+            # request the whole parameterised-procedure feature rests on. SIX WORDS TO
+            # CHOOSE BETWEEN IS LESS WORK THAN COMPOSING A GOAL.
+            #
+            # ATTEMPT 2, MAKE REFUSING COST SOMETHING (2026-08-05). `cannot` became an
+            # object requiring `words` — a verbatim span of the request — beside `why`, with
+            # a deterministic check dropping any refusal whose span was not in the text, and
+            # a prompt paragraph telling the model to quote before it refuses. Measured
+            # n=3 against a re-run baseline:
+            #
+            #     baseline    10 TRANSLATED · 0 DECLINED · 10 FORCED · 2 BROKE    0/8 declined
+            #     span         7 TRANSLATED · 3 DECLINED ·  9 FORCED · 3 BROKE    2/8 declined
+            #
+            # WORSE THAN THE ENUM ON EVERY AXIS — half the refusals for 3 broken ordinary
+            # requests instead of 2 — and the bisect is the part worth keeping. Reverting
+            # ONLY the prompt paragraph and leaving the object schema recovered all three
+            # regressions AND lost both declines: 3/3 stateable, 0/3 unstateable. So the
+            # PROMPT TEXT caused the gain and the damage alike, and the schema shape on its
+            # own is inert. There is no version of that idea that keeps the refusals without
+            # the regressions, which is why the object is not here.
+            #
+            # WHAT BOTH ATTEMPTS SHARE: they tell the model MORE ABOUT REFUSING, and a model
+            # told more about refusing refuses more — correct requests included. The lever
+            # is not a better description of when to decline.
             "cannot": {
                 "type": "string",
                 "description": ("say WHY, if this is not a request you can express as goals — "
@@ -193,9 +227,37 @@ def schema(kinds=None, request: str = "") -> Dict[str, Any]:
                                 "goal": {"type": "string", "enum": ["count"],
                                          "description": "how many members must match"},
                                 "select": _SELECT,
-                                "amount": {"type": "integer",
-                                           "description": ("HOW MANY there must be. Zero "
-                                                           "means none may remain")},
+                                # A COUNT IS NEVER NEGATIVE, AND SAYING SO IN THE GRAMMAR IS
+                                # THE WHOLE FIX FOR THE WORST BUG THIS SEAM HAS HAD. Asked to
+                                # "delete every machine labelled scratch" the model answered
+                                # `amount: -1` — a DELTA, not a count — and `_as_count`
+                                # stripped the sign and returned 1. So a request to remove
+                                # every scratch machine became `count(vm WHERE label=scratch)
+                                # = 1`, and the writer planned it faithfully:
+                                #
+                                #   3 scratch machines exist -> remove the LABEL from 2 of
+                                #                               them, delete nothing, DONE
+                                #   0 scratch machines exist -> CREATE a machine and label it
+                                #                               `scratch`, DONE
+                                #
+                                # A DELETION REQUEST THAT CREATES A MACHINE, silently: nothing
+                                # reached `dropped`, and `coverage_probe` judges shapes and
+                                # names so it read the row as merely the wrong shape. Found
+                                # 2026-08-05 by dumping RAW beside GOALS on the rows that
+                                # fail, which is the audit this codebase keeps being paid by.
+                                #
+                                # `minimum` REACHES THE DECODER — verified against ollama, not
+                                # assumed: asked point blank for -1 under this constraint the
+                                # model returns 0. So the wrong answer is unrepresentable
+                                # rather than repaired, which is the move that has worked
+                                # every time here. `_as_count` refuses a signed token as well,
+                                # because a hand-built dict and a differently-served model are
+                                # both paths the grammar does not cover.
+                                "amount": {"type": "integer", "minimum": 0,
+                                           "description": ("HOW MANY there must be, as a TOTAL "
+                                                           "and never as a change. Zero means "
+                                                           "none may remain — that is how you "
+                                                           "say delete")},
                                 "name": {"type": "string",
                                          "description": (
                                              "the NAME of the member, when the operator gave "
@@ -361,7 +423,37 @@ def schema(kinds=None, request: str = "") -> Dict[str, Any]:
         branches = out["properties"]["goals"]["items"]["oneOf"]
         out["properties"]["goals"]["items"]["oneOf"] = [
             b for b in branches if b["properties"]["goal"]["enum"] != ["reach"]]
+
+    # ## `per` IS NOT NARROWED THE SAME WAY, AND THE REASON IS MEASURED — 2026-08-05
+    #
+    # THE HALLUCINATION DID MOVE HERE when `reach` was closed. Four of six extractions on
+    # rungs 10 and 11 came back with a `per` MAKING A SNAPSHOT nobody asked for, on requests
+    # about pinging and cloning — the model still reaches for an unguarded shape "when it has
+    # nothing else to say", and `per` is now the unguarded one.
+    #
+    # AND GATING IT — offer `per` only where a linkable kind is mentioned — WAS BUILT, RAN
+    # CLEAN, AND WAS WITHDRAWN. It did exactly what it promised at the schema (`per` gone from
+    # rungs 1, 10 and 11, kept for rung 12 and the mixed-kind rows) and it made the ladder
+    # WORSE where it counts:
+    #
+    #     rung 11, literal, before   UNTRANSLATED 3/3   — refused, honestly
+    #     rung 11, literal, after    DONE_BUT_FALSE 3/3 — pinged, reported success, stopped nothing
+    #
+    # THE INVENTED GOAL WAS ACCIDENTALLY LOAD-BEARING, and that is the finding. "Ping every vm
+    # and stop the ones that do not answer" has a second clause the model cannot express
+    # (`every vm[alive=false] must status=stopped`, which no model size has ever produced).
+    # The spurious `per` was DROPPED by `to_goals`, and `orchestrator` closes UNTRANSLATED the
+    # moment anything is dropped — the operator's half-a-request ruling. So the hallucination
+    # was tripping the safety net that the MISSING clause never trips. Remove it and the run
+    # serves half the request in silence.
+    #
+    # WHAT THIS ACTUALLY SAYS TO FIX. Not the `per` gate — the fact that a clause NOBODY
+    # TRANSLATED has no detector at all. `planner/clause_ledger` is precisely that mechanism
+    # and it has NO PRODUCTION CALLER (`built and never called`, again). Wire that first,
+    # measure it, and only then take away the accident that is standing in for it.
     return out
+
+
 
 
 # The default-manifest instance, for callers that only ever wanted that one.
@@ -675,7 +767,19 @@ def _as_count(v: Any) -> Optional[int]:
     # THE LETTERS ARE WHAT SEPARATE THEM, so the rule is exact rather than a guess: strip
     # everything that is not a digit, and accept only if nothing alphabetic was there to
     # begin with.
-    if not any(c.isalpha() for c in text):
+    #
+    # A HYPHEN DISQUALIFIES THE WHOLE TOKEN, and that clause is the difference between an
+    # honest failure and the worst program this seam has ever written. Stripping "everything
+    # that is not a digit" also strips a MINUS SIGN: `-1` came back as `1`, so "delete every
+    # machine labelled scratch" — which the model answers as `amount: -1`, a delta — became
+    # "exactly one machine labelled scratch must exist", and the writer then CREATED one
+    # against a clean lab. A count has no sign, so a token carrying one is not a count and
+    # this must not pretend otherwise.
+    #
+    # IT DECLINES A RANGE FOR THE SAME REASON AND THAT IS ALSO RIGHT: `3-5` is not the
+    # number 35. Declining where the answer is not determined is this module's standing rule,
+    # and `/2` — the case the strip exists for — has no hyphen and still reads as two.
+    if not any(c.isalpha() for c in text) and "-" not in text:
         digits = "".join(c for c in text if c.isdigit())
         if digits:
             return int(digits)
@@ -796,7 +900,15 @@ def asks_reach(request: str) -> bool:
 
 
 def declined(raw: Dict[str, Any]) -> Optional[str]:
-    """The model's reason for refusing, or None. An answer, not an error."""
+    """The model's reason for refusing, or None. An answer, not an error.
+
+    A REFUSAL IS BELIEVED WITHOUT EVIDENCE HERE, and that is a known open weakness rather
+    than an oversight. Requiring the model to QUOTE the words it could not serve — and
+    dropping any refusal whose span was not in the request — was built and measured on
+    2026-08-05; see the `cannot` field in `schema` for the numbers and the bisect. It was
+    withdrawn because the gain came entirely from the prompt paragraph that came with it,
+    and that paragraph cost three ordinary requests to buy two refusals.
+    """
     said = ((raw or {}).get("cannot") or "").strip()
     return said or None
 
@@ -1026,9 +1138,18 @@ def to_goals(raw: Dict[str, Any], request: str = "",
     """
     out: List[Dict[str, Any]] = []
 
-    def _lost(why: str, g: Dict[str, Any] = None) -> None:
-        """Record that a component the model DID return did not survive translation."""
+    def _lost(why: str, g: Dict[str, Any] = None, whole: bool = False) -> None:
+        """Record that a component the model DID return did not survive translation.
+
+        `whole=True` for a rule that discards the ENTIRE reading rather than one component.
+        The per-goal prefix is a goal's shape, and a translation-wide drop has none — it was
+        printing `?:`, which reads as a missing value rather than as the deliberate scope it
+        is.
+        """
         if dropped is None:
+            return
+        if whole:
+            dropped.append(f"whole reading: {why}")
             return
         shape = str((g or {}).get("goal") or "?")
         dropped.append(f"{shape}: {why}")
@@ -1199,7 +1320,19 @@ def to_goals(raw: Dict[str, Any], request: str = "",
             # prompt says so in those words, so the model omits it as obvious — and the goal
             # was being DISCARDED over it. Defaulting is not a guess about meaning; it is the
             # reading the sentence already had.
+            #
+            # BUT A NUMBER THAT WAS SAID AND COULD NOT BE READ IS NOT A MISSING NUMBER, and
+            # collapsing the two is what let `amount: -1` become `eq: 1`. NOT SAID means the
+            # sentence already implied one; SAID AND UNREADABLE means the model stated a
+            # quantity this reader does not understand, and inventing one there is exactly
+            # the "wrong meaning" the module refuses to repair everywhere else. The request
+            # is returned as untranslated, with the value that defeated it named.
             if eq is None:
+                stated = g.get("amount")
+                if stated is not None and str(stated).strip() != "":
+                    _lost(f"it asks for {stated!r} of them, which is not a number of "
+                          f"things — a count is a total, never a change", g)
+                    continue
                 eq = 1
             # THE CONSTRAINT IN THE WRONG SLOT. It came back as `value: "name=alpha"` at the
             # goal level rather than in `select.where` — the right MEANING in the wrong
@@ -1439,7 +1572,23 @@ def to_goals(raw: Dict[str, Any], request: str = "",
             seen.append(g)
             unique.append(g)
     out = _partitioned(_scoped(unique), request)
-    return _subject_survived(_one_statement_not_two(out), request)
+    before = _one_statement_not_two(out)
+    kept = _subject_survived(before, request)
+    # THE ONE GUARD THAT THREW AWAY A WHOLE TRANSLATION IN SILENCE. Every other rule in this
+    # function reports what it dropped — that is what `dropped` is for, and `to_goals`' own
+    # docstring calls a half-read request the failure it exists to prevent — but this one
+    # returned `[]` and said nothing, so `rig` reported the generic "no usable goal" for a
+    # translation that was discarded for a specific, nameable reason. Found 2026-08-05 on
+    # `clone-fleet`: "make four copies of the golden IMAGE" names a template, every goal was
+    # about machines, the subject guard fired correctly and the operator was told nothing.
+    #
+    # A CORRECT RULE THAT CANNOT SAY WHY IT FIRED IS STILL A DEBUGGING DEAD END, and this
+    # codebase has now paid for that twice in one file.
+    if before and not kept:
+        missing = ", ".join(sorted(_subject_gap(before, request))) or "something else"
+        _lost(f"the request is about a {missing} and not one goal is — discarded rather "
+              f"than run against the wrong subject", whole=True)
+    return kept
 
 
 def _partitioned(goals: List[Dict[str, Any]], request: str = "") -> List[Dict[str, Any]]:
@@ -1561,8 +1710,20 @@ def _subject_survived(goals: List[Dict[str, Any]], request: str) -> List[Dict[st
     is how three machines get made for a question about the earth. UNTRANSLATED is the honest
     close, and it is recoverable — a wrong program is not.
     """
+    return goals if not _subject_gap(goals, request) else []
+
+
+def _subject_gap(goals: List[Dict[str, Any]], request: str) -> set:
+    """The kinds the REQUEST names and no goal is about. Empty means the subject survived.
+
+    SPLIT OUT SO THE VERDICT AND THE REASON COME FROM ONE PLACE. `_subject_survived` used to
+    compute this inline and return a bare `[]`, which made the drop unexplainable without
+    recomputing the rule somewhere else — and a second copy of a rule is how the two readers
+    of `reach` nearly diverged. One authority, asked twice: once for the decision, once for
+    the sentence the operator reads.
+    """
     if not request or not goals:
-        return goals
+        return set()
     words = {w.strip(".,!?;:'\"").lower() for w in request.split()}
     mentioned = set()
     for kind, spec in (config.KINDS or {}).items():
@@ -1570,7 +1731,7 @@ def _subject_survived(goals: List[Dict[str, Any]], request: str) -> List[Dict[st
         if nouns & words or {n + "s" for n in nouns} & words:
             mentioned.add(kind)
     if not mentioned:
-        return goals
+        return set()
     covered = set()
     for g in goals:
         for holder in ("select", "every", "observe", "per"):
@@ -1579,7 +1740,7 @@ def _subject_survived(goals: List[Dict[str, Any]], request: str) -> List[Dict[st
                 covered.add(sel["kind"])
         if isinstance(g.get("make"), str):
             covered.add(g["make"])
-    return goals if mentioned & covered else []
+    return set() if mentioned & covered else mentioned
 
 
 def _one_statement_not_two(goals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
