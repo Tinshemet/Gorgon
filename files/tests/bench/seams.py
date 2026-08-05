@@ -112,20 +112,55 @@ def seams(world):
             for attr, wanted in f.items():
                 if observe.matches(world.findings, kind or "vm", attr, name, wanted) is False:
                     return False
-            if "label" in f and f["label"] not in (vm["labels"] | vm.get("flags", set())):
-                return False
-            if "status" in f and vm["status"] != f["status"]:
-                return False
-            if "name" in f and name != f["name"]:
-                return False
-            if "os_type" in f and vm.get("os_type") != f["os_type"]:
-                return False
-            # Membership, not equality: a machine sits on a SET of networks. Written as
-            # equality (`network = 'core'`) because that is how the operator says it —
-            # "is it on core" — and the query language should not make a reader learn
-            # which attributes happen to be multi-valued.
-            if "network" in f and f["network"] not in vm.get("nets", set()):
-                return False
+            # ONE MATCHER PER ATTRIBUTE, AND THE TABLE IS THE ANSWER TO "CAN THIS BE
+            # EVALUATED". These were a run of `if "x" in f` tests, and anything with no test
+            # fell past all of them to `return True` — so an attribute the seam does not
+            # implement was a property EVERY MEMBER ALREADY HAD.
+            #
+            # `_legal` WAS ADDED FOR THIS ON 2026-08-03 AND ONLY HALF-CLOSED IT. It reads the
+            # MANIFEST, so it answers "is this attribute declared" and not "can this seam
+            # evaluate it" — and `cpu_cores`, `memory_mb` and `description` are declared on
+            # the vm kind with no matcher here. Measured 2026-08-05:
+            #
+            #     label=red        -> ['a']       evaluated
+            #     memory_mb=zzz    -> ['a','b']   EVERY member
+            #     cpu_cores=zzz    -> ['a','b']   EVERY member
+            #     description=zzz  -> ['a','b']   EVERY member
+            #
+            # So `COUNT(SELECT vm WHERE memory_mb = 8192) = 1` matched every machine and its
+            # closing ENSURE passed for the wrong reason. The coverage corpus asks "give the
+            # machine called burner 8192 MB of memory" and sits directly on it.
+            #
+            # DERIVED FROM THE TABLE, so the two cannot drift: adding a matcher is what makes
+            # an attribute filterable, and there is no second list to forget. Found via an
+            # attempt to add a `cloned` attribute, where a filter on something nothing tracks
+            # was silently dropped rather than refused.
+            matchers = {
+                "label": lambda: f["label"] in (vm["labels"] | vm.get("flags", set())),
+                "status": lambda: vm["status"] == f["status"],
+                "name": lambda: name == f["name"],
+                "os_type": lambda: vm.get("os_type") == f["os_type"],
+                # Membership, not equality: a machine sits on a SET of networks. Written as
+                # equality (`network = 'core'`) because that is how the operator says it —
+                # "is it on core" — and the query language should not make a reader learn
+                # which attributes happen to be multi-valued.
+                "network": lambda: f["network"] in vm.get("nets", set()),
+            }
+            observed = set((config.KINDS.get(kind or "vm") or {}).get("observed") or ())
+            # `kind` RIDES ALONG IN `f` AND IS NOT A FILTER. The old `if "x" in f` tests
+            # ignored anything they did not name, so a structural key was harmless; a loop
+            # over `f` is not so forgiving, and treating `kind` as unevaluable made EVERY
+            # select return nothing. `_legal` whitelists exactly these for the same reason.
+            structural = {"kind", "not", "any", "all"}
+            for attr in f:
+                if attr in structural or attr in observed:
+                    continue          # not a filter, or answered off the findings ledger
+                if attr not in matchers:
+                    # CANNOT EVALUATE IS NOT SATISFIED. A seam that does not implement an
+                    # attribute must not report every member as having it.
+                    return False
+                if not matchers[attr]():
+                    return False
             return True
 
         if kind == "snapshot":
