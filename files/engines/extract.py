@@ -1321,6 +1321,107 @@ def _born_with(kind: str, must: Dict[str, Any]) -> bool:
     return bool(must) and all(a not in settable and a in at_birth for a in must)
 
 
+# ── WHAT A SELECTOR MUST SURVIVE, IN ORDER, AS DATA ───────────────────────────────────────
+#
+# THE ORDER IS THE RULE, AND IT USED TO BE A SEQUENCE OF STATEMENTS NOBODY COULD SEE.
+# `_keep` ran one repair and three refusals in whatever order they had been added, and the
+# ordering was LOAD-BEARING and written down nowhere. On 2026-08-05 a refusal was added
+# BEFORE the repair and cost four rungs — 4, 7, 13 and 14 went DONE -> UNTRANSLATED, every
+# one of them for a name the repair was about to fix. The mistake was invisible in review and
+# took a full ladder arm to find.
+#
+# SO THE TWO PHASES ARE DECLARED RATHER THAN IMPLIED:
+#
+#     REPAIRS   may CHANGE the selector. A slot error is repaired.
+#     REFUSALS  may only reject, and they judge WHAT THE REPAIRS LEFT.
+#
+# That is this module's oldest stated line — A SLOT ERROR IS REPAIRED, A WRONG MEANING NEVER
+# IS — turned from a comment into the shape of the code. A refusal placed among the repairs
+# is now a category error a reader can see, not an ordering accident.
+#
+# EVERY RULE HAS ONE SIGNATURE, `(goal, sel, request) -> (goal, sel, why)`, so each is
+# testable on its own and the pipeline below is a loop rather than a cliff of `if`s. A
+# refusal returns the goal and selector unchanged; that it CAN return them is what lets a
+# repair refuse when nothing usable survives it.
+
+
+def _repair_unusable(goal: Dict[str, Any], sel: Dict[str, Any], request: str) -> tuple:
+    """STRIP WHAT CANNOT EXIST, KEEP THE GOAL. The one repair, and it runs first.
+
+    Dropping the whole component threw away a perfectly good count because the model had
+    echoed `machines` into the name slot — the request survived as nothing rather than as
+    most of itself.
+
+    THE KIND IS THE EXCEPTION: a selector whose KIND is unusable describes nothing at all,
+    and there is no smaller true statement left inside it. That is the case where a repair
+    ends in a refusal, which is why repairs are allowed to.
+    """
+    why = unusable(sel)
+    if not why:
+        return goal, sel, None
+    kind = sel.get("kind")
+    key = ((config.KINDS or {}).get(kind) or {}).get("key")
+    trimmed = {k: v for k, v in sel.items()
+               if not (k == key or k in (config.KINDS or {}))
+               or not unusable({"kind": kind, k: v})}
+    if not trimmed.get("kind") or unusable(trimmed):
+        return goal, sel, f"it names something that cannot exist ({why})"
+    holder = ("select" if "select" in goal else "every" if "every" in goal
+              else "observe" if "observe" in goal else "per")
+    return {**goal, holder: trimmed}, trimmed, None
+
+
+def _refuse_invented(goal: Dict[str, Any], sel: Dict[str, Any], request: str) -> tuple:
+    """A NAME THE REQUEST NEVER SAYS. Judged on what the repairs LEFT, never before them.
+
+    PUT FIRST, IT COST FOUR RUNGS — every one for a name `_repair_unusable` was about to fix:
+    `name: 'every'` (a schema word `_echoed` knows), `'exactly two vms'` and `'prod label on
+    exactly 3 vms'` (prose the whitespace rule knows). Those are SLOT ERRORS.
+
+    WHAT SURVIVES THE REPAIRS IS THE REAL THING: well-formed, not echoed, not prose, and
+    still absent from the request — `name: 'unresponsive'` for "stop the ones that do not
+    answer", which nothing upstream objects to and which reached the writer and closed DONE
+    over four calls.
+
+    IT DROPS RATHER THAN STRIPS. Stripping an echoed word leaves `count(vm) = 5`, still what
+    the operator asked; stripping an invented identity leaves `count(vm) = 0` — DELETE EVERY
+    MACHINE. Stripping is only safe when what remains is still the whole truth.
+    """
+    return goal, sel, invented(sel, request)
+
+
+def _refuse_shared_identity(goal: Dict[str, Any], sel: Dict[str, Any], request: str) -> tuple:
+    """SEVERAL MEMBERS CANNOT SHARE ONE IDENTITY, refused at the seam that owns the error.
+
+    A kind has one member per key, so `count(vm WHERE name='golden') = 3` describes no world
+    — rung 10's answer to "clone golden into 3 new vms", where the clone relation is lost.
+
+    IT WAS ALREADY CAUGHT, IN THE WRONG PLACE. `ghost_writer.cover` raises `Unsolvable`, so
+    the run is honest — and closes UNMET, which BLAMES THE ENGINE for a front-seam mistake.
+    `engine_probe` is explicit that UNTRANSLATED exists so that cannot happen. Nothing about
+    whether the request works changes; which layer is told to look does. The rule is
+    `coverage_probe.judge`'s, which has counted this as FORCED since the corpus was written
+    while production had no equivalent.
+
+    A MEMBERSHIP LIST IS NOT THIS: `name IN [n1, n2, n3]` with a count of three is three
+    members with three names. Only a SCALAR key beside a count above one is impossible.
+    """
+    key = ((config.KINDS or {}).get(sel.get("kind")) or {}).get("key")
+    pinned = sel.get(key) if key else None
+    if (isinstance(goal.get("eq"), int) and goal["eq"] > 1
+            and isinstance(pinned, (str, int, float))):
+        return goal, sel, (f"it asks for {goal['eq']} {sel.get('kind')}s all called "
+                           f"{pinned!r}, and a {sel.get('kind')} is identified by its "
+                           f"{key} — no world has that")
+    return goal, sel, None
+
+
+# REPAIRS FIRST, THEN REFUSALS. Adding a rule means putting it in the right tuple, which is
+# the whole point: the phase is a declaration rather than a line number.
+_REPAIRS = (_repair_unusable,)
+_REFUSALS = (_refuse_invented, _refuse_shared_identity)
+
+
 def to_goals(raw: Dict[str, Any], request: str = "",
              dropped: Optional[List[str]] = None) -> List[Dict[str, Any]]:
     """The model's answer, in the shape `ghost_writer.cover` takes.
@@ -1366,11 +1467,16 @@ def to_goals(raw: Dict[str, Any], request: str = "",
         dropped.append(f"{shape}: {why}")
 
     def _keep(goal: Dict[str, Any]) -> None:
-        """Admit a finished component, unless its selector names something that cannot exist.
+        """Admit a finished component, once it has survived the repairs and the refusals.
 
         ONE PLACE, AT THE END. Every branch below builds a selector its own way and several
         REPAIR one — moving a value out of the wrong slot, reading a bare value as an
         identity — so the only selector worth judging is the one that comes out.
+
+        THE PIPELINE IS `_REPAIRS` THEN `_REFUSALS`, declared above this function. It was a
+        run of `if`s whose ORDER was load-bearing and unwritten, and putting one refusal in
+        the wrong place cost four rungs; the order is now data, and a rule in the wrong phase
+        is a category error rather than an accident.
         """
         # `per` WAS NEVER JUDGED, and it is a selector like any other. "a snapshot per
         # machine that is running" carries a set of members exactly as `every` does, so a
@@ -1381,107 +1487,11 @@ def to_goals(raw: Dict[str, Any], request: str = "",
         if not isinstance(sel, dict):
             _lost("its selector is not a set of members")
             return
-        why = unusable(sel)
-        if why:
-            # STRIP THE NAME, KEEP THE GOAL. Dropping the whole component threw away a
-            # perfectly good count because the model had echoed `machines` into the name
-            # slot — the request survived as nothing rather than as most of itself.
-            #
-            # THE KIND IS THE EXCEPTION: a selector whose KIND is unusable describes nothing
-            # at all, and there is no smaller true statement left inside it.
-            kind = sel.get("kind")
-            key = ((config.KINDS or {}).get(kind) or {}).get("key")
-            trimmed = {k: v for k, v in sel.items()
-                       if not (k == key or k in (config.KINDS or {}))
-                       or not unusable({"kind": kind, k: v})}
-            if not trimmed.get("kind") or unusable(trimmed):
-                _lost(f"it names something that cannot exist ({why})")
+        for rule in _REPAIRS + _REFUSALS:
+            goal, sel, why = rule(goal, sel, request)
+            if why:
+                _lost(why)
                 return
-            goal = {**goal, ("select" if "select" in goal else
-                             "every" if "every" in goal else
-                             "observe" if "observe" in goal else "per"): trimmed}
-            sel = trimmed
-
-        # AN INVENTED IDENTITY DROPS THE GOAL WHOLE — but only one that SURVIVED the repair
-        # above, and that ordering is the whole of this rule working.
-        #
-        # PUT FIRST, IT COST FOUR RUNGS. Measured 2026-08-05: rungs 4, 7, 13 and 14 went DONE
-        # -> UNTRANSLATED, and every one of them for a name `unusable` was about to REPAIR —
-        # `name: 'every'` (a schema word `_echoed` knows), `name: 'exactly two vms'` and
-        # `name: 'prod label on exactly 3 vms'` (prose the whitespace rule knows). Those are
-        # slot errors, and this module's line is that A SLOT ERROR IS REPAIRED. Judging them
-        # as inventions threw away four correct counts.
-        #
-        # WHAT IS LEFT AFTERWARDS IS THE REAL THING: a name that is well-formed, not echoed,
-        # not prose, and still appears nowhere in the request — `name: 'unresponsive'` for
-        # "stop the ones that do not answer". Nothing upstream has an objection to it, which
-        # is exactly why it reached the writer and closed DONE over four calls.
-        #
-        # AND IT DROPS RATHER THAN STRIPS, unlike the repair above, because the two are not
-        # the same situation. Stripping an echoed word leaves `count(vm) = 5`, which is still
-        # what the operator asked. Stripping an invented identity leaves `count(vm) = 0` —
-        # DELETE EVERY MACHINE. Stripping is only safe when what remains is still the whole
-        # truth, and here the name WAS the subject.
-        made_up = invented(sel, request)
-        if made_up:
-            _lost(made_up)
-            return
-
-        # SEVERAL MEMBERS CANNOT SHARE ONE IDENTITY, and this refuses the goal at the seam
-        # that OWNS the error rather than three layers down. A kind has one member per key,
-        # so `count(vm WHERE name='golden') = 3` describes no world at all — it is rung 10's
-        # literal answer to "clone golden into 3 new vms", where the clone relation is lost
-        # and three machines end up sharing a name.
-        #
-        # IT WAS ALREADY CAUGHT, IN THE WRONG PLACE. `ghost_writer.cover` raises `Unsolvable:
-        # nothing reaches`, so the run is honest — and it closes UNMET, which BLAMES THE
-        # ENGINE for a front-seam mistake. `engine_probe`'s own docstring is explicit that
-        # UNTRANSLATED exists so that cannot happen: "it names the front seam, and confusing
-        # it with an engine failure is how a day gets spent debugging the wrong half."
-        # Nothing changes about whether the request works; what changes is which layer is
-        # told to look.
-        #
-        # THE RULE IS `coverage_probe.judge`'S, which has counted this as FORCED since the
-        # corpus was written while production had no equivalent — the bench asking a
-        # different question than production, one more time.
-        #
-        # A MEMBERSHIP LIST IS NOT THIS. `name IN [n1, n2, n3]` with a count of three is
-        # three members with three names, which is an ordinary request; only a SCALAR key
-        # bound beside a count above one is impossible.
-        key_of = ((config.KINDS or {}).get(sel.get("kind")) or {}).get("key")
-        pinned = sel.get(key_of) if key_of else None
-        if (isinstance(goal.get("eq"), int) and goal["eq"] > 1
-                and isinstance(pinned, (str, int, float))):
-            _lost(f"it asks for {goal['eq']} {sel.get('kind')}s all called {pinned!r}, and a "
-                  f"{sel.get('kind')} is identified by its {key_of} — no world has that")
-            return
-
-        # ## THE `must` CLAUSE WAS JUDGED HERE, AND IT WAS WITHDRAWN — 2026-08-05
-        #
-        # `_keep` reads the SELECTOR and stops, so a value on the WRITE side of a goal is not
-        # held to being a name. That let rung 8's paraphrase through as `every network[core]
-        # must members = 'all machines'` — prose where member names belong — and the run
-        # reported DONE having made ZERO calls.
-        #
-        # JUDGING IT WITH `unusable` FIXED THAT ROW AND COST A PASSING ONE. Rung 13 answers
-        # "put them all in a network" with `must network = 'the network they are all in'`,
-        # which is also prose — and the writer does something SENSIBLE with it, creating a
-        # network under that clumsy name. The rung never names a network, so the checker is
-        # satisfied and it closes DONE with 11 calls. Judged, the goal is dropped, the
-        # half-a-request rule fires, and a working rung becomes UNTRANSLATED.
-        #
-        #     literal 12/14 -> 11/14 · paraphrase 8/14, DONE_BUT_FALSE 2 -> 1
-        #
-        # ONE PASSING RUNG FOR ONE HONEST REFUSAL IS NOT A TRADE WORTH TAKING.
-        #
-        # AND THE DISTINCTION THAT WOULD SAVE IT DOES NOT EXIST IN THE MANIFEST. What
-        # separates the two is single-valued versus MANY: `network` is one name to MINT, and
-        # any string serves; `members` is a list of members that already exist, which prose
-        # cannot denote. Nothing declares that difference — there is no multi-value marker on
-        # any kind — so enforcing it would mean inventing a distinction in code and adding a
-        # fifteenth special case to a function whose implicit ordering already cost four
-        # rungs today. DECLARE IT IN THE MANIFEST FIRST, then this becomes a rule rather than
-        # a guess.
         out.append(goal)
 
     def _scoped(goals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

@@ -714,6 +714,56 @@ def test_a_name_the_request_never_says_is_not_a_name():
           invented({"kind": "vm", "name": "anything"}, "") is None)
 
 
+def test_repairs_run_before_refusals_and_the_order_is_declared():
+    """THE ORDERING BUG THAT COST FOUR RUNGS, pinned so it cannot come back quietly.
+
+    `_keep` used to be one repair and three refusals as a run of `if`s, in whatever order
+    they had been added. The order was LOAD-BEARING and written down nowhere: on 2026-08-05 a
+    refusal was added BEFORE the repair and rungs 4, 7, 13 and 14 went DONE -> UNTRANSLATED,
+    every one for a name the repair was about to fix. Invisible in review; it took a full
+    ladder arm to find.
+
+    The phases are now DATA — `_REPAIRS` then `_REFUSALS` — so a rule in the wrong tuple is a
+    category error a reader can see. This asserts the split, the order, and the behaviour the
+    order exists to protect.
+    """
+    print("\n[pipeline] repairs run before refusals, and the phases are declared")
+    from engines.extract import (_REFUSALS, _REPAIRS, _refuse_invented,
+                                 _refuse_shared_identity, _repair_unusable)
+
+    check("the repair phase holds the repair", _REPAIRS == (_repair_unusable,))
+    check("and the refusals are declared separately",
+          _REFUSALS == (_refuse_invented, _refuse_shared_identity))
+    check("no rule appears in both phases", not set(_REPAIRS) & set(_REFUSALS))
+
+    # EVERY RULE HAS ONE SIGNATURE, which is what makes them testable alone and the pipeline
+    # a loop. Each returns `(goal, sel, why)`; a refusal hands back what it was given.
+    g = {"shape": "count", "select": {"kind": "vm"}, "eq": 1}
+    for rule in _REPAIRS + _REFUSALS:
+        got = rule(dict(g), {"kind": "vm"}, "make a vm")
+        check(f"{rule.__name__} returns (goal, sel, why)",
+              isinstance(got, tuple) and len(got) == 3)
+
+    # THE BEHAVIOUR THE ORDER PROTECTS. `every` is a schema word `_echoed` knows, so the
+    # repair strips it and the count survives — and the invented-name refusal must never see
+    # it, because a name absent from the request is exactly what it would object to.
+    dropped = []
+    got = to_goals({"goals": [{"goal": "count", "select": {"kind": "vm", "where": []},
+                               "amount": 5, "name": "every"}]},
+                   "create 5 vms and put them all in a network", dropped)
+    check("a repairable name is repaired, not refused as invented",
+          got and got[0]["eq"] == 5 and "name" not in got[0]["select"])
+    check("and nothing is reported lost", dropped == [])
+
+    # AND WHAT SURVIVES THE REPAIR IS STILL REFUSED. `unresponsive` is well-formed, not
+    # echoed and not prose, so no repair touches it — and the request never says it.
+    lost2 = []
+    to_goals({"goals": [{"goal": "count", "select": {"kind": "vm", "where": []},
+                         "amount": 0, "name": "unresponsive"}]},
+             "ping every vm and stop the ones that do not answer", lost2)
+    check("a name no repair explains is still refused", len(lost2) == 1)
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "extract repairs"))
