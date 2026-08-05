@@ -1629,8 +1629,35 @@ def _build_per(g: Dict[str, Any], sel: Dict[str, Any], request: str) -> tuple:
 
 
 def _build_observe(g: Dict[str, Any], sel: Dict[str, Any], request: str) -> tuple:
-    """Ask each member something, requiring nothing of the answer."""
-    return {"observe": sel, "fact": g.get("fact") or "alive"}, None
+    """Ask each member something, requiring nothing of the answer.
+
+    A KIND NOTHING CAN ASK IS NOT OBSERVABLE. `observe` lowers to a PROBE — the manifest names
+    the asker under `observed.<fact>.by` — and only `vm` declares one. So `observe(network,
+    alive)` is a goal the writer can never plan, and the schema was offering it.
+
+    THE SAME GAP `reach` HAD, found by asking the same question of every shape in turn. Rung
+    9's paraphrase proved the model will pick a wrong kind when one is on offer: it answered
+    `reach(network …)` for a request about machines, and nothing but the kind was wrong.
+
+    DERIVED, so a package mounting a kind with a probe is observable without an edit here.
+    """
+    fact = g.get("fact") or "alive"
+    # THE KIND, NOT THE FACT, and the difference cost a rung when I got it wrong. Asking
+    # `probe_for(kind, fact)` refuses `observe(vm, exists)` — the model emits it beside a
+    # real `per` goal on rung 12's paraphrase, `exists` has no prober because existence is a
+    # REGISTRY fact rather than a finding, and dropping it tripped the half-a-request rule
+    # and took a passing rung with it. DONE -> UNTRANSLATED, on the rung closed an hour
+    # earlier.
+    #
+    # WHAT THIS GUARD IS FOR is a kind nothing can ask AT ALL — a network, a template, a
+    # file. A `vm` can be asked; that one of its facts has no prober is a smaller matter and
+    # not this rule's business.
+    kind = sel.get("kind")
+    spec = (config.KINDS or {}).get(kind) or {}
+    if not any((o or {}).get("by") for o in (spec.get("observed") or {}).values()):
+        return None, (f"nothing in the lab can ask a {kind} anything — it has no prober, "
+                      f"so there is no way to find out")
+    return {"observe": sel, "fact": fact}, None
 
 
 _BUILDERS = {"reach": _build_reach, "every": _build_every,
