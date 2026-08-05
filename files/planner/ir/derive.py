@@ -218,4 +218,110 @@ def _derive_disjoint(pred, select, scope, intent=None) -> Optional[List[Dict[str
     return None
 
 
-_DERIVERS = {"count": _derive_count, "reach": _derive_reach, "disjoint": _derive_disjoint}
+def _touches(plan: List[Dict[str, Any]]) -> set:
+    """Every name a derived plan acts ON — what two plans must not share to be concatenable.
+
+    Deliberately over-broad: every member a `foreach` walks AND every string argument of
+    every call, so a derived network name counts as a touch too. Two plans that both mint
+    `net_derived` interfere just as surely as two that relabel the same machine, and an
+    over-broad reading DECLINES a safe pair where a narrow one would CONCATENATE an unsafe
+    one. Only one of those errs toward doing nothing.
+    """
+    out = set()
+    for st in plan or ():
+        if not isinstance(st, dict):
+            continue
+        walked = st.get("in")
+        if isinstance(walked, list):
+            out |= {str(m) for m in walked}
+        elif isinstance(walked, str):
+            out.add(walked)
+        for holder in (st.get("call"), st):
+            for value in ((holder or {}).get("args") or {}).values():
+                if isinstance(value, str) and not value.startswith(config.SIGIL):
+                    out.add(value)
+        out |= _touches(st.get("do") or st.get("body") or [])
+    return out
+
+
+def _derive_all(pred, select, scope, intent=None) -> Optional[List[Dict[str, Any]]]:
+    """ALL(a, b, …) — every child closed, but ONLY when their plans cannot interfere.
+
+    THE RECORDED REASON THIS WAS UNDERIVABLE, and it is a real one: *"a composite is only as
+    derivable as its children, and combining their plans is a scheduling problem this layer
+    deliberately does not have."* Concatenating two plans is not generally sound — one may
+    undo what the other just did, and nothing here orders them.
+
+    **BUT THE SCHEDULING PROBLEM ONLY EXISTS WHERE THE PLANS MEET.** Two plans that act on
+    disjoint sets of names commute: running them in either order, or interleaved, reaches the
+    same world, so concatenation is correct and no scheduler is needed. That is decidable by
+    looking at what each plan touches, which is arithmetic and not a judgement — so this
+    closes the case the reason was about and declines the case it was FOR.
+
+    ANY CHILD THAT CANNOT BE DERIVED SINKS THE WHOLE THING. A partial plan for a conjunction
+    is worse than none: it acts, changes the world, and still leaves the assertion false.
+    """
+    children = pred.get("of")
+    if not isinstance(children, list) or not children:
+        return None
+    plans: List[List[Dict[str, Any]]] = []
+    for child in children:
+        fix = derive(child, select, scope, intent)
+        if fix is None:
+            return None
+        plans.append(fix)
+    seen: set = set()
+    for plan in plans:
+        touched = _touches(plan)
+        if touched & seen:
+            return None                    # they meet — that IS the scheduling problem
+        seen |= touched
+    return [st for plan in plans for st in plan]
+
+
+def _derive_not(pred, select, scope, intent=None) -> Optional[List[Dict[str, Any]]]:
+    """NOT(COUNT … >= n) — the inversion, and ONLY where the order makes it determinate.
+
+    THE RECORDED REASON, and it is right in general: *"satisfying NOT(x) means any world
+    where x is false, and choosing one is a decision, not a computation."*
+
+    **A COUNT IS TOTALLY ORDERED, SO ONE FAMILY OF NEGATIONS IS NOT A CHOICE.** `NOT(c >= n)`
+    is `c <= n-1` and `NOT(c <= n)` is `c >= n+1` — each names one bound, and closing it is
+    exactly what `_derive_count` already does for a bound an operator wrote directly. There
+    is no decision here that writing `<=` by hand would not also have made, so refusing this
+    while accepting that was never a consistent position.
+
+    `eq` IS STILL A CHOICE and stays refused: `NOT(c = 3)` is satisfied by two and by four,
+    the difference is creation versus deletion, and nothing in the predicate says which.
+    Neither is a non-count child — the reason holds in full for anything without an order.
+
+    `NOT(c >= 0)` INVERTS TO `c <= -1`, WHICH NO WORLD SATISFIES. Returning None says the gap
+    cannot be closed, which is true, rather than deriving a plan that would delete everything
+    and still fail.
+    """
+    inner = pred.get("of")
+    if not isinstance(inner, dict) or inner.get("shape") != "count":
+        return None
+    flipped = dict(inner)
+    if "gte" in inner:
+        flipped.pop("gte")
+        flipped["lte"] = int(inner["gte"]) - 1
+    elif "lte" in inner:
+        flipped.pop("lte")
+        flipped["gte"] = int(inner["lte"]) + 1
+    else:
+        return None
+    if int(flipped.get("lte", 0)) < 0:
+        return None
+    return _derive_count(flipped, select, scope, intent)
+
+
+# `disjoint` IS DECLARED UNDERIVABLE RATHER THAN GIVEN A DERIVER THAT ALWAYS SAYS None.
+# It had the stub, which passed `test_every_predicate_shape_declares_whether_it_can_be_derived`
+# by HAVING an entry here — and that test exists to stop exactly this: *"a shape that silently
+# cannot converge is indistinguishable from one nobody has written a deriver for yet."* A stub
+# returning None unconditionally IS that shape, wearing a deriver's clothes. The reason it
+# cannot be closed now lives in the manifest beside the other three, where the invariant reads
+# it. See `_derive_disjoint` above, kept for the reason it records.
+_DERIVERS = {"count": _derive_count, "reach": _derive_reach,
+             "all": _derive_all, "not": _derive_not}

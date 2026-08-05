@@ -782,7 +782,9 @@
    "source": "registry",
    "operand": "sets",
    "comparators": {},
-   "doc": "the named sets share no member"
+   "doc": "the named sets share no member",
+   "derivable": false,
+   "_derivable_doc": "detaching the overlap from either side satisfies it and the two are not equivalent acts — one is probably what was meant and the other is probably damage. IT HELD A DERIVER THAT ALWAYS RETURNED None until 2026-08-06, which passed the every-shape-declares-itself invariant by HAVING an entry while being precisely what that invariant exists to catch: a shape that silently cannot converge, indistinguishable from one nobody has written a deriver for yet."
   },
   "not": {
    "source": "composite",
@@ -790,8 +792,7 @@
    "arity": "one",
    "comparators": {},
    "doc": "the opposite of another check",
-   "derivable": false,
-   "_derivable_doc": "the opposite of a check does not name a state to bring about — satisfying NOT(x) means any world where x is false, and choosing one is a decision, not a computation"
+   "_derivable_doc": "DERIVABLE SINCE 2026-08-06 for an ORDERED count and nothing else. The old reason — the opposite of a check does not name a state to bring about, satisfying NOT(x) means any world where x is false, and choosing one is a decision — holds for anything unordered. A count is totally ordered, so NOT(c >= n) is c <= n-1 and NOT(c <= n) is c >= n+1: each names ONE bound, and closing it is exactly what the count deriver already does for a bound an operator wrote by hand. Refusing the negation while accepting the bound was never a consistent position. `eq` STAYS refused — NOT(c = 3) is satisfied by two and by four, the difference is deletion versus creation, and the predicate does not say which. So does any non-count child."
   },
   "all": {
    "source": "composite",
@@ -799,8 +800,7 @@
    "arity": "many",
    "comparators": {},
    "doc": "every one of these checks holds",
-   "derivable": false,
-   "_derivable_doc": "a composite is only as derivable as its children, and combining their plans is a scheduling problem this layer deliberately does not have"
+   "_derivable_doc": "DERIVABLE SINCE 2026-08-06, on the case the old reason was not about. That reason — a composite is only as derivable as its children, and combining their plans is a scheduling problem this layer deliberately does not have — is right wherever the plans MEET. But two plans over disjoint sets of names COMMUTE: either order, or interleaved, reaches the same world, so concatenation needs no scheduler. Which pair is which is decided by comparing what each plan touches, which is arithmetic and not a judgement. Children whose plans meet are still refused, and any child that cannot be derived sinks the whole conjunction — a partial plan acts, changes the world, and leaves the assertion false anyway."
   },
   "any": {
    "source": "composite",
