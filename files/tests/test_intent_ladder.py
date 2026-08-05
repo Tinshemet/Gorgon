@@ -296,6 +296,81 @@ def test_the_gate_is_still_behind_the_planner():
     check("and alpha is still there", "alpha" in world.vms)
 
 
+def test_a_translation_that_asserts_nothing_cannot_be_an_achieve():
+    """VACUITY, and the ladder is what makes it decidable without a vocabulary.
+
+    THE DEFECT NOTHING ELSE SEES is a clause NOBODY TRANSLATED: no goal is wrong, none is
+    dropped, every guard judges the goals that ARE there and passes. Rung 11 — *"ping every
+    vm AND STOP THE ONES THAT DO NOT ANSWER"* — comes back as a single `observe` and closes
+    DONE having stopped nothing. Four mechanisms were measured on this in one day and all
+    four failed, every one by asking the MODEL where each goal came from.
+
+    THIS ASKS THE MODEL NOTHING. It is vacuity detection, standard in model checking, whose
+    textbook example is this bug exactly: *"every request is eventually followed by a grant"
+    is satisfied vacuously in models in which requests are never sent.*
+
+    AND THE SAME GOAL SET IS CORRECT ONE RUNG DOWN, which is the whole reason this can be a
+    rule rather than a guess. `HOW_MANY_ARE_UP` is observations-only and it is exactly what a
+    FETCH should be — that is the control here, and it is the same constant the fetch tests
+    above already use.
+    """
+    print("[ladder] a translation that asserts nothing cannot be an achieve")
+
+    # THE CONTROL FIRST. If this ever starts failing, the rule has eaten the bottom rung.
+    out, world = _serve(HOW_MANY_ARE_UP, "fetch")
+    check("a fetch that only asks is untouched", out["outcome"] != "UNTRANSLATED")
+
+    for rung in ("ensure", "achieve"):
+        out, _ = _serve(HOW_MANY_ARE_UP, rung)
+        check(f"an {rung} over observations alone is refused",
+              out["outcome"] == "UNTRANSLATED")
+        check(f"and the {rung} says why, in the operator's terms",
+              "only ASKS" in str(out.get("why") or ""))
+
+    # ONE ASSERTIVE GOAL IS ENOUGH — this must not become "no observations allowed". Rung 11
+    # translated CORRECTLY is an observe beside an every, and that has to pass.
+    both = HOW_MANY_ARE_UP + [{"every": {"kind": "vm", "alive": False},
+                               "must": {"status": "stopped"}}]
+    out, _ = _serve(both, "achieve")
+    check("an observation beside something assertive is fine",
+          out["outcome"] != "UNTRANSLATED")
+
+    # AND A COUNT ALONE, the ordinary case, is untouched at every rung.
+    for rung in ("fetch", "ensure", "achieve"):
+        out, _ = _serve(FOUR_MACHINES, rung)
+        check(f"an ordinary count is untouched under {rung}",
+              out["outcome"] != "UNTRANSLATED")
+
+
+def test_an_invocation_acts_even_though_it_cannot_be_witnessed():
+    """A `_call` IS NOT VACUOUS, and conflating it with `observe` broke a routine.
+
+    `ghost_writer.groundable` answers *can this have a closing witness* and says NO to both
+    `observe` and `_call`. Vacuity asks something narrower — *does this ask for anything at
+    all* — and there the two part company: an observe neither asserts nor acts, while a
+    `_call` ACTS, being an invocation of a program somebody already wrote.
+
+    Reading `_call` as vacuous refused a due ROUTINE running its own saved body: nothing was
+    translated, so nothing could have been dropped. A call that cannot be WITNESSED is still
+    a call that HAPPENS.
+    """
+    print("[ladder] an invocation acts, even where nothing can witness it")
+    from planner.ir.intent import vacuous
+
+    check("a saved procedure invoked by name is not vacuous",
+          vacuous([{"_call": ("nightly", {"box": "web"})}], "achieve") is None)
+    check("nor is one beside an observation",
+          vacuous([{"observe": {"kind": "vm"}, "fact": "alive"},
+                   {"_call": ("nightly", {})}], "achieve") is None)
+    check("while observations alone still are",
+          vacuous([{"observe": {"kind": "vm"}, "fact": "alive"}], "achieve") is not None)
+
+    # NO GOALS AT ALL IS A DIFFERENT FAILURE and must keep its own name — `orchestrator`
+    # already closes that as UNTRANSLATED with the channel's own reason.
+    check("an empty translation is left to the guard that already names it",
+          vacuous([], "achieve") is None)
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "intent ladder"))

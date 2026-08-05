@@ -161,6 +161,81 @@ def permits(intent: str) -> bool:
     return _PERMITS.get(intent, _PERMITS[FETCH]) is None
 
 
+def vacuous(components: Any, intent: str) -> Optional[str]:
+    """A translation that asserts nothing, under an intent that requires something.
+
+    ## THE DEFECT, AND IT IS THE ONE NOTHING ELSE IN THIS SYSTEM CAN SEE
+
+    A clause NOBODY TRANSLATED leaves no trace: no goal is wrong, none is dropped, every
+    guard downstream judges the goals that ARE there and passes. Rung 11 — *"ping every vm
+    AND STOP THE ONES THAT DO NOT ANSWER"* — comes back as a single `observe` and closes
+    DONE having stopped nothing. Four mechanisms were measured on this in one day and all
+    four failed, every one of them by asking the MODEL where each goal came from
+    (`clause_ledger.reconcile` against a plan, its pigeonhole detector against the goals, a
+    quoted span, a closed enum of clauses).
+
+    ## THIS ASKS THE MODEL NOTHING, AND THE IDEA IS BORROWED RATHER THAN INVENTED
+
+    It is VACUITY DETECTION, standard in model checking, and its textbook example is exactly
+    this bug: *"every request is eventually followed by a grant" is satisfied vacuously in
+    models in which requests are never sent.* A specification no world can fail is not a
+    specification of anything.
+
+    THE INTENT LADDER IS WHAT MAKES IT DECIDABLE WITHOUT A VOCABULARY, and without it this
+    rule would be wrong half the time. *"Check which machines are answering"* translates to
+    nothing but observations too — and it is CORRECT, because a FETCH asks and requires
+    nothing. That is what a fetch IS. An ENSURE or an ACHIEVE over goals that assert nothing
+    is a contradiction in terms: there is no gap to close and nothing to be true afterwards.
+    So the same goal set is fine at one rung and impossible at the next, and the rung is
+    already declared.
+
+    GROUNDABILITY IS THE EXISTING AUTHORITY, asked rather than re-derived.
+    `ghost_writer.groundable` already decides whether a goal is a thing that BECOMES TRUE or
+    a thing merely DONE, and it was extracted as SSOT for precisely this reason — two
+    readers of that question drifting apart is how twins start. `observe` and `_call` are
+    UNGROUNDABLE: Medusa has no predicate for "has been asked".
+
+    ## BUT UNGROUNDABLE IS NOT THE SAME QUESTION, AND A TEST CAUGHT ME CONFLATING THEM
+
+    `groundable` answers *can this have a closing witness*, and it says NO to both `observe`
+    and `_call`. This function asks something narrower — *does the translation ASK FOR
+    ANYTHING AT ALL* — and on that question the two part company:
+
+        observe   asks, and requires nothing. It neither asserts nor acts.
+        _call     ACTS. It is an invocation of a procedure somebody already wrote, and its
+                  effects are whatever that program does.
+
+    Reading `_call` as vacuous refused a due ROUTINE running its own saved body
+    (`test_a_due_routine_runs_through_the_ordinary_engine`) — a program the operator wrote,
+    invoked by the clock, with nothing translated and therefore nothing to have dropped.
+    A call that cannot be WITNESSED is still a call that HAPPENS, and vacuity is about a
+    specification with no content, never about one that is hard to check.
+
+    Returns the reason, or None when the translation asserts or does something.
+
+    ## WHAT IT DOES NOT CATCH, SAID PLAINLY
+
+    A request whose second clause vanished while the first still constrains the world —
+    rung 10 keeps a `count`, so this stays quiet. Vacuity is a FLOOR, not the whole answer,
+    and it is worth having because the floor is currently the ground.
+    """
+    if _RUNG.get(intent, 0) < _RUNG[ENSURE]:
+        return None                      # a fetch that only asks is a fetch doing its job
+    goals = list(components or ())
+    if not goals:
+        return None                      # nothing translated at all is a different failure,
+                                         # and `orchestrator` already names it UNTRANSLATED
+    from planner.ghost_writer import groundable
+    for g in goals:
+        if not isinstance(g, dict):
+            return None                  # not a shape this understands; never guess
+        if groundable(g) or "_call" in g:
+            return None                  # it asserts something, or it does something
+    return (f"every goal here only ASKS something — nothing is required to be true at the "
+            f"end, so an {intent} has no gap to close. A request that asks and acts was "
+            f"read as one that only asks")
+
+
 def violations(program: Any, intent: str, actors: Optional[set] = None) -> List[str]:
     """Statements this intent is not authorised to contain.
 

@@ -627,6 +627,75 @@ class Orchestrator:
             # A DECLARED NAME WINS; the channel's is a fallback nothing currently fills.
             procedure = procedure or getattr(answer, "procedure", None)
 
+        # THE CLAUSE LEDGER, WIRED AS A READER AND NOTHING ELSE — which is the shape its own
+        # module declares: *"it reads and reports; it changes NOTHING … an unaccounted demand
+        # is REPORTED, never silently patched. This module has no writer."*
+        #
+        # IT DOES NOT TOUCH THE OUTCOME, AND THAT IS A MEASUREMENT AND NOT A TIMIDITY. Both
+        # routes to making it decide were measured on 2026-08-05: `reconcile` against a plan
+        # calls 24 of 26 COMPLETE plans incomplete (a plan renders tool names, a request
+        # contains verbs), and its pigeonhole detector against the goals wrongly flags 6 of
+        # 28 known-good ladder readings because clauses and goals are not in bijection —
+        # *"spin up a machine and call it alpha"* is two clauses and ONE goal. Wired to
+        # anything that refuses, it would refuse six rungs to catch one.
+        #
+        # SO THE COST OF ITS FALSE POSITIVES IS PAID IN NOISE RATHER THAN IN REFUSALS, which
+        # is exactly the trade its docstring already reasons about: *"a false warning is the
+        # cheaper mistake to have"* — true while it warns, false the moment it decides.
+        # `level="info"` rather than `warn` for the same reason: this is an open question, and
+        # the ledger's own three-valued vocabulary refuses to call anything COVERED.
+        try:
+            from planner import clause_ledger as _ledger
+            _led = _ledger.reconcile(
+                _ledger.open_ledger(request, _ledger.enumerate_clauses(request)),
+                list(components or ()))
+            _open = [r for r in _led.get("demands", ())
+                     if r.get("status") == _ledger.UNACCOUNTED]
+            if _open:
+                session.record(
+                    "clauses no goal accounts for: "
+                    + "; ".join(str(r.get("text")) for r in _open),
+                    filed_by="clause_ledger", caught_by="orchestrator",
+                    executed="translate", data={"ledger": _led}, level="info")
+        except Exception:
+            # A READER MAY NOT BREAK THE RUN IT IS READING. It decides nothing, so a fault
+            # here must cost the report and never the request — the one place a bare
+            # `except` is the correct shape rather than the quiet-degradation smell, because
+            # what degrades is a note and not a check.
+            pass
+
+        # A TRANSLATION THAT ASSERTS NOTHING CANNOT BE AN `ensure` OR AN `achieve`, and this
+        # is the only guard here that can see a clause NOBODY TRANSLATED. Every other check
+        # judges the goals that ARE present; rung 11 loses "and stop the ones that do not
+        # answer" entirely, so no goal is wrong, none is dropped, and the run closes DONE
+        # having stopped nothing.
+        #
+        # VACUITY DETECTION, borrowed from model checking rather than invented — a
+        # specification no world can fail is not a specification. The intent ladder is what
+        # makes it decidable without a vocabulary: "check which machines are answering" is
+        # observations-only too and is CORRECT, because a fetch asks and requires nothing.
+        # See `intent.vacuous` for why four earlier mechanisms failed and this one asks the
+        # model nothing.
+        #
+        # PLACED HERE RATHER THAN IN THE TRANSLATION BRANCH so it also covers components
+        # supplied directly by a caller — which is every measured result to date and the only
+        # shape a test can drive without a model. A guard that only sees the model's output
+        # is a guard the bench cannot exercise, which is the mistake `_author` above was
+        # moved out of the branch to fix.
+        # IMPORTED HERE, NOT AT THE TOP. `engines` may not carry an import-time edge up into
+        # `planner` — `test_layering` enforces it — and every other `planner.ir` use in this
+        # file is lazy for the same reason.
+        # THE SESSION IS THE AUTHORITY ON THE INTENT, not this function's arguments —
+        # `_attempt` is not handed one, and `Session.__init__` is where the operator's rung
+        # is settled and defaulted. Asking the session is also what keeps the check correct
+        # for a caller that never went through `_serve`.
+        from planner.ir import intent as _intent
+        hollow = _intent.vacuous(components, getattr(session, "intent", _intent.FETCH))
+        if hollow:
+            session.record(hollow, filed_by="orchestrator", caught_by="operator",
+                           executed="translate", level="warn")
+            return session.close("UNTRANSLATED", hollow)
+
         # AUTHORING, NOT ACTING. The operator asked for a reusable snippet, so the engine
         # WRITES the program for these goals and the orchestrator keeps it — nothing runs.
         # Doing otherwise is what put a machine called `default` on the lab in answer to a
