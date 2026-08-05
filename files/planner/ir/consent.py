@@ -162,7 +162,38 @@ def vacuous(program: Any) -> List[str]:
         if in_loop and _asserts_the_member_exists(st.get("predicate")):
             out.append("asserts that the member being iterated exists, which iterating it "
                        "already established — it holds however the program behaves")
+        floor = _floor_every_count_clears(st.get("predicate"))
+        if floor is not None:
+            out.append(f"asserts a count is at least {floor}, and a count never is not — "
+                       f"there is no world where this fails")
     return out
+
+
+def _floor_every_count_clears(pred: Any) -> Optional[int]:
+    """The floor of a `COUNT(...) >= n` that no world can miss, or None.
+
+    A COUNT IS A CARDINALITY, so it is never negative and `>= 0` is true in every world.
+    That is decorative grounding in its purest form, and it PASSED until 2026-08-06:
+    `survey` says in as many words that counting an assertion which cannot fail "would make
+    'add any ENSURE' a way to satisfy the grounding rule without satisfying the property",
+    and then `COUNT(SELECT vm) >= 0` did exactly that — one act, one assertion, grounded.
+
+    FOUND BY ASKING WHETHER EACH CHECK CAN FAIL rather than whether it passes. The docstring
+    above says "assertions that cannot fail" and detected exactly ONE shape; a check nobody
+    has watched go red is a claim, not a guarantee.
+
+    NARROW AND CERTAIN, which is the [[gorgon-deterministic-rules]] pattern. Only the FLOOR
+    is decidable without knowing the world: no `lte` can be judged here, because whether a
+    ceiling is unreachable depends on how many resources could exist, and `eq: 0` is a real
+    assertion — "there are none" is a claim a world can break. Nothing else is guessed.
+    """
+    if not isinstance(pred, dict) or pred.get("shape") != "count":
+        return None
+    try:
+        floor = int(pred["gte"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return floor if floor <= 0 else None
 
 
 def _body_of(program: Any) -> List[Any]:

@@ -599,6 +599,79 @@ def test_a_file_is_verified_as_a_program_and_not_as_text():
               any(not c["ok"] and c["fatal"] for c in report["checks"]))
 
 
+def test_every_check_verify_file_makes_can_actually_fail():
+    """A CHECK NOBODY HAS WATCHED GO RED IS A CLAIM, NOT A GUARANTEE.
+
+    `is the program saved` compared `render(expected)` to the file. From `save` — its only
+    real caller — the file already IS `render(program)`, so the two agreed by construction.
+    **It had never once had teeth**, and nothing said so: it was green on every run, which
+    reads exactly like a check that works.
+
+    So this drives EVERY check to failure. It is the only evidence that a passing report
+    means anything, and it is cheap: a check that cannot be made to fail is either
+    tautological or misspecified, and both are worth knowing on the day it is written rather
+    than on the day it was needed.
+    """
+    print("[verify] every check verify_file makes can be made to fail")
+    from planner.ir.parse import parse as _ir
+    with _Library() as lib:
+        at = os.path.join(procs._home(), "p.medusa")
+        os.makedirs(procs._home(), exist_ok=True)
+
+        def failures(src, expected=None):
+            open(at, "w").write(src)
+            report = lib.verify_file(at, expected=expected)
+            return {c["check"] for c in report["checks"] if c["ok"] is False}
+
+        good = ("PROCEDURE p() {\n"
+                "  STORE a = NEW CALL create_vm(os_type: linux, name: box);\n"
+                "  ENSURE COUNT(SELECT vm WHERE label = 'box') = 1;\n"
+                "  PUBLISH(a);\n}")
+
+        check("reads back fails on text that is not a program",
+              "reads back" in failures("this is not a program {{{"))
+
+        check("validates fails on a reference bound to nothing",
+              "validates" in failures(
+                  "PROCEDURE p() {\n"
+                  "  STORE a = NEW CALL create_vm(os_type: linux, name: box);\n"
+                  "  CALL launch_vm(name: $ghost);\n"
+                  "  ENSURE COUNT(SELECT vm WHERE label = 'box') = 1;\n}"))
+
+        # ACTS AND ASSERTS NOTHING. The act must not be a `new` — a creation vouches for
+        # itself, so a program whose every act is one is grounded and SHOULD pass here.
+        check("vouches fails on a program that acts and asserts nothing",
+              "vouches for what it does" in failures(
+                  "PROCEDURE p() {\n  CALL launch_vm(name: web);\n}"))
+
+        check("is the program saved fails when the file is another program",
+              "is the program saved" in failures(good, expected=_ir(
+                  "PROCEDURE p() {\n"
+                  "  STORE a = NEW CALL create_vm(os_type: windows, name: other);\n"
+                  "  ENSURE COUNT(SELECT vm WHERE label = 'box') = 1;\n"
+                  "  PUBLISH(a);\n}")))
+
+        bent = json.loads(json.dumps(_ir(good)))
+        bent["achieves"] = {"shape": "count", "select": {"kind": "vm"}, "eq": 99}
+        check("keeps its contract fails when the contract differs",
+              "keeps its contract" in failures(good, expected=bent))
+
+        # ROUND TRIPS is the one that needs a BROKEN RENDERER to fail, which is exactly what
+        # it is for: it catches a renderer that cannot reproduce what the parser read. There
+        # is no program that triggers it while the renderer is correct — so the renderer is
+        # what gets broken, and the check must notice.
+        real = procs.render_stored
+        procs.render_stored = lambda prog: real(
+            {**prog, "body": [st for st in (prog.get("body") or []) if st.get("op") != "ensure"]})
+        try:
+            check("round trips fails when the renderer drops a statement",
+                  "round trips" in failures(good))
+        finally:
+            procs.render_stored = real
+
+        check("and with the renderer restored the same file is clean", not failures(good))
+
+
 def test_a_file_that_is_not_the_program_is_refused_and_rolled_back():
     """A FAILED RE-SAVE MUST NOT DESTROY A WORKING PROCEDURE.
 
