@@ -44,13 +44,39 @@ def _kinds() -> List[str]:
 
 
 def _attrs(kind: str = None) -> List[str]:
-    """Every queryable attribute, aliases included — the operator's words, not ours."""
+    """Every queryable attribute — ONE SPELLING EACH, plus what can be observed.
+
+    ALIASES WERE OFFERED HERE AND ARE NOT ANY MORE — "the operator's words, not ours" was
+    the reasoning, and it is the right instinct in the wrong place. The model does not read
+    the operator's sentence out of this enum; it picks a slot from it under a CONSTRAINED
+    GRAMMAR, so every alias is one more indistinguishable choice at the moment of picking
+    and buys nothing at the moment of reading — `_to_select` resolves whatever arrives, and
+    a canonical name needs no resolving.
+
+    IT WAS 25 CHOICES FOR 14 ATTRIBUTES, five concepts spelled three ways each:
+
+        cores · cpu · cpu_cores          memory · memory_mb · ram
+        net · net_name · network         label · labels · tag          os · os_type
+
+    A WIDE OPEN SLOT SURFACE IS THE ONE THING EVERY MEASUREMENT IN THIS FILE SAYS THIS MODEL
+    IS BAD AT — it is the whole argument for giving each goal shape its own closed branch
+    ("the model chose a slot from a wide open surface on every goal it wrote"), and the
+    `where` clause was still carrying the old shape inside the new one.
+
+    `observed` STAYS, and it is not an alias. `alive` is a fact the world can be ASKED for
+    rather than a second name for a stored one, and it is exactly the attribute rung 11's
+    missing clause selects on — dropping it would make that clause unrepresentable while
+    trying to make it findable.
+
+    `_to_select` STILL RESOLVES ALIASES and that is deliberate, not leftover: the grammar
+    covers the model's path into this enum, and nothing covers a hand-built dict, a package
+    manifest, or a differently-served model.
+    """
     out = set()
     for k, spec in (config.KINDS or {}).items():
         if kind and k != kind:
             continue
         out |= set(spec.get("attrs") or ())
-        out |= set((spec.get("aliases") or {}).keys())
         out |= set((spec.get("observed") or {}).keys())
     return sorted(out)
 
@@ -1057,6 +1083,36 @@ def _echoed() -> set:
     return out
 
 
+def names_members(kind: str, attr: str) -> Optional[str]:
+    """Which kind's MEMBERS this attribute holds the names of, or None.
+
+    ONE AUTHORITY FOR A QUESTION FOUR GUARDS WERE EACH ANSWERING THEMSELVES. `unusable`,
+    `invented`, `_named_in` and `precondition` all need to know whether a value is a NAME,
+    and all of them answered it by the same CONVENTION: an attribute is a reference when its
+    name IS a declared kind. That is how `snapshot.vm` is recognised, and it is silent about
+    `network.members`, which holds vm names and is not called `vm`.
+
+    MEASURED COST OF THE SILENCE: rung 8's paraphrase came back as `every network[net_name=
+    core] must members = 'all machines'` — prose where member names belong — and no guard
+    objected, because none of them could see that `members` names anything. The writer had
+    nothing to plan and the run reported DONE having made ZERO calls. A false success, from a
+    rule that could not express the case in front of it.
+
+    SO THE MANIFEST DECLARES IT and the convention stays as the fallback. `refs` on a kind
+    maps an attribute to the kind it names members of; where a kind says nothing, an
+    attribute named for a kind still refers to one, so every existing row keeps working
+    without an edit. DECLARE, DON'T INFER — with the inference kept for the cases where it
+    was already right.
+    """
+    if not attr:
+        return None
+    spec = (config.KINDS or {}).get(kind) or {}
+    declared = (spec.get("refs") or {}).get(attr)
+    if declared:
+        return declared
+    return attr if attr in (config.KINDS or {}) else None
+
+
 def _said(text: str) -> str:
     """The request as one comparable token stream — lowercase, punctuation to spaces, padded.
 
@@ -1112,7 +1168,7 @@ def invented(sel: Dict[str, Any], request: str) -> Optional[str]:
         return _said(v) not in said
 
     for attr, value in sel.items():
-        if attr != key and attr not in (config.KINDS or {}):
+        if attr != key and not names_members(kind, attr):
             continue
         # A MEMBERSHIP LIST NAMES SEVERAL, and one invented member is enough: `name IN
         # [n1, n2, ghost]` is a claim about a set the operator did not describe.
@@ -1158,7 +1214,7 @@ def unusable(sel: Dict[str, Any]) -> Optional[str]:
     for attr, value in (sel or {}).items():
         if attr in ("kind", "not") or not isinstance(value, str):
             continue
-        names_a_member = attr == key or attr in (config.KINDS or {})
+        names_a_member = attr == key or bool(names_members(kind, attr))
         if not names_a_member:
             continue
         if value.strip().lower() in _NOT_A_NAME | _echoed():
@@ -1177,7 +1233,7 @@ def unusable(sel: Dict[str, Any]) -> Optional[str]:
         # program, which closed DONE.
         #
         # THE REFERENCED KIND'S FLAG, NOT THIS ONE'S: `attr` may name another kind entirely.
-        owner = kind if attr == key else attr
+        owner = kind if attr == key else names_members(kind, attr)
         if ((config.KINDS or {}).get(owner) or {}).get("key_freetext"):
             continue
         if any(c.isspace() for c in value.strip()):
@@ -1370,6 +1426,44 @@ def to_goals(raw: Dict[str, Any], request: str = "",
         if made_up:
             _lost(made_up)
             return
+
+        # AND THE `must` CLAUSE IS JUDGED TOO, which it never was. `_keep` read the SELECTOR
+        # and stopped — so `every network[net_name=core] must members = 'all machines'` walked
+        # past every guard in this file, because the prose was on the WRITE side of the goal
+        # rather than the read side. The writer had nothing to plan and the run reported DONE
+        # having made ZERO calls: rung 8's paraphrase, DONE_BUT_FALSE, measured 2026-08-05.
+        #
+        # THE SAME OMISSION AS `per`, one clause over. That one was "the one shape reaching
+        # the writer unexamined" on 2026-08-04; this is the other half of the same goal.
+        #
+        # ONLY WHERE THE ATTRIBUTE NAMES MEMBERS, asked of `names_members` so the rule is the
+        # one authority and not a fifth copy of the convention. `must: {label: 'prod'}` is
+        # free text and is left alone; `must: {members: ...}` and `must: {network: ...}` hold
+        # NAMES and are held to what a name is.
+        #
+        # ## `unusable` YES, `invented` NO — READING NAMES, WRITING MAY MINT
+        #
+        # A SELECTOR REFERS and a `must` ASSIGNS, and only the first needs the operator to
+        # have said the name. Applying the invented-identifier rule here as well cost rung 6's
+        # paraphrase, measured immediately: *"the red group must share ONE PRIVATE NETWORK,
+        # and the blue group A SEPARATE ONE"* names neither network ON PURPOSE, so the model
+        # minted `private-red` and `private-blue` — which is exactly right, and both were
+        # refused for not appearing in a sentence that deliberately left them out.
+        #
+        # SO THE ASYMMETRY IS THE RULE: you cannot SELECT members the operator never named,
+        # because there is nothing to point at; you CAN be told to put them somewhere new,
+        # because that is what "on their own network" means. What a written value still has to
+        # be is a NAME — `unusable` catches `members = 'all machines'`, which is a description
+        # wherever it appears.
+        must = goal.get("must")
+        if isinstance(must, dict):
+            for attr, value in must.items():
+                if not names_members(sel.get("kind"), attr):
+                    continue
+                bad = unusable({"kind": sel.get("kind"), attr: value})
+                if bad:
+                    _lost(f"what it asks for is not a name ({bad})")
+                    return
         out.append(goal)
 
     def _scoped(goals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

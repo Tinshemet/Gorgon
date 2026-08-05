@@ -604,6 +604,10 @@
     "net_name",
     "members"
    ],
+   "_refs_doc": "WHICH ATTRIBUTES HOLD THE NAMES OF OTHER MEMBERS. Every name-guard in the system asks the same question — `unusable`, `invented`, `_named_in`, `precondition` — and until 2026-08-05 they all answered it by CONVENTION: an attribute is a reference when its NAME IS a declared kind, which is how `snapshot.vm` is recognised. `members` holds vm names and is not called `vm`, so it was invisible to every one of them. Measured cost: rung 8's paraphrase came back `every network[net_name=core] must members = 'all machines'` — PROSE where member names go — and no guard objected, so the writer planned ZERO calls and the run reported DONE. A convention that cannot express the case in front of it is not a rule, it is a coincidence that has been holding.",
+   "refs": {
+    "members": "vm"
+   },
    "aliases": {
     "name": "net_name"
    },
