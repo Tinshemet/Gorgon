@@ -1515,6 +1515,105 @@ _REPAIRS = (_repair_unusable,)
 _REFUSALS = (_refuse_invented, _refuse_shared_identity)
 
 
+# ── ONE BUILDER PER SHAPE, SO THE DISPATCH IS A TABLE ─────────────────────────────────────
+#
+# `to_goals`' loop was a 250-line `elif` chain, and the four shapes below were buried in the
+# middle of it. Each is now a named function with one signature — `(g, sel, request)` ->
+# `(goal, reason)` — so it can be read and tested without the loop around it.
+#
+# THREE ANSWERS, NOT TWO, and the third is what preserves the old behaviour exactly:
+#
+#     (goal, None)   admit this, subject to `_keep`'s repairs and refusals
+#     (None, reason) refuse it, and say why
+#     (None, None)   THIS BRANCH DOES NOT APPLY — fall through to "not a shape this
+#                    translator can express", which is where `every` with no attribute and
+#                    `per` with no `make` already landed.
+#
+# `count` IS DELIBERATELY NOT HERE. It is 160 lines carrying its own repair stack — the
+# either-slot number, the identity repair, the shape floor, the pigeonhole against
+# `_not_an_identity` — and lifting it would be a rewrite of the most sensitive code in the
+# system rather than a move. It stays inline until there is a reason beyond tidiness.
+
+
+def _build_reach(g: Dict[str, Any], sel: Dict[str, Any], request: str) -> tuple:
+    """REACH IS NOT INVENTED. Twenty of twenty-three extraction failures on 2026-08-01 were a
+    `reach` goal the request never asked for, over a set too small to satisfy it. The evidence
+    is IN THE REQUEST, so it is checked there rather than argued with in a prompt.
+
+    THE GUARD IS RIGHT AND THE SILENCE WAS NOT: the model reaches for `reach` when a clause
+    has no shape (rung 2's "and then launch it"), the goal is correctly refused, and the
+    clause it stood for goes with it — which is why the refusal is reported.
+    """
+    if request and not asks_reach(request):
+        return None, "the model asked for reachability and the request never mentions it"
+    return {"shape": "reach", "select": sel, "min": int(g.get("amount") or 2)}, None
+
+
+def _build_every(g: Dict[str, Any], sel: Dict[str, Any], request: str) -> tuple:
+    """A property every member of a set must gain.
+
+    AN IDENTITY IS NOT A PROPERTY, and it is REPAIRED rather than argued with. "Create a vm
+    named alpha" came back as `every vm must be named alpha` — four of ten failures on
+    2026-08-01 — and giving every member of a set one name is not a state any world reaches.
+    The reading meant is a COUNT OF ONE.
+
+    A GOAL THAT ASKS FOR WHAT IT ALREADY SELECTS IS VACUOUS, so it cannot be what was meant —
+    it is a LOST NEGATION. Rung 5's paraphrase, "start up any machine that ISN'T already
+    running", came back as `every vm[status=running] must status=running`: nothing planned,
+    nothing run, and the goal true the moment it is asked. `effects.complement` knows the
+    opposite because the manifest enumerates the values, and DECLINES where a third value
+    exists, because then the sentence genuinely did not say which.
+    """
+    if not (g.get("attr") and g.get("value") is not None and not placeholder(g["value"])):
+        return None, None
+    spec = (config.KINDS or {}).get(sel["kind"]) or {}
+    attr = (spec.get("aliases") or {}).get(g["attr"], g["attr"])
+    if attr == spec.get("key"):
+        return {"shape": "count", "select": {**sel, attr: _coerce(g["value"])}, "eq": 1}, None
+    want = _coerce(g["value"])
+    if sel.get(attr) == want:
+        from planner.ir import effects as _fx
+        other = _fx.complement(sel["kind"], attr, want)
+        if other is None:
+            return None, (f"it asks every {sel['kind']} with {attr}={want} to have "
+                          f"{attr}={want}, which is already so")
+        sel = {**sel, attr: other}
+    return {"every": sel, "must": {attr: want}}, None
+
+
+def _build_per(g: Dict[str, Any], sel: Dict[str, Any], request: str) -> tuple:
+    """One new thing per member of a set.
+
+    A KIND THE REQUEST NEVER MENTIONS IS NOT BEING ASKED FOR — same rule as `reach`, same
+    reason. Rung 11's paraphrase came back `per vm make=snapshot` for a request naming no
+    snapshot, restore point or checkpoint: the model reached for `per` because "shut down
+    whichever ones don't" has no shape, and the run MADE SNAPSHOTS and reported success.
+    `_relevant` answers "could this request be about this kind" from the manifest's own
+    nouns, which is what keeps rung 12 working — that request does name one.
+
+    THE LINK IS DERIVED, NEVER TAKEN ON TRUST. "Launch every vm that is currently stopped"
+    came back as `per vm make=vm link=status` — one machine per machine, tied by a STATUS.
+    """
+    if not g.get("make"):
+        return None, None
+    if request and not _relevant((config.KINDS or {}).get(g["make"]) or {},
+                                 request, g["make"]):
+        return None, f"it makes a {g['make']}, which the request never mentions"
+    link = _link_between(sel.get("kind"), g["make"])
+    if not link:
+        return None, f"nothing links a {sel.get('kind')} to a {g['make']}"
+    return {"per": sel, "make": g["make"], "link": link}, None
+
+
+def _build_observe(g: Dict[str, Any], sel: Dict[str, Any], request: str) -> tuple:
+    """Ask each member something, requiring nothing of the answer."""
+    return {"observe": sel, "fact": g.get("fact") or "alive"}, None
+
+
+_BUILDERS = {"reach": _build_reach, "every": _build_every,
+             "per": _build_per, "observe": _build_observe}
+
+
 def to_goals(raw: Dict[str, Any], request: str = "",
              dropped: Optional[List[str]] = None) -> List[Dict[str, Any]]:
     """The model's answer, in the shape `ghost_writer.cover` takes.
@@ -1862,97 +1961,23 @@ def to_goals(raw: Dict[str, Any], request: str = "",
                 _lost("it states no number and its value names nothing", g)
                 continue
             _keep({"shape": "count", "select": sel, "eq": eq})
-        elif shape == "reach":
-            # REACH IS NOT INVENTED. Twenty of twenty-three extraction failures on
-            # 2026-08-01 were a `reach` goal the request never asked for, over a set too
-            # small to satisfy it — "create a vm named beta and then launch it" came back
-            # demanding two machines reach each other. The evidence for a reach goal is IN
-            # THE REQUEST, so it is checked there rather than argued with in a prompt. A
-            # slot-level guard, not a judgement about meaning: a request that does mention
-            # reaching keeps its goal untouched.
-            if request and not asks_reach(request):
-                # THE GUARD IS RIGHT AND THE SILENCE WAS NOT. This is the single biggest
-                # source of a half-read request: the model reaches for `reach` when it has
-                # no shape for what a clause asks (rung 2's "and then launch it"), the goal
-                # is correctly refused, and the clause it stood for is gone with it.
-                _lost("the model asked for reachability and the request never mentions it", g)
-                continue
-            _keep({"shape": "reach", "select": sel,
-                        "min": int(g.get("amount") or 2)})
-        elif (shape == "every" and g.get("attr") and g.get("value") is not None
-                and not placeholder(g["value"])):
-            spec = (config.KINDS or {}).get(sel["kind"]) or {}
-            attr = (spec.get("aliases") or {}).get(g["attr"], g["attr"])
-            if attr == spec.get("key"):
-                # AN IDENTITY IS NOT A PROPERTY, and this is REPAIRED rather than asked for.
-                # "create a vm named alpha" came back as `every vm must be named alpha` —
-                # four of ten failures on 2026-08-01, all the same mistake. A name is what a
-                # thing IS; giving every member of a set one name is not a state any world
-                # can reach. The reading the operator meant is a COUNT OF ONE, and deriving
-                # it costs a line where teaching it costs prompt budget measured to have none.
-                _keep({"shape": "count",
-                            "select": {**sel, attr: _coerce(g["value"])}, "eq": 1})
-            else:
-                want = _coerce(g["value"])
-                # A GOAL THAT ASKS FOR WHAT IT ALREADY SELECTS IS VACUOUS, so it cannot be
-                # what the operator meant — it is a LOST NEGATION. Measured on rung 5's
-                # paraphrase:
-                #
-                #   "start up any machine that ISN'T already running"
-                #     -> every vm[status=running] must status=running
-                #
-                # Nothing is planned, nothing runs, and the goal holds the moment it is
-                # asked — so the run reports success over a lab it never touched. The
-                # request said the OPPOSITE set, and `effects.complement` already knows
-                # what that is because the manifest enumerates the attribute's values.
-                #
-                # IT DECLINES RATHER THAN GUESSES: `complement` returns None where a third
-                # legal value exists, because then the sentence genuinely did not say which.
-                if sel.get(attr) == want:
-                    from planner.ir import effects as _fx
-                    other = _fx.complement(sel["kind"], attr, want)
-                    if other is None:
-                        _lost(f"it asks every {sel['kind']} with {attr}={want} to have "
-                              f"{attr}={want}, which is already so", g)
-                        continue
-                    sel = {**sel, attr: other}
-                _keep({"every": sel, "must": {attr: want}})
-        elif shape == "per" and g.get("make"):
-            # A KIND THE REQUEST NEVER MENTIONS IS NOT BEING ASKED FOR. Same rule as
-            # `reach`, same reason, and the evidence is in the same place — measured on
-            # rung 11's paraphrase:
-            #
-            #   "check which machines respond and shut down whichever ones don't"
-            #     -> per vm make=snapshot
-            #
-            # The request names no snapshot, no restore point and no checkpoint; the model
-            # reached for `per` because "shut down whichever ones don't" has no shape, and
-            # the run then MADE SNAPSHOTS and reported success. `_relevant` already answers
-            # "could this request be about this kind" from the manifest's own nouns, so it
-            # is asked rather than restated — which is what keeps rung 12 ("make a RESTORE
-            # POINT for each machine") working, because that request does name one.
-            if request and not _relevant((config.KINDS or {}).get(g["make"]) or {},
-                                         request, g["make"]):
-                _lost(f"it makes a {g['make']}, which the request never mentions", g)
-                continue
-            # DERIVED, NEVER TAKEN ON TRUST. The model's `link` was accepted whenever it
-            # supplied one, and it supplies nonsense: "launch every vm that is currently
-            # stopped" came back as `per vm make=vm link=status` — one machine created per
-            # machine, tied by a STATUS. The manifest answers this exactly (`_link_between`:
-            # the attribute of the made kind named for the source kind), so a value that
-            # cannot be derived is not a link the world has, whoever wrote it down.
-            link = _link_between(sel.get("kind"), g["make"])
-            if link:
-                _keep({"per": sel, "make": g["make"], "link": link})
-            else:
-                _lost(f"nothing links a {sel.get('kind')} to a {g['make']}", g)
-        elif shape == "observe":
-            _keep({"observe": sel, "fact": g.get("fact") or "alive"})
         else:
-            # NO BRANCH MATCHED, which until now was the quietest exit of all: a shape this
-            # module does not implement, or one whose required field the model omitted, left
-            # the loop having produced nothing and said nothing.
-            _lost("it is not a shape this translator can express", g)
+            # ONE BUILDER PER SHAPE — see `_BUILDERS`. A builder answering `(None, None)`
+            # means its branch does not apply (an `every` with no attribute, a `per` with no
+            # `make`), which is exactly where the old chain fell through to the message
+            # below.
+            build = _BUILDERS.get(shape)
+            made, why = build(g, sel, request) if build else (None, None)
+            if why:
+                _lost(why, g)
+                continue
+            if made is None:
+                # NO BRANCH MATCHED, which until now was the quietest exit of all: a shape
+                # this module does not implement, or one whose required field the model
+                # omitted, left the loop having produced nothing and said nothing.
+                _lost("it is not a shape this translator can express", g)
+                continue
+            _keep(made)
     # THE SAME GOAL TWICE IS ONE GOAL. Repairs converge — an `every` whose property was
     # unusable is stripped back to the count it was built on, and a request that states a
     # thing two ways lands on one shape — so duplicates arrive without either half being
