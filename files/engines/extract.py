@@ -150,34 +150,6 @@ def _settable() -> List[str]:
     return [a for a in _attrs() if a not in observed]
 
 
-def _states() -> List[str]:
-    """Every value a CLOSED attribute may take, across all kinds — the states a member is IN.
-
-    DERIVED FROM `attr_values`, which already enumerates them because `unusable` needs the
-    closed set to refuse a value the world cannot hold. A package that declares a kind with
-    states gets them here without an edit.
-    """
-    out = set()
-    for spec in (config.KINDS or {}).values():
-        for allowed in (spec.get("attr_values") or {}).values():
-            out |= {str(v) for v in (allowed or ())}
-    return sorted(out)
-
-
-def _attr_holding(kind: str, value: Any) -> Optional[str]:
-    """Which attribute of `kind` declares `value` as one of its states, or None.
-
-    THE SLOT SAYS *running*; THE SELECTOR NEEDS *status = running*. The manifest already
-    knows which attribute owns a value, so the mapping is read rather than written — a kind
-    with two closed attributes gets the right one without this function learning about it.
-    """
-    for attr, allowed in (((config.KINDS or {}).get(kind) or {}).get("attr_values") or
-                          {}).items():
-        if any(str(v).lower() == str(value).strip().lower() for v in (allowed or ())):
-            return attr
-    return None
-
-
 def _facts() -> List[str]:
     out = set()
     for spec in (config.KINDS or {}).values():
@@ -388,35 +360,36 @@ def schema(kinds=None, request: str = "") -> Dict[str, Any]:
                                              "LABEL, A GROUP OR A DESCRIPTION IS NOT A NAME: "
                                              "those belong in select.where. Empty string when "
                                              "no member is named")},
-                                # THE STATE GETS ITS OWN HOME, because until now it had none
-                                # and landed in `name`. `name` is the only free string this
-                                # branch offers, so every clause the model cannot shape has
-                                # been going there — `reach`, `prod`, `launch`, `running`,
-                                # `unresponsive`, `every`, `exactly two vms` — and each has
-                                # been met with its own guard.
+                                # ## A STATE SLOT WAS ADDED HERE AND WITHDRAWN — 2026-08-06
                                 #
-                                # RUNG 2 IS THE CLEAREST CASE AND IT IS THE PROMPT'S OWN
-                                # WORKED EXAMPLE. "Create a vm named beta AND THEN LAUNCH IT"
-                                # comes back, 4 runs in 5, as two goals differing only in a
-                                # name of "launch" and "running" — the model DID translate the
-                                # second clause and had nowhere true to put it. The identity
-                                # repair then refuses to overwrite `beta`, both goals collapse
-                                # to the same count, and the machine is never launched.
+                                # `name` IS A SINK: it is the only free string in this branch,
+                                # so every clause the model cannot shape lands in it —
+                                # `reach`, `prod`, `launch`, `running`, `unresponsive`,
+                                # `every`, `exactly two vms`. Rung 2 is the clearest case and
+                                # it is the PROMPT'S OWN WORKED EXAMPLE: "create a vm named
+                                # beta and then launch it" comes back, 4 runs in 5, as two
+                                # goals differing only in a `name` of "launch" and "running".
+                                # The model DID translate the second clause and had nowhere
+                                # true to put it.
                                 #
-                                # A CLOSED ENUM, DERIVED FROM `attr_values`, which already
-                                # enumerates the states because `unusable` needs them. So this
-                                # is not a sixth guard on the sink — it is the true home the
-                                # value was looking for, and the one thing this model is
-                                # measurably good at is picking from a closed set.
+                                # SO A `state` SLOT WAS GIVEN IT, a closed enum derived from
+                                # `attr_values`, OPTIONAL rather than required — with the
+                                # `except` lesson quoted in the commit as the reason.
+                                # OPTIONAL WAS NOT ENOUGH. Measured n=3, literal 32/42 -> 26/42:
                                 #
-                                # OPTIONAL, NEVER REQUIRED. "A required field gets filled
-                                # whether or not it is meant" is what made `except` a net
-                                # loss; most requests name no state at all.
-                                "state": {"type": "string", "enum": _states(),
-                                          "description": (
-                                              "the state the member must be IN at the end — "
-                                              "'and then launch it' puts running here. Leave "
-                                              "it out when the request names no state")},
+                                #     "create 5 vms, put them all in a network, …"
+                                #       -> count vm amount 5  state: "stopped"
+                                #       -> count(vm WHERE status=stopped) = 5
+                                #
+                                # The request never says stopped. "5 machines" became "5
+                                # STOPPED machines", and rungs 4 and 13 went 3/3 -> 0/3. Rung
+                                # 2 was not reliably fixed either: 3/3 in isolation, still 2/3
+                                # failing in the full arm.
+                                #
+                                # A SLOT GETS FILLED WHETHER OR NOT IT IS MEANT, and OPTIONAL
+                                # does not save it — that is the `except` finding restated,
+                                # and it now has a second measurement behind it. Giving a sink
+                                # somewhere else to drain is not the same as fixing the sink.
                                 # `where` IS REQUIRED BESIDE THIS ONE, and the pair is the
                                 # whole fix. `name` alone was REQUIRED and `where` optional,
                                 # so this was the only free string in the branch and every
@@ -2044,27 +2017,6 @@ def to_goals(raw: Dict[str, Any], request: str = "",
                     _lost(f"it also says {named!r}, which is not the {key} it already has "
                           f"({sel.get(key)!r}) and fits nowhere else in a count", g)
                     continue
-            # THE STATE, FOLDED ONTO THE ATTRIBUTE THAT DECLARES IT. The slot says `running`
-            # and the selector needs `status = running`; `_attr_holding` reads which
-            # attribute owns the value out of `attr_values`, so a kind with two closed
-            # attributes is handled without this line knowing about it.
-            #
-            # THIS IS WHAT THE `name` SINK WAS SWALLOWING. Rung 2's second clause — "and then
-            # launch it" — arrived as `name: "running"`, was refused by the identity repair
-            # for not being the name the goal already had, and vanished. With a home to go
-            # to it becomes `count(vm WHERE name=beta AND status=running) = 1`, which is
-            # exactly the hand-written goal `test_ghost_writer` has always used for this rung.
-            #
-            # A STATE THE KIND DOES NOT DECLARE IS IGNORED RATHER THAN FORCED. The enum is
-            # global across kinds, so `running` can reach a `network` goal, and writing it
-            # onto a kind that has no such attribute would invent a filter matching nothing —
-            # the vacuous-truth defect this file keeps closing.
-            state = g.get("state")
-            if state:
-                holder = _attr_holding(sel.get("kind"), state)
-                if holder and holder not in sel:
-                    sel = {**sel, holder: config.canonical_value(
-                        sel.get("kind"), holder, str(state).strip())}
             stray = g.get("value")
             if stray and "=" in str(stray) and len(sel) == 1:
                 a, _, v = str(stray).partition("=")
