@@ -115,10 +115,35 @@ def constrained(prompt: str, payload: Any, schema: Dict[str, Any],
 KEEP_ALIVE = -1
 SEED = 0
 
+# AND `num_ctx` IS THIS SEAM'S OWN, for exactly the reason the paragraph above gives for the
+# other two — it was the one option still IMPORTED from the chat, which is a different
+# workload with a different need. A chat carries conversation history; a call through here is
+# ONE SHOT with a known bound: a system prompt, a schema, and a request.
+#
+# THE VALUE IS THE CHAT'S OLD ONE, AND LOWERING IT IS NOT FREE — measured 2026-08-05, and the
+# measurement is the whole reason this comment exists. The input never exceeds ~2,732 tokens
+# across all 50 rung and corpus requests (prompt ~433, schema ~2,265, request ~27), and the KV
+# cache costs ~128 KB per token for llama3.1-8B, so 8192 reserves ~1 GB against ~0.5 GB at
+# 4096 — enough to push a 4.6 GB model past 6.1 GB of VRAM and spill 29% onto the CPU.
+#
+# SO IT LOOKED LIKE A FREE 7x: a full literal arm went from ~40 minutes to 5m54s at 4096.
+# IT IS NOT FREE. `num_ctx` CHANGES WHAT THE MODEL SAYS, deterministically:
+#
+#     num_ctx 4096   rung 11  DONE_BUT_FALSE 3/3   (12 calls, world disagrees)
+#     num_ctx 8192   rung 11  UNTRANSLATED   3/3   (0 calls, honest)
+#
+# A false success is the one unacceptable outcome, and a speedup that buys one is not a
+# speedup. 6144 held rung 11 at UNTRANSLATED 3/3 but moved rung 9 at n=1, and n=1 is not a
+# result — so the honest state is that CONTEXT SIZE IS A LIVE VARIABLE, not a tuning knob,
+# and it sits underneath every other measurement in this project.
+#
+# WHOEVER REVISITS THIS: it needs both arms at n=3 per candidate value, and the win is real
+# enough to be worth that. What it must not be is changed quietly alongside something else.
+NUM_CTX = 8192
+
 
 def _options(temperature: float = 0.0) -> Dict[str, Any]:
-    from orchestrator.ai.chat.ollama_client import _OLLAMA
-    return {"temperature": temperature, "num_ctx": _OLLAMA["num_ctx"],
+    return {"temperature": temperature, "num_ctx": NUM_CTX,
             "seed": SEED, "top_k": 1}
 
 
