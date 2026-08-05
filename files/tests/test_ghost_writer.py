@@ -380,27 +380,44 @@ def test_an_open_attribute_leaves_a_value_by_being_unset():
     check("a goal already true still writes nothing", cover(zero(label="scratch"), lab(0)) == [])
 
 
-def test_the_writer_only_ever_emits_the_core():
+def test_the_no_model_path_only_ever_emits_the_core():
     """PHASE 2'S BOUNDARY, MADE A FACT THE SUITE CHECKS.
 
     The operator, 2026-08-06: *"first make the writer version work and then build the user end
-    on top of it through a post translator."* That split rests on a measurement — the writer
-    emits FOUR ops and TWO predicates and nothing else, across every rung's known-good goals,
-    with no model in the loop:
+    on top of it through a post translator."* That split rests on a measurement:
 
-        core     new · publish · call · ensure          count · reach
-        surface  achieve · break · fetch · foreach · if  all · any · disjoint · is · not
+        core     new · publish · call · ensure · foreach   count · reach
+        surface  achieve · break · fetch · if              all · any · disjoint · is · not
 
     MORE THAN HALF THE LANGUAGE IS SURFACE, which is the empirical case for freezing it while
     the writer path is what fails. That was an observation somebody made once; the manifest
     now DECLARES it and this asserts it, so `core` cannot quietly grow a dependency on a
     surface form and the surface cannot quietly become load-bearing.
 
-    IT WILL FAIL THE DAY THE WRITER LEARNS A NEW OP, and that is the point — the boundary
-    should move by a manifest edit somebody meant, not by a code change nobody noticed.
+    ## THERE ARE TWO PRODUCERS ON THE NO-MODEL PATH AND THIS ONLY ASKED ONE
+
+    It walked the written programs alone and concluded the core was FOUR ops. But `derive()`
+    — ACHIEVE's deterministic engine — emits `foreach` and `call` when it closes a gap, and
+    it runs at CORRECTION time (`engines/medusa/_run.py::_correct`), after a program has
+    already run. So `foreach` never appears in a written program and is emitted by no-model
+    code on every per-member correction.
+
+    **CORE IS WHAT THE NO-MODEL PATH EMITS, not what the writer's first pass emits** — the
+    distinction the two-way partition had no room for, and the reason the count was wrong.
+    Both producers are asked here, which is what makes "no core op is unused" mean anything.
+
+    AND IT WALKS NESTED BODIES. Reading only the top level is how a surface op becomes
+    load-bearing without tripping this: today the writer emits nothing nested, so the two
+    readings agree and the recursion costs nothing — which is exactly when to add it.
+
+    IT WILL FAIL THE DAY EITHER PRODUCER LEARNS A NEW OP, and that is the point — the
+    boundary should move by a manifest edit somebody meant, not by a code change nobody
+    noticed.
     """
-    print("[regime] the writer emits the core and nothing else")
+    print("[regime] the no-model path emits the core and nothing else")
+    import importlib
     from planner.ir import config
+    derive = importlib.import_module("planner.ir.derive")
 
     check("the partition covers every op", config.CORE_OPS | config.SURFACE_OPS == set(config.OPS))
     check("and every predicate",
@@ -409,25 +426,61 @@ def test_the_writer_only_ever_emits_the_core():
           and not (config.CORE_PREDICATES & config.SURFACE_PREDICATES))
 
     seen_ops, seen_preds = set(), set()
-    for n in sorted(GOALS):
-        rung, world, plan, _ = _write(n)
-        temps = []
-        prog = as_program(cover(GOALS[n], world, temps=temps), GOALS[n], world, temps=temps)
-        for st in prog.get("body") or ():
-            seen_ops.add(st.get("op"))
+
+    def walk(stmts):
+        """Every op and predicate in a body, INCLUDING nested ones."""
+        for st in stmts or ():
+            if not isinstance(st, dict):
+                continue
+            if st.get("op"):
+                seen_ops.add(st["op"])
             shape = (st.get("predicate") or {}).get("shape")
             if shape:
                 seen_preds.add(shape)
+            for value in st.values():
+                if isinstance(value, list):
+                    walk(value)
+
+    # PRODUCER ONE — the writer, over every rung's known-good goals.
+    for n in sorted(GOALS):
+        rung, world, plan, _ = _write(n)
+        temps = []
+        walk(as_program(cover(GOALS[n], world, temps=temps), GOALS[n],
+                        world, temps=temps).get("body"))
+
+    written = set(seen_ops)
+
+    # PRODUCER TWO — the correction engine. Three gaps that between them reach every
+    # `foreach` branch `derive` has: a membership count short of its target, the same count
+    # over its target (which corrects DOWNWARD), and an unreachable set.
+    pool = ["a", "b", "c", "d", "e"]
+    labelled = lambda f: [] if f.get("label") else pool
+    every = lambda f: pool
+    gaps = (({"shape": "count", "select": {"kind": "vm", "label": "prod"}, "eq": 3}, labelled),
+            ({"shape": "count", "select": {"kind": "vm", "label": "prod"}, "eq": 1}, every),
+            ({"shape": "reach", "select": {"kind": "vm"}}, every))
+    corrected = set()
+    for pred, select in gaps:
+        fix = derive.derive(pred, select, {}, intent="achieve")
+        check(f"the correction engine closes {pred['shape']}", bool(fix))
+        before = set(seen_ops)
+        walk(fix)
+        corrected |= seen_ops - before
+
+    check(f"the correction engine emits foreach (saw {sorted(corrected)})",
+          "foreach" in corrected)
+    check("and the writer never does — the two producers really are different",
+          "foreach" not in written)
 
     stray_ops = seen_ops - config.CORE_OPS
     stray_preds = seen_preds - config.CORE_PREDICATES
-    check(f"every op the writer emits is core (saw {sorted(seen_ops)})", not stray_ops)
+    check(f"every op the no-model path emits is core (saw {sorted(seen_ops)})", not stray_ops)
     check(f"every predicate it emits is core (saw {sorted(seen_preds)})", not stray_preds)
 
-    # AND THE CORE IS NOT LARGER THAN IT NEEDS TO BE. A core op nothing emits is surface
-    # wearing the wrong label, and the freeze would be protecting the wrong half.
+    # AND THE CORE IS NOT LARGER THAN IT NEEDS TO BE. A core op NEITHER producer emits is
+    # surface wearing the wrong label, and the freeze would be protecting the wrong half.
     unused = config.CORE_OPS - seen_ops
-    check(f"and no core op is unused across the rungs ({sorted(unused)})", not unused)
+    check(f"and no core op goes unemitted ({sorted(unused)})", not unused)
 
 
 def main():
