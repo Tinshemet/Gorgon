@@ -159,6 +159,39 @@ def canonical(kind: str, attr: str) -> str:
     return ((KINDS.get(kind) or {}).get("aliases") or {}).get(attr, attr)
 
 
+def canonical_value(kind: str, attr: str, value):
+    """A VALUE under the one name the world stores it as — `up` is `running`.
+
+    THE TWIN OF `canonical`, which does this for attribute NAMES, and it exists for the same
+    reason: the operator's word and the world's word are not always the same, and a check
+    that reasons about a value has to resolve the synonym first or it silently refuses the
+    spellings it does not recognise.
+
+    WHY IT IS DECLARED AND NOT INFERRED. `attr_values` is a CLOSED SET and `unusable` refuses
+    anything outside it — rightly, because a filter for a value the world cannot hold matches
+    nothing for ever, and a goal about nothing is VACUOUSLY TRUE. Rung 12's paraphrase, "each
+    machine that is currently up", was refused 3 of 3 on exactly that. `extract` deliberately
+    would NOT map it: an inferred synonym is how a vocabulary starts, and this project has
+    spent months deleting vocabularies. A DECLARED one is a manifest row and the operator's
+    call, which is what `value_aliases` is.
+
+    THE ATTRIBUTE IS RESOLVED FIRST, so a synonym declared once is found however the
+    attribute was spelled — `status` reached through `state` still finds `up`.
+
+    UNKNOWN VALUES COME BACK UNCHANGED. This resolves; it does not judge. `unusable` still
+    decides whether what comes out is a value the world can hold, and it must go on seeing
+    the real thing for anything not declared here.
+    """
+    if not isinstance(value, str):
+        return value
+    attr = canonical(kind, attr)
+    table = ((KINDS.get(kind) or {}).get("value_aliases") or {}).get(attr) or {}
+    if not table:
+        return value
+    lowered = {str(k).lower(): v for k, v in table.items()}
+    return lowered.get(value.strip().lower(), value)
+
+
 def values_for(kind: str, attr: str):
     """The closed set of values `attr` may take, or None when it is open text.
 

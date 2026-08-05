@@ -549,16 +549,37 @@ def test_a_value_outside_a_closed_set_matches_nothing_and_is_refused():
 
     # `per` WAS NEVER JUDGED AT ALL, which is why this reached the writer. It carries a set of
     # members exactly as `every` does.
+    # THE FIXTURE MOVED OFF `up` ON 2026-08-05 AND THE TEST DID NOT CHANGE. `up` WAS the
+    # impossible value here — rung 12's paraphrase, refused 3 of 3 — until the operator
+    # DECLARED it as a synonym for `running` (`value_aliases` on the vm kind), at which point
+    # it resolves before this guard ever sees it and the goal rightly survives. What is being
+    # asserted is that a `per` over a filter the world cannot hold is dropped WHOLE, so the
+    # fixture needs a value that is still undeclared, not the one that stopped being.
     dropped = []
     raw = {"goals": [{"goal": "per",
                       "select": {"kind": "vm",
-                                 "where": [{"attr": "status", "value": "up"}]},
+                                 "where": [{"attr": "status", "value": "hibernating"}]},
                       "make": "snapshot"}]}
-    goals = to_goals(raw, "make a restore point for each machine that is currently up",
+    goals = to_goals(raw, "make a restore point for each machine that is hibernating",
                      dropped)
     check("a `per` over an impossible filter is dropped, whole", goals == [])
     check("and the drop is reported, so the request is not half-read",
           len(dropped) == 1 and "matches nothing" in dropped[0])
+
+    # A DECLARED SYNONYM RESOLVES BEFORE THIS GUARD RUNS, which is the whole difference
+    # between a manifest row and this module guessing. `unusable`'s own comment drew the
+    # line: "`up` plainly means `running` to a person, and mapping it here would be this
+    # module guessing what the operator meant… a declared synonym is a manifest row and the
+    # operator's call." That row exists now, so rung 12's paraphrase translates.
+    kept = []
+    up = to_goals({"goals": [{"goal": "per",
+                              "select": {"kind": "vm",
+                                         "where": [{"attr": "status", "value": "up"}]},
+                              "make": "snapshot"}]},
+                  "make a restore point for each machine that is currently up", kept)
+    check("a DECLARED synonym resolves to the value the world stores",
+          up and up[0]["per"].get("status") == "running")
+    check("and nothing is reported lost for it", kept == [])
 
 
 def test_a_count_is_a_total_and_never_a_change():

@@ -798,7 +798,21 @@ def _to_select(raw: Dict[str, Any]) -> Dict[str, Any]:
     out: Dict[str, Any] = {"kind": kind}
     for pair in raw.get("where") or []:
         attr = alias.get(pair["attr"], pair["attr"])
-        value = _coerce(pair["value"])
+        # AND THE VALUE IS RESOLVED THE SAME WAY THE ATTRIBUTE IS. `canonical_value` is the
+        # value-side twin of the alias table above: what the operator calls a state, mapped
+        # to the one the world stores. `up` is `running`.
+        #
+        # DECLARED, NOT INFERRED, and the distinction is the whole reason this line is safe.
+        # `unusable` refuses a value outside `attr_values` — rightly, since a filter the
+        # world cannot hold matches nothing for ever and a goal about nothing is VACUOUSLY
+        # TRUE — and rung 12's paraphrase, "each machine that is currently up", was refused
+        # 3 of 3 on exactly that. This module REFUSED TO MAP IT ON ITS OWN, and its comment
+        # in `unusable` says why: an inferred synonym is how a vocabulary starts. A declared
+        # one is a manifest row and the operator's call, made 2026-08-05.
+        #
+        # IT RESOLVES AND DOES NOT JUDGE. Anything undeclared passes through untouched, so
+        # `unusable` still sees the real value and still refuses what the world cannot hold.
+        value = config.canonical_value(kind, attr, _coerce(pair["value"]))
         # THE KEY SAID TWICE IS A LIST, NOT AN OVERWRITE. "make sure n1, n2 and n3 can all
         # ping each other" comes back as three `where` pairs on `name`, and this line kept
         # the last one — so a request about THREE machines became a goal about ONE, and a
