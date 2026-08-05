@@ -115,6 +115,36 @@ def enumerate_clauses(goal: str) -> List[Dict[str, Any]]:
     exact set difference with no matching at all — a clause with no goal pointing at it is
     unaccounted, provably. That needs a schema field and a re-measurement, so it is written
     down here rather than half-built.
+
+    ## AND THE CHEAP ALTERNATIVE IS UNSOUND — MEASURED 2026-08-05, DO NOT BUILD IT
+
+    The obvious way to skip that schema field is to point the PIGEONHOLE detector at the
+    GOALS instead of at a program: it is pure arithmetic, it needs no anchors, and it sidesteps
+    the tool-names-versus-verbs mismatch above entirely. It was measured against all 28 ladder
+    readings, using each rung's KNOWN-GOOD goal set as truth, and **it wrongly flags 6 of 28
+    readings that are completely correct.**
+
+    TWO CAUSES, AND ONLY THE FIRST IS A BUG:
+
+        "make sure n1, n2 and n3 can all ping each other"
+            -> "make sure n1" | "n2" | "n3 can all ping each other"        3 clauses, 1 goal
+
+    That one is the splitter cutting inside a MEMBER LIST, and it is fixable. This is not:
+
+        "spin up a machine and call it alpha"
+            -> "spin up a machine" | "call it alpha"                       2 clauses, 1 goal
+
+    **CLAUSES AND GOALS ARE NOT IN BIJECTION.** Two clauses describe one goal there, and no
+    splitter however good changes that — naming a thing and making it are one `count` with a
+    name in it. The arithmetic assumes at least one goal per clause and that assumption is
+    simply false, so the detector cannot be tuned into correctness.
+
+    WHY THIS MATTERS MORE THAN IT LOOKS: the cost of a false positive INVERTS the moment this
+    is wired to anything that refuses. Dormant, it warns and the docstring's own trade holds
+    — *"a false warning is the cheaper mistake to have"*. Wired to `orchestrator`'s
+    half-a-request rule, a false warning REFUSES A VALID REQUEST, and it would refuse six
+    rungs to catch one. The declared-provenance route is not merely the nicer answer, it is
+    the only sound one.
     """
     text = (goal or "").strip()
     if not text:
