@@ -403,6 +403,43 @@ def schema(kinds=None, request: str = "") -> Dict[str, Any]:
         "additionalProperties": False,
     }
 
+    # ## DECLARED CLAUSE PROVENANCE — BUILT TWICE, MEASURED TWICE, WITHDRAWN 2026-08-05
+    #
+    # THE DEFECT IT WAS FOR is the only one nothing in this system can see: a clause NOBODY
+    # TRANSLATED. Rung 11 — "ping every vm AND STOP THE ONES THAT DO NOT ANSWER" — comes back
+    # as a single `observe` and the second half is simply absent, so no goal is wrong, none is
+    # dropped, every guard downstream passes, and the run closes DONE over half a request.
+    # `clause_ledger`'s own docstring asked for exactly this fix on 2026-08-01: have each goal
+    # SAY which clause it came from, and reconciliation becomes an exact set difference with
+    # no matching at all.
+    #
+    # ATTEMPT 1 — A FREE-TEXT SPAN, quote the words you came from. The model answered with
+    # THIS SCHEMA back: `fact alive`, `link vm`, `every`, `per vm`, `except`, and twice the
+    # bare word `and`. That is `_echoed`'s failure one field over, and asking for a verbatim
+    # quotation is the hardest free string there is. **9 false positives on 12 passing rungs.**
+    #
+    # ATTEMPT 2 — A CLOSED ENUM built by `clause_ledger.enumerate_clauses`, so a goal could
+    # only ever name a real piece of the request. It fixed the echoing completely — every span
+    # came back a genuine clause — and the model then PICKED ONE CLAUSE AND REPEATED IT: all
+    # four of rung 4's goals claimed "and make sure they all ping each other", leaving three
+    # correctly-translated clauses looking uncovered. **6 false positives on 12 passing rungs.**
+    #
+    # AND IT MISSED THE ONE CASE IT WAS BUILT FOR, which is what settled it. Rung 11 reported
+    # CLEAN on both arms: two spans came back, one per raw goal, but only ONE goal survived
+    # `to_goals` — the second span belonged to the invented `per` that was thrown away. The
+    # detector was reading provenance from goals that do not exist in the output, and rung 12's
+    # paraphrase reported clean with ZERO surviving goals. Scoring it on survivors instead
+    # fixes that and can only RAISE the false-positive count, because it removes covering
+    # spans and adds no new ones.
+    #
+    # THE STANDING CONCLUSION: THE FRONT SEAM CANNOT SELF-REPORT WHAT IT FAILED TO TRANSLATE.
+    # Four mechanisms have now been measured on this one problem — `clause_ledger.reconcile`
+    # against a plan (24 of 26 complete plans called incomplete), its pigeonhole detector
+    # against the goals (unsound in principle: clauses and goals are not in bijection), a
+    # quoted span, and a closed enum. A fifth variant of "ask the model where each goal came
+    # from" is not the move. What is left is STRUCTURAL detection that asks the model nothing,
+    # and it has no design yet.
+
     # `reach` IS NOT OFFERED TO A REQUEST THAT NEVER MENTIONS REACHING, which moves a guard
     # that already existed from AFTER generation to BEFORE it. `to_goals` has always dropped
     # such a goal — twenty of twenty-three extraction failures on 2026-08-01 were one — and a
