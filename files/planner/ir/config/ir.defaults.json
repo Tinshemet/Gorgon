@@ -356,10 +356,11 @@
      "stopped"
     ]
    },
-   "_value_aliases_doc": "WHAT THE OPERATOR CALLS A STATE, mapped to the one the world stores. `attr_values` is the CLOSED SET a value may take and `unusable` refuses anything outside it — correctly, because a filter for a value the world cannot hold matches nothing for ever, and a goal about nothing is VACUOUSLY TRUE. Rung 12's paraphrase, *each machine that is currently up*, was refused 3 of 3 for exactly that. `up` plainly means `running` to a person, and `extract` REFUSED TO MAP IT ON ITS OWN — the module's own comment says why: an inferred synonym is how a vocabulary starts, and a declared one is a manifest row and the operator's call. This is that row, declared by the operator on 2026-08-05. Resolved in `config.canonical_value`, the value-side twin of `canonical`, so every reader that already resolves attribute NAMES resolves the values too rather than each learning the synonyms separately. NOTE what is NOT here: `down` for `stopped`. It is the obvious counterpart and it was not asked for, and this file is not the place to guess at the other half of a decision.",
+   "_value_aliases_doc": "WHAT THE OPERATOR CALLS A STATE, mapped to the one the world stores. `attr_values` is the CLOSED SET a value may take and `unusable` refuses anything outside it — correctly, because a filter for a value the world cannot hold matches nothing for ever, and a goal about nothing is VACUOUSLY TRUE. Rung 12's paraphrase, *each machine that is currently up*, was refused 3 of 3 for exactly that. `up` plainly means `running` to a person, and `extract` REFUSED TO MAP IT ON ITS OWN — the module's own comment says why: an inferred synonym is how a vocabulary starts, and a declared one is a manifest row and the operator's call. This is that row, declared by the operator on 2026-08-05. Resolved in `config.canonical_value`, the value-side twin of `canonical`, so every reader that already resolves attribute NAMES resolves the values too rather than each learning the synonyms separately. `down` for `stopped` was added on the operator's word the same day, completing the pair. IT MAPS A VALUE, NOT A WORD IN THE REQUEST — rung 11's paraphrase says *shut down whichever ones don't* and nothing here touches it, because this table is consulted only where a `where` clause already holds a value for a declared attribute.",
    "value_aliases": {
     "status": {
-     "up": "running"
+     "up": "running",
+     "down": "stopped"
     }
    },
    "observed": {

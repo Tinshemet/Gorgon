@@ -581,6 +581,23 @@ def test_a_value_outside_a_closed_set_matches_nothing_and_is_refused():
           up and up[0]["per"].get("status") == "running")
     check("and nothing is reported lost for it", kept == [])
 
+    from planner.ir.config import canonical_value
+    check("the counterpart is declared too — `down` is `stopped`",
+          canonical_value("vm", "status", "down") == "stopped")
+    check("a value the world does hold is left alone",
+          canonical_value("vm", "status", "running") == "running")
+    check("and an undeclared one is NOT invented into a legal state",
+          canonical_value("vm", "status", "hibernating") == "hibernating")
+
+    # IT MAPS A VALUE, NOT A WORD IN THE REQUEST — the table is consulted only where a
+    # `where` clause already holds a value for a declared attribute. Rung 11's paraphrase
+    # says "shut DOWN whichever ones don't" and nothing here touches it.
+    said = []
+    to_goals({"goals": [{"goal": "observe", "select": {"kind": "vm", "where": []},
+                         "fact": "alive"}]},
+             "check which machines respond and shut down whichever ones don't", said)
+    check("a request that merely says the word is untouched", said == [])
+
 
 def test_a_count_is_a_total_and_never_a_change():
     """THE WORST PROGRAM THIS SEAM HAS WRITTEN, and it was three characters of arithmetic.
