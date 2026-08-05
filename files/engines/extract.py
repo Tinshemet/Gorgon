@@ -1570,6 +1570,29 @@ def _build_every(g: Dict[str, Any], sel: Dict[str, Any], request: str) -> tuple:
     attr = (spec.get("aliases") or {}).get(g["attr"], g["attr"])
     if attr == spec.get("key"):
         return {"shape": "count", "select": {**sel, attr: _coerce(g["value"])}, "eq": 1}, None
+    # NOTHING CAN BE ASKED OF A KIND NOTHING CAN CHANGE. An `every … must` says members
+    # GAIN a property, so it needs something able to confer one — a setter, or an act. A
+    # `network` has NEITHER: it can be created and deleted and that is all, so `every
+    # network[net_name=core] must members = 'web'` is not a hard goal, it is an unplannable
+    # one.
+    #
+    # AND IT IS RUNG 8'S PARAPHRASE, DONE_BUT_FALSE. "Connect all the machines to a network
+    # named core, apart from db" came back with the RECEIVER INVERTED — asking the network to
+    # gain members, where the language wants `every vm[…] must network=core` — the writer had
+    # nothing to plan, made ZERO calls, and the run reported success.
+    #
+    # THE WHOLE KIND, NOT THE ATTRIBUTE, and that is deliberate. Matching an attribute against
+    # what a setter writes would take `memory_mb` and `cpu_cores` with it — those are changed
+    # by ACTS, which promise nothing and so declare no attribute. A kind with no setters AND
+    # no acts cannot be changed by anything, whatever the attribute, so the coarse test is the
+    # sound one and the fine one would be a guess.
+    #
+    # THE IDENTITY REPAIR RUNS FIRST and is untouched: `every network must net_name=lab` is
+    # already a COUNT by the time this is reached, which is what keeps rung 3 working.
+    spec_changeable = bool(spec.get("setters")) or bool(spec.get("acts"))
+    if not spec_changeable:
+        return None, (f"it asks every {sel['kind']} to gain {attr}, and nothing in the lab "
+                      f"can change a {sel['kind']} at all")
     want = _coerce(g["value"])
     if sel.get(attr) == want:
         from planner.ir import effects as _fx
