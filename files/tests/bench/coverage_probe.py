@@ -40,7 +40,7 @@ import sys
 from collections import Counter
 from typing import Any, Dict, List
 
-from engines.extract import extract, to_goals
+from engines.extract import declined, extract, to_goals
 from tests.bench.coverage_corpus import CORPUS
 
 TRANSLATED, DECLINED, FORCED, BROKE = "TRANSLATED", "DECLINED", "FORCED", "BROKE"
@@ -98,7 +98,8 @@ def names_of(goals: List[Dict[str, Any]]) -> set:
     return out
 
 
-def judge(row: Dict[str, Any], goals: List[Dict[str, Any]], cannot) -> tuple:
+def judge(row: Dict[str, Any], goals: List[Dict[str, Any]], cannot,
+          dropped: List[str] = None) -> tuple:
     """`(bucket, why)` for one reading of one request."""
     if not goals:
         # DECLINING IS AN ANSWER, and a bare empty result is not the same thing. A reading
@@ -107,6 +108,17 @@ def judge(row: Dict[str, Any], goals: List[Dict[str, Any]], cannot) -> tuple:
         if cannot:
             return (DECLINED, str(cannot)) if row["expect"] == "decline" else \
                    (DECLINED, f"declined a request I judged stateable: {cannot}")
+        # THE PROBE WAS THROWING AWAY THE ANSWER TO ITS OWN QUESTION. `to_goals` records why
+        # each component died, and this passed `[]` for that list and then reported "no
+        # reason" — so a translation discarded for a specific, nameable cause was displayed
+        # identically to a model that said nothing at all. `clone-fleet` read as silence for
+        # a whole day; the real cause was the subject guard firing on "the golden IMAGE"
+        # with every goal about machines, which `dropped` had said all along.
+        #
+        # STILL BROKE, and deliberately: the SEAM produced no usable answer either way. What
+        # changes is that the line now names which of the two failures it was.
+        if dropped:
+            return BROKE, f"no goals — {'; '.join(dropped)}"
         return BROKE, "no goals and no reason — silence is not a refusal"
 
     if row["expect"] == "decline":
@@ -126,6 +138,22 @@ def judge(row: Dict[str, Any], goals: List[Dict[str, Any]], cannot) -> tuple:
         if key and isinstance(sel.get(key), str):
             return FORCED, (f"{g['eq']} {sel.get('kind')}s pinned to one "
                             f"{key} ({sel[key]!r}) — no world has that")
+
+    # A REMOVAL THAT DOES NOT ASK FOR ZERO IS THE OPPOSITE OF THE REQUEST, and neither the
+    # shape check nor the name check can see it — both pass on the identical goal with the
+    # count flipped. That blindness hid a create-on-delete bug: "delete every machine
+    # labelled scratch" came back as `count(vm WHERE label=scratch) = 1`, which against a
+    # clean lab CREATES a machine and labels it scratch. Scored, before this, as merely the
+    # wrong shape. See `coverage_corpus.R`'s `empties`.
+    for kind in sorted(row.get("empties") or ()):
+        asked = [g for g in goals or ()
+                 if g.get("shape") == "count"
+                 and ((g.get("select") or {}).get("kind") == kind)]
+        if not asked:
+            return FORCED, f"nothing here says how many {kind}s must remain"
+        if not any(g.get("eq") == 0 for g in asked):
+            return FORCED, (f"the request removes {kind}s and this asks for "
+                            f"{sorted({g.get('eq') for g in asked})} of them, not 0")
 
     got_shapes, got_names = shapes_of(goals), names_of(goals)
     missing = row["shapes"] - got_shapes
@@ -147,17 +175,46 @@ def main(argv=None) -> int:
     ap.add_argument("-n", "--repeats", type=int, default=1)
     ap.add_argument("-v", "--verbose", action="store_true")
     ap.add_argument("--only", choices=("translate", "decline"))
+    # NAMED ROWS, FOR BISECTING A CHANGE AND NOTHING ELSE. A full n=3 pass is 66 model calls
+    # and the better part of an hour, which is too slow to ask "did THIS edit cause THAT
+    # regression" — the question every measurement here ends up asking. A subset is not a
+    # result and must never be reported as one; the summary says so on its own line.
+    ap.add_argument("--rows", help="comma-separated row ids — a bisect, NOT a measurement")
     args = ap.parse_args(argv)
 
     rows = [r for r in CORPUS if not args.only or r["expect"] == args.only]
+    if args.rows:
+        want = {r.strip() for r in args.rows.split(",") if r.strip()}
+        unknown = want - {r["id"] for r in CORPUS}
+        if unknown:
+            print(f"no such row: {', '.join(sorted(unknown))}")
+            return 2
+        rows = [r for r in rows if r["id"] in want]
     verdicts: Dict[str, tuple] = {}
+    # HOW OFTEN IT REFUSED WHILE STILL ANSWERING. `rig.translator` returns on a refusal
+    # BEFORE it builds goals, so a model that says "I can do this part but not that one" has
+    # its goals THROWN AWAY in production — and this probe, which judges on goals, shows
+    # nothing at all. Found while measuring the withdrawn span-anchored refusal (2 of 66
+    # readings, 2026-08-05) and kept because the seam is unchanged: the discard is a real
+    # choice `rig` makes on every request, and a rate nobody counts is a rate nobody knows.
+    both = 0
     for row in rows:
         worst = None
         for _ in range(args.repeats):
             try:
                 raw = extract(row["request"])
-                goals = to_goals(raw, row["request"], [])
-                got = judge(row, goals, raw.get("cannot"))
+                lost: List[str] = []
+                goals = to_goals(raw, row["request"], lost)
+                # THE PROBE ASKED THE RAW FIELD AND MUST NOT. It read `raw["cannot"]`
+                # directly, which counts a refusal the production seam would throw away —
+                # so a change to what COUNTS as a decline would have moved this number
+                # without moving anything an operator sees. `declined` is the one authority,
+                # and the bench asking a different question than production is the defect
+                # this codebase keeps finding under other names.
+                said_no = declined(raw)
+                if said_no and goals:
+                    both += 1
+                got = judge(row, goals, said_no, lost)
             except Exception as exc:                    # a seam that cannot answer is not
                 got = (BROKE, f"{type(exc).__name__}: {exc}")   # evidence about the model
             if worst is None or _RANK[got[0]] < _RANK[worst[0]]:
@@ -169,7 +226,8 @@ def main(argv=None) -> int:
     tally = Counter(v[0] for v in verdicts.values())
     stateable = [r for r in rows if r["expect"] == "translate"]
     unstateable = [r for r in rows if r["expect"] == "decline"]
-    print(f"\n── coverage · {len(rows)} requests · n={args.repeats}")
+    print(f"\n── coverage · {len(rows)} requests · n={args.repeats}"
+          + ("   *** A SUBSET. Not a coverage result." if args.rows or args.only else ""))
     for bucket in (TRANSLATED, DECLINED, FORCED, BROKE):
         if tally.get(bucket):
             print(f"  {tally[bucket]:3}  {bucket}")
@@ -178,6 +236,9 @@ def main(argv=None) -> int:
           f"{sum(1 for r in stateable if verdicts[r['id']][0] == TRANSLATED)} translated")
     print(f"  of {len(unstateable)} I judged UNSTATEABLE: "
           f"{sum(1 for r in unstateable if verdicts[r['id']][0] == DECLINED)} declined")
+    if both:
+        print(f"  {both} reading(s) refused AND produced goals — which `rig.translator` "
+              f"resolves by discarding the goals")
     if forced:
         print(f"\n  *** FORCED is the only unacceptable outcome here: the request was bent "
               f"into a shape it does not fit, and that is what a DONE_BUT_FALSE is made of. "

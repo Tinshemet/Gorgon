@@ -45,7 +45,8 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 
-def R(id: str, request: str, expect: str, shapes=(), names=(), why: str = "") -> Dict[str, Any]:
+def R(id: str, request: str, expect: str, shapes=(), names=(), why: str = "",
+      empties=()) -> Dict[str, Any]:
     """One row.
 
     `shapes` — what a CORRECT reading must claim, as goal shapes. Judged from the English.
@@ -55,9 +56,25 @@ def R(id: str, request: str, expect: str, shapes=(), names=(), why: str = "") ->
                request; one that drops it has read half of it.
     `expect` — "translate" or "decline". `decline` means: I do not believe these five shapes
                can state this, so the honest answer is `cannot`.
+    `empties`— the KINDS this request requires to end up with NONE of something. A removal
+               says `count … = 0`, and a reading that says `= 1` instead is the exact
+               opposite of the request while using the identical shape and the identical
+               names.
+
+    ## WHY `empties` EXISTS, AND IT IS A HOLE THIS CORPUS HAD
+
+    Shapes and names cannot see a NUMBER, so every check here passed a goal that meant the
+    reverse of what was asked. Measured 2026-08-05: "delete every machine labelled scratch"
+    became `count(vm WHERE label=scratch) = 1` — the model wrote `amount: -1` for "remove
+    them" and `_as_count` stripped the sign — and against a clean lab the writer CREATED a
+    machine and labelled it `scratch`. The row was scored merely "the wrong shape".
+
+    IT IS DECLARED, NOT INFERRED. Reading removal out of the English with a verb list is the
+    vocabulary this project keeps deleting; a row that requires emptiness says so.
     """
     return {"id": id, "request": request, "expect": expect,
-            "shapes": set(shapes), "names": set(names), "why": why}
+            "shapes": set(shapes), "names": set(names), "why": why,
+            "empties": set(empties)}
 
 
 CORPUS: List[Dict[str, Any]] = [
@@ -68,6 +85,9 @@ CORPUS: List[Dict[str, Any]] = [
     R("isolate", "take the machine called payload-test off every network",
       "translate", ("every",), ("payload-test",),
       "removal of an attribute, not addition — the unsetter side"),
+    # NO `empties` HERE, and the difference is the point: this removes an ATTRIBUTE from a
+    # member that must SURVIVE. `count(vm WHERE name=payload-test) = 0` would delete the
+    # machine the request is about. Emptiness is a claim about MEMBERS, never about a link.
     R("label-fleet", "tag every windows machine as target",
       "translate", ("every",), (),
       "a filtered distributive write"),
@@ -77,9 +97,15 @@ CORPUS: List[Dict[str, Any]] = [
     R("count-check", "how many machines are on the dmz network",
       "translate", ("count",), ("dmz",),
       "a pure question — no acting at all"),
+    # CORRECTED 2026-08-05, AGAINST THE DOCUMENTED MEANING AND NOT AGAINST A SCORE. This
+    # demanded `every` BESIDE `count`, and `network-teardown` two rows down — the identical
+    # act, a pure removal — demands `count` alone. One of them had to be wrong, and it is
+    # this one: `every` is the shape where "every member of a set GAINS A PROPERTY", and a
+    # deletion confers no property. `count(vm WHERE label=scratch) = 0` states this request
+    # completely. The corpus contradicting itself is a defect in the corpus.
     R("teardown", "delete every machine labelled scratch",
-      "translate", ("every", "count"), (),
-      "destruction over a filtered set"),
+      "translate", ("count",), (), empties=("vm",),
+      why="destruction over a filtered set — a count of ZERO, which is how removal is said"),
     R("reachability", "confirm the machines on the range network can all see each other",
       "translate", ("reach",), ("range",),
       "the reach shape, said in the operator's own words"),
@@ -96,8 +122,8 @@ CORPUS: List[Dict[str, Any]] = [
       "translate", ("every", "count"), ("web", "db"),
       "two named members, one state — the enumerated axis, small"),
     R("network-teardown", "get rid of the staging network",
-      "translate", ("count",), ("staging",),
-      "removal of a network, which only became sayable on 2026-08-04"),
+      "translate", ("count",), ("staging",), empties=("network",),
+      why="removal of a network, which only became sayable on 2026-08-04"),
     R("memory-spec", "give the machine called burner 8192 MB of memory",
       "translate", ("every", "count"), ("burner",),
       "an attribute that only became selectable on 2026-08-04"),
