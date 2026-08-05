@@ -242,7 +242,16 @@ def test_a_value_slot_filled_with_prose_is_refused():
 
 
 def test_the_refusal_reaches_to_goals():
-    """A rule nothing applies is a rule that does not exist."""
+    """A rule nothing applies is a rule that does not exist.
+
+    THE REQUEST NOW CONTAINS THE NAME IT EXPECTS TO SURVIVE, and that is a fixture fix rather
+    than a change of subject. It read `"launch all of them"` while asserting that a goal about
+    a machine called `web` came through — a pairing no real extraction produces, because the
+    operator cannot be asking about `web` in a sentence that never says it. The
+    invented-identifier guard flagged it correctly on the day it was added
+    (`test_a_name_the_request_never_says_is_not_a_name`). What this test is FOR — that
+    `unusable` is actually applied by `to_goals` and not merely defined — is unchanged.
+    """
     from engines.extract import to_goals
 
     raw = {"goals": [
@@ -250,7 +259,7 @@ def test_the_refusal_reaches_to_goals():
                                                               "value": "all"}]}},
         {"goal": "count", "select": {"kind": "vm", "where": [{"attr": "name",
                                                               "value": "web"}]}}]}
-    got = to_goals(raw, "launch all of them")
+    got = to_goals(raw, "launch all of them, especially web")
     assert len(got) == 1, "the unusable goal is dropped and the real one survives"
     assert got[0]["select"]["name"] == "web"
 
@@ -601,6 +610,79 @@ def test_the_grammar_forbids_a_negative_count():
     amount = (counts[0].get("properties") or {}).get("amount") or {}
     check("and its amount cannot be negative", amount.get("minimum") == 0)
     check("and it is still an integer", amount.get("type") == "integer")
+
+
+def test_a_name_the_request_never_says_is_not_a_name():
+    """THE DEFECT THAT SURVIVES EVERY SHAPE GATE, measured 2026-08-05.
+
+    A clause the model cannot express does not disappear — it MOVES. `reach` was narrowed on
+    08-04 and the pressure went to `per`; gating `per` sent it to `count`, arriving as
+    `count(vm WHERE name='unresponsive') = 0` for *"stop the ones that do not answer"*.
+    THREE SHAPES, ONE CLAUSE, and each hop landed somewhere quieter: a spurious `reach` and a
+    spurious `per` were both dropped by rules that already existed, while an invented name is
+    neither dropped nor vacuous — it ASSERTS something, so the writer plans four calls for it
+    and the run closes DONE.
+
+    THIS GUARD DOES NOT CARE WHICH SHAPE THE CLAUSE LANDS IN, which is the property every
+    shape gate lacks. A name is an IDENTITY — the same word in the request and in the goal —
+    which is exactly `clause_ledger.open_ledger`'s argument for its anchors.
+
+    IT DROPS RATHER THAN STRIPS, and that is decided by the measured hazard already recorded
+    in this module: stripping would leave `count(vm WHERE name='unresponsive') = 0` as
+    `count(vm) = 0`, which is DELETE EVERY MACHINE. Stripping is only safe when what remains
+    is still the whole truth, and here the name was the whole subject.
+    """
+    print("\n[decline] a name the request never says is not a name")
+
+    from engines.extract import invented
+
+    R = "ping every vm and stop the ones that do not answer"
+    check("a minted identity is refused", bool(invented({"kind": "vm",
+                                                         "name": "unresponsive"}, R)))
+    check("and the reason names the value",
+          "unresponsive" in (invented({"kind": "vm", "name": "unresponsive"}, R) or ""))
+
+    # THE WHOLE GOAL GOES, because the smaller statement left behind is a catastrophe.
+    dropped = []
+    goals = to_goals({"goals": [{"goal": "count", "select": {"kind": "vm", "where": []},
+                                 "amount": 0, "name": "unresponsive"}]}, R, dropped)
+    check("the goal is dropped whole, never stripped down to a bare count", goals == [])
+    check("and the drop is reported so the request is not half-read", len(dropped) == 1)
+
+    # ── THE CONTROLS. This must not start refusing names the operator DID give. ───────────
+    check("a name the request states survives",
+          invented({"kind": "vm", "name": "web"}, "shut down web and db") is None)
+    check("case is not the test",
+          invented({"kind": "vm", "name": "WEB"}, "shut down web and db") is None)
+    check("nor is punctuation — a hyphenated machine is one word in both",
+          invented({"kind": "vm", "name": "payload-test"},
+                   "take payload-test off every network") is None)
+    check("a reference the request names survives",
+          invented({"kind": "vm", "network": "lab"}, "put web on lab") is None)
+    check("every member of a stated list survives",
+          invented({"kind": "vm", "name": {"in": ["n1", "n2", "n3"]}},
+                   "n1, n2 and n3 must reach each other") is None)
+    check("but one ghost in the list condemns it",
+          bool(invented({"kind": "vm", "name": {"in": ["n1", "ghost"]}},
+                        "n1, n2 and n3 must reach each other")))
+
+    # AN ATTRIBUTE VALUE IS NOT AN IDENTITY. A label is free text and need never appear as a
+    # word — "tag every windows machine as target" means `label = 'target'` whatever the
+    # sentence looks like.
+    check("a label is not judged", invented({"kind": "vm", "label": "prod"},
+                                            "tag every windows machine") is None)
+    check("and neither is a state", invented({"kind": "vm", "status": "running"},
+                                             "launch everything") is None)
+
+    # A `$reference` IS THE HARNESS' OWN, substituted INTO the request by `stand_in`, so it
+    # is not the model's invention to answer for.
+    check("a stand-in is not an invention",
+          invented({"kind": "vm", "name": "$box"}, "a vm named $box") is None)
+
+    # NO REQUEST MEANS NO OPINION. Callers that pass goals with no sentence behind them —
+    # every test fixture and every direct caller — must not have their names refused.
+    check("with no request it declines to judge",
+          invented({"kind": "vm", "name": "anything"}, "") is None)
 
 
 def main():

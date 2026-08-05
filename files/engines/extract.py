@@ -1035,6 +1035,74 @@ def _echoed() -> set:
     return out
 
 
+def _said(text: str) -> str:
+    """The request as one comparable token stream — lowercase, punctuation to spaces, padded.
+
+    PADDED ON BOTH SIDES so containment lands on WORD boundaries: a member called `db` must
+    not be found inside `dbms`. Punctuation becomes a space rather than vanishing, so
+    `bench-red-1` in the request and `bench-red-1` in a selector flatten the same way while
+    `n1,` still yields `n1`.
+    """
+    words = "".join(c if c.isalnum() or c.isspace() else " " for c in (text or "").lower())
+    return f" {' '.join(words.split())} "
+
+
+def invented(sel: Dict[str, Any], request: str) -> Optional[str]:
+    """An identity this selector commits to that the operator never said, or None.
+
+    ## THE DEFECT THAT SURVIVES EVERY SHAPE GATE
+
+    A clause the model cannot express does not disappear — it moves. `reach` was narrowed on
+    2026-08-04 and the pressure went to `per`; gating `per` sent it to `count`, as
+    `count(vm WHERE name='unresponsive') = 0` for *"stop the ones that do not answer"*.
+    THREE SHAPES, ONE CLAUSE, and each hop landed somewhere quieter: a spurious `reach` and a
+    spurious `per` were both DROPPED by rules that already existed, and an invented name is
+    neither dropped nor vacuous — it asserts something, so the writer plans for it.
+
+    THIS GUARD DOES NOT CARE WHICH SHAPE THE CLAUSE LANDS IN, which is the property every
+    shape gate lacks. A name is an IDENTITY: it is the same word in the request and in the
+    goal, which is exactly the argument `clause_ledger.open_ledger` makes for its anchors. So
+    a name that appears nowhere in the request was not given by the operator, whatever branch
+    of the schema it arrived in.
+
+    ASKED OF THE KEY AND OF EVERY REFERENCE — the convention `unusable`, `precondition` and
+    `_named_in` already share: a kind's key IS the member's name, and an attribute named for
+    a declared kind refers to a member of it.
+
+    ## WHAT IT DELIBERATELY DOES NOT JUDGE
+
+    A `$reference` is a parameter or a stand-in, minted by the harness and substituted INTO
+    the request, so it is not the model's invention to answer for. A non-string value is not
+    an identity. And an ATTRIBUTE VALUE is not a name — a label is free text and `prod` need
+    never appear as a word for `label = 'prod'` to be exactly what was meant.
+    """
+    if not request:
+        return None                      # nothing to check against; never guess
+    kind = sel.get("kind")
+    key = ((config.KINDS or {}).get(kind) or {}).get("key")
+    said = _said(request)
+
+    def _absent(v: Any) -> bool:
+        if not isinstance(v, str) or not v.strip():
+            return False
+        if v.strip().startswith(config.SIGIL):
+            return False                 # a stand-in or a declared parameter
+        return _said(v) not in said
+
+    for attr, value in sel.items():
+        if attr != key and attr not in (config.KINDS or {}):
+            continue
+        # A MEMBERSHIP LIST NAMES SEVERAL, and one invented member is enough: `name IN
+        # [n1, n2, ghost]` is a claim about a set the operator did not describe.
+        members = value["in"] if isinstance(value, dict) and isinstance(
+            value.get("in"), list) else [value]
+        bad = [m for m in members if _absent(m)]
+        if bad:
+            return (f"it is about {attr} {', '.join(repr(b) for b in bad)}, which the "
+                    f"request never names")
+    return None
+
+
 def unusable(sel: Dict[str, Any]) -> Optional[str]:
     """Why this selector names something that cannot exist, or None.
 
@@ -1254,6 +1322,32 @@ def to_goals(raw: Dict[str, Any], request: str = "",
             goal = {**goal, ("select" if "select" in goal else
                              "every" if "every" in goal else
                              "observe" if "observe" in goal else "per"): trimmed}
+            sel = trimmed
+
+        # AN INVENTED IDENTITY DROPS THE GOAL WHOLE — but only one that SURVIVED the repair
+        # above, and that ordering is the whole of this rule working.
+        #
+        # PUT FIRST, IT COST FOUR RUNGS. Measured 2026-08-05: rungs 4, 7, 13 and 14 went DONE
+        # -> UNTRANSLATED, and every one of them for a name `unusable` was about to REPAIR —
+        # `name: 'every'` (a schema word `_echoed` knows), `name: 'exactly two vms'` and
+        # `name: 'prod label on exactly 3 vms'` (prose the whitespace rule knows). Those are
+        # slot errors, and this module's line is that A SLOT ERROR IS REPAIRED. Judging them
+        # as inventions threw away four correct counts.
+        #
+        # WHAT IS LEFT AFTERWARDS IS THE REAL THING: a name that is well-formed, not echoed,
+        # not prose, and still appears nowhere in the request — `name: 'unresponsive'` for
+        # "stop the ones that do not answer". Nothing upstream has an objection to it, which
+        # is exactly why it reached the writer and closed DONE over four calls.
+        #
+        # AND IT DROPS RATHER THAN STRIPS, unlike the repair above, because the two are not
+        # the same situation. Stripping an echoed word leaves `count(vm) = 5`, which is still
+        # what the operator asked. Stripping an invented identity leaves `count(vm) = 0` —
+        # DELETE EVERY MACHINE. Stripping is only safe when what remains is still the whole
+        # truth, and here the name WAS the subject.
+        made_up = invented(sel, request)
+        if made_up:
+            _lost(made_up)
+            return
         out.append(goal)
 
     def _scoped(goals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
