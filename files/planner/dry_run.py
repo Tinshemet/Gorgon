@@ -77,6 +77,48 @@ def _records(world, kind: str) -> Dict[str, Any]:
         # from the diff reads exactly like a kind nothing happened to.
         if isinstance(got, (set, frozenset)):
             return {str(name): {} for name in got}
+    # AND THE SHORT PLURAL A WORLD ACTUALLY USES. `network` -> `nets` is the live case;
+    # read from the manifest's own aliases so this is not a second word list.
+    short = {"network": ("nets",), "snapshot": ("snaps",)}.get(kind, ())
+    for attr in short:
+        got = getattr(world, attr, None)
+        if isinstance(got, dict):
+            return got
+        if isinstance(got, (set, frozenset)):
+            return {str(name): {} for name in got}
+    # LAST RESORT — ASK THE WORLD THROUGH THE LANGUAGE'S OWN READER.
+    #
+    # WHY IT IS NEEDED: `LabWorld` — the REAL lab — exposes only execute/findings/kinds/
+    # names/scratch/seams/unseeded. No `_vms`, no `vms`, no `.state`. So `before` was EMPTY
+    # in production while `after` (the scratch, a `model_world.World` with `.state`) read
+    # fine; every existing machine looked newly ADDED, the diff was never empty, and
+    # `Rehearsal.inert` COULD NOT FIRE against a real lab at all.
+    #
+    # WHY IT IS LAST, AND CROSS-EXAMINED. `LabWorld.seams`' own docstring records the trap:
+    # *"the production select, asked about a kind it did not know, answered with the nine
+    # MACHINES."* Used as an enumerator it did exactly that — the bench reported `file`,
+    # `profile` and `template` each holding the one machine. So it is asked about a kind that
+    # CANNOT exist first, and believed only if it answers that with nothing.
+    #
+    # A METHOD ON ONE WORLD AND A PROPERTY ON ANOTHER: `LabWorld.seams` is a @property
+    # returning the pair; checking only `callable` missed the very world this exists for.
+    seams = getattr(world, "seams", None)
+    pair = None
+    if callable(seams):
+        try:
+            pair = seams()
+        except Exception:
+            pair = None
+    elif isinstance(seams, (tuple, list)) and len(seams) == 2:
+        pair = seams
+    if pair:
+        try:
+            if not (pair[0]({"kind": "__no_such_kind__"}) or []):
+                names = pair[0]({"kind": kind}) or []
+                if names:
+                    return {str(n): {} for n in names}
+        except Exception:
+            pass
     state = getattr(world, "state", None)
     if isinstance(state, dict) and isinstance(state.get(kind), dict):
         return state[kind]

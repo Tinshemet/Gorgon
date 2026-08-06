@@ -134,11 +134,23 @@ def judge(request: str, rehearsal: "refine.Rehearsal",
     # exactly 3 carry prod" against a lab where 3 already do is a correct program that
     # changes nothing, and it is indistinguishable from rung 11's false success by shape
     # alone. The operator settles it in one word; no mechanism here can.
-    if rehearsal.inert:
-        return Verdict(ASK, "inert",
-                       question=("Running this would change nothing in the lab. Either it is "
-                                 "already as you asked, or I have misread you — which?"),
-                       detail="the rehearsal moved nothing")
+    # ⇒ `inert` IS A REPORT AND NOT A GATE — DEMOTED 2026-08-06, and the reason is a TRADE
+    #    the operator has not made rather than a defect.
+    #
+    # It could not fire in production at all until `dry_run._records` learned to read a world
+    # through its own seam (LabWorld exposes no `_vms`/`vms`/`.state`, so `before` was empty
+    # and the diff was never empty). Fixing that made it start firing — and the first thing it
+    # stopped was a correct in-session run.
+    #
+    # THE TRADE, UNRESOLVED: rung 13's world is ALREADY as asked, so its correct program is
+    # empty and legitimate; rung 8's bad reading is ALSO empty and is a lie. Both are "the
+    # goals already hold" and no rule here separates them. Gating catches the second and
+    # questions the first.
+    #
+    # AND IT HAS CAUGHT NOTHING WHEN MEASURED: 0 firings across 84 readings on
+    # `reading_probe`, against 4 ladder cells it cost when it did gate. So the report keeps
+    # the signal for a reader while the correctness fix lands without a silent behaviour
+    # change riding in on it.
 
     return Verdict(PROCEED)
 
