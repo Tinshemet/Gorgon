@@ -78,13 +78,22 @@ class Verdict:
 
 
 def judge(request: str, rehearsal: "refine.Rehearsal",
-          lost: Optional[List[str]] = None) -> Verdict:
+          lost: Optional[List[str]] = None,
+          warnings: Optional[List[str]] = None) -> Verdict:
     """Grade one reading. Deterministic, no model call, before anything runs.
 
     ORDER IS MOST-SPECIFIC FIRST, so the operator is told the most useful thing rather than
     the first true thing.
     """
     lost = [str(x).strip() for x in (lost or []) if str(x).strip()]
+
+    # 0 — THE ASSISTANT SPOKE. A contradiction or a high-stakes flag is about DANGER rather
+    # than about meaning, so it outranks everything below: the operator should be asked
+    # before a program that force-stops or deletes disks is run, whatever else is true of it.
+    if warnings:
+        return Verdict(ASK, "assistant",
+                       question=" ".join(str(w) for w in warnings),
+                       detail="; ".join(str(w) for w in warnings))
 
     # 1 — IT CANNOT BE PLANNED. There is no question to ask: the writer has already proven
     # no sequence of tools reaches this, so asking the operator to choose between readings

@@ -30,6 +30,76 @@ from planner.ir import validate as _validate
 from ._shared import _MAX_OPENINGS, _MAX_WAITS, _findings_of, _prose_of
 
 
+def _assistant(request: str, plan, world=None) -> List[str]:
+    """The CONTEXT ASSISTANT, asked about a PROGRAM instead of a single tool call.
+
+    ## IT LIVES HERE AND NOT IN `planner`, AND THAT IS THE LAYERING SPEAKING
+
+    `planner` is layer 0 — THE LANGUAGE — and the context assistant is chat-layer
+    domain knowledge: trigger words, high-stakes field names, a tool catalogue. The
+    language must not reach up for that. `engines` is layer 2 and already carries
+    declared upward edges (`channel.py` for the model, `rig.py` for the library), so the
+    call belongs on this side and `reading_gate.judge` just takes the warnings.
+
+    ## THE DETERMINISTIC CHECK THE ENGINE PATH NEVER GOT
+
+    `orchestrator/ai/chat/context_assistant.check_context` has run in production on the chat
+    path for a long time — no model call, vocabulary derived from the tool catalogue — and
+    the engine path never called it once. The gate above ported its GRADING; this ports the
+    assistant itself.
+
+    ## ONLY TWO OF ITS FOUR CHECKS TRAVEL, and the other two would do harm
+
+        contradictory intent   PORTED — "create dev-box and delete dev-box" is a request
+                               nobody should serve, whichever half is meant
+        high-stakes flags      PORTED — `delete_vm.delete_disks`, `stop_vm.force`. Set
+                               without the operator saying so, on a program they have not
+                               read yet
+        hallucinated field     NOT PORTED. It fires when a required argument's value is
+                               absent from the prompt — and THE WRITER MINTS NAMES. "create
+                               5 vms" produces vm1..vm5, none of which the operator ever
+                               said, so this would accuse every request that does not name
+                               its machines. `extract.invented` already asks the same
+                               question one layer up, where the model's own names live.
+        tool mismatch          NOT PORTED. It second-guesses which tool answers a request,
+                               and here the WRITER picks tools deterministically from the
+                               manifest — a mismatch would be the writer disagreeing with a
+                               word list, which is not evidence about the operator's meaning.
+
+    NEVER RAISES. A world or a plan it cannot read yields no warnings, which is the same
+    posture every other reader here takes: with nothing established, say nothing.
+    """
+    try:
+        from orchestrator.ai.chat.context_assistant import check_context
+    except Exception:
+        return []
+    known = None
+    try:
+        rows = getattr(world, "vms", None) or getattr(world, "_vms", None)
+        if isinstance(rows, dict):
+            known = set(rows)
+    except Exception:
+        known = None
+    out, seen = [], set()
+    for call in plan or ():
+        tool = call[0] if isinstance(call, (list, tuple)) and call else getattr(call, "tool", None)
+        args = (call[1] if isinstance(call, (list, tuple)) and len(call) > 1
+                else getattr(call, "args", {})) or {}
+        try:
+            hint = check_context(request, str(tool), dict(args), known_names=known)
+        except Exception:
+            continue
+        # ONLY THE TWO THAT TRAVEL. Selected by their message text because `check_context`
+        # returns one string and the chat gate reads it the same way — see its own
+        # `if "never mentioned it" in hint`.
+        if not hint or not ("high-stakes" in hint or "contradictory" in hint):
+            continue
+        if hint not in seen:
+            seen.add(hint)
+            out.append(hint)
+    return out
+
+
 class _PlanMixin:
     def run(self, components: List[Dict[str, Any]], session=None) -> Dict[str, Any]:
         # THE WHOLE OPERATION RUNS UNDER THIS ENGINE'S MANIFEST, not just the validate call.
@@ -186,7 +256,11 @@ class _PlanMixin:
                 _dry.snapshot(predicted[0]) if predicted else before,
                 predicted[0] if predicted else world, asked_for,
                 asked_before=_dry.observations(world))
-            verdict = _gate.judge(asked_for, rehearsal)
+            # THE CONTEXT ASSISTANT, over the whole program. Deterministic, no model call,
+            # and the engine path had never called it — see `reading_gate.assistant` for
+            # which of its four checks travel and why the other two would do harm.
+            verdict = _gate.judge(asked_for, rehearsal,
+                                  warnings=_assistant(asked_for, plan, world))
             if session is not None:
                 session.record(f"reading gate: {verdict.outcome}"
                                + (f" ({verdict.caught})" if verdict.caught else ""),

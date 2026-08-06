@@ -100,6 +100,12 @@ _ALLOWED_LAZY = {
     # The engines ask the chat layer where the model lives, and the orchestrator's library.
     ("engines",  "engines/channel.py",       "orchestrator.ai.chat.ollama_client"),
     ("engines",  "engines/rig.py",           "orchestrator.ai.active_library"),
+    # The reading gate asks the CONTEXT ASSISTANT about a whole program — the deterministic
+    # check the chat path has run for a long time and this one never called. It sits in
+    # `engines` and not in `planner` on purpose: the assistant is chat-layer domain knowledge
+    # (trigger words, high-stakes fields, a tool catalogue), and the LANGUAGE must not reach
+    # up for that.
+    ("engines",  "engines/medusa/_run.py",   "orchestrator.ai.chat.context_assistant"),
     # PRODUCTION REACHING INTO THE BENCH, deliberately — `staged_seams` says why: the
     # model-driven tree scores 4/13 against the writer's 13/13, so moving those builders
     # into production would claim they had arrived. Noted here because it is the kind of
