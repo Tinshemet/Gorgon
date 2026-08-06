@@ -224,6 +224,31 @@ def seams(world):
             carve = sel.get("not") or {}
             return [n for n in sorted(world.nets)
                     if _net_matches(n, sel) and not (carve and _net_matches(n, carve))]
+        # ⇒ THE MACHINES ARE A BRANCH, NOT THE DEFAULT. Fixed 2026-08-07.
+        #
+        # This fell through to `world.vms` for EVERY kind it had no branch for, so the seam
+        # answered a question about a kind it does not track with the machines. Measured:
+        #
+        #     select(kind=vm)               -> ['app1']
+        #     select(kind=file)             -> ['app1']      <- the machines
+        #     select(kind=__no_such_kind__) -> ['app1']      <- the machines
+        #
+        # THAT IS THE DEFECT `LabWorld.seams` RECORDS HAVING FIXED ON THE PRODUCTION SIDE —
+        # *"the production select, asked about a kind it did not know, answered with the nine
+        # MACHINES"* — and the fix never reached the bench. So the harness was MORE PERMISSIVE
+        # THAN THE SYSTEM IT MEASURES, which is the one direction a harness must never err in.
+        #
+        # WHAT IT COST, and it is not theoretical: every diff-based check read polluted
+        # evidence. Creating 8 machines appeared in `dry_run.diff` as 8 files, 8 profiles and
+        # 8 templates as well, so `touched` and `unaddressed` were reasoning about members
+        # that do not exist.
+        #
+        # AN UNTRACKED KIND ANSWERS EMPTY, WHICH IS NOT THE SAME AS "THERE ARE NONE" — decision
+        # 6's distinction — but it is the honest half: the sim tracks machines, networks and
+        # snapshots, and has never heard of a file or a profile. `SimWorld.unseeded` is where a
+        # world says so out loud, and the writer already refuses to plan over a blind kind.
+        if kind not in (None, "vm"):
+            return []
         carve = sel.get("not") or {}
         return [n for n, vm in sorted(world.vms.items())
                 if _matches(n, vm, sel, scope)

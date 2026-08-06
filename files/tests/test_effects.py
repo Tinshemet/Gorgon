@@ -152,6 +152,46 @@ def test_the_predicate_is_the_goal_language_not_a_second_one():
     check("a deleter claims a count of zero, same shape", gone["eq"] == 0)
 
 
+def test_the_bench_seam_answers_only_for_kinds_it_TRACKS():
+    """A HARNESS MUST NEVER BE MORE PERMISSIVE THAN THE SYSTEM IT MEASURES.
+
+    `seams.select` fell through to `world.vms` for every kind it had no branch for, so it
+    answered a question about a kind the sim does not track WITH THE MACHINES:
+
+        select(kind=vm)               -> ['app1']
+        select(kind=file)             -> ['app1']      <- the machines
+        select(kind=__no_such_kind__) -> ['app1']      <- the machines
+
+    THAT IS THE DEFECT `LabWorld.seams` RECORDS HAVING FIXED ON THE PRODUCTION SIDE — *"the
+    production select, asked about a kind it did not know, answered with the nine MACHINES"* —
+    and the fix never reached the bench, so every measurement was taken against a world more
+    forgiving than the lab.
+
+    IT WAS NOT COSMETIC. Every diff-based check read polluted evidence: creating 8 machines
+    appeared in `dry_run.diff` as 8 files, 8 profiles and 8 templates as well, so `touched`
+    and `unaddressed` reasoned about members that do not exist.
+    """
+    print("[seam] a kind the sim does not track answers EMPTY, not with the machines")
+    from tests.bench.seams import seams
+    from tests.bench.sim_world import SimWorld
+
+    world = SimWorld()
+    world.vms["app1"] = world.blank_vm()
+    world.execute("create_network", {"net_name": "core"})
+    select, _holds = seams(world)
+
+    check("it answers for the machines", select({"kind": "vm"}) == ["app1"])
+    check("and for the networks", select({"kind": "network"}) == ["core"])
+    # THE KINDS THE MANIFEST DECLARES AND THE SIM DOES NOT TRACK. These are the ones that
+    # polluted the diff, and they are declared — so a guard that only refused UNKNOWN kinds
+    # would have missed every one of them.
+    for kind in ("file", "profile", "template"):
+        check(f"a declared but untracked kind answers empty ({kind})",
+              select({"kind": kind}) == [])
+    check("and a kind nothing declares answers empty",
+          select({"kind": "__no_such_kind__"}) == [])
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "effects"))

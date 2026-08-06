@@ -65,34 +65,17 @@ class MountShaped:
 
     @property
     def seams(self):
-        """The bench seams, WRAPPED so they route by kind the way production's do.
+        """The lab's seams, as a PROPERTY — which is what `LabWorld` offers and what the
+        snapshot reader had to learn to accept.
 
-        MEASURED 2026-08-06 — the bench seam does NOT discriminate:
-
-            select({"kind": "vm"})              -> ['app1']
-            select({"kind": "network"})         -> ['core']
-            select({"kind": "__no_such_kind__"}) -> ['app1']     <- the machines
-
-        That is precisely the defect `LabWorld.seams` records having FIXED on the production
-        side: *"the production select, asked about a kind it did not know, answered with the
-        nine MACHINES."* The fix never reached the bench, so **the bench seam is more
-        permissive than production** — a harness that cannot notice kind confusion measuring
-        a system that must.
-
-        WRAPPED HERE RATHER THAN FIXED IN `tests/bench/seams.py`, because changing the seam
-        every existing measurement was taken against would invalidate them all at once. The
-        wrap is recorded and the defect is left where a reader will find it.
+        NO LONGER WRAPPED. This routed by kind by hand until 2026-08-07, because the bench
+        seam answered a question about ANY kind with the machines — the very defect
+        `LabWorld.seams` records having fixed on the production side. `tests/bench/seams.py`
+        discriminates now, so the harness can hand it over untouched, which is the point: a
+        harness that has to correct the thing it measures is measuring its own correction.
         """
-        from planner.ir import config
         from tests.bench.seams import seams as _seams
-        select, holds = _seams(self._sim)
-
-        def routed(sel, scope=None):
-            if (sel or {}).get("kind") not in (config.KINDS or {}):
-                return []
-            return select(sel, scope)
-
-        return routed, holds
+        return _seams(self._sim)
 
     @property
     def findings(self):
