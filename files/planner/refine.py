@@ -143,7 +143,8 @@ def judged(goals, plan, program, before, after, after_world, request: str = "",
                      visible=bool(before) or bool(after),
                      probed=bool(asked),
                      faults=(dry_run.unaddressed(request, change,
-                                                 dry_run.identifiers(before, after))
+                                                 dry_run.identifiers(before, after),
+                                                 plan=plan, goals=goals)
                              if request else []))
 
 

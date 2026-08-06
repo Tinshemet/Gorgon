@@ -70,6 +70,13 @@ def _records(world, kind: str) -> Dict[str, Any]:
         got = getattr(world, attr, None)
         if isinstance(got, dict):
             return got
+        # A BARE SET OF NAMES IS STILL A POPULATION. `SimWorld.nets` is a `set`, so the whole
+        # NETWORK kind was invisible to every snapshot: a program that created `lab` showed a
+        # diff mentioning only the machine, and a clause naming the network could never be
+        # judged. Found 2026-08-06 while checking why a rule did not fire — a kind absent
+        # from the diff reads exactly like a kind nothing happened to.
+        if isinstance(got, (set, frozenset)):
+            return {str(name): {} for name in got}
     state = getattr(world, "state", None)
     if isinstance(state, dict) and isinstance(state.get(kind), dict):
         return state[kind]
@@ -231,8 +238,74 @@ def identifiers(*snapshots) -> Set[str]:
     return out
 
 
+def reads(plan, kinds=None) -> Set[str]:
+    """Every name the plan READS rather than changes — a SOURCE, not a target.
+
+    A CLAUSE NAMING A SOURCE IS ADDRESSED BY A PLAN THAT READS IT. *"Clone golden into 3 new
+    vms"* names `golden`, and a correct program never changes golden — it copies FROM it. A
+    diff of what MOVED therefore says golden was untouched, which is true and is not a fault,
+    and accusing it is how the clause rule earned its withdrawal on first wiring.
+
+    READ FROM THE MANIFEST'S OWN `from` DECLARATIONS — `creators.clone.from = source_name`
+    already says which argument names the thing being copied. No second list, no word
+    matching: the fact was declared for the writer and this is a second reader of it.
+    """
+    from planner.ir import config as _config
+    sources: Dict[str, Set[str]] = {}
+    for spec in (kinds or _config.KINDS or {}).values():
+        for maker in (spec.get("creators") or {}).values():
+            if maker.get("tool") and maker.get("from"):
+                sources.setdefault(str(maker["tool"]), set()).add(str(maker["from"]))
+    # A PROBED MEMBER IS ADDRESSED TOO. "make sure n1, n2 and n3 can all ping each other" is
+    # answered by ASKING about n1 — the program does exactly what was requested and changes
+    # nothing, because the request was a question. Every prober's member argument counts.
+    asked = probers(kinds)
+    out: Set[str] = set()
+    for call in plan or ():
+        tool = call[0] if isinstance(call, (list, tuple)) and call else getattr(call, "tool", None)
+        args = call[1] if isinstance(call, (list, tuple)) and len(call) > 1 else getattr(call, "args", {})
+        wanted = set(sources.get(str(tool), ()))
+        if str(tool) in asked:
+            wanted |= {k for k in (args or {})}
+        for arg in wanted:
+            value = (args or {}).get(arg)
+            if isinstance(value, str) and value.strip():
+                out.add(value.strip().lower())
+    return out
+
+
+def mentions(goals) -> Set[str]:
+    """Every literal the GOALS name — what the reading accounted for, whether or not it acts.
+
+    A NAME CAN BE ADDRESSED BY BEING EXCLUDED. Rung 10's known-good reading is `count(vm) = 4`
+    beside `every vm EXCEPT golden must be running`: `golden` appears only as a carve-out, so
+    no call mentions it and a plan-only reading accuses the clause *"clone golden into 3 new
+    vms"* of being ignored. It was not ignored — it was READ, and the reading put golden on
+    the other side of an exclusion.
+
+    SO THE RULE'S REAL QUESTION IS NARROWER THAN "DID ANYTHING HAPPEN TO IT": it is whether
+    the request names something the translation never accounted for ANYWHERE. That is a much
+    smaller claim, and it is the only one this evidence supports.
+    """
+    out: Set[str] = set()
+
+    def walk(node):
+        if isinstance(node, dict):
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, (list, tuple, set)):
+            for item in node:
+                walk(item)
+        elif isinstance(node, str) and node.strip():
+            out.add(node.strip().lower())
+
+    walk(goals)
+    return out
+
+
 def unaddressed(request: str, d: Dict[str, Any],
-                known: Optional[Set[str]] = None) -> List[Dict[str, str]]:
+                known: Optional[Set[str]] = None,
+                plan=None, goals=None) -> List[Dict[str, str]]:
     """The clauses of `request` whose names appear NOWHERE in what the program moved.
 
     THIS IS THE THIRD ROW — a clause of the goal appearing nowhere — and it is asked of the
@@ -250,7 +323,8 @@ def unaddressed(request: str, d: Dict[str, Any],
         clauses = ledger.enumerate_clauses(request)
     except Exception:
         return []
-    moved = touched(d)
+    # WHAT MOVED, PLUS WHAT WAS READ. A source is addressed by being read; see `reads`.
+    moved = touched(d) | reads(plan) | mentions(goals)
     names = {str(n).strip().lower() for n in (known or set()) if str(n).strip()}
     out: List[Dict[str, str]] = []
     for clause in clauses:
