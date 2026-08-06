@@ -598,6 +598,15 @@ class Orchestrator:
                 # never became a request. Naming the stage matters: this is the front seam,
                 # and confusing it with an engine failure is how a day gets spent debugging
                 # the wrong half.
+                #
+                # AND THE SAME SENTENCE APPLIES ONE LAYER FURTHER OUT. A timeout or a dropped
+                # connection is the MODEL NOT ANSWERING, not the seam misreading — it arrived
+                # here indistinguishable from a genuine mistranslation and was scored as one.
+                # The spilled KV cache makes these real rather than theoretical: two turned up
+                # in a single probe run on 2026-08-06. `rig.translator` names the layer now,
+                # and ABANDONED is the existing word for a run that never got to try.
+                if getattr(answer, "source", "") == "channel":
+                    return session.close("ABANDONED", answer.why)
                 return session.close("UNTRANSLATED", answer.why)
             lost = list(getattr(answer, "dropped", ()) or ())
             if lost:

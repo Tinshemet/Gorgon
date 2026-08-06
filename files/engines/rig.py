@@ -50,11 +50,26 @@ def translator() -> Callable:
     from . import extract as _extract
     from .channel import Answer
 
+    # THE MODEL NOT ANSWERING IS NOT THE FRONT SEAM GETTING IT WRONG. A timeout, a dropped
+    # connection or a truncated reply is the CHANNEL failing, and it arrived here as
+    # `Answer(None, "extractor", ...)` — which the orchestrator closes as UNTRANSLATED,
+    # scoring an infra failure as a translation failure.
+    #
+    # THAT IS THE EXACT ATTRIBUTION ERROR `engine_probe` EXISTS TO PREVENT: *"confusing it
+    # with an engine failure is how a day gets spent debugging the wrong half."* The same
+    # sentence applies one layer further out, and the spilled KV cache makes these real —
+    # two timeouts turned up in a single probe run on 2026-08-06.
+    #
+    # NAMED, NOT SWALLOWED. The answer still fails; what changes is that a reader can tell a
+    # request the seam could not read from one the model never answered.
+    _INFRA = (TimeoutError, ConnectionError, OSError, ValueError)
+
     def translate(gap, world=None):
         try:
             raw = _extract.extract(str(gap))
         except Exception as exc:
-            return Answer(None, "extractor", f"{type(exc).__name__}: {exc}")
+            layer = "channel" if isinstance(exc, _INFRA) else "extractor"
+            return Answer(None, layer, f"{type(exc).__name__}: {exc}")
         # A DECLINE IS AN ANSWER AND IT CARRIES ITS OWN REASON. `declined()` existed and was
         # called from the bench ONLY — production flattened `{"cannot": "too vague"}` into the
         # same "no usable goal" it reports for a garbled reply. Those are different events: one
