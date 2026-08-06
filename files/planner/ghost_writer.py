@@ -580,7 +580,7 @@ def _scratch_of(world):
 
 def cover(goals: List[Dict[str, Any]], world, trace: List[str] = None,
           temps: List = None, acting: bool = True,
-          without: Optional[str] = None) -> List[Call]:
+          without: Optional[str] = None, predicted: List = None) -> List[Call]:
     """The calls that make every goal hold, in an order that runs.
 
     `temps` collects `(kind, name)` for every member this plan CREATES as a precondition —
@@ -600,6 +600,17 @@ def cover(goals: List[Dict[str, Any]], world, trace: List[str] = None,
     CHANGES something — and an unmet goal is then not a failure, it is the answer.
     """
     scratch = _scratch_of(world)
+    # THE DRY RUN THIS FUNCTION ALREADY PERFORMS, handed back instead of discarded.
+    #
+    # Every placed tile is EXECUTED on `scratch` below — that is how covering knows what is
+    # already satisfied — so when this returns, the scratch holds the program's PREDICTED END
+    # STATE. It was thrown away, and with it the only check the program regime was chosen for:
+    # a complete artifact, inert, gradeable before anything runs (see `planner/dry_run.py`).
+    #
+    # AN OUT-PARAMETER, exactly as `trace` and `temps` are, so no caller's return type moves
+    # and a caller that does not care pays nothing.
+    if predicted is not None:
+        predicted.append(scratch)
     asked = _named_in(goals, _kinds(scratch))
     # AND THE KINDS THE REQUEST IS ABOUT, computed once beside the names for the same reason
     # the names are: a member is the operator's if they NAMED it or if the goals RANGE OVER

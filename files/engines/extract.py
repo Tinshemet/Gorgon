@@ -1724,6 +1724,178 @@ _BUILDERS = {"reach": _build_reach, "every": _build_every,
              "per": _build_per, "observe": _build_observe}
 
 
+# ── SELECTION AND REPAIR: SPENDING THE REFEREE ──────────────────────────────────────────
+#
+# THE OPERATOR, 2026-08-06: *"so far we were pretty good at catching mistakes not correcting
+# them, which is why we havent made much progress... we havent used the ability we honed at
+# catching to actual progress."*
+#
+# THAT IS EXACTLY RIGHT AND THE CODE SAYS SO. Every detection path at this seam ends in
+# `session.close("UNTRANSLATED", ...)` — five separate sites, not one loop. Correction loops
+# DO exist (`_run.py::_MAX_CORRECTIONS = 3`) but they run AFTER the program executed, so the
+# system corrects THE WORLD and never THE READING. The one layer where every failure lives
+# is the only layer with no second attempt.
+#
+# AND THE PART THAT DEFEATS EVERYONE ELSE IS THE PART WE ALREADY HAVE. `Faithful
+# Autoformalization via Roundtrip Verification and Repair` (2604.25031) reports repair
+# lifting equivalence from 44.7-66.2% to 82.7-85.7%, and names its own bottleneck: the
+# DIAGNOSIS step, where an LLM judge blamed the first stage in 83-97% of cases regardless of
+# the real fault — *"the diagnosis function was the bottleneck. The pipeline and repair
+# operators were not."* Our diagnosis is not a judge. It is computed, specific and correct:
+#
+#     "it asks for 3 vms all called 'golden', and a vm is identified by its name —
+#      no world has that"
+#
+# A DETECTOR THAT ONLY REFUSES CANNOT CLOSE ANYTHING. A detector that SELECTS or RE-ASKS is
+# a producer. Nothing below asks the model to be better; it asks it more than once and uses
+# the referee already built to decide which answer to keep.
+
+
+def _judged(raw, request, world, clauses):
+    """One reading, with everything the referee can say about it. No model call.
+
+    Returns `(goals, lost, unaccounted)` — the goals, the reasons anything was dropped, and
+    the clauses the ledger can PROVE nothing in those goals addresses.
+    """
+    lost: List[str] = []
+    try:
+        goals = to_goals(raw, request, dropped=lost, world=world) or []
+    except Exception as exc:
+        return [], [f"{type(exc).__name__}: {exc}"], []
+    missing: List[str] = []
+    if goals and clauses:
+        try:
+            from planner import clause_ledger as _ledger
+            book = _ledger.reconcile(_ledger.open_ledger(request, clauses), goals)
+            missing = [r.get("why") or r.get("text") or "" for r in _ledger.unaccounted(book)]
+        except Exception:
+            missing = []                  # a ledger that cannot answer accuses nobody
+    return goals, lost, missing
+
+
+def best_of(request: str, world=None, draws: int = 3, model: str = None,
+            temp: float = 0.0, timeout: int = 300):
+    """Read the request `draws` times and KEEP THE CLEAN ONE. `(goals, lost, why)`.
+
+    SELECTION CANNOT INVENT. It only ever prefers one reading the model already produced, so
+    no answer appears here that a single draw could not also have given. What changes is
+    which of them is kept.
+
+    THE BAR IS HIGHER THAN A SINGLE DRAW FACES TODAY, and that is deliberate, because the
+    honest risk runs the other way. Today one draw is taken: dirty means the run is refused.
+    Selection can turn that refusal into a run, which is the whole point AND the danger — a
+    clean-but-wrong reading would now execute where a dirty one was safely refused. So a
+    candidate is only chosen when it is clean **and** the ledger proves no clause
+    unaddressed; anything less falls back to the first reading, which is exactly today's
+    behaviour including its refusal.
+
+    THE ORDER IS LEXICOGRAPHIC and every key is a detector this system already runs:
+
+        1  it produced goals at all
+        2  nothing was DROPPED — `to_goals`' own repairs and refusals
+        3  the fewest clauses PROVEN unaddressed — `clause_ledger`, which has been
+           reporting this and changing nothing since 2026-07-29
+        4  more goals, then the earliest draw, so the same request and world give the
+           same answer twice
+    """
+    from planner import clause_ledger as _ledger
+    try:
+        clauses = _ledger.enumerate_clauses(request)
+    except Exception:
+        clauses = []
+
+    seen = []
+    for _ in range(max(1, draws)):
+        try:
+            raw = extract(request, model=model, temp=temp, timeout=timeout)
+        except Exception as exc:
+            seen.append(([], [f"{type(exc).__name__}: {exc}"], []))
+            continue
+        seen.append(_judged(raw, request, world, clauses))
+    if not seen:
+        return [], ["nothing was read"], ""
+
+    def rank(item):
+        goals, lost, missing = item
+        return (bool(goals), not lost, -len(missing), len(goals))
+
+    ordered = sorted(range(len(seen)), key=lambda i: rank(seen[i]), reverse=True)
+    top = ordered[0]
+    goals, lost, missing = seen[top]
+    if goals and not lost and not missing:
+        return goals, [], (f"kept reading {top + 1} of {len(seen)} — the only one with "
+                           f"nothing dropped and no clause left unaddressed"
+                           if len(seen) > 1 else "")
+    # NOTHING WAS CLEAN. The first reading stands, refusal and all, so a run that would have
+    # been refused today is still refused — selection may promote a reading, never invent one.
+    goals, lost, missing = seen[0]
+    return goals, lost, ""
+
+
+def reasons_of(lost, missing) -> List[str]:
+    """The fault report, deduplicated — what a repair round is told, in the seam's own words."""
+    out, seen = [], set()
+    for why in list(lost or ()) + list(missing or ()):
+        text = str(why).strip()
+        if text and text not in seen:
+            seen.add(text)
+            out.append(text)
+    return out
+
+
+# THE REPAIR ROUND RIDES IN THE REQUEST, never in the system prompt. Four prompt levers were
+# measured on 2026-08-05 and every one cost more than it bought, so the whole-request call
+# stays byte-identical and the fault report travels as part of what is being read.
+#
+# IT NAMES THIS REQUEST'S FAULT AND NOTHING GENERAL. Telling a model ABOUT refusing makes it
+# refuse more — measured twice, in the refusal enum and the span refusal — but that was a
+# vocabulary of reasons offered on every call. This is one computed sentence about the
+# reading just given, which is what the roundtrip literature repairs from.
+_AGAIN = ("\n\nA PREVIOUS READING OF THIS REQUEST WAS REJECTED FOR THESE REASONS:\n"
+          "{why}\n"
+          "Read the request again and give a reading those reasons do not apply to. "
+          "Do not drop any part of the request.")
+
+
+def with_repair(request: str, world=None, draws: int = 3, rounds: int = 1,
+                model: str = None, temp: float = 0.0, timeout: int = 300):
+    """`best_of`, and when nothing is clean, SAY WHY AND ASK AGAIN. `(goals, lost, why)`.
+
+    THE CORRECTION HALF, and the one this system has never had at this seam. It is bounded
+    at `rounds` because an unbounded loop against a model that cannot see its own error is
+    how a repair becomes a spend.
+
+    THE REPAIRED READING IS JUDGED BY THE SAME REFEREE. A round that produces a reading which
+    is still not clean changes nothing — the original refusal stands, with its reasons. So
+    the failure mode of this function is the behaviour that existed before it, which is the
+    right way round for anything that turns a refusal into a run.
+    """
+    goals, lost, why = best_of(request, world=world, draws=draws, model=model,
+                               temp=temp, timeout=timeout)
+    if goals and not lost:
+        return goals, lost, why
+    from planner import clause_ledger as _ledger
+    try:
+        clauses = _ledger.enumerate_clauses(request)
+    except Exception:
+        clauses = []
+    told = reasons_of(lost, [])
+    for attempt in range(max(0, rounds)):
+        if not told:
+            break
+        framed = request + _AGAIN.format(why="\n".join(f"- {r}" for r in told))
+        try:
+            raw = extract(framed, model=model, temp=temp, timeout=timeout)
+        except Exception:
+            break
+        fixed, still, missing = _judged(raw, request, world, clauses)
+        if fixed and not still and not missing:
+            return fixed, [], (f"repaired on round {attempt + 1}: "
+                               f"{'; '.join(told)[:160]}")
+        told = reasons_of(still, [])
+    return goals, lost, why
+
+
 # ── THE CLAUSE SPLIT ──────────────────────────────────────────────────────────────────────
 #
 # THE ONE MECHANISM THAT IS A PRODUCER. Everything else built against the missing-clause
@@ -1895,6 +2067,71 @@ def to_goals(raw: Dict[str, Any], request: str = "",
                 goal = {**goal, slot: sel}
         out.append(goal)
 
+    def _referents(goals) -> Any:
+        """`of: N` — this goal is about whatever goal N is about. Resolved here, by code.
+
+        ## THE GAP THIS CLOSES, AND IT IS THE ONE UNDER MOST OF THE FAILING RUNGS
+
+        Every goal shape takes a `select` — a filter over WORLD ATTRIBUTES — and `select` is
+        REQUIRED in all five branches. So a clause whose subject is *what the previous clause
+        produced* has nowhere to go:
+
+            "create a vm named beta AND THEN LAUNCH IT"        it   = goal 1's machine
+            "clone golden into 3 new vms AND LAUNCH ALL OF THEM"  all of them = goal 1's set
+            "...provision a machine called web, AND CONNECT WEB TO IT"   it = goal 1's network
+
+        **THE MODEL CANNOT LEAVE THE SUBJECT BLANK AND CANNOT SAY "THE PREVIOUS ONE", SO IT
+        FABRICATES A FILTER.** Measured: rung 10 answers *"boot every copy"* with `every
+        vm[name=golden] must status=running` — it boots GOLDEN, not the copies, and every
+        guard passes because the goal is well formed and the machine exists. That is a
+        `DONE_BUT_FALSE` manufactured by a required field, which is `PhantomFill`
+        (arXiv 2607.20492) exactly: a field with no honest answer gets one anyway.
+
+        ## WHY THE RESOLUTION IS CODE AND NOT A SECOND QUESTION
+
+        The thing that resolves *"all of them"* is the goal it points at, and this layer holds
+        it. Asking the model to resolve its own referent is asking it to say where a goal came
+        from, which has been measured twice and failed twice — span provenance at 9 false
+        positives in 12, enum provenance at 6 in 12 and blind to rung 11.
+        [[gorgon-hallucination-was-load-bearing]]: *"four of the five failures asked the model
+        where each goal came from; both survivors ask it nothing."*
+
+        ## IT REFERS BACKWARD ONLY, AND A REFERENCE TO NOTHING IS REPORTED
+
+        A forward or self reference is refused rather than repaired: the operator's sentence
+        runs one way, so a goal about a later goal describes no order anything could execute.
+        And a reference that resolves to nothing is DROPPED WITH A REASON rather than
+        silently ignored — an unresolvable `of` is the invented-name defect wearing a new
+        slot, and the whole point of this seam is that a thing said and unread is reported.
+        """
+        rows = (goals or {}).get("goals") or [] if isinstance(goals, dict) else goals
+        for i, goal in enumerate(rows or []):
+            if not isinstance(goal, dict) or "of" not in goal:
+                continue
+            named = goal.pop("of")
+            try:
+                at = int(named)
+            except (TypeError, ValueError):
+                _lost(f"it says it is about goal {named!r}, which is not a goal number", goal)
+                continue
+            # 1-BASED, because it is the operator's ordinal and the model is answering about
+            # "the first thing" rather than indexing an array.
+            if not (1 <= at <= i):
+                _lost(f"it says it is about goal {at}, which does not come before it", goal)
+                continue
+            host = rows[at - 1]
+            subject = host.get("select") if isinstance(host, dict) else None
+            if not isinstance(subject, dict) or not subject.get("kind"):
+                _lost(f"it says it is about goal {at}, which is not about a set of members",
+                      goal)
+                continue
+            # A COPY, NEVER THE SAME OBJECT. Two goals sharing one selector dict means a
+            # repair applied to either silently rewrites the other, which is the class of
+            # defect `_keep` was fixed for on 2026-08-06 — a rule's work landing somewhere
+            # nobody expected.
+            goal["select"] = json.loads(json.dumps(subject))
+        return goals
+
     def _scoped(goals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """An UNFILTERED `every` beside a goal that names ONE member is about that member.
 
@@ -1997,6 +2234,12 @@ def to_goals(raw: Dict[str, Any], request: str = "",
     # one goal lives in a DIFFERENT goal — the label statement that proves `prod` is a label
     # may come after the count that misnames it.
     _said_property = _not_an_identity(raw)
+
+    # REFERENTS ARE RESOLVED BEFORE ANY GOAL IS JUDGED. `of: N` means this goal has no
+    # selector of its own YET, and every rule below rightly refuses a goal that says nothing
+    # about what it is about — so resolving afterwards judged the goal for a gap the
+    # reference was there to fill and dropped all four test cases. Measured, first run.
+    _referents(raw)
 
     for g in (raw or {}).get("goals") or []:
         shape, sel = g.get("goal"), _to_select(g.get("select") or {})
@@ -2225,6 +2468,10 @@ def to_goals(raw: Dict[str, Any], request: str = "",
     # its own tiles, and noise to every reader of the ledger and every rule below that counts
     # goals — `_one_statement_not_two` decides by comparing a total against the number of
     # identity goals, and a duplicate is a miscount.
+    # REFERENTS FIRST, BEFORE ANYTHING REORDERS OR MERGES. `of: N` is a POSITION in the list
+    # the model emitted, so every step that dedupes, folds or partitions destroys the thing
+    # it points at. Resolving here means every rule below sees an ordinary selector and none
+    # of them needs to know this slot exists.
     seen, unique = [], []
     for g in out:
         if g not in seen:
