@@ -841,7 +841,31 @@ class Orchestrator:
                 break
             readings.append(fresh)
             components = fresh
-            result = _insession.drive(engine, components, session, self._decide)
+            retried = _insession.drive(engine, components, session, self._decide)
+
+            # THE RATCHET, AND WITHOUT IT THE LOOP MANUFACTURES FALSE SUCCESSES.
+            #
+            # An EMPTY program never reaches the reading gate — `_plan` returns "already
+            # satisfied, nothing to do" before it — so an un-judged result was beating a
+            # judged one by default. Measured 2026-08-06: rung 8's paraphrase went
+            # UNTRANSLATED -> DONE with ZERO CALLS and the checker disagreeing, and the
+            # paraphrase arm's false successes doubled from 3 to 6.
+            #
+            # "NOTHING TO DO" IS A CLAIM, AND HERE IT IS THE LEAST CREDIBLE ONE AVAILABLE.
+            # The previous reading was rejected for a reason; a fresh reading that answers
+            # the same request by doing nothing at all has not corrected it, it has given up
+            # on it. Where a world genuinely is already as asked, the FIRST reading says so
+            # and never enters this loop.
+            #
+            # So a re-reading is adopted only when it does something AND survives the gate.
+            # The original verdict stands otherwise, which is the behaviour that existed
+            # before the loop — the right way round for anything that turns a refusal into a
+            # run.
+            if retried.get("done") and not (retried.get("calls") or []):
+                session.record("a re-reading claimed there was nothing to do — keeping the "
+                               "question, because the reading before it was rejected")
+                break
+            result = retried
             session.calls = result.get("calls") or []
             if not result.get("asked"):
                 session.record(f"a re-reading survived the gate on attempt {attempt + 1}")
