@@ -28,6 +28,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional
 
+from planner import reading_gate as _gate
+
 from . import insession as _insession
 from .channel import Channel
 from .registry import Registry
@@ -275,6 +277,13 @@ def _declare(program: Dict[str, Any], declared: Optional[Dict[str, str]],
 
 class Orchestrator:
     """One registry, one channel, and the loop between them."""
+
+    # HOW MANY TIMES A GATED READING IS READ AGAIN. Two, and the number is argued rather than
+    # picked: the gate's own findings are about MEANING, and a model that has now produced
+    # three readings none of which survived is not one draw away from a fourth that does —
+    # it is a request that needs the operator. Each attempt costs a model call and a plan.
+    _MAX_READINGS = 2
+
 
     def __init__(self, registry: Registry, channel: Optional[Channel] = None,
                  route: Optional[Callable] = None, budget: Optional[int] = None,
@@ -772,6 +781,72 @@ class Orchestrator:
             # no better program will make it allowed, and filing it with the gaps would send
             # the request up the ladder looking for a way around the ban.
             return session.close("REFUSED", str(result.get("why") or ""))
+        # ── THE LOOP THAT COMPLETES THE GATE ────────────────────────────────────────────
+        #
+        # A DETECTOR THAT ONLY REFUSES CANNOT CLOSE ANYTHING. The operator, 2026-08-06: *"we
+        # were pretty good at catching mistakes not correcting them... we havent used the
+        # ability we honed at catching to actual progress."* The gate was the catching half
+        # and it stopped there — every finding became a question and the run ended.
+        #
+        # SO A GATED READING IS READ AGAIN. Temperature 0 is not deterministic here (that is
+        # `ladder-is-not-a-feedback-loop`, and today's draws differ on identical input), so
+        # another draw is a genuinely different reading rather than the same one returned
+        # twice. Each is planned, rehearsed and judged by the same gate — a repair that is
+        # not re-judged is just a second guess.
+        #
+        # THE SAME SHAPE AS THE PROMOTION LOOP ABOVE, deliberately: ask again, bounded, and
+        # close honestly when the budget runs out. What differs is the question — a promotion
+        # asks about a GAP the writer could not close, this asks the request again because
+        # what came back did not survive reading.
+        #
+        # IT STOPS ON A REPEAT. If a fresh draw is the reading already rejected, another draw
+        # will not help and spending one is cost with no chance of gain.
+        #
+        # AND ITS OWN BUDGET, not `rounds_left` — that counts PROMOTIONS, and a reading
+        # retried three times would silently consume the escalation budget of a session that
+        # had not escalated at all.
+        # AND IT ONLY SPENDS A CALL WHERE ONE COULD WIN. A contradiction lives in the
+        # REQUEST — every draw will contain it — and a high-stakes flag is the WRITER's tile
+        # choice rather than the reading's, so re-drawing those is cost with no chance of
+        # gain. `reading_gate.rereadable` holds that list; the whole point of the free checks
+        # is that the expensive step stays rare.
+        readings = [components]
+        worth = result.get("asked") and _gate.rereadable(result.get("caught"))
+        for attempt in range(self._MAX_READINGS if worth else 0):
+            session.record(f"reading gate: {result.get('caught')} — reading the request "
+                           f"again ({attempt + 1} of {self._MAX_READINGS})",
+                           filed_by="orchestrator", caught_by="operator", level="warn")
+            # WITH THE HINT, NOT BLIND. The operator's structure, 2026-08-06: *"if it fails
+            # but is coherent, we ask it once again with a hint; if it cant produce any, we
+            # derive."* A re-draw that is not told what was wrong is a second guess, and the
+            # gate's reason is COMPUTED and specific — "it asks for 3 vms all called
+            # 'golden', and a vm is identified by its name".
+            #
+            # THE GAP DICT IS THE EXISTING CONVENTION, the same one the promotion loop above
+            # uses: `rig.translator` reads `str(gap)`, so the question travels into the
+            # request without a second channel or a prompt change.
+            #
+            # HINTING MEASURED NEGATIVE ONCE TODAY — told in as many words that it had
+            # invented `unresponsive`, the model returned the same class of error. That was
+            # one rung and a generic instruction; this is the gate's own sentence, and it is
+            # cheap enough to be worth measuring properly rather than assumed either way.
+            answer = self.channel.ask({"gap": result.get("asked") or "",
+                                       "request": request,
+                                       "have": components}, engine.world())
+            if not answer:
+                break
+            fresh = list(answer.components)
+            if any(fresh == earlier for earlier in readings):
+                session.record("the same reading came back — another draw will not help")
+                break
+            readings.append(fresh)
+            components = fresh
+            result = _insession.drive(engine, components, session, self._decide)
+            session.calls = result.get("calls") or []
+            if not result.get("asked"):
+                session.record(f"a re-reading survived the gate on attempt {attempt + 1}")
+                break
+
         if result.get("asked"):
             # THE READING GATE STOPPED IT, and that is neither a gap nor a refusal. UNMET
             # means nothing could close it and INVITES the next regime to try; a question

@@ -143,6 +143,24 @@ def judge(request: str, rehearsal: "refine.Rehearsal",
     return Verdict(PROCEED)
 
 
+# WHICH FINDINGS A RE-READING COULD PLAUSIBLY FIX. The checking is free — the rehearsal is a
+# by-product of planning and the gate and the assistant are deterministic — so the ONLY thing
+# this apparatus spends is a re-generation, and it must not spend one where it cannot win.
+#
+#     invented-or-dropped   YES. The seam misread the sentence; another draw reads it again.
+#     inert                 YES. A reading that does nothing may simply be the wrong reading.
+#     assistant             NO. A contradiction is in the REQUEST — every draw will contain
+#                           it — and a high-stakes flag is the WRITER's tile choice, not the
+#                           reading's. Re-drawing buys nothing and costs a call each time.
+#     unplannable           NO, and it never reaches the loop: it is a REFUSE.
+_WORTH_REREADING = {"invented-or-dropped", "inert"}
+
+
+def rereadable(caught: str) -> bool:
+    """Could another draw fix this? Asked before spending one."""
+    return str(caught or "") in _WORTH_REREADING
+
+
 def tally(verdicts: List[Verdict]) -> Dict[str, int]:
     """How often the gate fired and for what — THE MEASUREMENT.
 

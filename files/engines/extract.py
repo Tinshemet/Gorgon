@@ -447,6 +447,33 @@ def schema(kinds=None, request: str = "") -> Dict[str, Any]:
                             # an answer that echoes the schema back is removed rather than
                             # built. Requiring a field is only reasonable when a wrong answer
                             # costs nothing.
+# `name` STAYS REQUIRED, AND MAKING IT OPTIONAL WAS MEASURED AND WITHDRAWN
+                            # 2026-08-06.
+                            #
+                            # IT IS THE SINK — on "ping every vm and stop the ones that do not
+                            # answer" it holds `unresponsive`, 3 draws of 3, with an EMPTY
+                            # `where` beside it. And `PhantomFill` (arXiv 2607.20492)
+                            # prescribes exactly the fix that failed: *"Required fields
+                            # pressure the model to invent values when information is absent.
+                            # Optional fields allow honest null responses."*
+                            #
+                            # MEASURED HERE, n=3 over rungs 1, 2, 3 and 11:
+                            #
+                            #     rung  1 lit   the name moved to `select.where` — fine
+                            #     rung  1 par   NEITHER slot. `alpha` lost entirely
+                            #     rung  2, 3    NEITHER. `beta`, `lab`, `web` all lost
+                            #     rung 11       STILL 'unresponsive vms', 'before', 'after'
+                            #
+                            # **IT LOSES THE GOOD HALF AND KEEPS THE BAD HALF.** The
+                            # requirement was doing two jobs — compelling a real name to be
+                            # GIVEN, and compelling a value where none exists — and removing
+                            # it cost the first without fixing the second. `test_stand_in`
+                            # caught the same regression independently: with the identity no
+                            # longer reaching the selector, a creation stops being forced.
+                            #
+                            # SO THE SINK IS NOT CLOSED BY LOOSENING THE SLOT. What survives
+                            # is the DISCARDED-NAME REPORT, which refuses a name that fits
+                            # nowhere rather than letting it vanish.
                             "required": ["goal", "select", "amount", "name"],
                             "additionalProperties": False,
                         },
