@@ -753,6 +753,52 @@ def test_a_name_the_request_never_says_is_not_a_name():
           invented({"kind": "vm", "name": "anything"}, "") is None)
 
 
+def test_a_teardown_nobody_asked_for_is_refused():
+    """AN UNFILTERED `count(kind) = 0` DELETES THE LAB, and it must be asked for in words.
+
+    Measured 2026-08-06: handed `count(vm) = 0` against a four-machine lab, the writer plans
+    `stop_vm` + `delete_vm` for EVERY machine. That is a legitimate request and it must never
+    arrive by accident.
+
+    AND IT ARRIVES BY ACCIDENT EASILY, because it is what a FILTERED count degrades into when
+    its filter is lost. This file already records the withdrawn rule that stripped an
+    unexplained name and left `count(vm) = 3`; the same strip applied to a ZERO leaves
+    "delete everything", which is why `extract.invented` DROPS a goal rather than stripping
+    it. Every future repair that removes a filter has this waiting underneath it.
+
+    THE EVIDENCE IS THE SENTENCE, read from `request_evidence` exactly as `reach` and
+    `except` are — manifest data with two readers, not a word list in the extractor.
+    """
+    print("[refuse] a teardown nobody asked for")
+    sweep = [{"goal": "count", "select": {"kind": "vm", "where": []},
+              "amount": 0, "name": ""}]
+    dropped = []
+    check("a sweep with no removal word is refused",
+          to_goals({"goals": sweep}, "ping every vm and stop the ones that do not answer",
+                   dropped) == [])
+    check("and it says what it would have done",
+          bool(dropped) and "deleting every one" in dropped[0])
+
+    # ASKED FOR, IN THREE WORDINGS. A guard that only knew the word `delete` would refuse
+    # most of the ways an operator actually says this.
+    for said in ("delete every machine in the lab", "tear down the whole lab",
+                 "get rid of all the vms"):
+        check(f"{said!r} is served", len(to_goals({"goals": sweep}, said)) == 1)
+
+    # A FILTERED ZERO IS THE ORDINARY TEARDOWN and says WHICH ones — untouched.
+    check("a filtered zero is untouched",
+          len(to_goals({"goals": [{"goal": "count", "select": {
+              "kind": "vm", "where": [{"attr": "label", "value": "scratch"}]},
+              "amount": 0, "name": ""}]},
+              "make sure no machine carries the scratch label")) == 1)
+
+    # AND A NON-ZERO COUNT IS NOT A TEARDOWN — rung 14 asks for exactly two left.
+    check("'exactly two machines left' is untouched",
+          len(to_goals({"goals": [{"goal": "count", "select": {"kind": "vm", "where": []},
+                                   "amount": 2, "name": ""}]},
+                       "make sure there are exactly two machines left")) == 1)
+
+
 def test_repairs_run_before_refusals_and_the_order_is_declared():
     """THE ORDERING BUG THAT COST FOUR RUNGS, pinned so it cannot come back quietly.
 
@@ -768,14 +814,16 @@ def test_repairs_run_before_refusals_and_the_order_is_declared():
     """
     print("\n[pipeline] repairs run before refusals, and the phases are declared")
     from engines.extract import (_REFUSALS, _REPAIRS, _refuse_invented,
-                                 _refuse_shared_identity, _repair_unusable)
+                                 _refuse_shared_identity, _refuse_unasked_teardown,
+                                 _repair_unusable)
 
     # THE EXACT TUPLE, on purpose. Adding a rule should be a line somebody wrote here, not a
     # thing that happened — the ordering this file exists to protect cost four rungs the day
     # it was implicit.
     check("the repair phase holds the repair", _REPAIRS == (_repair_unusable,))
     check("and the refusals are declared separately",
-          _REFUSALS == (_refuse_invented, _refuse_shared_identity))
+          _REFUSALS == (_refuse_invented, _refuse_shared_identity,
+                        _refuse_unasked_teardown))
     check("no rule appears in both phases", not set(_REPAIRS) & set(_REFUSALS))
 
     # EVERY RULE HAS ONE SIGNATURE, which is what makes them testable alone and the pipeline

@@ -1569,10 +1569,44 @@ def _refuse_shared_identity(goal: Dict[str, Any], sel: Dict[str, Any], request: 
     return goal, sel, None
 
 
+def _refuse_unasked_teardown(goal: Dict[str, Any], sel: Dict[str, Any], request: str,
+                            world=None) -> tuple:
+    """AN UNFILTERED `count(kind) = 0` IS A TEARDOWN, and it must be asked for in words.
+
+    The writer plans it literally: measured 2026-08-06 against a four-machine lab, the goal
+    `count(vm) = 0` produced `stop_vm` + `delete_vm` for EVERY machine. That is a legitimate
+    request and it must never arrive by accident.
+
+    AND IT ARRIVES BY ACCIDENT EASILY, because it is what a FILTERED count degrades into when
+    its filter is lost. The record already turns on this: `extract.invented` DROPS a goal
+    rather than stripping the invented name, because stripping
+    `count(vm WHERE name='unresponsive') = 0` leaves `count(vm) = 0` — delete every machine.
+    So every future repair that removes a filter has this waiting underneath it.
+
+    THE EVIDENCE IS THE SENTENCE, read from `request_evidence` like `reach` and `except`
+    before it — data in the manifest, not a word list in this file, and the same two-reader
+    arrangement. A request that says *"stop the ones that do not answer"* contains no removal
+    word, and a teardown is not a believable reading of it.
+
+    A FILTERED ZERO IS UNTOUCHED. `count(vm WHERE label = scratch) = 0` is the ordinary
+    teardown and it says WHICH ones; what is refused is only the unqualified sweep.
+    """
+    if goal.get("shape") != "count" or goal.get("eq") != 0:
+        return goal, sel, None
+    rest = {k: v for k, v in (sel or {}).items() if k != "kind"}
+    if rest:
+        return goal, sel, None
+    if _mentions("removal", request):
+        return goal, sel, None
+    kind = sel.get("kind") or "member"
+    return goal, sel, (f"it asks for NO {kind}s left at all, which means deleting every one "
+                       f"of them, and the request never asks to remove anything")
+
+
 # REPAIRS FIRST, THEN REFUSALS. Adding a rule means putting it in the right tuple, which is
 # the whole point: the phase is a declaration rather than a line number.
 _REPAIRS = (_repair_unusable,)
-_REFUSALS = (_refuse_invented, _refuse_shared_identity)
+_REFUSALS = (_refuse_invented, _refuse_shared_identity, _refuse_unasked_teardown)
 
 
 # ── ONE BUILDER PER SHAPE, SO THE DISPATCH IS A TABLE ─────────────────────────────────────

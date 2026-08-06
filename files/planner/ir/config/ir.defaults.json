@@ -43,6 +43,25 @@
    "excluding",
    "leaving out"
   ],
+  "removal": [
+   "delete",
+   "remove",
+   "destroy",
+   "tear down",
+   "teardown",
+   "get rid",
+   "wipe",
+   "clear out",
+   "clean up",
+   "scrap",
+   "dispose",
+   "no more",
+   "none left",
+   "nothing left",
+   "empty the",
+   "cut the lab"
+  ],
+  "_removal_doc": "WORDS THAT MAKE A TEARDOWN BELIEVABLE. An UNFILTERED `count(kind) = 0` says the lab should hold NONE of a kind, and the writer plans exactly that: measured 2026-08-06 against a four-machine lab it produced stop+delete for every one. That is a legitimate thing to ASK FOR and must never arrive by ACCIDENT — and it arrives by accident easily, because it is what a FILTERED count degrades into when its filter is lost. `extract.invented` DROPS a goal rather than stripping its invented name for exactly this reason: strip `count(vm WHERE name='unresponsive') = 0` and what remains is DELETE EVERY MACHINE. A FILTERED zero is untouched — `count(vm WHERE label = scratch) = 0` is the ordinary teardown and it says which ones.",
   "_reach_doc": "REACH IS A MUTUAL RELATION, AND THE VERB IS NOT THE SIGNAL. This listed the networking VERBS — ping, see, talk, communicate, connect — and every one of them is distributive as often as it is mutual. 'ping every vm and stop the ones that do not answer' is a probe of each machine; 'connect web to it' is an attachment. Both got `reach` offered, and the model took it: rung 11 answered `reach vm min 2` for a clause that is `every vm[alive=false] must status=stopped`, and rung 3's paraphrase answered `reach network min 2` for an attach. MEASURED 2026-08-04, and 2026-08-03 had already recorded the shape — the model 'grabbed the one taking a bare set' when it had nothing else to say. WHAT MAKES A REQUEST MEAN REACH IS MUTUALITY: each other, one another, between them — or the word `reach` itself. A verb says what is done TO members; only the phrase says they must do it to EACH OTHER. This is the same narrowing that worked in 6e5896e: a shape a request cannot mean is not offered to it."
  },
  "loop_var": "item",
