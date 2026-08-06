@@ -13,6 +13,11 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from planner import ghost_writer as _gw
+import os as _os
+
+from planner import dry_run as _dry
+from planner import reading_gate as _gate
+from planner import refine as _refine
 from planner import tree_keeper as _keeper
 from planner.ir import lower as _lower
 from planner.ir import observe as _observe
@@ -107,9 +112,20 @@ class _PlanMixin:
         want = getattr(session, "intent", None)
         corrects = self._corrects(session)
         temps: List = []
+        # THE REHEARSAL, AND IT COSTS NOTHING. `cover` already executes every placed tile on
+        # a scratch copy — that is how it knows what is already satisfied — so the predicted
+        # end state is a by-product of planning that was thrown away until 2026-08-06. Asking
+        # for it back is what lets the reading be GRADED before anything runs, which is the
+        # property the program regime was chosen over the tree FOR:
+        #
+        #     "its artifact is complete and INERT before anything runs — so it can be graded
+        #      at every granularity at once, corrected, and resubmitted, at zero risk."
+        before = _dry.snapshot(world)
+        predicted: List = []
         try:
             plan = _gw.cover(components, world, temps=temps, acting=corrects,
-                             without=getattr(session, 'authoring', None))
+                             without=getattr(session, 'authoring', None),
+                             predicted=predicted)
         except _gw.Unsolvable as e:
             # THE PROMOTION REQUEST. Built as an honest refusal — no tile, no rule, will not
             # improvise — and under the engine architecture that is exactly what asking for
@@ -134,6 +150,56 @@ class _PlanMixin:
                                "findings": [],
                                "why": "already satisfied — nothing to do"},
                     "why": "already satisfied — nothing to do"}
+
+        # ── THE READING GATE ────────────────────────────────────────────────────────────
+        #
+        # DID WE UNDERSTAND THE REQUEST? Everything above this line asks whether the PROGRAM
+        # is well formed; nothing asked whether it answers the question that was put. That is
+        # what a `DONE_BUT_FALSE` is, and until now production had no check for it at all —
+        # the word appears in this codebase only in comments and in the bench, because the
+        # bench catches it with a hand-written checker per rung and production has no oracle.
+        #
+        # THE COMPARISON IS AGAINST THE REQUEST, never against the goals. Checking the
+        # predicted world against the goals passes BY CONSTRUCTION: a false success already
+        # agrees with itself, which is what makes it invisible. `clause_ledger` enumerates
+        # demands from the ENGLISH, so reconciling a world diff against those is the one
+        # piece of evidence available that is not derived from the thing being judged.
+        #
+        # AND THE GATE IS THE MEASUREMENT. The ladder needs an oracle per rung and can only
+        # ever measure fourteen requests; this fires or does not on every real one, and what
+        # it catches is the metric. That argument was already in `chat/config.json` — the
+        # chat path ships because it is gated, this one did not because it was not.
+        #
+        # OFF WITH `GORGON_NO_GATE=1`, for measuring it against itself and nothing else. It
+        # is ON by default because a mechanism nobody calls is this codebase's dominant
+        # defect, and four were added in one day before this line was written.
+        verdict = None
+        if _os.environ.get("GORGON_NO_GATE") != "1":
+            asked_for = str(getattr(session, "request", "") or "")
+            # ONE BUILDER — `refine.judged`. This assembled a `Rehearsal` by hand because
+            # `cover` has already run and must not run twice, and within the hour it had
+            # drifted from `refine.rehearse`: `probed` was added there and not here, so every
+            # PROBING program read as "does work, changes nothing" and the gate refused
+            # rung 13. A thing with several constructors has no invariants.
+            rehearsal = _refine.judged(
+                components, plan, program, before,
+                _dry.snapshot(predicted[0]) if predicted else before,
+                predicted[0] if predicted else world, asked_for,
+                asked_before=_dry.observations(world))
+            verdict = _gate.judge(asked_for, rehearsal)
+            if session is not None:
+                session.record(f"reading gate: {verdict.outcome}"
+                               + (f" ({verdict.caught})" if verdict.caught else ""),
+                               filed_by="reading_gate", caught_by="operator",
+                               level="warn" if verdict.outcome != _gate.PROCEED else "info")
+            if verdict.outcome != _gate.PROCEED:
+                # IT IS A QUESTION AND NOT A CRASH. The rehearsal found something it cannot
+                # settle alone, so the run stops with the question rather than acting on a
+                # reading nobody confirmed — and `promote` is deliberately absent, because
+                # this is not a gap another engine could close.
+                return {"ok": False, "asked": verdict.question or verdict.detail,
+                        "caught": verdict.caught, "calls": [], "program": program,
+                        "why": verdict.question or verdict.detail}
 
         # THE ENGINE'S OWN TOOLS, not Gorgon's. `validate` checks statements against known
         # tools, and the default is the VM executor's registry — correct for the executor

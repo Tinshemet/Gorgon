@@ -145,6 +145,39 @@ def empty(d: Dict[str, Any]) -> bool:
     return not (d.get("added") or d.get("removed") or d.get("changed"))
 
 
+def observations(world) -> Set[str]:
+    """What the world has been ASKED, as a set of finding keys. `set()` when it cannot say.
+
+    A PROBE IS AN EFFECT AND THE REGISTRY CANNOT SEE IT. `alive` is not stored on a machine;
+    it is recorded in the findings ledger (decision 6), so a program whose whole job is to
+    establish an observation moves nothing a snapshot of `_records` can read and looks
+    IDENTICAL to a program that did nothing.
+
+    THAT COST TWO FALSE ALARMS THE FIRST TIME THE GATE WAS WIRED — rung 9 asks whether three
+    machines can reach each other and rung 11 pings before it acts, and both were accused of
+    changing nothing while doing exactly what was asked.
+    """
+    found = getattr(world, "findings", None)
+    if found is None:
+        return set()
+    # THREE SHAPES, AND `Findings` IS NEITHER A DICT NOR ITERABLE. `planner.findings.Findings`
+    # keeps its entries privately and exposes `known()` (added for this — `persistable()`
+    # deliberately drops probe facts, which are precisely the ones that matter here); `model_world.Ledger` IS a dict;
+    # a test may pass a plain one. The first version tried `dict(found)` and then iteration,
+    # got a TypeError from both, and silently returned the empty set — so EVERY probe looked
+    # like no probe and the rule this exists to fix stayed broken while appearing fixed.
+    for read in (lambda: found.known(), lambda: dict(found), lambda: set(found)):
+        try:
+            got = read()
+        except Exception:
+            continue
+        try:
+            return {str(k) for k in got}
+        except Exception:
+            continue
+    return set()
+
+
 def touched(d: Dict[str, Any]) -> Set[str]:
     """Every name and value the change is ABOUT — what a clause's anchors are matched against.
 
@@ -237,3 +270,39 @@ def unaddressed(request: str, d: Dict[str, Any],
                         "why": ("nothing the program would change mentions "
                                 + ", ".join(repr(m) for m in missing))})
     return out
+
+
+def probers(kinds=None) -> Set[str]:
+    """Every tool the manifest declares as ESTABLISHING an observed fact.
+
+    READ FROM `observed.<fact>.by`, never a hand-written list — the manifest already names
+    the asker for each fact, and a second list here would be the vocabulary defect this
+    codebase has now paid for several times.
+    """
+    from planner.ir import config as _config
+    out: Set[str] = set()
+    for spec in (kinds or _config.KINDS or {}).values():
+        for fact in (spec.get("observed") or {}).values():
+            by = (fact or {}).get("by")
+            if by:
+                out.add(str(by))
+    return out
+
+
+def asks(plan) -> bool:
+    """Does this plan ASK the world anything? Read off the PLAN, not off the ledger.
+
+    THE LEDGER CANNOT ANSWER THIS ON A SECOND PASS. A re-run probes exactly as the first run
+    did, but the facts are already recorded, so "did new findings appear" is FALSE while the
+    program is doing precisely the work it is supposed to do — and the gate then called a
+    correct re-verification inert. Measured on `test_medusa_rungs`' second-pass invariant.
+
+    THE PLAN IS THE HONEST PLACE TO ASK, because it says what WILL BE DONE rather than what
+    happened to be new about it.
+    """
+    tools = probers()
+    for call in plan or ():
+        name = call[0] if isinstance(call, (list, tuple)) and call else getattr(call, "tool", None)
+        if str(name) in tools:
+            return True
+    return False

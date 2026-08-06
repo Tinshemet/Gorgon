@@ -101,16 +101,25 @@ def judge(request: str, rehearsal: "refine.Rehearsal",
                                  + "; ".join(lost) + ". What did you mean?"),
                        detail="; ".join(lost))
 
-    # 3 — A CLAUSE NAMES SOMETHING THE PROGRAM WOULD NEVER TOUCH. The strongest evidence the
-    # rehearsal produces, because it compares against the REQUEST rather than the goals, and
-    # a goal checked against itself always agrees.
-    if rehearsal.faults:
-        first = rehearsal.faults[0]
-        clause = (first.get("clause") or "").strip()
-        return Verdict(ASK, "clause-untouched",
-                       question=(f"I would not change anything to do with "
-                                 f"{clause!r}. Did I read that right?"),
-                       detail=refine.report(rehearsal))
+    # 3 — ⇒ `clause-untouched` WAS A GATING RULE AND IS NOW ONLY A REPORT. WITHDRAWN
+    #     2026-08-06 ON THE FIRST WIRING, which is exactly what wiring it was for.
+    #
+    # It accused 2 of 13 known-good rungs:
+    #
+    #     rung  9  "make sure n1, n2 and n3 can all ping each other"
+    #              -> nothing mentions 'n1'. The program PROBES, and a probe records a
+    #                 FINDING rather than changing a record — invisible to a registry diff.
+    #     rung 10  "clone golden into 3 new vms"
+    #              -> nothing mentions 'golden'. Correct, and irrelevant: golden is the
+    #                 SOURCE. A clause naming a thing to be READ is not a clause about a
+    #                 thing to be CHANGED, and nothing here can tell those apart.
+    #
+    # THE PROBE HALF IS FIXED (`dry_run.observations`); THE SOURCE HALF IS NOT, and no rule
+    # that cannot distinguish a source from a target belongs in front of a run. A gate that
+    # refuses correct programs is worse than no gate — it teaches the operator to ignore it.
+    #
+    # THE SIGNAL IS KEPT ON THE REHEARSAL where a caller can read it, because it is real
+    # evidence about a reading; what it is not is sufficient to STOP one.
 
     # 4 — IT WOULD DO NOTHING. Deliberately a QUESTION and never a refusal: "make sure
     # exactly 3 carry prod" against a lab where 3 already do is a correct program that

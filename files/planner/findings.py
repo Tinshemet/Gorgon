@@ -21,7 +21,7 @@ state. The schema is data (sits beside the catalog's `effect`), so a new yieldin
 tool declares its fact in one place.
 """
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Set
 
 from .claim_types import claim_type      # the typed-claim registry (ClaimType classes)
 
@@ -140,6 +140,21 @@ class Findings:
         for k, v in (entries or {}).items():
             if k not in self._f and isinstance(v, dict) and "value" in v:
                 self._f[k] = dict(v)
+
+    def known(self) -> Set[str]:
+        """Every fact this ledger holds, PROBE FACTS INCLUDED — what has been asked.
+
+        `persistable()` is not this and cannot stand in for it: it deliberately drops probe
+        facts because they are *"cheap to re-derive and go stale"*, which is right for saving
+        and wrong for asking WHAT HAS BEEN ESTABLISHED. Using it as an enumerator made every
+        probe invisible, so a program whose whole job is to observe looked like a program
+        that did nothing — see `dry_run.observations`, which is the caller this exists for.
+
+        A SET OF KEYS AND NOT THE ENTRIES, because a caller comparing two moments wants to
+        know WHAT WAS ASKED, and handing out the values would invite reading a verdict off a
+        ledger that `usable()` and `is_pending()` are the proper readers of.
+        """
+        return set(self._f)
 
     def has(self, fact: str) -> bool:
         return fact in self._f

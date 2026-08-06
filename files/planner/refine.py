@@ -52,13 +52,29 @@ class Rehearsal:
     def __init__(self, goals: List[Dict[str, Any]], plan=None, program=None,
                  diff: Optional[Dict[str, Any]] = None,
                  faults: Optional[List[Dict[str, str]]] = None,
-                 unsolvable: str = ""):
+                 unsolvable: str = "", visible: bool = True,
+                 probed: bool = False):
         self.goals = goals
         self.plan = plan or []
         self.program = program
         self.diff = diff or {}
         self.faults = faults or []
         self.unsolvable = unsolvable
+        # DID THE SNAPSHOT SEE ANYTHING AT ALL? A world this cannot read — a stub, a mock, a
+        # registry with an interface `dry_run._records` does not know — yields an EMPTY
+        # snapshot, an empty diff, and therefore a verdict of "changes nothing" about every
+        # program ever planned against it. That is absence of evidence read as evidence of
+        # absence, and it failed seven suites the first time this was wired.
+        #
+        # A BLIND REHEARSAL ACCUSES NOBODY. It is the same rule `dry_run.unaddressed` already
+        # follows when handed no identifiers, and the same one `_is_member` follows with no
+        # world: with nothing established, the safe reading is the behaviour that existed
+        # before the check.
+        self.visible = visible
+        # DID IT ASK THE WORLD ANYTHING? A probe records a FINDING, not a change to any
+        # record, so a rehearsal that only observes has an empty diff and is not inert —
+        # it did exactly what an observation is supposed to do. See `dry_run.observations`.
+        self.probed = probed
 
     @property
     def inert(self) -> bool:
@@ -73,7 +89,8 @@ class Rehearsal:
 
         So this is reported and never refused here. The gate decides.
         """
-        return bool(self.plan) and not self.unsolvable and dry_run.empty(self.diff)
+        return (bool(self.plan) and not self.unsolvable and self.visible
+                and not self.probed and dry_run.empty(self.diff))
 
     @property
     def clean(self) -> bool:
@@ -100,6 +117,36 @@ class Rehearsal:
                 -len(self.plan))
 
 
+def judged(goals, plan, program, before, after, after_world, request: str = "",
+           asked_before=None) -> Rehearsal:
+    """A Rehearsal from a plan SOMEBODY ELSE ALREADY MADE. THE ONE BUILDER.
+
+    THERE WERE TWO AND THEY DRIFTED WITHIN THE HOUR. `_run.py` assembles its own because
+    `cover` is expensive and has already run, and when `probed` was added to `rehearse` the
+    hand-built one kept passing the default — so every PROBING program read as "does work,
+    changes nothing" and the gate refused rung 13.
+
+    THE SAME SHAPE AS `SimWorld.blank_vm`, fixed the same day for the same reason: three
+    builders of one record, a field added to two of them, the third silently wrong. **A thing
+    with several constructors has no invariants.**
+
+    `asked_before` is what the world had already been asked, so a rehearsal that establishes
+    NOTHING NEW is not credited for findings that were there before it ran.
+    """
+    change = dry_run.diff(before, after)
+    # ASKED OFF THE PLAN, not off the ledger. On a SECOND pass the probes run again and the
+    # facts are already recorded, so "did new findings appear" is False while the program is
+    # doing exactly its job — and a correct re-verification was called inert.
+    asked = dry_run.asks(plan) or bool(
+        dry_run.observations(after_world) - set(asked_before or ()))
+    return Rehearsal(goals, plan=plan, program=program, diff=change,
+                     visible=bool(before) or bool(after),
+                     probed=bool(asked),
+                     faults=(dry_run.unaddressed(request, change,
+                                                 dry_run.identifiers(before, after))
+                             if request else []))
+
+
 def rehearse(goals: List[Dict[str, Any]], world, request: str = "") -> Rehearsal:
     """Plan `goals`, run them on a COPY, and report what they would do. Never touches `world`.
 
@@ -119,16 +166,13 @@ def rehearse(goals: List[Dict[str, Any]], world, request: str = "") -> Rehearsal
     except Exception as exc:
         return Rehearsal(goals, unsolvable=f"{type(exc).__name__}: {exc}")
     after = dry_run.snapshot(predicted[0]) if predicted else before
-    change = dry_run.diff(before, after)
-    faults: List[Dict[str, str]] = []
-    if request:
-        known = dry_run.identifiers(before, after)
-        faults = dry_run.unaddressed(request, change, known)
     try:
         program = as_program(plan, goals, world, temps=[])
     except Exception:
         program = None
-    return Rehearsal(goals, plan=plan, program=program, diff=change, faults=faults)
+    return judged(goals, plan, program, before, after,
+                  predicted[0] if predicted else world, request,
+                  asked_before=dry_run.observations(world))
 
 
 def best(candidates: List[List[Dict[str, Any]]], world, request: str = ""):

@@ -772,6 +772,24 @@ class Orchestrator:
             # no better program will make it allowed, and filing it with the gaps would send
             # the request up the ladder looking for a way around the ban.
             return session.close("REFUSED", str(result.get("why") or ""))
+        if result.get("asked"):
+            # THE READING GATE STOPPED IT, and that is neither a gap nor a refusal. UNMET
+            # means nothing could close it and INVITES the next regime to try; a question
+            # about what the operator MEANT is not something a better engine answers, and
+            # sending it up the ladder would have some other regime act on the same unread
+            # request.
+            #
+            # UNTRANSLATED IS THE RIGHT WORD and it is the one already defined for this: the
+            # request never became a request. What is new is that this one got as far as a
+            # complete, inert program before anybody could tell — which is exactly the
+            # granularity the program regime exists to give.
+            #
+            # THE QUESTION TRAVELS, because a refusal the operator cannot answer is a dead
+            # end and this one is answerable in a word.
+            out = session.close("UNTRANSLATED", str(result.get("asked") or ""))
+            out["asked"] = result.get("asked")
+            out["caught"] = result.get("caught")
+            return out
         if not result.get("ok"):
             return session.close("UNMET", str(result.get("why") or ""))
 
