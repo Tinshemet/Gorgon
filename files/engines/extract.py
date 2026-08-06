@@ -2096,6 +2096,28 @@ def to_goals(raw: Dict[str, Any], request: str = "",
         [[gorgon-hallucination-was-load-bearing]]: *"four of the five failures asked the model
         where each goal came from; both survivors ask it nothing."*
 
+        ## ⇒ THE SCHEMA HALF WAS BUILT, MEASURED AND WITHDRAWN — 2026-08-06
+
+        This resolves `of`. **Nothing in production emits it**, because the model would not.
+        A sixth branch requiring `of` and forbidding `select` was offered twice:
+
+            sharing the word `every`    used in  0 of 18 draws
+            with its own word `then`    used in  0 of 18 draws
+
+        across rungs 2, 3 and 10 — the three whose second clause IS a referent — on both
+        arms. **OFFERING A SHAPE DOES NOT MAKE A MODEL USE IT**, which is the third
+        independent confirmation of that law in one day: the `cannot` field was *"legal to
+        fill, never chosen"*, and `PhantomFill` (2607.20492) reports all nine open-weight
+        models ignoring an escape value while fabricating at 60-100%.
+
+        SO THE BRANCH WAS REMOVED and this was kept. A sixth branch costs enforcement — eleven
+        broke constrained decoding outright on 2026-07-31 — and buying that for a shape
+        measured at zero uses is a trade with nothing on one side.
+
+        WHAT KEEPS IT ALIVE is that `of` is correct and tested: given it, rung 10 plans, runs
+        and passes its own checker. The emitter it is waiting for is an OPERATOR writing goals
+        or the procedure picker, not this model — [[gorgon-ai-does-not-author]].
+
         ## IT REFERS BACKWARD ONLY, AND A REFERENCE TO NOTHING IS REPORTED
 
         A forward or self reference is refused rather than repaired: the operator's sentence
