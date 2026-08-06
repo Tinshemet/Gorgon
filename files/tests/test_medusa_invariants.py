@@ -1297,6 +1297,88 @@ def test_there_is_exactly_one_noun_lexicon():
     check("and has no inline noun list", '"instance"]' not in body)
 
 
+def test_an_operator_can_write_the_rung_the_ai_never_could():
+    """RUNG 11, BY HAND, AND IT PASSES ITS OWN CHECKER.
+
+    *"Ping every vm and stop the ones that do not answer."* No model has ever produced a
+    goal for that second clause at any size, and on 2026-08-06 `clause_probe` showed it is
+    not findability: asked for that clause ALONE, with the whole request as context and one
+    shape to decide, the model still did not produce it. The conclusion drawn that morning
+    was that Medusa lacked a conditional selector over an OBSERVED attribute.
+
+    **THAT CONCLUSION WAS WRONG AND THIS IS THE DISPROOF.** The language has it. A filter on
+    an observed attribute parses, plans, runs, and stops exactly the machines that did not
+    answer — leaving the ones that did alone, which is the half a blunt "stop everything"
+    fails.
+
+    SO THE GAP IS NOT IN MEDUSA. It is in the GOAL SCHEMA the extractor emits, where every
+    shape takes a selector over world attributes and there is no way to say "the ones that
+    just failed the probe". The operator can write this today; only the AI cannot — which is
+    the whole of [[gorgon-ai-does-not-author]] in one test.
+
+    IT IS AN INVARIANT AND NOT A BENCH ROW because it is a claim about the LANGUAGE. If this
+    ever stops parsing or stops stopping the right machines, the backbone claim — that
+    Medusa can express what an operator means — has broken, and no ladder score would say so.
+    """
+    print("[language] a result-dependent action is writable by hand")
+    import importlib
+
+    from planner import dry_run
+    from planner.ir import run as _run
+    from planner.ir.parse import parse
+    from tests.bench.rungs import _r11, _s11
+    from tests.bench.seams import seams
+    from tests.bench.sim_world import SimWorld
+
+    program = parse("PROCEDURE stop_the_dead() {\n"
+                    "  FOREACH $item IN SELECT vm { $item.alive(); }\n"
+                    "  FOREACH $item IN SELECT vm WHERE alive = false { $item.stop(); }\n"
+                    "  ENSURE COUNT(SELECT vm WHERE alive = false "
+                    "AND status = 'running') = 0;\n}")
+    check("a filter on an observed attribute parses", bool(program.get("body")))
+
+    world = SimWorld()
+    _s11(world)
+    select, holds = seams(world)
+    result = _run(program, execute=world.execute, select=select, holds=holds)
+    check("and it runs", result.get("ok") is True)
+    # THE HALF THAT MAKES IT A REAL ANSWER: stopping everything also empties the set, and
+    # the rung is written so that the blunt reading FAILS. Naming both directions here means
+    # a future change cannot pass this by becoming less discriminating.
+    stopped = {n for n, v in world.vms.items() if v["status"] == "stopped"}
+    check("it stops the machines that did not answer", stopped >= {"beta", "delta"})
+    check("and leaves the ones that did", not (stopped & {"alpha", "gamma"}))
+    check("the rung's own checker agrees", _r11(world) is True)
+
+    # ⇒ AND THE SAME PROGRAM WITHOUT THE PROBE PASS IS A FALSE SUCCESS, which is the more
+    # valuable half of this test and the reason the probe is not decoration.
+    #
+    # `alive` is OBSERVED: `$item.alive()` returns nothing to the program — it runs the
+    # prober and the answer lands in the findings ledger, which is what `WHERE alive = false`
+    # reads. Drop the probe and every machine is `unknown`; `unknown` matches neither true
+    # nor false (decision 6), so the filter selects NOBODY, the loop body never runs, and the
+    # closing ENSURE holds BECAUSE THE SET IS EMPTY.
+    #
+    # ANTECEDENT FAILURE, in three lines of Medusa — Beer & Ben-David's vacuity, which
+    # `consent.vacuous` was written for and does not catch here because the assertion is a
+    # perfectly ordinary count. It reports DONE having stopped nothing.
+    blind = parse("PROCEDURE b() {\n"
+                  "  FOREACH $item IN SELECT vm WHERE alive = false { $item.stop(); }\n"
+                  "  ENSURE COUNT(SELECT vm WHERE alive = false "
+                  "AND status = 'running') = 0;\n}")
+    second = SimWorld()
+    _s11(second)
+    was = dry_run.snapshot(second)
+    sel2, holds2 = seams(second)
+    blind_result = _run(blind, execute=second.execute, select=sel2, holds=holds2)
+    check("the blind version still reports success", blind_result.get("ok") is True)
+    check("while stopping nothing", _r11(second) is False)
+    # THE DRY RUN CATCHES IT WITH NO ORACLE, and this case was not one of the two the gate
+    # was built against — which is the only evidence so far that it generalises.
+    check("and a rehearsal sees the world did not move",
+          dry_run.empty(dry_run.diff(was, dry_run.snapshot(second))))
+
+
 def main():
     """Every `test_*` in this module, in definition order — DISCOVERED, not listed.
 
