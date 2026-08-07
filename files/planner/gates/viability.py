@@ -106,6 +106,48 @@ class Report:
                 f"unstable={len(self.unstable)} compounded={len(self.compounded)}>")
 
 
+BOUNCE = "bounce"
+BLOCK = "block"
+
+
+def viable(goals, verdicts: Optional[Dict[str, Any]] = None) -> str:
+    """BOUNCE while a person could still rescue this; BLOCK once nobody can.
+
+    ## ⇒ THE OPERATOR'S RULE, 2026-08-07
+
+    *"All of the gates either FIX or ROUTE. The rungs need to succeed because they are SOUND
+    — both the bounce and the block are our default response WHEN ALL ELSE FAILS. We can't fix
+    something broken, or missing logic. We either bounce it or block it: bounce when gate 4
+    determines it can still be VIABLE, and block when it can't be helped any more."*
+
+    That is what this gate was named for. The other three answer whether a reading is LEGAL;
+    only this one is asked whether it can still be made to WORK, and that is the question that
+    decides which of the two last resorts applies.
+
+    ## WHAT MAKES A REQUEST UNHELPABLE, AND BOTH ARE ALREADY COMPUTED
+
+        NOTHING SURVIVED      there is no reading to repair. A question about a sentence that
+                              produced no goal at all is a question with nothing to attach to.
+        UNSATISFIABLE         gate 2 asked the MANIFEST whether the kind can satisfy the shape
+                              AT ALL — no creator, no deleter, no probe, no setter. No answer
+                              from any operator changes a declaration, so asking is a courtesy
+                              that wastes their time and ends in the same refusal.
+
+    EVERYTHING ELSE BOUNCES. A reading that kept goals and drew a question is one a person can
+    still resolve, and refusing it without asking is the system deciding on their behalf.
+
+    ⇒ THE DEFAULT IS BOUNCE, NOT BLOCK, and that direction is deliberate: blocking a request
+    somebody could have rescued is the more expensive mistake, because it is invisible. A
+    needless question is a small annoyance the operator can see and dismiss.
+    """
+    if not goals:
+        return BLOCK
+    truth = (verdicts or {}).get("truth")
+    if truth is not None and getattr(truth, "unsatisfiable", None):
+        return BLOCK
+    return BOUNCE
+
+
 def _shape(goals) -> str:
     """A reading's identity, for comparing two draws of one request.
 

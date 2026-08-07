@@ -98,6 +98,32 @@ class Plan(Shortcut):
         return said.strip().lower() in ("y", "yes")
 
     @staticmethod
+    def ask_clarify(question, session=None):
+        """*Part of this was not understood — what did you mean?* Returns their words, or "".
+
+        THE ONE PLACE WITH A PERSON IN IT, which is the same argument `ask_destroy` makes one
+        method up: when the language cannot tell two readings apart, the fix is not a guess,
+        it is a question, and it belongs where somebody can answer.
+
+        ⇒ WHAT IS ASKED IS THE GATE'S OWN SENTENCE, not a paraphrase of it. The gates were
+        built to phrase their findings in the operator's terms — *"it makes a vm and a network
+        and never connects them. Did you mean them to be connected, or to stay apart?"* —
+        and re-wording that here would put a second author between the finding and the person.
+
+        ⇒ AN ABSENT TERMINAL IS SILENCE, NOT A GUESS. `EOFError` is a piped stdin and
+        `KeyboardInterrupt` is somebody declining; both return "" and the refusal that was
+        already coming stands. Same rule `ask_destroy` and `consent` keep: with nobody to ask,
+        take the answer that changes nothing.
+        """
+        console.print(f"\n[warn]{question}[/warn]")
+        try:
+            said = console.input("[bold cyan]say that part again "
+                                 "(or press enter to cancel):[/bold cyan] ")
+        except (EOFError, KeyboardInterrupt):
+            return ""
+        return said.strip()
+
+    @staticmethod
     def ask_banned(banned) -> bool:
         """*This program names a tool your agent forbids — password to lift it.* Default NO.
 
@@ -282,6 +308,7 @@ class Plan(Shortcut):
         # A DRY RUN NEEDS NO CONSENT SURFACE, because it never reaches the world — and
         # offering one would train the operator to answer a question that decides nothing.
         result = _rig.build(guarded, narrate=not dry, decide=decide,
+                            clarify=Plan.ask_clarify,
                             consent=None if dry else self._ask_consent,
                             # A DRY RUN TOUCHES NOTHING, so there is nothing to lift and no
                             # password to ask for — offering one would teach the operator to

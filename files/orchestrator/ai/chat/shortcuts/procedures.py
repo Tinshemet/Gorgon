@@ -309,6 +309,7 @@ class Procedures(Shortcut):
             return _insession.Verdict(step.kind)
 
         orch = _rig.build(guarded, narrate=True, consent=Plan._ask_consent, decide=decide,
+                          clarify=Plan.ask_clarify,
                           permit=Plan.ask_banned)
         shown = "".join(f" {k}={v}" for k, v in args.items())
         console.print(f"\n[bold]{name}[/bold]{shown}")

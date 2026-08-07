@@ -1099,10 +1099,15 @@ def test_the_bounce_asks_the_operator_and_reads_again():
 
     def answerer(gap, w=None):
         seen.append(str(gap))
-        # HALF A REQUEST FIRST, a whole one once the operator has explained.
+        # HALF A REQUEST FIRST, a whole one once the operator has explained. The GATE'S
+        # question is what travels — `asks` — because the raw drop reason holds the model's
+        # own mistakes as well as the operator's ambiguity, and only one of those is a
+        # question a person can answer.
         if len(seen) == 1:
-            return Answer(GOOD, "extractor", dropped=["it is about name 'x', which the "
-                                                      "request never names"])
+            return Answer(GOOD, "extractor",
+                          dropped=["it is about name 'x', which the request never names"],
+                          asks=["part of this reading does not match what you asked. "
+                                "'x' — the request never names it."])
         return Answer(GOOD, "extractor")
 
     def operator(question, session):
@@ -1116,7 +1121,8 @@ def test_the_bounce_asks_the_operator_and_reads_again():
                        clarify=operator).handle("create a vm named alpha", intent="achieve")
 
     check("the operator was asked exactly once", len(asked) == 1)
-    check("and the question names what was not read", "not understood" in asked[0])
+    check("and the question is the GATE'S, not the raw drop reason",
+          "never names it" in asked[0])
     check("their answer was APPENDED to their own sentence",
           "create a vm named alpha" in seen[1] and "I meant" in seen[1])
     check("the run is no longer refused", out.get("outcome") != "UNTRANSLATED")
@@ -1140,8 +1146,9 @@ def test_nobody_there_is_todays_behaviour_exactly():
     def answerer(gap, w=None):
         seen.append(str(gap))
         return Answer([{"shape": "count", "select": {"kind": "vm", "name": "a"}, "eq": 1}],
-                      "extractor", dropped=["it is about name 'x', which the request "
-                                            "never names"])
+                      "extractor",
+                      dropped=["it is about name 'x', which the request never names"],
+                      asks=["'x' — the request never names it."])
 
     world = SimWorld()
     registry = Registry()
@@ -1173,10 +1180,11 @@ def test_silence_and_a_still_broken_answer_both_leave_the_refusal_standing():
         def answerer(gap, w=None):
             seen.append(str(gap))
             drops = ["it is about name 'x', which the request never names"]
+            asks = ["'x' — the request never names it."]
             if always_broken or len(seen) == 1:
                 return Answer([{"shape": "count",
                                 "select": {"kind": "vm", "name": "a"}, "eq": 1}],
-                              "extractor", dropped=drops)
+                              "extractor", dropped=drops, asks=asks)
             return Answer([{"shape": "count",
                             "select": {"kind": "vm", "name": "a"}, "eq": 1}], "extractor")
 
@@ -1195,6 +1203,71 @@ def test_silence_and_a_still_broken_answer_both_leave_the_refusal_standing():
     out, seen = run("some clarification", True)
     check("a still-broken second reading is asked for once", len(seen) == 2)
     check("and is NOT asked about again", out.get("outcome") == "UNTRANSLATED")
+
+
+def test_gate_4_decides_which_last_resort_applies():
+    """THE OPERATOR'S RULE, 2026-08-07: *"All of the gates either FIX or ROUTE. The rungs need
+    to succeed because they are SOUND — both the bounce and the block are our default response
+    WHEN ALL ELSE FAILS. We can't fix something broken, or missing logic. We either bounce it
+    or block it: bounce when gate 4 determines it can still be VIABLE, and block when it can't
+    be helped any more."*
+
+    That is what this gate was named for. The other three answer whether a reading is LEGAL;
+    only this one is asked whether it can still be made to WORK.
+    """
+    print("[gate 4] bounce while a person can help, block once nobody can")
+    from planner.gates import truth as g2, viability as g4
+
+    good = [{"shape": "count", "select": {"kind": "vm", "name": "a"}, "eq": 1}]
+
+    check("a reading that kept goals can still be rescued",
+          g4.viable(good) == g4.BOUNCE)
+    check("nothing survived means nothing to attach a question to",
+          g4.viable([]) == g4.BLOCK)
+
+    # ⇒ UNSATISFIABLE IS THE OTHER ONE, AND IT IS THE INTERESTING CASE. Gate 2 asked the
+    #   MANIFEST whether the kind can satisfy the shape AT ALL — no creator, no deleter, no
+    #   probe, no setter. NO ANSWER FROM ANY OPERATOR CHANGES A DECLARATION, so asking is a
+    #   courtesy that wastes their time and ends in the same refusal.
+    world = _world()
+    cannot = [{"every": {"kind": "vm"}, "must": {"os_type": "linux"}}]
+    truth = g2.inspect(cannot, world)
+    check("gate 2 finds a shape the kind can never satisfy", bool(truth.unsatisfiable))
+    check("and gate 4 blocks rather than asking about it",
+          g4.viable(cannot, {"truth": truth}) == g4.BLOCK)
+
+    # ⇒ AND THE DEFAULT LEANS TO BOUNCE, deliberately: blocking a request somebody could have
+    #   rescued is the more expensive mistake because it is INVISIBLE, while a needless
+    #   question is a small annoyance the operator can see and dismiss.
+    check("an unknown verdict still bounces", g4.viable(good, {"truth": None}) == g4.BOUNCE)
+
+
+def test_an_unhelpable_request_is_never_asked_about():
+    """THE WIRE, end to end: gate 4 says BLOCK and the operator is left alone."""
+    print("[bounce] gate 4 blocks, and nobody is asked")
+    from engines.channel import Answer, Channel
+    from engines.medusa.engine import MedusaEngine
+    from engines.orchestrator import Orchestrator
+    from engines.registry import Registry
+    from tests.bench.sim_world import SimWorld
+
+    asked = []
+
+    def answerer(gap, w=None):
+        return Answer([{"shape": "count", "select": {"kind": "vm", "name": "a"}, "eq": 1}],
+                      "extractor",
+                      dropped=["it is about name 'x', which the request never names"],
+                      asks=["'x' — the request never names it."],
+                      gates={"viable": False})
+
+    world = SimWorld()
+    reg = Registry()
+    reg.mount(MedusaEngine(world))
+    out = Orchestrator(reg, Channel([answerer]),
+                       clarify=lambda q, s: asked.append(q) or "anything").handle(
+                           "create a vm named a", intent="achieve")
+    check("nobody was asked", not asked)
+    check("and it refuses outright", out.get("outcome") == "UNTRANSLATED")
 
 
 def main(argv=None) -> int:

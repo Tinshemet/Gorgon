@@ -172,8 +172,11 @@ def test_the_plan_shortcut_settles_the_intent_before_it_builds_anything():
             return {"outcome": "DONE", "why": "", "log": [], "calls": []}
 
     def fake_build(execute, library=None, narrate=True, decide=None, consent=None,
-                   permit=None):
-        seen["consent"], seen["permit"] = consent, permit
+                   permit=None, clarify=None):
+        # `clarify` IS THE THIRD OPERATOR SURFACE and it is asserted like the other two: the
+        # chat path is the one place with a person in it, so a mount built there that could
+        # not ask a question would leave every gate talking to a log.
+        seen["consent"], seen["permit"], seen["clarify"] = consent, permit, clarify
         return StubOrchestrator()
 
     real, _rig.build = _rig.build, fake_build
@@ -189,6 +192,11 @@ def test_the_plan_shortcut_settles_the_intent_before_it_builds_anything():
         # AND THE RED-LINE SURFACE, which is a DIFFERENT question: consent asks whether the
         # operator agrees, this asks whether they can prove they are the operator.
         check("and a red-line surface too", callable(seen.get("permit")))
+        # ⇒ AND THE SURFACE THAT ASKS A QUESTION RATHER THAN FOR PERMISSION. The gates were
+        # built to phrase what only the operator can answer; without this they phrase it into
+        # a log. The chat path is the one place with a person in it.
+        check("and a clarify surface, so a gate's question reaches somebody",
+              callable(seen.get("clarify")))
 
         seen.clear()
         # A DRY RUN NEVER REACHES THE WORLD, so it needs NEITHER a consent surface nor a rung.

@@ -263,6 +263,10 @@ def translator() -> Callable:
             #   ambiguous one.
             if any(r.get("to") == _viability.BAD_PROMPT for r in whole_verdict.routes()):
                 gates["reask"] = False
+            # ⇒ AND GATE 4 SAYS WHICH LAST RESORT APPLIES. The other three answer whether the
+            #   reading is LEGAL; only this one is asked whether it can still be made to WORK,
+            #   and that is what decides between asking a person and refusing outright.
+            gates["viable"] = _viability.viable(goals or [], verdicts) == _viability.BOUNCE
         except Exception:
             # A GATE THAT RAISES MUST NOT TAKE THE TRANSLATION WITH IT — the same rule the
             # gate 1 call above follows, and for the same reason: an observer that can fail
@@ -335,7 +339,8 @@ def packages(findings=None) -> Tuple:
 def build(execute: Callable, library=None, narrate: bool = True,
           decide: Optional[Callable] = None,
           consent: Optional[Callable] = None,
-          permit: Optional[Callable] = None) -> Any:
+          permit: Optional[Callable] = None,
+          clarify: Optional[Callable] = None) -> Any:
     """The whole production mount: two engines, a channel, a reporter, a router.
 
     `execute` is the caller's GUARDED executor — the same door a single tool call goes
@@ -378,6 +383,15 @@ def build(execute: Callable, library=None, narrate: bool = True,
     registry.mount(QemuEngine(lib, execute, findings=found, author=author, route=route,
                               packages=packages(findings=found)))
 
+    # ⇒ `clarify` IS THE OPERATOR'S SECOND SURFACE, and it is the caller's for exactly the
+    # reason `consent` is: this module knows how to assemble a mount, not who is at the
+    # terminal. Left `None` the gates' questions ride out on the outcome and the run closes —
+    # which is what every measurement to date was taken against.
+    #
+    # AND THE UNATTENDED PATHS MUST LEAVE IT NONE. A routine fired by the clock has nobody to
+    # ask, and a mount that blocked on `input()` there would hang a scheduled run rather than
+    # refuse it. Absent is not permission; it is absence.
     return Orchestrator(registry, Channel([translator()]), decide=decide,
                         route=floor_first, consent=consent, permit=permit,
+                        clarify=clarify,
                         narrate=_reporter.narrator() if narrate else None)

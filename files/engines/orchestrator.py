@@ -791,7 +791,40 @@ class Orchestrator:
             #   WHAT COMES BACK IS APPENDED, NOT SUBSTITUTED. The operator is answering a
             #   question about their own sentence, so the sentence plus the answer is the
             #   request they meant; replacing it would discard everything they got right.
-            asked = self._bounce(_clarify(request, lost), request, engine, session)
+            #   ⇒ AND IT ASKS THE **GATES'** QUESTION, NEVER THE RAW DROP REASON.
+            #
+            #     `lost` is `to_goals`' per-component legality output and it holds BOTH kinds:
+            #     an ambiguity that is the OPERATOR'S ("it is about name 'before', which the
+            #     request never names") and a mistake that is the MODEL'S ("it asks every vm
+            #     with label=prod to have label=prod, which is already so"). Measured over the
+            #     seven cells that would bounce, FOUR of the seven raw reasons are the model's
+            #     own error — and asking somebody "you asked every prod-labelled vm to have the
+            #     prod label, what did you mean?" blames them for a misreading. Being asked
+            #     that is worse than a clean refusal.
+            #
+            #     THE GATES ALREADY MAKE THAT SPLIT, because they were built to phrase only
+            #     what a person can answer — gate 1 asks about an INVENTION or a DROP, gate 3
+            #     about a reading that means nothing, and neither speaks for a shape the model
+            #     simply chose wrongly. Measured on the same seven: the gates ask on FOUR, all
+            #     four answerable, and stay silent on the three that should not be asked. They
+            #     also MISS one (a shared identity `to_goals` refuses and no gate sees), which
+            #     is a question not asked rather than a wrong one asked.
+            #
+            #     ⇒ AND GATE 4 DECIDES WHETHER TO ASK AT ALL. *"Bounce when gate 4 determines
+            #       it can still be VIABLE, and block when it can't be helped any more."* A
+            #       reading where NOTHING survived has no question to attach to, and one gate
+            #       2 calls UNSATISFIABLE cannot be rescued by any answer — the manifest says
+            #       the kind can never satisfy the shape, and no operator changes a
+            #       declaration. Asking there is a courtesy that wastes their time and ends in
+            #       the same refusal.
+            asked = None
+            if (answer.gates or {}).get("viable") is not False:
+                asked = self._bounce("  ".join(getattr(answer, "asks", ()) or ()),
+                                     request, engine, session)
+            else:
+                session.record("gate 4: nothing an answer could change — refusing outright",
+                               filed_by="viability", caught_by="operator",
+                               executed="translate", level="warn")
             if asked is not None:
                 return asked, None
             return None, session.close("UNTRANSLATED", _clarify(request, lost))
