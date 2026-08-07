@@ -151,6 +151,15 @@ def translator() -> Callable:
         try:
             whole = _completeness.inspect(str(gap), goals or [])
             illegal += [f for f in whole.findings() if f not in illegal]
+            # ⇒ AND GATE 1 VOTES HERE, by joining `lost` — the channel `to_goals` already
+            #   uses. Expressing the vote as a DROP rather than as a new outcome means the
+            #   whole apparatus behind it applies unchanged: the run refuses, gate 4 decides
+            #   whether it is still viable, and the bounce asks the operator in gate 1's own
+            #   words. A second refusal path would have been a second thing to keep correct.
+            #
+            #   ONE SHAPE ONLY — an invented `must` value, the slot `to_goals` is structurally
+            #   blind to and cannot borrow its own test for. See `Report.refusals`.
+            lost += [f for f in whole.refusals() if f not in lost]
         except Exception:
             pass
         # ⇒ GATE 2, HERE AND NOT IN THE ENGINE, because the world is already in hand.

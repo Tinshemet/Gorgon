@@ -161,6 +161,55 @@ def test_evidence_for_a_shape_that_no_goal_takes():
     check("a removal expressed as a total is not accused", not total.unshaped)
 
 
+def test_gate_1_votes_on_an_invented_must_value():
+    """THE ONE PLACE THIS GATE REFUSES RATHER THAN REPORTS, and it is the narrowest the
+    evidence supports.
+
+    ⇒ `to_goals` IS STRUCTURALLY BLIND THERE. `_keep` judges the SELECTOR —
+    `goal.get("select") or goal.get("every") or goal.get("observe")` — and never a `must`, so
+    `{"every": {"kind": "vm"}, "must": {"status": "before"}}` reaches the writer carrying a
+    value the request never said. Found live on rung 11's paraphrase.
+
+    ⇒ AND IT CANNOT BORROW ITS OWN TEST FOR THE SLOT. Judging `must` values with
+    `_refuse_invented` costs **6 false alarms of 58** — it refuses `must network='lab-red'`,
+    a MINTED name for a network the request never names, because it has no notion of a mint.
+    Gate 1 does, and measures **0 of 58** on the same slot.
+
+    ⇒ IT CATCHES NOTHING ON THE CORPUS, said plainly rather than dressed up: the corpus does
+    not contain the shape. The live path produced it.
+    """
+    print("[gate 1] the vote: an invented `must` value")
+    from planner.gates import completeness as g1
+
+    caught = g1.inspect("check which machines respond and shut down whichever ones dont",
+                        [{"every": {"kind": "vm"}, "must": {"status": "before"}}])
+    check("an invented `must` value is refusable", len(caught.refusals()) == 1)
+    check("and it names the slot", "must status" in caught.refusals()[0])
+
+    # ⇒ THE THREE IT MUST NOT REFUSE, and each one nearly broke it.
+    #
+    #   A `must` THAT POINTS AT ANOTHER KIND IS MINTABLE and its name need not come from the
+    #   request at all — the writer CREATES the member. Written without that exemption this
+    #   accused FIVE known-good readings: `must network='lab'`, `'net1'`, `'rednet'`,
+    #   `'bluenet'`, every one a network the request never names and the ORACLE ITSELF mints.
+    #   The compound test saves `lab-red` and CANNOT save `rednet` — `red` sits inside a word
+    #   there — so the exemption has to be the REFERENCE, not the spelling.
+    for made in ("lab-red", "rednet", "net1"):
+        ref = g1.inspect("put the red ones together on their own network",
+                         [{"every": {"kind": "vm", "label": "red"},
+                           "must": {"network": made}}])
+        check(f"a minted network name ({made}) is not refused", not ref.refusals())
+
+    enum = g1.inspect("launch every vm that is currently stopped",
+                      [{"every": {"kind": "vm"}, "must": {"status": "running"}}])
+    check("a value the SCHEMA declares is not refused", not enum.refusals())
+
+    # AND NOTHING ELSE GETS A VOTE — a drop and a hole stay questions, not refusals.
+    dropped = g1.inspect("tag every one of them 'fleet'",
+                         [{"every": {"kind": "vm"}, "must": {"network": "core"}}])
+    check("a DROP is still only a question", not dropped.refusals() and dropped.dropped)
+
+
 def test_gate_1_never_modifies_the_reading():
     """IT CLASSIFIES. IT DOES NOT STRIP, AND THAT IS A SAFETY PROPERTY.
 

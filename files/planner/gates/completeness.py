@@ -220,6 +220,18 @@ class Report:
         walk(fixed)
         return fixed
 
+    def refusals(self) -> List[str]:
+        """Findings this gate is entitled to REFUSE on, not merely report.
+
+        ⇒ ONE SHAPE, AND IT IS THE NARROWEST THE EVIDENCE SUPPORTS: an invented `must` value.
+        `to_goals` is structurally blind there — `_keep` judges the SELECTOR and never a
+        `must` — and it cannot borrow its own test for the slot, because `_refuse_invented`
+        has no notion of a MINT and refuses `must network='lab-red'` at 6 false alarms of 58.
+        Gate 1 measures 0 of 58 on the same slot.
+        """
+        return [f"it is about {i['slot']} {i['value']!r}, which the request never names"
+                for i in self.invented if i.get("votes")]
+
     def question(self) -> Optional[str]:
         """ONE message naming EVERY gap at once, or None if the operator is not needed.
 
@@ -706,6 +718,56 @@ def inspect(request: str, goals: List[dict], kinds=None) -> Report:
                             "became": value, "change": direction})
         else:
             invented.append({"shape": shape, "slot": slot, "value": value})
+
+    # ── 2b · AN INVENTED `must` VALUE — AND THIS ONE VOTES. ──────────────────────────────
+    #
+    # ⇒ THE ONE SLOT `to_goals` CANNOT JUDGE, MEASURED BOTH WAYS. `_keep` judges the SELECTOR
+    #   — `goal.get("select") or goal.get("every") or goal.get("observe")` — and never a
+    #   `must`, so `{"every": {"kind": "vm"}, "must": {"status": "before"}}` reaches the
+    #   writer with a value the request never said. Found live on rung 11's paraphrase.
+    #
+    # ⇒ AND `to_goals` CANNOT SIMPLY BE POINTED AT IT. Judging `must` values with
+    #   `_refuse_invented`'s test costs **6 false alarms of 58** — it refuses
+    #   `must network='lab-red'`, a MINTED name for a network the request never names.
+    #   `_refuse_invented` has no notion of a mint. Gate 1 does, and with it the same slot
+    #   measures **0 of 58**: `red` is a whole word of `lab-red`, so it is a compound built
+    #   from the operator's own word rather than a mangling.
+    #
+    # ⇒ SO THIS IS WHERE THE GATE EARNS A VOTE, and it is the narrowest place the evidence
+    #   supports one: a slot the older checker is blind to, a test it cannot borrow, and a
+    #   false-alarm rate of zero on every reading measured. It catches NOTHING on the corpus —
+    #   said plainly rather than dressed up — because the corpus does not contain the shape;
+    #   the live path produced it.
+    for goal in goals or ():
+        for attr, value in (goal.get("must") or {}).items():
+            if not isinstance(value, str) or _declared_value(attr, value, kinds):
+                continue
+            # ⇒ A `must` THAT POINTS AT ANOTHER KIND IS MINTABLE, AND ITS NAME NEED NOT COME
+            #   FROM THE REQUEST AT ALL. *"A selector REFERS — the name must be given; a
+            #   `must` ASSIGNS — the name may be MINTED"*
+            #   ([[gorgon-reading-names-writing-mints]]), and the writer creates the member.
+            #
+            #   MEASURED THE MOMENT THIS WAS WRITTEN WITHOUT IT: five KNOWN-GOOD readings
+            #   accused — `must network='lab'`, `'net1'`, `'rednet'`, `'bluenet'`. Every one
+            #   is a network the request never names and the ORACLE ITSELF mints. The
+            #   compound test saves `lab-red` and cannot save `rednet`, because `red` sits
+            #   INSIDE a word there — so the exemption has to be the REFERENCE, not the
+            #   spelling.
+            from . import claims as _claims
+            if _claims.refers_to(attr, kinds):
+                continue
+            if said(request, value):
+                continue
+            origin = _near(value, request)
+            if origin and origin[1] == "compound":
+                continue                      # a mint from the operator's own words
+            if origin:
+                token, direction = origin
+                mutated.append({"shape": "must", "slot": attr, "said": token,
+                                "became": value, "change": direction})
+                continue
+            invented.append({"shape": "must", "slot": f"must {attr}", "value": value,
+                             "votes": True})
 
     # ── 3 · DROPPED — the one check that must run the other way, kept to what is certain. ─
     #
