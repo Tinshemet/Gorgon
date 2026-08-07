@@ -121,6 +121,46 @@ def test_gate_1_catches_the_four_things_it_exists_for():
     check("a declared enum value is NOT an invention", rep.legal)
 
 
+def test_evidence_for_a_shape_that_no_goal_takes():
+    """THE ONE ABSENCE CHECK THAT NEEDS NO VOCABULARY OF ITS OWN.
+
+    Every previous attempt to see a dropped clause needed a word list somebody had to keep
+    correct. This asks the MANIFEST what makes a shape believable — `request_evidence`, the
+    same list `schema()` uses to decide whether to OFFER the branch — and reads it the other
+    way: a request that EARNED the offer and produced nothing has lost the clause.
+
+    ⇒ TWO ENTRIES ONLY, AND THE THIRD WAS MEASURED AND LEFT OUT. `removal` implies no single
+    goal form: rung 14's "cut the lab down to two machines" is `count(vm) = 2` — a TOTAL that
+    removes without any `eq 0` — so demanding one accuses a correct reading. `reach` and
+    `except` each map to exactly one form, which is what makes them checkable and removal not.
+    """
+    print("[gate 1] the request earned a shape and no goal took it")
+    from planner.gates import completeness as g1
+
+    lost = g1.inspect("make sure n1, n2 and n3 can all reach each other",
+                      [{"shape": "count", "select": {"kind": "vm", "name": "n1"}, "eq": 1}])
+    check("reach evidence with no reach goal is caught", bool(lost.unshaped))
+    check("and it says which", "reach" in lost.findings()[-1])
+
+    kept = g1.inspect("make sure n1, n2 and n3 can all reach each other",
+                      [{"shape": "reach", "select": {"kind": "vm"}, "min": 3}])
+    check("a reading that takes the shape is silent", not kept.unshaped)
+
+    carved = g1.inspect("put every vm on core except db",
+                        [{"every": {"kind": "vm", "not": {"name": "db"}},
+                          "must": {"network": "core"}}])
+    check("an except that IS carved out is silent", not carved.unshaped)
+    flat = g1.inspect("put every vm on core except db",
+                      [{"every": {"kind": "vm"}, "must": {"network": "core"}}])
+    check("and one that is not is caught", bool(flat.unshaped))
+
+    # ⇒ REMOVAL IS DELIBERATELY NOT CHECKED — pinned so it is not added later without the
+    #   measurement. "cut the lab down to two machines" removes, and says so with a TOTAL.
+    total = g1.inspect("cut the lab down to two machines",
+                       [{"shape": "count", "select": {"kind": "vm"}, "eq": 2}])
+    check("a removal expressed as a total is not accused", not total.unshaped)
+
+
 def test_gate_1_never_modifies_the_reading():
     """IT CLASSIFIES. IT DOES NOT STRIP, AND THAT IS A SAFETY PROPERTY.
 

@@ -94,15 +94,19 @@ class Report:
     ended up with rules that collided.
     """
 
-    def __init__(self, holes=None, dropped=None, mutated=None, invented=None):
+    def __init__(self, holes=None, dropped=None, mutated=None, invented=None,
+                 unshaped=None):
         self.holes: List[Dict[str, Any]] = list(holes or ())
         self.dropped: List[Dict[str, Any]] = list(dropped or ())
         self.mutated: List[Dict[str, Any]] = list(mutated or ())
         self.invented: List[Dict[str, Any]] = list(invented or ())
+        # THE REQUEST GAVE DECLARED EVIDENCE FOR A SHAPE AND NO GOAL IS THAT SHAPE.
+        self.unshaped: List[Dict[str, Any]] = list(unshaped or ())
 
     @property
     def legal(self) -> bool:
-        return not (self.holes or self.dropped or self.mutated or self.invented)
+        return not (self.holes or self.dropped or self.mutated or self.invented
+                    or self.unshaped)
 
     def findings(self) -> List[str]:
         """One sentence per problem, in the operator's terms — never the model's."""
@@ -117,6 +121,8 @@ class Report:
                        f"— data was {m['change']}")
         for i in self.invented:
             out.append(f"it is about {i['slot']} {i['value']!r}, which the request never names")
+        for u in self.unshaped:
+            out.append(f"the request asks about {u['evidence']} and no goal says it")
         return out
 
     # ── THE RESOLVE ARM ──────────────────────────────────────────────────────────────────
@@ -613,6 +619,55 @@ def inspect_raw(request: str, raw: Dict[str, Any], kinds=None,
     return report
 
 
+# ⇒ WHICH DECLARED EVIDENCE IMPLIES WHICH GOAL SHAPE, and only where the mapping is EXACT.
+#
+# `request_evidence` already declares the words that make a shape believable — the manifest is
+# the authority and nothing new is invented here. What this adds is the other direction: if
+# the request carries the evidence and NO GOAL IS THAT SHAPE, the clause was lost.
+#
+# ⇒ TWO ENTRIES, AND THE THIRD WAS MEASURED AND LEFT OUT. `removal` implies no single goal
+#   form: rung 14's "cut the lab down to two machines" is `count(vm) = 2`, a TOTAL that removes
+#   without any `eq 0`, so demanding one accuses a correct reading. Reach and except each map
+#   to exactly one form, which is what makes them checkable and `removal` not.
+_SHAPE_OF = {
+    "reach": lambda g: g.get("shape") == "reach",
+    "except": lambda g: "not" in (g.get("select") or g.get("every") or g.get("per") or {}),
+}
+
+
+def unshaped(request: str, goals: List[dict]) -> List[Dict[str, Any]]:
+    """Evidence the request gives for a shape that no goal takes.
+
+    ⇒ THE ONE ABSENCE CHECK THAT NEEDS NO VOCABULARY OF ITS OWN. Every other attempt to see a
+    dropped clause needed a word list somebody had to keep correct. This asks the MANIFEST
+    what makes a shape believable — the same list `schema()` uses to decide whether to OFFER
+    the branch — so a request that earned the offer and produced nothing is a loss the system
+    can state in its own declared terms.
+
+    MEASURED: across the corpus the only readings with reach evidence and no reach goal are
+    rung 6's, whose evidence exists only since `together`/`share` were added TODAY and whose
+    recorded readings predate the offer. Every reading drawn WHILE reach was offered carries
+    one. `except` is 2 catches, 0 false alarms.
+    """
+    from planner.ir import config as _config
+    out = []
+    said = _flat(request)
+    words = set(said.split())
+    for evidence, is_shape in _SHAPE_OF.items():
+        for phrase in (getattr(_config, "REQUEST_EVIDENCE", {}) or {}).get(evidence) or ():
+            phrase = _flat(phrase).strip()
+            if not phrase:
+                continue
+            # WHOLE WORDS FOR SINGLE TOKENS, substrings for the multi-word ones — the same
+            # rule `extract._mentions` follows, restated here because `planner` is layer 0 and
+            # may not reach up into `engines`. The LIST is shared; only the reading is local.
+            if (phrase in said) if " " in phrase else (phrase in words):
+                if not any(is_shape(g) for g in goals or ()):
+                    out.append({"evidence": evidence, "said": phrase})
+                break
+    return out
+
+
 def inspect(request: str, goals: List[dict], kinds=None) -> Report:
     """Gate 1 over one reading. Deterministic, no model call, no world.
 
@@ -682,4 +737,5 @@ def inspect(request: str, goals: List[dict], kinds=None) -> Report:
         if token.lower() not in carried and _flat(token).strip() not in flat_goals:
             dropped.append({"token": token, "why": "a value the request quotes"})
 
-    return Report(holes=holes, dropped=dropped, mutated=mutated, invented=invented)
+    return Report(holes=holes, dropped=dropped, mutated=mutated, invented=invented,
+                  unshaped=unshaped(request, goals or []))
