@@ -39,7 +39,8 @@ class Answer:
     def __init__(self, components: Optional[List[Dict[str, Any]]], source: str, why: str = "",
                  procedure: Optional[str] = None, dropped: Optional[List[str]] = None,
                  illegal: Optional[List[str]] = None,
-                 fetch: Optional[List[str]] = None):
+                 fetch: Optional[List[str]] = None,
+                 asks: Optional[List[str]] = None):
         self.components = components or []
         self.source = source
         # AN AUTHORING REQUEST NAMES WHAT TO KEEP. `None` is an ordinary request: do it now.
@@ -73,6 +74,15 @@ class Answer:
         # to anything that treats absence as denial. That would stop every machine in the lab
         # on a request to stop the unresponsive ones.
         self.fetch = list(fetch or ())
+        # ⇒ WHAT GATE 3 WANTS THE **OPERATOR** ASKED, and it is a different field from `fetch`
+        # for the reason the two gates differ: `fetch` is a question for the WORLD, which the
+        # system may answer for itself, and this is a question for a PERSON, which it may not.
+        #
+        # *"We can't truly know what the user wants — it's on them to clarify."* Gate 3 can
+        # DERIVE the missing relation and deliberately does not supply it; joining two things
+        # a request meant to leave apart is inventing intent. So it asks, and the asking has
+        # to reach somebody or the restraint buys nothing.
+        self.asks = list(asks or ())
 
     def __bool__(self) -> bool:
         return bool(self.components)

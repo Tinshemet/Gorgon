@@ -143,6 +143,7 @@ def translator() -> Callable:
         # — neither is a reason to doubt the reading. Folding them into `illegal` would make
         # the one gate that knows how to RESOLVE something look like the one complaining most.
         fetch: list = []
+        asks: list = []
         try:
             verdict = _truth.inspect(goals or [], world)
             illegal += [f for f in verdict.findings() if f not in illegal]
@@ -172,6 +173,7 @@ def translator() -> Callable:
             reasoned = _reasoning.inspect(goals or [], world,
                                           settled=bool(verdict.settled))
             illegal += [f for f in reasoned.findings() if f not in illegal]
+            asks = reasoned.questions()
         except Exception:
             # A GATE THAT RAISES MUST NOT TAKE THE TRANSLATION WITH IT — the same rule the
             # gate 1 call above follows, and for the same reason: an observer that can fail
@@ -198,8 +200,9 @@ def translator() -> Callable:
                 # stands: the run is refused, and the recovery shows up as goals nobody used.
         if not goals:
             return Answer(None, "extractor", "; ".join(lost) or "no usable goal",
-                          dropped=lost, illegal=illegal, fetch=fetch)
-        return Answer(goals, "extractor", "", dropped=lost, illegal=illegal, fetch=fetch)
+                          dropped=lost, illegal=illegal, fetch=fetch, asks=asks)
+        return Answer(goals, "extractor", "", dropped=lost, illegal=illegal,
+                      fetch=fetch, asks=asks)
     translate.name = "extractor"
     return translate
 

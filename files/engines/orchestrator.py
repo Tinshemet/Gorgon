@@ -727,6 +727,15 @@ class Orchestrator:
             # looked at `alive` yet"* — not a doubt about the reading. Filing it beside the
             # faults would teach a reader that the gate which knows how to RESOLVE something
             # is the one complaining most.
+            # ⇒ GATE 3'S QUESTIONS FOR THE OPERATOR, filed as a WARNING because unlike a
+            # probe these cannot be answered by the system. It derived the missing relation
+            # and declined to supply it — that restraint only means something if the question
+            # reaches a person.
+            if getattr(answer, "asks", None):
+                session.record("gate 3 asks: " + " ".join(answer.asks[:2]),
+                               filed_by="reasoning", caught_by="operator",
+                               executed="translate",
+                               data={"asks": answer.asks}, level="warn")
             if getattr(answer, "fetch", None):
                 session.record("gate 2 wants a probe: " + "; ".join(answer.fetch[:3]),
                                filed_by="truth", caught_by="orchestrator",

@@ -693,6 +693,54 @@ def test_contradiction_is_sound_and_records_that_it_has_never_fired():
           not g3.contradictions(multi))
 
 
+def test_gate_3_asks_and_never_supplies():
+    """THE OPERATOR'S RULING, 2026-08-07: *"we can't truly know what the user wants — it's on
+    them to clarify."*
+
+    The temptation was concrete. `unrelated` KNOWS what the missing goal would be — `lab` and
+    `web` are both minted and the manifest declares `vm.setters.add_vm_to_network refs
+    network`, so `count(vm WHERE name=web AND network=lab) = 1` is derivable with no
+    vocabulary and no model call. It would close rung 3 outright.
+
+    AND IT WOULD BE INVENTING INTENT. Two relatable things a request MEANS to leave apart
+    would be joined by a gate that decided it knew better — on the one false alarm this gate
+    has that is UNOBSERVED rather than disproven.
+
+    ⇒ THE LINE BETWEEN THE GATES: gate 2 MAY supply because a probe only asks the WORLD; gate
+    3 may not, because everything it could supply is a guess about a PERSON.
+    """
+    print("[gate 3] it asks; it does not decide for the operator")
+    from planner.gates import reasoning as g3
+
+    check("gate 3 has no supply arm at all", not hasattr(g3.Report(), "supply"))
+
+    dropped = [{"shape": "count", "select": {"kind": "network", "net_name": "lab"}, "eq": 1},
+               {"shape": "count", "select": {"kind": "vm", "name": "web"}, "eq": 1}]
+    rep = g3.inspect(dropped, _world())
+    asks = rep.questions()
+    check("the missing relation becomes a QUESTION", len(asks) == 1)
+    check("and it offers both readings back", "stay apart" in asks[0])
+
+    # AND THE GOALS ARE UNTOUCHED — no relation was quietly added.
+    check("nothing was added to the reading", len(dropped) == 2)
+
+    # A VACUOUS READING ASKS 'what should be TRUE' — the "why?" clarification, landing where
+    # the operator said it would.
+    vac = g3.inspect([{"observe": {"kind": "vm"}, "fact": "alive"}],
+                     _world(), intent="achieve")
+    check("a vacuous reading asks what should be true",
+          any("TRUE when it is finished" in q for q in vac.questions()))
+
+    # AND A CLEAN READING ASKS NOTHING. A gate that always has a question is noise.
+    for rung in RUNGS:
+        goals = GOALS.get(rung.n)
+        if goals and g3.inspect(goals, _world(rung), settled=True).questions():
+            check(f"rung {rung.n} was asked about and should not have been", False)
+            break
+    else:
+        check("no correct reading is asked about at all", True)
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "gates")

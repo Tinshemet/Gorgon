@@ -11,6 +11,13 @@ nothing** — which is the defect this gate exists for, and the clarification it
 **"why?"**: *"create a procedure that checks the network"* refers to real things, invents
 nothing, and still means nothing until someone says what checking is.
 
+## ⇒ IT ASKS AND NEVER SUPPLIES
+
+The operator, 2026-08-07: *"we can't truly know what the user wants — it's on them to
+clarify."* Gate 2 MAY supply what it finds missing, because a probe only asks the WORLD and
+the worst case is a question nobody needed answered. **Everything gate 3 could supply is a
+guess about a PERSON**, so it asks. See `Report.questions()` for the case that was refused.
+
 ## ⇒ IT NEEDS A PLAN, AND THAT SHAPES EVERYTHING
 
 Vacuity, inertness and relation are statements about what a reading WOULD DO. Gates 1 and 2
@@ -90,6 +97,49 @@ class Report:
 
     def reports(self) -> List[str]:
         return [f"the writer cannot close this: {u['why']}" for u in self.unplannable]
+
+    def questions(self) -> List[str]:
+        """THE RESOLVE ARM, AND IT IS ALL QUESTIONS. Gate 3 asks **WHY** — for what reason,
+        to what end — which is the clarification its findings can actually earn.
+
+        ## ⇒ IT MAY NOT SUPPLY, AND THAT IS A RULING RATHER THAN A LIMITATION
+
+        The operator, 2026-08-07: *"we can't truly know what the user wants — it's on them to
+        clarify."*
+
+        The temptation was concrete and it was refused. `unrelated` knows exactly what the
+        missing goal WOULD be: `lab` and `web` are both minted and the manifest declares
+        `vm.setters.add_vm_to_network refs network`, so `count(vm WHERE name=web AND
+        network=lab) = 1` is derivable with no vocabulary and no model call. It would close
+        rung 3 outright.
+
+        **AND IT WOULD BE INVENTING INTENT.** Two relatable things a request MEANS to leave
+        apart would be joined, silently, by a gate that decided it knew better — and that is
+        the one false alarm this gate has which is UNOBSERVED rather than disproven, so
+        supplying would be acting confidently on the thing least measured about it.
+
+        ⇒ THE LINE BETWEEN THE GATES IS NOW STATED: **gate 2 MAY supply because a probe only
+        asks the WORLD — the worst case is a question nobody needed answered. Gate 3 may not,
+        because everything it could supply is a guess about a PERSON.** Same machinery,
+        different subject, opposite defaults.
+
+        ONE MESSAGE PER FINDING AND EACH NAMES WHAT TO SAY BACK. A question the operator has
+        to decode is a question they will answer wrongly.
+        """
+        asks = []
+        for v in self.vacuous:
+            asks.append("this reading asks about things and never changes any of them. "
+                        "What should be TRUE when it is finished?")
+        for u in self.unrelated:
+            asks.append(f"it makes a {u['kind']} and a {u['other']} and never connects them. "
+                        f"Did you mean them to be connected, or to stay apart?")
+        for i in self.inert:
+            asks.append("nothing in this would do anything, and nothing says it is already "
+                        "done. What did you want changed?")
+        for c in self.contradictory:
+            asks.append(f"{c['name']!r} is asked to have {c['attr']}={c['first']!r} and "
+                        f"{c['attr']}={c['second']!r}, and it can only have one. Which?")
+        return asks
 
     def __repr__(self) -> str:
         return (f"<Reasoning {'legal' if self.legal else 'ILLEGAL'} "
