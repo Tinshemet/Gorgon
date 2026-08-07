@@ -161,8 +161,13 @@ def claims(goal: Dict[str, Any], kinds=None) -> List[Claim]:
             out.append(Claim(subject, ASSERTS, attr=attr, value=value, goal=goal))
             ref = refers_to(attr, kinds)
             if ref and isinstance(value, str):
-                out.append(Claim(ref, CREATES, key=key_of(ref, kinds) or "name",
-                                 name=value, goal=goal))
+                # ⇒ MINTABLE ONLY IF THE KIND CAN BE MADE. A `must` ASSIGNS and the writer
+                #   mints the member — but only where the manifest declares a creator. A kind
+                #   with no `create` cannot be brought into being by assigning to it, so
+                #   naming an absent one there REFERS, and refers to nothing.
+                creatable = bool((_table(kinds).get(ref) or {}).get("create"))
+                out.append(Claim(ref, CREATES if creatable else REFERS,
+                                 key=key_of(ref, kinds) or "name", name=value, goal=goal))
     return out
 
 

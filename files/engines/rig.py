@@ -146,7 +146,21 @@ def translator() -> Callable:
             verdict = _truth.inspect(goals or [], world)
             illegal += [f for f in verdict.findings() if f not in illegal]
             fetch = verdict.questions()
+            # ⇒ AND THE FETCH IS SUPPLIED, NOT MERELY NAMED. A reading that FILTERS on `alive`
+            #   without ever asking is missing a precondition nothing else provides, so gate 2
+            #   says the missing claim out loud — `observe(vm) alive` — and it is PREPENDED,
+            #   because the observation has to happen before the goals that read it.
+            #
+            #   IT IS A READ AND ONLY A READ. `consent.survey` counts a probe as not acting,
+            #   so this cannot turn an inert reading into one that changes the lab; the worst
+            #   case is a question asked that nobody needed the answer to.
+            supplied = verdict.supply()
+            if supplied and goals:
+                goals = supplied + list(goals)
         except Exception:
+            # A GATE THAT RAISES MUST NOT TAKE THE TRANSLATION WITH IT — the same rule the
+            # gate 1 call above follows, and for the same reason: an observer that can fail
+            # the thing it observes is not one.
             pass
         # THE CLAUSE SPLIT, ADDITIVE AND OFF BY DEFAULT. Each clause of the request is asked
         # for on its own and the readings are unioned — see `extract.by_clause` for why a

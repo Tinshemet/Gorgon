@@ -463,8 +463,17 @@ def test_a_quantifier_aimed_at_one_member_is_a_group_fault():
     goals = [{"every": {"kind": "vm", "name": "alpha"}, "must": {"status": "running"}}]
     rep = g2.inspect(goals, world)
     check("a quantifier over one member is caught", len(rep.arity) == 1)
-    check("and it is named as an arity fault, not a world fault",
-          "aimed at ONE member" in rep.findings()[-1])
+    check("and it is named as an arity matter, not a world one",
+          "aimed at ONE member" in rep.reports()[-1])
+    # ⇒ A REPORT, NOT A REFUSAL — and the demotion is measured. It looked like a clean rule
+    #   because the shape occurs 0 times in the 14 hand-written correct readings. Against 83
+    #   REAL model readings it appears on ones that PASS (`every vm WHERE name=db`, five
+    #   times): a clumsy way to say something true, which the writer plans correctly anyway.
+    #   Fourteen hand-written readings are ONE IDIOM, and a rule validated only against them
+    #   is a rule about that idiom.
+    check("but it does not refuse the reading", rep.legal)
+    check("and it stays out of the fault channel",
+          not any("ONE member" in f for f in rep.findings()))
 
     plural = [{"every": {"kind": "vm", "os_type": "linux"}, "must": {"status": "running"}}]
     check("quantifying over a real group is fine", g2.inspect(plural, world).legal)

@@ -77,15 +77,27 @@ class Report:
         self.fetch: List[Dict[str, Any]] = list(fetch or ())
         # ALREADY TRUE. Also not a fault — but the caller should know before it plans.
         self.settled: List[Dict[str, Any]] = list(settled or ())
-        # A GROUP OPERATION AIMED AT A SINGULAR — see `inspect` for the measurement.
+        # ⇒ A GROUP OPERATION AIMED AT A SINGULAR — A REPORT, NOT A FAULT, AND THE
+        #   DEMOTION IS MEASURED.
+        #
+        #   It looked like a clean legality rule: `every`/`per` over a key-pinned selector
+        #   occurs 0 times in the 14 hand-written correct readings, so a shape no correct
+        #   reading uses can be refused. **That sample was the wrong one.** Against 83 REAL
+        #   model readings the shape appears on ones that PASS — `every vm WHERE name=db`
+        #   five times — because it is a clumsy way to say something true and the writer
+        #   plans it correctly anyway.
+        #
+        #   SO IT IS STILL WORTH SAYING AND NOT WORTH REFUSING. That is the same conclusion
+        #   `clause-untouched` and `inert` reached on 2026-08-06, and the lesson underneath it
+        #   is about the SAMPLE: fourteen hand-written readings are one idiom, and a rule
+        #   validated only against them is a rule about that idiom.
         self.arity: List[Dict[str, Any]] = list(arity or ())
 
     @property
     def legal(self) -> bool:
         """`fetch` and `settled` are NOT faults. A gate whose resolve arm counted against the
         reading would refuse exactly the requests it knows how to help with."""
-        return not (self.unreferable or self.illegal_values or self.unsatisfiable
-                    or self.arity)
+        return not (self.unreferable or self.illegal_values or self.unsatisfiable)
 
     def findings(self) -> List[str]:
         out = []
@@ -97,10 +109,41 @@ class Report:
                        f"— it is one of {sorted(v['allowed'])}")
         for s in self.unsatisfiable:
             out.append(f"a {s['kind']} can never satisfy {s['shape']}: {s['why']}")
-        for a in self.arity:
-            out.append(f"it says {a['shape']} over {a['kind']} {a['name']!r} — a group "
-                       f"operation aimed at ONE member")
         return out
+
+    def reports(self) -> List[str]:
+        """TRUE, WORTH SAYING, AND NOT A REASON TO DOUBT THE READING.
+
+        Kept OUT of `findings()` so it cannot leak into the caller's fault channel: `rig.py`
+        folds findings into `Answer.illegal`, and a report filed among faults is how a
+        measurement nobody acted on becomes a refusal nobody intended.
+        """
+        return [f"it says {a['shape']} over {a['kind']} {a['name']!r} — a group "
+                f"operation aimed at ONE member" for a in self.arity]
+
+    def supply(self) -> List[Dict[str, Any]]:
+        """THE RESOLVE ARM, AND IT ACTS. The goals that would establish what this reading
+        needs — returned to be ADDED to the reading, never executed here.
+
+        ⇒ A GATE THAT ONLY NAMES THE PROBE HAS NOT RESOLVED ANYTHING. The operator's
+        instruction was that gate 2 must PROMPT A FETCH, and until now `questions()` was the
+        whole of it: a sentence in the ledger and nothing that made the probe happen.
+
+        ⇒ AND IT AMENDS THE READING RATHER THAN REACHING FOR THE WORLD. Gate 2 has no
+        executor and should not have one — running a tool from inside a legality check is a
+        second door onto the lab. What it CAN do is say the missing claim out loud:
+        `observe(vm) alive`. The writer then plans the probe the way it plans anything else,
+        the in-session grants it like any other step, and the whole path stays one path.
+        MEASURED SUPPORT: rung 11's own known-good reading is exactly
+        `observe(vm) alive` + `every vm WHERE alive=false must status=stopped` — so supplying
+        the first goal turns a deficient reading INTO the hand-written correct one.
+
+        ⇒ ONLY FOR AN UNESTABLISHED FACT, never for an unprobed KIND. "nobody has enumerated
+        `file` yet" is answered by the mount, not by a goal, and inventing an `observe` for it
+        would be a claim about a kind this reading never spoke about.
+        """
+        return [{"observe": {"kind": f["kind"]}, "fact": f["name"]}
+                for f in self.fetch if f.get("probe")]
 
     def questions(self) -> List[str]:
         """WHAT TO ASK THE WORLD BEFORE JUDGING — the resolve arm, and it acts rather than
@@ -299,6 +342,42 @@ def inspect(goals: List[dict], world, table=None) -> Report:
                 report.fetch.append({"kind": kind, "name": attr,
                                      "why": "an observed fact nothing has asked for",
                                      "probe": _effects.probe_for(kind, attr, table)})
+
+        # ⇒ CAN THIS KIND SATISFY THIS SHAPE AT ALL? Asked of the MANIFEST, so the answer is
+        #   the same on an empty lab as on a full one — and it is the question
+        #   [[gorgon-can-the-world-satisfy-it]] records as the one that keeps paying: four
+        #   shapes were offered to kinds that could never satisfy them.
+        #
+        #   EVERY ARM READS A DECLARATION AND NONE GUESSES. A kind with no creator cannot be
+        #   counted into existence; one with no deleter cannot be counted to zero; a fact no
+        #   kind declares `observed` cannot be established; an attribute with no setter cannot
+        #   be required. The manifest already says all four.
+        shape = str(goal.get("shape") or "")
+        sel = goal.get("select") or goal.get("every") or goal.get("per") \
+            or goal.get("observe") or {}
+        kind = sel.get("kind")
+        spec = table.get(kind) or {}
+        if kind and spec:
+            if shape == "count" and goal.get("eq") == 0 and not spec.get("delete"):
+                report.unsatisfiable.append({"kind": kind, "shape": "count = 0",
+                                             "why": "nothing can remove one"})
+            elif shape == "count" and goal.get("eq") not in (0, None) \
+                    and not (spec.get("create") or spec.get("creators")):
+                report.unsatisfiable.append({"kind": kind, "shape": f"count = {goal['eq']}",
+                                             "why": "nothing can make one"})
+            # ⇒ `exists` IS ANSWERED BY ENUMERATION, NOT BY A PROBE, so `probe_for` correctly
+            #   returns nothing for it and reading that as "unsatisfiable" accused 3 PASSING
+            #   readings. Any kind the world can list can answer whether a member is there;
+            #   only a fact that needs a TOOL needs a declaration.
+            if "observe" in goal and str(goal.get("fact") or "") not in ("", "exists") \
+                    and not _effects.probe_for(kind, str(goal["fact"]), table):
+                report.unsatisfiable.append({"kind": kind,
+                                             "shape": f"observe {goal['fact']}",
+                                             "why": "no probe establishes it"})
+            for attr in (goal.get("must") or {}):
+                if not _effects.writable(kind, attr, table):
+                    report.unsatisfiable.append({"kind": kind, "shape": f"must {attr}",
+                                                 "why": "nothing can set it"})
 
         # VALUES THE MANIFEST FORBIDS. Asked of the declaration, never of the world, so it is
         # the same answer on an empty lab as on a full one.
