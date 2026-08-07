@@ -68,8 +68,14 @@ class Signature(NamedTuple):
         return sorted({e.dst for e in self.joins if e.kind == _edges.ASKS_FILTERS})
 
     @property
-    def holes(self) -> List[int]:
-        """Moves that EXCEPT an identity nobody else handles — a set carved out and dropped."""
+    def set_aside(self) -> List[int]:
+        """Moves that EXCEPT something nobody else handles — a set carved out and left.
+
+        NOT a defect. Rung 8 excepts `db` and then handles it, so the pair is total; rung 10
+        excepts `golden` and deliberately leaves it alone, which is correct. The difference
+        is unknowable from the request, so this is a QUESTION and never a repair — the
+        standing rule that we cannot know what the operator wanted.
+        """
         covered = {e.src for e in self.joins if e.kind == _edges.COVERS}
         return sorted({i for i, m in enumerate(self.moves)
                        if m.filled.get("except") and i not in covered})

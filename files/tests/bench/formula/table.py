@@ -88,8 +88,8 @@ def table() -> None:
             note = ""
             if orig in sig.residual:
                 note = "   ⇐ RESIDUAL: filters on a fact another move must go and ASK"
-            if orig in sig.holes:
-                note += "   ⇐ HOLE: excepts an identity nothing else handles"
+            if orig in sig.set_aside:
+                note += "   ⇐ SET ASIDE: excepted, and nothing else says what happens to it"
             print(f"      move {slot + 1}  {m.mnemonic:<34} k={m.key:<6} {_gloss(m)}{note}")
         if sig.joins:
             for e in sig.joins:
