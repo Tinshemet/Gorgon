@@ -272,6 +272,29 @@ _WORDS = {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
           "seven": 7, "eight": 8, "nine": 9, "ten": 10}
 
 
+def copies_of(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """(kind, name, amount) for every count of N>1 that also pins a NAME.
+
+    ⇒ GATE 1 FINDS THEM, GATE 2 JUDGES THEM — the same split the stated-cardinality check
+    uses, and for the same reason: the question needs the RAW ANSWER (which gate 2 never sees)
+    and the WORLD (which gate 1 never sees), and neither gate may take the other's subject.
+    What crosses is a list of triples: facts, not sentences.
+
+    ⇒ AND IT MUST BE READ FROM THE RAW, because `_refuse_shared_identity` drops the goal
+    before any gate could look. Same reason the invention checks had to move upstream: a rule
+    that refuses first destroys the evidence a rule that explains would need.
+    """
+    out = []
+    for goal in (raw or {}).get("goals") or ():
+        if not isinstance(goal, dict) or str(goal.get("goal")) != "count":
+            continue
+        amount, name = goal.get("amount"), goal.get("name")
+        kind = (goal.get("select") or {}).get("kind")
+        if isinstance(amount, int) and amount > 1 and isinstance(name, str) and kind:
+            out.append({"kind": kind, "name": name, "amount": amount})
+    return out
+
+
 def said_numbers(request: str) -> Set[int]:
     """Every cardinality the REQUEST states, as integers.
 

@@ -60,16 +60,21 @@ from typing import Any, Dict, List, Optional
 
 from . import claims as _claims
 
+# STRUCTURAL SELECTOR KEYS — set operations, not attributes of a member.
+_STRUCTURAL = ("kind", "not", "any", "all", "except")
+
 
 class Report:
     """What gate 3 found. Five lists, because they mean five different things."""
 
     def __init__(self, vacuous=None, inert=None, unrelated=None,
-                 contradictory=None, unplannable=None):
+                 contradictory=None, unplannable=None, uncountable=None):
         # ASSERTS NOTHING — true by construction, so it cannot fail and cannot inform.
         self.vacuous: List[Dict[str, Any]] = list(vacuous or ())
         # PLANS NOTHING — see `legal` for why this is conditional on gate 2.
         self.inert: List[Dict[str, Any]] = list(inert or ())
+        # COUNTS A SET WHOSE SIZE NOBODY CAN KNOW UNTIL SOMETHING ASKS.
+        self.uncountable: List[Dict[str, Any]] = list(uncountable or ())
         # MAKES TWO THINGS THE MANIFEST SAYS CAN RELATE, AND NEVER RELATES THEM.
         self.unrelated: List[Dict[str, Any]] = list(unrelated or ())
         # TWO GOALS FORCING ONE SINGLE-VALUED ATTRIBUTE TO DIFFERENT VALUES.
@@ -80,7 +85,8 @@ class Report:
 
     @property
     def legal(self) -> bool:
-        return not (self.vacuous or self.inert or self.unrelated or self.contradictory)
+        return not (self.vacuous or self.inert or self.unrelated or self.contradictory
+                    or self.uncountable)
 
     def findings(self) -> List[str]:
         out = []
@@ -88,6 +94,10 @@ class Report:
             out.append(f"this asserts nothing that could fail: {v['why']}")
         for i in self.inert:
             out.append("nothing in this would do anything")
+        for u in self.uncountable:
+            out.append(f"it asks for exactly {u['eq']} {u['kind']}s where {u['attr']} holds, "
+                       f"and nothing knows how many that is until something asks — "
+                       f"`every` says it without counting")
         for u in self.unrelated:
             out.append(f"it makes a {u['kind']} and a {u['other']} and never connects them")
         for c in self.contradictory:
@@ -136,6 +146,9 @@ class Report:
         for i in self.inert:
             asks.append("nothing in this would do anything, and nothing says it is already "
                         "done. What did you want changed?")
+        for u in self.uncountable:
+            asks.append(f"how many {u['kind']}s have {u['attr']} set is not knowable until "
+                        f"something asks. Did you mean ALL of the ones that do?")
         for c in self.contradictory:
             asks.append(f"{c['name']!r} is asked to have {c['attr']}={c['first']!r} and "
                         f"{c['attr']}={c['second']!r}, and it can only have one. Which?")
@@ -144,7 +157,8 @@ class Report:
     def __repr__(self) -> str:
         return (f"<Reasoning {'legal' if self.legal else 'ILLEGAL'} "
                 f"vacuous={len(self.vacuous)} inert={len(self.inert)} "
-                f"unrelated={len(self.unrelated)} contradictory={len(self.contradictory)} "
+                f"unrelated={len(self.unrelated)} uncountable={len(self.uncountable)} "
+                f"contradictory={len(self.contradictory)} "
                 f"unplannable={len(self.unplannable)}>")
 
 
@@ -190,6 +204,53 @@ def contradictions(goals: List[dict], table=None) -> List[Dict[str, Any]]:
             out.append({"kind": claim.kind, "name": claim.identity, "attr": claim.attr,
                         "first": forced[key], "second": claim.value})
         forced[key] = claim.value
+    return out
+
+
+def uncountable(goals: List[dict], table=None) -> List[Dict[str, Any]]:
+    """A `count` whose selector filters on an OBSERVED fact. Its cardinality is unknowable.
+
+    ## ⇒ THE OPERATOR'S DIAGNOSIS, 2026-08-07, AND IT IS THE CLEANEST STATEMENT OF RUNG 11
+
+    *"'stop the unresponsive ones' is a SET, but of an UNKNOWABLE NUMBER. `count` needs a
+    knowable number, meaning it either has to count them first and plug them in, or have a way
+    to express the count of an unknowable finite set."*
+
+    `count` REQUIRES `amount` — an integer, at authoring time. `alive` is not stored, it is
+    ASKED (`observed.alive.by`), so how many machines have it is unknown until something pings.
+    A count over that set demands a number nobody can supply.
+
+    ⇒ **AND `every` IS THE ANSWER, WHICH IS WHY THE FINDING SAYS SO.** *"`every` covers an
+    unknowable number of a finite set."* `every vm WHERE alive=false must status=stopped`
+    quantifies over exactly that set and never counts it — and it round-trips to the
+    hand-written correct reading of rung 11 byte for byte. The shape is not missing; it is
+    declined.
+
+    ## IT HAS NEVER FIRED, AND THAT IS RECORDED RATHER THAN HIDDEN
+
+    0 false alarms and 0 catches across the corpus, because the model does not attempt the
+    honest version and fail — it AVOIDS the filter entirely and names the set instead
+    (`count(vm WHERE name='unresponsive') = 0`). The failure is one step earlier than this
+    rule can see.
+
+    IT IS KEPT BECAUSE IT IS FREE AND SOUND, and it fires the moment a model does reach for
+    the shape this describes. A rule that costs nothing and states a real impossibility is
+    worth having before the case arrives, not after.
+    """
+    from planner.ir import config as _config
+    from planner.ir import effects as _effects
+    table = table if table is not None else (_config.KINDS or {})
+    out = []
+    for goal in goals or ():
+        if str(goal.get("shape") or "") != "count":
+            continue
+        sel = goal.get("select") or {}
+        kind = sel.get("kind")
+        for attr in sel:
+            if attr in _STRUCTURAL or attr == "kind":
+                continue
+            if _effects.probe_for(kind, attr, table):
+                out.append({"kind": kind, "attr": attr, "eq": goal.get("eq")})
     return out
 
 
@@ -261,6 +322,7 @@ def inspect(goals: List[dict], world, intent: str = "achieve",
         report.vacuous.append({"why": str(why)})
 
     report.contradictory = contradictions(goals, table)
+    report.uncountable = uncountable(goals, table)
     report.unrelated = unrelated(goals, table)
 
     # ── AND WHAT WOULD IT DO? Everything below here needs the writer. ─────────────────────

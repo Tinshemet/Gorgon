@@ -610,6 +610,45 @@ def test_gate_2_reports_what_is_already_true():
     check("and it is still legal", rep.legal)
 
 
+def test_n_copies_of_a_member_that_already_exists():
+    """RUNG 10'S PARAPHRASE, which died SILENTLY — a correct refusal with no question attached.
+
+    `to_goals` refuses *"3 vms all called 'golden', and a vm is identified by its name"* and it
+    is RIGHT: three members cannot share one identity. But no gate could phrase it, so the
+    operator got a refusal and nothing to answer. They meant three COPIES of an existing
+    machine, and only they can say so.
+
+    ⇒ GATE 1 FINDS IT IN THE RAW, GATE 2 JUDGES IT AGAINST THE WORLD. It has to be read from
+    the raw because `_refuse_shared_identity` drops the goal before any gate could look — the
+    same reason the invention checks moved upstream: a rule that refuses first destroys the
+    evidence a rule that EXPLAINS would need.
+
+    ⇒ AND THE MEMBERSHIP TEST TOOK THREE ATTEMPTS. On the raw alone: 25 false alarms of 58,
+    because the `name` slot is a SINK for descriptions the model cannot shape (`'every'`,
+    `'vms labelled prod'`). Narrowed to names the operator SAID: still 9, because `'blue'` is
+    said as a LABEL. Narrowed to names that are EXISTING MEMBERS: **0 of 58**.
+    """
+    print("[gate 2] N copies of a machine that already exists")
+    from planner.gates import completeness as g1, truth as g2
+
+    raw = {"goals": [{"goal": "count", "select": {"kind": "vm"},
+                      "amount": 3, "name": "golden"}]}
+    found = g1.copies_of(raw)
+    check("gate 1 reads it off the raw answer", len(found) == 1)
+
+    world = _world()
+    world.execute("create_vm", {"name": "golden", "os_type": "linux"})
+    rep = g2.inspect([], world, copies=found)
+    check("gate 2 confirms it against the world", bool(rep.shared))
+    check("and asks the only question that helps",
+          "copies of it" in rep.questions()[0])
+
+    # ⇒ THE SAME SHAPE WHERE THE NAME IS NOT A MEMBER IS NOT THIS. "create 3 vms called web"
+    #   on a lab with no `web` is an ordinary — if malformed — creation, and `to_goals` owns it.
+    check("a name nothing in the world holds is left alone",
+          not g2.inspect([], _world(), copies=found).shared)
+
+
 def test_gate_2_never_reads_the_request():
     """THE BOUNDARY WITH GATE 1, and it is what stops the two colliding the way the single gate
     did. Whether the SENTENCE contained a word is gate 1's, settled and measured. Gate 2 only
@@ -777,6 +816,53 @@ def test_inert_is_a_check_only_because_gate_2_answers_first():
           not g3.inspect(already, world, settled=True).inert)
     check("but WITHOUT that guarantee it would",
           bool(g3.inspect(already, world, settled=False).inert))
+
+
+def test_a_count_over_a_set_nobody_has_measured():
+    """THE OPERATOR'S DIAGNOSIS OF RUNG 11, 2026-08-07, and it is the cleanest statement of
+    that failure anyone made:
+
+    *"'stop the unresponsive ones' is a SET, but of an UNKNOWABLE NUMBER. `count` needs a
+    knowable number — meaning it either has to count them first and plug them in, or have a
+    way to express the count of an unknowable finite set."*
+
+    `count` REQUIRES `amount`, an integer, at authoring time. `alive` is not stored, it is
+    ASKED (`observed.alive.by`), so how many machines have it is unknown until something
+    pings. A count over that set demands a number nobody can supply.
+
+    ⇒ AND `every` IS THE ANSWER, WHICH IS WHY THE FINDING SAYS SO — *"every covers an
+    unknowable number of a finite set."* `every vm WHERE alive=false must status=stopped`
+    quantifies over exactly that set and never counts it, and round-trips to rung 11's
+    hand-written correct reading byte for byte. The shape is not missing; it is DECLINED.
+
+    ⇒ IT HAS NEVER FIRED, recorded rather than hidden: the model does not attempt the honest
+    version and fail, it AVOIDS the filter and names the set instead
+    (`count(vm WHERE name='unresponsive') = 0`). The failure is one step earlier than this
+    rule can see. It is kept because it costs nothing and states a real impossibility.
+    """
+    print("[gate 3] a count over a set nobody has measured")
+    from planner.gates import reasoning as g3
+
+    counted = [{"shape": "count", "select": {"kind": "vm", "alive": False}, "eq": 0}]
+    check("a count filtered on an OBSERVED fact is caught",
+          len(g3.uncountable(counted)) == 1)
+
+    world = _world()
+    world.execute("create_vm", {"name": "a", "os_type": "linux"})
+    rep = g3.inspect(counted, world, settled=True)
+    check("and the finding names the remedy rather than only the fault",
+          "`every` says it without counting" in rep.findings()[0])
+    check("and the question offers the reading they probably meant",
+          "ALL of the ones that do" in rep.questions()[0])
+
+    # ⇒ THE `every` FORM IS SILENT, and it is the SAME set — that is the whole point.
+    quantified = [{"observe": {"kind": "vm"}, "fact": "alive"},
+                  {"every": {"kind": "vm", "alive": False}, "must": {"status": "stopped"}}]
+    check("quantifying over the same set is not accused", not g3.uncountable(quantified))
+
+    # AND A COUNT ON A STORED ATTRIBUTE IS FINE — `status` is written, not asked.
+    stored = [{"shape": "count", "select": {"kind": "vm", "status": "running"}, "eq": 2}]
+    check("a count on a STORED attribute is knowable", not g3.uncountable(stored))
 
 
 def test_an_unplannable_reading_is_reported_and_not_refused():

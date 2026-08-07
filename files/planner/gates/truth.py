@@ -66,7 +66,8 @@ class Report:
     """What gate 2 found, in five lists, because they resolve five different ways."""
 
     def __init__(self, unreferable=None, illegal_values=None, unsatisfiable=None,
-                 fetch=None, settled=None, arity=None, uncarried=None):
+                 fetch=None, settled=None, arity=None, uncarried=None,
+                 shared=None):
         # A REFERENCE TO A MEMBER THE WORLD DOES NOT HOLD. Nothing to constrain.
         self.unreferable: List[Dict[str, Any]] = list(unreferable or ())
         # A VALUE THE MANIFEST DOES NOT ALLOW FOR THAT ATTRIBUTE.
@@ -91,6 +92,8 @@ class Report:
         #   `clause-untouched` and `inert` reached on 2026-08-06, and the lesson underneath it
         #   is about the SAMPLE: fourteen hand-written readings are one idiom, and a rule
         #   validated only against them is a rule about that idiom.
+        # N OF A MEMBER THAT ALREADY EXISTS — a count of copies wearing an identity's clothes.
+        self.shared: List[Dict[str, Any]] = list(shared or ())
         # A CARDINALITY THE REQUEST STATED THAT NO GOAL CARRIES — gate 1 finds the numbers,
         # this gate judges them against the world. See `inspect` for the measurement.
         self.uncarried: List[Dict[str, Any]] = list(uncarried or ())
@@ -101,7 +104,7 @@ class Report:
         """`fetch` and `settled` are NOT faults. A gate whose resolve arm counted against the
         reading would refuse exactly the requests it knows how to help with."""
         return not (self.unreferable or self.illegal_values or self.unsatisfiable
-                    or self.uncarried)
+                    or self.uncarried or self.shared)
 
     def findings(self) -> List[str]:
         out = []
@@ -111,6 +114,9 @@ class Report:
         for v in self.illegal_values:
             out.append(f"{v['kind']}.{v['attr']} cannot be {v['value']!r} "
                        f"— it is one of {sorted(v['allowed'])}")
+        for h in self.shared:
+            out.append(f"it asks for {h['amount']} {h['kind']}s all called {h['name']!r}, "
+                       f"and {h['name']!r} is one that already exists")
         for u in self.uncarried:
             out.append(f"the request says {u['said']} and no goal asks for {u['said']} "
                        f"of anything")
@@ -155,8 +161,21 @@ class Report:
     def questions(self) -> List[str]:
         """WHAT TO ASK THE WORLD BEFORE JUDGING — the resolve arm, and it acts rather than
         refusing. Each entry is a kind nobody has looked at yet."""
-        return [f"nothing has looked at {f['kind']} yet — probe it before judging "
-                f"{f['name']!r}" for f in self.fetch]
+        out = [f"nothing has looked at {f['kind']} yet — probe it before judging "
+               f"{f['name']!r}" for f in self.fetch]
+        # ⇒ AND WHAT ONLY THE OPERATOR CAN SETTLE. `to_goals` already REFUSES a shared
+        #   identity — *"several members cannot share one identity"* — and refusing without
+        #   asking is where rung 10's paraphrase died SILENTLY: a correct refusal that gave
+        #   the operator nothing to answer. They meant N COPIES of an existing member, and
+        #   only they can say so.
+        #
+        #   BOTH KINDS LIVE ON ONE METHOD because the caller does not care who has to answer
+        #   — it cares that a question exists. Two `questions()` on one report is how the
+        #   later one silently shadows the first, which is exactly what happened writing this.
+        out += [f"you asked for {h['amount']} {h['kind']}s called {h['name']!r}, and "
+                f"{h['name']!r} already exists — did you mean {h['amount']} copies of it?"
+                for h in self.shared]
+        return out
 
     def __repr__(self) -> str:
         return (f"<Truth {'legal' if self.legal else 'ILLEGAL'} "
@@ -238,7 +257,8 @@ def carried(n: int, goals: List[dict], here: int) -> bool:
 
 
 def inspect(goals: List[dict], world, table=None,
-            said_numbers: Optional[Set[int]] = None) -> Report:
+            said_numbers: Optional[Set[int]] = None,
+            copies: Optional[List[Dict[str, Any]]] = None) -> Report:
     """Gate 2 over one reading. Deterministic, no model call, NO REQUEST TEXT.
 
     The world is asked through the language's own reader, so a production mount answers this
@@ -303,6 +323,19 @@ def inspect(goals: List[dict], world, table=None,
             except Exception:
                 seen[kind] = set()
         return seen[kind]
+
+    # ⇒ N OF A MEMBER THAT ALREADY EXISTS. Gate 1 read these off the RAW answer, because
+    #   `_refuse_shared_identity` drops the goal before any gate could look.
+    #
+    #   THE MEMBERSHIP TEST IS WHAT MAKES IT SAFE, and it took three attempts to find. On the
+    #   raw alone the check costs 25 false alarms of 58 — the `name` slot is a SINK for
+    #   descriptions the model cannot shape (`'every'`, `'vms labelled prod'`) which are
+    #   repaired away rather than meant as identities. Narrowing to names the operator SAID
+    #   still costs 9, because `'blue'` is said as a LABEL. Narrowing to names that are
+    #   EXISTING MEMBERS costs **0 of 58** and catches rung 10's paraphrase.
+    for copy in copies or ():
+        if str(copy.get("name")) in members(str(copy.get("kind"))):
+            report.shared.append(dict(copy))
 
     # ⇒ A CARDINALITY THE OPERATOR STATED AND NO GOAL CARRIES.
     #

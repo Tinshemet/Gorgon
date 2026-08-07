@@ -180,7 +180,8 @@ def translator() -> Callable:
         try:
             verdict = _truth.inspect(
                 goals or [], world,
-                said_numbers=_completeness.said_numbers(str(gap)))
+                said_numbers=_completeness.said_numbers(str(gap)),
+                copies=_completeness.copies_of(raw))
             illegal += [f for f in verdict.findings() if f not in illegal]
             fetch = verdict.questions()
             # ⇒ AND THE FETCH IS SUPPLIED, NOT MERELY NAMED. A reading that FILTERS on `alive`
