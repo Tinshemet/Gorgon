@@ -21,6 +21,7 @@ import os as _os
 from planner.gates import completeness as _completeness
 from planner.gates import reasoning as _reasoning
 from planner.gates import truth as _truth
+from planner.gates import viability as _viability
 
 from typing import Any, Callable, Dict, Optional, Tuple
 
@@ -126,9 +127,10 @@ def translator() -> Callable:
         # answer, before `to_goals` discards the evidence.
         #
         # ONE GATE, TWO SUBJECTS, and each check is asked of the artifact that can answer it.
+        whole = None
         try:
-            illegal += [f for f in _completeness.inspect(str(gap), goals or []).findings()
-                        if f not in illegal]
+            whole = _completeness.inspect(str(gap), goals or [])
+            illegal += [f for f in whole.findings() if f not in illegal]
         except Exception:
             pass
         # ⇒ GATE 2, HERE AND NOT IN THE ENGINE, because the world is already in hand.
@@ -144,6 +146,7 @@ def translator() -> Callable:
         # the one gate that knows how to RESOLVE something look like the one complaining most.
         fetch: list = []
         asks: list = []
+        verdicts: dict = {}
         try:
             verdict = _truth.inspect(goals or [], world)
             illegal += [f for f in verdict.findings() if f not in illegal]
@@ -174,6 +177,23 @@ def translator() -> Callable:
                                           settled=bool(verdict.settled))
             illegal += [f for f in reasoned.findings() if f not in illegal]
             asks = reasoned.questions()
+            # ⇒ AND THE THREE VERDICTS TRAVEL, because gate 4 judges what the OTHER GATES DID
+            #   rather than what the reading says. Each of them RESOLVES something locally —
+            #   gate 1 restores a mangled value, gate 2 supplies a missing probe, gate 3 asks —
+            #   and three reasonable local repairs can compound into something the operator
+            #   never asked for. That composition is invisible to every gate that only sees
+            #   its own question, which is the whole reason gate 4 is not a fourth check in a
+            #   row.
+            verdicts = {"completeness": whole, "truth": verdict, "reasoning": reasoned}
+            # ⇒ GATE 4, OVER THE OTHER THREE. One reading cannot be unstable, so the
+            #   disagreement half is free here and silent — it only has content where somebody
+            #   paid for a second draw, which is `_restandardise`'s territory. What DOES fire
+            #   on a single reading is the compounding check: two gates that both RESOLVED
+            #   something have moved the artifact in two independent ways and nobody has
+            #   looked at the sum.
+            whole_verdict = _viability.inspect([goals or []], verdicts)
+            illegal += [f for f in whole_verdict.findings() if f not in illegal]
+            asks += [q for q in whole_verdict.questions() if q not in asks]
         except Exception:
             # A GATE THAT RAISES MUST NOT TAKE THE TRANSLATION WITH IT — the same rule the
             # gate 1 call above follows, and for the same reason: an observer that can fail

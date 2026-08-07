@@ -741,6 +741,120 @@ def test_gate_3_asks_and_never_supplies():
         check("no correct reading is asked about at all", True)
 
 
+# ══ GATE 4 — VIABILITY ═══════════════════════════════════════════════════════════════════
+
+
+def test_gate_4_is_silent_on_a_single_settled_reading():
+    """ONE READING CANNOT BE UNSTABLE, so the check is free when nobody paid for a second
+    draw — and every correct reading is a settled one."""
+    print("[gate 4] silent on a settled reading")
+    from planner.gates import viability as g4
+
+    for rung in RUNGS:
+        goals = GOALS.get(rung.n)
+        if not goals:
+            continue
+        if not g4.inspect([goals]).legal:
+            check(f"rung {rung.n} was accused and should not have been", False)
+            break
+    else:
+        check("no correct reading is accused", True)
+    check("and three IDENTICAL draws are still one reading",
+          g4.inspect([GOALS[1], GOALS[1], GOALS[1]]).legal)
+
+
+def test_a_request_that_reads_two_ways_is_caught_and_routed_to_the_operator():
+    """MEASURED, and it is gate 4's whole content. Three draws per cell across the corpus:
+
+        cells whose draws AGREE   54/71 pass  (76%)
+        cells whose draws DIFFER   4/12 pass  (33%)
+
+    A request the system cannot settle on ONE reading of fails more than twice as often. It
+    needs neither the world nor a checker, and it is the operator's *"gate 4 flags
+    paraphrasing, technically"* — paraphrase sensitivity and draw instability are the same
+    property measured two ways.
+    """
+    print("[gate 4] a request that reads two ways")
+    from planner.gates import viability as g4
+
+    two_ways = [GOALS[1], GOALS[2]]
+    rep = g4.inspect(two_ways)
+    check("the disagreement is caught", bool(rep.unstable))
+    check("and it says how many ways", "2 different ways" in rep.findings()[0])
+
+    # ⇒ ROUTED TO THE OPERATOR, NOT BACK TO A GATE, and the attribution is the point. If the
+    #   same request drawn twice yields two readings, the deciding information is NOT IN THE
+    #   SENTENCE — another draw is another coin, not another look.
+    routes = rep.routes()
+    check("it routes to the operator as a BAD PROMPT",
+          routes and routes[0]["to"] == g4.BAD_PROMPT)
+    check("and asks which was meant", "Which did you mean" in rep.questions()[0])
+
+
+def test_gate_4_counts_resolutions_and_not_complaints():
+    """THE EMERGENCE HALF. Gate 1 restoring a value and gate 2 supplying an observation are
+    each a repair; BOTH on one reading mean the artifact differs from what the model produced
+    in two independent ways, and nobody has looked at the sum.
+
+    ⇒ IT COUNTS GATES THAT **ACTED**. A gate that merely objected changed nothing and cannot
+    have contributed to a drift — only one that resolved is implicated.
+    """
+    print("[gate 4] two gates that both acted")
+    from planner.gates import viability as g4
+
+    class Acted:
+        def repairs(self):
+            return [{"kind": "restore"}]
+
+    class Supplied:
+        def supply(self):
+            return [{"observe": {"kind": "vm"}, "fact": "alive"}]
+
+    class Objected:
+        def repairs(self):
+            return []
+
+    one = g4.inspect([GOALS[1]], {"completeness": Acted()})
+    check("one gate acting alone is not a compounding", one.legal)
+
+    both = g4.inspect([GOALS[1]], {"completeness": Acted(), "truth": Supplied()})
+    check("two gates acting on one reading IS", bool(both.compounded))
+    check("and it names which", "completeness and truth" in both.findings()[0])
+
+    check("a gate that only complained is not counted",
+          g4.inspect([GOALS[1]], {"completeness": Objected(),
+                                  "truth": Supplied()}).legal)
+
+
+def test_gate_4_does_not_own_the_destructive_case_and_says_why():
+    """THE NEGATIVE RESULT, PINNED SO IT IS NOT RE-ATTEMPTED.
+
+    `count(vm) = 10` against twelve machines deletes two, and gates 1-3 all pass it correctly.
+    The obvious gate-4 rule — *the plan destroys and no claim asked to remove* — was written
+    and counted: **6 false alarms on PASSING readings against 2 real catches.**
+
+    The reason is fatal. Rung 14, *"make sure there are exactly two machines LEFT"*, is
+    `count(vm) = 2`, removes machines, and is CORRECT — the claim is a TOTAL. "create 10 vms"
+    is `count(vm) = 10`, removes machines, and is WRONG — the request stated a DELTA. THE TWO
+    ARE STRUCTURALLY IDENTICAL. They differ only in what the operator meant.
+
+    ⇒ SO A PERSON DECIDES, and that is already shipped: `Orchestrator._grant` refuses an
+    unauthorised destruction and re-asks a live consent surface with the machines NAMED.
+    """
+    print("[gate 4] the destructive case belongs to consent, not to a gate")
+    from planner.gates import viability as g4
+
+    check("gate 4 has no destructive check", not hasattr(g4, "destroys_unasked"))
+
+    # AND THE GUARD THAT DOES OWN IT IS STILL THERE.
+    from engines import insession as _insession
+    from engines.orchestrator import Orchestrator
+    step = _insession.Step("run", "plan", destroys=[("delete_vm", {"name": "web"})])
+    verdict = Orchestrator._grant(step, type("S", (), {"consent": None})())
+    check("an unauthorised destruction is still refused by consent",
+          verdict.action == _insession.STOP)
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "gates")
