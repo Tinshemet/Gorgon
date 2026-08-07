@@ -108,6 +108,22 @@ class Move:
         return f"<move {self.mnemonic} k={self.key}>"
 
 
+def provenance_of(kind: Optional[str], kinds=None) -> Optional[str]:
+    """The attribute a creator RECORDS when it copies something — `cloned_from` for a vm.
+
+    Read off the manifest's own `creators`, so a kind added later is covered without an
+    edit here. A creator that takes a `from` but records nothing (`from_template`) leaves
+    no trace to filter on, and is correctly not offered.
+    """
+    from planner.ir import config as _config
+    table = kinds if kinds is not None else (_config.KINDS or {})
+    spec = table.get(kind) or {}
+    for creator in (spec.get("creators") or {}).values():
+        if isinstance(creator, dict) and creator.get("from") and creator.get("records"):
+            return creator["records"]
+    return None
+
+
 # ── reading a known-good IR goal BACK into slots ──────────────────────────────────────
 def reduce(goal: dict) -> Move:
     """Reduce one IR goal to the slots an AI would have had to supply.
@@ -121,6 +137,9 @@ def reduce(goal: dict) -> Move:
             sel = dict(goal[name])
             break
     filled = {"subject": sel.pop("kind", None)}
+    provenance = provenance_of(filled["subject"])
+    if provenance and provenance in sel:
+        filled["source"] = sel.pop(provenance)
     neg = sel.pop("not", None)
     if neg:
         filled["except"] = dict(neg)
@@ -165,8 +184,18 @@ def build(move: Move) -> dict:
     if f.get("except"):
         sel["not"] = dict(f["except"])
 
+    if f.get("source"):
+        # DECLARED, NOT HARDCODED: the manifest names the attribute a creator RECORDS when
+        # it copies something, so "clone web into two" becomes a filter on provenance rather
+        # than the world-dependent arithmetic rung 10's reading resorts to.
+        attr = provenance_of(f.get("subject"))
+        if attr:
+            sel[attr] = f["source"]
+
     if "fact" in f:
-        return {"observe": {"kind": f.get("subject")}, "fact": f["fact"]}
+        # the filter must survive. Dropping it turns "check whether the gateway answers"
+        # into "ping the whole lab" — held-out row 6 caught exactly that.
+        return {"observe": sel, "fact": f["fact"]}
     if "makes" in f:
         make, link = f["makes"]
         out = {"per": sel, "make": make}
