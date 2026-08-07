@@ -19,6 +19,7 @@ from __future__ import annotations
 import os as _os
 
 from planner.gates import completeness as _completeness
+from planner.gates import reasoning as _reasoning
 from planner.gates import truth as _truth
 
 from typing import Any, Callable, Dict, Optional, Tuple
@@ -157,6 +158,20 @@ def translator() -> Callable:
             supplied = verdict.supply()
             if supplied and goals:
                 goals = supplied + list(goals)
+            # ⇒ GATE 3, AND IT IS HANDED GATE 2'S ANSWER RATHER THAN RE-DERIVING IT.
+            #
+            # `settled` is the whole reason `inert` can be a check here at all. An empty
+            # program has two causes — the goals ALREADY HOLD, or the reading does nothing —
+            # and the single gate could not tell them apart, which is why `inert` was demoted
+            # to a report on 2026-08-06. Gate 2 owns already-true now, so passing its verdict
+            # forward is the architecture working: each gate guarantees something to the next.
+            #
+            # IT PLANS, WHICH COSTS A `cover` THE ENGINE WILL RUN AGAIN. Deterministic and
+            # model-free, so it is milliseconds against a model call's seconds — worth saying
+            # out loud rather than discovering later, but not worth contorting the wire for.
+            reasoned = _reasoning.inspect(goals or [], world,
+                                          settled=bool(verdict.settled))
+            illegal += [f for f in reasoned.findings() if f not in illegal]
         except Exception:
             # A GATE THAT RAISES MUST NOT TAKE THE TRANSLATION WITH IT — the same rule the
             # gate 1 call above follows, and for the same reason: an observer that can fail

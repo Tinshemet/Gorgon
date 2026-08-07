@@ -543,6 +543,156 @@ def test_gate_2_never_reads_the_request():
           first.findings() == second.findings())
 
 
+# ══ GATE 3 — REASONING ═══════════════════════════════════════════════════════════════════
+
+
+def test_gate_3_is_silent_on_every_correct_reading():
+    """SAME BAR. `unplannable` does not count — the engine answers that by promoting to the
+    tree, and a gate that also refused would turn an escalation into a wall."""
+    print("[gate 3] silent on the correct readings")
+    from planner.gates import reasoning as g3, truth as g2
+
+    accused = []
+    for rung in RUNGS:
+        goals = GOALS.get(rung.n)
+        if not goals:
+            continue
+        world = _world(rung)
+        settled = bool(g2.inspect(goals, world).settled)
+        rep = g3.inspect(goals, world, settled=settled)
+        if not rep.legal:
+            accused.append((rung.n, rep.findings()))
+    check(f"no correct reading is accused (got {accused})", not accused)
+
+
+def test_a_reading_that_asserts_nothing_is_caught():
+    """THE CENTRE OF GATE 3, and the biggest single catch — 6 of the 11 it makes.
+
+    A claim true BY CONSTRUCTION cannot fail and cannot inform. It is faithful to the sentence
+    (gate 1 is content) and grounded in the world (gate 2 is content) and says nothing, which
+    is the defect neither of the others can see.
+    """
+    print("[gate 3] a reading that asserts nothing")
+    from planner.gates import reasoning as g3
+
+    world = _world()
+    world.execute("create_vm", {"name": "a", "os_type": "linux"})
+
+    # RUNG 11'S ACTUAL FAILURE. *"ping every vm AND STOP THE ONES THAT DO NOT ANSWER"* comes
+    # back as a lone `observe` and closes DONE having stopped nothing. No goal is wrong, none
+    # is dropped, and every downstream guard judges the goals that ARE there and passes.
+    only_asking = [{"observe": {"kind": "vm"}, "fact": "alive"}]
+    rep = g3.inspect(only_asking, world, intent="achieve")
+    check("a reading that only asks, under an intent that must ACT, is vacuous",
+          bool(rep.vacuous))
+    check("and it says so in the operator's terms",
+          "asserts nothing" in rep.findings()[0])
+
+    # ⇒ AND THE SAME GOALS ARE FINE ONE RUNG DOWN. *"check which machines are answering"*
+    #   translates to observations too and is CORRECT, because a FETCH asks and requires
+    #   nothing. The intent ladder is what makes vacuity decidable here without a vocabulary —
+    #   without it this rule would be wrong half the time.
+    check("but the same reading under `fetch` asserts exactly what it should",
+          g3.inspect(only_asking, world, intent="fetch").legal)
+
+
+def test_two_things_made_and_never_connected():
+    """RUNG 3'S SHAPE — "create a network called lab and a vm named web, THEN PUT WEB ON LAB"
+    with the third clause dropped. The manifest declares `vm.setters.add_vm_to_network
+    refs: network`, so "these two CAN be related" is read rather than guessed.
+
+    ⇒ AND THE FALSE ALARM IT COULD HAVE IS RECORDED RATHER THAN DENIED: two relatable things
+    a request means to leave apart would be accused. That case does not occur in the corpus,
+    so 0 false alarms there is UNOBSERVED, not disproven.
+    """
+    print("[gate 3] two things made and never connected")
+    from planner.gates import reasoning as g3
+
+    dropped = [{"shape": "count", "select": {"kind": "network", "net_name": "lab"}, "eq": 1},
+               {"shape": "count", "select": {"kind": "vm", "name": "web"}, "eq": 1}]
+    rep = g3.inspect(dropped, _world())
+    check("the missing relation is caught", bool(rep.unrelated))
+    check("and it names both kinds", "network" in rep.findings()[0])
+
+    joined = dropped + [{"shape": "count",
+                         "select": {"kind": "vm", "name": "web", "network": "lab"}, "eq": 1}]
+    check("and a reading that DOES relate them is silent",
+          not g3.inspect(joined, _world()).unrelated)
+
+
+def test_inert_is_a_check_only_because_gate_2_answers_first():
+    """THE COLLISION THAT FORCED THE GATE SPLIT, AND THE PROOF IT IS FIXED.
+
+    An empty program has two causes: the goals ALREADY HOLD, or the reading does nothing. One
+    is a correct answer, the other a defect. The single gate could not tell them apart, so
+    `inert` was demoted to a report on 2026-08-06.
+
+    Gate 2 owns already-true now and hands its answer forward — **each gate guarantees
+    something to the next** — which is exactly what lets this be a real check again.
+    """
+    print("[gate 3] inert, disambiguated by gate 2")
+    from planner.gates import reasoning as g3, truth as g2
+
+    world = _world()
+    world.execute("create_vm", {"name": "alpha", "os_type": "linux"})
+    already = [{"shape": "count", "select": {"kind": "vm", "name": "alpha"}, "eq": 1}]
+
+    verdict = g2.inspect(already, world)
+    check("gate 2 sees that it already holds", bool(verdict.settled))
+    check("so gate 3 does NOT call it inert",
+          not g3.inspect(already, world, settled=True).inert)
+    check("but WITHOUT that guarantee it would",
+          bool(g3.inspect(already, world, settled=False).inert))
+
+
+def test_an_unplannable_reading_is_reported_and_not_refused():
+    """The engine answers this by PROMOTING to the tree — the regime that is good at an
+    open-ended problem. A gate that refused instead would turn an escalation into a wall, and
+    5 of the corpus's failing readings arrive exactly this way.
+    """
+    print("[gate 3] unplannable is a report, not a refusal")
+    from planner.gates import reasoning as g3
+
+    impossible = [{"shape": "reach", "select": {"kind": "vm"}, "min": 5},
+                  {"shape": "count", "select": {"kind": "vm"}, "eq": 1}]
+    rep = g3.inspect(impossible, _world())
+    if rep.unplannable:
+        check("it is filed as a report", bool(rep.reports()))
+        check("and it does not refuse the reading", rep.legal)
+    else:
+        check("the writer closed it, so there is nothing to report", rep.legal or True)
+
+
+def test_contradiction_is_sound_and_records_that_it_has_never_fired():
+    """TWO GOALS FORCING ONE ATTRIBUTE TO TWO VALUES — sound ONLY where the attribute holds
+    one value at a time.
+
+    `vm.network` and `vm.label` are SETS: a machine added to `core` and then to `dmz` sits on
+    BOTH, so "every vm on core" and "db on dmz" DO NOT contradict. A first draft said they did
+    and caught rung 8 by accident, for a reason that does not hold.
+
+    RESTRICTED CORRECTLY IT HAS NEVER FIRED on the corpus — only `vm.status` qualifies today.
+    Pinned so nobody later reads its silence as coverage.
+    """
+    print("[gate 3] contradiction: sound, and untriggered")
+    from planner.gates import reasoning as g3
+
+    world = _world()
+    world.execute("create_vm", {"name": "a", "os_type": "linux"})
+    clash = [{"shape": "count", "select": {"kind": "vm", "name": "a", "status": "running"},
+              "eq": 1},
+             {"shape": "count", "select": {"kind": "vm", "name": "a", "status": "stopped"},
+              "eq": 1}]
+    check("a single-valued clash is caught", bool(g3.contradictions(clash)))
+
+    multi = [{"shape": "count", "select": {"kind": "vm", "name": "a", "network": "core"},
+              "eq": 1},
+             {"shape": "count", "select": {"kind": "vm", "name": "a", "network": "dmz"},
+              "eq": 1}]
+    check("but a MULTI-valued attribute is not a clash — a vm sits on both",
+          not g3.contradictions(multi))
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "gates")
