@@ -30,10 +30,7 @@ from collections import Counter
 
 from engines import extract
 from planner import reading_gate as gate
-from planner.gates import completeness as _g1
-from planner.gates import reasoning as _g3
-from planner.gates import truth as _g2
-from planner.gates import viability as _g4
+from engines.rig import translator as _make_translator
 from tests.bench.rungs import RUNGS
 from tests.bench.sim_world import SimWorld
 
@@ -75,7 +72,7 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     wanted = set(args.rung or [r.n for r in RUNGS])
 
-    _schema = extract.schema()
+    _translate = _make_translator()
     print(f"\n{'rung':<5}{'arm':<4}{'n=':<4}{'match':<10}{'gate':<8}{'gates hit':<12}reading "
           f"(most common of {args.repeats} draws)")
     print("─" * 126)
@@ -94,57 +91,40 @@ def main(argv=None) -> int:
             #   while the `n=` column beside it reported 5 rows that DID disagree. The same
             #   `built-and-never-called` shape fixed in `engines/rig.py` the same hour,
             #   reproduced here while copying it across. The draws were always in this loop.
-            all_draws: list = []
             for _ in range(args.repeats):
                 world = _world(rung)
-                lost: list = []
-                raw = {}
-                try:
-                    raw = extract.extract(request)
-                    goals = extract.to_goals(raw, request,
-                                             dropped=lost, world=world) or []
-                except Exception as exc:
-                    goals, lost = [], [f"{type(exc).__name__}"]
-                # THE FOUR GATES, on a reading that is judged and never run.
+                # ⇒ THE REAL FRONT SEAM, NOT A REIMPLEMENTATION OF IT.
                 #
-                # EACH ONE ASKS ITS OWN QUESTION AND THEY ARE NOT INTERCHANGEABLE:
-                #   1 is the pattern WHOLE · 2 does it REFER · 3 does it MEAN anything ·
-                #   4 taken TOGETHER, does it work — which needs the other three's verdicts.
-                g1 = _g1.inspect_raw(request, raw, schema=_schema)
-                g1b = _g1.inspect(request, goals or [])
-                g2 = _g2.inspect(goals or [], world)
-                g3 = _g3.inspect(goals or [], world, settled=bool(g2.settled))
-                all_draws.append(goals or [])
-                flags = {
-                    "1": not (g1.legal and g1b.legal),
-                    "2": not g2.legal,
-                    "3": not g3.legal,
-                }
-                said = g1.findings() + g1b.findings() + g2.findings() + g3.findings()
-                warn = g3.questions() + g2.questions()
+                #   This harness used to call `extract`, `to_goals` and each gate by hand —
+                #   which measured a COPY of production's wiring and would drift from it
+                #   silently. `rig.translator()` is what the orchestrator actually mounts, so
+                #   everything wired into it is exercised here: gate 1's repairs applied, gate
+                #   2's supplied probe, gate 4's second draw, and the verdicts on
+                #   `Answer.gates`.
+                #
+                #   WHAT IT STILL DOES NOT REACH: `_restandardise` lives in the ORCHESTRATOR,
+                #   one layer up, so the re-ask is NOT measured here. This table is the
+                #   reading and the gates; it is not the whole front door.
+                answer = _translate(request, world)
+                goals = list(answer.components or [])
+                lost = list(answer.dropped or [])
+                flags = {g: (ok is False)
+                         for g, ok in (answer.gates or {}).items() if g != "reask"}
+                warn = list(answer.asks or []) + list(answer.fetch or [])
                 verdict = gate.Verdict(
                     gate.PROCEED if not any(flags.values()) else gate.ASK,
-                    "+".join(k for k, v in flags.items() if v) or "",
-                    detail="; ".join(said))
+                    "+".join(sorted(k for k, v in flags.items() if v)) or "",
+                    detail="; ".join(answer.illegal or []))
+                vetoed = (answer.gates or {}).get("reask") is False
+                if vetoed:
+                    warn = ["gate 4: reads more than one way — not re-asking"] + warn
                 key = json.dumps([_short(g) for g in goals], sort_keys=True)
                 readings[key] += 1
-                store[key] = (goals, lost, verdict, warn, flags, g1, g2, g3)
-            # ── GATE 4, ONCE, OVER EVERY DRAW OF THIS REQUEST ────────────────────────────
-            _g, _l, _v, _w, _flags, _c1, _c2, _c3 = store[readings.most_common(1)[0][0]]
-            g4 = _g4.inspect(all_draws,
-                             {"completeness": _c1, "truth": _c2, "reasoning": _c3})
-            if not g4.legal:
-                _flags["4"] = True
-                _v = gate.Verdict(gate.ASK,
-                                  "+".join(k for k, v in _flags.items() if v),
-                                  detail="; ".join(_v.detail.split("; ") + g4.findings()))
-                _w = list(_w) + g4.questions()
-                store[readings.most_common(1)[0][0]] = (_g, _l, _v, _w, _flags,
-                                                        _c1, _c2, _c3)
+                store[key] = (goals, lost, verdict, warn)
             distinct = len(readings)
             unstable += distinct > 1
             top, _n = readings.most_common(1)[0]
-            goals, lost, verdict, warn = store[top][:4]
+            goals, lost, verdict, warn = store[top]
             flag = "  " if distinct == 1 else "!!"
             mark = {gate.PROCEED: "ok", gate.ASK: "ASK", gate.REFUSE: "REFUSE"}[verdict.outcome]
             # AGAINST THE KNOWN-GOOD READING, which is the only ground truth for a
