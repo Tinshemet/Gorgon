@@ -191,7 +191,31 @@ def translator() -> Callable:
             #   on a single reading is the compounding check: two gates that both RESOLVED
             #   something have moved the artifact in two independent ways and nobody has
             #   looked at the sum.
-            whole_verdict = _viability.inspect([goals or []], verdicts)
+            # ⇒ A SECOND DRAW, AND ONLY WHERE SOMETHING IS ALREADY SUSPECT.
+            #
+            #   Gate 4's measured content is DISAGREEMENT — cells whose draws differ pass 33%
+            #   against 76% for cells that agree — and one reading cannot disagree with
+            #   itself. Wired against a single reading it fired 0 times on all 83 corpus
+            #   readings: the mechanism worked and its input never arrived, which is the
+            #   `built-and-never-called` shape the whole gates/ folder was written to escape.
+            #
+            #   THE COST IS BOUNDED BY THE EARLIER GATES. Drawing twice for every request
+            #   would double the front seam; drawing twice only where gates 1-3 already found
+            #   something spends the call on exactly the requests where a second opinion could
+            #   change the answer. A clean reading pays nothing.
+            #
+            #   AND IT CANNOT CHANGE AN OUTCOME, only report one. Gate 4 does not vote — the
+            #   second reading is compared and discarded, never served.
+            readings = [goals or []]
+            if illegal:
+                try:
+                    second = _extract.to_goals(
+                        _extract.extract(str(gap)), str(gap), world=world) or []
+                    if second:
+                        readings.append(second)
+                except Exception:
+                    pass
+            whole_verdict = _viability.inspect(readings, verdicts)
             illegal += [f for f in whole_verdict.findings() if f not in illegal]
             asks += [q for q in whole_verdict.questions() if q not in asks]
         except Exception:

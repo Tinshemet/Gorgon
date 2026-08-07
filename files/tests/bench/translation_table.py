@@ -29,9 +29,11 @@ import sys
 from collections import Counter
 
 from engines import extract
-from engines.medusa._run import _assistant
 from planner import reading_gate as gate
-from planner import refine
+from planner.gates import completeness as _g1
+from planner.gates import reasoning as _g3
+from planner.gates import truth as _g2
+from planner.gates import viability as _g4
 from tests.bench.rungs import RUNGS
 from tests.bench.sim_world import SimWorld
 
@@ -73,7 +75,8 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     wanted = set(args.rung or [r.n for r in RUNGS])
 
-    print(f"\n{'rung':<5}{'arm':<4}{'n=':<4}{'match':<10}{'gate':<8}{'caught':<20}reading "
+    _schema = extract.schema()
+    print(f"\n{'rung':<5}{'arm':<4}{'n=':<4}{'match':<10}{'gate':<8}{'gates hit':<12}reading "
           f"(most common of {args.repeats} draws)")
     print("─" * 126)
     unstable = 0
@@ -88,20 +91,37 @@ def main(argv=None) -> int:
             for _ in range(args.repeats):
                 world = _world(rung)
                 lost: list = []
+                raw = {}
                 try:
-                    goals = extract.to_goals(extract.extract(request), request,
+                    raw = extract.extract(request)
+                    goals = extract.to_goals(raw, request,
                                              dropped=lost, world=world) or []
                 except Exception as exc:
                     goals, lost = [], [f"{type(exc).__name__}"]
-                # THE ASSISTANT AND THE GATE, on a plan that is rehearsed and never run.
-                if goals:
-                    reh = refine.rehearse(goals, world, request)
-                    warn = _assistant(request, reh.plan, world)
-                    verdict = gate.judge(request, reh, lost, warn)
-                else:
-                    warn = []
-                    verdict = gate.Verdict(gate.REFUSE, "no-reading",
-                                           detail="; ".join(lost) or "nothing usable")
+                # THE FOUR GATES, on a reading that is judged and never run.
+                #
+                # EACH ONE ASKS ITS OWN QUESTION AND THEY ARE NOT INTERCHANGEABLE:
+                #   1 is the pattern WHOLE · 2 does it REFER · 3 does it MEAN anything ·
+                #   4 taken TOGETHER, does it work — which needs the other three's verdicts.
+                g1 = _g1.inspect_raw(request, raw, schema=_schema)
+                g1b = _g1.inspect(request, goals or [])
+                g2 = _g2.inspect(goals or [], world)
+                g3 = _g3.inspect(goals or [], world, settled=bool(g2.settled))
+                g4 = _g4.inspect([goals or []],
+                                 {"completeness": g1, "truth": g2, "reasoning": g3})
+                flags = {
+                    "1": not (g1.legal and g1b.legal),
+                    "2": not g2.legal,
+                    "3": not g3.legal,
+                    "4": not g4.legal,
+                }
+                said = (g1.findings() + g1b.findings() + g2.findings()
+                        + g3.findings() + g4.findings())
+                warn = g3.questions() + g2.questions()
+                verdict = gate.Verdict(
+                    gate.PROCEED if not any(flags.values()) else gate.ASK,
+                    "+".join(k for k, v in flags.items() if v) or "",
+                    detail="; ".join(said))
                 key = json.dumps([_short(g) for g in goals], sort_keys=True)
                 readings[key] += 1
                 store[key] = (goals, lost, verdict, warn)
@@ -125,7 +145,7 @@ def main(argv=None) -> int:
                 match, bucket = "DIFF", "DIFF"
             scores[bucket] += 1
             head = (f"{rung.n:<5}{arm:<4}{str(distinct) + flag:<4}{match:<10}{mark:<8}"
-                    f"{verdict.caught or '':<20}")
+                    f"{verdict.caught or '-':<12}")
             if not goals:
                 print(head + f"— nothing kept: {'; '.join(lost)[:52] or 'no reading'}")
             else:

@@ -855,6 +855,49 @@ def test_gate_4_does_not_own_the_destructive_case_and_says_why():
           verdict.action == _insession.STOP)
 
 
+def test_gate_4_gets_a_second_draw_only_where_something_is_suspect():
+    """THE WIRING FIX, AND IT IS THE FAILURE THIS WHOLE FOLDER WAS WRITTEN TO ESCAPE.
+
+    Gate 4's measured content is DISAGREEMENT — cells whose draws differ pass 33% against 76%
+    for cells that agree — and ONE READING CANNOT DISAGREE WITH ITSELF. Wired against a single
+    reading it fired **0 times on all 83 corpus readings**: the mechanism worked and its input
+    never arrived. Same shape as the re-read loop deleted the same morning.
+
+    ⇒ THE COST IS BOUNDED BY THE EARLIER GATES. A second draw for every request would double
+    the front seam. A second draw only where gates 1-3 already found something spends the call
+    on exactly the requests where another opinion could change the answer, and a clean reading
+    pays nothing.
+    """
+    print("[gate 4] a second draw, only where it could matter")
+    from engines.channel import Answer, Channel
+    from engines.medusa.engine import MedusaEngine
+    from engines.orchestrator import Orchestrator
+    from engines.registry import Registry
+    from tests.bench.sim_world import SimWorld
+
+    # THE CLEAN CASE PAYS NOTHING. Driven through the real orchestrator with a stub channel,
+    # so the count is of ACTUAL calls rather than of intent.
+    seen = []
+
+    def clean(gap, w=None):
+        seen.append(str(gap))
+        return Answer([{"shape": "count", "select": {"kind": "vm", "name": "alpha"},
+                        "eq": 1}], "extractor")
+
+    world = SimWorld()
+    registry = Registry()
+    registry.mount(MedusaEngine(world))
+    Orchestrator(registry, Channel([clean])).handle("create a vm named alpha",
+                                                    intent="achieve")
+    check("a reading nothing objected to is drawn ONCE", len(seen) == 1)
+
+    # AND THE GATE ITSELF STILL SEES DISAGREEMENT WHEN IT IS GIVEN TWO.
+    from planner.gates import viability as g4
+    check("two different readings disagree", not g4.inspect([GOALS[1], GOALS[2]]).legal)
+    check("two identical readings do not", g4.inspect([GOALS[1], GOALS[1]]).legal)
+    check("and one reading cannot", g4.inspect([GOALS[1]]).legal)
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "gates")
