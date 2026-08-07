@@ -97,26 +97,6 @@ class Rehearsal:
         """Plannable, and nothing the rehearsal can PROVE wrong. `inert` is asked separately."""
         return bool(self.goals) and not self.unsolvable and not self.faults
 
-    def rank(self):
-        """Higher is better, compared lexicographically. Every key is computed, none judged.
-
-        ORDER MATTERS AND IT IS ARGUED, not chosen:
-
-          1  IT PLANS AT ALL. A reading the writer refuses is not a reading.
-          2  IT DOES SOMETHING. An acting request whose rehearsal changes nothing is the
-             exact shape of rung 11's false success — four pings, one true assertion about a
-             machine nobody named, DONE reported, nothing stopped.
-          3  FEWEST CLAUSES LEFT UNTOUCHED, by the world rather than by the plan's text.
-          4  FEWER CALLS, last and only as a tie-break: between two readings that do the
-             same thing, the cheaper is better, and it must never outrank doing the RIGHT
-             thing — which is why it sits below every other key.
-        """
-        return (bool(self.plan) and not self.unsolvable,
-                not dry_run.empty(self.diff),
-                -len(self.faults),
-                -len(self.plan))
-
-
 def judged(goals, plan, program, before, after, after_world, request: str = "",
            asked_before=None) -> Rehearsal:
     """A Rehearsal from a plan SOMEBODY ELSE ALREADY MADE. THE ONE BUILDER.
@@ -174,24 +154,6 @@ def rehearse(goals: List[Dict[str, Any]], world, request: str = "") -> Rehearsal
     return judged(goals, plan, program, before, after,
                   predicted[0] if predicted else world, request,
                   asked_before=dry_run.observations(world))
-
-
-def best(candidates: List[List[Dict[str, Any]]], world, request: str = ""):
-    """Rehearse every reading and return the one that best does what was asked.
-
-    Returns `(rehearsal, all_rehearsals)` so a caller can report what it passed over — a
-    selection nobody can inspect is a verdict, and this file's whole argument is that a
-    verdict without its evidence is what we already had too much of.
-
-    THE FIRST CANDIDATE WINS A TIE, always, so the same request against the same world
-    yields the same program twice. Determinism is not a nicety here: it is what makes a
-    failing run debuggable at all.
-    """
-    runs = [rehearse(goals, world, request) for goals in candidates if goals]
-    if not runs:
-        return Rehearsal([]), []
-    top = max(range(len(runs)), key=lambda i: (runs[i].rank(), -i))
-    return runs[top], runs
 
 
 def report(r: Rehearsal) -> str:

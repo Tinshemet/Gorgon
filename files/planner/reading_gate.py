@@ -155,22 +155,16 @@ def judge(request: str, rehearsal: "refine.Rehearsal",
     return Verdict(PROCEED)
 
 
-# WHICH FINDINGS A RE-READING COULD PLAUSIBLY FIX. The checking is free — the rehearsal is a
-# by-product of planning and the gate and the assistant are deterministic — so the ONLY thing
-# this apparatus spends is a re-generation, and it must not spend one where it cannot win.
+# ⇒ `_WORTH_REREADING` AND `rereadable()` WERE REMOVED ON 2026-08-07 WITH THE LOOP THAT WAS
+#   THEIR ONLY CALLER. They named the findings a second draw could plausibly fix, and the
+#   reasoning still reads well — but NEITHER OF THE TWO CODES COULD EVER REACH THEM.
+#   `invented-or-dropped` fires only on a non-empty `lost`, which has already closed the run
+#   upstream as UNTRANSLATED; `inert` was demoted to a report the same week and is never
+#   returned. So the predicate was always false and the loop never ran.
 #
-#     invented-or-dropped   YES. The seam misread the sentence; another draw reads it again.
-#     inert                 YES. A reading that does nothing may simply be the wrong reading.
-#     assistant             NO. A contradiction is in the REQUEST — every draw will contain
-#                           it — and a high-stakes flag is the WRITER's tile choice, not the
-#                           reading's. Re-drawing buys nothing and costs a call each time.
-#     unplannable           NO, and it never reaches the loop: it is a REFUSE.
-_WORTH_REREADING = {"invented-or-dropped", "inert"}
-
-
-def rereadable(caught: str) -> bool:
-    """Could another draw fix this? Asked before spending one."""
-    return str(caught or "") in _WORTH_REREADING
+#   WHAT REPLACED IT: `Orchestrator._restandardise`, at the seam that COMPUTES the violation
+#   rather than downstream of the refusal it causes. The lesson is about placement, not about
+#   the idea — a correcting step put behind the refusal it means to prevent can never run.
 
 
 def tally(verdicts: List[Verdict]) -> Dict[str, int]:

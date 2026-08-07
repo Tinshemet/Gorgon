@@ -278,12 +278,6 @@ def _declare(program: Dict[str, Any], declared: Optional[Dict[str, str]],
 class Orchestrator:
     """One registry, one channel, and the loop between them."""
 
-    # HOW MANY TIMES A GATED READING IS READ AGAIN. Two, and the number is argued rather than
-    # picked: the gate's own findings are about MEANING, and a model that has now produced
-    # three readings none of which survived is not one draw away from a fourth that does —
-    # it is a request that needs the operator. Each attempt costs a model call and a plan.
-    _MAX_READINGS = 2
-
 
     def __init__(self, registry: Registry, channel: Optional[Channel] = None,
                  route: Optional[Callable] = None, budget: Optional[int] = None,
@@ -325,10 +319,12 @@ class Orchestrator:
         # let the ghost writer be proven with hand-written goals.
         self._route = route or self._first_claimant
         # `decide(step, session) -> Verdict`: the verdict on ONE act, inside the in-session.
-        # The default grants what the engine proposed, and that is not a formality — the
-        # budget has already refused anything unaffordable before this is reached, so what
-        # is left is the seam where a consent gate or a destructive-act policy hangs. It is
-        # injected for the same reason routing is: the whole loop stays testable without one.
+        # The budget has already refused anything unaffordable before this is reached, so what
+        # is left is the seam where a consent gate or a destructive-act policy hangs — AND AS
+        # OF 2026-08-07 THE DESTRUCTIVE-ACT POLICY IS ACTUALLY ON IT rather than merely
+        # welcome to be. `_grant` grants what the engine proposed EXCEPT where the step
+        # declares it would destroy something, which needs the operator. It stays injected for
+        # the same reason routing is: the whole loop is testable with a function that says RUN.
         self._decide = decide or self._grant
         # `forward(publication, session) -> bool`: does this claim reach the OPERATOR, or is
         # it kept internal? The default forwards everything, and that is not laziness — an
@@ -342,7 +338,119 @@ class Orchestrator:
 
     @staticmethod
     def _grant(step, session):
-        return _insession.Verdict(step.kind)
+        """The default verdict — and it REFUSES A DESTRUCTIVE STEP NOBODY AUTHORISED.
+
+        MEASURED 2026-08-07, and this is why it is no longer a pass-through. Against a lab
+        holding twelve machines, `count(vm) = 10` plans
+
+            delete_vm(name=web) · delete_vm(name=work-laptop)
+
+        and this method returned `Verdict(step.kind)` without reading `step.destroys`, so a
+        request whose only verb was CREATE destroyed two of the operator's machines and never
+        asked. `tests/bench/surplus_probe.py` reproduces it with no model call.
+
+        THE WRITER IS NOT WRONG. `count(vm) = 10` is a TOTAL, so removing two IS how that
+        claim becomes true, and `ghost_writer` already takes care to surrender an ATTRIBUTE
+        rather than a member wherever the goal named one. The defect is that nothing between
+        the plan and the world asked a person. `Step.destroys` exists for exactly this and its
+        own docstring says so — *"a destructive node gets a verdict of its own rather than
+        riding in on the back of a program granted as a whole"* — and until now nothing on
+        this path read the field. The CHAT path has asked all along
+        (`orchestrator/ai/chat/shortcuts/plan.py:275`, default NO); the engine path did not.
+
+        ⇒ WHY CONSENT AND NOT A DESTRUCTIVE-VERB TEST. The tempting rule is *"refuse when the
+        request contains no destructive word"*. It is weaker and it is fragile: the same scan
+        found a request served or refused on whether the model reached for `vms` or `fleet`,
+        and a rule that reads the operator's vocabulary inherits that. Asking WHETHER IT WAS
+        AUTHORISED needs no word list and refuses the unauthorised case whatever it is called.
+
+        FAIL-CLOSED, THE STANDING RULE, and stated the same way `consent.granted` states it:
+        `None` means nobody is there, and nobody there is a NO. A callable is RE-ASKED with
+        the destruction named — which is what "operator re-auth for high-impact acts" means;
+        consenting to run a program is not consenting to delete `web`.
+        """
+        if not getattr(step, "destroys", None):
+            return _insession.Verdict(step.kind)
+        gone = sorted({str(list(args.values())[0]) if args else "?"
+                       for _tool, args in step.destroys})
+        question = (f"this destroys {len(step.destroys)} machine(s): "
+                    f"{', '.join(gone)} — go ahead?")
+        answer = getattr(session, "consent", None)
+        if answer is True:
+            return _insession.Verdict(step.kind)
+        if callable(answer):
+            # RE-ASKED WITH THE DESTRUCTION NAMED, not handed the program's generic question.
+            # An operator who agreed that this run may change the world has not thereby agreed
+            # to lose `web`, and a surface that cannot tell the two apart is not a consent
+            # surface — it is a formality.
+            try:
+                if bool(answer(question)):
+                    return _insession.Verdict(step.kind)
+            except Exception as exc:                 # a surface that fails is not a surface
+                return _insession.Verdict(
+                    _insession.STOP, f"the consent surface failed: {type(exc).__name__}")
+        return _insession.Verdict(_insession.STOP, question)
+
+    # ONE. Not a budget to be tuned — a second reading is a second draw, and this project has
+    # measured that more draws buy variance rather than accuracy.
+    _RESTANDARDISE = 1
+
+    def _restandardise(self, request: str, lost: List[str], engine, session):
+        """The translator broke a rule. Tell it WHICH, and let it standardise again. Once.
+
+        ⇒ NOT A PROMPT LEVER, WHICH IS WHY IT IS ALLOWED TO EXIST. Every prompt lever tried
+        here has failed ([[gorgon-detectors-not-producers]]) and they all had the same shape:
+        telling the model MORE ABOUT THE TASK before it answers. This says nothing about the
+        task. It hands back a rule the model's own answer broke — *"it is about name 'fives',
+        which the request never names"* — which is a FACT about that answer, computed
+        deterministically by `to_goals`.
+
+        ⇒ ACCEPTED ONLY IF THE SECOND READING IS LEGAL, and that condition is the whole
+        safety argument. A front-seam repair of exactly this shape was WITHDRAWN on 2026-08-06
+        because it turned UNTRANSLATED 3/3 into DONE_BUT_FALSE 3/3 — *"an impossible goal was
+        doing a REFUSAL'S JOB"*. A reading that still breaks a rule is DISCARDED and the
+        original refusal stands, so the worst case is the cost of one call and the outcome the
+        run would have had anyway.
+
+        ⇒ OFF BY DEFAULT (`GORGON_RESTANDARDISE=1`). It fires on ~50% of recorded readings, so
+        it is far too load-bearing to switch on unmeasured, and the ladder's noise exceeds the
+        effects it would be judged by ([[gorgon-ladder-noise-exceeds-the-effect]]).
+        """
+        import os
+
+        from planner.ir import config as _config     # local, as everywhere else in this file
+        if os.environ.get("GORGON_RESTANDARDISE", "") != "1":
+            return None
+        for _ in range(self._RESTANDARDISE):
+            # THE VIOLATION, NOT THE REQUEST RESTATED. The model already has the request; what
+            # it has never been given is what was wrong with its own answer.
+            hint = (f"{request}\n\n"
+                    f"A previous reading of this was rejected: {'; '.join(lost)}. "
+                    f"Express the SAME request without that problem.")
+            try:
+                with _config.use_kinds(getattr(engine, "manifest", None)):
+                    second = self.channel.ask(hint, engine.world())
+            except Exception:
+                return None
+            if not second or not getattr(second, "components", None):
+                return None
+            # BOTH LEGALITY VERDICTS, because a re-read that trades one violation for another
+            # is not a repair. `dropped` is `to_goals`' verdict and `illegal` is gate 1's; a
+            # second reading has to satisfy the pair or the first one stands.
+            still = (list(getattr(second, "dropped", ()) or ())
+                     + list(getattr(second, "illegal", ()) or ()))
+            if still:
+                session.record(
+                    "re-read still illegal: " + "; ".join(still),
+                    filed_by="orchestrator", caught_by="operator", executed="re-standardise",
+                    data={"first": lost, "second": still}, level="warn")
+                return None
+            session.record(
+                "re-standardised after: " + "; ".join(lost),
+                filed_by="orchestrator", caught_by="channel", executed="re-standardise",
+                data={"dropped": lost, "goals": second.components}, level="info")
+            return second
+        return None
 
     def sync(self, capabilities: Optional[List[str]] = None) -> Dict[str, Any]:
         return self.registry.sync(capabilities)
@@ -602,6 +710,28 @@ class Orchestrator:
                            filed_by=answer.source or "channel", caught_by="orchestrator",
                            executed="translate", data=answer.components,
                            level="warn" if not answer else "info")
+            # ⇒ GATE 1'S VERDICT ON THE MODEL'S OWN ANSWER, FILED AND NOT ACTED ON.
+            #
+            # A gate whose resolve arm is unbuilt has exactly one honest state: VISIBLE. This
+            # puts it in the ledger, where the rate can be read off real traffic rather than
+            # off a corpus recorded on 2026-08-01 — and where a wrong flag is an entry someone
+            # can point at, instead of a refusal they have to reverse-engineer.
+            if getattr(answer, "illegal", None):
+                session.record("gate 1: " + "; ".join(answer.illegal[:3]),
+                               filed_by="completeness", caught_by="operator",
+                               executed="translate",
+                               data={"illegal": answer.illegal}, level="warn")
+            # ⇒ GATE 2'S FETCH LIST, FILED AT `info` AND NOT AS A WARNING.
+            #
+            # It is a PRECONDITION the reading is entitled to have supplied — *"nothing has
+            # looked at `alive` yet"* — not a doubt about the reading. Filing it beside the
+            # faults would teach a reader that the gate which knows how to RESOLVE something
+            # is the one complaining most.
+            if getattr(answer, "fetch", None):
+                session.record("gate 2 wants a probe: " + "; ".join(answer.fetch[:3]),
+                               filed_by="truth", caught_by="orchestrator",
+                               executed="translate",
+                               data={"fetch": answer.fetch}, level="info")
             if not answer:
                 # A REQUEST NOBODY COULD TRANSLATE IS NOT A FAILED REQUEST — it is one that
                 # never became a request. Naming the stage matters: this is the front seam,
@@ -618,6 +748,37 @@ class Orchestrator:
                     return session.close("ABANDONED", answer.why)
                 return session.close("UNTRANSLATED", answer.why)
             lost = list(getattr(answer, "dropped", ()) or ())
+            if lost:
+                # ⇒ ONE RE-STANDARDISATION BEFORE REFUSING. The operator, 2026-08-07: *"the
+                # AI's job is to STANDARDISE the human's response to a measurable pattern, and
+                # the gates catch if the pattern the AI translated is LEGAL."* `lost` IS that
+                # legality verdict, already phrased in the operator's terms — and until now
+                # the only thing done with it was to close the run.
+                #
+                # THIS IS WHERE THE CORRECTING LOOP HAD TO LIVE, and it was built at :867
+                # where it can never run: `_WORTH_REREADING` holds `invented-or-dropped`,
+                # which fires only on a non-empty `lost` — and a non-empty `lost` had already
+                # returned from HERE, so the engine's gate always saw an empty one. `worth`
+                # was permanently falsy and that loop has never iterated once.
+                second = self._restandardise(request, lost, engine, session)
+                if second is not None:
+                    answer, lost = second, []
+            elif getattr(answer, "illegal", None):
+                # ⇒ GATE 1'S RESOLVE ARM, AND IT COSTS NOTHING WHEN IT FAILS.
+                #
+                # `to_goals` kept every goal, so there is no refusal to reverse — but gate 1
+                # found the model mangled or invented something. Its findings are a BETTER
+                # hint than `lost` ever was, because they name the OPERATOR'S OWN WORD: *"the
+                # request says 'fleet' and the reading says 'fleetsize'"*.
+                #
+                # AND THE DOWNSIDE IS BOUNDED AT ONE CALL. `lost` is empty here, so nothing
+                # below would have refused this run: if the re-read is illegal it is discarded
+                # and the ORIGINAL reading proceeds exactly as it does today. That is what
+                # lets gate 1 act at 1-in-21 false alarms — it can only ever improve a reading
+                # or waste a call, never turn a served request into a refused one.
+                second = self._restandardise(request, list(answer.illegal), engine, session)
+                if second is not None:
+                    answer = second
             if lost:
                 # HALF A REQUEST IS NOT A REQUEST — the operator's ruling, 2026-08-03:
                 # *"it should refuse something it can not understand and ask to clarify."*
@@ -636,6 +797,14 @@ class Orchestrator:
                 # IT COSTS NO PASSING REQUEST. Measured across all 28 ladder runs before it
                 # was written: only 4 drop anything, every one a `reach` the request never
                 # asked for, and NO run that currently succeeds drops a thing.
+                #
+                # ⇒ THAT NUMBER IS STALE AND THE CONCLUSION IS NOT. Replaying the 78 recorded
+                #   readings in `tests/bench/corpus/extract_raw.jsonl` through today's
+                #   `to_goals` gives **39 with a non-empty `dropped`, not 4** — the rule set
+                #   has grown since. What survives re-measurement is the second half: of the
+                #   readings that PASSED, none drops anything. So this still costs no passing
+                #   request; it just refuses far more of the failing ones than it used to,
+                #   which is why the re-standardise arm below exists at all.
                 session.record("could not read: " + "; ".join(lost),
                                filed_by=answer.source or "extractor",
                                caught_by="operator", executed="translate",
@@ -781,95 +950,26 @@ class Orchestrator:
             # no better program will make it allowed, and filing it with the gaps would send
             # the request up the ladder looking for a way around the ban.
             return session.close("REFUSED", str(result.get("why") or ""))
-        # ── THE LOOP THAT COMPLETES THE GATE ────────────────────────────────────────────
+        # ⇒ THE RE-READ LOOP THAT USED TO LIVE HERE WAS REMOVED ON 2026-08-07. IT HAD NEVER
+        #   RUN A SINGLE ITERATION, and the reason was structural rather than a bug in it:
         #
-        # A DETECTOR THAT ONLY REFUSES CANNOT CLOSE ANYTHING. The operator, 2026-08-06: *"we
-        # were pretty good at catching mistakes not correcting them... we havent used the
-        # ability we honed at catching to actual progress."* The gate was the catching half
-        # and it stopped there — every finding became a question and the run ended.
+        #     `worth = result.get("asked") and _gate.rereadable(result.get("caught"))`
         #
-        # SO A GATED READING IS READ AGAIN. Temperature 0 is not deterministic here (that is
-        # `ladder-is-not-a-feedback-loop`, and today's draws differ on identical input), so
-        # another draw is a genuinely different reading rather than the same one returned
-        # twice. Each is planned, rehearsed and judged by the same gate — a repair that is
-        # not re-judged is just a second guess.
+        #   `rereadable` admits exactly two codes. `invented-or-dropped` fires only when
+        #   `judge` is handed a non-empty `lost` — and a non-empty `lost` has ALREADY closed
+        #   the run as UNTRANSLATED, hundreds of lines earlier, so it can never reach here.
+        #   `inert` was demoted to a report on 2026-08-06 and is never returned at all. So
+        #   `worth` was permanently falsy and `range(0)` never iterated.
         #
-        # THE SAME SHAPE AS THE PROMOTION LOOP ABOVE, deliberately: ask again, bounded, and
-        # close honestly when the budget runs out. What differs is the question — a promotion
-        # asks about a GAP the writer could not close, this asks the request again because
-        # what came back did not survive reading.
+        #   THE CATCHING HALF WAS BUILT AND THE CORRECTING HALF WAS PUT WHERE THE CATCH
+        #   CANNOT REACH IT. The operator's question — *"we know how to catch it, why are we
+        #   not correcting it?"* — had this as its answer.
         #
-        # IT STOPS ON A REPEAT. If a fresh draw is the reading already rejected, another draw
-        # will not help and spending one is cost with no chance of gain.
-        #
-        # AND ITS OWN BUDGET, not `rounds_left` — that counts PROMOTIONS, and a reading
-        # retried three times would silently consume the escalation budget of a session that
-        # had not escalated at all.
-        # AND IT ONLY SPENDS A CALL WHERE ONE COULD WIN. A contradiction lives in the
-        # REQUEST — every draw will contain it — and a high-stakes flag is the WRITER's tile
-        # choice rather than the reading's, so re-drawing those is cost with no chance of
-        # gain. `reading_gate.rereadable` holds that list; the whole point of the free checks
-        # is that the expensive step stays rare.
-        readings = [components]
-        worth = result.get("asked") and _gate.rereadable(result.get("caught"))
-        for attempt in range(self._MAX_READINGS if worth else 0):
-            session.record(f"reading gate: {result.get('caught')} — reading the request "
-                           f"again ({attempt + 1} of {self._MAX_READINGS})",
-                           filed_by="orchestrator", caught_by="operator", level="warn")
-            # WITH THE HINT, NOT BLIND. The operator's structure, 2026-08-06: *"if it fails
-            # but is coherent, we ask it once again with a hint; if it cant produce any, we
-            # derive."* A re-draw that is not told what was wrong is a second guess, and the
-            # gate's reason is COMPUTED and specific — "it asks for 3 vms all called
-            # 'golden', and a vm is identified by its name".
-            #
-            # THE GAP DICT IS THE EXISTING CONVENTION, the same one the promotion loop above
-            # uses: `rig.translator` reads `str(gap)`, so the question travels into the
-            # request without a second channel or a prompt change.
-            #
-            # HINTING MEASURED NEGATIVE ONCE TODAY — told in as many words that it had
-            # invented `unresponsive`, the model returned the same class of error. That was
-            # one rung and a generic instruction; this is the gate's own sentence, and it is
-            # cheap enough to be worth measuring properly rather than assumed either way.
-            answer = self.channel.ask({"gap": result.get("asked") or "",
-                                       "request": request,
-                                       "have": components}, engine.world())
-            if not answer:
-                break
-            fresh = list(answer.components)
-            if any(fresh == earlier for earlier in readings):
-                session.record("the same reading came back — another draw will not help")
-                break
-            readings.append(fresh)
-            components = fresh
-            retried = _insession.drive(engine, components, session, self._decide)
-
-            # THE RATCHET, AND WITHOUT IT THE LOOP MANUFACTURES FALSE SUCCESSES.
-            #
-            # An EMPTY program never reaches the reading gate — `_plan` returns "already
-            # satisfied, nothing to do" before it — so an un-judged result was beating a
-            # judged one by default. Measured 2026-08-06: rung 8's paraphrase went
-            # UNTRANSLATED -> DONE with ZERO CALLS and the checker disagreeing, and the
-            # paraphrase arm's false successes doubled from 3 to 6.
-            #
-            # "NOTHING TO DO" IS A CLAIM, AND HERE IT IS THE LEAST CREDIBLE ONE AVAILABLE.
-            # The previous reading was rejected for a reason; a fresh reading that answers
-            # the same request by doing nothing at all has not corrected it, it has given up
-            # on it. Where a world genuinely is already as asked, the FIRST reading says so
-            # and never enters this loop.
-            #
-            # So a re-reading is adopted only when it does something AND survives the gate.
-            # The original verdict stands otherwise, which is the behaviour that existed
-            # before the loop — the right way round for anything that turns a refusal into a
-            # run.
-            if retried.get("done") and not (retried.get("calls") or []):
-                session.record("a re-reading claimed there was nothing to do — keeping the "
-                               "question, because the reading before it was rejected")
-                break
-            result = retried
-            session.calls = result.get("calls") or []
-            if not result.get("asked"):
-                session.record(f"a re-reading survived the gate on attempt {attempt + 1}")
-                break
+        #   ⇒ THE CORRECTION NOW LIVES WHERE THE VIOLATION IS FOUND: `_restandardise`, called
+        #     from the translation branch the moment `dropped` or gate 1's `illegal` is
+        #     non-empty. Same idea, one re-ask with the reason attached; reachable, because
+        #     it sits at the seam that computes the reason instead of downstream of the
+        #     refusal it triggers.
 
         if result.get("asked"):
             # THE READING GATE STOPPED IT, and that is neither a gap nor a refusal. UNMET

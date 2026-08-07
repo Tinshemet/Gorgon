@@ -944,6 +944,155 @@ def test_a_step_declares_what_it_would_destroy():
     check("and nothing was destroyed", len(world.vms) == 3)
 
 
+def test_the_SHIPPED_grant_refuses_a_destruction_nobody_authorised():
+    """AND THE TEST ABOVE IS NOT THIS TEST. It injects `refuse_destruction` — its own policy —
+    so it proves the field is READABLE and says nothing about what ships.
+
+    MEASURED 2026-08-07: nothing shipped read it. `Orchestrator._grant` returned
+    `Verdict(step.kind)`, so against a lab of twelve machines the goal `count(vm) = 10` — a
+    TOTAL — planned `delete_vm(web)`, `delete_vm(work-laptop)` and RAN them. A request whose
+    only verb was CREATE destroyed the operator's machines. The proving test passed throughout,
+    because it brought its own decider.
+
+    That is the BUILT-AND-NEVER-CALLED shape at its most expensive: the mechanism existed, a
+    test proved it worked, and the default never used it. This pins the DEFAULT.
+    """
+    print("[in-session] the SHIPPED default refuses an unauthorised destruction")
+    from engines import insession
+    from engines.orchestrator import Orchestrator
+    from tests.bench.sim_world import SimWorld
+
+    world = SimWorld()
+    for name in ("alpha", "beta", "gamma"):
+        world.execute("create_vm", {"name": name, "os_type": "linux"})
+    eng = MedusaEngine(world)
+    goals = [{"shape": "count", "select": {"kind": "vm"}, "eq": 1}]
+
+    # 1 · NOBODY THERE. Fail-closed, exactly as `consent.granted` reads a `None` operator.
+    sess = Session("just one", eng, intent="achieve", regime="translation")
+    out = insession.drive(eng, goals, sess, Orchestrator._grant)
+    check("the shipped default refuses it", out.get("refused") is True)
+    check("and NOTHING was destroyed", len(world.vms) == 3)
+    check("and it names what it would have destroyed",
+          "alpha" in str(out.get("why", "")) or "machine" in str(out.get("why", "")))
+
+    # 2 · AN OPERATOR IS ASKED, AND ASKED ABOUT THE DESTRUCTION ITSELF. Consenting to run a
+    #     world-changing program is not consenting to lose `alpha`.
+    asked = []
+
+    def present(question):
+        asked.append(question)
+        return False
+
+    world2 = SimWorld()
+    for name in ("alpha", "beta", "gamma"):
+        world2.execute("create_vm", {"name": name, "os_type": "linux"})
+    eng2 = MedusaEngine(world2)
+    sess2 = Session("just one", eng2, intent="achieve", regime="translation",
+                    consent=present)
+    insession.drive(eng2, goals, sess2, Orchestrator._grant)
+    check("a live consent surface is RE-ASKED", len(asked) == 1)
+    check("and the question names the machines", "destroys" in asked[0])
+    check("a no is honoured", len(world2.vms) == 3)
+
+    # 3 · AND THE ONE THAT MUST STILL WORK. A guard that refuses everything is not a guard.
+    world3 = SimWorld()
+    for name in ("alpha", "beta", "gamma"):
+        world3.execute("create_vm", {"name": name, "os_type": "linux"})
+    eng3 = MedusaEngine(world3)
+    sess3 = Session("just one", eng3, intent="achieve", regime="translation", consent=True)
+    insession.drive(eng3, goals, sess3, Orchestrator._grant)
+    check("an AUTHORISED destruction still runs", len(world3.vms) == 1)
+
+
+def test_an_illegal_reading_is_re_standardised_once_before_it_is_refused():
+    """THE CORRECTING HALF, PUT WHERE IT CAN ACTUALLY RUN.
+
+    The operator, 2026-08-07: *"the AI's job is to STANDARDISE the human's response to a
+    measurable pattern, and the gates catch if the pattern the AI translated is LEGAL."*
+    `answer.dropped` IS that legality verdict, and until today the only thing done with it was
+    to close the run — `engines/orchestrator.py` returned UNTRANSLATED the moment it was
+    non-empty.
+
+    WHICH IS ALSO WHY THE RE-READ LOOP AT :867 HAD NEVER ITERATED. Its
+    `_WORTH_REREADING = {"invented-or-dropped", "inert"}` holds one code that fires only on a
+    non-empty `dropped` — already returned from upstream — and one that was demoted to a
+    report and is never returned at all. `worth` was permanently falsy. The catching half was
+    built and the correcting half was put somewhere unreachable behind it.
+
+    NO MODEL HERE. The channel is a stub that answers illegally first and legally second,
+    which is the only way to test the MECHANISM rather than the weather.
+    """
+    print("[front seam] an illegal reading gets one more chance, then is refused")
+    from engines.channel import Answer, Channel
+    from engines.orchestrator import Orchestrator
+    from engines.registry import Registry
+    from tests.bench.sim_world import SimWorld
+
+    LEGAL = [{"shape": "count", "select": {"kind": "vm", "name": "alpha"}, "eq": 1}]
+
+    def stub(answers):
+        seen = []
+
+        def answerer(gap, world=None):
+            seen.append(str(gap))
+            return answers[min(len(seen) - 1, len(answers) - 1)]
+        answerer.seen = seen
+        return answerer
+
+    def serve(answers, flag):
+        import os
+        world = SimWorld()
+        registry = Registry()
+        registry.mount(MedusaEngine(world))
+        a = stub(answers)
+        orch = Orchestrator(registry, Channel([a]))
+        old = os.environ.get("GORGON_RESTANDARDISE")
+        if flag:
+            os.environ["GORGON_RESTANDARDISE"] = "1"
+        else:
+            os.environ.pop("GORGON_RESTANDARDISE", None)
+        try:
+            return orch.handle("create a vm named alpha", intent="achieve"), a.seen, world
+        finally:
+            if old is None:
+                os.environ.pop("GORGON_RESTANDARDISE", None)
+            else:
+                os.environ["GORGON_RESTANDARDISE"] = old
+
+    # A PARTIAL READING — SOME GOALS KEPT, ONE DROPPED. That is what `dropped` is FOR (*"an
+    # answer with components AND drops is a request served in part"*), and it is the shape 33
+    # of the 39 illegal readings in `tests/bench/corpus/extract_raw.jsonl` actually have.
+    #
+    # AN ANSWER WITH ZERO COMPONENTS NEVER REACHES THIS CODE AT ALL: `Answer.__bool__` is
+    # false, so `orchestrator.py` returns UNTRANSLATED from the `if not answer` branch above,
+    # and the drop reason is never used. Found by this test failing on its first run.
+    illegal = Answer(LEGAL, "model",
+                     dropped=["it is about name 'fives', which the request never names"])
+    legal = Answer(LEGAL, "model")
+
+    # 1 · OFF BY DEFAULT. The behaviour every measurement to date was taken against.
+    out, seen, _w = serve([illegal, legal], flag=False)
+    check("off by default — one call only", len(seen) == 1)
+    check("and it still refuses as before", out.get("outcome") == "UNTRANSLATED")
+
+    # 2 · ON, AND THE SECOND READING IS LEGAL. The run is served instead of refused.
+    out, seen, world = serve([illegal, legal], flag=True)
+    check("it asked a second time", len(seen) == 2)
+    check("the second ask carried the VIOLATION, not the request restated",
+          "never names" in seen[1])
+    check("and the run is no longer refused", out.get("outcome") != "UNTRANSLATED")
+    check("the machine the request asked for exists", "alpha" in world.vms)
+
+    # 3 · ON, BUT THE SECOND READING IS ALSO ILLEGAL. THE ORIGINAL REFUSAL MUST STAND.
+    #     This is the arm that keeps the 2026-08-06 withdrawal from repeating: a repair that
+    #     accepts an illegal second reading turns UNTRANSLATED into DONE_BUT_FALSE.
+    out, seen, world = serve([illegal, illegal], flag=True)
+    check("it tried once and only once", len(seen) == 2)
+    check("an illegal re-read is DISCARDED", out.get("outcome") == "UNTRANSLATED")
+    check("and nothing was built on it", not world.vms)
+
+
 def test_the_opened_grain_acts_before_it_knows_the_request_is_impossible():
     """THE TREE REGIME'S INTRINSIC COST, measured rather than asserted.
 

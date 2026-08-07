@@ -18,6 +18,9 @@ from __future__ import annotations
 
 import os as _os
 
+from planner.gates import completeness as _completeness
+from planner.gates import truth as _truth
+
 from typing import Any, Callable, Dict, Optional, Tuple
 
 
@@ -92,8 +95,59 @@ def translator() -> Callable:
         # that had no second clause — so the writer covered the half that made it, every
         # layer below was honest about that half, and the run closed DONE over a request it
         # had only partly read. See `to_goals`' own docstring for the measurement (rung 2).
+        # ⇒ GATE 1, ON THE RAW ANSWER, AND THIS IS THE ONLY PLACE IT CAN WORK.
+        #
+        # `to_goals` is a legality checker in its own right, and it DISCARDS what it refuses:
+        # an invented name goes into `lost` and the goal carrying it is thrown away. Run gate 1
+        # after that and it finds nothing — measured, 0 mutations and 0 inventions across all
+        # 78 recorded readings, on a corpus that visibly contains 'fives' and 'fleetsize'. It
+        # was auditing a room the evidence had been removed from. Moved here, the same rules
+        # catch 32 of 57. **The placement was worth ten times the rules.**
+        #
+        # IT DOES NOT VOTE YET. Its findings ride on `Answer.illegal`, which nothing refuses
+        # on — see that field for why merging it into `dropped` would refuse 1 in 21 currently
+        # passing runs.
+        try:
+            illegal = _completeness.inspect_raw(
+                str(gap), raw, schema=_extract.schema()).findings()
+        except Exception:
+            # A GATE THAT RAISES MUST NOT TAKE THE TRANSLATION WITH IT. It is an observer here
+            # and an observer that can fail the thing it observes is not one.
+            illegal = []
         lost: list = []
         goals = _extract.to_goals(raw, str(gap), dropped=lost, world=world)
+        # AND THE HALF OF GATE 1 THAT NEEDS THE GOALS RATHER THAN THE RAW ANSWER.
+        #
+        # `DROPPED` asks whether a value the operator QUOTED survived into the reading, and
+        # that can only be answered once there IS a reading — the raw answer is the wrong
+        # subject for it, because a clause the model never wrote is exactly what is being
+        # looked for. The other three checks are the reverse and belong upstream, on the raw
+        # answer, before `to_goals` discards the evidence.
+        #
+        # ONE GATE, TWO SUBJECTS, and each check is asked of the artifact that can answer it.
+        try:
+            illegal += [f for f in _completeness.inspect(str(gap), goals or []).findings()
+                        if f not in illegal]
+        except Exception:
+            pass
+        # ⇒ GATE 2, HERE AND NOT IN THE ENGINE, because the world is already in hand.
+        #
+        # It needs a WORLD, which looked like it forced the call site into `engines/medusa` —
+        # off limits until the orchestrator level is finished. It does not: `translate` is
+        # HANDED a world (`orchestrator.py` calls `channel.ask(request, engine.world())`) and
+        # passes it to `to_goals` already. Gate 2 asks the same object the same way.
+        #
+        # ITS `fetch` AND `settled` ARE NOT FAULTS AND MUST NOT TRAVEL AS ONE. A probe the
+        # reading needs, and a goal that already holds, are both things the caller should KNOW
+        # — neither is a reason to doubt the reading. Folding them into `illegal` would make
+        # the one gate that knows how to RESOLVE something look like the one complaining most.
+        fetch: list = []
+        try:
+            verdict = _truth.inspect(goals or [], world)
+            illegal += [f for f in verdict.findings() if f not in illegal]
+            fetch = verdict.questions()
+        except Exception:
+            pass
         # THE CLAUSE SPLIT, ADDITIVE AND OFF BY DEFAULT. Each clause of the request is asked
         # for on its own and the readings are unioned — see `extract.by_clause` for why a
         # narrower ASK with the same CONTEXT is the one lever the record supports.
@@ -115,8 +169,8 @@ def translator() -> Callable:
                 # stands: the run is refused, and the recovery shows up as goals nobody used.
         if not goals:
             return Answer(None, "extractor", "; ".join(lost) or "no usable goal",
-                          dropped=lost)
-        return Answer(goals, "extractor", "", dropped=lost)
+                          dropped=lost, illegal=illegal, fetch=fetch)
+        return Answer(goals, "extractor", "", dropped=lost, illegal=illegal, fetch=fetch)
     translate.name = "extractor"
     return translate
 

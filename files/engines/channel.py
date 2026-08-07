@@ -37,7 +37,9 @@ class Answer:
     """
 
     def __init__(self, components: Optional[List[Dict[str, Any]]], source: str, why: str = "",
-                 procedure: Optional[str] = None, dropped: Optional[List[str]] = None):
+                 procedure: Optional[str] = None, dropped: Optional[List[str]] = None,
+                 illegal: Optional[List[str]] = None,
+                 fetch: Optional[List[str]] = None):
         self.components = components or []
         self.source = source
         # AN AUTHORING REQUEST NAMES WHAT TO KEEP. `None` is an ordinary request: do it now.
@@ -49,12 +51,36 @@ class Answer:
         # from a non-empty string made a descriptive label read as a complaint. An answer
         # with components AND drops is a request served in part, which nothing could say.
         self.dropped = list(dropped or ())
+        # ⇒ WHAT GATE 1 FOUND IN THE MODEL'S OWN ANSWER — a hole, a drop, a mutation or an
+        # invention (`planner/gates/completeness.py`).
+        #
+        # ITS OWN FIELD, AND DELIBERATELY NOT FOLDED INTO `dropped`. A non-empty `dropped`
+        # CLOSES THE RUN — `engines/orchestrator.py` refuses the whole request the moment one
+        # appears ("half a request is not a request"). Gate 1 flags 1 of every 21 readings
+        # that currently PASS, so merging the two would refuse a twentieth of the working
+        # system on a measurement nobody has acted on yet.
+        #
+        # SO IT TRAVELS AND DOES NOT VOTE. That is the honest state of a gate whose RESOLVE
+        # arm is not built: it is visible in the ledger, it is measurable on live traffic, and
+        # it changes no outcome until something is written that can act on it.
+        self.illegal = list(illegal or ())
+        # ⇒ WHAT GATE 2 WANTS THE WORLD ASKED BEFORE ANYBODY JUDGES THIS READING.
+        #
+        # SEPARATE FROM `illegal` BECAUSE IT IS NOT A FAULT. "nothing has looked at `alive`
+        # yet" is a PRECONDITION the reading is entitled to have supplied, not a doubt about
+        # it — and Decision 6 is the reason it cannot be treated as one: a kind the world
+        # cannot see is not a kind with nothing in it, so an unprobed `alive` reads as FALSE
+        # to anything that treats absence as denial. That would stop every machine in the lab
+        # on a request to stop the unresponsive ones.
+        self.fetch = list(fetch or ())
 
     def __bool__(self) -> bool:
         return bool(self.components)
 
     def __repr__(self) -> str:
-        return f"<Answer {self.source} n={len(self.components)} {self.why[:40]}>"
+        return (f"<Answer {self.source} n={len(self.components)} "
+                f"{'illegal=' + str(len(self.illegal)) + ' ' if self.illegal else ''}"
+                f"{self.why[:40]}>")
 
 
 def constrained(prompt: str, payload: Any, schema: Dict[str, Any],
