@@ -98,13 +98,18 @@ def choose_subject(claim: str, board: Board) -> Optional[str]:
     import re
 
     low = claim.lower()
-    best, best_len = None, 0
+    best, at, length = None, len(low) + 1, 0
     for kind in board.subjects():
         names = [kind] + list((board.kinds.get(kind) or {}).get("nouns") or [])
         for noun in names:
             word = str(noun).lower()
-            if re.search(rf"\b{re.escape(word)}s?\b", low) and len(word) > best_len:
-                best, best_len = kind, len(word)
+            hit = re.search(rf"\b{re.escape(word)}s?\b", low)
+            if not hit:
+                continue
+            # FIRST MENTION WINS, not longest. "give every vm on the dmz network the label
+            # quarantine" is about the vm; longest-match picks `network` and is wrong.
+            if hit.start() < at or (hit.start() == at and len(word) > length):
+                best, at, length = kind, hit.start(), len(word)
     return best
 
 
