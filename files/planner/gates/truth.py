@@ -161,21 +161,26 @@ class Report:
     def questions(self) -> List[str]:
         """WHAT TO ASK THE WORLD BEFORE JUDGING — the resolve arm, and it acts rather than
         refusing. Each entry is a kind nobody has looked at yet."""
-        out = [f"nothing has looked at {f['kind']} yet — probe it before judging "
-               f"{f['name']!r}" for f in self.fetch]
-        # ⇒ AND WHAT ONLY THE OPERATOR CAN SETTLE. `to_goals` already REFUSES a shared
-        #   identity — *"several members cannot share one identity"* — and refusing without
-        #   asking is where rung 10's paraphrase died SILENTLY: a correct refusal that gave
-        #   the operator nothing to answer. They meant N COPIES of an existing member, and
-        #   only they can say so.
-        #
-        #   BOTH KINDS LIVE ON ONE METHOD because the caller does not care who has to answer
-        #   — it cares that a question exists. Two `questions()` on one report is how the
-        #   later one silently shadows the first, which is exactly what happened writing this.
-        out += [f"you asked for {h['amount']} {h['kind']}s called {h['name']!r}, and "
+        return [f"nothing has looked at {f['kind']} yet — probe it before judging "
+                f"{f['name']!r}" for f in self.fetch]
+
+    def asks(self) -> List[str]:
+        """WHAT ONLY THE **OPERATOR** CAN SETTLE — as opposed to `questions()`, which the
+        SYSTEM answers for itself by probing.
+
+        ⇒ THESE TWO WERE MERGED INTO ONE METHOD AND IT BROKE THE BOUNCE. `questions()` travels
+        to `Answer.fetch`, the channel for a question the world can answer; folding an
+        operator's question into it sent the shared-identity ask somewhere nothing reads it,
+        and rung 10's paraphrase BLOCKED with a perfectly good question sitting in the wrong
+        field. Two audiences, two methods — merging them once already cost a shadowed
+        definition, and merging them again cost a silent block.
+
+        `to_goals` REFUSES a shared identity and is right to: three members cannot share one
+        name. What it cannot do is say what the operator probably meant, which is N COPIES.
+        """
+        return [f"you asked for {h['amount']} {h['kind']}s called {h['name']!r}, and "
                 f"{h['name']!r} already exists — did you mean {h['amount']} copies of it?"
                 for h in self.shared]
-        return out
 
     def __repr__(self) -> str:
         return (f"<Truth {'legal' if self.legal else 'ILLEGAL'} "

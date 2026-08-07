@@ -1995,6 +1995,93 @@ def with_repair(request: str, world=None, draws: int = 3, rounds: int = 1,
 _ONLY = "\n\nTRANSLATE ONLY THIS PART OF IT, and nothing else in the request: "
 
 
+# ── PASS ONE: WHAT THE REQUEST SAYS, WITHOUT EVER MENTIONING THE GOAL SHAPES ──────────────
+#
+# ⇒ TELLING THE MODEL THE SHAPES IS WHAT MAKES IT THINK IN CONTROL FLOW, and that is measured
+#   rather than supposed. Asked to break "ping every vm and stop the ones that do not answer"
+#   into claims WITH the shapes in the prompt, it answered — deterministically, 3 draws of 3 —
+#
+#       ['every(vm, alive, True)',  'if (result == False): stop(vm)']
+#
+#   and explained itself coherently: *"I chose `every` because I want to check all VMs. Then I
+#   used a conditional statement to filter out the ones that don't respond."* Medusa has no
+#   `if`. It is a language of END-STATE CLAIMS, and the model was reaching for a BRANCH.
+#
+#   THE SAME REQUEST WITH NO SHAPES IN THE PROMPT decomposes cleanly, in English:
+#
+#       ['Check which machines respond', 'Shut down machines that do not respond']
+#
+#   That is the whole argument for a first pass that knows nothing about the schema: the
+#   shapes do not help it read, they change what it thinks it is being asked for.
+_SPLIT_PROMPT = (
+    "Break this request into the separate things it asks for. Use the requester's own words. "
+    "Each item must be a complete claim about what should be true or what should happen — "
+    "never a single word, never a fragment. Do not translate, do not use code, do not name "
+    "any data structure. If the request asks for only one thing, return exactly one item."
+)
+_SPLIT_SCHEMA = {
+    "type": "object", "required": ["claims"],
+    "properties": {"claims": {"type": "array", "minItems": 1, "items": {
+        "type": "string", "minLength": 8,
+        "description": "one complete claim, in the requester's own words"}}},
+}
+
+
+def in_words(request: str, model: str = None, temp: float = 0.0,
+             timeout: int = 300) -> List[str]:
+    """The request's separate claims, IN WORDS, with no schema in sight. Pass one.
+
+    ⇒ `minLength: 8` AND "never a single word" ARE BOTH THERE FOR ONE MEASURED FAILURE.
+      "launch every vm that is currently stopped" came back as SEVEN items — `launch`,
+      `every`, `vm`, `that`, `is`, `currently`, `stopped`. The grammar refuses that shape now
+      rather than trusting the instruction alone, because a splitter that tokenises is worse
+      than no splitter: every fragment is a clause nobody asked for.
+
+    RETURNS [] RATHER THAN GUESSING when the answer is unusable. A pass that cannot read the
+    sentence must not hand the next pass a worse version of it.
+    """
+    try:
+        from .channel import constrained as _constrained
+        got = _constrained(_SPLIT_PROMPT, str(request), _SPLIT_SCHEMA,
+                           model=model, temp=temp, timeout=timeout)
+    except Exception:
+        return []
+    claims = [str(c).strip() for c in (got or {}).get("claims") or [] if str(c).strip()]
+    # A CLAIM SHORTER THAN A CLAUSE IS A TOKEN. Belt and braces with the grammar above: the
+    # constrained decoder is the guard that was never enforced once already.
+    return [c for c in claims if len(c.split()) > 1]
+
+
+def two_pass(request: str, world=None, model: str = None, temp: float = 0.0,
+             timeout: int = 300) -> List[Dict[str, Any]]:
+    """Read the request in WORDS first, then standardise each claim on its own. Pass two.
+
+    The operator, 2026-08-07: *"the first pass is extraction only and no standardisation, and
+    the other is the actual standardisation."*
+
+    ⇒ IT IS `by_clause` WITH A SEMANTIC SPLITTER RATHER THAN A SYNTACTIC ONE.
+      `clause_ledger.enumerate_clauses` cuts on punctuation and conjunctions; this asks the
+      model what the claims ARE. Everything downstream is deliberately identical — one
+      extraction per claim, the FULL request handed to `to_goals` so `_refuse_invented` judges
+      a name against what the operator actually said, and the union taken.
+
+    ⇒ AND IT COSTS ONE CALL PER CLAIM PLUS ONE. Measured against the alternative rather than
+      assumed: the whole-request pass drops rung 3's join and mutates rung 7's group, and a
+      syntactic split fixes the first while breaking the second.
+    """
+    claims = in_words(request, model=model, temp=temp, timeout=timeout)
+    if len(claims) < 2:
+        return []                     # one claim IS the ordinary path; a second draw buys noise
+    out: List[Dict[str, Any]] = []
+    for claim in claims:
+        try:
+            raw = extract(f"{request}{_ONLY}{claim}", model=model, temp=temp, timeout=timeout)
+        except Exception:
+            continue                  # one claim failing must not lose the others
+        out.extend(to_goals(raw, request, world=world) or [])
+    return out
+
+
 def by_clause(request: str, world=None, model: str = None, temp: float = 0.0,
               timeout: int = 300) -> List[Dict[str, Any]]:
     """Goals from each clause of `request`, asked for one clause at a time.

@@ -640,8 +640,12 @@ def test_n_copies_of_a_member_that_already_exists():
     world.execute("create_vm", {"name": "golden", "os_type": "linux"})
     rep = g2.inspect([], world, copies=found)
     check("gate 2 confirms it against the world", bool(rep.shared))
-    check("and asks the only question that helps",
-          "copies of it" in rep.questions()[0])
+    check("and asks the only question that helps", "copies of it" in rep.asks()[0])
+    # ⇒ AND IT GOES TO THE OPERATOR'S CHANNEL, NOT THE WORLD'S. `questions()` is what the
+    #   SYSTEM answers by probing; `asks()` is what only a person can. Merging the two sent
+    #   this question to `Answer.fetch`, which the bounce never reads, and rung 10's paraphrase
+    #   BLOCKED with a perfectly good question sitting in the wrong field.
+    check("and it is NOT filed as something the world can answer", not rep.questions())
 
     # ⇒ THE SAME SHAPE WHERE THE NAME IS NOT A MEMBER IS NOT THIS. "create 3 vms called web"
     #   on a lab with no `web` is an ordinary — if malformed — creation, and `to_goals` owns it.

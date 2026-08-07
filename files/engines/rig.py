@@ -184,6 +184,11 @@ def translator() -> Callable:
                 copies=_completeness.copies_of(raw))
             illegal += [f for f in verdict.findings() if f not in illegal]
             fetch = verdict.questions()
+            # ⇒ AND GATE 2'S QUESTIONS FOR THE **OPERATOR** GO WHERE THE BOUNCE READS. `fetch`
+            #   is a question the SYSTEM answers by probing; `asks` is one only a person can.
+            #   Folding the two together sent the shared-identity question to `fetch` and rung
+            #   10's paraphrase BLOCKED with a perfectly good question in the wrong field.
+            asks += [q for q in verdict.asks() if q not in asks]
             # ⇒ AND THE FETCH IS SUPPLIED, NOT MERELY NAMED. A reading that FILTERS on `alive`
             #   without ever asking is missing a precondition nothing else provides, so gate 2
             #   says the missing claim out loud — `observe(vm) alive` — and it is PREPENDED,
@@ -210,6 +215,17 @@ def translator() -> Callable:
                                           settled=bool(verdict.settled))
             illegal += [f for f in reasoned.findings() if f not in illegal]
             asks = reasoned.questions()
+            # ⇒ AND GATE 3 SUPPLIES THE JOIN IT CAN DERIVE. A BOUNCE is a TRUTHY NEGATIVE —
+            #   the shape existed and the reading missed it — so where the fix follows from
+            #   the manifest rather than from a guess, the gate makes it instead of asking.
+            #
+            #   ONLY WITH EXACTLY ONE MEMBER OF EACH KIND. Two machines and one network is a
+            #   CHOICE about which joins which, and choosing is the guess gate 3 does not
+            #   make; it falls back to a question there. Measured: 0 firings across 58 PASSING
+            #   readings.
+            joined = reasoned.supply()
+            if joined and goals:
+                goals = list(goals) + joined
             # ⇒ AND THE THREE VERDICTS TRAVEL, because gate 4 judges what the OTHER GATES DID
             #   rather than what the reading says. Each of them RESOLVES something locally —
             #   gate 1 restores a mangled value, gate 2 supplies a missing probe, gate 3 asks —

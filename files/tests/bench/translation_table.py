@@ -93,7 +93,18 @@ def main(argv=None) -> int:
                 continue
             _world_for_engine = _world(rung)
             _engine = _Medusa(_world_for_engine)
-            _orch = _Orch(_Registry(), _Channel([_make_translator()]))
+            # ⇒ AN OPERATOR WHO LISTENS AND SAYS NOTHING. Silence leaves the refusal exactly
+            #   where it was, so the OUTCOMES here are identical to a run with no operator at
+            #   all — but the question is RECORDED, which is the only way this harness can
+            #   tell a BOUNCE (gate 4 says a person could still rescue it) from a BLOCK
+            #   (nothing an answer could change). Answering would measure the answers.
+            _bounced: list = []
+
+            def _listen(question, session, _b=_bounced):
+                _b.append(question)
+                return ""
+
+            _orch = _Orch(_Registry(), _Channel([_make_translator()]), clarify=_listen)
             readings, store = Counter(), {}
             # ⇒ EVERY DRAW, KEPT, BECAUSE GATE 4 JUDGES THE SET AND NOT A MEMBER OF IT.
             #   The first port of this harness called gate 4 once per draw with a single
@@ -117,7 +128,8 @@ def main(argv=None) -> int:
                 answer, closed = _orch.read(request, _engine, session)
                 if answer is None:
                     goals, lost = [], [str((closed or {}).get("why") or "unreadable")]
-                    flags, warn, vetoed = {"0": True}, [], False
+                    flags = {"BOUNCE" if _bounced else "BLOCK": True}
+                    warn, vetoed = list(_bounced), False
                 else:
                     goals = list(answer.components or [])
                     lost = list(answer.dropped or [])
@@ -125,6 +137,7 @@ def main(argv=None) -> int:
                              for g, ok in (answer.gates or {}).items() if g != "reask"}
                     warn = list(answer.asks or []) + list(answer.fetch or [])
                     vetoed = (answer.gates or {}).get("reask") is False
+                del _bounced[:]
                 reasked = sum(1 for line in session.log if "re-standardis" in str(line))
                 verdict = gate.Verdict(
                     gate.PROCEED if not any(flags.values()) else gate.ASK,
