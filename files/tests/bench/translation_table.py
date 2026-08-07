@@ -30,7 +30,11 @@ from collections import Counter
 
 from engines import extract
 from planner import reading_gate as gate
+from engines.medusa.engine import MedusaEngine as _Medusa
+from engines.orchestrator import Orchestrator as _Orch
+from engines.registry import Registry as _Registry
 from engines.rig import translator as _make_translator
+from engines.session import Session as _Session
 from tests.bench.rungs import RUNGS
 from tests.bench.sim_world import SimWorld
 
@@ -72,7 +76,10 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     wanted = set(args.rung or [r.n for r in RUNGS])
 
-    _translate = _make_translator()
+    # THE PRODUCTION MOUNT, built once. `read` needs an engine (for its manifest and its
+    # world) and a channel; nothing here reaches the engine's executor.
+    from engines.channel import Channel as _Channel
+    _registry = _Registry()
     print(f"\n{'rung':<5}{'arm':<4}{'n=':<4}{'match':<10}{'gate':<8}{'gates hit':<12}reading "
           f"(most common of {args.repeats} draws)")
     print("─" * 126)
@@ -84,6 +91,9 @@ def main(argv=None) -> int:
         for arm, request in (("lit", rung.goal), ("par", rung.paraphrase)):
             if not request:
                 continue
+            _world_for_engine = _world(rung)
+            _engine = _Medusa(_world_for_engine)
+            _orch = _Orch(_Registry(), _Channel([_make_translator()]))
             readings, store = Counter(), {}
             # ⇒ EVERY DRAW, KEPT, BECAUSE GATE 4 JUDGES THE SET AND NOT A MEMBER OF IT.
             #   The first port of this harness called gate 4 once per draw with a single
@@ -92,32 +102,38 @@ def main(argv=None) -> int:
             #   `built-and-never-called` shape fixed in `engines/rig.py` the same hour,
             #   reproduced here while copying it across. The draws were always in this loop.
             for _ in range(args.repeats):
-                world = _world(rung)
-                # ⇒ THE REAL FRONT SEAM, NOT A REIMPLEMENTATION OF IT.
+                # ⇒ THE WHOLE FRONT DOOR, CORRECTIONS INCLUDED — `Orchestrator.read`.
                 #
-                #   This harness used to call `extract`, `to_goals` and each gate by hand —
-                #   which measured a COPY of production's wiring and would drift from it
-                #   silently. `rig.translator()` is what the orchestrator actually mounts, so
-                #   everything wired into it is exercised here: gate 1's repairs applied, gate
-                #   2's supplied probe, gate 4's second draw, and the verdicts on
-                #   `Answer.gates`.
+                #   Nothing is executed: `read` translates, runs the four gates, applies what
+                #   they can safely fix and RE-ASKS where a violation is worth another draw.
+                #   It stops before the engine, which is exactly the boundary this table wants.
                 #
-                #   WHAT IT STILL DOES NOT REACH: `_restandardise` lives in the ORCHESTRATOR,
-                #   one layer up, so the re-ask is NOT measured here. This table is the
-                #   reading and the gates; it is not the whole front door.
-                answer = _translate(request, world)
-                goals = list(answer.components or [])
-                lost = list(answer.dropped or [])
-                flags = {g: (ok is False)
-                         for g, ok in (answer.gates or {}).items() if g != "reask"}
-                warn = list(answer.asks or []) + list(answer.fetch or [])
+                #   IT CALLS PRODUCTION RATHER THAN IMITATING IT. This harness previously drove
+                #   `extract`/`to_goals`/each gate by hand — a COPY of the wiring, which had
+                #   already drifted: it ran its own gate-4 pass, with its own single-reading
+                #   bug, an hour after the real one was fixed. A measurement harness that
+                #   re-implements the thing it measures is measuring itself.
+                session = _Session(request, _engine, intent="achieve")
+                answer, closed = _orch.read(request, _engine, session)
+                if answer is None:
+                    goals, lost = [], [str((closed or {}).get("why") or "unreadable")]
+                    flags, warn, vetoed = {"0": True}, [], False
+                else:
+                    goals = list(answer.components or [])
+                    lost = list(answer.dropped or [])
+                    flags = {g: (ok is False)
+                             for g, ok in (answer.gates or {}).items() if g != "reask"}
+                    warn = list(answer.asks or []) + list(answer.fetch or [])
+                    vetoed = (answer.gates or {}).get("reask") is False
+                reasked = sum(1 for line in session.log if "re-standardis" in str(line))
                 verdict = gate.Verdict(
                     gate.PROCEED if not any(flags.values()) else gate.ASK,
                     "+".join(sorted(k for k, v in flags.items() if v)) or "",
-                    detail="; ".join(answer.illegal or []))
-                vetoed = (answer.gates or {}).get("reask") is False
+                    detail="; ".join((answer.illegal if answer else []) or []))
                 if vetoed:
-                    warn = ["gate 4: reads more than one way — not re-asking"] + warn
+                    warn = ["gate 4 vetoed the re-ask: reads more than one way"] + warn
+                elif reasked:
+                    warn = [f"re-standardised x{reasked}"] + warn
                 key = json.dumps([_short(g) for g in goals], sort_keys=True)
                 readings[key] += 1
                 store[key] = (goals, lost, verdict, warn)

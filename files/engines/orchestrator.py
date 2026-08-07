@@ -549,6 +549,161 @@ class Orchestrator:
         return self._serve(request, order, state, intent, components, regime,
                            procedure, declared)
 
+    def read(self, request, engine, session):
+        """English -> an Answer the gates have judged and, where they safely can, CORRECTED.
+
+        Returns `(answer, closed)`. `closed` is a finished session result when the request
+        could not be read at all, and `None` when there is an answer to serve.
+
+        ⇒ EXTRACTED FROM `_serve` SO THERE IS ONE FRONT DOOR AND NOT TWO. The rung harness
+        needs to measure what the gates do INCLUDING their corrections, and the only ways to
+        get that were to run the whole engine (which executes) or to re-implement this block
+        (which is how `translation_table` came to carry its own copy of the gate wiring, with
+        its own bug, an hour after the real one was fixed).
+
+        **A MEASUREMENT HARNESS THAT RE-IMPLEMENTS THE THING IT MEASURES IS MEASURING ITSELF.**
+        This is the seam that lets the harness call production instead of imitating it.
+        """
+        from planner.ir import config as _config
+        with _config.use_kinds(getattr(engine, "manifest", None)):
+            answer = self.channel.ask(request, engine.world())
+        session.record(f"{len(answer.components or ())} goal(s)",
+                       filed_by=answer.source or "channel", caught_by="orchestrator",
+                       executed="translate", data=answer.components,
+                       level="warn" if not answer else "info")
+        # ⇒ GATE 1'S VERDICT ON THE MODEL'S OWN ANSWER, FILED AND NOT ACTED ON.
+        #
+        # A gate whose resolve arm is unbuilt has exactly one honest state: VISIBLE. This
+        # puts it in the ledger, where the rate can be read off real traffic rather than
+        # off a corpus recorded on 2026-08-01 — and where a wrong flag is an entry someone
+        # can point at, instead of a refusal they have to reverse-engineer.
+        # ⇒ WHICH GATES PASSED, as a judgement rather than as prose. They were deciding
+        # this four times a request and nothing was reading it.
+        if getattr(answer, "gates", None):
+            objected = [g for g, ok in answer.gates.items() if ok is False and g != "reask"]
+            if objected:
+                session.record("gates that objected: " + ", ".join(sorted(objected)),
+                               filed_by="gates", caught_by="orchestrator",
+                               executed="translate", data=answer.gates, level="warn")
+        if getattr(answer, "illegal", None):
+            session.record("gate 1: " + "; ".join(answer.illegal[:3]),
+                           filed_by="completeness", caught_by="operator",
+                           executed="translate",
+                           data={"illegal": answer.illegal}, level="warn")
+        # ⇒ GATE 2'S FETCH LIST, FILED AT `info` AND NOT AS A WARNING.
+        #
+        # It is a PRECONDITION the reading is entitled to have supplied — *"nothing has
+        # looked at `alive` yet"* — not a doubt about the reading. Filing it beside the
+        # faults would teach a reader that the gate which knows how to RESOLVE something
+        # is the one complaining most.
+        # ⇒ GATE 3'S QUESTIONS FOR THE OPERATOR, filed as a WARNING because unlike a
+        # probe these cannot be answered by the system. It derived the missing relation
+        # and declined to supply it — that restraint only means something if the question
+        # reaches a person.
+        if getattr(answer, "asks", None):
+            session.record("gate 3 asks: " + " ".join(answer.asks[:2]),
+                           filed_by="reasoning", caught_by="operator",
+                           executed="translate",
+                           data={"asks": answer.asks}, level="warn")
+        if getattr(answer, "fetch", None):
+            session.record("gate 2 wants a probe: " + "; ".join(answer.fetch[:3]),
+                           filed_by="truth", caught_by="orchestrator",
+                           executed="translate",
+                           data={"fetch": answer.fetch}, level="info")
+        if not answer:
+            # A REQUEST NOBODY COULD TRANSLATE IS NOT A FAILED REQUEST — it is one that
+            # never became a request. Naming the stage matters: this is the front seam,
+            # and confusing it with an engine failure is how a day gets spent debugging
+            # the wrong half.
+            #
+            # AND THE SAME SENTENCE APPLIES ONE LAYER FURTHER OUT. A timeout or a dropped
+            # connection is the MODEL NOT ANSWERING, not the seam misreading — it arrived
+            # here indistinguishable from a genuine mistranslation and was scored as one.
+            # The spilled KV cache makes these real rather than theoretical: two turned up
+            # in a single probe run on 2026-08-06. `rig.translator` names the layer now,
+            # and ABANDONED is the existing word for a run that never got to try.
+            if getattr(answer, "source", "") == "channel":
+                return None, session.close("ABANDONED", answer.why)
+            return None, session.close("UNTRANSLATED", answer.why)
+        lost = list(getattr(answer, "dropped", ()) or ())
+        if lost:
+            # ⇒ ONE RE-STANDARDISATION BEFORE REFUSING. The operator, 2026-08-07: *"the
+            # AI's job is to STANDARDISE the human's response to a measurable pattern, and
+            # the gates catch if the pattern the AI translated is LEGAL."* `lost` IS that
+            # legality verdict, already phrased in the operator's terms — and until now
+            # the only thing done with it was to close the run.
+            #
+            # THIS IS WHERE THE CORRECTING LOOP HAD TO LIVE, and it was built at :867
+            # where it can never run: `_WORTH_REREADING` holds `invented-or-dropped`,
+            # which fires only on a non-empty `lost` — and a non-empty `lost` had already
+            # returned from HERE, so the engine's gate always saw an empty one. `worth`
+            # was permanently falsy and that loop has never iterated once.
+            second = self._restandardise(request, lost, engine, session)
+            if second is not None:
+                answer, lost = second, []
+        elif getattr(answer, "illegal", None):
+            # ⇒ GATE 1'S RESOLVE ARM, AND IT COSTS NOTHING WHEN IT FAILS.
+            #
+            # `to_goals` kept every goal, so there is no refusal to reverse — but gate 1
+            # found the model mangled or invented something. Its findings are a BETTER
+            # hint than `lost` ever was, because they name the OPERATOR'S OWN WORD: *"the
+            # request says 'fleet' and the reading says 'fleetsize'"*.
+            #
+            # AND THE DOWNSIDE IS BOUNDED AT ONE CALL. `lost` is empty here, so nothing
+            # below would have refused this run: if the re-read is illegal it is discarded
+            # and the ORIGINAL reading proceeds exactly as it does today. That is what
+            # lets gate 1 act at 1-in-21 false alarms — it can only ever improve a reading
+            # or waste a call, never turn a served request into a refused one.
+            # ⇒ GATE 4 CAN VETO THE RE-ASK, AND IT IS THE ONLY GATE THAT COULD.
+            #
+            #   A request whose draws DISAGREE is a BAD PROMPT: the deciding information
+            #   is not in the sentence, so another draw is another coin rather than
+            #   another look. Re-asking there spends a model call to re-roll. Gate 4 is
+            #   the only gate that can tell a MISREAD sentence from an AMBIGUOUS one,
+            #   which is what its routing was always for and what nothing read until now.
+            if (answer.gates or {}).get("reask") is False:
+                session.record(
+                    "gate 4: the request itself reads more than one way — not re-asking",
+                    filed_by="viability", caught_by="operator", executed="translate",
+                    data={"asks": list(getattr(answer, "asks", ()))}, level="warn")
+            else:
+                second = self._restandardise(request, list(answer.illegal),
+                                             engine, session)
+                if second is not None:
+                    answer = second
+        if lost:
+            # HALF A REQUEST IS NOT A REQUEST — the operator's ruling, 2026-08-03:
+            # *"it should refuse something it can not understand and ask to clarify."*
+            #
+            # `to_goals` refuses components for reasons that are each correct, and the
+            # request was then served in PART: the writer covered what survived, every
+            # layer below was honest about that half, and the run closed DONE over a
+            # sentence it had only partly read. Measured on rung 2 — a CONTROL rung —
+            # where "and then launch it" vanished and the run reported success over a
+            # machine that was not running.
+            #
+            # UNTRANSLATED RATHER THAN A NEW OUTCOME WORD, because that is exactly what
+            # happened and it names the LAYER that owns it: the front seam, not the
+            # engine. The vocabulary stays closed and the ledger stays readable.
+            #
+            # IT COSTS NO PASSING REQUEST. Measured across all 28 ladder runs before it
+            # was written: only 4 drop anything, every one a `reach` the request never
+            # asked for, and NO run that currently succeeds drops a thing.
+            #
+            # ⇒ THAT NUMBER IS STALE AND THE CONCLUSION IS NOT. Replaying the 78 recorded
+            #   readings in `tests/bench/corpus/extract_raw.jsonl` through today's
+            #   `to_goals` gives **39 with a non-empty `dropped`, not 4** — the rule set
+            #   has grown since. What survives re-measurement is the second half: of the
+            #   readings that PASSED, none drops anything. So this still costs no passing
+            #   request; it just refuses far more of the failing ones than it used to,
+            #   which is why the re-standardise arm below exists at all.
+            session.record("could not read: " + "; ".join(lost),
+                           filed_by=answer.source or "extractor",
+                           caught_by="operator", executed="translate",
+                           data={"dropped": lost}, level="warn")
+            return None, session.close("UNTRANSLATED", _clarify(request, lost))
+        return answer, None
+
     def _serve(self, request, order, state, intent, components, regime=None,
                procedure=None, declared=None):
         """Try each claimant in turn until one serves it, refuses it, or all are spent.
@@ -714,144 +869,9 @@ class Orchestrator:
             # THAT IS THE WHOLE OF "a capability that cannot be requested is not mounted".
             # The writer could plan a search, the engine could run one, and the model could
             # not say the word.
-            from planner.ir import config as _config
-            with _config.use_kinds(getattr(engine, "manifest", None)):
-                answer = self.channel.ask(request, engine.world())
-            session.record(f"{len(answer.components or ())} goal(s)",
-                           filed_by=answer.source or "channel", caught_by="orchestrator",
-                           executed="translate", data=answer.components,
-                           level="warn" if not answer else "info")
-            # ⇒ GATE 1'S VERDICT ON THE MODEL'S OWN ANSWER, FILED AND NOT ACTED ON.
-            #
-            # A gate whose resolve arm is unbuilt has exactly one honest state: VISIBLE. This
-            # puts it in the ledger, where the rate can be read off real traffic rather than
-            # off a corpus recorded on 2026-08-01 — and where a wrong flag is an entry someone
-            # can point at, instead of a refusal they have to reverse-engineer.
-            # ⇒ WHICH GATES PASSED, as a judgement rather than as prose. They were deciding
-            # this four times a request and nothing was reading it.
-            if getattr(answer, "gates", None):
-                objected = [g for g, ok in answer.gates.items() if ok is False and g != "reask"]
-                if objected:
-                    session.record("gates that objected: " + ", ".join(sorted(objected)),
-                                   filed_by="gates", caught_by="orchestrator",
-                                   executed="translate", data=answer.gates, level="warn")
-            if getattr(answer, "illegal", None):
-                session.record("gate 1: " + "; ".join(answer.illegal[:3]),
-                               filed_by="completeness", caught_by="operator",
-                               executed="translate",
-                               data={"illegal": answer.illegal}, level="warn")
-            # ⇒ GATE 2'S FETCH LIST, FILED AT `info` AND NOT AS A WARNING.
-            #
-            # It is a PRECONDITION the reading is entitled to have supplied — *"nothing has
-            # looked at `alive` yet"* — not a doubt about the reading. Filing it beside the
-            # faults would teach a reader that the gate which knows how to RESOLVE something
-            # is the one complaining most.
-            # ⇒ GATE 3'S QUESTIONS FOR THE OPERATOR, filed as a WARNING because unlike a
-            # probe these cannot be answered by the system. It derived the missing relation
-            # and declined to supply it — that restraint only means something if the question
-            # reaches a person.
-            if getattr(answer, "asks", None):
-                session.record("gate 3 asks: " + " ".join(answer.asks[:2]),
-                               filed_by="reasoning", caught_by="operator",
-                               executed="translate",
-                               data={"asks": answer.asks}, level="warn")
-            if getattr(answer, "fetch", None):
-                session.record("gate 2 wants a probe: " + "; ".join(answer.fetch[:3]),
-                               filed_by="truth", caught_by="orchestrator",
-                               executed="translate",
-                               data={"fetch": answer.fetch}, level="info")
-            if not answer:
-                # A REQUEST NOBODY COULD TRANSLATE IS NOT A FAILED REQUEST — it is one that
-                # never became a request. Naming the stage matters: this is the front seam,
-                # and confusing it with an engine failure is how a day gets spent debugging
-                # the wrong half.
-                #
-                # AND THE SAME SENTENCE APPLIES ONE LAYER FURTHER OUT. A timeout or a dropped
-                # connection is the MODEL NOT ANSWERING, not the seam misreading — it arrived
-                # here indistinguishable from a genuine mistranslation and was scored as one.
-                # The spilled KV cache makes these real rather than theoretical: two turned up
-                # in a single probe run on 2026-08-06. `rig.translator` names the layer now,
-                # and ABANDONED is the existing word for a run that never got to try.
-                if getattr(answer, "source", "") == "channel":
-                    return session.close("ABANDONED", answer.why)
-                return session.close("UNTRANSLATED", answer.why)
-            lost = list(getattr(answer, "dropped", ()) or ())
-            if lost:
-                # ⇒ ONE RE-STANDARDISATION BEFORE REFUSING. The operator, 2026-08-07: *"the
-                # AI's job is to STANDARDISE the human's response to a measurable pattern, and
-                # the gates catch if the pattern the AI translated is LEGAL."* `lost` IS that
-                # legality verdict, already phrased in the operator's terms — and until now
-                # the only thing done with it was to close the run.
-                #
-                # THIS IS WHERE THE CORRECTING LOOP HAD TO LIVE, and it was built at :867
-                # where it can never run: `_WORTH_REREADING` holds `invented-or-dropped`,
-                # which fires only on a non-empty `lost` — and a non-empty `lost` had already
-                # returned from HERE, so the engine's gate always saw an empty one. `worth`
-                # was permanently falsy and that loop has never iterated once.
-                second = self._restandardise(request, lost, engine, session)
-                if second is not None:
-                    answer, lost = second, []
-            elif getattr(answer, "illegal", None):
-                # ⇒ GATE 1'S RESOLVE ARM, AND IT COSTS NOTHING WHEN IT FAILS.
-                #
-                # `to_goals` kept every goal, so there is no refusal to reverse — but gate 1
-                # found the model mangled or invented something. Its findings are a BETTER
-                # hint than `lost` ever was, because they name the OPERATOR'S OWN WORD: *"the
-                # request says 'fleet' and the reading says 'fleetsize'"*.
-                #
-                # AND THE DOWNSIDE IS BOUNDED AT ONE CALL. `lost` is empty here, so nothing
-                # below would have refused this run: if the re-read is illegal it is discarded
-                # and the ORIGINAL reading proceeds exactly as it does today. That is what
-                # lets gate 1 act at 1-in-21 false alarms — it can only ever improve a reading
-                # or waste a call, never turn a served request into a refused one.
-                # ⇒ GATE 4 CAN VETO THE RE-ASK, AND IT IS THE ONLY GATE THAT COULD.
-                #
-                #   A request whose draws DISAGREE is a BAD PROMPT: the deciding information
-                #   is not in the sentence, so another draw is another coin rather than
-                #   another look. Re-asking there spends a model call to re-roll. Gate 4 is
-                #   the only gate that can tell a MISREAD sentence from an AMBIGUOUS one,
-                #   which is what its routing was always for and what nothing read until now.
-                if (answer.gates or {}).get("reask") is False:
-                    session.record(
-                        "gate 4: the request itself reads more than one way — not re-asking",
-                        filed_by="viability", caught_by="operator", executed="translate",
-                        data={"asks": list(getattr(answer, "asks", ()))}, level="warn")
-                else:
-                    second = self._restandardise(request, list(answer.illegal),
-                                                 engine, session)
-                    if second is not None:
-                        answer = second
-            if lost:
-                # HALF A REQUEST IS NOT A REQUEST — the operator's ruling, 2026-08-03:
-                # *"it should refuse something it can not understand and ask to clarify."*
-                #
-                # `to_goals` refuses components for reasons that are each correct, and the
-                # request was then served in PART: the writer covered what survived, every
-                # layer below was honest about that half, and the run closed DONE over a
-                # sentence it had only partly read. Measured on rung 2 — a CONTROL rung —
-                # where "and then launch it" vanished and the run reported success over a
-                # machine that was not running.
-                #
-                # UNTRANSLATED RATHER THAN A NEW OUTCOME WORD, because that is exactly what
-                # happened and it names the LAYER that owns it: the front seam, not the
-                # engine. The vocabulary stays closed and the ledger stays readable.
-                #
-                # IT COSTS NO PASSING REQUEST. Measured across all 28 ladder runs before it
-                # was written: only 4 drop anything, every one a `reach` the request never
-                # asked for, and NO run that currently succeeds drops a thing.
-                #
-                # ⇒ THAT NUMBER IS STALE AND THE CONCLUSION IS NOT. Replaying the 78 recorded
-                #   readings in `tests/bench/corpus/extract_raw.jsonl` through today's
-                #   `to_goals` gives **39 with a non-empty `dropped`, not 4** — the rule set
-                #   has grown since. What survives re-measurement is the second half: of the
-                #   readings that PASSED, none drops anything. So this still costs no passing
-                #   request; it just refuses far more of the failing ones than it used to,
-                #   which is why the re-standardise arm below exists at all.
-                session.record("could not read: " + "; ".join(lost),
-                               filed_by=answer.source or "extractor",
-                               caught_by="operator", executed="translate",
-                               data={"dropped": lost}, level="warn")
-                return session.close("UNTRANSLATED", _clarify(request, lost))
+            answer, closed = self.read(request, engine, session)
+            if closed is not None:
+                return closed
             components = answer.components
             # A DECLARED NAME WINS; the channel's is a fallback nothing currently fills.
             procedure = procedure or getattr(answer, "procedure", None)
