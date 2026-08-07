@@ -412,14 +412,25 @@ class Orchestrator:
         original refusal stands, so the worst case is the cost of one call and the outcome the
         run would have had anyway.
 
-        ⇒ OFF BY DEFAULT (`GORGON_RESTANDARDISE=1`). It fires on ~50% of recorded readings, so
-        it is far too load-bearing to switch on unmeasured, and the ladder's noise exceeds the
-        effects it would be judged by ([[gorgon-ladder-noise-exceeds-the-effect]]).
+        ⇒ ON BY DEFAULT AS OF 2026-08-07, and it was off for a measured reason that has since
+        been answered. It fires on ~50% of readings, so switching it on while the detector
+        behind it was wrong a third of the time would have spread the error. Gate 1 now stands
+        at 0 false alarms of 58 passing readings, which is what makes its findings worth
+        acting on. `GORGON_RESTANDARDISE=0` disables it.
         """
         import os
 
         from planner.ir import config as _config     # local, as everywhere else in this file
-        if os.environ.get("GORGON_RESTANDARDISE", "") != "1":
+        # ⇒ ON BY DEFAULT SINCE 2026-08-07, AND THE BLOCKER THAT CLEARED WAS A MEASUREMENT.
+        #
+        #   It shipped OFF because it fires on ~50% of readings and acting on a detector
+        #   nobody had measured would spread its errors rather than fix them. Gate 1 then went
+        #   from 32% false alarms to **0 of 58 passing readings** — mint-vs-mangle and the
+        #   grammar echoes — so the findings it hands back are now safe to act on.
+        #
+        #   `GORGON_RESTANDARDISE=0` still turns it off, because a lever with no off switch is
+        #   how a measurement becomes unrepeatable.
+        if os.environ.get("GORGON_RESTANDARDISE", "1") == "0":
             return None
         for _ in range(self._RESTANDARDISE):
             # THE VIOLATION, NOT THE REQUEST RESTATED. The model already has the request; what

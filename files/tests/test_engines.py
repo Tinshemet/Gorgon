@@ -1047,11 +1047,10 @@ def test_an_illegal_reading_is_re_standardised_once_before_it_is_refused():
         registry.mount(MedusaEngine(world))
         a = stub(answers)
         orch = Orchestrator(registry, Channel([a]))
+        # IT IS ON BY DEFAULT NOW, so the OFF arm has to say so explicitly — the test that
+        # pins "off by default" had to become the test that pins "off is still reachable".
         old = os.environ.get("GORGON_RESTANDARDISE")
-        if flag:
-            os.environ["GORGON_RESTANDARDISE"] = "1"
-        else:
-            os.environ.pop("GORGON_RESTANDARDISE", None)
+        os.environ["GORGON_RESTANDARDISE"] = "1" if flag else "0"
         try:
             return orch.handle("create a vm named alpha", intent="achieve"), a.seen, world
         finally:
@@ -1071,10 +1070,13 @@ def test_an_illegal_reading_is_re_standardised_once_before_it_is_refused():
                      dropped=["it is about name 'fives', which the request never names"])
     legal = Answer(LEGAL, "model")
 
-    # 1 · OFF BY DEFAULT. The behaviour every measurement to date was taken against.
+    # 1 · SWITCHED OFF. Not the default any more — gate 1 reaching 0 false alarms is what
+    #     made acting on its findings safe — but the off switch has to keep working, because
+    #     a lever with no off switch makes a measurement unrepeatable.
     out, seen, _w = serve([illegal, legal], flag=False)
-    check("off by default — one call only", len(seen) == 1)
-    check("and it still refuses as before", out.get("outcome") == "UNTRANSLATED")
+    check("switched off, it makes one call only", len(seen) == 1)
+    check("and refuses exactly as it did before the loop existed",
+          out.get("outcome") == "UNTRANSLATED")
 
     # 2 · ON, AND THE SECOND READING IS LEGAL. The run is served instead of refused.
     out, seen, world = serve([illegal, legal], flag=True)

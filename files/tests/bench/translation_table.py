@@ -88,6 +88,13 @@ def main(argv=None) -> int:
             if not request:
                 continue
             readings, store = Counter(), {}
+            # ⇒ EVERY DRAW, KEPT, BECAUSE GATE 4 JUDGES THE SET AND NOT A MEMBER OF IT.
+            #   The first port of this harness called gate 4 once per draw with a single
+            #   reading — and one reading cannot disagree with itself, so it fired 0 times
+            #   while the `n=` column beside it reported 5 rows that DID disagree. The same
+            #   `built-and-never-called` shape fixed in `engines/rig.py` the same hour,
+            #   reproduced here while copying it across. The draws were always in this loop.
+            all_draws: list = []
             for _ in range(args.repeats):
                 world = _world(rung)
                 lost: list = []
@@ -107,16 +114,13 @@ def main(argv=None) -> int:
                 g1b = _g1.inspect(request, goals or [])
                 g2 = _g2.inspect(goals or [], world)
                 g3 = _g3.inspect(goals or [], world, settled=bool(g2.settled))
-                g4 = _g4.inspect([goals or []],
-                                 {"completeness": g1, "truth": g2, "reasoning": g3})
+                all_draws.append(goals or [])
                 flags = {
                     "1": not (g1.legal and g1b.legal),
                     "2": not g2.legal,
                     "3": not g3.legal,
-                    "4": not g4.legal,
                 }
-                said = (g1.findings() + g1b.findings() + g2.findings()
-                        + g3.findings() + g4.findings())
+                said = g1.findings() + g1b.findings() + g2.findings() + g3.findings()
                 warn = g3.questions() + g2.questions()
                 verdict = gate.Verdict(
                     gate.PROCEED if not any(flags.values()) else gate.ASK,
@@ -124,11 +128,23 @@ def main(argv=None) -> int:
                     detail="; ".join(said))
                 key = json.dumps([_short(g) for g in goals], sort_keys=True)
                 readings[key] += 1
-                store[key] = (goals, lost, verdict, warn)
+                store[key] = (goals, lost, verdict, warn, flags, g1, g2, g3)
+            # ── GATE 4, ONCE, OVER EVERY DRAW OF THIS REQUEST ────────────────────────────
+            _g, _l, _v, _w, _flags, _c1, _c2, _c3 = store[readings.most_common(1)[0][0]]
+            g4 = _g4.inspect(all_draws,
+                             {"completeness": _c1, "truth": _c2, "reasoning": _c3})
+            if not g4.legal:
+                _flags["4"] = True
+                _v = gate.Verdict(gate.ASK,
+                                  "+".join(k for k, v in _flags.items() if v),
+                                  detail="; ".join(_v.detail.split("; ") + g4.findings()))
+                _w = list(_w) + g4.questions()
+                store[readings.most_common(1)[0][0]] = (_g, _l, _v, _w, _flags,
+                                                        _c1, _c2, _c3)
             distinct = len(readings)
             unstable += distinct > 1
             top, _n = readings.most_common(1)[0]
-            goals, lost, verdict, warn = store[top]
+            goals, lost, verdict, warn = store[top][:4]
             flag = "  " if distinct == 1 else "!!"
             mark = {gate.PROCEED: "ok", gate.ASK: "ASK", gate.REFUSE: "REFUSE"}[verdict.outcome]
             # AGAINST THE KNOWN-GOOD READING, which is the only ground truth for a

@@ -116,6 +116,26 @@ def translator() -> Callable:
             # A GATE THAT RAISES MUST NOT TAKE THE TRANSLATION WITH IT. It is an observer here
             # and an observer that can fail the thing it observes is not one.
             illegal = []
+        # ⇒ AND GATE 1 CORRECTS WHAT IT SAFELY CAN, BEFORE THE READING IS BUILT FROM IT.
+        #
+        #   COERCE and RESTORE only — `"5"` becomes `5`, and `fleetsize` becomes `fleet`
+        #   because the request says `fleet`. Neither removes anything: an INVENTION is never
+        #   repaired and a DROP is never filled, because answering those for the operator is
+        #   the guess the gate exists to avoid.
+        #
+        #   IT WAS UNSAFE THIS MORNING AND IS SAFE NOW, and the difference is a number.
+        #   Applying a repair to a WRONG flag rewrites a CORRECT reading, and gate 1 stood at
+        #   32% false alarms against the fresh corpus. Mint-vs-mangle and the grammar echoes
+        #   took it to 0 of 58 passing readings; that is the whole licence for correcting here
+        #   rather than only reporting.
+        try:
+            _fix = _completeness.inspect_raw(str(gap), raw, schema=_extract.schema())
+            if _fix.repairs():
+                raw = _fix.apply(raw)
+                illegal = _completeness.inspect_raw(
+                    str(gap), raw, schema=_extract.schema()).findings()
+        except Exception:
+            pass
         lost: list = []
         goals = _extract.to_goals(raw, str(gap), dropped=lost, world=world)
         # AND THE HALF OF GATE 1 THAT NEEDS THE GOALS RATHER THAN THE RAW ANSWER.

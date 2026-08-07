@@ -166,6 +166,54 @@ class Report:
                         "why": f"the request says {m['said']!r}"})
         return out
 
+    def apply(self, raw: Dict[str, Any]) -> Dict[str, Any]:
+        """A CORRECTED COPY of the model's answer, with every safe repair made.
+
+        ## ⇒ IT RETURNS A COPY, AND THAT IS NOT POLITENESS
+
+        `inspect_raw` must never modify what it is handed — there is a test pinning it — because
+        the design that preceded this one STRIPPED an invented name in place, and stripping
+        `count(vm WHERE name='fives') = 10` yields an UNFILTERED `count(vm) = 10` that DELETES
+        MACHINES. Correction and classification stay separate: the gate reads, and a caller
+        that wants the repair asks for one explicitly.
+
+        ## ⇒ AND WHAT IS REPAIRED IS NOT WHAT WAS REFUSED
+
+        Only `repairs()` is applied — COERCE and RESTORE — and neither removes anything:
+
+            COERCE   `"5"` becomes `5`. The value does not change, only its type.
+            RESTORE  `fleetsize` becomes `fleet`, because the request says `fleet`. It puts
+                     the OPERATOR'S OWN WORD back where the model mangled it.
+
+        An INVENTION is never repaired and a DROP is never filled — those are questions, and
+        answering them for the operator is the guess this whole gate exists to avoid.
+
+        ## ⇒ WHY THIS IS SAFE NOW AND WAS NOT THIS MORNING
+
+        Applying a repair to a WRONG flag rewrites a correct reading. Gate 1 stood at 32% false
+        alarms against the fresh corpus, so acting on it would have corrupted roughly one
+        reading in three. Mint-vs-mangle and the grammar echoes took it to **0 of 58 passing
+        readings**, which is the entire licence for this method to exist.
+        """
+        import copy
+        fixed = copy.deepcopy(raw or {})
+        wanted = {(r["slot"], str(r["from"])): r["to"] for r in self.repairs()}
+        if not wanted:
+            return fixed
+
+        def walk(node):
+            if isinstance(node, list):
+                for kid in node:
+                    walk(kid)
+            elif isinstance(node, dict):
+                for slot, value in list(node.items()):
+                    if isinstance(value, (dict, list)):
+                        walk(value)
+                    elif (slot, str(value)) in wanted:
+                        node[slot] = wanted[(slot, str(value))]
+        walk(fixed)
+        return fixed
+
     def question(self) -> Optional[str]:
         """ONE message naming EVERY gap at once, or None if the operator is not needed.
 
