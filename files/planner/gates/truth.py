@@ -66,7 +66,7 @@ class Report:
     """What gate 2 found, in five lists, because they resolve five different ways."""
 
     def __init__(self, unreferable=None, illegal_values=None, unsatisfiable=None,
-                 fetch=None, settled=None, arity=None):
+                 fetch=None, settled=None, arity=None, uncarried=None):
         # A REFERENCE TO A MEMBER THE WORLD DOES NOT HOLD. Nothing to constrain.
         self.unreferable: List[Dict[str, Any]] = list(unreferable or ())
         # A VALUE THE MANIFEST DOES NOT ALLOW FOR THAT ATTRIBUTE.
@@ -91,13 +91,17 @@ class Report:
         #   `clause-untouched` and `inert` reached on 2026-08-06, and the lesson underneath it
         #   is about the SAMPLE: fourteen hand-written readings are one idiom, and a rule
         #   validated only against them is a rule about that idiom.
+        # A CARDINALITY THE REQUEST STATED THAT NO GOAL CARRIES — gate 1 finds the numbers,
+        # this gate judges them against the world. See `inspect` for the measurement.
+        self.uncarried: List[Dict[str, Any]] = list(uncarried or ())
         self.arity: List[Dict[str, Any]] = list(arity or ())
 
     @property
     def legal(self) -> bool:
         """`fetch` and `settled` are NOT faults. A gate whose resolve arm counted against the
         reading would refuse exactly the requests it knows how to help with."""
-        return not (self.unreferable or self.illegal_values or self.unsatisfiable)
+        return not (self.unreferable or self.illegal_values or self.unsatisfiable
+                    or self.uncarried)
 
     def findings(self) -> List[str]:
         out = []
@@ -107,6 +111,9 @@ class Report:
         for v in self.illegal_values:
             out.append(f"{v['kind']}.{v['attr']} cannot be {v['value']!r} "
                        f"— it is one of {sorted(v['allowed'])}")
+        for u in self.uncarried:
+            out.append(f"the request says {u['said']} and no goal asks for {u['said']} "
+                       f"of anything")
         for s in self.unsatisfiable:
             out.append(f"a {s['kind']} can never satisfy {s['shape']}: {s['why']}")
         return out
@@ -209,7 +216,29 @@ def _allowed(kind: str, attr: str, table=None) -> Optional[Set[str]]:
     return {str(v) for v in values} if values else None
 
 
-def inspect(goals: List[dict], world, table=None) -> Report:
+def carried(n: int, goals: List[dict], here: int) -> bool:
+    """Does some goal assert this number, or a number DERIVABLE from it and the world?
+
+    ⇒ THE DERIVATION IS THE WHOLE RULE, and it is what makes this checkable at all. "clone
+    golden into 3 NEW vms" is correctly served by `count(vm) = 4` — three clones plus the
+    `golden` already there — because A COUNT IS A TOTAL AND THE REQUEST STATED A DELTA
+    ([[gorgon-count-is-a-total]]). A rule demanding the literal 3 accuses that reading, which
+    is a hand-written CORRECT answer; a rule that also accepts `3 + here` does not.
+
+    THIS IS WHY THE CHECK CANNOT LIVE IN GATE 1. `here` is the world.
+    """
+    asserts = set()
+    for goal in goals or ():
+        for field in ("eq", "gte", "lte", "min", "max"):
+            if isinstance(goal.get(field), int):
+                asserts.add(goal[field])
+    if n in asserts:
+        return True
+    return any(x == n + here or x == here - n or x == n - here for x in asserts)
+
+
+def inspect(goals: List[dict], world, table=None,
+            said_numbers: Optional[Set[int]] = None) -> Report:
     """Gate 2 over one reading. Deterministic, no model call, NO REQUEST TEXT.
 
     The world is asked through the language's own reader, so a production mount answers this
@@ -274,6 +303,23 @@ def inspect(goals: List[dict], world, table=None) -> Report:
             except Exception:
                 seen[kind] = set()
         return seen[kind]
+
+    # ⇒ A CARDINALITY THE OPERATOR STATED AND NO GOAL CARRIES.
+    #
+    #   GATE 1 FINDS THE NUMBERS AND THIS GATE JUDGES THEM, because the question needs BOTH
+    #   the sentence and the world and neither gate may have the other's subject. What crosses
+    #   is a SET OF INTEGERS — a fact, not a sentence — so gate 2 still reads no English.
+    #
+    #   MEASURED BEFORE IT WAS WRITTEN: 5 catches against ONE distinct false alarm, and the
+    #   false alarm is rung 13's paraphrase, which omits `count(vm) = 5` and is labelled PASS
+    #   ONLY BECAUSE THE WORLD ALREADY HOLDS FIVE MACHINES. The reading is deficient and works
+    #   by luck; flagging it is right and the outcome metric cannot see that.
+    if said_numbers:
+        kinds = {(g.get("select") or g.get("every") or {}).get("kind") for g in goals or ()}
+        here = max([len(members(k)) for k in kinds if k] or [0])
+        for n in sorted(said_numbers):
+            if not carried(n, goals, here):
+                report.uncarried.append({"said": n, "world": here})
 
     for goal in goals or ():
         for kind, key, value, stance in positions(goal, table):

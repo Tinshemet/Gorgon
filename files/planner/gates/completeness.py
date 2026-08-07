@@ -246,6 +246,28 @@ def _flat(text: str) -> str:
     return " " + re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).strip() + " "
 
 
+# NUMBER WORDS, AND `one` IS DELIBERATELY ABSENT. "wire them together on ONE private network"
+# is an ARTICLE, not a cardinality — counting it cost 6 of the 9 false alarms this check opened
+# with, all of them on readings that PASS. `a` and `an` are out for the same reason. A request
+# that really means exactly one says "exactly one", and that is a loss worth taking.
+_WORDS = {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+          "seven": 7, "eight": 8, "nine": 9, "ten": 10}
+
+
+def said_numbers(request: str) -> Set[int]:
+    """Every cardinality the REQUEST states, as integers.
+
+    ⇒ GATE 1 FINDS THEM AND GATE 2 JUDGES THEM, which is how a check that needs BOTH the
+    sentence and the world gets built without either gate reaching into the other's subject.
+    Gate 2 never reads English — it receives a SET OF INTEGERS, which is a fact rather than a
+    sentence, and its boundary holds.
+    """
+    flat = _flat(request).split()
+    out = {int(t) for t in flat if t.isdigit()}
+    out |= {_WORDS[t] for t in flat if t in _WORDS}
+    return out
+
+
 def said(request: str, value: Any) -> bool:
     """Did the operator's sentence contain this value?
 

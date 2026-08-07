@@ -543,6 +543,51 @@ def test_gate_2_never_reads_the_request():
           first.findings() == second.findings())
 
 
+def test_a_stated_cardinality_that_no_goal_carries():
+    """THE CHECK I REMOVED FROM GATE 1 AND DEFERRED TO NOWHERE.
+
+    Gate 1 had a number rule; it accused rung 10 — *"clone golden into 3 NEW vms"* is
+    correctly served by `count(vm) = 4`, three clones plus the `golden` already there, because
+    A COUNT IS A TOTAL AND THE REQUEST STATED A DELTA. So it was removed, with a comment
+    saying *"it belongs to gate 2 and is left for it"*. Gate 2 never got it, and rung 13's
+    paraphrase drops `count(vm) = 5` with nothing objecting.
+
+    ⇒ IT NEEDS BOTH THE SENTENCE AND THE WORLD, so gate 1 finds the numbers and gate 2 judges
+    them. What crosses the boundary is a SET OF INTEGERS — a fact, not a sentence — so gate 2
+    still reads no English and does not become a second gate 1.
+    """
+    print("[gate 2] a cardinality the request stated and no goal carries")
+    from planner.gates import completeness as g1, truth as g2
+
+    world = _world()
+    dropped = [{"shape": "count", "select": {"kind": "network", "net_name": "p"}, "eq": 1}]
+    rep = g2.inspect(dropped, world,
+                     said_numbers=g1.said_numbers("use five machines on one network"))
+    check("the stated five is caught", bool(rep.uncarried))
+    check("and it says so plainly", "says 5" in rep.findings()[0])
+
+    kept = dropped + [{"shape": "count", "select": {"kind": "vm"}, "eq": 5}]
+    check("a reading that carries it is silent",
+          not g2.inspect(kept, world,
+                         said_numbers=g1.said_numbers("use five machines")).uncarried)
+
+    # ⇒ AND THE DERIVATION, which is why this cannot live in gate 1. "clone golden into 3 NEW
+    #   vms" against a world holding `golden` is `count(vm) = 4` — the request stated a DELTA
+    #   and a count is a TOTAL. Demanding the literal 3 accuses a hand-written CORRECT answer.
+    w2 = _world()
+    w2.execute("create_vm", {"name": "golden", "os_type": "linux"})
+    total = [{"shape": "count", "select": {"kind": "vm"}, "eq": 4}]
+    check("3 + what the world holds is carried by a total of 4",
+          not g2.inspect(total, w2,
+                         said_numbers=g1.said_numbers("clone golden into 3 new vms")).uncarried)
+
+    # ⇒ AND `one` IS NOT A NUMBER HERE. "wire them together on ONE private network" is an
+    #   ARTICLE, and counting it cost 6 of the 9 false alarms this check opened with.
+    check("the article `one` is not read as a cardinality",
+          1 not in g1.said_numbers("wire them together on one private network"))
+    check("but a digit still is", 5 in g1.said_numbers("create 5 vms"))
+
+
 # ══ GATE 3 — REASONING ═══════════════════════════════════════════════════════════════════
 
 
@@ -944,8 +989,17 @@ def test_gate_4_can_veto_a_re_ask_and_it_is_the_only_gate_that_could():
     routes = g4.inspect([GOALS[1], GOALS[2]]).routes()
     check("disagreement routes to the operator", routes[0]["to"] == g4.BAD_PROMPT)
 
+    # ⇒ THE RE-ASK IS SWITCHED ON EXPLICITLY, because the DEFAULT changed under this test and
+    #   the default is not what it is about. `_restandardise` shipped ON, was measured across
+    #   all 28 rung rows — one clear win, one reading that became `count vm eq 0`, DELETE EVERY
+    #   MACHINE — and went back OFF. What this pins is the VETO: that gate 4 can stop a re-ask
+    #   that would otherwise happen, whatever the default is.
+    import os
+
     goals = [{"shape": "count", "select": {"kind": "vm", "name": "alpha"}, "eq": 1}]
     asked = []
+    _prior = os.environ.get("GORGON_RESTANDARDISE")
+    os.environ["GORGON_RESTANDARDISE"] = "1"
 
     def answerer(gap, w=None):
         asked.append(str(gap))
@@ -969,8 +1023,14 @@ def test_gate_4_can_veto_a_re_ask_and_it_is_the_only_gate_that_could():
     world2 = SimWorld()
     reg2 = Registry()
     reg2.mount(MedusaEngine(world2))
-    Orchestrator(reg2, Channel([rereadable])).handle("create a vm named alpha",
-                                                     intent="achieve")
+    try:
+        Orchestrator(reg2, Channel([rereadable])).handle("create a vm named alpha",
+                                                         intent="achieve")
+    finally:
+        if _prior is None:
+            os.environ.pop("GORGON_RESTANDARDISE", None)
+        else:
+            os.environ["GORGON_RESTANDARDISE"] = _prior
     check("a bad READ still is", len(asked2) == 2)
 
 

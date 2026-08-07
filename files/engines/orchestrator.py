@@ -430,7 +430,17 @@ class Orchestrator:
         #
         #   `GORGON_RESTANDARDISE=0` still turns it off, because a lever with no off switch is
         #   how a measurement becomes unrepeatable.
-        if os.environ.get("GORGON_RESTANDARDISE", "1") == "0":
+        # ⇒ OFF AGAIN, 2026-08-07, AND THE MEASUREMENT IS WHY. Run across all 28 rung rows it
+        #   bought ONE clear win (rung 7 literal, DIFF -> same) and ONE dangerous regression:
+        #   rung 11's vacuous `observe vm alive` became `observe vm alive` + `count vm eq 0`
+        #   — DELETE EVERY MACHINE — and ALL FOUR GATES then passed it, because a reading that
+        #   asserts annihilation is not vacuous.
+        #
+        #   THE ASYMMETRY DECIDES IT. Gate 1's precision licensed acting on its FINDINGS; it
+        #   says nothing about whether a SECOND DRAW beats the first, and that was never
+        #   measured. One win against one catastrophic loss is not a favourable trade when the
+        #   loss direction is the expensive one.
+        if os.environ.get("GORGON_RESTANDARDISE", "0") == "0":
             return None
         for _ in range(self._RESTANDARDISE):
             # THE VIOLATION, NOT THE REQUEST RESTATED. The model already has the request; what
