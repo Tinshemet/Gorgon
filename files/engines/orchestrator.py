@@ -284,6 +284,7 @@ class Orchestrator:
                  narrate: Optional[Callable] = None,
                  decide: Optional[Callable] = None,
                  forward: Optional[Callable] = None,
+                 clarify: Optional[Callable] = None,
                  consent: Optional[Callable] = None,
                  permit: Optional[Callable] = None):
         self.registry = registry
@@ -331,6 +332,18 @@ class Orchestrator:
         # engine that publishes has CHOSEN to say something, and silently keeping it would
         # make the act a no-op. Suppression is a policy someone has to write down.
         self._forward = forward or (lambda pub, session: True)
+        # ⇒ `clarify(question, session) -> str | None` — THE BOUNCE, AND THE SEAM THAT WAS
+        # MISSING. The scan of 2026-08-07 put it plainly: the question travels to the operator
+        # and *"there is no mechanism in this file that ASKS the question and WAITS for an
+        # answer."* Every gate that can only ask has been talking to a log.
+        #
+        # `None` MEANS NOBODY IS THERE, and that is today's behaviour exactly — the question
+        # rides out on the outcome and the run closes. Same fail-closed reading as `consent`:
+        # absent is not permission, it is absence.
+        #
+        # INJECTED FOR THE SAME REASON ROUTING AND CONSENT ARE: the whole loop stays testable
+        # with a function that answers from a list, and nothing here learns what a terminal is.
+        self._clarify = clarify
 
     @staticmethod
     def _first_claimant(request, menu, engines):
@@ -559,6 +572,62 @@ class Orchestrator:
         return self._serve(request, order, state, intent, components, regime,
                            procedure, declared)
 
+    def _bounce(self, question, request, engine, session):
+        """Ask the OPERATOR and read again with what they said. `None` if nobody answered.
+
+        ## ⇒ WHY THIS IS NOT `_restandardise` WEARING A HAT
+
+        `_restandardise` re-asks the MODEL with the rule it broke. This asks the PERSON, and
+        the difference is which of them holds the missing information:
+
+            the reading is ILLEGAL          -> the model can try again; the sentence was fine
+            the SENTENCE is under-specified -> only the operator knows, and another draw is
+                                               another coin rather than another look
+
+        Gate 4 already tells those apart — a request whose draws DISAGREE routes BAD_PROMPT —
+        and gate 3 was built to ask rather than supply on exactly this reasoning: *"we can't
+        truly know what the user wants, it's on them to clarify."*
+
+        ## ONE ROUND, AND THAT IS NOT A BUDGET
+
+        An operator who answers a question and is asked a second one about the same sentence is
+        being interrogated rather than consulted. If the answer does not settle it, the honest
+        outcome is the refusal that was already on its way.
+
+        ## THE ANSWER IS APPENDED
+
+        They are answering about their OWN sentence, so `request + answer` is what they meant.
+        Substituting would throw away everything the first attempt got right, and the operator
+        would have to restate it — which is how a clarification becomes a retype.
+        """
+        if not callable(self._clarify) or not question:
+            return None
+        try:
+            answer = self._clarify(question, session)
+        except Exception as exc:
+            session.record(f"the operator could not be asked: {type(exc).__name__}",
+                           filed_by="orchestrator", caught_by="operator", level="warn")
+            return None
+        answer = str(answer or "").strip()
+        if not answer:
+            # SILENCE IS NOT AN ANSWER, and it is not a failure either — it is the operator
+            # declining to resolve it, which leaves the refusal exactly as it was.
+            return None
+        session.record(f"asked the operator: {question[:70]}",
+                       filed_by="orchestrator", caught_by="operator",
+                       executed="clarify", data={"question": question, "answer": answer},
+                       level="info")
+        from planner.ir import config as _config
+        with _config.use_kinds(getattr(engine, "manifest", None)):
+            second = self.channel.ask(f"{request}\n\n{answer}", engine.world())
+        if not second or getattr(second, "dropped", None):
+            # STILL UNREADABLE AFTER THEY EXPLAINED. Asking again would be the interrogation
+            # this method exists to avoid.
+            session.record("the reading is still incomplete after the operator answered",
+                           filed_by="orchestrator", caught_by="operator", level="warn")
+            return None
+        return second
+
     def read(self, request, engine, session):
         """English -> an Answer the gates have judged and, where they safely can, CORRECTED.
 
@@ -711,6 +780,20 @@ class Orchestrator:
                            filed_by=answer.source or "extractor",
                            caught_by="operator", executed="translate",
                            data={"dropped": lost}, level="warn")
+            # ⇒ THE BOUNCE. Before closing, ASK — and only where asking can help.
+            #
+            #   MEASURED FIRST, and it is why this asks rather than serves the remainder: of
+            #   the 17 refused readings in the corpus, 15 kept some goals and ALL FIFTEEN had
+            #   at least one gate object to what was left. There is no "possible but blocked"
+            #   case here — the remainder is independently defective every time. So serving
+            #   the half is the DONE_BUT_FALSE direction and the honest move is a QUESTION.
+            #
+            #   WHAT COMES BACK IS APPENDED, NOT SUBSTITUTED. The operator is answering a
+            #   question about their own sentence, so the sentence plus the answer is the
+            #   request they meant; replacing it would discard everything they got right.
+            asked = self._bounce(_clarify(request, lost), request, engine, session)
+            if asked is not None:
+                return asked, None
             return None, session.close("UNTRANSLATED", _clarify(request, lost))
         return answer, None
 

@@ -1074,6 +1074,129 @@ def test_gate_4_can_veto_a_re_ask_and_it_is_the_only_gate_that_could():
     check("a bad READ still is", len(asked2) == 2)
 
 
+# ══ THE BOUNCE ═══════════════════════════════════════════════════════════════════════════
+
+
+def test_the_bounce_asks_the_operator_and_reads_again():
+    """THE SEAM THAT WAS MISSING, and the scan of 2026-08-07 named it: the question travels to
+    the operator and *"there is no mechanism in this file that ASKS the question and WAITS for
+    an answer."* Every gate that can only ask has been talking to a log.
+
+    ⇒ MEASURED BEFORE IT WAS BUILT, and it is why the bounce ASKS rather than serving the
+    remainder: of the 17 refused readings in the corpus, 15 kept some goals and ALL FIFTEEN had
+    a gate object to what was left. There is no possible-but-blocked case here — serving the
+    half is the DONE_BUT_FALSE direction.
+    """
+    print("[bounce] the operator is asked, and the answer is read")
+    from engines.channel import Answer, Channel
+    from engines.medusa.engine import MedusaEngine
+    from engines.orchestrator import Orchestrator
+    from engines.registry import Registry
+    from tests.bench.sim_world import SimWorld
+
+    GOOD = [{"shape": "count", "select": {"kind": "vm", "name": "alpha"}, "eq": 1}]
+    seen, asked = [], []
+
+    def answerer(gap, w=None):
+        seen.append(str(gap))
+        # HALF A REQUEST FIRST, a whole one once the operator has explained.
+        if len(seen) == 1:
+            return Answer(GOOD, "extractor", dropped=["it is about name 'x', which the "
+                                                      "request never names"])
+        return Answer(GOOD, "extractor")
+
+    def operator(question, session):
+        asked.append(question)
+        return "I meant the machine called alpha"
+
+    world = SimWorld()
+    registry = Registry()
+    registry.mount(MedusaEngine(world))
+    out = Orchestrator(registry, Channel([answerer]),
+                       clarify=operator).handle("create a vm named alpha", intent="achieve")
+
+    check("the operator was asked exactly once", len(asked) == 1)
+    check("and the question names what was not read", "not understood" in asked[0])
+    check("their answer was APPENDED to their own sentence",
+          "create a vm named alpha" in seen[1] and "I meant" in seen[1])
+    check("the run is no longer refused", out.get("outcome") != "UNTRANSLATED")
+    check("and the machine was made", "alpha" in world.vms)
+
+
+def test_nobody_there_is_todays_behaviour_exactly():
+    """`clarify=None` MEANS NOBODY IS THERE, and that is not a degraded mode — it is the
+    behaviour every measurement to date was taken against. Same fail-closed reading as
+    `consent`: absent is not permission, it is absence.
+    """
+    print("[bounce] with no operator, nothing changes")
+    from engines.channel import Answer, Channel
+    from engines.medusa.engine import MedusaEngine
+    from engines.orchestrator import Orchestrator
+    from engines.registry import Registry
+    from tests.bench.sim_world import SimWorld
+
+    seen = []
+
+    def answerer(gap, w=None):
+        seen.append(str(gap))
+        return Answer([{"shape": "count", "select": {"kind": "vm", "name": "a"}, "eq": 1}],
+                      "extractor", dropped=["it is about name 'x', which the request "
+                                            "never names"])
+
+    world = SimWorld()
+    registry = Registry()
+    registry.mount(MedusaEngine(world))
+    out = Orchestrator(registry, Channel([answerer])).handle("create a vm named a",
+                                                             intent="achieve")
+    check("no second call is made", len(seen) == 1)
+    check("and it refuses exactly as before", out.get("outcome") == "UNTRANSLATED")
+
+
+def test_silence_and_a_still_broken_answer_both_leave_the_refusal_standing():
+    """TWO WAYS THE BOUNCE DECLINES TO HELP, and neither is a failure.
+
+    SILENCE is the operator choosing not to resolve it, which leaves the refusal exactly where
+    it was. AND A SECOND READING THAT IS STILL INCOMPLETE ends it too — asking again about the
+    same sentence is the interrogation this is meant to avoid. An operator asked twice about
+    one sentence is being cross-examined rather than consulted.
+    """
+    print("[bounce] silence, and an answer that does not settle it")
+    from engines.channel import Answer, Channel
+    from engines.medusa.engine import MedusaEngine
+    from engines.orchestrator import Orchestrator
+    from engines.registry import Registry
+    from tests.bench.sim_world import SimWorld
+
+    def run(reply, always_broken):
+        seen = []
+
+        def answerer(gap, w=None):
+            seen.append(str(gap))
+            drops = ["it is about name 'x', which the request never names"]
+            if always_broken or len(seen) == 1:
+                return Answer([{"shape": "count",
+                                "select": {"kind": "vm", "name": "a"}, "eq": 1}],
+                              "extractor", dropped=drops)
+            return Answer([{"shape": "count",
+                            "select": {"kind": "vm", "name": "a"}, "eq": 1}], "extractor")
+
+        world = SimWorld()
+        reg = Registry()
+        reg.mount(MedusaEngine(world))
+        out = Orchestrator(reg, Channel([answerer]),
+                           clarify=lambda q, s: reply).handle("create a vm named a",
+                                                              intent="achieve")
+        return out, seen
+
+    out, seen = run("", False)
+    check("silence makes no second call", len(seen) == 1)
+    check("and the refusal stands", out.get("outcome") == "UNTRANSLATED")
+
+    out, seen = run("some clarification", True)
+    check("a still-broken second reading is asked for once", len(seen) == 2)
+    check("and is NOT asked about again", out.get("outcome") == "UNTRANSLATED")
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "gates")
