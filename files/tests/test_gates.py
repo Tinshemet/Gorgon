@@ -898,6 +898,82 @@ def test_gate_4_gets_a_second_draw_only_where_something_is_suspect():
     check("and one reading cannot", g4.inspect([GOALS[1]]).legal)
 
 
+# ══ THE WIRE ═════════════════════════════════════════════════════════════════════════════
+
+
+def test_every_gate_verdict_reaches_the_answer():
+    """THE GATES WERE DECIDING FOUR TIMES A REQUEST AND NOTHING READ IT.
+
+    Grepped at the end of 2026-08-07: `.legal` had **zero readers anywhere in `engines/`**.
+    `rig` folded `findings()` into `Answer.illegal` and never asked a gate whether the reading
+    was legal, so everything downstream saw a list of SENTENCES where a JUDGEMENT had been
+    made and discarded.
+
+    A NAME PER GATE, NOT ONE BOOLEAN — "the reading is illegal" is not actionable and "gate 2
+    refused it" is. Collapsing them is how the single gate's rules collided in the first place.
+    """
+    print("[wire] each gate's verdict reaches the answer")
+    from engines.channel import Answer
+
+    check("Answer carries a verdict per gate", hasattr(Answer([], "x"), "gates"))
+    a = Answer([], "x", gates={"1": True, "2": False, "3": True, "4": True})
+    check("and it names which one objected",
+          [g for g, ok in a.gates.items() if ok is False] == ["2"])
+
+
+def test_gate_4_can_veto_a_re_ask_and_it_is_the_only_gate_that_could():
+    """GATE 4'S ROUTING IS FINALLY READ. Its whole job in the architecture was *bad AI read ->
+    back to the gate; bad prompt -> back to the operator*, and it computed that and nobody
+    looked (`routes()`, 0 production callers).
+
+    ⇒ THE ONE PLACE IT CHANGES ANYTHING: a request whose draws DISAGREE is a BAD PROMPT. The
+    deciding information is not in the sentence, so another draw is another COIN rather than
+    another LOOK, and `_restandardise` would otherwise spend a model call re-rolling it.
+
+    Gate 4 is the only gate that can tell a MISREAD sentence from an AMBIGUOUS one, because it
+    is the only one that sees more than one reading.
+    """
+    print("[wire] gate 4 vetoes a pointless re-ask")
+    from engines.channel import Answer, Channel
+    from engines.medusa.engine import MedusaEngine
+    from engines.orchestrator import Orchestrator
+    from engines.registry import Registry
+    from planner.gates import viability as g4
+    from tests.bench.sim_world import SimWorld
+
+    routes = g4.inspect([GOALS[1], GOALS[2]]).routes()
+    check("disagreement routes to the operator", routes[0]["to"] == g4.BAD_PROMPT)
+
+    goals = [{"shape": "count", "select": {"kind": "vm", "name": "alpha"}, "eq": 1}]
+    asked = []
+
+    def answerer(gap, w=None):
+        asked.append(str(gap))
+        return Answer(goals, "extractor", illegal=["something"],
+                      gates={"1": False, "reask": False})
+
+    world = SimWorld()
+    registry = Registry()
+    registry.mount(MedusaEngine(world))
+    Orchestrator(registry, Channel([answerer])).handle("create a vm named alpha",
+                                                       intent="achieve")
+    check("a bad PROMPT is not re-asked", len(asked) == 1)
+
+    # AND THE CONTRAST: the same finding WITHOUT gate 4's veto does spend the call.
+    asked2 = []
+
+    def rereadable(gap, w=None):
+        asked2.append(str(gap))
+        return Answer(goals, "extractor", illegal=["something"], gates={"1": False})
+
+    world2 = SimWorld()
+    reg2 = Registry()
+    reg2.mount(MedusaEngine(world2))
+    Orchestrator(reg2, Channel([rereadable])).handle("create a vm named alpha",
+                                                     intent="achieve")
+    check("a bad READ still is", len(asked2) == 2)
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "gates")

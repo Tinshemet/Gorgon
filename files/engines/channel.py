@@ -40,7 +40,8 @@ class Answer:
                  procedure: Optional[str] = None, dropped: Optional[List[str]] = None,
                  illegal: Optional[List[str]] = None,
                  fetch: Optional[List[str]] = None,
-                 asks: Optional[List[str]] = None):
+                 asks: Optional[List[str]] = None,
+                 gates: Optional[Dict[str, bool]] = None):
         self.components = components or []
         self.source = source
         # AN AUTHORING REQUEST NAMES WHAT TO KEEP. `None` is an ordinary request: do it now.
@@ -83,6 +84,21 @@ class Answer:
         # a request meant to leave apart is inventing intent. So it asks, and the asking has
         # to reach somebody or the restraint buys nothing.
         self.asks = list(asks or ())
+        # ⇒ WHAT EACH GATE **DECIDED**, as opposed to what it said about it.
+        #
+        # THE GATES WERE COMPUTING A VERDICT FOUR TIMES A REQUEST AND THROWING IT AWAY. `rig`
+        # folded their `findings()` into `illegal` and never read `.legal` — grepped at the
+        # end of 2026-08-07: ZERO readers anywhere in `engines/`. Everything downstream saw a
+        # list of SENTENCES where a JUDGEMENT had been made and discarded.
+        #
+        # A NAME PER GATE, NOT ONE BOOLEAN, because "the reading is illegal" is not actionable
+        # and "gate 2 refused it" is: the four ask different questions and their answers have
+        # different remedies. Collapsing them is how the single gate's rules collided.
+        #
+        # IT STILL DOES NOT VOTE. Carrying the verdict is the PREREQUISITE for a gate ever
+        # voting, not the vote — that is a decision with a false-alarm budget attached and it
+        # belongs to the operator.
+        self.gates = dict(gates or {})
 
     def __bool__(self) -> bool:
         return bool(self.components)

@@ -167,6 +167,7 @@ def translator() -> Callable:
         fetch: list = []
         asks: list = []
         verdicts: dict = {}
+        gates: dict = {}
         try:
             verdict = _truth.inspect(goals or [], world)
             illegal += [f for f in verdict.findings() if f not in illegal]
@@ -238,6 +239,28 @@ def translator() -> Callable:
             whole_verdict = _viability.inspect(readings, verdicts)
             illegal += [f for f in whole_verdict.findings() if f not in illegal]
             asks += [q for q in whole_verdict.questions() if q not in asks]
+            # ⇒ GATE 1'S OWN QUESTION, which lists EVERY gap in ONE message. It was built,
+            #   tested and never called: an operator answering four questions in sequence
+            #   re-answers the first three every time the fourth changes.
+            first = whole.question() if whole is not None else None
+            if first and first not in asks:
+                asks.append(first)
+            # ⇒ AND THE VERDICTS THEMSELVES, not just their prose.
+            gates = {"1": bool(whole is None or whole.legal),
+                     "2": bool(verdict.legal),
+                     "3": bool(reasoned.legal),
+                     "4": bool(whole_verdict.legal)}
+            # ⇒ GATE 4 ROUTES, AND THE ROUTING IS FINALLY READ. Its whole job in the
+            #   architecture was *bad AI read -> back to the gate; bad prompt -> back to the
+            #   operator*, and it computed that and nobody looked.
+            #
+            #   THE ONE PLACE IT CHANGES ANYTHING: a request whose draws DISAGREE is a BAD
+            #   PROMPT, so re-asking is spending a call to re-roll a coin. `_restandardise`
+            #   would otherwise do exactly that. Suppressing it here is gate 4 earning its
+            #   place — it is the only gate that can tell a misread sentence from an
+            #   ambiguous one.
+            if any(r.get("to") == _viability.BAD_PROMPT for r in whole_verdict.routes()):
+                gates["reask"] = False
         except Exception:
             # A GATE THAT RAISES MUST NOT TAKE THE TRANSLATION WITH IT — the same rule the
             # gate 1 call above follows, and for the same reason: an observer that can fail
@@ -264,9 +287,10 @@ def translator() -> Callable:
                 # stands: the run is refused, and the recovery shows up as goals nobody used.
         if not goals:
             return Answer(None, "extractor", "; ".join(lost) or "no usable goal",
-                          dropped=lost, illegal=illegal, fetch=fetch, asks=asks)
+                          dropped=lost, illegal=illegal, fetch=fetch, asks=asks,
+                          gates=gates)
         return Answer(goals, "extractor", "", dropped=lost, illegal=illegal,
-                      fetch=fetch, asks=asks)
+                      fetch=fetch, asks=asks, gates=gates)
     translate.name = "extractor"
     return translate
 

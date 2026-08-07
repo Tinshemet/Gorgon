@@ -727,6 +727,14 @@ class Orchestrator:
             # puts it in the ledger, where the rate can be read off real traffic rather than
             # off a corpus recorded on 2026-08-01 — and where a wrong flag is an entry someone
             # can point at, instead of a refusal they have to reverse-engineer.
+            # ⇒ WHICH GATES PASSED, as a judgement rather than as prose. They were deciding
+            # this four times a request and nothing was reading it.
+            if getattr(answer, "gates", None):
+                objected = [g for g, ok in answer.gates.items() if ok is False and g != "reask"]
+                if objected:
+                    session.record("gates that objected: " + ", ".join(sorted(objected)),
+                                   filed_by="gates", caught_by="orchestrator",
+                                   executed="translate", data=answer.gates, level="warn")
             if getattr(answer, "illegal", None):
                 session.record("gate 1: " + "; ".join(answer.illegal[:3]),
                                filed_by="completeness", caught_by="operator",
@@ -796,9 +804,23 @@ class Orchestrator:
                 # and the ORIGINAL reading proceeds exactly as it does today. That is what
                 # lets gate 1 act at 1-in-21 false alarms — it can only ever improve a reading
                 # or waste a call, never turn a served request into a refused one.
-                second = self._restandardise(request, list(answer.illegal), engine, session)
-                if second is not None:
-                    answer = second
+                # ⇒ GATE 4 CAN VETO THE RE-ASK, AND IT IS THE ONLY GATE THAT COULD.
+                #
+                #   A request whose draws DISAGREE is a BAD PROMPT: the deciding information
+                #   is not in the sentence, so another draw is another coin rather than
+                #   another look. Re-asking there spends a model call to re-roll. Gate 4 is
+                #   the only gate that can tell a MISREAD sentence from an AMBIGUOUS one,
+                #   which is what its routing was always for and what nothing read until now.
+                if (answer.gates or {}).get("reask") is False:
+                    session.record(
+                        "gate 4: the request itself reads more than one way — not re-asking",
+                        filed_by="viability", caught_by="operator", executed="translate",
+                        data={"asks": list(getattr(answer, "asks", ()))}, level="warn")
+                else:
+                    second = self._restandardise(request, list(answer.illegal),
+                                                 engine, session)
+                    if second is not None:
+                        answer = second
             if lost:
                 # HALF A REQUEST IS NOT A REQUEST — the operator's ruling, 2026-08-03:
                 # *"it should refuse something it can not understand and ask to clarify."*
