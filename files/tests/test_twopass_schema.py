@@ -347,8 +347,16 @@ def test_gate_1_asks_about_what_the_request_never_said():
           any(f.kind == "invented" for f in found))
     check("and an invented VALUE is caught separately",
           any(f.kind == "invented-value" for f in found))
-    check("and it ASKS rather than repairing — nothing is changed",
-          all("?" in f.says or "did you" in f.says for f in found))
+    # ⇒ TWO AUDIENCES, AND THEY ARE PHRASED DIFFERENTLY. What the request does not settle is
+    #   a QUESTION for the operator. A residual is not that — the operator already said those
+    #   words — so it is an INSTRUCTION to the model to read again. Asserting every finding
+    #   ends in a question mark conflated the two.
+    from tests.bench.twopass import gates12 as _G
+    asks = [f for f in found if f not in _G.bounces(found)]
+    check("what the operator must settle is phrased as a question",
+          asks and all("?" in f.says or "did you" in f.says for f in asks))
+    check("and nothing is repaired — the rows are untouched",
+          [(r.name, dict(r.where)) for r in made_up] == [("quarantine", {"label": "urgent"})])
 
 
 def test_gate_2_asks_what_the_world_cannot_hold():
