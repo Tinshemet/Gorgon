@@ -160,10 +160,37 @@ EXPECTED: Dict[int, Expect] = {
 }
 
 
+def ask_conditions(name: str, object_type: str, ask, board: Board) -> Dict[str, object]:
+    """THE FORCED CHOICE, then an attribute, then a value CLOSED BY THAT ATTRIBUTE.
+
+    Three small calls instead of one array. The array let the model answer `[]` where an answer
+    was wanted and fill one in where none was — 19 invented conditions across 14 requests, about
+    17 of them on things that needed none.
+    """
+    scope = ask(S.SCOPE_Q.format(name=name), S.scope_schema())
+    if scope != S.ONLY_SOME:
+        return {}                                   # it declined, and declining is an answer
+    kind = object_type[:-len(S.SET_SUFFIX)] if object_type.endswith(S.SET_SUFFIX) else object_type
+    attr = ask(S.ATTRIBUTE_Q.format(kind=kind, name=name),
+               S.attribute_schema(object_type, board))
+    if not attr:
+        return {}
+    value = ask(S.VALUE_Q.format(name=name, attr=attr),
+                S.value_schema(object_type, attr, board))
+    return {attr: value} if value is not None else {}
+
+
+def _old_where(name: str, object_type: str, ask, board: Board) -> Dict[str, object]:
+    """The array form, kept only so the A/B can be re-run. MEASURED WORSE."""
+    pairs = ask(S.WHERE_Q.format(name=name), S.where_schema(object_type, board)) or []
+    return {p["attribute"]: p["value"] for p in pairs
+            if isinstance(p, dict) and "attribute" in p}
+
+
 def run_pass1(request: str, board: Optional[Board] = None, model=None, temp=0.0,
               timeout=180, trace: Optional[List] = None,
               paired: bool = False, fold: bool = True,
-              expand_names: bool = True) -> List[S.Declared]:
+              expand_names: bool = True, forced: bool = True) -> List[S.Declared]:
     """The questions, one per call, exactly as `schema.py` declares them.
 
     `paired=True` asks NAME and TYPE together — the fix for the measured cascade, where the
@@ -203,9 +230,8 @@ def run_pass1(request: str, board: Optional[Board] = None, model=None, temp=0.0,
                                   S.type_schema(board))
         if not object_type:
             continue
-        pairs = ask(S.WHERE_Q.format(name=name), S.where_schema(object_type, board)) or []
-        where = {p["attribute"]: p["value"] for p in pairs
-                 if isinstance(p, dict) and "attribute" in p}
+        where = ask_conditions(name, object_type, ask, board) if forced else _old_where(
+            name, object_type, ask, board)
         existence = ask(S.EXISTENCE_Q.format(name=name, new=S.NEW, existing=S.EXISTING),
                         S.existence_schema()) or S.EXISTING
         rows.append(S.declare_from(name, object_type, where, existence, board))
@@ -257,6 +283,8 @@ def main() -> None:
     ap.add_argument("--model", default=None)
     ap.add_argument("--paired", action="store_true",
                     help="ask NAME and TYPE together — the cascade fix (REJECTED, kept for A/B)")
+    ap.add_argument("--array-conditions", action="store_true",
+                    help="the OLD array form of the conditions question — measured worse")
     ap.add_argument("--no-expand", action="store_true",
                     help="do NOT repair chunked names from the request")
     ap.add_argument("--no-fold", action="store_true",
@@ -283,7 +311,8 @@ def main() -> None:
             trace: List = []
             rows = run_pass1(want.request, board=board, model=args.model, trace=trace,
                              paired=args.paired, fold=not args.no_fold,
-                             expand_names=not args.no_expand)
+                             expand_names=not args.no_expand,
+                             forced=not args.array_conditions)
             g = grade(rows, want)
             for row in rows:
                 mark = "  ⇐ RESIDUAL" if row.residual else ""

@@ -423,3 +423,72 @@ def expand(name: str, request: str) -> str:
                 stop = found
         end += stop
     return request[at:end].strip()
+
+
+# ── CONDITIONS, ASKED AS A FORCED CHOICE AND THEN CLOSED AT BOTH ENDS ──────────────────
+#
+# MEASURED 2026-08-08, over 14 requests: the old array form produced 7 correct conditions, 19
+# INVENTED, and 10 empties. Two holes, neither of them the model being poor at reading:
+#
+#   1 THE VALUE WAS FREE TEXT. The attribute came from a closed list and the value did not, so
+#     `status = pingable` and `status = new` were writable — while the manifest says status is
+#     running or stopped. We closed one half of the pair and left the other open.
+#   2 THE QUESTION WAS ASKED WHERE NO ANSWER WAS WANTED. About 17 of the 19 invented conditions
+#     sat on things needing none — `alpha`, `db`, `n1`, and chunks like `called lab`. `[]` was
+#     available and it did not take it.
+#
+# And every one of the 7 correct answers was a request containing the value word LITERALLY —
+# "currently stopped", "the 'prod' label", "every running vm". It matches text.
+ALL_OF_THEM, ONLY_SOME = "all of them", "only some of them"
+
+SCOPE_Q = (
+    "Does {name!r} mean ALL of them, or only SOME of them?\n\n"
+    "Answer 'only some of them' just when the request states a condition that picks certain "
+    "ones out. A thing referred to by its own name is not a condition."
+)
+
+ATTRIBUTE_Q = (
+    "Which ONE thing about a {kind} decides whether it is part of {name!r}? Choose from the "
+    "list. Judge MEMBERSHIP of that group, not what should happen to it."
+)
+
+VALUE_Q = (
+    "For something to be part of {name!r}, what must its {attr} be?"
+)
+
+
+def scope_schema() -> dict:
+    # ALL FIRST, DELIBERATELY. The first enum member is over-picked on this stack, and the
+    # errors here run 19 invented against a handful missing — so the safe bias is toward
+    # "no condition", which is what leading with `all of them` buys.
+    return {"type": "object", "additionalProperties": False, "required": ["answer"],
+            "properties": {"answer": {"type": "string",
+                                      "enum": [ALL_OF_THEM, ONLY_SOME]}}}
+
+
+def attribute_schema(object_type: str, board: Optional[Board] = None) -> dict:
+    attrs = attributes_for(object_type, board)
+    return {"type": "object", "additionalProperties": False, "required": ["answer"],
+            "properties": {"answer": {"type": "string", "enum": attrs} if attrs
+                           else {"type": "string"}}}
+
+
+def value_schema(object_type: str, attr: str, board: Optional[Board] = None) -> dict:
+    """THE VALUE LIST IS BUILT FROM THE ATTRIBUTE, so an illegal value is UNWRITABLE.
+
+    This is the half that was open. `status = pingable` was not a mistake the model made in
+    spite of the schema — the schema permitted it. Where the manifest declares a closed set the
+    answer is an enum; where the attribute is OBSERVED it is a boolean; only genuinely open
+    attributes, like a name, stay free text.
+    """
+    board = board or Board()
+    kind = object_type[:-len(SET_SUFFIX)] if object_type.endswith(SET_SUFFIX) else object_type
+    allowed = board.values(kind, attr)
+    if allowed:
+        return {"type": "object", "additionalProperties": False, "required": ["answer"],
+                "properties": {"answer": {"type": "string", "enum": list(allowed)}}}
+    if attr in board.observable(kind):
+        return {"type": "object", "additionalProperties": False, "required": ["answer"],
+                "properties": {"answer": {"type": "boolean"}}}
+    return {"type": "object", "additionalProperties": False, "required": ["answer"],
+            "properties": {"answer": {"type": "string", "minLength": 1}}}
