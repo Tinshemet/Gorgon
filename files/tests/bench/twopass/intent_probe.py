@@ -99,12 +99,30 @@ CASES: List[Case] = [
          "instead", "core", "ambiguous", "'a network called core' does not say if it exists"),
 ]
 
-_QUESTION = (
-    "Does the request ask for this thing to be BROUGHT INTO BEING, or does it refer to one "
-    "that is already there?\n\n"
-    "Answer only from the words of the request. You do NOT know what exists — do not guess "
-    "about that, and do not let it change your answer. Judge only what is being ASKED FOR."
-)
+# ── THE VOCABULARY IS ITSELF A VARIABLE, and it turned out to be THE variable ──────────
+#
+# ABSTRACT wording returned `refer` to all fourteen cases — a constant, not a reading, and
+# the apparent 62% was only the case mix. CONCRETE wording, on the same model and the same
+# sentences, read the intent. `refer` is a SYSTEMS word; `create` and `use` are the words the
+# request is already written in.
+VOCAB = {
+    "abstract": (
+        [REFER, MAKE],
+        "Does the request ask for this thing to be BROUGHT INTO BEING, or does it refer to "
+        "one that is already there?\n\nAnswer only from the words of the request. You do NOT "
+        "know what exists — do not guess about that. Judge only what is being ASKED FOR.",
+    ),
+    "concrete": (
+        ["use", "create"],
+        "Read the request. For the thing named, answer 'create' if the request asks you to "
+        "bring it into existence, or 'use' if the request talks about one that already "
+        "exists and only acts on it.",
+    ),
+}
+
+
+def normalise(answer) -> str:
+    return MAKE if answer in (MAKE, "create") else REFER if answer in (REFER, "use") else "?"
 
 
 def _schema(order: List[str]) -> dict:
@@ -112,11 +130,11 @@ def _schema(order: List[str]) -> dict:
             "properties": {"answer": {"type": "string", "enum": order}}}
 
 
-def ask(case: Case, order: List[str], model=None, temp=0.0, timeout=300):
+def ask(case: Case, order: List[str], question: str, model=None, temp=0.0, timeout=300):
     from engines.channel import constrained
     payload = f"the request: {case.request}\n\nthe thing: {case.thing}"
     try:
-        got = constrained(_QUESTION, payload, _schema(order),
+        got = constrained(question, payload, _schema(order),
                           model=model, temp=temp, timeout=timeout) or {}
         return got.get("answer")
     except Exception as exc:
@@ -128,42 +146,39 @@ def main() -> None:
     ap.add_argument("--model", default=None)
     args = ap.parse_args()
 
-    orders = {"refer-first": [REFER, MAKE], "make-first": [MAKE, REFER]}
     print("=" * 100)
-    print("CAN IT READ INTENT?   every case asked in BOTH enum orders — a flip is a coin, "
-          "not a reading")
+    print("CAN IT READ INTENT?   both vocabularies, each in BOTH enum orders.")
+    print("A flip with the order is a coin, not a reading — only order-stable answers score.")
     print("=" * 100)
-    print(f"  {'thing':<36} {'want':<10} {'refer-1st':<11} {'make-1st':<11} verdict")
 
-    tally: Counter = Counter()
-    for case in CASES:
-        answers = {name: ask(case, order, model=args.model) for name, order in orders.items()}
-        a, b = answers["refer-first"], answers["make-first"]
-        stable = a == b
-        if case.expect == "ambiguous":
-            verdict = f"AMBIGUOUS — said {a}" if stable else "AMBIGUOUS — flipped"
-            tally["ambiguous"] += 1
-        elif not stable:
-            verdict = "FLIPPED (order decided it)"
-            tally["flipped"] += 1
-        elif a == case.expect:
-            verdict = "correct"
-            tally["correct"] += 1
-        else:
-            verdict = f"WRONG (wanted {case.expect})"
-            tally["wrong"] += 1
-            tally[f"wrong->{a}"] += 1
-        print(f"  {case.thing[:35]:<36} {case.expect:<10} {str(a):<11} {str(b):<11} {verdict}")
+    for vocab, (enum, question) in VOCAB.items():
+        tally: Counter = Counter()
+        print(f"\n{'─' * 100}\n{vocab.upper()}  —  options {enum!r}")
+        print(f"  {'thing':<34} {'want':<10} {'as-given':<10} {'reversed':<10} verdict")
+        for case in CASES:
+            a = normalise(ask(case, enum, question, model=args.model))
+            b = normalise(ask(case, list(reversed(enum)), question, model=args.model))
+            if case.expect == "ambiguous":
+                verdict = f"ambiguous — said {a}" if a == b else "ambiguous — flipped"
+                tally["ambiguous"] += 1
+            elif a != b:
+                verdict = "FLIPPED (order decided it)"
+                tally["flipped"] += 1
+            elif a == case.expect:
+                verdict = "correct"
+                tally["correct"] += 1
+            else:
+                verdict = f"WRONG (wanted {case.expect})"
+                tally["wrong"] += 1
+                tally[f"wrong->{a}"] += 1
+            print(f"  {case.thing[:33]:<34} {case.expect:<10} {a:<10} {b:<10} {verdict}")
 
-    scored = tally["correct"] + tally["wrong"] + tally["flipped"]
-    print(f"\n{'=' * 100}")
-    print(f"  order-stable and correct : {tally['correct']} of {scored} scored")
-    print(f"  wrong                    : {tally['wrong']}"
-          f"   (toward make: {tally['wrong->make']}, toward refer: {tally['wrong->refer']})")
-    print(f"  decided by enum order    : {tally['flipped']}")
-    print(f"  ambiguous, not scored    : {tally['ambiguous']}")
-    if scored:
-        print(f"\n  ⇒ R1 asked for >= 80%. Result: {100 * tally['correct'] / scored:.0f}%")
+        scored = tally["correct"] + tally["wrong"] + tally["flipped"]
+        print(f"    correct {tally['correct']}/{scored}   wrong {tally['wrong']} "
+              f"(toward make {tally['wrong->make']}, toward refer {tally['wrong->refer']})   "
+              f"order-decided {tally['flipped']}   ambiguous {tally['ambiguous']}")
+        if scored:
+            print(f"    ⇒ {100 * tally['correct'] / scored:.0f}%   (R1 asked for >= 80%)")
 
 
 if __name__ == "__main__":
