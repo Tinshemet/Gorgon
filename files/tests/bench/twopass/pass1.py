@@ -78,38 +78,52 @@ from . import schema as S
 
 class Expect(NamedTuple):
     request: str
-    conditions: List[Dict[str, object]]   # every `where` the request states, in any row
+    identities: List[str]                 # names the request states — must appear SOMEWHERE
+    conditions: List[Dict[str, object]]   # real conditions BEYOND identity
     sets: int                             # how many declared things are GROUPS
     residual: bool                        # is any row settled at run time
+    rows: int                             # how many things there really are — REPORTED only
 
 
-# THE ANSWER KEY, written before the runner was pointed at a model.
+# ── THE ANSWER KEY, CORRECTED. The first version was wrong twice, both my errors: ──────
+#
+#   1  IT DOUBLE-COUNTED IDENTITY. If a row is NAMED `alpha` and typed `vm`, demanding
+#      `where {name: alpha}` as well asks the model to state the same fact twice. A name is
+#      carried by the `name` field; it is not a condition. So identities are now checked as
+#      NAMES and struck from `conditions`.
+#   2  IT COUNTED ACTIONS AS CONDITIONS. Rung 4's *"give them all the 'fleet' label"* is
+#      something pass 2 DOES, not something that picks the set out. Asking pass 1 for it was
+#      asking the wrong pass.
+#
+# What remains under `conditions` is only what genuinely narrows a set: a status, a label
+# that DISTINGUISHES two groups, an observed fact.
 EXPECTED: Dict[int, Expect] = {
-    1: Expect("create a vm named alpha", [{"name": "alpha"}], 0, False),
-    2: Expect("create a vm named beta and then launch it",
-              [{"name": "beta"}], 0, False),
+    1: Expect("create a vm named alpha", ["alpha"], [], 0, False, 1),
+    2: Expect("create a vm named beta and then launch it", ["beta"], [], 0, False, 1),
     3: Expect("create a network called lab and a vm named web, then put web on lab",
-              [{"net_name": "lab"}, {"name": "web"}], 0, False),
+              ["lab", "web"], [], 0, False, 2),
     4: Expect("create 5 vms, put them all in a network, give them all the 'fleet' label, "
-              "and make sure they all ping each other", [{"label": "fleet"}], 1, False),
+              "and make sure they all ping each other", [], [], 1, False, 2),
     5: Expect("launch every vm that is currently stopped",
-              [{"status": "stopped"}], 1, False),
+              [], [{"status": "stopped"}], 1, False, 1),
     6: Expect("create 3 vms labelled 'red' and 2 vms labelled 'blue', put the red ones "
               "together on their own network, and put the blue ones on a different network",
-              [{"label": "red"}, {"label": "blue"}], 2, False),
-    7: Expect("make sure exactly 3 vms carry the 'prod' label", [{"label": "prod"}], 1, False),
+              [], [{"label": "red"}, {"label": "blue"}], 2, False, 4),
+    7: Expect("make sure exactly 3 vms carry the 'prod' label",
+              [], [{"label": "prod"}], 1, False, 1),
     8: Expect("put every vm on a network called core, except db — db goes on a network "
-              "called dmz instead",
-              [{"name": "db"}, {"net_name": "core"}, {"net_name": "dmz"}], 1, False),
+              "called dmz instead", ["db", "core", "dmz"], [], 1, False, 4),
     9: Expect("make sure n1, n2 and n3 can all ping each other",
-              [{"name": "n1"}, {"name": "n2"}, {"name": "n3"}], 0, False),
-    10: Expect("clone golden into 3 new vms and launch all of them", [], 1, False),
+              ["n1", "n2", "n3"], [], 0, False, 3),
+    10: Expect("clone golden into 3 new vms and launch all of them",
+               ["golden"], [], 1, False, 2),
     11: Expect("ping every vm and stop the ones that do not answer",
-               [{"alive": False}], 2, True),          # ⇐ THE ONE THAT MATTERS
-    12: Expect("take a snapshot of every running vm", [{"status": "running"}], 1, False),
+               [], [{"alive": False}], 2, True, 2),   # ⇐ THE ONE THAT MATTERS
+    12: Expect("take a snapshot of every running vm",
+               [], [{"status": "running"}], 1, False, 2),
     13: Expect("take 5 vms, put them all in a network, give them all the 'fleet' label, "
-               "and make sure they all ping each other", [{"label": "fleet"}], 1, False),
-    14: Expect("make sure there are exactly two machines left", [], 1, False),
+               "and make sure they all ping each other", [], [], 1, False, 2),
+    14: Expect("make sure there are exactly two machines left", [], [], 1, False, 1),
 }
 
 
@@ -151,15 +165,20 @@ def run_pass1(request: str, board: Optional[Board] = None, model=None, temp=0.0,
 def grade(rows: List[S.Declared], want: Expect) -> Dict[str, object]:
     """Structural only. Names are the requester's words and are never compared."""
     got_conditions = [dict(r.where) for r in rows if r.where]
-    found = 0
-    for wanted in want.conditions:
-        if any(all(g.get(k) == v for k, v in wanted.items()) for g in got_conditions):
-            found += 1
+    found = sum(1 for wanted in want.conditions
+                if any(all(g.get(k) == v for k, v in wanted.items()) for g in got_conditions))
     invented = sum(1 for g in got_conditions
                    if not any(all(g.get(k) == v for k, v in w.items())
                               for w in want.conditions))
+    # IDENTITY IS CHECKED AS A NAME, not as a condition. `alpha` must appear as the name of
+    # some row; demanding `where {name: alpha}` too would be asking for the same fact twice.
+    names = " ".join(r.name.lower() for r in rows)
+    named = sum(1 for i in want.identities if i.lower() in names)
     return {
         "rows": len(rows),
+        "extra_rows": len(rows) - want.rows,
+        "identities": f"{named}/{len(want.identities)}" if want.identities else "—",
+        "identities_ok": named == len(want.identities),
         "conditions": f"{found}/{len(want.conditions)}" if want.conditions else "—",
         "conditions_ok": found == len(want.conditions),
         "invented": invented,
@@ -188,8 +207,8 @@ def main() -> None:
         if args.only and n != args.only:
             continue
         print(f"\n{'─' * 104}\nrung {n} · “{want.request[:88]}”")
-        print(f"    want   conditions {want.conditions}   sets>={want.sets}   "
-              f"residual={want.residual}")
+        print(f"    want   names {want.identities}   conditions {want.conditions}   "
+              f"sets>={want.sets}   residual={want.residual}   rows {want.rows}")
         for i in range(args.runs):
             trace: List = []
             rows = run_pass1(want.request, board=board, model=args.model, trace=trace)
@@ -199,8 +218,11 @@ def main() -> None:
                 where = ", ".join(f"{k}={v}" for k, v in row.where.items()) or "—"
                 print(f"      {row.name[:28]:<30} {row.object_type:<14} {where:<26} "
                       f"{row.existence}{mark}")
-            print(f"    run {i + 1}  conditions {g['conditions']}  invented {g['invented']}  "
-                  f"sets {g['sets']}  residual {g['residual']}  new {g['new']}")
+            print(f"    run {i + 1}  names {g['identities']}  conditions {g['conditions']}  "
+                  f"invented {g['invented']}  sets {g['sets']}  residual {g['residual']}  "
+                  f"rows {g['rows']} (want {want.rows})")
+            tally["identities_ok"] += g["identities_ok"]
+            tally["extra_rows"] += max(0, g["extra_rows"])
             tally["conditions_ok"] += g["conditions_ok"]
             tally["sets_ok"] += g["sets_ok"]
             tally["residual_ok"] += g["residual_ok"]
@@ -211,6 +233,8 @@ def main() -> None:
     c = max(tally["cells"], 1)
     print(f"\n{'=' * 104}")
     print(f"  cells                    {tally['cells']}")
+    print(f"  named things found       {tally['identities_ok']}/{c}")
+    print(f"  SURPLUS rows declared    {tally['extra_rows']}    (over-declaration)")
     print(f"  every condition found    {tally['conditions_ok']}/{c}")
     print(f"  groups declared as sets  {tally['sets_ok']}/{c}")
     print(f"  residual correct         {tally['residual_ok']}/{c}   "
