@@ -61,12 +61,45 @@ poisons every question after it.
   feeds all three. Question 1 emits a paraphrase; questions 2-4 consume it; and a type error
   is unrecoverable because it changes which attributes exist to be chosen from.
 
-⇒ TWO CANDIDATE FIXES, NEITHER MEASURED:
-    * ASK NAME AND TYPE TOGETHER. Precedent: `which_ones` and `must_become` failed apart and
-      worked as a contrastive pair. A model cannot produce a name whose type it then misreads
-      if it commits to both at once.
-    * MAKE THE NAME A SPAN of the request rather than a paraphrase. Stronger, but span
-      quotation was tried once before and withdrawn ([[gorgon-refusal-enum-withdrawn]]).
+⇒ TWO CANDIDATE FIXES:
+    * ASK NAME AND TYPE TOGETHER — **MEASURED AND REJECTED, see below.**
+    * MAKE THE NAME A SPAN of the request rather than a paraphrase. Untested. Span quotation
+      was tried once before and withdrawn ([[gorgon-refusal-enum-withdrawn]]).
+
+# ⇒⇒ RESULTS WITH CLEAN PROMPTS — THE PAIRED FIX IS REJECTED, AND PASS 1 DOES NOT WORK
+
+                             baseline    paired
+    named things found         14/14      14/14
+    GROUPS SEEN AS GROUPS      13/14       4/14   <- pairing DESTROYED the one working axis
+    conditions found           12/14      13/14
+    surplus things declared       24         31
+    conditions INVENTED           36         37
+
+**PAIRING NAME AND TYPE COLLAPSES SET RECOGNITION.** Forced to commit to a sort while it is
+still listing, the model picks the plain kind over the `_set` kind, so "every vm" comes back as
+one machine. The contrastive-pair precedent did not transfer: `which_ones` and `must_become`
+disambiguate each other, but a name does not disambiguate a type — it PRECEDES it, and the
+separate question gets to see the finished name before judging it.
+
+**AND PASS 1 DOES NOT WORK IN EITHER ARM.** Rung 11:
+
+    baseline   ping / vm / ones, all vm_set, no conditions   <- "ping" declared as a THING
+    paired     answer : network, one row
+
+Neither finds `alive = false`, so the residual — the entire point — is never reachable.
+
+# ⇒ WHAT THE NUMBERS ACTUALLY SAY THE PROBLEM IS
+
+It is NOT extraction. Names come back 14/14 in both arms. The failures are:
+
+  * **OVER-DECLARATION.** 24 surplus rows across 14 requests. It declares verbs (`ping`),
+    fragments (`ones`, `answer`, `each other`) and the kind word itself as separate things.
+    Question 1 asks for "every distinct thing" and every noun phrase qualifies.
+  * **INVENTED CONDITIONS.** 36 of them. Given a `where` question about a thing that should
+    have no conditions, it fills one in anyway — the same over-fill P4 got backwards.
+
+⇒ SO THE OPEN QUESTION IS NOT "can it name things" — IT CAN. It is **how to stop it naming
+  things that are not things**, which is a different problem from anything item 1 tested.
 """
 import argparse
 from collections import Counter
