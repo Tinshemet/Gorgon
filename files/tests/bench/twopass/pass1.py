@@ -162,7 +162,7 @@ EXPECTED: Dict[int, Expect] = {
 
 def run_pass1(request: str, board: Optional[Board] = None, model=None, temp=0.0,
               timeout=180, trace: Optional[List] = None,
-              paired: bool = False) -> List[S.Declared]:
+              paired: bool = False, fold: bool = True) -> List[S.Declared]:
     """The questions, one per call, exactly as `schema.py` declares them.
 
     `paired=True` asks NAME and TYPE together — the fix for the measured cascade, where the
@@ -205,7 +205,9 @@ def run_pass1(request: str, board: Optional[Board] = None, model=None, temp=0.0,
         existence = ask(S.EXISTENCE_Q.format(name=name, new=S.NEW, existing=S.EXISTING),
                         S.existence_schema()) or S.EXISTING
         rows.append(S.declare_from(name, object_type, where, existence, board))
-    return rows
+    # FOLD REPEATED MENTIONS. The model mentions things more than once — by name and by
+    # pronoun — and that is fine. The first mention declares; the rest become references.
+    return S.merge(rows, board) if fold else rows
 
 
 def grade(rows: List[S.Declared], want: Expect) -> Dict[str, object]:
@@ -242,14 +244,17 @@ def main() -> None:
     ap.add_argument("--runs", type=int, default=1)
     ap.add_argument("--model", default=None)
     ap.add_argument("--paired", action="store_true",
-                    help="ask NAME and TYPE together — the cascade fix")
+                    help="ask NAME and TYPE together — the cascade fix (REJECTED, kept for A/B)")
+    ap.add_argument("--no-fold", action="store_true",
+                    help="do NOT fold repeated mentions — the pre-fold baseline")
     args = ap.parse_args()
 
     board = Board()
     tally: Counter = Counter()
     print("=" * 104)
     print(f"ITEM 3 · PASS ONE AGAINST THE MODEL — "
-          f"{'PAIRED name+type' if args.paired else 'separate questions'}, "
+          f"{'PAIRED name+type' if args.paired else 'separate questions'}"
+          f"{'' if args.no_fold else ' + FOLD'}, "
           f"graded on structure, never on names")
     print("=" * 104)
 
@@ -262,7 +267,7 @@ def main() -> None:
         for i in range(args.runs):
             trace: List = []
             rows = run_pass1(want.request, board=board, model=args.model, trace=trace,
-                             paired=args.paired)
+                             paired=args.paired, fold=not args.no_fold)
             g = grade(rows, want)
             for row in rows:
                 mark = "  ⇐ RESIDUAL" if row.residual else ""
