@@ -395,6 +395,72 @@ def test_neither_gate_repairs_anything():
           G.conflicts(rows, None, board) == [])
 
 
+# ── 8 · anchor and scan ───────────────────────────────────────────────────────────────
+def test_the_code_reads_the_phrase_the_model_only_points_at():
+    print("\n[scan] the model points at an anchor; the enumerator, comparator, kind and "
+          "modifiers are READ off the request")
+    from tests.bench.twopass.scan import scan
+    board = Board()
+
+    got = scan("alpha", "create a vm named alpha", board)
+    check(f"a bare anchor recovers its whole phrase (got {got.span!r})",
+          got.span == "a vm named alpha")
+    check("the enumerator becomes a count", got.count == 1)
+    check("the noun becomes the kind, from the manifest", got.kind == "vm")
+    check("and what is left over is the modifier", got.modifiers == "named alpha")
+
+    # THE COUNT WAS NEVER ASKED FOR BY PASS 1 AT ALL, so half the rungs could not be
+    # expressed however good the other answers were.
+    check("a digit enumerator counts", scan("vms", "create 5 vms, put them all in a network",
+                                            board).count == 5)
+    check("and a quantifier reads as 'all'",
+          scan("vm", "ping every vm and stop the rest", board).count == "all")
+
+    # ⇒ THE COMPARATOR IS IN THE ENUMERATOR REGION, and it is the (eq, 3) a program needs.
+    exactly = scan("machines", "make sure there are exactly two machines left", board)
+    check("a one-word comparator is read", (exactly.comparator, exactly.count) == ("eq", 2))
+    atmost = scan("vms", "there should be at most three vms with the test label", board)
+    check("and a two-word one", (atmost.comparator, atmost.count) == ("max", 3))
+    check("comparator words do not leak into the modifiers",
+          "most" not in atmost.modifiers)
+
+    # A SPAN MAY NEVER CROSS A CLAUSE BOUNDARY. Without this, "create 5 vms, put them all in
+    # a network" scanned as a single phrase.
+    check("a comma stops the scan",
+          scan("vms", "create 5 vms, put them all in a network", board).span == "5 vms")
+
+    # ⇒ THE KIND IS TAKEN AT OR BEFORE THE ANCHOR, NEVER AFTER. A noun precedes its modifiers,
+    #   so reaching rightward answers with the next clause's noun.
+    check("a bare name gets NO kind rather than the wrong one — the lab decides",
+          scan("golden", "clone golden into 3 new vms and launch all of them",
+               board).kind is None)
+    check("a two-word noun is matched before a one-word one",
+          scan("restore point", "make a restore point for each machine", board).kind
+          == "snapshot")
+    check("an anchor that is not in the request returns nothing",
+          scan("wombat", "ping every vm", board) is None)
+
+    # ⇒ EVERY OCCURRENCE, AND THE FIRST ONE DECLARES. `scan` alone saw only the first, so a
+    #   reference was invisible — the operator's ordering rule applied to spans.
+    from tests.bench.twopass.scan import scan_all
+    both = scan_all("web", "create a network called lab and a vm named web, "
+                           "then put web on lab", board)
+    check(f"a name mentioned twice is scanned twice (got {len(both)})", len(both) == 2)
+    check("the first occurrence carries the phrase that declares it",
+          both[0].span == "a vm named web" and both[0].kind == "vm")
+
+    # COLLISION IS THE FOLD SIGNAL, AND IT NEEDS NO KEY ATTRIBUTE.
+    r3 = "create a network called lab and a vm named web, then put web on lab"
+    check("two anchors on one phrase collide — provably the same object",
+          scan("lab", r3, board).collides(scan("network", r3, board)))
+    check("and two anchors on different phrases do not",
+          not scan("lab", r3, board).collides(scan("web", r3, board)))
+    # ⇒ THE TRAP: in "then put web on lab" BOTH references scan to the same clause, so they
+    #   collide while being different objects. Compare FIRST occurrences only.
+    check("references to different things share a clause and would falsely collide",
+          scan_all("web", r3, board)[1].collides(scan_all("lab", r3, board)[1]))
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "two-pass schema")
