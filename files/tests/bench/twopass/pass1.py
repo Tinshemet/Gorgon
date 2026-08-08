@@ -306,7 +306,7 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
                            if better_kind else kept.object_type)
             where = dict(kept.where)
             if better_kind:
-                where.update(conditions_from(first.modifiers, first.kind, board))
+                where.update(conditions_from(first.modifiers, first.kind, board, first.span))
             rows[clash] = S.declare_from(kept.name, object_type, where,
                                          kept.existence, board,
                                          references=list(kept.references) + [anchor],
@@ -315,7 +315,8 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
                                          comparator=kept.comparator or first.comparator,
                                          span=kept.span)
             continue
-        where = conditions_from(first.modifiers, first.kind, board) if first.kind else {}
+        where = (conditions_from(first.modifiers, first.kind, board, first.span)
+                 if first.kind else {})
         object_type = (f"{first.kind}{S.SET_SUFFIX}" if _is_group(first) else first.kind) \
             if first.kind else UNKNOWN_KIND
         existence = ask(S.EXISTENCE_Q.format(name=first.span, new=S.NEW,

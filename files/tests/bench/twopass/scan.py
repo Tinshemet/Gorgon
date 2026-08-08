@@ -350,8 +350,13 @@ def _stem(word: str) -> str:
 NAMING_CUES = {"called", "named", "titled", "known"}
 
 
+def _config_kinds():
+    from planner.ir import config as _config
+    return _config.KINDS or {}
+
+
 def conditions_from(modifiers: str, kind: Optional[str],
-                    board: Optional[Board] = None) -> Dict[str, object]:
+                    board: Optional[Board] = None, span: str = "") -> Dict[str, object]:
     """Read a phrase like *"labelled 'red'"* into `{label: red}` — from the manifest alone.
 
     Three rules, in order, and every one of them consults a DECLARATION:
@@ -391,13 +396,32 @@ def conditions_from(modifiers: str, kind: Optional[str],
 
     from planner.gates import claims as _claims
     key_attr = _claims.key_of(kind, board.kinds)
+    nouns_here = {}
+    for kind_name, spec_ in (_config_kinds().items() if True else []):
+        for noun in [kind_name] + list((spec_ or {}).get("nouns") or []):
+            nouns_here[str(noun).lower()] = kind_name
+            nouns_here[str(noun).lower() + "s"] = kind_name
+
     for i, word in enumerate(words):                      # 0 · a naming cue names the KEY
-        if word in NAMING_CUES and key_attr:
-            nxt = next((w for w in words[i + 1:]
-                        if w not in LINKING and w not in NAMING_CUES), None)
-            if nxt:
-                out[key_attr] = nxt
-                break
+        if word not in NAMING_CUES or not key_attr:
+            continue
+        # ⇒ ONLY IF THE CUE IS NAMING *THIS* THING. "every vm on a network CALLED core" names
+        #   the NETWORK, not the machine — and applying the span's key gave `name = core` on a
+        #   vm, which is a confidently wrong condition rather than a missing one. The nearest
+        #   noun before the cue says whose name it is.
+        # THE SPAN, NOT THE MODIFIERS. Noun-words are stripped out of the modifiers, so the
+        # very evidence this guard needs — "on a NETWORK called core" — is not in them.
+        look = [w.strip("'\".,") for w in (span or modifiers).lower().split()]
+        cue_at = next((j for j, w in enumerate(look) if w in NAMING_CUES), len(look))
+        nearest = next((nouns_here[w] for w in reversed(look[:cue_at]) if w in nouns_here),
+                       None)
+        if nearest is not None and nearest != kind:
+            continue
+        nxt = next((w for w in words[i + 1:]
+                    if w not in LINKING and w not in NAMING_CUES), None)
+        if nxt:
+            out[key_attr] = nxt
+            break
 
     for i, word in enumerate(words):
         if word in values:                                   # 1 · a value names its attribute
