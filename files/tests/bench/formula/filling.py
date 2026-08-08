@@ -25,6 +25,33 @@ has failed five times ([[gorgon-offering-is-not-using]]):
 
 The failure modes it can still have are exactly two, and both are attributable: a WRONG
 VALUE (gate 1 and gate 2 already catch those at zero false alarms) and a WRONG SLOT.
+
+# ⇒⇒ THE RESULT, AND IT IS A FAILURE: 0 OF 14 FINAL KEYS MATCHED
+
+Run over all fourteen rungs end to end, the model's fills reproduced the correct final key
+ZERO times. Not one. The isolated probes above were clean and the whole pipeline is not, so
+the gap is somewhere between them and it is mine, not the model's:
+
+    rung  1   correct S·F·C[eq]  -> model S·T
+    rung 11   correct S·? ▸ S·F·T -> model S           (nothing filled at all)
+    rung 12   correct S·F·M      -> model S
+    rung  9   correct S·C[min]·P[reach] -> BLOCKED, no move survived
+
+TWO CAUSES ARE VISIBLE AND NEITHER IS THE DESIGN:
+
+  1 **THE PER-TURN PROMPTS LOST THE BOARD.** `_offered()` is still written and is no longer
+    sent — the rewrite to one-question-per-turn dropped it, so each turn now sees only the
+    bare sentence and its enum. That is `built-and-never-called` AGAIN, in code written to
+    demonstrate the fix for a different instance of it.
+
+  2 **CREATION VERBS BIAS TO `must_become`.** "create a vm named alpha" wants
+    which_ones=name:alpha + how_many=(eq,1) and the model answers must_become. The
+    contrastive pair that rescued `network=dmz` is the same pair that mis-sorts a creation,
+    because "create" genuinely sounds like something becoming true.
+
+⇒ SO THE HONEST STATE IS: the FORMULA is measured and sound (31/31, 293/293, commutative,
+  order recovered). THE FILLING IS NOT WORKING at request scale and the numbers above are
+  what that looks like. Do not quote the isolated 10/10 as if it were a system result.
 """
 import argparse
 import json
