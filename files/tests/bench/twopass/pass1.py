@@ -283,10 +283,29 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
         if not seen:
             continue
         first = seen[0]
+        # ⇒ A KINDLESS SPAN THAT CONTAINS A PRONOUN IS A REFERENCE, NOT A THING.
+        #   "create a vm named beta and then launch it" scans `it` outward to `launch it` —
+        #   no noun, so no kind — and that became a row of its own instead of pointing at
+        #   beta. The fold tested the row's NAME, which is the whole span, so a bare pronoun
+        #   sitting inside it was never seen.
+        if first.kind is None and rows:
+            pronoun = next((w for w in str(first.span).lower().split()
+                            if S._is_bare_pronoun(w.strip(".,'\""), request)), None)
+            if pronoun:
+                at = len(rows) - 1          # the most recent declaration it could be about
+                kept = rows[at]
+                rows[at] = S.declare_from(kept.name, kept.object_type, kept.where,
+                                          kept.existence, board,
+                                          references=list(kept.references) + [first.span],
+                                          count=kept.count, comparator=kept.comparator,
+                                          span=kept.span, identity=kept.identity)
+                continue
+
         if first.kind is None and len(present) == 1:
             # a pronoun-headed set — "the ones that do not answer" — takes the only kind the
             # request talks about. With more than one kind present we do not guess.
             first = first._replace(kind=present[0])
+
         # ⇒ A KINDLESS THING IS STILL A THING. Dropping it lost every bare proper name —
         #   db, core, dmz, n1, n2, n3, golden — and rung 9, which contains no declared noun at
         #   all, produced nothing whatever. The operator's rule: a bare item and a full one are

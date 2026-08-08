@@ -99,6 +99,23 @@ wiring.** Three beats, and none of them is optional:
 **W7 · Prefer deleting an option to adding a repair.** Measured five times: only subtractive
 moves have ever worked here. If the fix is "and then we correct it afterwards", stop.
 
+**W7b · NEVER ASK THE MODEL TO DESCRIBE. ASK IT TO MOVE.** A question whose answer is an
+account of its own understanding degrades; a question whose answer is a choice from a closed
+set performs. Measured repeatedly on one day, same model, same sentences:
+
+| asked to DESCRIBE | asked to MOVE |
+|---|---|
+| "list the conditions" -> `[]` | "does this mean alive=false?" -> correct |
+| "what does 'it' refer to?" -> *"the request itself"* | "what has to be done?" -> resolved `it` to beta, 3/3 |
+| "is this create or use?" -> 62-85% | "what does the request DO to it?" -> killed the create-bias |
+| "list the things" -> chunks the sentence into parts | "point at an anchor" -> 14/14 |
+
+> *The operator, 2026-08-08: "it CAN do references, but seems to fail when actually
+> presented."* It resolved a pronoun perfectly while never being asked about the pronoun.
+
+⇒ THIS IS WHY ANCHOR-AND-SCAN WORKS. We stopped asking the model to describe a sentence and
+  started asking it to point at part of one. Everything else is read by code.
+
 **W8 · When a value can be computed, do not ask for it.** Anything derivable from the manifest
 or from another field is computed. Asking creates a second source of truth and a way to be
 wrong.
