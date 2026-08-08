@@ -51,6 +51,7 @@ class Declared(NamedTuple):
     where: Dict[str, object]             # {} for a bare named individual
     existence: str                       # NEW | EXISTING — asked, 85%, errors toward NEW
     settled: str                         # COMPUTED, never supplied
+    references: List[str] = ()           # LATER mentions of this same object, in order
 
     @property
     def kind(self) -> str:
@@ -210,13 +211,15 @@ def existence_schema() -> dict:
 
 
 def declare_from(name: str, object_type: str, where: Dict[str, object], existence: str,
-                 board: Optional[Board] = None) -> Declared:
+                 board: Optional[Board] = None,
+                 references: Optional[List[str]] = None) -> Declared:
     """Assemble one row. `settled` is derived here and nowhere else."""
     board = board or Board()
     kind = object_type[:-len(SET_SUFFIX)] if object_type.endswith(SET_SUFFIX) else object_type
     return Declared(name=name, object_type=object_type, where=dict(where or {}),
                     existence=existence if existence in (NEW, EXISTING) else EXISTING,
-                    settled=settled_of(kind, where or {}, board))
+                    settled=settled_of(kind, where or {}, board),
+                    references=list(references or []))
 
 
 def render(rows: List[Declared]) -> str:
@@ -226,6 +229,100 @@ def render(rows: List[Declared]) -> str:
     out = ["these things have already been identified and confirmed:"]
     for r in rows:
         where = ", ".join(f"{k} = {v}" for k, v in r.where.items()) or "no condition"
+        also = f"   (also referred to as: {', '.join(r.references)})" if r.references else ""
         out.append(f"  {r.name}  —  a {r.object_type}  —  {where}  —  "
-                   f"{r.existence}, known {r.settled}")
+                   f"{r.existence}, known {r.settled}{also}")
     return "\n".join(out)
+
+
+# A BARE PRONOUN REFERS; A RESTRICTED ONE DOES NOT. Closed set, so this is arithmetic.
+#
+# The operator, 2026-08-08: *"or not even by name, through context — 'create X then put it in
+# Y' is actually 2 X references, one is X as create and then 'it' is also a reference to X."*
+#
+# The model already shows this. Rung 2 came back as `vm` / `beta` / `it`, with `it` declared
+# as an object of its own.
+#
+# ⇒ **BUT ONLY A BARE PRONOUN FOLDS.** *"the ones that do not answer"* is NOT a reference to
+#   *"every vm"* — it is a different set, restricted. Folding on the word `ones` alone would
+#   silently merge a subset into its superset, which is rung 11's whole distinction destroyed.
+#   So the match must be the WHOLE name, with nothing else in it.
+PRONOUNS = frozenset({
+    "it", "its", "them", "they", "their", "theirs", "this", "that", "these", "those",
+    "one", "ones", "the one", "the ones", "both", "all", "all of them", "each other",
+    "each of them", "every one of them", "the rest",
+})
+
+
+def _is_bare_pronoun(name: str) -> bool:
+    return name.strip().strip(".,'\"").lower() in PRONOUNS
+
+
+# ── COREFERENCE, COMPUTED RATHER THAN ASKED ───────────────────────────────────────────
+def merge(rows: List[Declared], board: Optional[Board] = None) -> List[Declared]:
+    """Collapse rows that provably denote the SAME object.
+
+    The operator, 2026-08-08, on rung 3: *"when an object got referenced twice, it seems like
+    it didn't connect the dots."* Correct — `web` is mentioned in both clauses and came back
+    as two separate declarations, alongside a third from the chunking.
+
+    ⇒ **AND THE IDENTITY IS ALREADY IN THE ANSWERS.** Two rows of the same kind whose KEY
+      attribute holds the same value are the same object — `key` is declared in the manifest,
+      so this is arithmetic, not a judgement. W8: when a value can be computed, do not ask.
+
+    ⇒ **THE FIRST MENTION DECLARES; EVERY LATER ONE IS A REFERENCE.** The operator's design:
+      *"if an object with the same name pops up twice, we fold the later onto a reference. In
+      'create X, do Y with X', X is an object because of CREATE, and then X shows up again as
+      part of Y, which is an operator. So X is saved twice — once as the actual object, and
+      later as a reference."*
+
+      That ordering carries two things a symmetric merge throws away:
+
+        * **A LATER MENTION CAN NEVER RE-CREATE.** The declaration's `existence` is decided by
+          the mention that declared it. A second appearance inside an operation is a use, so
+          it is `existing` by definition and is not judged again.
+        * **THE REFERENCES ARE THE DEPENDENCY STRUCTURE.** That X is mentioned again in a later
+          clause says that clause depends on X's declaration — the join, stated rather than
+          inferred.
+
+    ⇒ AND IT MEANS WE STOP FIGHTING THE OVER-DECLARATION. The model extracts well (names 14/14);
+      it simply mentions things more than once. Let it, and fold behind it.
+
+    A row with no key value cannot be proven identical to anything and is left alone; a set is
+    never folded into an individual.
+    """
+    from planner.gates import claims as _claims
+
+    board = board or Board()
+    out: List[Declared] = []
+    seen: Dict[tuple, int] = {}
+    for row in rows:
+        # A BARE PRONOUN IS A REFERENCE TO THE MOST RECENT DECLARATION IT COULD BE ABOUT.
+        # Its own type answer is not trusted — the model was asked to type a pronoun, which
+        # is not a question with an answer.
+        if _is_bare_pronoun(row.name) and out:
+            back = next((i for i in range(len(out) - 1, -1, -1)
+                         if out[i].kind == row.kind or not row.where), None)
+            if back is not None:
+                first = out[back]
+                out[back] = declare_from(first.name, first.object_type, first.where,
+                                         first.existence, board,
+                                         references=list(first.references) + [row.name])
+                continue
+
+        key_attr = _claims.key_of(row.kind, board.kinds)
+        value = (row.where or {}).get(key_attr) if key_attr else None
+        token = (row.kind, row.is_set, value) if value not in (None, "") else None
+        if token is not None and token in seen:
+            at = seen[token]
+            first = out[at]
+            where = dict(first.where)
+            where.update(row.where)          # a later mention may still ADD a condition
+            out[at] = declare_from(first.name, first.object_type, where,
+                                   first.existence, board,   # the DECLARATION's answer stands
+                                   references=list(first.references) + [row.name])
+            continue
+        if token is not None:
+            seen[token] = len(out)
+        out.append(row)
+    return out

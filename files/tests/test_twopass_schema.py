@@ -179,6 +179,82 @@ def test_the_questions_format_and_carry_the_gloss():
           "group" in S.NAMES_Q.lower())
 
 
+def test_repeated_mentions_of_one_object_are_merged_by_computation():
+    print("\n[coreference] two rows of one kind whose KEY holds the same value ARE the same "
+          "thing — provable from the manifest, so it is computed and never asked")
+    board = Board()
+
+    # THE ACTUAL ROWS the model produced for rung 3, transcribed from the run. `web` is
+    # mentioned in both clauses and came back as separate declarations, alongside a third
+    # from the chunking. This is the operator's observation, pinned against real output.
+    observed = [("a network", "network_set", {"members": "web"}),
+                ("called lab", "network", {"net_name": "lab"}),
+                ("a vm", "vm_set", {"name": "web", "network": "lab"}),
+                ("named web", "vm", {"name": "web", "network": "lab"}),
+                ("web", "vm", {"name": "web", "network": "lab"}),
+                ("lab", "network", {"net_name": "lab"})]
+    rows = [S.declare_from(n, t, w, S.EXISTING, board) for n, t, w in observed]
+    merged = S.merge(rows, board)
+    names = [r.name for r in merged]
+
+    check(f"six rows collapse to four (got {len(merged)})", len(merged) == 4)
+    check("the two `lab` mentions become one object", names.count("lab") == 0
+          and any("lab" in r.references for r in merged))
+    check("the two `web` mentions become one object", names.count("web") == 0
+          and any("web" in r.references for r in merged))
+    # THE FIRST MENTION DECLARES and later ones become its references — the operator's rule.
+    # It carries the ordering, which a symmetric merge throws away.
+    check("the FIRST mention is the declaration, not the shortest name",
+          "called lab" in names and "named web" in names)
+    check("and the later mentions survive AS references rather than being dropped",
+          sorted(r for row in merged for r in row.references) == ["lab", "web"])
+
+    # Conservative on purpose: a row with no key value cannot be PROVEN identical to anything.
+    check("a row with no key value is left alone rather than guessed at",
+          "a network" in names)
+    check("and a set is never merged into an individual", "a vm" in names)
+
+    # merging keeps every condition from both rows
+    both = S.merge([S.declare_from("web", "vm", {"name": "web"}, S.EXISTING, board),
+                    S.declare_from("web", "vm", {"name": "web", "network": "lab"},
+                                   S.EXISTING, board)], board)
+    check("the merged row carries conditions from both mentions",
+          len(both) == 1 and both[0].where == {"name": "web", "network": "lab"})
+    check("merging nothing returns nothing", S.merge([], board) == [])
+
+
+def test_a_bare_pronoun_folds_onto_what_it_refers_to():
+    print("\n[anaphora] 'create X then put it in Y' mentions X twice — the second time as "
+          "'it'. Pronouns are a closed set, so the fold is computed, not asked")
+    board = Board()
+
+    # RUNG 2, EXACTLY as the model produced it: `it` came back as an object of its own.
+    rows = [S.declare_from("vm", "vm_set", {}, S.NEW, board),
+            S.declare_from("beta", "vm_set", {}, S.NEW, board),
+            S.declare_from("it", "vm_set", {}, S.EXISTING, board)]
+    merged = S.merge(rows, board)
+    check(f"'it' stops being an object of its own (got {[r.name for r in merged]})",
+          "it" not in [r.name for r in merged])
+    check("and becomes a reference on the thing it refers to",
+          any("it" in r.references for r in merged))
+    check("which is the MOST RECENT compatible declaration, not the first",
+          [r.name for r in merged if r.references] == ["beta"])
+
+    # ⇒ THE GUARD THAT MATTERS MORE THAN THE FOLD. A pronoun with a RESTRICTION is a
+    #   different object. Folding "the ones that do not answer" into "every vm" would merge a
+    #   subset into its superset and destroy the one distinction rung 11 exists to test.
+    pair = S.merge([S.declare_from("every vm", "vm_set", {}, S.EXISTING, board),
+                    S.declare_from("the ones that do not answer", "vm_set",
+                                   {"alive": False}, S.EXISTING, board)], board)
+    check(f"a RESTRICTED description never folds into its superset (got {len(pair)})",
+          len(pair) == 2)
+    check("and the subset keeps its run-time marking",
+          [r.residual for r in pair] == [False, True])
+    check("a pronoun with nothing before it is left alone rather than dropped",
+          [r.name for r in S.merge([S.declare_from("it", "vm", {}, S.NEW, board)],
+                                   board)] == ["it"])
+
+
 def test_no_question_quotes_a_request_it_will_be_asked_about():
     print("\n[leakage] a prompt that illustrates itself with a request's own words gets the "
           "EXAMPLE back as the answer")
