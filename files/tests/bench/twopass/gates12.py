@@ -177,6 +177,12 @@ def conflicts(rows: List[S.Declared], world, board: Optional[Board] = None) -> L
     for row in rows:
         key_attr = _claims.key_of(row.kind, board.kinds)
         value = (row.where or {}).get(key_attr) if key_attr else None
+        # ⇒ AND A CANDIDATE IDENTITY IS RESOLVED HERE, WHICH IS THE WHOLE POINT OF CARRYING IT.
+        #   `box` is a declared noun for `vm` AND a plausible machine name; nothing in the
+        #   request settles which, and only the lab can. Present means it was a REFERENCE;
+        #   absent means the word was the common noun after all.
+        if not value and row.identity:
+            value = row.identity
         if not value:
             continue
         try:

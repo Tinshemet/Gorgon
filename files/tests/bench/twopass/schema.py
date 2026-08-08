@@ -55,6 +55,7 @@ class Declared(NamedTuple):
     count: object = None                 # 5 · "all" · None — READ from the enumerator
     comparator: Optional[str] = None     # eq · min · max — READ from in front of it
     span: str = ""                       # the noun phrase the request actually wrote
+    identity: Optional[str] = None       # a CANDIDATE name — only the lab confirms it
 
     @property
     def kind(self) -> str:
@@ -236,7 +237,7 @@ def declare_from(name: str, object_type: str, where: Dict[str, object], existenc
                  board: Optional[Board] = None,
                  references: Optional[List[str]] = None,
                  count: object = None, comparator: Optional[str] = None,
-                 span: str = "") -> Declared:
+                 span: str = "", identity: Optional[str] = None) -> Declared:
     """Assemble one row. `settled` is derived here and nowhere else.
 
     ⇒ `count` AND `comparator` ARE READ, NOT ASKED. They live in the request's enumerator
@@ -250,7 +251,7 @@ def declare_from(name: str, object_type: str, where: Dict[str, object], existenc
                     existence=existence if existence in (NEW, EXISTING) else EXISTING,
                     settled=settled_of(kind, where or {}, board),
                     references=list(references or []),
-                    count=count, comparator=comparator, span=span)
+                    count=count, comparator=comparator, span=span, identity=identity)
 
 
 def render(rows: List[Declared]) -> str:

@@ -528,6 +528,37 @@ def test_gate_1_bounces_a_residual_back_to_the_model():
               "ping every vm and stop the ones that do not answer", board)))
 
 
+def test_a_numeral_before_a_noun_counts_and_after_one_names():
+    print("\n[identity] '3 vms' is three machines; 'network 1' is one network called that")
+    from tests.bench.twopass.scan import scan, scan_all
+    board = Board()
+
+    named = scan("network", "get me box and put it in network 1", board)
+    check("a numeral AFTER the noun joins the name",
+          named.identity == "network 1" and named.count is None)
+    counted = scan("vms", "create 5 vms, put them all in a network", board)
+    check("and a numeral BEFORE it is still a count",
+          counted.count == 5 and counted.identity is None)
+
+    # ⇒ WITHOUT THIS, "network 1" AND "network 2" PRODUCED THE SAME SPAN and the fold merged
+    #   two distinct networks into one — a confidently wrong program, not a visible error.
+    both = scan_all("network", "put web on network 1 and db on network 2", board)
+    check("two numbered networks are two spans", len(both) == 2)
+    check("with different identities",
+          {b.identity for b in both} == {"network 1", "network 2"})
+    check("and they do NOT collide, so the fold cannot merge them",
+          not both[0].collides(both[1]))
+
+    # ⇒ A BARE NOUN-WORD MAY BE A NAME, and only the lab can say. `box` is a declared noun for
+    #   `vm` and a plausible machine name; carrying the candidate is what lets gate 2 ask.
+    bare = scan("box", "get me box and put it in network 1", board)
+    check("a bare noun-word is carried as a CANDIDATE identity", bare.identity == "box")
+    check("but a counted phrase is not — it is plainly generic",
+          scan("vm", "ping every vm", board).identity is None)
+    check("nor is one whose name is given outright",
+          scan("vm", "create a vm named alpha", board).identity is None)
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "two-pass schema")

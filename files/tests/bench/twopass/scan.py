@@ -72,6 +72,7 @@ class Scanned(NamedTuple):
     comparator: Optional[str]       # eq · min · max · None
     kind: Optional[str]             # from the manifest's nouns, or None if the anchor is bare
     modifiers: str                  # everything that is not the enumerator or the noun
+    identity: Optional[str] = None  # a CANDIDATE name — only the lab can confirm it
 
     def collides(self, other: "Scanned") -> bool:
         """Do these two spans cover the same ground?
@@ -262,6 +263,29 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
     #   no kind here, and that is correct: only the lab can say what `golden` is.
     head = [t[0] for t in toks[left:last] if t[0] not in BOUNDARIES]
     kind = _kind_of(head, nouns)
+
+    # ⇒ A NUMERAL BEFORE A NOUN COUNTS; AFTER ONE IT NAMES. "3 vms" is three machines and
+    #   "network 1" is one network called `network 1`. Without this the `1` was dropped, so
+    #   `network 1` and `network 2` produced the SAME span and the fold merged two distinct
+    #   networks into one — a confidently wrong program, not a visible error.
+    identity = None
+    if kind:
+        noun_at = next((i for i in range(left, right)
+                        if toks[i][0] in nouns and nouns[toks[i][0]] == kind), None)
+        if noun_at is not None:
+            tail = noun_at + 1
+            while (tail < right and tail < len(toks)
+                   and (toks[tail][0].isdigit() or
+                        (len(toks[tail][0]) <= 3 and any(c.isdigit() for c in toks[tail][0])))):
+                tail += 1
+            if tail > noun_at + 1:
+                identity = request[toks[noun_at][1]:toks[tail - 1][2]]
+            elif count is None and comparator is None:
+                # ⇒ A BARE NOUN-WORD MAY BE A NAME. `box` is a declared noun for `vm` AND a
+                #   plausible machine name, and nothing in the request settles which — only the
+                #   lab does. Carry it as a CANDIDATE so gate 2 can ask; deciding here would be
+                #   guessing, and throwing it away is what stopped gate 2 ever being asked.
+                identity = toks[noun_at][0]
     # ⇒ ONLY STRIP A COMPARATOR WORD WHERE A COMPARATOR WAS ACTUALLY FOUND. Stripping every
     #   word that appears in any comparator phrase deleted `not` — because "not more than" is
     #   one — and *"the ones that do not answer"* became *"the ones that do answer"*. Negation
@@ -276,7 +300,7 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
     hi = toks[right - 1][2] if right > left else at + len(anchor)
     return Scanned(anchor=anchor, span=request[lo:hi], start=lo, end=hi,
                    count=count, comparator=comparator, kind=kind,
-                   modifiers=" ".join(modifiers))
+                   modifiers=" ".join(modifiers), identity=identity)
 
 
 def _comparator_before(toks, left):
