@@ -247,8 +247,19 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
         clash = next((i for i, r in enumerate(rows)
                       if r.span and first.collides(_span_of(r, request, board))), None)
         if clash is not None:
+            # ⇒ A COLLISION TAKES THE BETTER INFORMATION, NOT THE EARLIER. Both anchors cover
+            #   the same phrase, but the kind is read at-or-before the anchor — so anchored on
+            #   `2`, "2 vms labelled 'blue'" has NO noun in its head and comes back kindless,
+            #   while anchored on `blue` the same span reads `vm`. Keeping whichever arrived
+            #   first threw the kind away.
             kept = rows[clash]
-            rows[clash] = S.declare_from(kept.name, kept.object_type, kept.where,
+            better_kind = (first.kind and kept.object_type == UNKNOWN_KIND)
+            object_type = ((f"{first.kind}{S.SET_SUFFIX}" if _is_group(first) else first.kind)
+                           if better_kind else kept.object_type)
+            where = dict(kept.where)
+            if better_kind:
+                where.update(conditions_from(first.modifiers, first.kind, board))
+            rows[clash] = S.declare_from(kept.name, object_type, where,
                                          kept.existence, board,
                                          references=list(kept.references) + [anchor],
                                          count=kept.count if kept.count is not None

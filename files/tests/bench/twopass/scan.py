@@ -57,7 +57,10 @@ ENUMERATORS: Dict[str, object] = {
 }
 
 # a clause ends here, and a span may never cross one
-BOUNDARIES = {",", ";", ".", "and", "then", "but", "—"}
+# `of` ENDS A PHRASE AND OPENS ANOTHER. "a snapshot OF every running vm" is two things, and
+# without this the snapshot's span swallowed the machines, which then folded away as a
+# collision — rung 12 declared one object where the request names two.
+BOUNDARIES = {",", ";", ".", "and", "then", "but", "—", "of"}
 
 
 class Scanned(NamedTuple):
