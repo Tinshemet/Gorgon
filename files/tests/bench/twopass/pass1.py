@@ -199,7 +199,7 @@ def run_pass1(request: str, board: Optional[Board] = None, model=None, temp=0.0,
         # REPAIR A CHUNKED NAME BEFORE ANY QUESTION IS ASKED ABOUT IT. The restriction is
         # still in the request; recovering it is cheaper and more reliable than re-asking.
         name = S.expand(name, request) if expand_names else name
-        object_type = sort or ask(S.TYPE_Q.format(name=name, suffix=S.SET_SUFFIX),
+        object_type = sort or ask(S.TYPE_Q.format(name=name, suffix=S.SET_SUFFIX, nouns=S.nouns_offered(board)),
                                   S.type_schema(board))
         if not object_type:
             continue

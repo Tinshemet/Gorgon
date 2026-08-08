@@ -155,7 +155,8 @@ def test_the_questions_format_and_carry_the_gloss():
     print("\n[questions] they are declared here and used in item 3 — so they are exercised "
           "here, or a bad placeholder waits until then to surface")
     try:
-        typed = S.TYPE_Q.format(name="fleet", suffix=S.SET_SUFFIX)
+        typed = S.TYPE_Q.format(name="fleet", suffix=S.SET_SUFFIX,
+                                nouns=S.nouns_offered())
         wheres = S.WHERE_Q.format(name="fleet")
         exists = S.EXISTENCE_Q.format(name="fleet", new=S.NEW, existing=S.EXISTING)
         formatted = True
@@ -166,6 +167,10 @@ def test_the_questions_format_and_carry_the_gloss():
     check("every question formats with its placeholders", formatted)
     check("the type question names the thing and the set suffix",
           "fleet" in typed and S.SET_SUFFIX in typed)
+    # WITHOUT THE MANIFEST'S SYNONYMS THE QUESTION IS UNANSWERABLE: the enum says `vm` and the
+    # request says "machines". Measured — every wording of rung 14 failed until these appeared.
+    check("and it carries the manifest's own synonyms",
+          "machine" in typed and "restore point" in typed)
     check("the where question offers the empty-list escape", "empty list" in wheres)
 
     # THE GLOSS IS THE MEASURED PART: it lifted a weak wording from 54% to 77% and collapsed

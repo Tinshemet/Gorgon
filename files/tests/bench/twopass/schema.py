@@ -125,9 +125,28 @@ NAMES_Q = (
     "Do not say what happens to them."
 )
 
+# ⇒⇒ THE MANIFEST'S OWN SYNONYMS, AND WITHOUT THEM THE QUESTION IS UNANSWERABLE.
+#
+# The enum says `vm`. A request says *"machines"*. Nothing told the model those are the same
+# thing — and the manifest has always known:  vm.nouns = machine, box, node, server, host...
+#
+# Measured 2026-08-08, rung 14. WITHOUT the nouns, every wording failed:
+#     'two machines' -> snapshot · 'a group of machines' -> network · 'machines' -> snapshot
+# WITH them, all correct — and *"a restore point"* maps to `snapshot`, a word that appears
+# nowhere but the synonym list, which is what proves it is the nouns and not luck.
+def nouns_offered(board: Optional[Board] = None) -> str:
+    board = board or Board()
+    lines = []
+    for kind in board.kinds:                      # declaration order, pinned like the rest
+        also = (board.kinds[kind] or {}).get("nouns") or []
+        lines.append(f"  {kind} — also called: {', '.join(also)}" if also else f"  {kind}")
+    return "\n".join(lines)
+
+
 TYPE_Q = (
-    "What sort of thing is {name!r} in this sentence? Choose ONE option. Choose a plain kind "
-    "if it is a single individual thing, and the '{suffix}' form if it is a GROUP of them."
+    "What sort of thing is {name!r} in this request? Choose ONE option.\n\n{nouns}\n\n"
+    "Choose the plain kind if it is a single individual thing, and the '{suffix}' form if it "
+    "is a GROUP of them."
 )
 
 WHERE_Q = (

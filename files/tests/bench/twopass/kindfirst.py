@@ -105,7 +105,7 @@ def run(request: str, board: Optional[Board] = None, model=None, temp=0.0,
             trace.append((kind, n))
         names = ask(NAME_Q.format(n=n, plural=plural), _names_schema(int(n))) or []
         for name in names:
-            object_type = ask(S.TYPE_Q.format(name=name, suffix=S.SET_SUFFIX),
+            object_type = ask(S.TYPE_Q.format(name=name, suffix=S.SET_SUFFIX, nouns=S.nouns_offered(board)),
                               S.type_schema(board))
             if not object_type:
                 continue
@@ -131,6 +131,10 @@ def main() -> None:
     print("KIND-FIRST · the question is asked per DECLARED KIND, so a verb cannot be an object")
     print("=" * 104)
 
+    # ⇒ A DIAGNOSTIC LABEL, NOT A RULE, AND IT IS RUNG-DERIVED ON PURPOSE. These are words
+    #   the rungs actually produced as declared objects. Nothing branches on this list and no
+    #   mechanism consults it — it exists so a verb-as-object is VISIBLE in the output. If it
+    #   ever starts filtering, it has become per-rung tuning and must be deleted.
     banned = {"ping", "named", "sentence", "launch", "clone", "pinging", "currently"}
     for n, want in sorted(EXPECTED.items()):
         if args.only and n != args.only:
