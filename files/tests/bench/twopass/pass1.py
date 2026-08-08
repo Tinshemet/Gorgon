@@ -112,13 +112,40 @@ from . import schema as S
 class Expect(NamedTuple):
     request: str
     identities: List[str]                 # names the request states — must appear SOMEWHERE
-    conditions: List[Dict[str, object]]   # real conditions BEYOND identity
+    conditions: List[Dict[str, object]]   # DERIVED from the known-correct reading
     sets: int                             # how many declared things are GROUPS
     residual: bool                        # is any row settled at run time
     rows: int                             # how many things there really are — REPORTED only
 
 
-# ── THE ANSWER KEY, CORRECTED. The first version was wrong twice, both my errors: ──────
+def _conditions_from_goals(rung: int) -> List[Dict[str, object]]:
+    """THE EXPECTED CONDITIONS, DERIVED FROM THE PROJECT'S OWN CORRECT READINGS.
+
+    ⇒ **THE HAND-WRITTEN KEY WAS WRONG AND I ONLY SAW IT BY SCORING AGAINST IT.** I had ruled
+      that a name is carried by the name field and is never a condition — so `{name: alpha}`
+      counted as an INVENTED condition. But `tests.test_ghost_writer.GOALS`, the readings this
+      project已 calls correct, says otherwise:
+
+          rung 1   select {kind: vm, name: alpha}      <- the name IS in the select
+          rung 9   select {kind: vm}                   <- and here it is NOT
+
+      My key contradicted them in some places and agreed in others, which is exactly the state
+      a hand-written key drifts into. Deriving it removes the judgement: whatever the correct
+      reading filters on is what pass 1 must find.
+    """
+    from tests.bench.formula.slots import reduce as _reduce
+    from tests.test_ghost_writer import GOALS
+    out: List[Dict[str, object]] = []
+    for goal in GOALS.get(rung, []):
+        where = _reduce(goal).filled.get("filter") or {}
+        for attr, value in where.items():
+            row = {attr: value}
+            if row not in out:
+                out.append(row)
+    return out
+
+
+# ── THE ANSWER KEY. Conditions are DERIVED (above); the rest is hand-written. ──────────
 #
 #   1  IT DOUBLE-COUNTED IDENTITY. If a row is NAMED `alpha` and typed `vm`, demanding
 #      `where {name: alpha}` as well asks the model to state the same fact twice. A name is
@@ -158,6 +185,11 @@ EXPECTED: Dict[int, Expect] = {
                "and make sure they all ping each other", [], [], 1, False, 2),
     14: Expect("make sure there are exactly two machines left", [], [], 1, False, 1),
 }
+
+# ⇒ THE CONDITIONS ARE NOW DERIVED, NOT DECLARED. Whatever the known-correct reading filters
+#   on is what pass 1 must find — no hand-written judgement in between.
+for _rung, _entry in list(EXPECTED.items()):
+    EXPECTED[_rung] = _entry._replace(conditions=_conditions_from_goals(_rung))
 
 
 def ask_conditions(name: str, object_type: str, ask, board: Board) -> Dict[str, object]:
