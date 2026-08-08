@@ -326,6 +326,75 @@ def test_no_question_quotes_a_request_it_will_be_asked_about():
     check(f"no question quotes any rung, in either wording (found {leaks})", not leaks)
 
 
+# ── 7 · gates 1 and 2, on declarations ────────────────────────────────────────────────
+def test_gate_1_asks_about_what_the_request_never_said():
+    print("\n[gate 1] every NAME and every VALUE must trace to the request; the attribute "
+          "came from a closed enum and could not have been invented")
+    from tests.bench.twopass import gates12 as G
+    board = Board()
+    r = "ping every vm and stop the ones that do not answer"
+
+    clean = [S.declare_from("every vm", "vm_set", {}, S.EXISTING, board),
+             S.declare_from("the ones that do not answer", "vm_set", {"alive": False},
+                            S.EXISTING, board)]
+    check(f"a correct reading is NOT accused (got {G.gate1(clean, r)})", not G.gate1(clean, r))
+    check("a boolean value is not treated as a quotation",
+          not any(f.kind == "invented-value" for f in G.gate1(clean, r)))
+
+    made_up = [S.declare_from("quarantine", "vm_set", {"label": "urgent"}, S.NEW, board)]
+    found = G.gate1(made_up, r)
+    check(f"an invented NAME is caught (got {found})",
+          any(f.kind == "invented" for f in found))
+    check("and an invented VALUE is caught separately",
+          any(f.kind == "invented-value" for f in found))
+    check("and it ASKS rather than repairing — nothing is changed",
+          all("?" in f.says or "did you" in f.says for f in found))
+
+
+def test_gate_2_asks_what_the_world_cannot_hold():
+    print("\n[gate 2] legality against the manifest — no lab required")
+    from tests.bench.twopass import gates12 as G
+    board = Board()
+
+    check("a legal declaration passes",
+          not G.gate2([S.declare_from("stopped ones", "vm_set", {"status": "stopped"},
+                                      S.EXISTING, board)], board))
+    check("an illegal VALUE is caught against the manifest's closed set",
+          any(f.kind == "illegal-value" for f in G.gate2(
+              [S.declare_from("x", "vm_set", {"status": "powered on"}, S.EXISTING, board)],
+              board)))
+    check("an attribute the kind does not have is caught",
+          any(f.kind == "no-such-attribute" for f in G.gate2(
+              [S.declare_from("x", "network", {"alive": True}, S.EXISTING, board)], board)))
+
+    # ⇒ THE ONE THAT MATTERS: a set decided by asking the machines cannot be CREATED.
+    residual_new = [S.declare_from("the ones that do not answer", "vm_set", {"alive": False},
+                                   S.NEW, board)]
+    check("a probe-defined set declared NEW is refused — you can only go and look",
+          any(f.kind == "cannot-be-made" for f in G.gate2(residual_new, board)))
+    check("and the same set declared EXISTING is fine",
+          not G.gate2([S.declare_from("the ones that do not answer", "vm_set",
+                                      {"alive": False}, S.EXISTING, board)], board))
+
+
+def test_neither_gate_repairs_anything():
+    print("\n[gates] they ask; they never decide for the operator")
+    from tests.bench.twopass import gates12 as G
+    board = Board()
+    rows = [S.declare_from("quarantine", "vm_set", {"status": "powered on"}, S.NEW, board)]
+    before = [(r.name, dict(r.where), r.existence) for r in rows]
+    out = G.report(rows, "stop the machines", board)
+    after = [(r.name, dict(r.where), r.existence) for r in rows]
+    check("the declarations are untouched by being judged", before == after)
+    check("findings arrive as questions", len(out["asks"]) == len(out["findings"]))
+    check("and an illegal table is marked illegal", out["legal"] is False)
+    check("a clean table is marked legal",
+          G.report([S.declare_from("every vm", "vm_set", {}, S.EXISTING, board)],
+                   "ping every vm", board)["legal"] is True)
+    check("the world arm is skipped when there is no world",
+          G.conflicts(rows, None, board) == [])
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "two-pass schema")
