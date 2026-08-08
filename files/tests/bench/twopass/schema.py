@@ -441,11 +441,24 @@ def expand(name: str, request: str) -> str:
 # "currently stopped", "the 'prod' label", "every running vm". It matches text.
 ALL_OF_THEM, ONLY_SOME = "all of them", "only some of them"
 
-SCOPE_Q = (
-    "Does {name!r} mean ALL of them, or only SOME of them?\n\n"
-    "Answer 'only some of them' just when the request states a condition that picks certain "
-    "ones out. A thing referred to by its own name is not a condition."
-)
+# ⇒⇒ THIS IS THE WORDING THAT WAS MEASURED. DO NOT "IMPROVE" IT.
+#
+# It scored 4/4. I then added two sentences of guidance that began *"Answer 'only some of
+# them' just when..."* — and it dropped to 2/4, answering "only some" for everything including
+# the verb `ping`. NAMING ONE OF THE OPTIONS INSIDE THE EXPLANATION PRIMES IT. That is the
+# third measured question degraded today by being improved after it was measured.
+# AND IT SAYS "machines", NOT "vms" — the manifest's own noun. Substituting the KIND name
+# dropped it from 4/4 to 2/3: 'the ones that do not answer' answered "all of them" when asked
+# about `vms` and "only some" when asked about `machines`. Same finding as the type question.
+SCOPE_Q = "Does {name!r} mean ALL of the {plural}, or only SOME of them?"
+
+
+def plural_for(kind: str, board: Optional[Board] = None) -> str:
+    """The operator's word for this kind, pluralised — never the system's word."""
+    board = board or Board()
+    nouns = (board.kinds.get(kind) or {}).get("nouns") or []
+    word = nouns[0] if nouns else kind
+    return word if word.endswith("s") else f"{word}s"
 
 ATTRIBUTE_Q = (
     "Which ONE thing about a {kind} decides whether it is part of {name!r}? Choose from the "

@@ -167,10 +167,11 @@ def ask_conditions(name: str, object_type: str, ask, board: Board) -> Dict[str, 
     was wanted and fill one in where none was — 19 invented conditions across 14 requests, about
     17 of them on things that needed none.
     """
-    scope = ask(S.SCOPE_Q.format(name=name), S.scope_schema())
+    kind = object_type[:-len(S.SET_SUFFIX)] if object_type.endswith(S.SET_SUFFIX) else object_type
+    scope = ask(S.SCOPE_Q.format(name=name, plural=S.plural_for(kind, board)),
+                S.scope_schema())
     if scope != S.ONLY_SOME:
         return {}                                   # it declined, and declining is an answer
-    kind = object_type[:-len(S.SET_SUFFIX)] if object_type.endswith(S.SET_SUFFIX) else object_type
     attr = ask(S.ATTRIBUTE_Q.format(kind=kind, name=name),
                S.attribute_schema(object_type, board))
     if not attr:
