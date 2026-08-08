@@ -481,6 +481,45 @@ def test_a_possessive_is_not_a_plural():
     check("and short words are never plurals", not _plural("its") and not _plural("was"))
 
 
+def test_gate_1_bounces_a_residual_back_to_the_model():
+    print("\n[bounce] an object may stand alone; a descriptor may not. What no declaration "
+          "claims is a clause nobody read — and it goes back to the AI, not to the operator")
+    from tests.bench.twopass import gates12 as G
+    board = Board()
+
+    def rows(*specs):
+        return [S.declare_from(sp, t_, w, S.EXISTING, board, span=sp) for sp, t_, w in specs]
+
+    r6 = "create 3 vms labelled 'red' and 2 vms labelled 'blue'"
+    complete = rows(("3 vms labelled 'red'", "vm_set", {"label": "red"}),
+                    ("2 vms labelled 'blue'", "vm_set", {"label": "blue"}))
+    dropped = rows(("3 vms labelled 'red'", "vm_set", {"label": "red"}))
+    check("a complete reading is silent", not G.bounces(G.gate1(complete, r6, board)))
+    check("a DROPPED GROUP bounces", bool(G.bounces(G.gate1(dropped, r6, board))))
+    check("and the residue names what was missed",
+          "blue" in G.bounces(G.gate1(dropped, r6, board))[0].about)
+
+    r4 = "create 5 vms, put them all in a network, give them all the 'fleet' label"
+    check("a dropped LABEL bounces too",
+          "fleet" in G.bounces(G.gate1(rows(("5 vms", "vm_set", {}),
+                                            ("a network", "network", {})), r4, board))[0].about)
+    check("and the same reading with it declared is silent",
+          not G.bounces(G.gate1(rows(("5 vms", "vm_set", {}), ("a network", "network", {}),
+                                     ("the 'fleet' label", "vm_set", {"label": "fleet"})),
+                                r4, board)))
+
+    # ⇒ IT BOUNCES TO THE MODEL, IT DOES NOT ASK THE OPERATOR. The words are in the request —
+    #   the operator already said them — so failing to read them is the model's miss.
+    residue = G.bounces(G.gate1(dropped, r6, board))[0]
+    check("the residue is addressed to the reader, not the requester",
+          "read the request again" in residue.says)
+    check("rung 11's correct reading is silent",
+          not G.bounces(G.gate1(
+              rows(("every vm", "vm_set", {}),
+                   ("the ones that do not answer", "vm_set", {"alive": "False"})),
+              "ping every vm and stop the ones that do not answer", board)))
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "two-pass schema")

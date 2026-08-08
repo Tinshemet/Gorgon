@@ -57,11 +57,21 @@ def _traces(value, request: str) -> bool:
 
 
 # ── GATE 1 · did you say this? ────────────────────────────────────────────────────────
-def gate1(rows: List[S.Declared], request: str) -> List[Finding]:
-    """Every name and every VALUE must trace to the request.
+def gate1(rows: List[S.Declared], request: str,
+          board: Optional[Board] = None) -> List[Finding]:
+    """Every name and every VALUE must trace to the request — AND NOTHING MAY BE LEFT OVER.
 
     THE ATTRIBUTE IS NOT CHECKED — it comes from a closed enum the manifest supplied, so it
     could not have been invented. Only what the model chose freely can be.
+
+    ⇒ **AND THE OTHER HALF IS THE ONE NO GATE HAS EVER HAD.** The operator's rule: an object
+      may stand alone, but a descriptor, an amount or an adjective may not. So after the
+      declarations are made, every content word the request used must be COVERED by some
+      declared span. What is left is a clause nobody read.
+
+      Rung 13's dropped clique has been unowned by any gate precisely because no check that
+      reasons over what is PRESENT can see what is ABSENT. Spans invert that: absence becomes
+      a comparison against the request's own text.
     """
     out: List[Finding] = []
     for row in rows:
@@ -73,7 +83,52 @@ def gate1(rows: List[S.Declared], request: str) -> List[Finding]:
                 out.append(Finding(1, "invented-value", row.name,
                                    f"the request never says {attr} is {value!r} — "
                                    f"did you mean that?"))
+
+    # ⇒ NOTHING LEFT OVER. Anything the request said that no declaration claimed.
+    #
+    #   A DECLARED WORD IS CLAIMED WHEREVER IT APPEARS. Counting only the DECLARING span made
+    #   every later mention look orphaned — rung 3 accused `web` and `lab`, which it had
+    #   declared and then simply referred to again. A reference is not a lost clause.
+    #   A REFERENCE CLAIMS ITS OWN WORD, NOT A FRESH SPAN AROUND IT. Re-scanning a span's
+    #   words at their OTHER occurrences swallowed whole different phrases — `labelled` appears
+    #   twice in rung 6, and re-scanning the second one claimed `'blue'`, hiding the very drop
+    #   this check exists to find. So later mentions mark only themselves.
+    import re as _re
+    from .scan import scan, uncovered
+    low = request.lower()
+    spans = []
+    for row in rows:
+        located = scan(row.span or row.name, request, board)
+        if located:
+            spans.append((located.start, located.end))
+        for word in {row.name, *(row.references or ())}:
+            for m in _re.finditer(_re.escape(str(word).lower()), low):
+                spans.append((m.start(), m.end()))
+        for word in str(row.span or row.name).lower().split():
+            for m in _re.finditer(rf"\b{_re.escape(word.strip(chr(34) + chr(39) + '.,'))}\b", low):
+                spans.append((m.start(), m.end()))
+
+    orphans = uncovered(request, spans, board)
+    if orphans:
+        # ⇒ THIS ONE BOUNCES TO THE AI, IT DOES NOT ASK THE OPERATOR. The operator, 2026-08-08:
+        #   *"if there is a residual, gate 1 bounces it back to the AI."* Right — the words are
+        #   in the request, so the operator already said them. Failing to read them is the
+        #   model's miss, and the model gets another go with the residue named. An operator
+        #   question is for what the request genuinely does not settle; this is not that.
+        out.append(Finding(1, "left-over", ", ".join(orphans),
+                           f"you did not account for {', '.join(repr(o) for o in orphans)} — "
+                           f"read the request again and declare what it belongs to"))
     return out
+
+
+def bounces(findings: List[Finding]) -> List[Finding]:
+    """What goes BACK TO THE MODEL rather than to the operator."""
+    return [f for f in findings if f.kind == "left-over"]
+
+
+def _locate(row: S.Declared, request: str, board: Optional[Board] = None):
+    from .scan import scan
+    return scan(row.span or row.name, request, board)
 
 
 # ── GATE 2 · can the world hold it? ───────────────────────────────────────────────────
@@ -143,7 +198,7 @@ def report(rows: List[S.Declared], request: str, board: Optional[Board] = None,
            world=None) -> Dict[str, object]:
     """Both gates over one symbol table. NOTHING IS REPAIRED — findings are questions."""
     board = board or Board()
-    found = gate1(rows, request) + gate2(rows, board) + conflicts(rows, world, board)
+    found = gate1(rows, request, board) + gate2(rows, board) + conflicts(rows, world, board)
     return {
         "findings": found,
         "asks": [f.says for f in found],
