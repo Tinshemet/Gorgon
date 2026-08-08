@@ -271,6 +271,27 @@ def test_a_bare_pronoun_folds_onto_what_it_refers_to():
                                    board)] == ["it"])
 
 
+def test_a_chunked_name_is_repaired_from_the_request():
+    print("\n[expansion] the restriction is still in the request, so recover it rather than "
+          "re-asking — measured: 'ones' types WRONG and 'the ones that do not answer' types RIGHT")
+    r11 = "ping every vm and stop the ones that do not answer"
+    check("a chunked restricted description is grown back",
+          S.expand("ones", r11) == "the ones that do not answer")
+    check("a determiner is picked up on the left",
+          S.expand("vm", r11) == "every vm")
+    check("and it STOPS at the clause boundary rather than swallowing the sentence",
+          "ping" not in S.expand("vm", r11))
+    check("a digit quantifier counts as a determiner",
+          S.expand("vms", "create 5 vms, put them all in a network") == "5 vms")
+    check("a word quantifier does too",
+          S.expand("machines", "make sure there are exactly two machines left") == "two machines")
+    check("nothing is added where no restrictor follows",
+          S.expand("web", "create a vm named web") == "web")
+    check("a name that is not in the request is returned untouched",
+          S.expand("invented", r11) == "invented")
+    check("and empty input does not raise", S.expand("", r11) == "" and S.expand("x", "") == "x")
+
+
 def test_no_question_quotes_a_request_it_will_be_asked_about():
     print("\n[leakage] a prompt that illustrates itself with a request's own words gets the "
           "EXAMPLE back as the answer")

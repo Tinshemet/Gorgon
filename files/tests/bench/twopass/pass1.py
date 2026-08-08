@@ -162,7 +162,8 @@ EXPECTED: Dict[int, Expect] = {
 
 def run_pass1(request: str, board: Optional[Board] = None, model=None, temp=0.0,
               timeout=180, trace: Optional[List] = None,
-              paired: bool = False, fold: bool = True) -> List[S.Declared]:
+              paired: bool = False, fold: bool = True,
+              expand_names: bool = True) -> List[S.Declared]:
     """The questions, one per call, exactly as `schema.py` declares them.
 
     `paired=True` asks NAME and TYPE together — the fix for the measured cascade, where the
@@ -195,6 +196,9 @@ def run_pass1(request: str, board: Optional[Board] = None, model=None, temp=0.0,
 
     rows: List[S.Declared] = []
     for name, sort in pairs:
+        # REPAIR A CHUNKED NAME BEFORE ANY QUESTION IS ASKED ABOUT IT. The restriction is
+        # still in the request; recovering it is cheaper and more reliable than re-asking.
+        name = S.expand(name, request) if expand_names else name
         object_type = sort or ask(S.TYPE_Q.format(name=name, suffix=S.SET_SUFFIX),
                                   S.type_schema(board))
         if not object_type:
@@ -253,6 +257,8 @@ def main() -> None:
     ap.add_argument("--model", default=None)
     ap.add_argument("--paired", action="store_true",
                     help="ask NAME and TYPE together — the cascade fix (REJECTED, kept for A/B)")
+    ap.add_argument("--no-expand", action="store_true",
+                    help="do NOT repair chunked names from the request")
     ap.add_argument("--no-fold", action="store_true",
                     help="do NOT fold repeated mentions — the pre-fold baseline")
     args = ap.parse_args()
@@ -262,6 +268,7 @@ def main() -> None:
     print("=" * 104)
     print(f"ITEM 3 · PASS ONE AGAINST THE MODEL — "
           f"{'PAIRED name+type' if args.paired else 'separate questions'}"
+          f"{'' if args.no_expand else ' + EXPAND'}"
           f"{'' if args.no_fold else ' + FOLD'}, "
           f"graded on structure, never on names")
     print("=" * 104)
@@ -275,7 +282,8 @@ def main() -> None:
         for i in range(args.runs):
             trace: List = []
             rows = run_pass1(want.request, board=board, model=args.model, trace=trace,
-                             paired=args.paired, fold=not args.no_fold)
+                             paired=args.paired, fold=not args.no_fold,
+                             expand_names=not args.no_expand)
             g = grade(rows, want)
             for row in rows:
                 mark = "  ⇐ RESIDUAL" if row.residual else ""

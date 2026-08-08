@@ -351,3 +351,56 @@ def merge(rows: List[Declared], board: Optional[Board] = None,
             seen[token] = len(out)
         out.append(row)
     return out
+
+
+# ── A TRUNCATED NAME IS REPAIRED FROM THE REQUEST, NOT RE-ASKED ────────────────────────
+DETERMINERS = ("the", "a", "an", "every", "all", "each", "both", "any", "some", "no",
+               "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")
+BOUNDARIES = (",", ";", " and ", " then ", " but ", "—", " - ")
+
+
+def expand(name: str, request: str) -> str:
+    """Grow a chunked name back to the phrase it came from, using the REQUEST as the source.
+
+    The naming question chunks — *"the ones that do not answer"* comes back as bare `ones`, and
+    every question after it is then asked about a fragment. The restriction is not lost, it is
+    still sitting in the request, so it is RECOVERED rather than re-requested.
+
+    ⇒ AND IT IS MEASURED, not hoped for. From the same model, earlier the same day:
+
+          'ones that do not answer'       -> network_set   WRONG
+          'the ones that do not answer'   -> vm_set        right, 2 of 2
+
+      So the expansion fixes the TYPE as well as giving the conditions question something to
+      read. Both failures downstream of rung 11 have one upstream cause.
+
+    Conservative by construction: it extends left over at most ONE determiner, and extends
+    right ONLY when a restrictor immediately follows, stopping at the first clause boundary.
+    A name that is not found verbatim is returned untouched.
+    """
+    if not name or not request:
+        return name
+    low, target = request.lower(), name.strip().lower()
+    at = low.find(target)
+    if at < 0:
+        return name
+    end = at + len(target)
+
+    # left: one determiner, if the word before it is one
+    before = low[:at].rstrip()
+    if before:
+        word = before.split()[-1] if before.split() else ""
+        if word in DETERMINERS or word.isdigit():      # "5 vms" as well as "five vms"
+            at = len(before) - len(word)
+
+    # right: only through a restrictor, and only to the end of this clause
+    rest = low[end:]
+    following = rest.strip().split()[0] if rest.strip() else ""
+    if following in RESTRICTORS:
+        stop = len(rest)
+        for mark in BOUNDARIES:
+            found = rest.find(mark)
+            if 0 <= found < stop:
+                stop = found
+        end += stop
+    return request[at:end].strip()
