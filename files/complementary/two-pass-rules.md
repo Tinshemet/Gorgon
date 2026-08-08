@@ -80,11 +80,21 @@ it. A hand-written list is a copy that will drift.
 > `alive` — the exact attribute the rung exists to test. `choose_subject` matched the synonym
 > list without the kind's own name, so "vm" matched nothing.*
 
-**W6 · Never half-apply a change.** If the wiring cannot be finished in this turn, revert the
-half that exists. A suppressed question with nothing consuming the replacement is worse than
-either end.
+**W6 · Never half-apply a change. Test before applying, wire it when you can, test again after
+wiring.** Three beats, and none of them is optional:
+
+1. **Test before applying.** Prove the change does what it claims, on the smallest case that
+   shows it, *before* it goes into the tree. A change that has never been run is a guess with
+   good formatting.
+2. **Wire it when you can.** Anything that can be connected to its real caller in this turn is
+   connected in this turn. If it genuinely cannot be, revert the half that exists — a
+   suppressed question with nothing consuming the replacement is worse than either end.
+3. **Test again after wiring.** Exercise it *through the real caller*. Passing in isolation
+   says nothing about being reached, and being reached is the thing that keeps failing here.
+
 > *Gate 3's `supply()` derived a join and suppressed the question, and the consumer was never
-> built.*
+> built — beat 2 skipped. `SETTLES` was declared, tabled, and never emitted — beat 3 would have
+> caught it in seconds. `_offered()` survived a rewrite that stopped calling it — beat 3 again.*
 
 **W7 · Prefer deleting an option to adding a repair.** Measured five times: only subtractive
 moves have ever worked here. If the fix is "and then we correct it afterwards", stop.
@@ -154,3 +164,14 @@ know what Medusa looks like, it is the wrong gate.
 **H2 · A correction is one sentence and then the work continues.** No re-litigating.
 
 **H3 · Distinguish "measured" from "believed".** If it has not been run, it is not a result.
+
+**H4 · Always show the current state of the code, simply and informatively.** When reporting on
+code, paste what it *is* — not a description of what it does. A summary is a claim about the
+code; the code is the evidence, and the operator should never have to take the claim on trust.
+
+Simply and informatively means: the part that matters, as it stands right now, short enough to
+read. Not a whole file, not a diff fragment with no context, and never a paraphrase.
+
+> *Every entry in §2 was invisible in my own reporting and visible the instant the code was
+> looked at. `SETTLES` "was added". `_offered()` "hands the model its legal moves". Both
+> sentences were true of the source and false of what ran.*
