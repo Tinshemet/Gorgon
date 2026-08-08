@@ -37,6 +37,36 @@ correct. So grading is on the three things that are STRUCTURAL and do decide the
         answer to lead. If first-member bias now dominates, everything comes back EXISTING
         and rungs 1-4 declare nothing as new. That is a decision of mine backfiring, not a
         model failure, and it is the thing to look at first.
+
+# ⇒⇒ THE FIRST FINDING, AND IT IS AN ARCHITECTURAL HOLE WE PUT THERE
+
+Rung 11 fails structurally, not narrowly:
+
+    vm                        vm_set        —           existing
+    ones that do not answer   network_set   net_name=   new      ⇐ should be vm_set, alive=false
+
+The type answer is wrong, so `where_schema` then offered NETWORK attributes — `alive` was
+never on the menu and the residual could not be found EVEN IN PRINCIPLE. One wrong answer
+poisons every question after it.
+
+**AND THE CAUSE IS ONE WORD.** Measured stable, 2 of 2 each:
+
+    'ones that do not answer'        -> network_set   WRONG   ⇐ the model's own name
+    'the ones that do not answer'    -> vm_set        right
+    'the ones that do not respond'   -> vm_set        right
+    'unresponsive machines'          -> vm_set        right
+
+⇒ **THE NAME IS PASS ONE'S ONLY FREE-TEXT FIELD, AND IT IS THE INPUT TO ALL THE OTHERS.** We
+  closed conditions, types and existence to enums and left free text in the ONE place that
+  feeds all three. Question 1 emits a paraphrase; questions 2-4 consume it; and a type error
+  is unrecoverable because it changes which attributes exist to be chosen from.
+
+⇒ TWO CANDIDATE FIXES, NEITHER MEASURED:
+    * ASK NAME AND TYPE TOGETHER. Precedent: `which_ones` and `must_become` failed apart and
+      worked as a contrastive pair. A model cannot produce a name whose type it then misreads
+      if it commits to both at once.
+    * MAKE THE NAME A SPAN of the request rather than a paraphrase. Stronger, but span
+      quotation was tried once before and withdrawn ([[gorgon-refusal-enum-withdrawn]]).
 """
 import argparse
 from collections import Counter
