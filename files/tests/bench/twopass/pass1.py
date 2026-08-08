@@ -233,8 +233,10 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
             # a pronoun-headed set — "the ones that do not answer" — takes the only kind the
             # request talks about. With more than one kind present we do not guess.
             first = first._replace(kind=present[0])
-        if first.kind is None:
-            continue                     # a bare name with no kind — the lab must say
+        # ⇒ A KINDLESS THING IS STILL A THING. Dropping it lost every bare proper name —
+        #   db, core, dmz, n1, n2, n3, golden — and rung 9, which contains no declared noun at
+        #   all, produced nothing whatever. The operator's rule: a bare item and a full one are
+        #   the same until the WORLD says otherwise, so declare it and let gate 2 ask.
         # SPAN COLLISION IS THE FOLD, and only between DECLARATIONS.
         clash = next((i for i, r in enumerate(rows)
                       if r.span and first.collides(_span_of(r, request, board))), None)
@@ -248,8 +250,9 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
                                          comparator=kept.comparator or first.comparator,
                                          span=kept.span)
             continue
-        where = conditions_from(first.modifiers, first.kind, board)
-        object_type = f"{first.kind}{S.SET_SUFFIX}" if _is_group(first) else first.kind
+        where = conditions_from(first.modifiers, first.kind, board) if first.kind else {}
+        object_type = (f"{first.kind}{S.SET_SUFFIX}" if _is_group(first) else first.kind) \
+            if first.kind else UNKNOWN_KIND
         existence = ask(S.EXISTENCE_Q.format(name=first.span, new=S.NEW,
                                              existing=S.EXISTING),
                         S.existence_schema()) or S.EXISTING
@@ -259,6 +262,8 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
                                    span=first.span))
     return rows
 
+
+UNKNOWN_KIND = "?"          # declared, kind not yet known — gate 2 asks the lab
 
 PLURAL_PRONOUNS = {"ones", "them", "they", "those", "these", "all", "both", "rest", "others"}
 

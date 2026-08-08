@@ -310,10 +310,17 @@ def conditions_from(modifiers: str, kind: Optional[str],
             if word == cue or stem == cue or (
                     len(cue) >= 4 and len(stem) >= 3
                     and (cue.startswith(stem) or stem.startswith(cue))):
-                nxt = next((w for w in words[i + 1:] if w not in LINKING and w not in attrs),
-                           None)
-                if nxt and nxt not in values:
-                    out[real] = nxt
+                # LOOK BOTH WAYS. English puts the value either side of the attribute word —
+                # *"labelled 'red'"* but *"the 'prod' label"* — and taking only the next word
+                # lost every request phrased the second way.
+                after = next((w for w in words[i + 1:]
+                              if w not in LINKING and w not in attrs), None)
+                before = next((w for w in reversed(words[:i])
+                               if w not in LINKING and w not in attrs), None)
+                pick = after if (after and after not in values) else (
+                    before if (before and before not in values) else None)
+                if pick:
+                    out[real] = pick
                 break
 
     for attr, meta in (spec.get("observed") or {}).items():   # 3 · observed, through its doc
