@@ -126,6 +126,65 @@ def anchors_in(request: str, board: Optional[Board] = None) -> List[str]:
     return found
 
 
+def uncovered(request: str, spans, board: Optional[Board] = None) -> List[str]:
+    """Content words no span has claimed — CANDIDATE OBJECTS, and lost clauses, together.
+
+    ⇒ **THE ANCHOR FINDER AND THE LEFTOVER CHECK ARE ONE MECHANISM.** A word the request uses
+      that no declaration covers is either a thing nobody named or a clause nobody read, and
+      until it is claimed we cannot tell which. `n1`, `golden`, `db`, `dmz` are found this way
+      — none is a declared noun, so nothing else would ever reach them.
+
+    Grammar, enumerators, comparators and the manifest's OPERATION words are exempt: a verb
+    belongs to pass 2, and `and` belongs to nobody.
+    """
+    board = board or Board()
+    nouns = _index(board)
+    low = request.lower()
+    covered = bytearray(len(low))
+    for start, end in spans:
+        for i in range(max(0, start), min(end, len(low))):
+            covered[i] = 1
+    out: List[str] = []
+    for m in re.finditer(r"[\w']+", low):
+        word = m.group(0)
+        if covered[m.start()] or word in out:
+            continue
+        if word in GRAMMAR or word in ENUMERATORS or word in nouns:
+            continue
+        if any(word in phrase.split() for phrase in COMPARATORS):
+            continue
+        if word in _operation_words(board):
+            continue
+        out.append(word)
+    return out
+
+
+GRAMMAR = {"a", "an", "the", "of", "on", "in", "to", "for", "and", "then", "but", "with",
+           "that", "which", "is", "are", "be", "it", "its", "them", "they", "their", "there",
+           "should", "must", "can", "each", "other", "into", "from", "at", "by", "so", "do",
+           "does", "not", "was", "were", "this", "those", "these", "up", "out", "all", "own",
+           "same", "different", "already", "currently", "still", "also", "sure", "left"}
+
+
+def _operation_words(board: Board) -> set:
+    """Verbs the manifest names — they belong to pass 2, never to a declaration."""
+    from planner.ir import config as _config
+    out = set()
+    for spec in (_config.KINDS or {}).values():
+        if not isinstance(spec, dict):
+            continue
+        for group in ("creators", "setters", "acts", "observed"):
+            for name in (spec.get(group) or {}):
+                out.update(re.findall(r"[a-z]+", str(name).lower()))
+        for word in ("delete", "list", "create"):
+            if spec.get(word):
+                out.update(re.findall(r"[a-z]+", str(spec[word]).lower()))
+    out |= {"make", "put", "give", "take", "launch", "start", "stop", "ping", "clone", "check",
+            "ensure", "confirm", "get", "run", "carry", "carries", "goes", "go", "answer",
+            "answers", "respond", "responds", "reach", "connect", "wire", "spin", "boot"}
+    return out - {"network", "snapshot", "template", "profile", "file", "vm"}
+
+
 def kinds_named(request: str, board: Optional[Board] = None) -> List[str]:
     """Which kinds this request mentions at all — used to give a pronoun-headed set its kind."""
     board = board or Board()

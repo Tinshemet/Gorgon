@@ -217,8 +217,14 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
     from .scan import anchors_in, kinds_named
     # THE MANIFEST'S NOUNS ARE ANCHORS AND NEED NO ASKING. The model's answers are ADDED to
     # them, for the things the manifest cannot list — a pronoun-headed set, a bare name.
+    from .scan import uncovered, scan
     said = ask(S.NAMES_Q, S.names_schema()) or []
     anchors = anchors_in(request, board) + [a for a in said if a.lower() in request.lower()]
+    # ⇒ AND ANYTHING STILL UNCLAIMED IS A CANDIDATE OBJECT. `n1`, `golden`, `db` are not
+    #   declared nouns, so nothing above reaches them, and rung 9 — which contains no declared
+    #   noun at all — produced an EMPTY reading until this existed.
+    claimed = [(g.start, g.end) for g in (scan(a, request, board) for a in anchors) if g]
+    anchors += uncovered(request, claimed, board)
     present = kinds_named(request, board)
     if trace is not None:
         trace.append(("anchors", list(anchors)))
