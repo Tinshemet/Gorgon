@@ -39,6 +39,42 @@ the model is actually good at giving.
     U4  THE ERROR DIRECTION STOPS BEING ONE-SIDED. Every miss in the sweep was toward make;
         with intent derived rather than chosen, misses should scatter. If they are STILL all
         toward make, the bias is not in the question and I have misdiagnosed it twice.
+
+# ⇒⇒ RESULTS: 9/13 SINGLE-ACTION, ~11/13 MULTI-ACTION. NEITHER BEATS GLOSSING. CLOSED.
+
+    U1  CONFIRMED, and it is the only thing that ever fixed it. `web` under "put web on the
+        lab network" failed in 6 of 6 synonym pairs and in every glossed cell; asking what the
+        request DOES to it returns `add_label` / `add_vm_to_network`, which derives to `use`.
+    U2  FAILED. `golden` returns `clone_vm`, never "used as the thing copied from". The source
+        role was offered and not taken.
+    U3  FAILED. 9/13 single-action, ~11/13 multi-action against glossing's 11/13.
+    U4  CONFIRMED. Misses split 2 toward make and 2 toward use. **Deriving the intent instead
+        of asking for it killed the one-sided create-bias completely** — that half of the
+        theory held even though the score did not.
+
+## the two failure modes it introduced, both mine and not the model's
+
+  * **ONE ACTION WHEN THE REQUEST DOES SEVERAL.** "create a vm named beta AND THEN LAUNCH IT"
+    does two things to `beta`; the schema forced a choice, it took the last, and the creating
+    action — the one that decides existence — was discarded. THE MULTI-ACTION REPAIR FIXES
+    THIS: `beta` -> [create_vm, launch_vm] -> make, and `the 3 new vms` likewise.
+  * **ACTIONS THAT BELONG TO A DIFFERENT OBJECT.** "take a snapshot of every running vm"
+    returns `create_snapshot` FOR THE VMS — true of the sentence, false of the object. The
+    multi-action repair does NOT touch this, and neither does anything else tried today. It is
+    the same object-versus-sentence limit wearing a new costume.
+
+## and what the repair cost
+
+The unbounded array TIMED OUT at 300s — a 19-option enum with an unbounded list is expensive
+to decode. Bounded to 3 it returned noisy lists: `add_label` three times over, `create_vm`
+asserted for machines that are cloned rather than created.
+
+⇒ **SETTLED: the glossed two-option question at 11/13 is the design.** Slower, equal-scoring
+  and noisier is not a trade worth taking.
+
+⇒ PARKED, NOT CHASED: the miss sets are COMPLEMENTARY. Glossing misses `web` and `golden`;
+  multi-action misses `every running vm` and `golden`. A design that asked both and reconciled
+  would leave only `golden` — 12/13. Untested, and it doubles the calls per object.
 """
 import argparse
 from collections import Counter
@@ -84,6 +120,21 @@ def derive(action: str, made: set) -> str:
     if action in (SOURCE, MENTIONED):
         return REFER
     return MAKE if action in made else REFER
+
+
+def derive_all(actions: List[str], made: set) -> str:
+    """MULTI-ACTION: a thing is MADE if ANY action applied to it brings it into being.
+
+    The single-action run lost `beta` ("create a vm named beta AND THEN LAUNCH IT") and
+    `the 3 new vms` ("clone golden into 3 new vms AND LAUNCH ALL OF THEM") because a request
+    can do several things to one object and the schema forced a choice — it took the last,
+    and the creating action, the one that decides existence, was discarded.
+
+    ⇒ RISK, NAMED IN ADVANCE: letting it pick several invites the over-selection measured
+      twice today. If it returns everything, everything derives to `make` and the cure is
+      worse than the disease.
+    """
+    return MAKE if any(a in made for a in actions) else REFER
 
 
 def main() -> None:
