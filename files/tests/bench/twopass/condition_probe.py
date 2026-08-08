@@ -47,6 +47,42 @@ condition, and the operation just names it. So two framings, same requests, same
     AND ONE STATED LIMIT: the operator enum below is the manifest's creators + setters +
     delete + probe. The manifest ALSO declares 21 `acts` for a vm which no rung uses. Enum
     size is therefore UNTESTED at its real width, and that is a known gap, not an oversight.
+
+# ⇒⇒ RESULTS, n=3, every cell byte-identical across runs
+
+    P1  CONFIRMED   framing A 6 EXACT of 12, framing B 3 of 12.
+    P2  CONFIRMED   RUNG 11 EXACT 3 OF 3 — probe_alive on `fleet`, stop_vm on `unresponsive`.
+                    The bet pays. The set the model has never once produced on its own was
+                    declared for it, and pointing at it is all it had to do.
+    P3  CONFIRMED   rung 12, 6 of 6 across both framings.
+    P4  **WRONG**   I predicted the unconstrained `value` field would be where a name got
+                    invented. `add_vm_to_network web lab` was correct 3 of 3. The cross
+                    reference was never the problem and I had the risk in the wrong place.
+    P5  CONFIRMED   rung 8 is the worst, and its 2 missing steps are stable under EVERY
+                    ordering below — so they are a separate defect, not this one.
+
+# ⇒⇒ AND THE FINDING P4 WAS HIDING: ENUM ORDER CHANGES THE ANSWER
+
+Every spurious step in the whole probe was `add_label`. Four orderings of the SAME closed set,
+n=3, on rungs 3 / 8 / 11:
+
+    ordering        add_label index   spurious steps   exact
+    alpha                    0              6           3/9
+    stop_first               1              6           3/9
+    reversed                16              0           6/9
+    label_last              16              0           6/9      <- isolation cell
+
+`stop_first` shares its first element with `reversed` and behaves like `alpha`, so this is NOT
+first-member bias. `label_last` moves that ONE entry and leaves everything else alphabetical,
+reproducing `reversed` exactly — so the cause is isolated to `add_label`'s POSITION.
+
+⇒ **REORDERING ONE ENUM ENTRY DOUBLED EXACT MATCHES AND REMOVED EVERY SPURIOUS STEP**, with no
+  change to the prompt, the schema, or the model.
+
+⇒ **AND THAT IS A HAZARD, NOT A WIN.** Order is semantically meaningless in a closed set, so it
+  is a HIDDEN PARAMETER: a manifest edit that adds a kind silently reorders this list and moves
+  behaviour with it. Whatever is built next must pin the order deliberately rather than inherit
+  whatever `sorted()` returns.
 """
 import argparse
 import json
@@ -118,6 +154,26 @@ def operators(kinds=None) -> List[str]:
     return sorted(set(out))
 
 
+def ordered(order: str = "alpha", kinds=None) -> List[str]:
+    """The same operators in a different ORDER — the diagnostic for first-member bias.
+
+    Every spurious step the probe produced was `add_label`, which is first alphabetically. If
+    the spurious step follows position 1 when the list is reversed, the cause is POSITIONAL and
+    no amount of prompt wording will touch it.
+    """
+    ops = operators(kinds)
+    if order == "reversed":
+        return list(reversed(ops))
+    if order == "stop_first":
+        return ["stop_vm"] + [o for o in ops if o != "stop_vm"]
+    if order == "label_last":
+        # THE ISOLATION CELL. `reversed` moves every operator, so it cannot tell us whether
+        # `add_label`'s position is the cause or merely correlated. This moves that one entry
+        # to the end and leaves the rest alphabetical.
+        return [o for o in ops if o != "add_label"] + ["add_label"]
+    return ops
+
+
 def _table_text(entry: dict) -> str:
     lines = ["these things have already been identified and confirmed:"]
     for name, otype, definition, settled in entry["declared"]:
@@ -172,12 +228,13 @@ _PROMPT_B = ("Say what has to be DONE, as a list of steps. Each step names one o
              "of them. Use only the operations and names offered. Do not invent a name.")
 
 
-def run_one(n: int, framing: str, model=None, temp=0.0, timeout=300) -> List[tuple]:
+def run_one(n: int, framing: str, model=None, temp=0.0, timeout=300,
+            order: str = "alpha") -> List[tuple]:
     from engines.channel import constrained
 
     entry = TABLES[n]
     names = [d[0] for d in entry["declared"]]
-    ops = operators()
+    ops = ordered(order)
     schema = _schema_a(names, ops) if framing == "A" else _schema_b(names, ops)
     prompt = _PROMPT_A if framing == "A" else _PROMPT_B
     payload = (f"{_table_text(entry)}\n\n"
