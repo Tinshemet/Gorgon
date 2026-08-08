@@ -43,6 +43,41 @@ in the symbol table and appear nowhere in the request.
     Q3  I expect the truth to be BOTH, and the position result is why: a latent naming intent
         that only surfaces when a plausible-enough operator is positionally cheap to reach.
         If Q1 shows `set_name` AND `label_last` still suppresses it, that is the answer.
+
+# ⇒⇒ THE ANSWER: A. REAL INTENT, NO OPERATOR TO CARRY IT
+
+    Q1 CONFIRMED, and decisively. Offer `set_name` and the model uses it — `set_name web`,
+    3 of 3 on rung 3 — and rung 8's spurious `add_label db` DISAPPEARS entirely. So that
+    `add_label` was standing in for a naming intent the whole time. It is not filler. It is
+    not giving up. It is trying to say something the vocabulary cannot express.
+
+    AND THE DETAIL THAT SETTLES IT: `set_name` sat at INDEX 16 of 18 and was still chosen.
+    The model reaches past a whole menu to find the semantically right operator when one
+    exists. **Position does not decide whether it substitutes — it only decides WHICH wrong
+    thing it grabs when the right one is missing.**
+
+# ⇒ SO THE FIX IS NOT `set_name`, AND THIS IS THE USEFUL PART
+
+What is it trying to name? `web`, from *"a vm named web"*. But PASS ONE ALREADY CAPTURED THAT:
+the declaration reads `web — a vm — the machine named web`. The model is re-stating in pass 2
+something pass 1 has already settled.
+
+⇒ **THE DEFECT IS DUPLICATION ACROSS THE TWO PASSES, NOT A MISSING OPERATOR.** Adding
+  `set_name` would satisfy the urge and encode the same fact twice, which is how a symbol table
+  and a program drift apart. The fix belongs one level up: pass 2 must be told that identity is
+  already settled, or gate 3 must recognise an operation that merely restates a declaration.
+
+# ⇒⇒ AND A CORRECTION I OWE THE RECORD
+
+I reported the ordering result as *"n=3, every cell byte-identical across runs"*. **That was
+overstated.** The same input later produced BOTH outcomes on rung 8 under `alpha` — clean in
+one invocation, spurious in another — while six other repeats, across separate processes, were
+identical. So this stack is mostly stable and not reliably so, and my n=3 was weaker evidence
+than I claimed.
+
+⇒ The ordering effect is REAL — `label_last` suppressed the substitute in every cell it was
+  run in — but it is NOT the clean deterministic table the earlier docstring implies. Treat
+  those exact counts as indicative, not settled. Rule V3 exists for this and I under-applied it.
 """
 import argparse
 from collections import Counter
