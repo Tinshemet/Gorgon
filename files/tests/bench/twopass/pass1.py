@@ -207,7 +207,7 @@ def run_pass1(request: str, board: Optional[Board] = None, model=None, temp=0.0,
         rows.append(S.declare_from(name, object_type, where, existence, board))
     # FOLD REPEATED MENTIONS. The model mentions things more than once — by name and by
     # pronoun — and that is fine. The first mention declares; the rest become references.
-    return S.merge(rows, board) if fold else rows
+    return S.merge(rows, board, request) if fold else rows
 
 
 def grade(rows: List[S.Declared], want: Expect) -> Dict[str, object]:
@@ -218,12 +218,20 @@ def grade(rows: List[S.Declared], want: Expect) -> Dict[str, object]:
     invented = sum(1 for g in got_conditions
                    if not any(all(g.get(k) == v for k, v in w.items())
                               for w in want.conditions))
-    # IDENTITY IS CHECKED AS A NAME, not as a condition. `alpha` must appear as the name of
-    # some row; demanding `where {name: alpha}` too would be asking for the same fact twice.
-    names = " ".join(r.name.lower() for r in rows)
+    # IDENTITY IS CHECKED AS A NAME **OR AS A REFERENCE**, not as a condition. `alpha` must
+    # appear as the name of some row; demanding `where {name: alpha}` too would ask for the
+    # same fact twice.
+    #
+    # ⇒ REFERENCES COUNT, AND LEAVING THEM OUT WAS A GRADER BUG. The operator: *"the older run
+    #   is now invalid, because yes it can name objects correctly but it doesn't account for
+    #   the issue that surfaced, which is references."* A mention that folds CORRECTLY was
+    #   scoring as a LOST name — the whole 14/14 -> 12/14 drop was this, not a regression.
+    names = " ".join([r.name.lower() for r in rows]
+                     + [ref.lower() for r in rows for ref in r.references])
     named = sum(1 for i in want.identities if i.lower() in names)
     return {
         "rows": len(rows),
+        "folded": sum(len(r.references) for r in rows),
         "extra_rows": len(rows) - want.rows,
         "identities": f"{named}/{len(want.identities)}" if want.identities else "—",
         "identities_ok": named == len(want.identities),
@@ -276,8 +284,9 @@ def main() -> None:
                       f"{row.existence}{mark}")
             print(f"    run {i + 1}  names {g['identities']}  conditions {g['conditions']}  "
                   f"invented {g['invented']}  sets {g['sets']}  residual {g['residual']}  "
-                  f"rows {g['rows']} (want {want.rows})")
+                  f"rows {g['rows']} (want {want.rows})  folded {g['folded']}")
             tally["identities_ok"] += g["identities_ok"]
+            tally["folded"] += g["folded"]
             tally["extra_rows"] += max(0, g["extra_rows"])
             tally["conditions_ok"] += g["conditions_ok"]
             tally["sets_ok"] += g["sets_ok"]
@@ -291,6 +300,7 @@ def main() -> None:
     print(f"  cells                    {tally['cells']}")
     print(f"  named things found       {tally['identities_ok']}/{c}")
     print(f"  SURPLUS rows declared    {tally['extra_rows']}    (over-declaration)")
+    print(f"  mentions FOLDED as refs  {tally['folded']}    (repeat mentions recognised)")
     print(f"  every condition found    {tally['conditions_ok']}/{c}")
     print(f"  groups declared as sets  {tally['sets_ok']}/{c}")
     print(f"  residual correct         {tally['residual_ok']}/{c}   "

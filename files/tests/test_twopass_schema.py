@@ -250,6 +250,22 @@ def test_a_bare_pronoun_folds_onto_what_it_refers_to():
           len(pair) == 2)
     check("and the subset keeps its run-time marking",
           [r.residual for r in pair] == [False, True])
+    # ⇒ THE REGRESSION THIS FILE EXISTS TO PREVENT. The naming question chunks "the ones that
+    #   do not answer" down to the bare token `ones`, and `ones` used to be listed as a
+    #   pronoun — so the fold merged it into `vm` and rung 11's subset vanished. Two correct
+    #   mechanisms compounding into one wrong answer.
+    r11 = "ping every vm and stop the ones that do not answer"
+    chunked = [S.declare_from("ping", "vm_set", {}, S.NEW, board),
+               S.declare_from("vm", "vm_set", {}, S.EXISTING, board),
+               S.declare_from("ones", "vm_set", {}, S.EXISTING, board)]
+    kept = S.merge(chunked, board, r11)
+    check(f"a chunked restricted description is NOT folded away (got {len(kept)})",
+          len(kept) == 3 and "ones" in [r.name for r in kept])
+    check("because the REQUEST is consulted for a restrictor the chunker stripped",
+          not S._is_bare_pronoun("ones", r11))
+    check("and the same word with nothing after it would still fold",
+          S._is_bare_pronoun("them", "stop them"))
+
     check("a pronoun with nothing before it is left alone rather than dropped",
           [r.name for r in S.merge([S.declare_from("it", "vm", {}, S.NEW, board)],
                                    board)] == ["it"])

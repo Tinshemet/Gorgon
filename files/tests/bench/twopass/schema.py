@@ -247,19 +247,44 @@ def render(rows: List[Declared]) -> str:
 #   *"every vm"* — it is a different set, restricted. Folding on the word `ones` alone would
 #   silently merge a subset into its superset, which is rung 11's whole distinction destroyed.
 #   So the match must be the WHOLE name, with nothing else in it.
+# ⇒⇒ MEASURED REGRESSION, 2026-08-08, AND IT WAS TWO OF THESE MECHANISMS COMPOUNDING.
+#
+# `one`, `ones`, `that`, `those` and `these` USED TO BE IN THIS SET. They are the HEADS OF
+# RESTRICTED DESCRIPTIONS, not pro-forms: *"the ones that do not answer"*. The naming question
+# chunks that phrase down to the bare token `ones` — and the fold then merged `ones` into
+# `vm`, correctly by its own rule, destroying rung 11's subset.
+#
+#     pre-fold   ping · vm · ones          <- three rows, `ones` badly representing the subset
+#     folded     ping · vm                 <- the subset GONE, refs=['ones'] on `vm`
+#
+# The guard checked the whole name for a restriction, but the chunker had ALREADY stripped it.
+# So: only unambiguous pro-forms are listed, AND the request is consulted for a restrictor.
 PRONOUNS = frozenset({
-    "it", "its", "them", "they", "their", "theirs", "this", "that", "these", "those",
-    "one", "ones", "the one", "the ones", "both", "all", "all of them", "each other",
-    "each of them", "every one of them", "the rest",
+    "it", "its", "them", "they", "their", "theirs", "both",
+    "all of them", "each of them", "every one of them",
 })
 
+# a word that turns a noun phrase into a RESTRICTED description — "the ones THAT do not answer"
+RESTRICTORS = ("that", "which", "who", "whose", "with", "without", "not")
 
-def _is_bare_pronoun(name: str) -> bool:
-    return name.strip().strip(".,'\"").lower() in PRONOUNS
+
+def _is_bare_pronoun(name: str, request: str = "") -> bool:
+    """A pro-form with nothing attached. The REQUEST is consulted, because the naming question
+    chunks restricted phrases down to their head and the restriction is no longer in the name.
+    """
+    word = name.strip().strip(".,'\"").lower()
+    if word not in PRONOUNS:
+        return False
+    if request:
+        low = request.lower()
+        if any(f"{word} {r} " in low or low.endswith(f"{word} {r}") for r in RESTRICTORS):
+            return False        # it heads a restriction in the request — not a bare reference
+    return True
 
 
 # ── COREFERENCE, COMPUTED RATHER THAN ASKED ───────────────────────────────────────────
-def merge(rows: List[Declared], board: Optional[Board] = None) -> List[Declared]:
+def merge(rows: List[Declared], board: Optional[Board] = None,
+          request: str = "") -> List[Declared]:
     """Collapse rows that provably denote the SAME object.
 
     The operator, 2026-08-08, on rung 3: *"when an object got referenced twice, it seems like
@@ -300,7 +325,7 @@ def merge(rows: List[Declared], board: Optional[Board] = None) -> List[Declared]
         # A BARE PRONOUN IS A REFERENCE TO THE MOST RECENT DECLARATION IT COULD BE ABOUT.
         # Its own type answer is not trusted — the model was asked to type a pronoun, which
         # is not a question with an answer.
-        if _is_bare_pronoun(row.name) and out:
+        if _is_bare_pronoun(row.name, request) and out:
             back = next((i for i in range(len(out) - 1, -1, -1)
                          if out[i].kind == row.kind or not row.where), None)
             if back is not None:
