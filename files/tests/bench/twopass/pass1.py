@@ -252,11 +252,27 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
     from .scan import uncovered, scan
     said = ask(S.NAMES_Q, S.names_schema()) or []
     anchors = anchors_in(request, board) + [a for a in said if a.lower() in request.lower()]
-    # ⇒ AND ANYTHING STILL UNCLAIMED IS A CANDIDATE OBJECT. `n1`, `golden`, `db` are not
-    #   declared nouns, so nothing above reaches them, and rung 9 — which contains no declared
-    #   noun at all — produced an EMPTY reading until this existed.
-    claimed = [(g.start, g.end) for g in (scan(a, request, board) for a in anchors) if g]
-    anchors += uncovered(request, claimed, board)
+    # ⇒ AND ANYTHING STILL UNCLAIMED IS A CANDIDATE OBJECT — TO A FIXPOINT.
+    #
+    #   `n1`, `golden`, `db` are not declared nouns, so nothing above reaches them, and rung 9
+    #   — which contains no declared noun at all — produced an EMPTY reading until this
+    #   existed. But one round is not enough: a word claimed in round 1 widens the covered
+    #   text, which can reveal or absorb neighbours, and a word that only becomes claimable
+    #   once its neighbour is claimed was never reached.
+    #
+    #   THE OPERATOR'S POINT, AND IT IS WHAT MAKES THE RESIDUE MEAN ANYTHING: an unclaimed word
+    #   is ambiguous between "an object nobody named" and "a clause nobody read" ONLY UNTIL WE
+    #   TRY TO CLAIM IT. Run it to a fixpoint and the ambiguity is gone — whatever is still
+    #   unclaimed has been offered the chance and failed it, so it is a lost clause and gate 1
+    #   may bounce it without guessing.
+    for _round in range(4):
+        claimed = [(g.start, g.end) for g in (scan(a, request, board) for a in anchors) if g]
+        fresh = [w for w in uncovered(request, claimed, board) if w not in anchors]
+        if not fresh:
+            break
+        anchors += fresh
+    if trace is not None:
+        trace.append(("rounds", _round + 1))
     present = kinds_named(request, board)
     if trace is not None:
         trace.append(("anchors", list(anchors)))
