@@ -30,6 +30,49 @@ choice is the single variable.
     S3  THE SAME CASES FAIL in every concrete pair. Stable failures = a structural limit.
         Moving failures = noise, and then none of the scores mean much.
     S4  The abstract control stays lowest and stays a near-constant.
+
+# ⇒⇒ RESULTS — IT IS BOTH, AND THE MECHANISM IS A PRIOR
+
+    new/existing      11/13  85%      <- best, and NOT the pair we had been using
+    create/use        10/13  77%
+    add/reuse         10/13  77%
+    make/take          9/13  69%
+    provision/select   8/13  62%
+    make/refer         8/13  62%      <- the "null" anchor, and NOT the worst
+    build/find         7/13  54%
+
+    S1  **FAILED.** Spread is 4 cases — 31 points, double the bar. Word choice is not a
+        finishing touch on this question, it is a first-order variable.
+    S2  CONFIRMED. No pair reaches 13/13; the ceiling is 11. There is no magic combination,
+        which is the direct answer to the operator's question.
+    S3  PARTLY. `web` and `golden` fail in 6 of 6 concrete pairs — structural. Everything
+        else MOVES with the wording (4/6, 3/6, 2/6, 2/6), so there is a hard core with a
+        noisy shell around it.
+    S4  PARTLY. The abstract anchor was not uniquely bad — `build/find` scored lower.
+
+# ⇒ THE ONE REGULARITY THAT HOLDS EVERYWHERE: **EVERY MISS, IN EVERY PAIR, WAS TOWARD MAKE.**
+
+Not one error in any cell went the other way. That single fact explains the whole table:
+
+  * THE WORD PAIR SETS A PRIOR toward creating, and the sentence's evidence has to overcome
+    it. A pair whose "already exists" word is weak (`find`) leaves a strong create-prior and
+    loses even the EASY cases — "ping every vm" has no creating verb anywhere and still came
+    back `build`. A pair whose word is strong (`existing`) leaves a weak prior and holds.
+  * SO THE MOVING FAILURES ARE PRIOR-STRENGTH, and the two fixed ones are something else:
+    `web` under *"put web on the lab network"* and `golden` under *"clone golden into 3 new
+    vms"* both sit in sentences that DO contain a creating verb. There the evidence actively
+    points the wrong way, and no vocabulary rescues it.
+
+⇒ **THE LIMIT IS OBJECT-LEVEL READING.** The model judges the SENTENCE, not the thing's role
+  in it. That is why it splits "create a vm named web" from "put web on lab" only when they
+  are separate sentences.
+
+⇒ **AND THE BIAS IS IN THE SAFE DIRECTION.** Every error asks to create something that already
+  exists — which is exactly the disagreement gate 2 is built to catch, and it arrives as a
+  question rather than as a bad program.
+
+⇒ PARKED, NOT CHASED (rule S3): asking *"what does the request DO to this thing"* would force
+  an object-level reading and might take `web` and `golden`. Untested.
 """
 import argparse
 from collections import Counter
