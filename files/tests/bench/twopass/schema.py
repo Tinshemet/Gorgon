@@ -52,6 +52,9 @@ class Declared(NamedTuple):
     existence: str                       # NEW | EXISTING — asked, 85%, errors toward NEW
     settled: str                         # COMPUTED, never supplied
     references: List[str] = ()           # LATER mentions of this same object, in order
+    count: object = None                 # 5 · "all" · None — READ from the enumerator
+    comparator: Optional[str] = None     # eq · min · max — READ from in front of it
+    span: str = ""                       # the noun phrase the request actually wrote
 
     @property
     def kind(self) -> str:
@@ -231,14 +234,23 @@ def existence_schema() -> dict:
 
 def declare_from(name: str, object_type: str, where: Dict[str, object], existence: str,
                  board: Optional[Board] = None,
-                 references: Optional[List[str]] = None) -> Declared:
-    """Assemble one row. `settled` is derived here and nowhere else."""
+                 references: Optional[List[str]] = None,
+                 count: object = None, comparator: Optional[str] = None,
+                 span: str = "") -> Declared:
+    """Assemble one row. `settled` is derived here and nowhere else.
+
+    ⇒ `count` AND `comparator` ARE READ, NOT ASKED. They live in the request's enumerator
+      region — *"exactly two machines"*, *"at most three vms"*, *"5 vms"* — and pass 1 never
+      asked for either, so half the rungs could not have been expressed however good the
+      other answers were.
+    """
     board = board or Board()
     kind = object_type[:-len(SET_SUFFIX)] if object_type.endswith(SET_SUFFIX) else object_type
     return Declared(name=name, object_type=object_type, where=dict(where or {}),
                     existence=existence if existence in (NEW, EXISTING) else EXISTING,
                     settled=settled_of(kind, where or {}, board),
-                    references=list(references or []))
+                    references=list(references or []),
+                    count=count, comparator=comparator, span=span)
 
 
 def render(rows: List[Declared]) -> str:
@@ -249,7 +261,11 @@ def render(rows: List[Declared]) -> str:
     for r in rows:
         where = ", ".join(f"{k} = {v}" for k, v in r.where.items()) or "no condition"
         also = f"   (also referred to as: {', '.join(r.references)})" if r.references else ""
-        out.append(f"  {r.name}  —  a {r.object_type}  —  {where}  —  "
+        howmany = ""
+        if r.count is not None:
+            howmany = f"  —  {r.comparator or 'eq'} {r.count}" if r.comparator or \
+                isinstance(r.count, int) else f"  —  {r.count}"
+        out.append(f"  {r.name}  —  a {r.object_type}{howmany}  —  {where}  —  "
                    f"{r.existence}, known {r.settled}{also}")
     return "\n".join(out)
 

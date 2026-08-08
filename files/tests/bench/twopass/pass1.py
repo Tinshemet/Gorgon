@@ -192,6 +192,97 @@ def _old_where(name: str, object_type: str, ask, board: Board) -> Dict[str, obje
             if isinstance(p, dict) and "attribute" in p}
 
 
+def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.0,
+                timeout=180, trace: Optional[List] = None) -> List[S.Declared]:
+    """PASS ONE, ANCHOR-AND-SCAN. The model points; the code reads; the world decides.
+
+    Two model calls' worth of questions instead of four. The TYPE and the CONDITIONS are no
+    longer asked at all — the noun gives the kind and the modifiers give the conditions, both
+    from the manifest. What the model still supplies is the ANCHOR (14/14) and the EXISTENCE
+    intent (85%, errors all in the safe direction).
+    """
+    from engines.channel import constrained
+    from .scan import scan_all, conditions_from
+
+    board = board or Board()
+
+    def ask(question: str, built: dict):
+        try:
+            got = constrained(question, request, built,
+                              model=model, temp=temp, timeout=timeout) or {}
+            return got.get("answer")
+        except Exception:
+            return None
+
+    from .scan import anchors_in, kinds_named
+    # THE MANIFEST'S NOUNS ARE ANCHORS AND NEED NO ASKING. The model's answers are ADDED to
+    # them, for the things the manifest cannot list — a pronoun-headed set, a bare name.
+    said = ask(S.NAMES_Q, S.names_schema()) or []
+    anchors = anchors_in(request, board) + [a for a in said if a.lower() in request.lower()]
+    present = kinds_named(request, board)
+    if trace is not None:
+        trace.append(("anchors", list(anchors)))
+
+    rows: List[S.Declared] = []
+    for anchor in anchors:
+        seen = scan_all(anchor, request, board)
+        if not seen:
+            continue
+        first = seen[0]
+        if first.kind is None and len(present) == 1:
+            # a pronoun-headed set — "the ones that do not answer" — takes the only kind the
+            # request talks about. With more than one kind present we do not guess.
+            first = first._replace(kind=present[0])
+        if first.kind is None:
+            continue                     # a bare name with no kind — the lab must say
+        # SPAN COLLISION IS THE FOLD, and only between DECLARATIONS.
+        clash = next((i for i, r in enumerate(rows)
+                      if r.span and first.collides(_span_of(r, request, board))), None)
+        if clash is not None:
+            kept = rows[clash]
+            rows[clash] = S.declare_from(kept.name, kept.object_type, kept.where,
+                                         kept.existence, board,
+                                         references=list(kept.references) + [anchor],
+                                         count=kept.count if kept.count is not None
+                                         else first.count,
+                                         comparator=kept.comparator or first.comparator,
+                                         span=kept.span)
+            continue
+        where = conditions_from(first.modifiers, first.kind, board)
+        object_type = f"{first.kind}{S.SET_SUFFIX}" if _is_group(first) else first.kind
+        existence = ask(S.EXISTENCE_Q.format(name=first.span, new=S.NEW,
+                                             existing=S.EXISTING),
+                        S.existence_schema()) or S.EXISTING
+        rows.append(S.declare_from(first.span, object_type, where, existence, board,
+                                   references=[a.anchor for a in seen[1:]],
+                                   count=first.count, comparator=first.comparator,
+                                   span=first.span))
+    return rows
+
+
+PLURAL_PRONOUNS = {"ones", "them", "they", "those", "these", "all", "both", "rest", "others"}
+
+
+def _is_group(scanned) -> bool:
+    """A thing is a GROUP when the request says so — by count, by plural, or by pronoun.
+
+    Count alone was not enough: *"stop the ones that do not answer"* carries no enumerator and
+    is plainly a set. The plural noun and the plural pronoun say it just as clearly.
+    """
+    if scanned.count == "all" or (isinstance(scanned.count, int) and scanned.count > 1):
+        return True
+    words = scanned.span.lower().split()
+    if any(w.strip(".,'") in PLURAL_PRONOUNS for w in words):
+        return True
+    return any(w.endswith("s") and not w.endswith("ss") and len(w) > 3
+               for w in words if w.strip(".,'") not in {"is", "as", "its"})
+
+
+def _span_of(row: S.Declared, request: str, board: Board):
+    from .scan import scan
+    return scan(row.span, request, board) or scan(row.name, request, board)
+
+
 def run_pass1(request: str, board: Optional[Board] = None, model=None, temp=0.0,
               timeout=180, trace: Optional[List] = None,
               paired: bool = False, fold: bool = True,
@@ -288,6 +379,8 @@ def main() -> None:
     ap.add_argument("--model", default=None)
     ap.add_argument("--paired", action="store_true",
                     help="ask NAME and TYPE together — the cascade fix (REJECTED, kept for A/B)")
+    ap.add_argument("--scanned", action="store_true",
+                    help="ANCHOR-AND-SCAN: the model points, the code reads, the world decides")
     ap.add_argument("--forced-conditions", action="store_true",
                     help="ask ALL-or-SOME first — MEASURED WORSE (32 invented against 16) "
                          "because committing to SOME leaves no way to decline afterwards")
@@ -301,7 +394,7 @@ def main() -> None:
     tally: Counter = Counter()
     print("=" * 104)
     print(f"ITEM 3 · PASS ONE AGAINST THE MODEL — "
-          f"{'PAIRED name+type' if args.paired else 'separate questions'}"
+          f"{'ANCHOR-AND-SCAN' if args.scanned else ('PAIRED name+type' if args.paired else 'separate questions')}"
           f"{'' if args.no_expand else ' + EXPAND'}"
           f"{'' if args.no_fold else ' + FOLD'}, "
           f"graded on structure, never on names")
@@ -315,10 +408,12 @@ def main() -> None:
               f"sets>={want.sets}   residual={want.residual}   rows {want.rows}")
         for i in range(args.runs):
             trace: List = []
-            rows = run_pass1(want.request, board=board, model=args.model, trace=trace,
-                             paired=args.paired, fold=not args.no_fold,
-                             expand_names=not args.no_expand,
-                             forced=args.forced_conditions)
+            rows = (run_scanned(want.request, board=board, model=args.model, trace=trace)
+                    if args.scanned else
+                    run_pass1(want.request, board=board, model=args.model, trace=trace,
+                              paired=args.paired, fold=not args.no_fold,
+                              expand_names=not args.no_expand,
+                              forced=args.forced_conditions))
             g = grade(rows, want)
             for row in rows:
                 mark = "  ⇐ RESIDUAL" if row.residual else ""

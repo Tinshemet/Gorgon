@@ -104,6 +104,40 @@ def _tokens(text: str):
             for m in re.finditer(r"[\w']+|[,;.]", text)]
 
 
+def anchors_in(request: str, board: Optional[Board] = None) -> List[str]:
+    """EVERY DECLARED NOUN THE REQUEST USES — anchors found without asking anyone.
+
+    ⇒ The naming question returns paraphrases: *"make sure there are exactly two machines
+      left"* came back as `sentence` / `things` / `group`, none of which are IN the request, so
+      nothing could be scanned and the whole reading was empty. But the manifest already lists
+      the words that name a thing, so the anchors can be READ.
+
+    The model is still needed for what the manifest cannot list — a pronoun-headed set like
+    *"the ones that do not answer"* — so its answers are added to these, never replaced by them.
+    """
+    board = board or Board()
+    nouns = _index(board)
+    low = request.lower()
+    found: List[str] = []
+    for match in re.finditer(r"[\w']+", low):
+        word = match.group(0)
+        if word in nouns and word not in found:
+            found.append(word)
+    return found
+
+
+def kinds_named(request: str, board: Optional[Board] = None) -> List[str]:
+    """Which kinds this request mentions at all — used to give a pronoun-headed set its kind."""
+    board = board or Board()
+    nouns = _index(board)
+    out: List[str] = []
+    for match in re.finditer(r"[\w']+", request.lower()):
+        kind = nouns.get(match.group(0))
+        if kind and kind not in out:
+            out.append(kind)
+    return out
+
+
 def scan_all(anchor: str, request: str,
              board: Optional[Board] = None) -> List[Scanned]:
     """EVERY occurrence, in order. The first DECLARES; the rest are REFERENCES to it.
@@ -205,3 +239,86 @@ def _kind_of(words: List[str], nouns: Dict[str, str]) -> Optional[str]:
         if pair in nouns:
             return nouns[pair]
     return next((nouns[w] for w in words if w in nouns), None)
+
+
+# ── MODIFIERS INTO CONDITIONS, where the manifest can settle it ────────────────────────
+LINKING = {"called", "named", "labelled", "labeled", "tagged", "marked", "is", "are", "be",
+           "the", "a", "an", "with", "on", "in", "to", "of", "that", "do", "does", "and",
+           "currently", "already", "its", "their"}
+
+
+def _stem(word: str) -> str:
+    for suffix in ("ed", "ing", "s"):
+        if len(word) > 4 and word.endswith(suffix):
+            return word[: -len(suffix)]
+    return word
+
+
+def conditions_from(modifiers: str, kind: Optional[str],
+                    board: Optional[Board] = None) -> Dict[str, object]:
+    """Read a phrase like *"labelled 'red'"* into `{label: red}` — from the manifest alone.
+
+    Three rules, in order, and every one of them consults a DECLARATION:
+
+      1 A WORD THAT IS A DECLARED VALUE names its own attribute. `stopped` can only be
+        `status`, because `attr_values` says so. Measured 2/2 on the closed sets.
+      2 A WORD THAT NAMES AN ATTRIBUTE takes the next real word as its value —
+        *"labelled 'red'"*, *"network called core"*. Linking words are stepped over, which is
+        why `network called core` does not come back as `network = called`.
+      3 AN OBSERVED ATTRIBUTE is matched through its own DOC. The manifest says `alive` is
+        *"whether the machine answers its guest agent"*, so *"do not answer"* reaches it — and
+        the `not` decides the value rather than being discarded.
+
+    What it cannot settle is left for gate 2 to ask the model about, which is the operator's
+    seam: everything here is a declaration lookup, and a judgement call is not.
+    """
+    board = board or Board()
+    if not modifiers or not kind or kind not in board.kinds:
+        return {}
+    from planner.ir import config as _config
+    spec = _config.KINDS.get(kind) or {}
+
+    values: Dict[str, tuple] = {}
+    for attr, allowed in (spec.get("attr_values") or {}).items():
+        for value in allowed:
+            values[str(value).lower()] = (attr, value)
+    for attr, aliases in (spec.get("value_aliases") or {}).items():
+        for word, value in aliases.items():
+            values[str(word).lower()] = (attr, value)
+
+    attrs = {a: a for a in (spec.get("attrs") or [])}
+    attrs.update({alias: real for alias, real in (spec.get("aliases") or {}).items()})
+
+    words = [w.strip("'\"") for w in modifiers.lower().split() if w.strip("'\"")]
+    negated = "not" in words or "n't" in words
+    out: Dict[str, object] = {}
+
+    for i, word in enumerate(words):
+        if word in values:                                   # 1 · a value names its attribute
+            attr, value = values[word]
+            out[attr] = value
+            continue
+        stem = _stem(word)                                   # 2 · an attribute takes a value
+        for cue, real in attrs.items():
+            # MATCH IN BOTH DIRECTIONS. "labelled" stems to "labell", which no cue starts
+            # with; "named" stems to "nam", which is shorter than any cue. One-way prefixing
+            # missed both, and those are the two commonest descriptors in the corpus.
+            # ⇒ PREFIX MATCHING ONLY WHERE THE CUE IS LONG ENOUGH TO MEAN SOMETHING. The
+            #   manifest aliases `on` to `network`, and a 3-char prefix let `ones` match it —
+            #   *"the ones that do not answer"* came back as `network = not`. A two-letter cue
+            #   must match exactly.
+            if word == cue or stem == cue or (
+                    len(cue) >= 4 and len(stem) >= 3
+                    and (cue.startswith(stem) or stem.startswith(cue))):
+                nxt = next((w for w in words[i + 1:] if w not in LINKING and w not in attrs),
+                           None)
+                if nxt and nxt not in values:
+                    out[real] = nxt
+                break
+
+    for attr, meta in (spec.get("observed") or {}).items():   # 3 · observed, through its doc
+        doc = {_stem(w.strip(".,'")) for w in str(meta.get("doc") or "").lower().split()
+               if len(w) > 5}
+        if doc & {_stem(w) for w in words}:
+            out[attr] = not negated
+    return out
