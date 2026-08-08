@@ -340,6 +340,16 @@ def _stem(word: str) -> str:
     return word
 
 
+# A NAMING CUE POINTS AT THE KIND'S KEY, whatever that key happens to be called.
+#
+# "a vm NAMED alpha" worked only by luck — `named` stems to `nam`, which prefixes the attribute
+# `name`, and a vm's key IS `name`. A network's key is `net_name`, and `called` stems to
+# nothing that prefixes it, so "a network CALLED lab" produced no condition at all. The cue
+# should point at the KEY the manifest declares, not at an attribute that happens to be spelt
+# similarly.
+NAMING_CUES = {"called", "named", "titled", "known"}
+
+
 def conditions_from(modifiers: str, kind: Optional[str],
                     board: Optional[Board] = None) -> Dict[str, object]:
     """Read a phrase like *"labelled 'red'"* into `{label: red}` — from the manifest alone.
@@ -378,6 +388,16 @@ def conditions_from(modifiers: str, kind: Optional[str],
     words = [w.strip("'\"") for w in modifiers.lower().split() if w.strip("'\"")]
     negated = "not" in words or "n't" in words
     out: Dict[str, object] = {}
+
+    from planner.gates import claims as _claims
+    key_attr = _claims.key_of(kind, board.kinds)
+    for i, word in enumerate(words):                      # 0 · a naming cue names the KEY
+        if word in NAMING_CUES and key_attr:
+            nxt = next((w for w in words[i + 1:]
+                        if w not in LINKING and w not in NAMING_CUES), None)
+            if nxt:
+                out[key_attr] = nxt
+                break
 
     for i, word in enumerate(words):
         if word in values:                                   # 1 · a value names its attribute
