@@ -161,11 +161,15 @@ EXPECTED: Dict[int, Expect] = {
 
 
 def ask_conditions(name: str, object_type: str, ask, board: Board) -> Dict[str, object]:
-    """THE FORCED CHOICE, then an attribute, then a value CLOSED BY THAT ATTRIBUTE.
+    """THE FORCED CHOICE — MEASURED WORSE AND NOT THE DEFAULT. Kept for the A/B.
 
-    Three small calls instead of one array. The array let the model answer `[]` where an answer
-    was wanted and fill one in where none was — 19 invented conditions across 14 requests, about
-    17 of them on things that needed none.
+    The idea was sound and the measurement refused it: 32 genuinely invented conditions against
+    the array form's 16, with the scope question working correctly at 6/6 in isolation.
+
+    ⇒ **THE ESCAPE HATCH MATTERED MORE THAN THE CLOSURE.** An array can answer `[]` at the END,
+      after seeing the attributes. This commits at the START and then REQUIRES an attribute and
+      a value, so every "only some" manufactures a condition whether or not one exists. Removing
+      the late decline cost more than closing the value bought.
     """
     kind = object_type[:-len(S.SET_SUFFIX)] if object_type.endswith(S.SET_SUFFIX) else object_type
     scope = ask(S.SCOPE_Q.format(name=name, plural=S.plural_for(kind, board)),
@@ -191,7 +195,7 @@ def _old_where(name: str, object_type: str, ask, board: Board) -> Dict[str, obje
 def run_pass1(request: str, board: Optional[Board] = None, model=None, temp=0.0,
               timeout=180, trace: Optional[List] = None,
               paired: bool = False, fold: bool = True,
-              expand_names: bool = True, forced: bool = True) -> List[S.Declared]:
+              expand_names: bool = True, forced: bool = False) -> List[S.Declared]:
     """The questions, one per call, exactly as `schema.py` declares them.
 
     `paired=True` asks NAME and TYPE together — the fix for the measured cascade, where the
@@ -284,8 +288,9 @@ def main() -> None:
     ap.add_argument("--model", default=None)
     ap.add_argument("--paired", action="store_true",
                     help="ask NAME and TYPE together — the cascade fix (REJECTED, kept for A/B)")
-    ap.add_argument("--array-conditions", action="store_true",
-                    help="the OLD array form of the conditions question — measured worse")
+    ap.add_argument("--forced-conditions", action="store_true",
+                    help="ask ALL-or-SOME first — MEASURED WORSE (32 invented against 16) "
+                         "because committing to SOME leaves no way to decline afterwards")
     ap.add_argument("--no-expand", action="store_true",
                     help="do NOT repair chunked names from the request")
     ap.add_argument("--no-fold", action="store_true",
@@ -313,7 +318,7 @@ def main() -> None:
             rows = run_pass1(want.request, board=board, model=args.model, trace=trace,
                              paired=args.paired, fold=not args.no_fold,
                              expand_names=not args.no_expand,
-                             forced=not args.array_conditions)
+                             forced=args.forced_conditions)
             g = grade(rows, want)
             for row in rows:
                 mark = "  ⇐ RESIDUAL" if row.residual else ""
