@@ -35,6 +35,35 @@ GAP between them rather than whether it nudges one number.
         width — and width has already cost us once today.
     T4  IF GLOSS LEVELS THE PAIRS, word choice stops being first-order and the fix is to gloss
         rather than to hunt for the perfect word. That would be the useful outcome.
+
+# ⇒⇒ RESULTS — ALL FOUR CONFIRMED, AND T4 IS THE ONE THAT MATTERS
+
+    pair               bare      glossed
+    build/find         7/13      10/13     <- +3, the weak pair recovers
+    create/use        10/13      11/13
+    new/existing      11/13      11/13     <- already strong, nothing to recover
+    wide enum (8 options)         8/13     <- WORSE than every glossed pair
+
+    SPREAD             4 cases   1 case
+
+    T1  CONFIRMED. Glossing lifted the weak pair most of the way to the strong one, which is
+        the direct evidence for the prior explanation: `find` was losing easy cases because it
+        was a weak word, and defining it fixed them.
+    T2  CONFIRMED. The ceiling did not move. 11/13 is 11/13.
+    T3  CONFIRMED. Eight options scored 8/13 — worse than any glossed pair and worse than
+        create/use bare. Semantic richness did not pay for the enum width, exactly as the
+        ordering result predicted it would not.
+    T4  CONFIRMED, AND THIS IS THE FINDING. **Glossing LEVELS the pairs** — the spread falls
+        from 4 cases to 1. Word choice stops being a first-order variable.
+
+⇒ **SO THE FIX IS TO GLOSS, NOT TO HUNT FOR THE PERFECT WORD.** The value is not the extra two
+  points, it is that the schema stops depending on which synonym we happened to pick. A design
+  that scores 85% with any reasonable wording beats one that scores 85% with one blessed pair
+  and 54% with a near-synonym.
+
+⇒ **AND THE REMAINDER IS NOW CLEANLY ISOLATED.** Every glossed cell misses EXACTLY `web` and
+  `golden` and nothing else. Glossing removed all of the prior-driven noise and left precisely
+  the two object-versus-sentence failures — which is what `action_probe.py` goes after.
 """
 import argparse
 from typing import List, Tuple
