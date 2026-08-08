@@ -461,6 +461,26 @@ def test_the_code_reads_the_phrase_the_model_only_points_at():
           scan_all("web", r3, board)[1].collides(scan_all("lab", r3, board)[1]))
 
 
+def test_a_possessive_is_not_a_plural():
+    print("\n[set-ness] 'ones' is a set; \"one's\" is one that is — the apostrophe decides")
+    from tests.bench.twopass.pass1 import _is_group, _plural, _possessive
+
+    class Span:
+        def __init__(self, span, count=None):
+            self.span, self.count = span, count
+
+    check("a plural pronoun makes a group", _is_group(Span("the ones that do not answer")))
+    # ⇒ WITHOUT THIS, "the machine's network" WAS DECLARED A GROUP OF MACHINES. Every word
+    #   ending in s counted as plural, and a possessive ends in s.
+    check("a possessive does NOT", not _is_group(Span("the machine's network")))
+    check("nor does a possessive pronoun", not _is_group(Span("one's own network")))
+    check("a plural noun still does", _is_group(Span("three machines")))
+    check("and a singular phrase does not", not _is_group(Span("a vm named alpha")))
+    check("the apostrophe is what is being read", _possessive("machine's")
+          and not _possessive("machines"))
+    check("and short words are never plurals", not _plural("its") and not _plural("was"))
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "two-pass schema")

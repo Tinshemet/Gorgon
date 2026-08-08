@@ -272,10 +272,27 @@ def _is_group(scanned) -> bool:
     if scanned.count == "all" or (isinstance(scanned.count, int) and scanned.count > 1):
         return True
     words = scanned.span.lower().split()
-    if any(w.strip(".,'") in PLURAL_PRONOUNS for w in words):
+    if any(w.strip(".,'") in PLURAL_PRONOUNS and not _possessive(w) for w in words):
         return True
-    return any(w.endswith("s") and not w.endswith("ss") and len(w) > 3
-               for w in words if w.strip(".,'") not in {"is", "as", "its"})
+    return any(_plural(w) for w in words)
+
+
+def _possessive(word: str) -> bool:
+    """`one's` is not `ones`. The apostrophe is the whole difference and it decides SET-NESS.
+
+    The operator, 2026-08-08: *"'ones' (a set) versus 'one's' (one that is) — it needs the
+    ability to know the difference."* Right, and without this a possessive reads as a plural:
+    *"the machine's network"* was being declared a GROUP of machines.
+    """
+    stripped = word.strip(".,")
+    return "'" in stripped and stripped.endswith("s") and stripped.rfind("'") == len(stripped) - 2
+
+
+def _plural(word: str) -> bool:
+    w = word.strip(".,'\"")
+    if _possessive(word) or len(w) <= 3:
+        return False
+    return w.endswith("s") and not w.endswith("ss") and w not in {"its", "this", "has", "was"}
 
 
 def _span_of(row: S.Declared, request: str, board: Board):
