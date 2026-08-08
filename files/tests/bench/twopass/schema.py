@@ -106,10 +106,21 @@ def attributes_for(object_type: str, board: Optional[Board] = None) -> List[str]
 
 
 # ── the four questions. ONE PER CALL. ─────────────────────────────────────────────────
+# ⇒⇒ NO PROMPT HERE MAY QUOTE A PHRASE FROM A REQUEST. MEASURED, 2026-08-08.
+#
+# This question used to illustrate itself with *"the ones that do not answer"* — which is
+# rung 11's own wording. The model COPIED THE EXAMPLE INSTEAD OF READING THE SENTENCE:
+#
+#   with the example      "clone golden into 3 new vms"  ->  ['ones that do not answer', ...]
+#   without the example   "clone golden into 3 new vms"  ->  ['a group of clones', 'golden', ...]
+#
+# So the illustration became the answer, and rung 11 was being handed its own solution — the
+# whole first pass-1 measurement was void. `test_twopass_schema` now fails if any question
+# string contains a rung's wording, because this is invisible in the output and looks like a
+# model failure.
 NAMES_Q = (
     "List every distinct thing this sentence talks about, using the sentence's OWN words for "
-    "each. A GROUP of things counts as one thing and should be named too — if the sentence "
-    "says 'the ones that do not answer', that group is a thing, so give it a short name. "
+    "each. A GROUP of things counts as one thing and should be named too. "
     "Do not say what happens to them."
 )
 
@@ -134,6 +145,37 @@ EXISTENCE_Q = (
     "being selected, reused or acted upon\n"
     "Judge only what the request asks for about THIS thing."
 )
+
+
+# ── THE PAIRED FORM: name and type answered TOGETHER ──────────────────────────────────
+#
+# Measured 2026-08-08: asked separately, *"create a vm named alpha"* came back as the names
+# ['vm', 'alpha'] — correct extraction of both MENTIONS, and no way to say they are ONE thing
+# with a type and a name. The flat list of names has no slot for that, so the model cannot
+# express it however well it reads.
+#
+# ⇒ THE RULE THIS IS THE THIRD INSTANCE OF: ask one question at a time, UNLESS the two answers
+#   are mutually defining — then splitting them removes the information each one needed.
+#   `which_ones` + `must_become` was the first, single-versus-multi action the second.
+PAIRED_Q = (
+    "List every distinct thing this sentence talks about. For each one give TWO things:\n"
+    "  name — the sentence's own words for it\n"
+    "  sort — what kind of thing it is\n\n"
+    "When the sentence describes something by its KIND and also gives it a NAME, that is ONE "
+    "thing and not two: the kind is its sort, and the name is its name.\n"
+    "A GROUP of things is also ONE thing, with its own name and sort.\n"
+    "Do not say what happens to them."
+)
+
+
+def paired_schema(board: Optional[Board] = None) -> dict:
+    return {"type": "object", "additionalProperties": False, "required": ["answer"],
+            "properties": {"answer": {
+                "type": "array", "minItems": 1, "items": {
+                    "type": "object", "additionalProperties": False,
+                    "required": ["name", "sort"],
+                    "properties": {"name": {"type": "string", "minLength": 2},
+                                   "sort": {"type": "string", "enum": types_offered(board)}}}}}}
 
 
 def names_schema() -> dict:

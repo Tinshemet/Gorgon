@@ -179,6 +179,35 @@ def test_the_questions_format_and_carry_the_gloss():
           "group" in S.NAMES_Q.lower())
 
 
+def test_no_question_quotes_a_request_it_will_be_asked_about():
+    print("\n[leakage] a prompt that illustrates itself with a request's own words gets the "
+          "EXAMPLE back as the answer")
+    from tests.bench.rungs import RUNGS
+
+    questions = {name: getattr(S, name) for name in dir(S)
+                 if name.endswith("_Q") and isinstance(getattr(S, name), str)}
+    check(f"there are questions to check ({sorted(questions)})", len(questions) >= 4)
+
+    # Any run of 4+ words shared between a question and a rung is a phrase, not a coincidence.
+    def phrases(text: str, n: int = 4):
+        words = [w.strip(".,'\"—-").lower() for w in text.split() if w.strip(".,'\"—-")]
+        return {" ".join(words[i:i + n]) for i in range(len(words) - n + 1)}
+
+    leaks = []
+    for rung in RUNGS:
+        for wording in filter(None, (rung.goal, rung.paraphrase)):
+            said = phrases(wording)
+            for name, question in questions.items():
+                shared = said & phrases(question)
+                if shared:
+                    leaks.append(f"{name} quotes rung {rung.n}: {sorted(shared)[0]!r}")
+
+    # MEASURED: NAMES_Q once contained rung 11's own wording, and the model returned that
+    # phrase for a request about CLONING. The example became the answer, rung 11 was handed
+    # its own solution, and a whole measurement was void before anyone noticed.
+    check(f"no question quotes any rung, in either wording (found {leaks})", not leaks)
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "two-pass schema")

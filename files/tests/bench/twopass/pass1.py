@@ -128,8 +128,14 @@ EXPECTED: Dict[int, Expect] = {
 
 
 def run_pass1(request: str, board: Optional[Board] = None, model=None, temp=0.0,
-              timeout=180, trace: Optional[List] = None) -> List[S.Declared]:
-    """The four questions, one per call, exactly as `schema.py` declares them."""
+              timeout=180, trace: Optional[List] = None,
+              paired: bool = False) -> List[S.Declared]:
+    """The questions, one per call, exactly as `schema.py` declares them.
+
+    `paired=True` asks NAME and TYPE together — the fix for the measured cascade, where the
+    model's own free-text name became the input to the type question and one missing word
+    ('the') flipped `vm_set` to `network_set`.
+    """
     from engines.channel import constrained
 
     board = board or Board()
@@ -144,13 +150,20 @@ def run_pass1(request: str, board: Optional[Board] = None, model=None, temp=0.0,
                 trace.append(("<failed>", f"{type(exc).__name__}"))
             return None
 
-    names = ask(S.NAMES_Q, S.names_schema()) or []
+    if paired:
+        got = ask(S.PAIRED_Q, S.paired_schema(board)) or []
+        pairs = [(p.get("name"), p.get("sort")) for p in got
+                 if isinstance(p, dict) and p.get("name") and p.get("sort")]
+    else:
+        names = ask(S.NAMES_Q, S.names_schema()) or []
+        pairs = [(n, None) for n in names]
     if trace is not None:
-        trace.append(("names", list(names)))
+        trace.append(("things", list(pairs)))
 
     rows: List[S.Declared] = []
-    for name in names:
-        object_type = ask(S.TYPE_Q.format(name=name, suffix=S.SET_SUFFIX), S.type_schema(board))
+    for name, sort in pairs:
+        object_type = sort or ask(S.TYPE_Q.format(name=name, suffix=S.SET_SUFFIX),
+                                  S.type_schema(board))
         if not object_type:
             continue
         pairs = ask(S.WHERE_Q.format(name=name), S.where_schema(object_type, board)) or []
@@ -195,12 +208,16 @@ def main() -> None:
     ap.add_argument("--only", type=int, default=None)
     ap.add_argument("--runs", type=int, default=1)
     ap.add_argument("--model", default=None)
+    ap.add_argument("--paired", action="store_true",
+                    help="ask NAME and TYPE together — the cascade fix")
     args = ap.parse_args()
 
     board = Board()
     tally: Counter = Counter()
     print("=" * 104)
-    print("ITEM 3 · PASS ONE AGAINST THE MODEL — graded on structure, never on names")
+    print(f"ITEM 3 · PASS ONE AGAINST THE MODEL — "
+          f"{'PAIRED name+type' if args.paired else 'separate questions'}, "
+          f"graded on structure, never on names")
     print("=" * 104)
 
     for n, want in sorted(EXPECTED.items()):
@@ -211,7 +228,8 @@ def main() -> None:
               f"sets>={want.sets}   residual={want.residual}   rows {want.rows}")
         for i in range(args.runs):
             trace: List = []
-            rows = run_pass1(want.request, board=board, model=args.model, trace=trace)
+            rows = run_pass1(want.request, board=board, model=args.model, trace=trace,
+                             paired=args.paired)
             g = grade(rows, want)
             for row in rows:
                 mark = "  ⇐ RESIDUAL" if row.residual else ""
