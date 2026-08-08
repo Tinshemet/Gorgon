@@ -142,17 +142,17 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
     last = next((i for i, t in enumerate(toks) if t[1] >= at + len(anchor)), len(toks))
 
     # ── LEFT: descriptors, then the enumerator, then the comparator in front of it
-    left, count, comparator = first, None, None
+    left, count, comparator, matched = first, None, None, ""
     while left > 0 and toks[left - 1][0] not in BOUNDARIES:
         word = toks[left - 1][0]
         if word in ENUMERATORS or word.isdigit():
             count = int(word) if word.isdigit() else ENUMERATORS[word]
             left -= 1
-            comparator, left = _comparator_before(toks, left)
+            comparator, matched, left = _comparator_before(toks, left)
             break
         left -= 1
     if count is None:                       # a comparator can sit alone: "no more than two"
-        comparator, left = _comparator_before(toks, left)
+        comparator, matched, left = _comparator_before(toks, left)
 
     # ── RIGHT: modifiers and restrictors, to the end of the clause
     right = last
@@ -166,7 +166,11 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
     #   no kind here, and that is correct: only the lab can say what `golden` is.
     head = [t[0] for t in toks[left:last] if t[0] not in BOUNDARIES]
     kind = _kind_of(head, nouns)
-    comparator_words = {w for phrase in COMPARATORS for w in phrase.split()}
+    # ⇒ ONLY STRIP A COMPARATOR WORD WHERE A COMPARATOR WAS ACTUALLY FOUND. Stripping every
+    #   word that appears in any comparator phrase deleted `not` — because "not more than" is
+    #   one — and *"the ones that do not answer"* became *"the ones that do answer"*. Negation
+    #   is the difference between the two halves of rung 11.
+    comparator_words = set(matched.split())
     # a word that names ANY kind is never a modifier — otherwise a bare anchor whose own kind
     # is unknown picks up the next clause's noun and stops reporting itself bare.
     modifiers = [w for w in span_words
@@ -180,14 +184,18 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
 
 
 def _comparator_before(toks, left):
-    """A comparator may be one word or three, and sits in front of the enumerator."""
+    """A comparator may be one word or three, and sits in front of the enumerator.
+
+    Returns the MATCHED PHRASE as well as its meaning — looking the phrase back up by value
+    finds whichever synonym is listed first, so "at most" was stripping "no more than".
+    """
     for size in (3, 2, 1):
         if left - size < 0:
             continue
         phrase = " ".join(t[0] for t in toks[left - size:left])
         if phrase in COMPARATORS:
-            return COMPARATORS[phrase], left - size
-    return None, left
+            return COMPARATORS[phrase], phrase, left - size
+    return None, "", left
 
 
 def _kind_of(words: List[str], nouns: Dict[str, str]) -> Optional[str]:
