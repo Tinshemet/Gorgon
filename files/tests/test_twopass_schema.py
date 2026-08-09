@@ -901,6 +901,72 @@ def test_the_operator_enum_order_is_pinned_because_it_moved_the_answer():
           not any(o.startswith("kill") or o == "memory" for o in ops))
 
 
+class _NamedLab:
+    def __init__(self, *names, kind="vm", key="name"):
+        self.ROWS = [{"kind": kind, key: n} for n in names]
+
+    def select(self, query):
+        return [r for r in self.ROWS
+                if all(str(r.get(k, "")).lower() == str(v).lower() for k, v in query.items())]
+
+
+def test_gate_3_computes_the_refusal_the_model_will_not_give():
+    print("\n[gate3] three attempts to ASK for a refusal have measured 0, 4/8 and 2/8 — the "
+          "third, removing `minItems: 1`, was byte-identical at 0/3. So it is DERIVED instead")
+    from tests.bench.twopass import gate3 as G3, pass1 as P, pass2 as P2
+    from tests.bench.twopass.effects import Operation
+    from tests.bench.twopass.metrics import Lab
+    board = Board()
+    channel, was = _no_model()
+    try:
+        def table(n, world=None):
+            rows = P.run_scanned(P.EXPECTED[n].request, board=board)
+            return P2.symbol_table(P.settle_with_world(rows, world or Lab(), board), board)
+
+        # ⇒ RUNG 9, THE ROW THIS EXISTS FOR. The model answers `add_label(n1, n2)` 3 of 3 for
+        #   *"make sure n1, n2 and n3 can all ping each other"* — there is no connectivity
+        #   operator in the manifest at all, so the request HAS no legal answer.
+        mesh = [Operation("add_label", "n1", "n2"), Operation("add_label", "n2", "n1"),
+                Operation("add_label", "n3", "n1"), Operation("add_label", "n3", "n2")]
+        t9 = table(9)
+        check("every step of the ping mesh is illegal", len(G3.check(mesh, t9, board)) == 4)
+        check("so the request is REFUSED, not half-served", G3.refused(mesh, t9, board))
+        check("and the reason names what is missing",
+              "nothing says what" in G3.check(mesh, t9, board)[0].says)
+
+        # ⇒ AND IT STILL REFUSES WHEN THE LAB DOES KNOW THEM — a different rule catches it.
+        #   You cannot label a machine WITH a machine, whoever those machines are.
+        known = table(9, _NamedLab("n1", "n2", "n3"))
+        caught = G3.check(mesh, known, board)
+        check("with the kinds settled it is still refused", G3.refused(mesh, known, board))
+        check("now because a label slot took an object",
+              caught[0].rule == "value-is-an-object")
+
+        # THE CONTROLS. Four programs the model got right must pass untouched.
+        t3 = P2.symbol_table(P.run_scanned(P.EXPECTED[3].request, board=board), board)
+        good3 = [Operation("create_network", "lab", None), Operation("create_vm", "web", None),
+                 Operation("add_vm_to_network", "web", "lab")]
+        check("rung 3's correct program is legal", not G3.check(good3, t3, board))
+        t11 = table(11)
+        good11 = [Operation("probe_alive", "vms", None),
+                  Operation("stop_vm", "not_alive_vms", None)]
+        check("rung 11's correct program is legal", not G3.check(good11, t11, board))
+        check("and a run-time set is a perfectly legal target",
+              not G3.check([Operation("stop_vm", "not_alive_vms", None)], t11, board))
+
+        # ⇒ THE OTHER TWO RULES, EACH EXERCISED WHERE IT IS THE ONLY ONE THAT CAN FIRE.
+        missing = G3.check([Operation("add_vm_to_network", "web", None)], t3, board)
+        check("a setter with its value omitted is caught",
+              missing and missing[0].rule == "value-missing")
+        wrong = G3.check([Operation("add_vm_to_network", "web", "web")], t3, board)
+        check("and a value of the wrong kind is caught",
+              wrong and wrong[0].rule == "wrong-kind-value")
+        check("one bad step among good ones is NOT a refusal",
+              not G3.refused(good3 + [Operation("add_vm_to_network", "web", None)], t3, board))
+    finally:
+        channel.constrained = was
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "two-pass schema")

@@ -187,10 +187,33 @@ ASK = ("Say what has to be DONE, as a list of steps. Each step names one operati
        "Do not invent a name.")
 
 
-def _schema(handles: List[str], operators: List[str]) -> dict:
+def _schema(handles: List[str], operators: List[str], require_one: bool = True) -> dict:
+    """⇒ `require_one=False` IS THE REFUSAL ESCAPE, AND IT IS SUBTRACTIVE ON PURPOSE.
+
+    Two attempts at reliable refusal have already been withdrawn after measurement
+    ([[gorgon-refusal-enum-withdrawn]]): a closed enum of reasons, and a span-anchored
+    quotation. Both ADDED a vocabulary for declining plus prompt text about when to use it,
+    and the bisect proved the prompt text caused the gain and the damage alike. The standing
+    conclusion is *"do not spend a third attempt on a better description of when to decline"*,
+    beside the design law that **every additive schema move here has measured zero or
+    negative** ([[gorgon-offering-is-not-using]]).
+
+    So nothing is added. `minItems: 1` is REMOVED — the schema stops requiring an answer, and
+    the empty list becomes representable. No new operator, no new field, no sentence about
+    refusing anywhere in the prompt. That is the one form of this the evidence has not already
+    refused: *removing a wrong option works; adding a right one does not.*
+
+    Rung 9 is the row it exists for. *"make sure n1, n2 and n3 can all ping each other"* has
+    NO legal answer — the manifest declares 21 acts for a vm and not one of them is
+    connectivity — and the model answers `add_label(n1, n2)` 3 times out of 3 rather than
+    nothing, because nothing was not expressible.
+    """
+    array: dict = {"type": "array", "items": None}
+    if require_one:
+        array["minItems"] = 1
     return {
         "type": "object", "additionalProperties": False, "required": ["operations"],
-        "properties": {"operations": {"type": "array", "minItems": 1, "items": {
+        "properties": {"operations": {**array, "items": {
             "type": "object", "additionalProperties": False,
             "required": ["operator", "on", "value"],
             "properties": {
@@ -213,7 +236,7 @@ def _payload(request: str, table: List[Symbol], operators: List[str]) -> str:
 
 def operations_for(request: str, rows: List[S.Declared], board: Optional[Board] = None,
                    model=None, temp: float = 0.0, timeout: int = 300,
-                   handles: str = "derived") -> List[Operation]:
+                   handles: str = "derived", require_one: bool = True) -> List[Operation]:
     """THE ONE QUESTION PASS 2 ASKS. Everything in the answer is closed."""
     from engines.channel import constrained
     board = board or Board()
@@ -224,7 +247,7 @@ def operations_for(request: str, rows: List[S.Declared], board: Optional[Board] 
     operators = operators_offered(board)
     try:
         got = constrained(ASK, _payload(request, table, operators),
-                          _schema(names, operators),
+                          _schema(names, operators, require_one),
                           model=model, temp=temp, timeout=timeout) or {}
     except Exception:
         return []
