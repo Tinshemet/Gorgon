@@ -51,7 +51,7 @@ import argparse
 from typing import Dict, List, NamedTuple, Optional
 
 from ..formula.legal import Board
-from . import gate3, gates12, pass1, pass2, schema as S
+from . import gate3, gates12, linguistics, pass1, pass2, schema as S
 from .effects import Operation, conditions_after, flatten
 
 SERVE, BOUNCE, ASK, REFUSE = "SERVE", "BOUNCE", "ASK", "REFUSE"
@@ -70,7 +70,8 @@ class Run(NamedTuple):
     asks: List[str]                         # to the OPERATOR
     bounces: List[str]                      # to the MODEL
     illegal: List[gate3.Illegal]
-    outcome: str
+    linguistics: List = ()
+    outcome: str = ""
 
     @property
     def handles(self) -> List[str]:
@@ -89,9 +90,18 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     asks: List[str] = list(early["asks"])
     early_bounces = list(early["bounces"])
 
-    table = pass2.symbol_table(rows, board)
+    declared = pass2.symbol_table(rows, board)
+
+    # ⇒⇒ THE LINGUISTICS GATE RUNS BETWEEN PASS 2 AND GATE 3, AND EVERY EVALUATION GOES THROUGH
+    #   IT — including each retry, from the PRISTINE table. Settling drops rows, so re-settling
+    #   an already-settled table could never bring one back if a later answer needed it.
+    def evaluate(ops):
+        settled_rows, settled_table, notes = linguistics.report(
+            request, rows, ops, declared, board)
+        return settled_rows, settled_table, notes, gate3.check(ops, settled_table, board, world)
+
     operations = pass2.operations_for(request, rows, board, model=model, timeout=timeout)
-    illegal = gate3.check(operations, table, board, world)
+    rows, table, ling, illegal = evaluate(operations)
 
     # ⇒⇒ THE RETRY. A BOUNCE MEANS THE MODEL'S OWN MISS, SO THE MODEL GETS ANOTHER GO.
     #
@@ -115,13 +125,13 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
                                      rejected=rejected)
         if not again:
             break
-        fresh = gate3.check(again, table, board, world)
+        fresh_rows, fresh_table, fresh_ling, fresh = evaluate(again)
         # ⇒ KEEP THE BETTER ANSWER, NEVER THE LATER ONE. A retry that produces MORE illegal
         #   steps is a regression, and taking it because it came second would be the repair
         #   loop making things worse while looking busy.
         if len(fresh) >= len(illegal):
             break
-        operations, illegal = again, fresh
+        operations, rows, table, ling, illegal = again, fresh_rows, fresh_table, fresh_ling, fresh
     # ⇒⇒ A WORD MAY BE ACCOUNTED FOR BY AN OPERATION, NOT ONLY BY A DECLARATION.
     #
     #   Gate 1's leftover rule was written when declarations were all there was, so it asks
@@ -144,6 +154,11 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
                 continue          # every leftover word is an operation's argument
         bounces.append(finding.says)
 
+    # ⇒ THE LINGUISTICS FINDINGS CARRY THEIR OWN AUDIENCE. A mood or an exclusion the
+    #   vocabulary cannot express is the OPERATOR's — re-asking the model for something
+    #   unsayable is the trap three refusal attempts already walked into.
+    for note in ling:
+        (asks if note.audience == "operator" else bounces).append(repr(note))
     for bad in illegal:
         (asks if bad.rule in ANSWERABLE else bounces).append(repr(bad))
     asks += destructive(operations, table, request, board)
@@ -152,7 +167,8 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     conditions = flatten(conditions_after(declared, _aimed(operations, table), board))
 
     return Run(request, rows, table, operations, conditions,
-               asks, bounces, illegal, _verdict(operations, illegal, asks, bounces))
+               asks, bounces, illegal, ling,
+               _verdict(operations, illegal, asks, bounces))
 
 
 def _destroyers(board: Board) -> Dict[str, str]:
