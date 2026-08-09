@@ -967,6 +967,101 @@ def test_gate_3_computes_the_refusal_the_model_will_not_give():
         channel.constrained = was
 
 
+def _canned(steps):
+    """Stub the model with a fixed pass-2 answer, so the CHAIN is exercised with no GPU.
+
+    Rule W6 beat 3: passing in isolation says nothing about being reached, and being reached is
+    the thing that keeps failing here. Pass 1 needs no model at all; only pass 2's one question
+    does, so it is answered from a table.
+    """
+    import engines.channel as channel
+    was = channel.constrained
+
+    def fake(prompt, payload, schema, **kw):
+        if "operations" in (schema.get("properties") or {}):
+            return {"operations": [{"operator": o, "on": t, "value": v} for o, t, v in steps]}
+        return {}
+
+    channel.constrained = fake
+    return channel, was
+
+
+def test_the_whole_chain_runs_and_every_stage_is_reached():
+    print("\n[chain] six pieces were built over two days and every one ran in a bench of its "
+          "own — `operations_for` had exactly ONE caller, its own main()")
+    from tests.bench.twopass import pipeline as PL
+    from tests.bench.twopass.metrics import Lab
+    board = Board()
+    channel, was = _canned([("probe_alive", "vms", None), ("stop_vm", "not_alive_vms", None)])
+    try:
+        got = PL.run("ping every vm and stop the ones that do not answer",
+                     board=board, world=Lab())
+        check("pass 1 reached — the run-time set is declared and addressable",
+              got.handles == ["vms", "not_alive_vms"])
+        check("pass 2 reached — operations came back", len(got.operations) == 2)
+        check("gate 3 reached — and found nothing wrong", not got.illegal)
+        # ⇒ THE EFFECT TABLE IS REACHED THROUGH THE HANDLE DEREFERENCE. `conditions_after` is
+        #   keyed by the declaration's NAME and pass 2 speaks in HANDLES; without `_aimed` the
+        #   effects land on nothing and the conditions come back short, silently.
+        check("effects reached — stop_vm's own effect is computed, not read from English",
+              {"status": "stopped"} in got.conditions)
+        check("and the request's own condition survives", {"alive": False} in got.conditions)
+        check("so the verdict is SERVE", got.outcome == PL.SERVE)
+    finally:
+        channel.constrained = was
+
+
+def test_a_refusal_is_only_a_refusal_when_nobody_could_answer_it():
+    print("\n[chain] rung 9 has every operation illegal under BOTH conditions, for two "
+          "different reasons — and only one of them is a refusal")
+    from tests.bench.twopass import pipeline as PL
+    from tests.bench.twopass.metrics import Lab
+    board = Board()
+    mesh = [("add_label", "n1", "n2"), ("add_label", "n2", "n1"),
+            ("add_label", "n3", "n1"), ("add_label", "n3", "n2")]
+    channel, was = _canned(mesh)
+    try:
+        r9 = "make sure n1, n2 and n3 can all ping each other"
+        unknown = PL.run(r9, board=board, world=Lab())
+        check("with the kinds unknown every step is illegal", len(unknown.illegal) == 4)
+        check("but the operator could answer it, so it ASKS", unknown.outcome == PL.ASK)
+
+        known = PL.run(r9, board=board, world=_NamedLab("n1", "n2", "n3"))
+        check("with the kinds settled it is still illegal", len(known.illegal) == 4)
+        check("and now nobody can answer it, so it REFUSES", known.outcome == PL.REFUSE)
+    finally:
+        channel.constrained = was
+
+
+def test_a_destructive_operation_over_a_whole_set_asks_first():
+    print("\n[chain] rung 14 SERVED `delete_vm` over every machine in the lab, and every "
+          "check passed — nothing about it is ILLEGAL, which is exactly the problem")
+    from tests.bench.twopass import pipeline as PL
+    from tests.bench.twopass.metrics import Lab
+    board = Board()
+    channel, was = _canned([("delete_vm", "vms", None), ("probe_exists", "vms", None)])
+    try:
+        got = PL.run("make sure there are exactly two machines left", board=board, world=Lab())
+        check("gate 3 stays silent — it is not illegal", not got.illegal)
+        check("but it does not SERVE", got.outcome != PL.SERVE)
+        check("it asks the operator to confirm",
+              any("Confirm before this runs" in a for a in got.asks))
+        check("and says what would be removed",
+              any("NOTHING NARROWS IT" in a for a in got.asks))
+    finally:
+        channel.constrained = was
+
+    # ⇒ THE CONTROL: deleting a thing the operator NAMED is not a surprise, and a guard that
+    #   fires on it would be noise that gets switched off.
+    channel, was = _canned([("delete_vm", "alpha", None)])
+    try:
+        named = PL.run("delete the vm named alpha", board=board, world=Lab())
+        check("deleting a named individual raises no confirmation",
+              not any("Confirm before this runs" in a for a in named.asks))
+    finally:
+        channel.constrained = was
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "two-pass schema")
