@@ -122,8 +122,38 @@ def gate1(rows: List[S.Declared], request: str,
 
 
 def bounces(findings: List[Finding]) -> List[Finding]:
-    """What goes BACK TO THE MODEL rather than to the operator."""
-    return [f for f in findings if f.kind == "left-over"]
+    """What goes BACK TO THE MODEL rather than to the operator.
+
+    ⇒ **AND A SPAN-GRAIN RESIDUE BOUNCES ON THE SAME GROUND.** `unread-value` is a word the
+      REQUEST itself binds — quoted as a value, or named outright — that no declaration
+      carries. The operator already said it, so failing to read it is the model's miss, which
+      is precisely the test that decides this list.
+    """
+    return [f for f in findings if f.kind in ("left-over", "unread-value")]
+
+
+def residues(rows: List[S.Declared], request: str, board: Optional[Board] = None,
+             world=None) -> List[Finding]:
+    """THE SPAN-GRAIN HALF OF THE LEFTOVER RULE — see `residue.py` for why it is needed.
+
+    Gate 1 asks which words no SPAN claimed. This asks which words inside a span no CONDITION
+    claimed, and routes each by the SLOT it landed in rather than by what it might mean:
+
+        BOUNCE      the request binds it and the reading missed it   -> the model
+        ASK         only an open slot could hold it                  -> the operator
+        RELATIONAL  it carries a set operation                       -> pass 2
+    """
+    from .residue import ASK, BOUNCE, REJECT, report as _residue
+    out: List[Finding] = []
+    for r in _residue(rows, request, board, world):
+        if r.verdict == BOUNCE:
+            out.append(Finding(1, "unread-value", r.word,
+                               f"{r.why} — read the request again and declare what "
+                               f"{r.word!r} belongs to"))
+        elif r.verdict in (ASK, REJECT):
+            out.append(Finding(2, "unread-descriptor", r.word,
+                               f"{r.why}. Is it a name, a label, or should it be ignored?"))
+    return out
 
 
 def _locate(row: S.Declared, request: str, board: Optional[Board] = None):
@@ -215,10 +245,14 @@ def report(rows: List[S.Declared], request: str, board: Optional[Board] = None,
            world=None) -> Dict[str, object]:
     """Both gates over one symbol table. NOTHING IS REPAIRED — findings are questions."""
     board = board or Board()
-    found = gate1(rows, request, board) + gate2(rows, board) + conflicts(rows, world, board)
+    found = (gate1(rows, request, board) + gate2(rows, board)
+             + conflicts(rows, world, board) + residues(rows, request, board, world))
     return {
         "findings": found,
-        "asks": [f.says for f in found],
+        # ⇒ THE OPERATOR'S HALF ONLY. A bounce is not a question — the words are already in the
+        #   request, so it goes back to the model instead of costing the operator a turn.
+        "asks": [f.says for f in found if f not in bounces(found)],
+        "bounces": bounces(found),
         "legal": not found,
         "by_gate": {1: [f for f in found if f.gate == 1],
                     2: [f for f in found if f.gate == 2]},

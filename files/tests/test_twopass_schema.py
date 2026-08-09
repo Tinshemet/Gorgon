@@ -648,6 +648,81 @@ def test_the_contextual_kind_demands_the_evidence_it_was_written_for():
           not P._has_pronoun("the machine's network"))
 
 
+def test_the_slot_decides_whether_a_word_is_junk_not_its_meaning():
+    print("\n[residue] the operator: 'a grubnash isn't a descriptor that correlates to "
+          "anything, at best, a name or label' — so the SLOT decides, never the meaning")
+    from tests.bench.twopass import pass1 as P, residue as R
+    board = Board()
+    channel, was = _no_model()
+    try:
+        # ⇒ THE SAME WORD IN THREE POSITIONS, AND ALL THREE VERDICTS DIFFER. Nothing here
+        #   knows what `grubnash` means; only which slot it landed in.
+        def verdicts(request):
+            rows = P.run_scanned(request, board=board)
+            return {r.word: r.verdict for r in R.report(rows, request, board)}
+
+        check("a descriptor slot is closed, so junk asks",
+              verdicts("create a grubnash vm named alpha") == {"grubnash": R.ASK})
+        check("a naming slot is open, so the same word is silent",
+              verdicts("create a vm named grubnash") == {})
+        check("and so is a quoted label",
+              verdicts("give every vm the 'grubnash' label") == {})
+
+        # ⇒ WHERE THE JUNK WENT WHEN THE FIRST DOOR CLOSED. `conditions_from` promotes the
+        #   word beside an attribute into a VALUE, so it is not unread at all — it is a
+        #   confidently wrong filter that both gates pass.
+        promoted = P.run_scanned("put every vm on a wibblesome network", board=board)
+        check("junk beside an attribute word becomes a condition VALUE",
+              any(r.where.get("network") == "wibblesome" for r in promoted))
+        check("and the value is checked against the slot, so it still asks",
+              [r.verdict for r in R.report(promoted, "put every vm on a wibblesome network",
+                                           board)] == [R.ASK])
+
+        # ⇒ A REFERENCE THAT RESOLVES IS SILENT. The symbol table settles it with no lab —
+        #   rule D1, the symbol table is the contract.
+        declared_here = "create a network called mesh and put orion on it"
+        check("a reference to something declared in the same request is silent",
+              verdicts(declared_here) == {})
+
+        # THE CLEAN CONTROLS. A check that speaks about a correct reading is worse than none.
+        for request in ("create a vm named orion",
+                        "stop every vm that is running",
+                        "make sure at least 2 vms carry the 'edge' label",
+                        "launch the machines that do not answer"):
+            check(f"silent on a correct reading: {request!r}", verdicts(request) == {})
+    finally:
+        channel.constrained = was
+
+
+def test_a_span_residue_bounces_but_junk_asks():
+    print("\n[residue] two audiences, and the request decides which: a word the request BINDS "
+          "is the model's miss; a word nothing can hold is the operator's call")
+    from tests.bench.twopass import gates12 as G, pass1 as P, residue as R
+    board = Board()
+    channel, was = _no_model()
+    try:
+        bound = "create 3 vms labelled 'edge' and put the edge ones on a network"
+        rows = P.run_scanned(bound, board=board)
+        check("a value quoted earlier in the request BOUNCES",
+              [r.verdict for r in R.report(rows, bound, board)] == [R.BOUNCE])
+        report = G.report(rows, bound, board)
+        check("so it reaches the model, not the operator",
+              any(f.kind == "unread-value" for f in report["bounces"]))
+        check("and it is not put to the operator at all",
+              not any("edge" in a and "name, a label" in a for a in report["asks"]))
+
+        junk = "create a grubnash vm named alpha"
+        jr = G.report(P.run_scanned(junk, board=board), junk, board)
+        check("junk goes to the OPERATOR", any("grubnash" in a for a in jr["asks"]))
+        check("and never bounces — the model would find it a job",
+              not jr["bounces"])
+        check("the ask is a CLOSED CHOICE, not a request for an explanation",
+              all("Is it a name, a label, or should it be ignored?" in a
+                  for a in jr["asks"] if "grubnash" in a))
+    finally:
+        channel.constrained = was
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "two-pass schema")
