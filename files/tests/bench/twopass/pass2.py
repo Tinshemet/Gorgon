@@ -187,7 +187,8 @@ ASK = ("Say what has to be DONE, as a list of steps. Each step names one operati
        "Do not invent a name.")
 
 
-def _schema(handles: List[str], operators: List[str], require_one: bool = True) -> dict:
+def _schema(handles: List[str], operators: List[str], require_one: bool = True,
+            free_value: bool = False) -> dict:
     """⇒ `require_one=False` IS THE REFUSAL ESCAPE, AND IT IS SUBTRACTIVE ON PURPOSE.
 
     Two attempts at reliable refusal have already been withdrawn after measurement
@@ -211,6 +212,19 @@ def _schema(handles: List[str], operators: List[str], require_one: bool = True) 
     array: dict = {"type": "array", "items": None}
     if require_one:
         array["minItems"] = 1
+    # ⇒ **THE VALUE ENUM MADE THE CORRECT ANSWER UNSAYABLE, AND THAT IS MY BUG NOT THE
+    #   MODEL'S.** `enum: handles + [None]` permits only declared objects, so
+    #   `add_label(prod_vms, "prod")` — a label is free text — cannot be expressed at all. The
+    #   model is forced to pick a handle and picks the target itself:
+    #
+    #       add_label(prod_vms, prod_vms)   add_label(red_vms, red_vms)   ×5 across the corpus
+    #
+    #   That is five of the seven pass-2 errors in the first end-to-end run, and NOT a thing to
+    #   retry around. The manifest already says which slots take text and which take an object
+    #   (`refs`), and gate 3 already checks both directions — so the enum is doing no work the
+    #   gate does not do better, while forbidding half the legal answers.
+    value: dict = ({"type": ["string", "null"]} if free_value
+                   else {"type": ["string", "null"], "enum": handles + [None]})
     return {
         "type": "object", "additionalProperties": False, "required": ["operations"],
         "properties": {"operations": {**array, "items": {
@@ -219,24 +233,44 @@ def _schema(handles: List[str], operators: List[str], require_one: bool = True) 
             "properties": {
                 "operator": {"type": "string", "enum": operators},
                 "on": {"type": "string", "enum": handles},
-                "value": {"type": ["string", "null"], "enum": handles + [None]},
+                "value": value,
             }}}},
     }
 
 
-def _payload(request: str, table: List[Symbol], operators: List[str]) -> str:
+def _payload(request: str, table: List[Symbol], operators: List[str],
+             rejected: Optional[List[str]] = None) -> str:
+    """The symbol table, the operators, the request — and, on a retry, what was REJECTED.
+
+    ⇒ **THE REJECTIONS GO IN THE PAYLOAD AND NEVER IN THE PROMPT, AND THAT IS THE WHOLE SAFETY
+      ARGUMENT.** The last time prompt text was added to make the model behave differently, a
+      bisect proved the text caused the gain AND the damage together
+      ([[gorgon-refusal-enum-withdrawn]]). Here the base question is byte-identical on the
+      first attempt, so **a request that succeeds first time never sees any of this** — the
+      retry cannot regress what already worked, by construction rather than by measurement.
+
+    ⇒ **AND IT IS EVIDENCE, NOT INSTRUCTION.** Each line is a step that was produced and the
+      manifest's reason it is illegal. Nothing tells the model how to behave, which is the
+      distinction W7b draws: it is asked to MOVE again, given a fact it did not have.
+    """
     lines = ["these things have already been identified and confirmed:"]
     for sym in table:
         lines.append(f"  {sym.handle}  —  a {sym.row.object_type}  —  {sym.definition}"
                      f"  —  known {sym.settled}")
-    return (f"{chr(10).join(lines)}\n\n"
-            f"the operations you may use: {', '.join(operators)}\n\n"
-            f"the request: {request}")
+    out = (f"{chr(10).join(lines)}\n\n"
+           f"the operations you may use: {', '.join(operators)}\n\n"
+           f"the request: {request}")
+    if rejected:
+        out += ("\n\nthese steps were rejected by the lab and cannot be used:\n  "
+                + "\n  ".join(rejected))
+    return out
 
 
 def operations_for(request: str, rows: List[S.Declared], board: Optional[Board] = None,
                    model=None, temp: float = 0.0, timeout: int = 300,
-                   handles: str = "derived", require_one: bool = True) -> List[Operation]:
+                   handles: str = "derived", require_one: bool = True,
+                   free_value: bool = True,
+                   rejected: Optional[List[str]] = None) -> List[Operation]:
     """THE ONE QUESTION PASS 2 ASKS. Everything in the answer is closed."""
     from engines.channel import constrained
     board = board or Board()
@@ -246,8 +280,8 @@ def operations_for(request: str, rows: List[S.Declared], board: Optional[Board] 
         return []
     operators = operators_offered(board)
     try:
-        got = constrained(ASK, _payload(request, table, operators),
-                          _schema(names, operators, require_one),
+        got = constrained(ASK, _payload(request, table, operators, rejected),
+                          _schema(names, operators, require_one, free_value),
                           model=model, temp=temp, timeout=timeout) or {}
     except Exception:
         return []

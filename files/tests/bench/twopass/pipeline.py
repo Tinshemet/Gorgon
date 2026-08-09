@@ -78,7 +78,7 @@ class Run(NamedTuple):
 
 
 def run(request: str, board: Optional[Board] = None, world=None, model=None,
-        timeout: int = 300) -> Run:
+        timeout: int = 300, retries: int = 1) -> Run:
     """The whole chain. Two model calls' worth of questions in pass 1, one in pass 2."""
     board = board or Board()
 
@@ -91,8 +91,37 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
 
     table = pass2.symbol_table(rows, board)
     operations = pass2.operations_for(request, rows, board, model=model, timeout=timeout)
+    illegal = gate3.check(operations, table, board, world)
 
-    illegal = gate3.check(operations, table, board)
+    # ⇒⇒ THE RETRY. A BOUNCE MEANS THE MODEL'S OWN MISS, SO THE MODEL GETS ANOTHER GO.
+    #
+    #   It is handed the steps that were rejected and the manifest's reason for each — evidence
+    #   it did not have, not instruction about how to behave. The base question is byte-identical
+    #   on the first attempt, so **a request that succeeds first time never sees any of this**:
+    #   the retry cannot regress what already worked, by construction rather than by measurement.
+    #   That matters because the last time prompt text was added to change behaviour, a bisect
+    #   proved the text caused the gain AND the damage together.
+    #
+    #   ⇒ AND `unknown-kind` IS NOT RETRIED. Only the operator or the lab can say what `n1` is,
+    #     so re-asking would be inviting the model to guess — which is the whole failure the
+    #     kindless row exists to prevent.
+    rejected: List[str] = []
+    for _round in range(max(0, retries)):
+        retryable = [bad for bad in illegal if bad.rule not in ANSWERABLE]
+        if not retryable or not operations:
+            break
+        rejected = sorted({repr(bad) for bad in retryable} | set(rejected))
+        again = pass2.operations_for(request, rows, board, model=model, timeout=timeout,
+                                     rejected=rejected)
+        if not again:
+            break
+        fresh = gate3.check(again, table, board, world)
+        # ⇒ KEEP THE BETTER ANSWER, NEVER THE LATER ONE. A retry that produces MORE illegal
+        #   steps is a regression, and taking it because it came second would be the repair
+        #   loop making things worse while looking busy.
+        if len(fresh) >= len(illegal):
+            break
+        operations, illegal = again, fresh
     for bad in illegal:
         (asks if bad.rule in ANSWERABLE else bounces).append(repr(bad))
     asks += destructive(operations, table, board)
@@ -192,6 +221,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", type=int, default=None)
     ap.add_argument("--model", default=None)
+    ap.add_argument("--retries", type=int, default=1,
+                    help="how many times a BOUNCE is handed back to the model")
     ap.add_argument("--no-lab", action="store_true",
                     help="run with no world at all — every bare name stays kindless")
     args = ap.parse_args()
@@ -208,7 +239,8 @@ def main() -> None:
     for n, want in sorted(pass1.EXPECTED.items()):
         if args.only and n != args.only:
             continue
-        got = run(want.request, board=board, world=world, model=args.model)
+        got = run(want.request, board=board, world=world, model=args.model,
+                  retries=args.retries)
         tally[got.outcome] = tally.get(got.outcome, 0) + 1
         print(f"\n{'─' * 100}\nrung {n} · “{want.request[:74]}”")
         print(f"    declared   {', '.join(got.handles) or '—'}")

@@ -72,7 +72,33 @@ def _setter_for(operator: str) -> Optional[Dict]:
     return None
 
 
-def check(operations: List[Operation], table, board: Optional[Board] = None) -> List[Illegal]:
+def kind_of_operator(operator: str) -> Optional[str]:
+    """WHICH KIND THIS OPERATION BELONGS TO. Read off the manifest, never listed.
+
+    ⇒ **THE GAP THE FIRST END-TO-END RUN LEFT OPEN.** Rung 7 came back with
+      `delete_profile(prod_vms)` — a PROFILE's delete applied to a set of MACHINES — and every
+      rule passed it, because `_setter_for` finds nothing for a delete and the check returned
+      early. An operator that belongs to another kind is illegal on its face.
+
+    ⇒ **AND IT COVERS DELETES AND SETTERS ONLY — A CREATOR IS DELIBERATELY EXCLUDED.** A
+      creator's target is not its own kind: `create_snapshot(running_vms)` takes a snapshot OF
+      the machines, and that is rung 12's CORRECT answer. Including creators here would have
+      flagged it, which is a false alarm on a right answer — the most expensive kind. A setter
+      and a delete act on a member of their own kind, and those are the ones with evidence.
+    """
+    from planner.ir import config as _config
+    for kind, spec in (_config.KINDS or {}).items():
+        if not isinstance(spec, dict):
+            continue
+        if operator == spec.get("delete"):
+            return kind
+        if operator in (spec.get("setters") or {}) or operator in (spec.get("unsetters") or {}):
+            return kind
+    return None
+
+
+def check(operations: List[Operation], table, board: Optional[Board] = None,
+          world=None) -> List[Illegal]:
     """Every step, against the manifest and the symbol table. No model call, no judgement.
 
     `table` is `pass2.symbol_table`'s output — handle, row, definition. It is the ONLY source
@@ -95,6 +121,14 @@ def check(operations: List[Operation], table, board: Optional[Board] = None) -> 
             out.append(Illegal(step, "unknown-kind",
                                f"nothing says what {step.on!r} is, so {step.operator!r} "
                                f"cannot be applied to it — say what it is first"))
+            continue
+
+        # 4 · AN OPERATOR BELONGS TO A KIND, AND MAY NOT BE APPLIED TO ANOTHER.
+        owner = kind_of_operator(step.operator)
+        if owner and owner != row.kind:
+            out.append(Illegal(step, "wrong-kind-operator",
+                               f"{step.operator!r} is a {owner} operation and {step.on!r} "
+                               f"is a {row.kind}"))
             continue
 
         meta = _setter_for(step.operator)
@@ -127,10 +161,33 @@ def check(operations: List[Operation], table, board: Optional[Board] = None) -> 
                 out.append(Illegal(step, "wrong-kind-value",
                                    f"{step.operator!r} needs a {refs} and {step.value!r} "
                                    f"is a {got.kind}"))
+            continue
+
+        # 5 · A REFERENCE SLOT NEEDS A THING THAT EXISTS — the symbol table, then the lab.
+        #
+        # ⇒ **THIS RULE EXISTS BECAUSE THE VALUE ENUM WAS REMOVED.** While `value` was
+        #   restricted to declared handles the grammar guaranteed this, at the cost of making
+        #   `add_label(prod_vms, "prod")` unsayable — five of seven pass-2 errors. Free text
+        #   fixes those and opens this hole, so the guarantee moves from the grammar to here.
+        #   D1 is unchanged either way: a reference must resolve or it is an error.
+        if refs and not names_an_object:
+            there = None
+            if world is not None:
+                from planner.gates import claims as _claims
+                key = _claims.key_of(refs, board.kinds)
+                try:
+                    there = world.select({"kind": refs, key: str(step.value)}) if key else None
+                except Exception:
+                    there = None
+            if not there:
+                out.append(Illegal(step, "value-not-declared",
+                                   f"{step.operator!r} needs a {refs} called {step.value!r} "
+                                   f"and nothing declares one"))
     return out
 
 
-def refused(operations: List[Operation], table, board: Optional[Board] = None) -> bool:
+def refused(operations: List[Operation], table, board: Optional[Board] = None,
+            world=None) -> bool:
     """Is EVERY step illegal? Then the request cannot be served with this vocabulary.
 
     ⇒ **THIS IS THE DISTINCTION THAT MATTERS.** One bad step among good ones is a correction.
@@ -139,4 +196,4 @@ def refused(operations: List[Operation], table, board: Optional[Board] = None) -
     """
     if not operations:
         return True
-    return len(check(operations, table, board)) == len(operations)
+    return len(check(operations, table, board, world)) == len(operations)

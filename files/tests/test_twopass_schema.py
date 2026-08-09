@@ -1062,6 +1062,86 @@ def test_a_destructive_operation_over_a_whole_set_asks_first():
         channel.constrained = was
 
 
+def _canned_sequence(*answers):
+    """A model whose pass-2 answer CHANGES between calls, so a retry can be observed."""
+    import engines.channel as channel
+    was = channel.constrained
+    calls = {"n": 0}
+
+    def fake(prompt, payload, schema, **kw):
+        if "operations" not in (schema.get("properties") or {}):
+            return {}
+        i = min(calls["n"], len(answers) - 1)
+        calls["n"] += 1
+        return {"operations": [{"operator": o, "on": t, "value": v} for o, t, v in answers[i]]}
+
+    channel.constrained = fake
+    return channel, was, calls
+
+
+def test_the_retry_hands_the_model_its_own_miss():
+    print("\n[retry] a BOUNCE means the model's own miss, so the model gets another go — "
+          "given the rejected steps as EVIDENCE, never as instruction about how to behave")
+    from tests.bench.twopass import pipeline as PL
+    from tests.bench.twopass.metrics import Lab
+    board = Board()
+
+    # first answer is illegal (a profile's delete on machines); the second is legal
+    bad = [("add_label", "prod_vms", "prod"), ("delete_profile", "prod_vms", None)]
+    good = [("add_label", "prod_vms", "prod")]
+    channel, was, calls = _canned_sequence(bad, good)
+    try:
+        got = PL.run("make sure exactly 3 vms carry the 'prod' label",
+                     board=board, world=Lab(), retries=1)
+        check("the model was asked twice", calls["n"] == 2)
+        check("and the second, legal answer is the one kept",
+              [(o.operator, o.on, o.value) for o in got.operations] == list(good))
+        check("so nothing is left illegal", not got.illegal)
+    finally:
+        channel.constrained = was
+
+    # ⇒ A RETRY THAT MAKES THINGS WORSE IS DISCARDED. Taking the later answer because it came
+    #   second is how a repair loop degrades while looking busy.
+    worse = [("delete_profile", "prod_vms", None), ("delete_network", "prod_vms", None)]
+    channel, was, calls = _canned_sequence(bad, worse)
+    try:
+        got = PL.run("make sure exactly 3 vms carry the 'prod' label",
+                     board=board, world=Lab(), retries=1)
+        check("a worse retry is rejected and the first answer stands",
+              [(o.operator, o.on, o.value) for o in got.operations] == list(bad))
+    finally:
+        channel.constrained = was
+
+    # ⇒ AND AN UNANSWERABLE KIND IS NEVER RETRIED. Only the operator or the lab can say what
+    #   `n1` is, so re-asking would be inviting the model to guess.
+    mesh = [("add_label", "n1", "n2"), ("add_label", "n2", "n1")]
+    channel, was, calls = _canned_sequence(mesh, mesh)
+    try:
+        got = PL.run("make sure n1, n2 and n3 can all ping each other",
+                     board=board, world=Lab(), retries=2)
+        check("an unknown kind is not handed back to the model", calls["n"] == 1)
+        check("it goes to the operator instead", got.outcome == PL.ASK)
+    finally:
+        channel.constrained = was
+
+
+def test_a_first_time_success_never_sees_the_retry():
+    print("\n[retry] the base question is byte-identical on the first attempt, so the retry "
+          "cannot regress what already worked — by construction, not by measurement")
+    from tests.bench.twopass import pipeline as PL
+    from tests.bench.twopass.metrics import Lab
+    board = Board()
+    ok = [("probe_alive", "vms", None), ("stop_vm", "not_alive_vms", None)]
+    channel, was, calls = _canned_sequence(ok, [("delete_vm", "vms", None)])
+    try:
+        got = PL.run("ping every vm and stop the ones that do not answer",
+                     board=board, world=Lab(), retries=3)
+        check("the model is asked exactly once", calls["n"] == 1)
+        check("and rung 11 still serves", got.outcome == PL.SERVE)
+    finally:
+        channel.constrained = was
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "two-pass schema")
