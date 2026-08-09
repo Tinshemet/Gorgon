@@ -847,6 +847,60 @@ def test_settling_is_general_across_kinds_and_key_names():
         channel.constrained = was
 
 
+def test_pass_2_addresses_a_declaration_by_a_derived_handle():
+    print("\n[pass2] the model was measured pointing at `fleet` and `unresponsive`. Pass 1 "
+          "names a row by its SPAN, and a 34-character enum member is not what was measured")
+    from tests.bench.twopass import pass1 as P, pass2 as P2
+    from tests.bench.twopass.metrics import Lab
+    board = Board()
+    channel, was = _no_model()
+    try:
+        def handles(n):
+            rows = P.settle_with_world(P.run_scanned(P.EXPECTED[n].request, board=board),
+                                       Lab(), board)
+            return [s.handle for s in P2.symbol_table(rows, board)]
+
+        check("a named individual addresses by its key value", handles(1) == ["alpha"])
+        check("two of them keep their own names", handles(3) == ["lab", "web"])
+        check("a conditioned set says what narrows it", handles(5) == ["stopped_vms"])
+        # ⇒ RUNG 11 IS THE ONE THAT MATTERS: the run-time set must be addressable at all.
+        check("and a boolean condition reads as a negation",
+              handles(11) == ["vms", "not_alive_vms"])
+        # ⇒ AND A KINDLESS ROW TAKES THE OPERATOR'S OWN WORD. `thing`, `thing_2`, `thing_3`
+        #   gave three indistinguishable addresses for three distinct machines; taking the
+        #   last non-grammar word gave `ping`, a VERB addressing a machine.
+        check("three bare names stay distinguishable", handles(9) == ["n1", "n2", "n3"])
+        check("and a verb is never an address", "ping" not in handles(9))
+
+        every = [h for n in P.EXPECTED for h in handles(n)]
+        check("no handle is empty", all(h and h.strip() for h in every))
+        check("and none is a whole span", all(len(h) < 20 for h in every))
+    finally:
+        channel.constrained = was
+
+
+def test_the_operator_enum_order_is_pinned_because_it_moved_the_answer():
+    print("\n[pass2] moving ONE entry of this enum doubled exact matches and removed every "
+          "spurious step — so the order is a hidden parameter and is pinned by value")
+    from tests.bench.twopass import pass2 as P2
+    ops = P2.operators_offered(Board())
+
+    # ⇒ MEASURED, n=3, four orderings with an isolation cell: `add_label` at index 0 or 1
+    #   gave 6 spurious steps and 3/9 exact; that one entry moved to the end gave 0 and 6/9.
+    check("add_label is LAST and that is a measurement, not a preference",
+          ops[-1] == "add_label")
+    check("it appears exactly once", ops.count("add_label") == 1)
+    check("the rest is otherwise stable, not shuffled",
+          ops[:-1] == sorted(ops[:-1]))
+    check("every operator is read from the manifest, so a probe is offered",
+          "probe_alive" in ops and "create_vm" in ops and "stop_vm" in ops)
+    # THE GAP, STATED RATHER THAN HIDDEN: a vm's 21 `acts` are not offered, so a request that
+    # needs one has NO legal answer — and a closed enum with no legal answer produces a
+    # confident wrong one. Rung 9 reaches for `add_label` to build a ping mesh.
+    check("`acts` are deliberately absent, and nothing pretends otherwise",
+          not any(o.startswith("kill") or o == "memory" for o in ops))
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "two-pass schema")
