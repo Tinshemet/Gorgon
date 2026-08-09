@@ -87,7 +87,7 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
 
     early = gates12.report(rows, request, board, world)
     asks: List[str] = list(early["asks"])
-    bounces: List[str] = [f.says for f in early["bounces"]]
+    early_bounces = list(early["bounces"])
 
     table = pass2.symbol_table(rows, board)
     operations = pass2.operations_for(request, rows, board, model=model, timeout=timeout)
@@ -122,9 +122,31 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
         if len(fresh) >= len(illegal):
             break
         operations, illegal = again, fresh
+    # ⇒⇒ A WORD MAY BE ACCOUNTED FOR BY AN OPERATION, NOT ONLY BY A DECLARATION.
+    #
+    #   Gate 1's leftover rule was written when declarations were all there was, so it asks
+    #   which words no DECLARATION claimed. *"give them all the 'fleet' label"* is not a thing
+    #   — it is something pass 2 DOES — and once `all the 'fleet' label` stopped being declared
+    #   as a bogus object, gate 1 started bouncing `'fleet'` as unread. It is read perfectly
+    #   well, by `add_label(vms, 'fleet')`.
+    #
+    #   ⇒ **THIS IS THE FIRST CHECK THAT SPANS BOTH PASSES**, and it is only possible now that
+    #     both artifacts exist. Absence becomes a comparison across the pair rather than within
+    #     one of them.
+    spent = {str(op.value).strip().lower() for op in operations if op.value}
+    spent |= {str(op.on).strip().lower() for op in operations}
+    bounces: List[str] = []
+    for finding in early_bounces:
+        if finding.kind == "left-over":
+            unclaimed = [w.strip(" '\"") for w in str(finding.about).split(",")
+                         if w.strip(" '\"").lower() not in spent]
+            if not unclaimed:
+                continue          # every leftover word is an operation's argument
+        bounces.append(finding.says)
+
     for bad in illegal:
         (asks if bad.rule in ANSWERABLE else bounces).append(repr(bad))
-    asks += destructive(operations, table, board)
+    asks += destructive(operations, table, request, board)
 
     declared = {row.name: dict(row.where) for row in rows}
     conditions = flatten(conditions_after(declared, _aimed(operations, table), board))
@@ -143,8 +165,12 @@ def _destroyers(board: Board) -> Dict[str, str]:
     return out
 
 
-def destructive(operations: List[Operation], table, board: Optional[Board] = None
-                ) -> List[str]:
+DESTRUCTIVE_WORDS = ("delete", "remove", "destroy", "tear down", "get rid",
+                     "wipe", "drop", "kill off", "clear out")
+
+
+def destructive(operations: List[Operation], table, request: str = "",
+                board: Optional[Board] = None) -> List[str]:
     """A DESTRUCTIVE OPERATION OVER A WHOLE SET GOES TO THE OPERATOR. It is not illegal.
 
     ⇒ **FOUND BY THE FIRST END-TO-END RUN, AND BY NOTHING BEFORE IT.** Rung 14 —
@@ -171,18 +197,33 @@ def destructive(operations: List[Operation], table, board: Optional[Board] = Non
     board = board or Board()
     destroyers = _destroyers(board)
     by_handle = {sym.handle: sym for sym in table}
+    # ⇒⇒ NOTHING IS DESTROYED UNLESS THE REQUEST ASKED FOR DESTRUCTION.
+    #
+    #   The first version exempted a NAMED INDIVIDUAL, on the reasoning that deleting something
+    #   the operator named by name is not a surprise. That was wrong, and rung 8 proved it:
+    #   *"put every vm on core, except db — db goes on a network called dmz"* produced
+    #   `delete_network(dmz)` followed by `create_network(dmz)` — destroying and rebuilding a
+    #   network nobody mentioned destroying — and it SERVED, because `dmz` is named.
+    #
+    #   ⇒ THE OPERATOR NAMED IT AS A CREATE TARGET, NOT AS A DELETE TARGET. So the exemption is
+    #     no longer about the target at all: it is about whether the REQUEST asks to destroy
+    #     anything. *"delete the vm named alpha"* says so; rungs 4, 8 and 13 do not.
+    asked_to_destroy = any(word in request.lower() for word in DESTRUCTIVE_WORDS)
     out: List[str] = []
     for op in operations:
         kind = destroyers.get(op.operator)
         if not kind:
             continue
         sym = by_handle.get(op.on)
-        if sym is None or not sym.row.is_set:
-            continue          # a named individual is what the operator asked for by name
+        if sym is None:
+            continue
+        if asked_to_destroy and not sym.row.is_set:
+            continue          # they said to remove it, and named the one thing to remove
         bound = ", ".join(f"{k} = {v}" for k, v in (sym.row.where or {}).items())
-        out.append(f"{op.operator}({op.on}) removes {sym.definition}"
-                   f"{' — narrowed only by ' + bound if bound else ' — NOTHING NARROWS IT'}. "
-                   f"Confirm before this runs.")
+        narrow = (" — narrowed only by " + bound if bound else
+                  " — NOTHING NARROWS IT" if sym.row.is_set else "")
+        out.append(f"{op.operator}({op.on}) removes {sym.definition}{narrow}, and the request "
+                   f"never asks to remove anything. Confirm before this runs.")
     return out
 
 

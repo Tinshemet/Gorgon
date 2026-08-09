@@ -402,6 +402,18 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
                                          comparator=kept.comparator or first.comparator,
                                          span=kept.span)
             continue
+        # ⇒⇒ A VALUE PHRASE IS NOT AN OBJECT. *"give them all the 'fleet' label"* was declared
+        #   as a thing of unknown kind, so pass 2 was handed a HANDLE called `fleet` — and then
+        #   `add_label(vms, fleet)` reads as *label these machines with that machine*, which
+        #   gate 3 rejects. Rungs 4 and 13 both fail this way and neither is a pass 2 error.
+        #
+        #   ⇒ THE SIGNAL IS THE REQUEST'S OWN PUNCTUATION, not a judgement about what `fleet`
+        #     might be. An ATTRIBUTE NAME beside a QUOTED word is the operator writing a value:
+        #     `the 'fleet' label`, `labelled 'red'`. A bare word beside an attribute name is
+        #     left alone, because only the lab can say whether it names something.
+        if first.kind is None and _is_value_phrase(first.span, board):
+            continue
+
         where = (conditions_from(first.modifiers, first.kind, board, first.span)
                  if first.kind else {})
         object_type = (f"{first.kind}{S.SET_SUFFIX}" if _is_group(first) else first.kind) \
@@ -491,6 +503,47 @@ def _is_group(scanned) -> bool:
     if any(w.strip(".,'") in PLURAL_PRONOUNS and not _possessive(w) for w in words):
         return True
     return any(_plural(w) for w in words)
+
+
+def _is_value_phrase(span: str, board: Board) -> bool:
+    """Is this span the operator WRITING A VALUE rather than naming a thing?
+
+    Two marks, and both must be present, because either alone is far too broad:
+
+      * an ATTRIBUTE NAME the manifest declares — `label`, `status`, `os` — appears in it
+      * and a QUOTED word sits beside it, which is how the request itself marks a literal
+
+    `the 'fleet' label` and `labelled 'red'` qualify. `except db` does not — no attribute word.
+    `a network called core` does not — it has a kind, so it never reaches here. And a BARE word
+    beside an attribute name is deliberately left alone: nothing but the lab can say whether it
+    names something, which is the whole of item 0.
+    """
+    from planner.ir import config as _config
+    words = str(span).lower().split()
+    attrs = set()
+    for spec in (_config.KINDS or {}).values():
+        if isinstance(spec, dict):
+            attrs |= set(spec.get("attrs") or []) | set((spec.get("aliases") or {}).keys())
+    # ⇒ MATCH AN ATTRIBUTE THE SAME WAY `conditions_from` DOES, in both directions. `labelled`
+    #   stems to `labell`, which no attribute equals — and a one-way test missed the commonest
+    #   descriptor in the whole corpus. The length guards are that function's, for the same
+    #   reason: a two-letter cue must match exactly or `ones` starts matching `on`.
+    def _is_attr(word: str) -> bool:
+        stem = _stem_of(word)
+        return any(word == cue or stem == cue
+                   or (len(cue) >= 4 and len(stem) >= 3
+                       and (cue.startswith(stem) or stem.startswith(cue)))
+                   for cue in attrs)
+
+    has_attr = any(_is_attr(w.strip(".,'\"")) for w in words)
+    has_quote = any(w.strip(".,").startswith(("'", '"')) and len(w.strip(".,'\"")) > 1
+                    for w in words)
+    return has_attr and has_quote
+
+
+def _stem_of(word: str) -> str:
+    from .scan import _stem
+    return _stem(word)
 
 
 def _has_pronoun(span: str) -> bool:

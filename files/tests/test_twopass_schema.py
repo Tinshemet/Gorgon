@@ -1142,6 +1142,85 @@ def test_a_first_time_success_never_sees_the_retry():
         channel.constrained = was
 
 
+def test_a_value_phrase_is_not_an_object():
+    print("\n[objects] \"give them all the 'fleet' label\" was declared as a THING, so pass 2 "
+          "got a handle called `fleet` and `add_label(vms, fleet)` reads as label-with-a-machine")
+    from tests.bench.twopass import pass1 as P, pass2 as P2
+    board = Board()
+    channel, was = _no_model()
+    try:
+        for n in (4, 13):
+            rows = P.run_scanned(P.EXPECTED[n].request, board=board)
+            handles = [s.handle for s in P2.symbol_table(rows, board)]
+            check(f"rung {n} no longer declares the label phrase", "fleet" not in handles)
+            check(f"rung {n} still declares both real objects", len(rows) == 2)
+
+        # ⇒ THE SIGNAL IS AN ATTRIBUTE WORD BESIDE A QUOTED ONE, never a guess about the word.
+        check("an attribute name beside a quoted word is a value phrase",
+              P._is_value_phrase("all the 'fleet' label", board))
+        check("and so is a labelling phrase", P._is_value_phrase("labelled 'red'", board))
+        # THE CONTROLS. A bare word beside an attribute name is left alone — only the lab can
+        # say whether it names something, which is the whole of item 0.
+        check("a bare word beside an attribute word is NOT",
+              not P._is_value_phrase("the fleet label", board))
+        check("nor is a plain name", not P._is_value_phrase("except db", board))
+        check("nor a quoted word with no attribute beside it",
+              not P._is_value_phrase("the 'red' ones", board))
+    finally:
+        channel.constrained = was
+
+
+def test_an_operation_can_account_for_a_word_too():
+    print("\n[objects] gate 1's leftover rule predates pass 2 — it asks which words no "
+          "DECLARATION claimed, and 'fleet' is claimed by add_label")
+    from tests.bench.twopass import pipeline as PL
+    from tests.bench.twopass.metrics import Lab
+    board = Board()
+    r4 = P4 = ("create 5 vms, put them all in a network, give them all the 'fleet' label, "
+               "and make sure they all ping each other")
+    channel, was, _ = _canned_sequence([("create_vm", "vms", None),
+                                        ("add_vm_to_network", "vms", "network"),
+                                        ("add_label", "vms", "fleet")])
+    try:
+        got = PL.run(r4, board=board, world=Lab())
+        check("the label word no longer bounces as unread",
+              not any("fleet" in b for b in got.bounces))
+        check("and the label still reaches the program",
+              {"label": "fleet"} in got.conditions)
+    finally:
+        channel.constrained = was
+
+
+def test_nothing_is_destroyed_unless_the_request_asks():
+    print("\n[safety] rung 8 produced delete_network(dmz) then create_network(dmz) — "
+          "destroying a network nobody mentioned — and it SERVED, because `dmz` is named")
+    from tests.bench.twopass import pipeline as PL
+    from tests.bench.twopass.metrics import Lab
+    board = Board()
+
+    channel, was, _ = _canned_sequence([("delete_network", "dmz", None)])
+    try:
+        got = PL.run("put every vm on a network called core, except db — db goes on a "
+                     "network called dmz instead", board=board, world=Lab())
+        check("a delete nobody asked for is confirmed even on a NAMED thing",
+              any("Confirm before this runs" in a for a in got.asks))
+        check("and the reason says the request never asked",
+              any("never asks to remove anything" in a for a in got.asks))
+        check("so it does not serve", got.outcome != PL.SERVE)
+    finally:
+        channel.constrained = was
+
+    # ⇒ THE CONTROL: when the request DOES say to remove something and names it, no
+    #   confirmation — a guard that fires on what was plainly asked for gets switched off.
+    channel, was, _ = _canned_sequence([("delete_vm", "alpha", None)])
+    try:
+        named = PL.run("delete the vm named alpha", board=board, world=Lab())
+        check("an explicit delete of a named thing passes without a confirm",
+              not any("Confirm before this runs" in a for a in named.asks))
+    finally:
+        channel.constrained = was
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "two-pass schema")

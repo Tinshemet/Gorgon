@@ -306,13 +306,43 @@ def _reference_values(rows: List[S.Declared], request: str, board: Board,
     return out
 
 
+def _names_declared_here(rows: List[S.Declared], board: Board) -> set:
+    """Words that IDENTIFY a declared row — its key value, or its candidate identity.
+
+    ⇒ **THE CHECK DID NOT CONSULT THE OTHER DECLARATIONS, AND SO IT LIED.** Rung 8 says
+      *"except db — db goes on a network called dmz"*. The second `db` falls inside the dmz
+      network's span, and the check reported it as an unread reference — while `db` was
+      declared as its own row two lines above. A word that names a declared object is a
+      REFERENCE to it, not a residue.
+
+    ⇒ **AND IT IS THE KEY VALUE ONLY, WHICH IS THE WHOLE PRECISION OF THIS.** `db` is a vm's
+      `name`, so it identifies an object and a later mention points at it. `red` in rung 6 is a
+      `label` — an ordinary attribute value, not an identity — so a later *"the red ones"*
+      still owes a condition and must still be caught. Exempting every value alike would have
+      thrown that away.
+    """
+    from planner.gates import claims as _claims
+    out: set = set()
+    for row in rows:
+        if row.identity:
+            out.add(str(row.identity).lower())
+        key_attr = _claims.key_of(row.kind, board.kinds) if row.kind in board.kinds else None
+        value = (row.where or {}).get(key_attr) if key_attr else None
+        if value:
+            out.add(str(value).lower())
+    return out
+
+
 def report(rows: List[S.Declared], request: str, board: Optional[Board] = None,
            world=None) -> List[Residue]:
     """Every word in every declaration that nothing can account for, with its verdict."""
     board = board or Board()
+    identified = _names_declared_here(rows, board)
     out: List[Residue] = []
     for row in rows:
         for word in unread(row, request, board):
+            if word.lower() in identified:
+                continue          # it names a row declared elsewhere — a reference, not residue
             verdict, why = classify(word, row.kind, request, world)
             out.append(Residue(word, row.name, row.kind, verdict, why))
         if row.object_type == S.UNKNOWN_KIND:
