@@ -323,8 +323,64 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
         #   all, produced nothing whatever. The operator's rule: a bare item and a full one are
         #   the same until the WORLD says otherwise, so declare it and let gate 2 ask.
         # SPAN COLLISION IS THE FOLD, and only between DECLARATIONS.
+        # ⇒ A ROW ON THE SAME PHRASE WINS OVER A ROW THAT MERELY OVERLAPS. Taking the FIRST
+        #   overlapping row made the `core` anchor collide with the `every vm` row rather than
+        #   with the `a network called core` row it belongs to — and rung 8 declared that
+        #   network TWICE, once per anchor.
         clash = next((i for i, r in enumerate(rows)
-                      if r.span and first.collides(_span_of(r, request, board))), None)
+                      if str(r.span).strip() == str(first.span).strip()), None)
+        if clash is None:
+            clash = next((i for i, r in enumerate(rows)
+                          if r.span and first.collides(_span_of(r, request, board))), None)
+
+        # ⇒⇒ A COLLISION IS NOT ALWAYS A FOLD, AND ASSUMING IT WAS ATE WHOLE OBJECTS.
+        #
+        #   *"clone golden into 3 new vms"* — `golden` has no noun after it, so its span runs
+        #   to the clause boundary and SWALLOWS `3 new vms`. The two overlap, the fold merged
+        #   them, and **the clone source vanished from the reading entirely**: rung 10 declares
+        #   one row where the correct reading has two. Rung 8 lost its `core` network the same
+        #   way. Both were invisible — a merged row looks like a read row.
+        #
+        #   ⇒ **THE TEST IS THE SPAN, NOT THE OVERLAP.** Two anchors on the SAME phrase are the
+        #     same thing: *"create a network called lab"* anchored on `lab` and on `network`
+        #     yields identical spans, which is the case the fold was built for. One span
+        #     CONTAINING another is the opposite situation — the outer one over-reached, and
+        #     the inner one has its own noun.
+        if clash is not None:
+            kept_span = _span_of(rows[clash], request, board)
+            # ⇒ IDENTITY IS THE RECORDED SPAN TEXT, NEVER A RE-DERIVED ONE. `_span_of` re-scans
+            #   using the row's whole phrase as an anchor, which can land on different offsets
+            #   than the scan that declared it — so comparing offsets said "different" for two
+            #   anchors on the same phrase and rung 8 declared `a network called core` TWICE.
+            kept_kind = (rows[clash].kind
+                         if rows[clash].object_type != UNKNOWN_KIND else None)
+            identical = str(first.span).strip() == str(rows[clash].span).strip()
+            same_kind = first.kind is not None and first.kind == kept_kind
+            if not identical and not same_kind:
+                # ⇒ TRIM AGAINST THE KEPT ROW'S OWN RECORDED WORDS, found in the request. The
+                #   re-derived span scans outward again and comes back covering the SAME ground
+                #   as the over-reaching one, so nothing ever trimmed.
+                at = request.lower().find(str(rows[clash].span).strip().lower())
+                kept_start = at if at >= 0 else (kept_span.start if kept_span else -1)
+                kept_end = (at + len(str(rows[clash].span).strip())) if at >= 0 else (
+                    kept_span.end if kept_span else -1)
+                if kept_start >= 0 and first.start < kept_start < first.end:
+                    first = first._replace(end=kept_start,
+                                           span=request[first.start:kept_start].strip())
+                elif kept_start >= 0 and first.start < kept_end < first.end:
+                    first = first._replace(start=kept_end,
+                                           span=request[kept_end:first.end].strip())
+                # ⇒ AND WHAT IS LEFT MUST STILL BE A THING. Trimming *"launch every vm that is
+                #   currently stopped"* leaves the bare verb `launch`, and declaring that as an
+                #   object cost rung 5 its SERVE — a verb belongs to pass 2 and may not stand
+                #   alone, which is the same rule gate 1 applies to leftovers.
+                from .scan import GRAMMAR, _operation_words
+                verbs = _operation_words(board)
+                left = [w.strip(".,'\"—–") for w in str(first.span).lower().split()]
+                if not any(w and w not in GRAMMAR and w not in verbs for w in left):
+                    continue
+                clash = None
+
         if clash is not None:
             # ⇒ A COLLISION TAKES THE BETTER INFORMATION, NOT THE EARLIER. Both anchors cover
             #   the same phrase, but the kind is read at-or-before the anchor — so anchored on
