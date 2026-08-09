@@ -115,12 +115,26 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #   ⇒ AND `unknown-kind` IS NOT RETRIED. Only the operator or the lab can say what `n1` is,
     #     so re-asking would be inviting the model to guess — which is the whole failure the
     #     kindless row exists to prevent.
+    # ⇒ A SPURIOUS STEP IS RETRYABLE TOO, AND IT IS THE MODEL'S TO DROP. `unasked-step` says
+    #   nothing in the request warrants the operation — evidence the model can act on, exactly
+    #   like an illegal one. Everything the linguistics gate addresses to the OPERATOR stays
+    #   out of the retry: re-asking for a mood the vocabulary cannot express is the trap.
+    def _faults(bad_steps, notes):
+        return ([repr(b) for b in bad_steps if b.rule not in ANSWERABLE]
+                + [repr(n) for n in notes if n.audience == "model"])
+
     rejected: List[str] = []
     for _round in range(max(0, retries)):
-        retryable = [bad for bad in illegal if bad.rule not in ANSWERABLE]
+        # ⇒ NOT WHILE SOMETHING THE OPERATOR MUST ANSWER IS STILL OPEN. Rung 9's `add_label` is
+        #   genuinely unwarranted and genuinely retryable — but what BLOCKS that rung is *what
+        #   is n1?*, and no answer the model gives can settle it. Retrying here spends a call
+        #   to invite the guess the kindless row exists to prevent.
+        if any(bad.rule in ANSWERABLE for bad in illegal):
+            break
+        retryable = _faults(illegal, ling)
         if not retryable or not operations:
             break
-        rejected = sorted({repr(bad) for bad in retryable} | set(rejected))
+        rejected = sorted(set(retryable) | set(rejected))
         again = pass2.operations_for(request, rows, board, model=model, timeout=timeout,
                                      rejected=rejected)
         if not again:
@@ -129,7 +143,7 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
         # ⇒ KEEP THE BETTER ANSWER, NEVER THE LATER ONE. A retry that produces MORE illegal
         #   steps is a regression, and taking it because it came second would be the repair
         #   loop making things worse while looking busy.
-        if len(fresh) >= len(illegal):
+        if len(_faults(fresh, fresh_ling)) >= len(_faults(illegal, ling)):
             break
         operations, rows, table, ling, illegal = again, fresh_rows, fresh_table, fresh_ling, fresh
     # ⇒⇒ A WORD MAY BE ACCOUNTED FOR BY AN OPERATION, NOT ONLY BY A DECLARATION.

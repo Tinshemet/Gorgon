@@ -128,6 +128,63 @@ def verb_kind(word: str, board: Optional[Board] = None) -> str:
     return UNKNOWN_VERB
 
 
+def evidence_for(operator: str, board: Optional[Board] = None) -> set:
+    """The words in a request that would WARRANT this operation. Read from the manifest.
+
+    ⇒ **AND WHAT COUNTS AS EVIDENCE DIFFERS BY WHAT THE OPERATION IS**, which is the whole
+      difficulty. A naive rule — the operation's own name-words must appear — gets it backwards
+      in both directions:
+
+        `launch_vm` contains `vm`, so ANY request mentioning a machine would warrant launching
+        it, and rung 4's unasked `launch_vm` stays invisible.
+
+        `create_snapshot` split of its kind noun leaves only `create`, so rung 12's *"TAKE a
+        snapshot"* — which is correct — would be called spurious.
+
+      So a CREATOR is warranted by its KIND being named (*take a snapshot* -> a snapshot is
+      wanted); a SETTER by its ATTRIBUTE or its own verb (*put them in a NETWORK*, *STOP it*);
+      a PROBE by its attribute or the doc that defines it, which is how *"do not ANSWER"*
+      reaches `probe_alive` without anyone listing `ping`.
+    """
+    from planner.ir import config as _config
+    from .scan import _stem
+    board = board or Board()
+    out: set = set()
+    for kind, spec in (_config.KINDS or {}).items():
+        if not isinstance(spec, dict):
+            continue
+        nouns = {kind} | {str(n).lower() for n in (spec.get("nouns") or [])}
+
+        for name in (spec.get("creators") or {}):
+            if operator == (f"create_{kind}" if name == "create" else f"{name}_{kind}"):
+                out |= nouns | {str(name).lower()}          # the KIND is the evidence
+
+        for group in ("setters", "unsetters"):
+            meta = (spec.get(group) or {}).get(operator)
+            if meta:
+                out |= {w for w in str(operator).lower().split("_") if w not in nouns}
+                if meta.get("attr"):
+                    out.add(str(meta["attr"]).lower())
+                for alias, real in (spec.get("aliases") or {}).items():
+                    if real == meta.get("attr"):
+                        out.add(str(alias).lower())
+                for value in (spec.get("attr_values") or {}).get(meta.get("attr"), []) or []:
+                    out.add(str(value).lower())
+
+        if operator == spec.get("delete"):
+            out |= {"delete", "remove", "destroy", "wipe", "drop", "clear"}
+
+        for fact, meta in (spec.get("observed") or {}).items():
+            if operator == f"probe_{fact}":
+                out.add(str(fact).lower())
+                out |= {_stem(w.strip(".,'")) for w in str(meta.get("doc") or "").lower().split()
+                        if len(w) > 5}
+
+        if operator in (spec.get("acts") or {}):
+            out.add(str(operator).lower())
+    return {w for w in out if w}
+
+
 def _roles(board: Board) -> Tuple[Dict[str, str], Dict[str, str], set]:
     """Every operator, by what it does to its target. READ from the manifest (rule W5).
 
@@ -279,6 +336,32 @@ def findings(request: str, rows: List[S.Declared], operations: List[Operation], 
                            f"the request bounds {sym.handle!r} at {bound} and no operation "
                            f"expresses that bound — the plan acts on the whole set",
                            "operator"))
+
+    # 5 · A STEP NOTHING IN THE REQUEST WARRANTS.
+    #
+    # ⇒ **GATE 3 ASKS WHETHER A STEP IS LEGAL; NOTHING ASKED WHETHER IT WAS WANTED.** Rung 4
+    #   came back with `launch_vm` on machines nobody asked to launch, rung 13 with
+    #   `create_snapshot` on a request that never mentions a snapshot, rung 14 with `delete_vm`
+    #   on a request that never says delete. Every one is perfectly legal, so every one served.
+    #   Over-production was the dominant defect the moment the accidental nets came down.
+    from .scan import _stem
+    said = {_stem(w.strip(".,'\"—–")) for w in request.lower().split()}
+    said |= {w.strip(".,'\"—–") for w in request.lower().split()}
+    unsettled = {sym.handle for sym in table if sym.row.object_type == S.UNKNOWN_KIND}
+    flagged: set = set()
+    for op in operations:
+        # ⇒ NOT WHILE THE TARGET IS UNIDENTIFIED, and not twice for the same operator. Rung 9's
+        #   `add_label` is unwarranted whatever `n1` turns out to be — but reporting it to the
+        #   MODEL says "fix this", and the model cannot: what blocks that rung is a question
+        #   only the operator can answer. Same guard as `role-unsettled`, for the same reason.
+        if str(op.on) in unsettled or op.operator in flagged:
+            continue
+        warrant = evidence_for(op.operator, board)
+        if warrant and not (warrant & said):
+            flagged.add(op.operator)
+            out.append(Finding("unasked-step", op.operator,
+                               f"nothing in the request asks for {op.operator!r} — no word here "
+                               f"warrants it", "model"))
 
     # 4 · A ROW NO VERB SETTLED. It reached pass 2 and pass 2 never mentioned it.
     for sym in table:
