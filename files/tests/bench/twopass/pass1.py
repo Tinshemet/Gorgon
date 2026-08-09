@@ -362,6 +362,64 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
 
 UNKNOWN_KIND = S.UNKNOWN_KIND       # DEFINED IN `schema`, beside the row it appears in
 
+
+def settle_with_world(rows: List[S.Declared], world, board: Optional[Board] = None
+                      ) -> List[S.Declared]:
+    """THE WORLD DECIDES — apply the answer to the question gate 2 asks about a kindless row.
+
+    ⇒ **THIS IS NOT A GATE REPAIRING SOMETHING, AND THE DISTINCTION IS THE WHOLE DESIGN.**
+      Gate 2 asks *"the request does not say what 'db' is"*. It does not answer itself, and it
+      must not ([[gorgon-gates-check-legality]]). This is the step AFTER the answer arrives —
+      and when a lab is attached, the lab IS the answer, so nobody has to be interrupted.
+
+    ⇒ **AND IT IS A LOOKUP, NOT AN INFERENCE.** `db` is a bare proper name; nothing in the
+      words says it is a machine. The lab either holds a vm called `db` or it does not. Both
+      the KIND and the KEY VALUE come back from that one query, which is why the row can go
+      from `? {}` straight to `vm {name: db}` with nothing guessed in between.
+
+    Rung 8 is the corpse: `put every vm on a network called core, except db — db goes on a
+    network called dmz instead` wants `{name: db}` and `{network: dmz}`. The first is a
+    DECLARATION and could never come from pass 2 (rule D1 — pass 2 may reference only what
+    pass 1 declared); the second is an operation's effect and needs a declared target to
+    attach to. So both waited on this.
+    """
+    from planner.gates import claims as _claims
+    board = board or Board()
+    if world is None:
+        return rows
+    out: List[S.Declared] = []
+    for row in rows:
+        if row.object_type != UNKNOWN_KIND:
+            out.append(row)
+            continue
+        found = None
+        # THE ROW'S OWN WORDS, LONGEST FIRST — a bare name is somewhere inside its span, and
+        # the span may have picked up a verb or a connective on the way.
+        words = [w.strip(".,'\"—–") for w in str(row.span or row.name).lower().split()]
+        for word in sorted({w for w in words if w}, key=len, reverse=True):
+            for kind in board.kinds:
+                key = _claims.key_of(kind, board.kinds)
+                if not key:
+                    continue
+                try:
+                    if world.select({"kind": kind, key: word}):
+                        found = (kind, key, word)
+                        break
+                except Exception:
+                    continue
+            if found:
+                break
+        if not found:
+            out.append(row)
+            continue
+        kind, key, word = found
+        where = dict(row.where)
+        where.setdefault(key, word)
+        out.append(S.declare_from(row.name, kind, where, row.existence, board,
+                                  references=list(row.references), count=row.count,
+                                  comparator=row.comparator, span=row.span, identity=word))
+    return out
+
 PLURAL_PRONOUNS = {"ones", "them", "they", "those", "these", "all", "both", "rest", "others"}
 
 

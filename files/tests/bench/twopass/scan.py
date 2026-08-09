@@ -60,7 +60,7 @@ ENUMERATORS: Dict[str, object] = {
 # `of` ENDS A PHRASE AND OPENS ANOTHER. "a snapshot OF every running vm" is two things, and
 # without this the snapshot's span swallowed the machines, which then folded away as a
 # collision — rung 12 declared one object where the request names two.
-BOUNDARIES = {",", ";", ".", "and", "then", "but", "—", "of"}
+BOUNDARIES = {",", ";", ".", "and", "then", "but", "—", "–", "of"}
 
 
 class Scanned(NamedTuple):
@@ -103,9 +103,20 @@ def _index(board: Board) -> Dict[str, str]:
 
 def _tokens(text: str):
     """Words AND punctuation, with positions. Punctuation must survive — a span that crosses
-    a comma is the bug that made 'create 5 vms, put them all in a network' one phrase."""
+    a comma is the bug that made 'create 5 vms, put them all in a network' one phrase.
+
+    ⇒ **AND THE DASH MUST SURVIVE TOO. `BOUNDARIES` HAS LISTED `—` SINCE IT WAS WRITTEN AND
+      THIS PATTERN COULD NEVER EMIT IT**, so the boundary was declared and dead. Rung 8's
+      `db` scanned from `except` to the end of the sentence — 51 characters, both `db`
+      mentions and the dmz network in one span — and the fold then merged the lot into a
+      single `network` row. A rule that cannot fire is worse than a missing one: it reads as
+      handled.
+
+      The ASCII hyphen is deliberately NOT here. `[\\w']+` matches first, so adding `-` would
+      split `well-known` into two spans; an em- or en-dash never appears inside a word.
+    """
     return [(m.group(0).lower(), m.start(), m.end())
-            for m in re.finditer(r"[\w']+|[,;.]", text)]
+            for m in re.finditer(r"[\w']+|[,;.]|[—–]", text)]
 
 
 def anchors_in(request: str, board: Optional[Board] = None) -> List[str]:

@@ -723,6 +723,130 @@ def test_a_span_residue_bounces_but_junk_asks():
         channel.constrained = was
 
 
+def test_every_declared_boundary_can_actually_be_emitted():
+    print("\n[boundary] a rule that CANNOT FIRE is worse than a missing one — it reads as "
+          "handled. `—` was a declared clause boundary the tokenizer could never produce")
+    from tests.bench.twopass import scan as SC
+    board = Board()
+
+    # ⇒ THE MECHANISM, NOT JUST THE OUTCOME. Every punctuation boundary must be reachable by
+    #   the tokenizer, or the next one added will be dead in the same silent way.
+    punctuation = [b for b in SC.BOUNDARIES if not b.isalpha()]
+    for mark in punctuation:
+        sample = f"a vm named alpha{mark} a network called lab"
+        check(f"the boundary {mark!r} is emitted as a token",
+              any(t[0] == mark for t in SC._tokens(sample)))
+
+    # ⇒ AND THE HYPHEN IS DELIBERATELY NOT ONE. `[\w']+` matches first, so making `-` a
+    #   boundary would split a hyphenated word into two spans.
+    check("an ASCII hyphen stays inside its word",
+          [t[0] for t in SC._tokens("a well-known vm")] == ["a", "well", "known", "vm"]
+          or "-" not in [t[0] for t in SC._tokens("a well-known vm")])
+
+    # RUNG 8, THE CORPSE THIS RULE COMES FROM. The span ran from `except` to the end of the
+    # sentence — 51 characters, both `db` mentions and the dmz network — and the fold then
+    # merged all of it into one `network` row.
+    r8 = ("put every vm on a network called core, except db — db goes on a network "
+          "called dmz instead")
+    spans = SC.scan_all("db", r8, board)
+    check("`db` no longer swallows the rest of the sentence",
+          all(s.end - s.start < 45 for s in spans))
+    check("and the dash separates the two clauses",
+          any(s.span.strip().endswith("db") for s in spans))
+
+
+def test_the_world_settles_a_kindless_row_and_that_is_what_closes_rung_8():
+    print("\n[settle] gate 2 asks what 'db' is and must not answer itself. The LAB answers, "
+          "and both the kind and the key value come back from the one query")
+    from tests.bench.twopass import gates12 as G, pass1 as P
+    from tests.bench.twopass.effects import Operation, conditions_after, flatten
+    from tests.bench.twopass.metrics import Lab
+    board = Board()
+    channel, was = _no_model()
+    try:
+        r8 = P.EXPECTED[8].request
+        raw = P.run_scanned(r8, board=board)
+        check("without a lab the row is honestly kindless",
+              any(r.object_type == S.UNKNOWN_KIND for r in raw))
+        check("and gate 2 ASKS rather than guessing",
+              any(f.kind == "kind-not-settled" for f in G.gate2(raw, board)))
+
+        settled = P.settle_with_world(raw, Lab(), board)
+        db = next((r for r in settled if r.where.get("name") == "db"), None)
+        check("the lab settles it to a vm", db is not None and db.object_type == "vm")
+        check("and the same query returns the key value, so nothing is inferred",
+              db.where == {"name": "db"})
+        check("gate 2 has nothing left to ask about it",
+              not [f for f in G.gate2(settled, board) if "db" in f.about])
+
+        # ⇒ AND ONLY NOW CAN AN OPERATION POINT AT IT (rule D1). `{name: db}` is a
+        #   DECLARATION and could never have come from pass 2; `{network: dmz}` is an effect
+        #   that needed a declared target.
+        declared = {r.name: dict(r.where) for r in settled}
+        after = flatten(conditions_after(declared,
+                                         [Operation("add_vm_to_network", "except db", "dmz")],
+                                         board))
+        want = P.EXPECTED[8].conditions
+        check(f"rung 8's conditions are complete: {want}",
+              all(w in after for w in want))
+
+        # THE CONTROL: no lab, no settling. A missing world must never invent a kind.
+        check("with no world nothing is settled",
+              [r.object_type for r in P.settle_with_world(raw, None, board)]
+              == [r.object_type for r in raw])
+        check("and a lab that does not hold it leaves it kindless",
+              any(r.object_type == S.UNKNOWN_KIND
+                  for r in P.settle_with_world(raw, _EmptyLab(), board)))
+    finally:
+        channel.constrained = was
+
+
+class _EmptyLab:
+    def select(self, query):
+        return []
+
+
+class _WideLab:
+    """Four kinds under THREE DIFFERENT KEY NAMES — `name`, `net_name`, `snap_name`. None of
+    these objects appears in the 14 rungs, so nothing here can be passing by memory."""
+    ROWS = [{"kind": "vm", "name": "atlas"}, {"kind": "network", "net_name": "spine"},
+            {"kind": "snapshot", "snap_name": "nightly"}, {"kind": "template", "name": "base9"}]
+
+    def select(self, query):
+        return [r for r in self.ROWS
+                if all(str(r.get(k, "")).lower() == str(v).lower() for k, v in query.items())]
+
+
+def test_settling_is_general_across_kinds_and_key_names():
+    print("\n[settle] the operator: 'make it a general fix not a rung specific'. Four kinds, "
+          "three different key names, and none of them in the corpus")
+    from tests.bench.twopass import pass1 as P
+    board = Board()
+    channel, was = _no_model()
+    try:
+        def settled(request):
+            rows = P.settle_with_world(P.run_scanned(request, board=board), _WideLab(), board)
+            return [(r.object_type, dict(r.where)) for r in rows]
+
+        check("a bare vm name settles by `name`",
+              ("vm", {"name": "atlas"}) in settled("launch atlas"))
+        check("a snapshot settles by `snap_name`, not by `name`",
+              ("snapshot", {"snap_name": "nightly"}) in settled("restore nightly"))
+        check("a template settles by its own key",
+              ("template", {"name": "base9"}) in settled("check base9"))
+
+        # ⇒ THE TWO CONTROLS THAT MATTER MORE THAN THE HITS. An absent word must stay `?`,
+        #   and a mixed request must settle per WORD rather than per request.
+        check("a word the lab does not hold stays kindless",
+              any(t == S.UNKNOWN_KIND for t, _ in settled("launch quibble")))
+        mixed = settled("ping atlas, quibble and spine")
+        check("known and unknown in one request settle independently",
+              ("vm", {"name": "atlas"}) in mixed
+              and any(t == S.UNKNOWN_KIND for t, _ in mixed))
+    finally:
+        channel.constrained = was
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "two-pass schema")
