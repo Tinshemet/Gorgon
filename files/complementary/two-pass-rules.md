@@ -172,6 +172,52 @@ problem returns wearing a different hat. Conditions are closed grammar over decl
 **D7 · Gates 1–2 must never read a program shape.** They see declarations. If a gate needs to
 know what Medusa looks like, it is the wrong gate.
 
+**D8 · THE VERB DECIDES WHAT THE NOUN IS — attribute, action, object, or mood.** A noun has no
+role until a verb gives it one, and the same noun takes different roles under different verbs:
+
+| | | |
+|---|---|---|
+| give X the `'fleet'` **label** | light verb + attribute-noun | an **attribute** |
+| **take** a snapshot | light verb + kind-noun | an **action** |
+| **restore** a snapshot | contentful verb | the **object** itself |
+| **make sure** there are two left | light verb + adjective | a **mood** — achieve, not do |
+
+> *The operator, 2026-08-09: "snapshot IS an object but in this context its also the
+> verb/action" · "find me a snapshot, and take a snapshot are 2 different actions with only the
+> verb being different, this is again the create/use".*
+
+This is D-something rather than a writing rule because it decides **which pass owns a word**,
+and getting it wrong puts a bogus object in the symbol table — which pass 2 then dutifully
+operates on. Rungs 4, 7, 12 and 13 all fail this way and **not one of them is a pass 2 error.**
+
+⇒ **THE NAMES ARE ESTABLISHED, SO USE THEM.** `snapshot` is a **dot object** (`event•object`)
+  in Pustejovsky's Generative Lexicon, and the verb performs **type coercion** to pick a facet.
+  `take a snapshot` / `give a label` / `make sure` are **light verb constructions** (a.k.a.
+  support verbs) — the verb empties itself and the noun carries the predicate. Whether the noun
+  pre-exists is the **effected vs affected object** distinction (Fillmore), which is this
+  project's create/use fork under its proper name.
+
+⇒ **AND THE MANIFEST ALREADY HOLDS THE QUALIA STRUCTURE, so this is a lookup and not a
+  judgement.** GL's AGENTIVE role (how a thing comes into being) is our `creators`; its TELIC
+  role (what it is for) is our `acts`; the attribute slots are our `setters`. **If the
+  governing verb is a creator of that kind the noun is the product; if it is an act or setter
+  taking that kind the noun is an argument.** The light-verb list is a closed class of English
+  — `take · give · make · do · run · get · have · carry` — with the same status as
+  `COMPARATORS` and `ENUMERATORS`.
+
+⇒ **THE MOOD ROW IS NOT A PARSING RULE AND MUST NOT BE TREATED AS ONE.** Every rung filed as a
+  *reasoning error* — 7, 9, 14 — is a `make sure`. The request is in the ACHIEVE mood and pass
+  2 only knows how to DO, which is why no rephrasing fixed rung 14 and why `delete_vm(vms)`
+  keeps appearing: asked to ENSURE two machines remain, the only thing sayable is to delete
+  them. Medusa has `ACHIEVE`; this pipeline does not reach it.
+
+**Two things this rule already indicts, and they are named so they cannot be forgotten:** the
+shipped fix for rungs 4 and 13 keys on a QUOTED word beside an attribute, which is a proxy for
+the attribute reading — it works, it is safe, and it is the symptom rather than the cause. And
+`snapshot.creators.create` declares only a tool, with **no source argument**, so nothing says
+`create_snapshot` consumes a vm — which is why gate 3 excludes creators from its
+wrong-kind-operator rule and why the clean version of the fix cannot be written yet.
+
 ---
 
 ## 5 · The honest-report rule
