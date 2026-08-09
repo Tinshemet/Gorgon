@@ -138,8 +138,19 @@ def gate2(rows: List[S.Declared], board: Optional[Board] = None) -> List[Finding
     out: List[Finding] = []
     for row in rows:
         if row.kind not in board.kinds:
-            out.append(Finding(2, "unknown-kind", row.name,
-                               f"this lab has no {row.kind!r}"))
+            # ⇒ AN UNSETTLED KIND IS A DIFFERENT QUESTION FROM A WRONG ONE, AND ONLY THE
+            #   OPERATOR CAN ANSWER IT. `?` does not mean the lab lacks that kind; it means the
+            #   request never said what the thing IS — `grubnash` may be a machine name or it
+            #   may be noise, and nothing in the words decides. Phrased as *"this lab has no
+            #   '?'"* the finding was unanswerable, which made the honest outcome of item 0
+            #   look like a malfunction.
+            if row.kind == S.UNKNOWN_KIND:
+                out.append(Finding(2, "kind-not-settled", row.name,
+                                   f"the request does not say what {row.name!r} is — "
+                                   f"this lab has {', '.join(sorted(board.kinds))}"))
+            else:
+                out.append(Finding(2, "unknown-kind", row.name,
+                                   f"this lab has no {row.kind!r}"))
             continue
         for attr, value in (row.where or {}).items():
             if attr not in board.filterable(row.kind):

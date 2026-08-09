@@ -43,6 +43,11 @@ RUN_TIME = "at run time"
 NEW, EXISTING = "new", "existing"
 SET_SUFFIX = "_set"
 
+# A THING WHOSE KIND THE REQUEST DOES NOT SETTLE. Declared anyway — a bare item and a full one
+# are the same until the world says otherwise — and gate 2 asks. It lives HERE, beside the row
+# it appears in, so a gate can name it without importing the runner that produces it.
+UNKNOWN_KIND = "?"
+
 
 class Declared(NamedTuple):
     """One row of the symbol table. Pass 2 may reference nothing else."""

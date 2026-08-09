@@ -301,9 +301,21 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
                                           span=kept.span, identity=kept.identity)
                 continue
 
-        if first.kind is None and len(present) == 1:
-            # a pronoun-headed set — "the ones that do not answer" — takes the only kind the
-            # request talks about. With more than one kind present we do not guess.
+        # ⇒ THE CONTEXTUAL KIND IS FOR PRONOUN-HEADED SETS AND FOR NOTHING ELSE.
+        #
+        #   It exists so *"the ones that do not answer"* takes the only kind the request talks
+        #   about — a pro-form REFERS, so the kind is in the request even though the span has
+        #   no noun. Applied to any kindless span it LAUNDERS JUNK INTO AN OBJECT: measured
+        #   2026-08-08, *"create a vm named alpha and launch it, grubnash"* declared `grubnash`
+        #   a vm and BOTH GATES RETURNED NOTHING. Gate 1 could not object — the OPERATOR said
+        #   the word, and gate 1 catches what the MODEL invented. Gate 2 could not object —
+        #   `vm` is a real kind. And `bounces()` never sees it, because the fixpoint claims the
+        #   word and a claimed word is never left over.
+        #
+        #   So the rule now demands the EVIDENCE it was written for. Without a pro-form the
+        #   kind stays `?` and gate 2 asks — which is the honest answer anyway, since only the
+        #   lab can say whether `grubnash` is a machine name or noise.
+        if first.kind is None and len(present) == 1 and _has_pronoun(first.span):
             first = first._replace(kind=present[0])
 
         # ⇒ A KINDLESS THING IS STILL A THING. Dropping it lost every bare proper name —
@@ -348,7 +360,7 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
     return rows
 
 
-UNKNOWN_KIND = "?"          # declared, kind not yet known — gate 2 asks the lab
+UNKNOWN_KIND = S.UNKNOWN_KIND       # DEFINED IN `schema`, beside the row it appears in
 
 PLURAL_PRONOUNS = {"ones", "them", "they", "those", "these", "all", "both", "rest", "others"}
 
@@ -365,6 +377,24 @@ def _is_group(scanned) -> bool:
     if any(w.strip(".,'") in PLURAL_PRONOUNS and not _possessive(w) for w in words):
         return True
     return any(_plural(w) for w in words)
+
+
+def _has_pronoun(span: str) -> bool:
+    """Does this span contain a pro-form at all — restricted or bare?
+
+    ⇒ **NOT `S._is_bare_pronoun`, AND THE DIFFERENCE IS RUNG 11.** That helper asks whether a
+      pro-form stands ALONE, and answers False for *"the ones that do not answer"* precisely
+      because `that` restricts it. Here the question is the opposite one: does this span REFER
+      at all? A restricted pro-form refers just as hard as a bare one — it is the whole reason
+      the contextual kind exists.
+
+    Both lists are consulted because they were built for different jobs: `PRONOUNS` for the
+    singular reference that folds into an earlier row, `PLURAL_PRONOUNS` for the group that
+    heads a set.
+    """
+    words = [w.strip(".,'\"") for w in str(span).lower().split()]
+    return any((w in PLURAL_PRONOUNS or w in S.PRONOUNS) and not _possessive(raw)
+               for raw, w in zip(str(span).lower().split(), words))
 
 
 def _possessive(word: str) -> bool:

@@ -559,6 +559,95 @@ def test_a_numeral_before_a_noun_counts_and_after_one_names():
           scan("vm", "create a vm named alpha", board).identity is None)
 
 
+def _no_model():
+    """Stub `constrained` so `run_scanned` makes NO model call.
+
+    Everything item 0 concerns — the anchors, the fixpoint, the contextual kind, both gates —
+    is deterministic code, and with the model stubbed the whole pipeline is suite-ownable.
+    V4 also applies: a suite that quietly called a model would contend with any probe running
+    beside it and make both results noise.
+    """
+    import engines.channel as channel
+    was = channel.constrained
+    channel.constrained = lambda *a, **k: {}
+    return channel, was
+
+
+def test_a_meaningless_word_is_not_laundered_into_an_object():
+    print("\n[junk] the taxonomy had two slots — a thing nobody named, a clause nobody read — "
+          "and a meaningless word is a THIRD. It was being forced into the first")
+    from tests.bench.twopass import gates12 as G, pass1 as P
+    board = Board()
+    channel, was = _no_model()
+    try:
+        # ⇒ THE DEFECT, MEASURED 2026-08-08: `grubnash` was DECLARED A VM and both gates were
+        #   silent. Gate 1 could not object — the OPERATOR said the word, and gate 1 catches
+        #   what the MODEL invented. Gate 2 could not object — `vm` is a real kind. And it
+        #   never reached the leftover check, because the fixpoint had claimed the word.
+        trailing = "create a vm named alpha and launch it, grubnash"
+        rows = P.run_scanned(trailing, board=board)
+        junk = next((r for r in rows if "grubnash" in r.name.lower()), None)
+        check("the junk word is still DECLARED — a kindless thing is still a thing",
+              junk is not None)
+        check("but it is NOT given the request's only kind", junk.object_type != "vm")
+        check("its kind is unsettled, which is the honest answer",
+              junk.object_type == S.UNKNOWN_KIND)
+        check("and the real object is untouched",
+              any(r.object_type == "vm" and r.where.get("name") == "alpha" for r in rows))
+
+        # ⇒ AND GATE 2 NOW ASKS SOMETHING ANSWERABLE. `this lab has no '?'` was unanswerable:
+        #   `?` does not mean the lab lacks a kind, it means the request never said which.
+        asks = [f for f in G.gate2(rows, board) if f.kind == "kind-not-settled"]
+        check("gate 2 asks the operator what it is", len(asks) == 1)
+        # INDEXED SAFELY ON PURPOSE. Under the old rule there is no finding at all, and a
+        # regression must REPORT as three failures rather than raise on `asks[0]`.
+        said = asks[0].says if asks else ""
+        check("naming the word", "grubnash" in said)
+        check("and offering the kinds this lab does have", "vm" in said)
+        check("it never claims the lab lacks the kind", said and "has no" not in said)
+
+        alone = "grubnash grubnash grubnash"
+        check("junk with nothing around it asks too",
+              [f.kind for f in G.gate2(P.run_scanned(alone, board=board), board)]
+              == ["kind-not-settled"])
+
+        # ⇒ THE CONTROL THAT MATTERS: the rule being narrowed EXISTS for rung 11, so rung 11
+        #   must be untouched by narrowing it. A pro-form REFERS, so its kind is in the request
+        #   even though its span has no noun.
+        r11 = "ping every vm and stop the ones that do not answer"
+        got = P.run_scanned(r11, board=board)
+        residual = next((r for r in got if r.residual), None)
+        check("rung 11's pronoun-headed set still takes the contextual kind",
+              residual is not None and residual.object_type == "vm_set")
+        check("with its condition intact", residual.where == {"alive": False})
+
+        # STILL OPEN, DELIBERATELY NOT PINNED AS CORRECT: junk INSIDE a span is swallowed by
+        # it — "create a grubnash vm named alpha" reads as one vm and no gate speaks. What is
+        # pinned is only that it does not become a SECOND object; whether an unread descriptor
+        # inside a span should be flagged is the next item, not this one.
+        inside = P.run_scanned("create a grubnash vm named alpha", board=board)
+        check("junk inside a span does not spawn a second object", len(inside) == 1)
+    finally:
+        channel.constrained = was
+
+
+def test_the_contextual_kind_demands_the_evidence_it_was_written_for():
+    print("\n[junk] `_has_pronoun` is not `_is_bare_pronoun`, and the difference is rung 11")
+    from tests.bench.twopass import pass1 as P
+
+    check("a restricted pro-form still REFERS", P._has_pronoun("the ones that do not answer"))
+    check("even though it is not a BARE pronoun",
+          not S._is_bare_pronoun("ones", "stop the ones that do not answer"))
+    check("a bare one refers as well", P._has_pronoun("launch it"))
+    check("and 'them all' does", P._has_pronoun("put them all in a network"))
+    check("a meaningless word does not", not P._has_pronoun("grubnash"))
+    check("nor does an ordinary phrase with no pro-form",
+          not P._has_pronoun("a network called core"))
+    # `one's` is not `ones` — the apostrophe decides SET-NESS and it decides this too.
+    check("a possessive is not a plural pro-form",
+          not P._has_pronoun("the machine's network"))
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "two-pass schema")
