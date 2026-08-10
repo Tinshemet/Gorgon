@@ -196,6 +196,62 @@ def evidence_for(operator: str, board: Optional[Board] = None) -> set:
     return {w for w in out if w}
 
 
+def anchor_to_clauses(request: str, operations: List[Operation],
+                      board: Optional[Board] = None) -> List[Tuple[str, Operation]]:
+    """Which CLAUSE of the request warrants each step. Computed, never asked.
+
+    ⇒⇒ **ASKING PER CLAUSE WAS BUILT, MEASURED AND REFUSED — 2026-08-10.** The model was given
+      the whole request, the whole symbol table, and one clause marked as *the part to answer
+      for*. It ignored the marking and answered for the whole request every time:
+
+          rung 11  "ping every vm"                -> probe_alive AND stop_vm
+                   "stop the ones that do not..." -> probe_alive AND stop_vm
+          rung 3   "create a network called lab"  -> add_vm_to_network(lab, web)  <- swapped
+          rung 2   "create a vm named beta"       -> add_label(beta, 'known at plan time')
+                                                     <- the symbol table's `settled` column,
+                                                        read back as a label value
+
+      Duplicated steps, two new failure modes, and no narrowing. **A narrower ASK does not
+      produce a narrower ANSWER** — the same law that killed the refusal enum and the `cannot`
+      field, met from a third direction.
+
+    ⇒ **SO THE ANCHORING IS ARITHMETIC.** `evidence_for` already says which words warrant an
+      operation; running it against each clause instead of the whole request says WHICH PART
+      warranted it. No call, no narrowing to ignore.
+
+    An operation warranted by no clause is returned against `""` — which is exactly what
+    `unasked-step` reports, now with the clause named when there is one.
+    """
+    from .pass2 import clauses_of
+    from .scan import _stem
+    board = board or Board()
+    clauses = clauses_of(request)
+    spoken = []
+    for clause in clauses:
+        words = {w.strip(".,'\"—–") for w in clause.lower().split()}
+        words |= {_stem(w) for w in words}
+        spoken.append((clause, words))
+
+    out: List[Tuple[str, Operation]] = []
+    for op in operations:
+        warrant = evidence_for(op.operator, board)
+        # ⇒ BEST MATCH, NOT FIRST MATCH, AND THE TARGET BREAKS THE TIE. `create_vm` is warranted
+        #   by `create` in one clause and by `vm` in another; taking the first put it on the
+        #   network's clause. The thing it ACTS ON decides: `create_vm(web)` belongs to the
+        #   clause that says `web`.
+        best, score = "", 0
+        for clause, words in spoken:
+            hit = len(warrant & words)
+            if hit and str(op.on).lower() in clause.lower():
+                hit += 2
+            if op.value and str(op.value).lower() in clause.lower():
+                hit += 1
+            if hit > score:
+                best, score = clause, hit
+        out.append((best, op))
+    return out
+
+
 def _roles(board: Board) -> Tuple[Dict[str, str], Dict[str, str], set]:
     """Every operator, by what it does to its target. READ from the manifest (rule W5).
 
@@ -365,6 +421,11 @@ def findings(request: str, rows: List[S.Declared], operations: List[Operation], 
     #   already says so, to the right audience.
     unsettled = {sym.handle for sym in table if sym.row.object_type == S.UNKNOWN_KIND}
     flagged: set = set()
+    # ⇒ THE CLAUSE IS COMPUTED, AND A STEP WITH NONE IS THE UNWARRANTED ONE. Same verdict as
+    #   before, with the part of the request that warranted it named — which is what a partial
+    #   serve will need when the verdict stops being per-request.
+    anchored = dict((id(op), clause)
+                    for clause, op in anchor_to_clauses(request, list(operations), board))
     for op in (() if mood_of(request) == ACHIEVE else operations):
         # ⇒ NOT WHILE THE TARGET IS UNIDENTIFIED, and not twice for the same operator. Rung 9's
         #   `add_label` is unwarranted whatever `n1` turns out to be — but reporting it to the
@@ -373,11 +434,11 @@ def findings(request: str, rows: List[S.Declared], operations: List[Operation], 
         if str(op.on) in unsettled or op.operator in flagged:
             continue
         warrant = evidence_for(op.operator, board)
-        if warrant and not (warrant & said):
+        if warrant and not anchored.get(id(op)):
             flagged.add(op.operator)
             out.append(Finding("unasked-step", op.operator,
-                               f"nothing in the request asks for {op.operator!r} — no word here "
-                               f"warrants it", "model"))
+                               f"no clause of the request asks for {op.operator!r} — no part "
+                               f"of it warrants this step", "model"))
 
     # 4 · A ROW NO VERB SETTLED. It reached pass 2 and pass 2 never mentioned it.
     for sym in table:

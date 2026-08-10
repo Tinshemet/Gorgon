@@ -186,6 +186,68 @@ ASK = ("Say what has to be DONE, as a list of steps. Each step names one operati
        "value — otherwise leave value null. Use only the operations and the names offered. "
        "Do not invent a name.")
 
+CLAUSE_ASK = ("Say what has to be DONE for the marked part of the request, as a list of steps. "
+              "Each step names one operation and the ONE already-identified thing it acts on. "
+              "Some operations need a second thing as their value — otherwise leave value "
+              "null. If the marked part needs no operation of its own, answer with no steps. "
+              "Use only the operations and the names offered. Do not invent a name.")
+
+# a clause ends at these; `of` is a PHRASE boundary and is deliberately not one of them
+CLAUSE_MARKS = (",", ";", ".", "—", "–")
+CLAUSE_WORDS = (" and then ", " then ", " and ", " but ")
+
+
+def clauses_of(request: str) -> List[str]:
+    """Cut the request where it joins itself — to ASK about, never to build from.
+
+    ⇒ **THE RECORDED HAZARD, AND WHY IT DOES NOT APPLY HERE.** `clause_ledger` says plainly
+      that *splitting prose to BUILD is what wrecked staged lowering: a fragment handed to an
+      author has lost its referents.* True there, and not true here — **the fragment does not
+      need to carry its referents, because the SYMBOL TABLE does.** Every call gets the whole
+      handle table and the whole request; the clause only says which part to answer for.
+
+    ⇒ **AND A MEMBER LIST IS NOT A CLAUSE BOUNDARY.** The same file records the splitter
+      cutting *"make sure n1, n2 and n3 can all ping each other"* into three, which is the one
+      bug it calls fixable. A comma between BARE NAMES with no verb between them is joining a
+      list, not separating two things to do.
+    """
+    import re as _re
+    parts, buf = [], []
+    tokens = _re.split(r"([,;.—–])", request)
+    for chunk in tokens:
+        if chunk in CLAUSE_MARKS:
+            buf.append(chunk)
+            continue
+        buf.append(chunk)
+    text = "".join(buf)
+
+    rough: List[str] = [text]
+    for mark in CLAUSE_MARKS:
+        rough = [bit for part in rough for bit in part.split(mark)]
+    out: List[str] = []
+    for part in rough:
+        pieces = [part]
+        for word in CLAUSE_WORDS:
+            pieces = [bit for piece in pieces for bit in piece.split(word)]
+        out.extend(pieces)
+
+    # ⇒ REJOIN A MEMBER LIST. A piece with no verb the manifest knows, sitting between two
+    #   others, is an item in a list rather than something to do — `n2` is not a clause.
+    from .linguistics import manifest_verbs
+    from .scan import GRAMMAR
+    verbs = manifest_verbs()
+    kept: List[str] = []
+    for piece in out:
+        words = [w.strip(".,'\"—–").lower() for w in piece.split()]
+        content = [w for w in words if w and w not in GRAMMAR]
+        has_verb = any(w in verbs for w in words)
+        if kept and content and not has_verb and len(content) <= 2:
+            kept[-1] = f"{kept[-1].rstrip()}, {piece.strip()}"
+            continue
+        if piece.strip():
+            kept.append(piece.strip())
+    return kept
+
 
 def _schema(handles: List[str], operators: List[str], require_one: bool = True,
             free_value: bool = False) -> dict:
@@ -263,6 +325,48 @@ def _payload(request: str, table: List[Symbol], operators: List[str],
     if rejected:
         out += ("\n\nthese steps were rejected by the lab and cannot be used:\n  "
                 + "\n  ".join(rejected))
+    return out
+
+
+def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[Board] = None,
+                         model=None, temp: float = 0.0, timeout: int = 300,
+                         rejected: Optional[List[str]] = None):
+    """ASK ONCE PER CLAUSE, AND KEEP WHICH CLAUSE EACH STEP CAME FROM.
+
+    ⇒ **THIS IS A PRODUCER, NOT A DETECTOR, AND THAT IS THE WHOLE REASON FOR IT.** Asked over
+      the whole request with seventeen operators offered, the model emits steps no clause
+      warrants — `launch_vm` on a request that never says launch, `stop_vm` on one that says
+      launch. `unasked-step` catches those AFTERWARDS. Asked per clause, a step with no clause
+      **cannot be emitted at all**: there is no call it could come from.
+
+    ⇒ **THE FRAGMENT IS WHAT IS ASKED ABOUT, NEVER WHAT IS READ FROM.** Every call carries the
+      WHOLE request and the WHOLE symbol table; the clause only marks which part to answer for.
+      That is the difference from staged lowering, where a fragment was handed to an author
+      with nothing else and lost its referents. Here `put web on lab` can still see `web` and
+      `lab` even when the clause naming them is a different one.
+
+    Returns [(clause, Operation)], in clause order — which also gives the program a sequence
+    the whole-request form never had.
+    """
+    from engines.channel import constrained
+    board = board or Board()
+    table = symbol_table(rows, board)
+    names = [s.handle for s in table]
+    if not names:
+        return []
+    operators = operators_offered(board)
+    out = []
+    for clause in clauses_of(request):
+        payload = (f"{_payload(request, table, operators, rejected)}\n\n"
+                   f"the part to answer for: {clause}")
+        try:
+            got = constrained(CLAUSE_ASK, payload, _schema(names, operators, False, True),
+                              model=model, temp=temp, timeout=timeout) or {}
+        except Exception:
+            continue
+        for step in got.get("operations") or []:
+            if isinstance(step, dict) and step.get("operator") and step.get("on"):
+                out.append((clause, Operation(step["operator"], step["on"], step.get("value"))))
     return out
 
 
