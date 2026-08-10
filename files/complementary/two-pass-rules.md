@@ -220,6 +220,45 @@ wrong-kind-operator rule and why the clean version of the fix cannot be written 
 
 ---
 
+## 4b · ⚠ THE HARNESS IS TUNED TO ONE MODEL — READ BEFORE SWAPPING MODELS
+
+**Every measured decision in this pipeline was measured on `llama3.1:8b` and nothing else.**
+That is not a footnote; it is the single largest threat to any claim this project makes about
+model quality, and it was measured on 2026-08-10 rather than suspected.
+
+**THE PROOF.** The operator enum's pin — `add_label` last — was chosen because moving it
+doubled llama's exact matches. Remove it and run three models on identical payloads:
+
+| | llama3.1:8b | mistral-nemo:12b | qwen2.5:14b |
+|---|---|---|---|
+| **pinned** (fitted to llama) | 9/9 · 0 risky | 9/9 · 5 risky | 9/9 · 3 risky |
+| **alpha** (neutral order) | **8/9** · 4 risky | 9/9 · 5 risky | 9/9 · **0 risky** |
+
+⇒ **REMOVE THE PIN AND LLAMA DEGRADES WHILE QWEN IMPROVES SHARPLY.** The pin does not fix a
+  general defect. It compensates for a position bias that llama has and qwen does not — and
+  imposing it on qwen actively harms qwen, from 2 extras to 8.
+
+**WHAT ELSE IS FITTED THE SAME WAY**, all measured on llama alone: the pass-2 prompt wording;
+framing A over framing B; the handle scheme; `evidence_for` and the mood markers, built from
+llama's own error habits; and the fourteen rungs, kept because they exercised llama's failures.
+
+⇒ **SO NO MODEL-QUALITY CLAIM FROM THIS PROJECT IS VALID WITHOUT RE-MEASUREMENT.** Three
+  configurations produced three different winners over the same three models. The ranking is a
+  property of the harness at least as much as of the model.
+
+### ⇒ IF YOU CHANGE THE MODEL, YOU MUST DO ONE OF THESE
+
+1. **Re-measure the knobs for the new model** and write down what you chose. The switches
+   exist: `operators_offered(order=...)` for the pin, `order="alpha"` for the neutral control,
+   and `request=...` to shrink the enum by evidence.
+2. **Or run on the neutral configuration** (`--order alpha`) and accept whatever ceiling that
+   model has, unfitted.
+
+**Do NOT assume the defaults transfer.** A size sweep on one family, neutral order, found the
+capability line between 8b and 12b — 3b and 7b score 6–7 of 9 and are the only models that
+have ever produced a CANCEROUS step, while 12b and 14b score 9/9 with no help at all.
+`tests/bench/twopass/model_race.py` is the qualification run; it takes a model name.
+
 ## 5 · The honest-report rule
 
 **H1 · State what was not done.** Unfinished, skipped, untested, assumed — say which.

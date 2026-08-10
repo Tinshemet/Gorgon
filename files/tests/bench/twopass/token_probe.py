@@ -20,7 +20,7 @@ from ..formula.legal import Board
 RUNGS = (4, 13, 11, 5)
 
 
-def payload_for(rung: int, board: Board):
+def payload_for(rung: int, board: Board, order: str = "pinned", filtered: bool = False):
     """The exact question pass 2 asks, for one rung."""
     import engines.channel as channel
     from . import pass1, pass2
@@ -30,7 +30,8 @@ def payload_for(rung: int, board: Board):
     finally:
         channel.constrained = was
     table = pass2.symbol_table(rows, board)
-    operators = pass2.operators_offered(board)
+    operators = pass2.operators_offered(
+        board, order, pass1.EXPECTED[rung].request if filtered else "")
     names = [s.handle for s in table]
     return (pass2.ASK,
             pass2._payload(pass1.EXPECTED[rung].request, table, operators, None),

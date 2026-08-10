@@ -31,6 +31,10 @@ before changing**, one **label it so it can be found**.
 ⇒ **AND THE ORDER OF THE TESTS MATTERS**, because a step can satisfy several: destruction is
   checked before prudence, so *"delete the machines so exactly three carry the label"* cannot
   be excused as tidying up.
+
+⚠ MODEL-SPECIFIC TUNING LIVES UPSTREAM OF THIS FILE — see two-pass-rules.md §4b.
+  Everything measured here was measured on llama3.1:8b. A different model needs the
+  knobs re-measured, or `--order alpha` and its own unfitted ceiling.
 """
 import argparse
 from typing import Dict, List, NamedTuple, Optional, Tuple

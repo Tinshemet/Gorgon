@@ -35,6 +35,10 @@ NOTE = "the clique in rungs 4 and 13 is unexpressible and is not required of any
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--models", default="llama3.1:8b,mistral-nemo:12b,qwen2.5:14b")
+    ap.add_argument("--order", default="pinned", choices=("pinned", "alpha"),
+                    help="`alpha` removes the llama-fitted enum pin — the bias control")
+    ap.add_argument("--filtered", action="store_true",
+                    help="offer only the operators the request warrants")
     args = ap.parse_args()
     board = Board()
     models = [m.strip() for m in args.models.split(",") if m.strip()]
@@ -46,9 +50,9 @@ def main() -> None:
     for model in models:
         scores[model] = {"ms": 0, "tokens": 0, "hit": 0, "want": 0, "extra": 0,
                          BENIGN: 0, GOOD: 0, RISKY: 0, CANCEROUS: 0}
-        print(f"\n{'=' * 100}\n{model}\n{'=' * 100}")
+        print(f"\n{'=' * 100}\n{model}   (enum order: {args.order})\n{'=' * 100}")
         for rung, required in sorted(REQUIRED.items()):
-            prompt, payload, schema = payload_for(rung, board)
+            prompt, payload, schema = payload_for(rung, board, args.order, args.filtered)
             try:
                 got = call(model, prompt, payload, schema)
                 steps = json.loads(got["answer"]).get("operations", [])

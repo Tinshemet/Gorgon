@@ -46,6 +46,10 @@ And the rest of the order follows from what each audience costs:
              model's own miss, so try it before spending the operator's attention
     ASK      the request genuinely does not settle it — the operator's turn
     SERVE    nothing to report
+
+⚠ MODEL-SPECIFIC TUNING LIVES UPSTREAM OF THIS FILE — see two-pass-rules.md §4b.
+  Everything measured here was measured on llama3.1:8b. A different model needs the
+  knobs re-measured, or `--order alpha` and its own unfitted ceiling.
 """
 import argparse
 from typing import Dict, List, NamedTuple, Optional

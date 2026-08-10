@@ -42,6 +42,19 @@ change to prompt, schema or model. Order is semantically meaningless in a closed
 makes it a hidden parameter: inherit `sorted()` and a manifest edit silently moves behaviour.
 So the order is declared here and pinned by a test, the same treatment `types_offered` gets.
 """
+
+# ⚠⚠ THIS FILE CONTAINS A MODEL-SPECIFIC TUNING — SEE two-pass-rules.md §4b
+#
+#   `operators_offered` pins `add_label` LAST. That was measured on llama3.1:8b and on nothing
+#   else. Measured 2026-08-10 across three models on identical payloads:
+#
+#       pinned   llama 9/9 (0 risky)   mistral 9/9 (5 risky)   qwen 9/9 (3 risky)
+#       alpha    llama 8/9 (4 risky)   mistral 9/9 (5 risky)   qwen 9/9 (0 risky)
+#
+#   ⇒ REMOVING IT DEGRADES LLAMA AND IMPROVES QWEN. It compensates for one model's position
+#     bias; it does not fix a general defect. IF YOU CHANGE THE MODEL, re-measure the knobs or
+#     run `--order alpha` and accept the unfitted ceiling. Do not assume this transfers.
+
 import argparse
 import re
 from collections import Counter
@@ -150,7 +163,8 @@ def symbol_table(rows: List[S.Declared], board: Optional[Board] = None,
     return out
 
 
-def operators_offered(board: Optional[Board] = None) -> List[str]:
+def operators_offered(board: Optional[Board] = None, order: str = "pinned",
+                      request: str = "") -> List[str]:
     """creators + setters + delete + a probe per observed fact, IN A PINNED ORDER.
 
     ⇒ **`add_label` GOES LAST AND THAT IS A MEASUREMENT, NOT A PREFERENCE.** Four orderings of
@@ -178,6 +192,29 @@ def operators_offered(board: Optional[Board] = None) -> List[str]:
         for fact in (spec.get("observed") or {}):
             out.append(f"probe_{fact}")
     ordered = sorted(set(out))
+
+    # ⇒⇒ `request=...` SHRINKS THE CHOICE SET BY EVIDENCE, AND THAT IS THE GENERAL MOVE.
+    #
+    #   The pin below was fitted to one model: remove it and llama degrades while qwen improves
+    #   sharply. Compensating for a position bias is per-model by construction. REMOVING THE
+    #   ROOM FOR ONE IS NOT — seventeen operators give position somewhere to hide, four do not.
+    #   And the filter is the SAME `evidence_for` used to detect unasked steps afterwards,
+    #   applied BEFORE the ask instead: a detector turned into a producer, which is the only
+    #   direction this project has ever measured working.
+    if request:
+        from .linguistics import evidence_for
+        from .scan import _stem
+        said = {w.strip(".,'\"—–") for w in request.lower().split()}
+        said |= {_stem(w) for w in said}
+        warranted = [o for o in ordered if (evidence_for(o, board) & said)]
+        if warranted:
+            ordered = warranted
+
+    # ⇒ `order="alpha"` IS THE UNTUNED CONTROL. The pin below was measured on llama3.1:8b and
+    #   nothing else, so it is a candidate PROJECT BIAS: if the ranking of models changes when
+    #   the pin is removed, the pin was fitting one model rather than fixing a general defect.
+    if order == "alpha":
+        return ordered
     return [o for o in ordered if o != "add_label"] + ["add_label"]
 
 
