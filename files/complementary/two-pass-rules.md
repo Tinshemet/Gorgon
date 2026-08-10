@@ -148,6 +148,48 @@ sealed and committed before the machinery that has to pass it.
 
 ## 4 · Specific to this design
 
+### ⇒⇒ D0 · WHAT THE ORCHESTRATOR PRODUCES, AND WHAT EACH GATE IS FOR
+
+> *The operator, 2026-08-11, sharpening it: "what the orchestrator does in our pipeline is
+> propose a computational model, well more of a scaffold, it doesn't write anything, it only
+> produces a bullet-point list of what the user asked. The Medusa engine is the one writing the
+> code. Gate 4's job is to go over the newly assembled proposal/scaffold and make sure it's
+> viable and logical. Gate 3 is for reasoning, but gate 4 is completeness and viability."*
+
+**THE ORCHESTRATOR DOES NOT WRITE A PROGRAM. IT PROPOSES A SCAFFOLD.** Two artifacts — the
+declarations and the operations — which together are *a bullet-point list of what the operator
+asked for*, in a form that can be checked. Nothing in the orchestrator emits Medusa. **The
+engine writes the code**, from a scaffold that has already been agreed.
+
+⇒ **THIS IS WHY THE GATES CAN BE CHEAP.** They are reading a list of intentions, not a program.
+  Nothing here needs to know what Medusa's syntax looks like — which is D7 restated, and now
+  also the reason D7 is true rather than merely a rule.
+
+| gate | question | grain |
+|---|---|---|
+| **1** | did you say this? | request ↔ scaffold, word by word |
+| **2** | can the world hold it? | each declaration, against the manifest and the lab |
+| **linguistics** | does the shape match? | the request's grammar ↔ the scaffold's structure |
+| **3** | **is this step REASONED?** | one operation at a time, in isolation |
+| **4** | **is the ASSEMBLED scaffold VIABLE and COMPLETE?** | the whole thing, as one object |
+
+**D0a · GATE 3 IS REASONING; GATE 4 IS COMPLETENESS AND VIABILITY.** The dividing line is the
+grain, and it is sharp: **gate 3 may look at exactly one operation**, and **gate 4 may only look
+at the whole**. A finding that can be stated about a single step without reference to any other
+step is gate 3's. A finding that requires two steps, or a step and a declaration, or the absence
+of a step, is gate 4's.
+
+⇒ **THIS RE-CHARTERS GATE 4 AND CONTRADICTS A MOVE MADE ON 08-10.** `unused-declaration` and
+  `uncreated-declaration` were put in **gate 1** on the reasoning that completeness is
+  faithfulness one level up. Under D0 they are **viability of the assembled scaffold** — *this
+  will not run, because the thing it needs is never brought about* — and they belong to gate 4.
+  The relocation is an open item, not a decision already taken; see the handover.
+
+⇒ **AND THE DESTRUCTIVE-CONFIRM RULE MAY NOT BELONG TO GATE 4 AT ALL.** It is an *impact*
+  question — the scaffold is entirely viable and entirely complete, and you still want to be
+  asked. That is neither reasoning nor completeness. Either gate 4 owns impact as a third duty
+  and says so explicitly, or impact is a fifth gate. Do not leave it implicit a second time.
+
 **D1 · The symbol table is the contract.** Pass 2 may reference only names pass 1 declared and
 gates 1–2 confirmed. An unresolvable reference is a hard error, never a warning and never a
 silent repair.
