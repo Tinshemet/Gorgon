@@ -150,10 +150,18 @@ def evidence_for(operator: str, board: Optional[Board] = None) -> set:
     from .scan import _stem
     board = board or Board()
     out: set = set()
+    from .scan import _index
+    index = _index(board)
     for kind, spec in (_config.KINDS or {}).items():
         if not isinstance(spec, dict):
             continue
-        nouns = {kind} | {str(n).lower() for n in (spec.get("nouns") or [])}
+        # ⇒ **PLURALS COME FROM THE MANIFEST'S OWN INDEX, WHICH ALREADY HAS THEM.** Building the
+        #   noun set by hand gave the SINGULARS only, and the stemmer cannot rescue it —
+        #   `_stem("vms")` is `"vms"`, because it refuses to strip an `s` from a word of three
+        #   letters. So `create_vm` was reported as unasked on every request that says `vms`,
+        #   and that false alarm is a large share of the bounces this check introduced.
+        nouns = {w for w, k in index.items() if k == kind}
+        nouns |= {kind} | {str(n).lower() for n in (spec.get("nouns") or [])}
 
         for name in (spec.get("creators") or {}):
             if operator == (f"create_{kind}" if name == "create" else f"{name}_{kind}"):
@@ -168,8 +176,11 @@ def evidence_for(operator: str, board: Optional[Board] = None) -> set:
                 for alias, real in (spec.get("aliases") or {}).items():
                     if real == meta.get("attr"):
                         out.add(str(alias).lower())
-                for value in (spec.get("attr_values") or {}).get(meta.get("attr"), []) or []:
-                    out.add(str(value).lower())
+                # ⇒ **AN ATTRIBUTE'S VALUES ARE NOT EVIDENCE, AND ADDING THEM SERVED A
+                #   SELF-CONTRADICTING PROGRAM.** `stopped` is a value of `status`, so it
+                #   warranted `stop_vm` on *"launch every vm that is currently stopped"* — and
+                #   the chain served `launch_vm` AND `stop_vm` on the same set. A value says
+                #   WHICH THINGS ARE SELECTED; it says nothing about what to do to them.
 
         if operator == spec.get("delete"):
             out |= {"delete", "remove", "destroy", "wipe", "drop", "clear"}
@@ -347,9 +358,14 @@ def findings(request: str, rows: List[S.Declared], operations: List[Operation], 
     from .scan import _stem
     said = {_stem(w.strip(".,'\"—–")) for w in request.lower().split()}
     said |= {w.strip(".,'\"—–") for w in request.lower().split()}
+    # ⇒⇒ AND NOT AT ALL IN THE ACHIEVE MOOD. Asked to bring a STATE about, the model must
+    #   choose actions the request never names — that is what an achieve request IS. Reporting
+    #   those as unwarranted told the MODEL to fix rung 14, when the only thing wrong is a mood
+    #   this pipeline cannot express, and no answer it gives can settle that. The mood finding
+    #   already says so, to the right audience.
     unsettled = {sym.handle for sym in table if sym.row.object_type == S.UNKNOWN_KIND}
     flagged: set = set()
-    for op in operations:
+    for op in (() if mood_of(request) == ACHIEVE else operations):
         # ⇒ NOT WHILE THE TARGET IS UNIDENTIFIED, and not twice for the same operator. Rung 9's
         #   `add_label` is unwarranted whatever `n1` turns out to be — but reporting it to the
         #   MODEL says "fix this", and the model cannot: what blocks that rung is a question
