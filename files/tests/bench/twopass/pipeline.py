@@ -70,6 +70,7 @@ class Run(NamedTuple):
     asks: List[str]                         # to the OPERATOR
     bounces: List[str]                      # to the MODEL
     illegal: List[gate3.Illegal]
+    suggested: List[Operation] = ()   # legal, unasked, PRUDENT — shown, never run
     linguistics: List = ()
     outcome: str = ""
 
@@ -157,8 +158,57 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #   ⇒ **THIS IS THE FIRST CHECK THAT SPANS BOTH PASSES**, and it is only possible now that
     #     both artifacts exist. Absence becomes a comparison across the pair rather than within
     #     one of them.
-    spent = {str(op.value).strip().lower() for op in operations if op.value}
-    spent |= {str(op.on).strip().lower() for op in operations}
+    # ⇒⇒ AN UNASKED STEP IS NOT NOISE. IT IS HOUSEKEEPING, AND WE HAD BEEN THROWING IT AWAY.
+    #
+    #   Asked to justify its own invented steps, the model quoted NO words of the request — and
+    #   then gave a reason that was sound every time:
+    #
+    #       probe_alive     "to check if any of the stopped VMs are now running"
+    #       create_snapshot "to ensure I have a snapshot before making changes"
+    #       add_label       "to assign a label for identification purposes"
+    #
+    #   Six of the nine invented steps are *check it worked*, one is *snapshot before changing*,
+    #   one is *label it so it can be found*. Those are OPS INSTINCTS applied unasked, not
+    #   misreadings — which is exactly why telling the model a step was rejected changed
+    #   nothing, byte for byte: from its side the step was never a mistake.
+    #
+    #   ⇒ **SO THE SPLIT IS THREE-WAY, NOT TWO.** What the request asked for is the PROGRAM.
+    #     What it did not ask for, and is legal and harmless, is a SUGGESTION — shown, never
+    #     run. What is illegal or destructive stays a finding, because a helpful instinct that
+    #     deletes machines is not helpful.
+    from .linguistics import anchor_to_clauses
+    asked_now, suggested = [], []
+    destroyers = _destroyers(board)
+    for clause, op in anchor_to_clauses(request, list(operations), board):
+        if clause or op.operator in destroyers:
+            asked_now.append(op)          # a destructive step is never quietly "suggested"
+        else:
+            suggested.append(op)
+    operations = asked_now
+
+    # ⇒ A BAD SUGGESTION IS DROPPED, NEVER HELD AGAINST THE PROGRAM. Gate 3 had judged the
+    #   whole list, so rung 12's illegal `add_vm_to_network(running_vms)` — now merely a
+    #   suggestion — made every operation look illegal and turned a servable request into a
+    #   REFUSE. An offer we cannot stand behind is simply not offered.
+    suggested = [op for op in suggested
+                 if not gate3.check([op], table, board, world)]
+
+    # ⇒⇒ A BAD SUGGESTION NEVER COSTS THE PROGRAM ITS VERDICT.
+    #
+    #   The operator, 2026-08-10: *"a cancerous housekeeping should be dropped but the core
+    #   proposal shipped — we don't drop a whole proposal only because of a bad housekeeping
+    #   solution."* Right, and it has to be STRUCTURAL rather than hoped for: an illegal
+    #   suggestion once made every operation look illegal and turned a servable rung 12 into a
+    #   REFUSE. So the tiers are sorted here, the CANCEROUS ones are purged outright, and
+    #   `illegal` is recomputed over the PROGRAM ALONE — the verdict cannot see the offers.
+    from .housekeeping import CANCEROUS, GOOD, RISKY, sort_out
+    tiers = sort_out(suggested, operations, table, board)
+    purged = [v.op for v in tiers[CANCEROUS]]
+    suggested = [v.op for v in tiers[GOOD] + tiers[RISKY]]
+    illegal = gate3.check(operations, table, board, world)
+
+    spent = {str(op.value).strip().lower() for op in operations + suggested if op.value}
+    spent |= {str(op.on).strip().lower() for op in operations + suggested}
     bounces: List[str] = []
     for finding in early_bounces:
         if finding.kind == "left-over":
@@ -172,6 +222,8 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #   vocabulary cannot express is the OPERATOR's — re-asking the model for something
     #   unsayable is the trap three refusal attempts already walked into.
     for note in ling:
+        if note.rule == "unasked-step":
+            continue      # ⇒ it is a SUGGESTION now, carried on the Run rather than complained about
         (asks if note.audience == "operator" else bounces).append(repr(note))
     for bad in illegal:
         (asks if bad.rule in ANSWERABLE else bounces).append(repr(bad))
@@ -181,7 +233,7 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     conditions = flatten(conditions_after(declared, _aimed(operations, table), board))
 
     return Run(request, rows, table, operations, conditions,
-               asks, bounces, illegal, ling,
+               asks, bounces, illegal, suggested, ling,
                _verdict(operations, illegal, asks, bounces))
 
 
@@ -316,6 +368,8 @@ def main() -> None:
         print(f"\n{'─' * 100}\nrung {n} · “{want.request[:74]}”")
         print(f"    declared   {', '.join(got.handles) or '—'}")
         print(f"    operations {[(o.operator, o.on, o.value) for o in got.operations] or '—'}")
+        if got.suggested:
+            print(f"    SUGGESTED  {[(o.operator, o.on, o.value) for o in got.suggested]}")
         print(f"    conditions {got.conditions or '—'}")
         for a in got.asks:
             print(f"      ASK     {a[:92]}")
