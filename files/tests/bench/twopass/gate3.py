@@ -109,6 +109,50 @@ def check(operations: List[Operation], table, board: Optional[Board] = None,
     by_handle = {sym.handle: sym.row for sym in table}
     out: List[Illegal] = []
 
+    # ⇒⇒ BINDING TIME IS AN ORDERING, AND NOTHING HAS EVER READ IT.
+    #
+    #   `settled` has been on every row since the schema was written — *at plan time* or *at
+    #   run time* — and the only consumer was gate 2 refusing to CREATE a residual set. It also
+    #   states an ORDER, and ignoring that let this serve silently:
+    #
+    #       probe_alive(not_alive_vms) · stop_vm(vms)      -> SERVE, nothing objects
+    #
+    #   which stops EVERY machine instead of the unresponsive ones — rung 11 inverted into a
+    #   fleet-wide outage. Every existing check passes it: both operations are legal, both
+    #   operators are warranted by the request, both handles are used, and `stop_vm` is not a
+    #   delete so the destructive guard stays quiet.
+    #
+    #   ⇒ TWO RULES FALL OUT OF THE ONE FACT, and both are arithmetic over the table:
+    #     A RESIDUAL SET IS NOT KNOWN UNTIL SOMETHING ASKS THE MACHINES, so an operation on one
+    #     must come AFTER the probe that settles it; and THE PROBE THAT SETTLES IT CANNOT TAKE
+    #     IT AS ITS TARGET, which is the circularity above — you cannot ask only the machines
+    #     that failed to answer whether they answer.
+    from planner.ir import config as _config
+    probe_for: Dict[str, str] = {}
+    for spec in (_config.KINDS or {}).values():
+        if isinstance(spec, dict):
+            for fact in (spec.get("observed") or {}):
+                probe_for[str(fact)] = f"probe_{fact}"
+    settled_now: set = set()
+
+    for step in operations:
+        row_here = by_handle.get(step.on)
+        if row_here is not None and row_here.residual:
+            observed = [a for a in (row_here.where or {}) if a in probe_for]
+            wanted = {probe_for[a] for a in observed}
+            if step.operator in wanted:
+                out.append(Illegal(step, "circular-probe",
+                                   f"{step.on!r} is the set of machines that answered a "
+                                   f"certain way, so {step.operator!r} cannot be asked OF it — "
+                                   f"ask the whole set first"))
+                continue
+            if wanted and not (wanted & settled_now):
+                out.append(Illegal(step, "not-settled-yet",
+                                   f"{step.on!r} is decided by asking the machines and nothing "
+                                   f"has asked yet — {', '.join(sorted(wanted))} must run first"))
+                continue
+        settled_now.add(step.operator)
+
     for step in operations:
         row = by_handle.get(step.on)
         if row is None:

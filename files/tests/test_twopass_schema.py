@@ -951,8 +951,30 @@ def test_gate_3_computes_the_refusal_the_model_will_not_give():
         good11 = [Operation("probe_alive", "vms", None),
                   Operation("stop_vm", "not_alive_vms", None)]
         check("rung 11's correct program is legal", not G3.check(good11, t11, board))
-        check("and a run-time set is a perfectly legal target",
-              not G3.check([Operation("stop_vm", "not_alive_vms", None)], t11, board))
+        # ⇒ THE ASSERTION HERE WAS SUPERSEDED, NOT SOFTENED. It used to check that a lone
+        #   `stop_vm(not_alive_vms)` is legal — and a run-time set IS a legal target, which is
+        #   still asserted just below. But a program that stops the unresponsive machines and
+        #   never probes them is incomplete, and the binding-time rule now says so. The lone
+        #   operation was never a valid program; it was a convenient fixture.
+        check("a run-time set is legal ONCE ITS PROBE HAS RUN", not G3.check(good11, t11, board))
+        alone = G3.check([Operation("stop_vm", "not_alive_vms", None)], t11, board)
+        check("but acting on one before anything asks is not",
+              alone and alone[0].rule == "not-settled-yet")
+
+        # ⇒⇒ THE SILENT WRONG PROGRAM THIS RULE EXISTS FOR. Both steps legal, both operators
+        #   warranted, both handles used, `stop_vm` not a delete — every other check passes it,
+        #   and it stops EVERY machine instead of the unresponsive ones.
+        swapped = [Operation("probe_alive", "not_alive_vms", None),
+                   Operation("stop_vm", "vms", None)]
+        caught = G3.check(swapped, t11, board)
+        check("probing the set that the probe itself defines is circular",
+              caught and caught[0].rule == "circular-probe")
+        backwards = G3.check([Operation("stop_vm", "not_alive_vms", None),
+                              Operation("probe_alive", "vms", None)], t11, board)
+        check("and the right steps in the wrong ORDER are caught too",
+              backwards and backwards[0].rule == "not-settled-yet")
+        check("a plan-time set needs no probe first",
+              not G3.check([Operation("stop_vm", "vms", None)], t11, board))
 
         # ⇒ THE OTHER TWO RULES, EACH EXERCISED WHERE IT IS THE ONLY ONE THAT CAN FIRE.
         missing = G3.check([Operation("add_vm_to_network", "web", None)], t3, board)
