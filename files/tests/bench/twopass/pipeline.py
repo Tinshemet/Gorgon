@@ -55,7 +55,7 @@ import argparse
 from typing import Dict, List, NamedTuple, Optional
 
 from ..formula.legal import Board
-from . import gate3, gates12, linguistics, pass1, pass2, schema as S
+from . import gate3, gate4, gates12, linguistics, pass1, pass2, schema as S
 from .effects import Operation, conditions_after, flatten
 
 SERVE, BOUNCE, ASK, REFUSE = "SERVE", "BOUNCE", "ASK", "REFUSE"
@@ -134,7 +134,9 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
         #   genuinely unwarranted and genuinely retryable — but what BLOCKS that rung is *what
         #   is n1?*, and no answer the model gives can settle it. Retrying here spends a call
         #   to invite the guess the kindless row exists to prevent.
-        if any(bad.rule in ANSWERABLE for bad in illegal):
+        # ⇒ GATE 2 OWNS THE UNSETTLED KIND NOW, so the guard reads gate 2's findings
+        #   rather than a duplicate gate 3 was emitting. Same rule, one owner.
+        if any(f.kind == 'kind-not-settled' for f in early['findings']):
             break
         retryable = _faults(illegal, ling)
         if not retryable or not operations:
@@ -182,7 +184,7 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #     deletes machines is not helpful.
     from .linguistics import anchor_to_clauses
     asked_now, suggested = [], []
-    destroyers = _destroyers(board)
+    destroyers = gate4._destroyers(board)
     for clause, op in anchor_to_clauses(request, list(operations), board):
         if clause or op.operator in destroyers:
             asked_now.append(op)          # a destructive step is never quietly "suggested"
@@ -213,6 +215,24 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
 
     spent = {str(op.value).strip().lower() for op in operations + suggested if op.value}
     spent |= {str(op.on).strip().lower() for op in operations + suggested}
+    # ⇒⇒ AND A WORD CARRIED BY A ROW THE PROGRAM OPERATES ON HAS ALSO BEEN USED.
+    #
+    #   The same accounting, one level down, and leaving it out made rung 6 lie. `red` is
+    #   quoted in the request and the residue check found it unread inside the NETWORK's span —
+    #   but `red_vms {label: red}` carries it, and the program does `add_vm_to_network(red_vms,
+    #   …)`. The word is accounted for by a REFERENCE to that row.
+    #
+    #   ⇒ AND THE COST OF MISSING IT WAS NOT NOISE, IT WAS MISDIRECTION. Rung 6's genuine
+    #     finding — a second network declared and never used — sat underneath two spurious
+    #     complaints telling the model to go re-read `'red'` and `'blue'`, which it had read
+    #     correctly. The true fault was the one the reader would reach last.
+    by_handle = {sym.handle: sym.row for sym in table}
+    carried = set()
+    for op in operations:
+        row = by_handle.get(str(op.on))
+        if row is not None:
+            carried |= {str(v).strip().lower() for v in (row.where or {}).values()}
+
     bounces: List[str] = []
     for finding in early_bounces:
         if finding.kind == "left-over":
@@ -220,6 +240,8 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
                          if w.strip(" '\"").lower() not in spent]
             if not unclaimed:
                 continue          # every leftover word is an operation's argument
+        if finding.kind == "unread-value" and str(finding.about).strip().lower() in carried:
+            continue              # a condition of a row the program acts on — already used
         bounces.append(finding.says)
 
     # ⇒ THE LINGUISTICS FINDINGS CARRY THEIR OWN AUDIENCE. A mood or an exclusion the
@@ -231,7 +253,9 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
         (asks if note.audience == "operator" else bounces).append(repr(note))
     for bad in illegal:
         (asks if bad.rule in ANSWERABLE else bounces).append(repr(bad))
-    asks += destructive(operations, table, request, board)
+    asks += gate4.confirmations(operations, table, request, board)
+    # ⇒ GATE 1's OTHER HALF, which needs both artifacts: nothing declared may go unused.
+    bounces += [f.says for f in gates12.completeness(rows, operations, table, board)]
 
     declared = {row.name: dict(row.where) for row in rows}
     conditions = flatten(conditions_after(declared, _aimed(operations, table), board))
@@ -239,78 +263,6 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     return Run(request, rows, table, operations, conditions,
                asks, bounces, illegal, suggested, ling,
                _verdict(operations, illegal, asks, bounces))
-
-
-def _destroyers(board: Board) -> Dict[str, str]:
-    """Each kind's declared destructive operation. READ, never listed (rule W5)."""
-    from planner.ir import config as _config
-    out: Dict[str, str] = {}
-    for kind, spec in (_config.KINDS or {}).items():
-        if isinstance(spec, dict) and spec.get("delete"):
-            out[str(spec["delete"])] = kind
-    return out
-
-
-DESTRUCTIVE_WORDS = ("delete", "remove", "destroy", "tear down", "get rid",
-                     "wipe", "drop", "kill off", "clear out")
-
-
-def destructive(operations: List[Operation], table, request: str = "",
-                board: Optional[Board] = None) -> List[str]:
-    """A DESTRUCTIVE OPERATION OVER A WHOLE SET GOES TO THE OPERATOR. It is not illegal.
-
-    ⇒ **FOUND BY THE FIRST END-TO-END RUN, AND BY NOTHING BEFORE IT.** Rung 14 —
-      *"make sure there are exactly two machines left"* — came back:
-
-          declared    vms                                 every machine, count eq 2
-          operations  delete_vm(vms) · probe_exists(vms)
-          ⇒ SERVE
-
-      `delete_vm` over the unfiltered set of every machine, and every check passed. Gate 3 was
-      right to stay quiet: nothing about it is ILLEGAL. The declaration says how many should be
-      LEFT and the operation says what to remove, and no stage compares the two.
-
-    ⇒ **SO THIS ASKS RATHER THAN REFUSING**, which is the standing invariant: a high-impact act
-      takes the operator's word, and only the operator can give it
-      ([[gorgon-security-invariants]]). It is the shape that once deleted two machines unasked
-      ([[gorgon-create-deletes]]).
-
-    ⇒ **AND IT BELONGS TO GATE 4, WHICH IS WHY IT IS HERE AND NOT IN GATE 3.** Gate 3 asks
-      whether a step is legal; this asks whether it is worth doing. Gate 4 already exists and
-      reads verdicts rather than programs — reconciling the two is a separate item, and until
-      then this must not silently SERVE.
-    """
-    board = board or Board()
-    destroyers = _destroyers(board)
-    by_handle = {sym.handle: sym for sym in table}
-    # ⇒⇒ NOTHING IS DESTROYED UNLESS THE REQUEST ASKED FOR DESTRUCTION.
-    #
-    #   The first version exempted a NAMED INDIVIDUAL, on the reasoning that deleting something
-    #   the operator named by name is not a surprise. That was wrong, and rung 8 proved it:
-    #   *"put every vm on core, except db — db goes on a network called dmz"* produced
-    #   `delete_network(dmz)` followed by `create_network(dmz)` — destroying and rebuilding a
-    #   network nobody mentioned destroying — and it SERVED, because `dmz` is named.
-    #
-    #   ⇒ THE OPERATOR NAMED IT AS A CREATE TARGET, NOT AS A DELETE TARGET. So the exemption is
-    #     no longer about the target at all: it is about whether the REQUEST asks to destroy
-    #     anything. *"delete the vm named alpha"* says so; rungs 4, 8 and 13 do not.
-    asked_to_destroy = any(word in request.lower() for word in DESTRUCTIVE_WORDS)
-    out: List[str] = []
-    for op in operations:
-        kind = destroyers.get(op.operator)
-        if not kind:
-            continue
-        sym = by_handle.get(op.on)
-        if sym is None:
-            continue
-        if asked_to_destroy and not sym.row.is_set:
-            continue          # they said to remove it, and named the one thing to remove
-        bound = ", ".join(f"{k} = {v}" for k, v in (sym.row.where or {}).items())
-        narrow = (" — narrowed only by " + bound if bound else
-                  " — NOTHING NARROWS IT" if sym.row.is_set else "")
-        out.append(f"{op.operator}({op.on}) removes {sym.definition}{narrow}, and the request "
-                   f"never asks to remove anything. Confirm before this runs.")
-    return out
 
 
 def _aimed(operations: List[Operation], table) -> List[Operation]:

@@ -913,7 +913,7 @@ class _NamedLab:
 def test_gate_3_computes_the_refusal_the_model_will_not_give():
     print("\n[gate3] three attempts to ASK for a refusal have measured 0, 4/8 and 2/8 — the "
           "third, removing `minItems: 1`, was byte-identical at 0/3. So it is DERIVED instead")
-    from tests.bench.twopass import gate3 as G3, pass1 as P, pass2 as P2
+    from tests.bench.twopass import gate3 as G3, gates12 as G, pass1 as P, pass2 as P2
     from tests.bench.twopass.effects import Operation
     from tests.bench.twopass.metrics import Lab
     board = Board()
@@ -929,10 +929,14 @@ def test_gate_3_computes_the_refusal_the_model_will_not_give():
         mesh = [Operation("add_label", "n1", "n2"), Operation("add_label", "n2", "n1"),
                 Operation("add_label", "n3", "n1"), Operation("add_label", "n3", "n2")]
         t9 = table(9)
-        check("every step of the ping mesh is illegal", len(G3.check(mesh, t9, board)) == 4)
-        check("so the request is REFUSED, not half-served", G3.refused(mesh, t9, board))
-        check("and the reason names what is missing",
-              "nothing says what" in G3.check(mesh, t9, board)[0].says)
+        # ⇒ OWNERSHIP CHANGED, NOT THE VERDICT. An unsettled kind is GATE 2's question, and
+        #   gate 3 used to re-derive it — the one fact *nothing says what n1 is* came back five
+        #   times, three from gate 2 and two from here. Gate 3 now trusts the table it is given.
+        rows9 = P.settle_with_world(P.run_scanned(P.EXPECTED[9].request, board=board),
+                                    Lab(), board)
+        asks9 = [f for f in G.gate2(rows9, board) if f.kind == "kind-not-settled"]
+        check("GATE 2 reports the unsettled kinds", len(asks9) == 3)
+        check("and gate 3 stays out of it", not G3.check(mesh, t9, board))
 
         # ⇒ AND IT STILL REFUSES WHEN THE LAB DOES KNOW THEM — a different rule catches it.
         #   You cannot label a machine WITH a machine, whoever those machines are.
@@ -1045,8 +1049,11 @@ def test_a_refusal_is_only_a_refusal_when_nobody_could_answer_it():
     try:
         r9 = "make sure n1, n2 and n3 can all ping each other"
         unknown = PL.run(r9, board=board, world=Lab())
-        check("with the kinds unknown every step is illegal", len(unknown.illegal) == 4)
-        check("but the operator could answer it, so it ASKS", unknown.outcome == PL.ASK)
+        # ⇒ OWNERSHIP MOVED, THE ANSWER DID NOT. An unsettled kind is GATE 2's question; gate 3
+        #   used to re-derive it, so one fact came back five times. The VERDICT is unchanged,
+        #   which is the property a relocation has to have.
+        check("gate 3 is silent while the kinds are unsettled", not unknown.illegal)
+        check("and the operator is still the one asked", unknown.outcome == PL.ASK)
 
         known = PL.run(r9, board=board, world=_NamedLab("n1", "n2", "n3"))
         check("with the kinds settled it is still illegal", len(known.illegal) == 4)
@@ -1241,6 +1248,65 @@ def test_nothing_is_destroyed_unless_the_request_asks():
               not any("Confirm before this runs" in a for a in named.asks))
     finally:
         channel.constrained = was
+
+
+def test_a_later_mention_marked_distinct_is_a_second_thing():
+    print("\n[distinct] rung 6 asks for the red ones on their OWN network and the blue ones "
+          "on a DIFFERENT one — and one network was declared, so both groups went onto it")
+    from tests.bench.twopass import pass1 as P, pass2 as P2
+    from tests.bench.twopass.metrics import Lab
+    board = Board()
+    channel, was = _no_model()
+    try:
+        rows = P.settle_with_world(P.run_scanned(P.EXPECTED[6].request, board=board),
+                                   Lab(), board)
+        networks = [r for r in rows if r.kind == "network"]
+        check("rung 6 declares TWO networks, not one", len(networks) == 2)
+        handles = [s.handle for s in P2.symbol_table(rows, board)]
+        check("and both vm groups survive beside them",
+              "red_vms" in handles and "blue_vms" in handles)
+        check("with no junk rows added", len(rows) == 4)
+
+        # ⇒ THE MARKERS ARE A CLOSED CLASS, and the negative cases matter more than the
+        #   positives — a marker fires on a SECOND mention only.
+        check("`a different network` is marked", P._marks_distinct("a different network"))
+        check("`their own network` is marked", P._marks_distinct("their own network"))
+        check("an ordinary phrase is not", not P._marks_distinct("a network called lab"))
+
+        # ⇒ AND ONLY A KINDED ANCHOR MAY SPLIT. `ones` sits inside both marked spans in rung 6;
+        #   letting it split produced two junk `?` rows for one pronoun.
+        check("a pronoun inside a marked span does not become a second object",
+              not any(r.object_type == S.UNKNOWN_KIND for r in rows))
+
+        # THE CONTROL THAT MATTERS: a thing mentioned twice with NO marker must still fold.
+        r3 = P.run_scanned(P.EXPECTED[3].request, board=board)
+        check("rung 3's lab is mentioned twice and stays ONE network",
+              len([r for r in r3 if r.kind == "network"]) == 1)
+    finally:
+        channel.constrained = was
+
+
+def test_each_gate_owns_its_own_checks():
+    print("\n[gates] a check in the wrong gate is a check nobody audits — three were, and one "
+          "of them is why a fix for rung 6 landed in gate 3 instead of gate 2")
+    from tests.bench.twopass import gate3 as G3, gate4 as G4, gates12 as G
+    from tests.bench.twopass import linguistics as L
+
+    owners = {"gate 1": G.GATE1_OWNS, "gate 2": G.GATE2_OWNS, "gate 3": G3.OWNS,
+              "gate 4": G4.OWNS, "linguistics": L.OWNS}
+    for name, mine in owners.items():
+        others = set().union(*[v for k, v in owners.items() if k != name])
+        clash = mine & others
+        check(f"{name} shares no rule name with another gate ({sorted(clash) or 'none'})",
+              not clash)
+
+    # ⇒ AND THE THREE THAT WERE WRONG, PINNED BY NAME so a regression is a failing test:
+    check("an unsettled kind belongs to gate 2, not gate 3",
+          "kind-not-settled" in G.GATE2_OWNS and "unknown-kind" not in G3.OWNS)
+    check("completeness belongs to gate 1, not the grammar gate",
+          "unused-declaration" in G.GATE1_OWNS and "role-unsettled" not in L.OWNS)
+    check("impact belongs to gate 4, and gate 4 exists",
+          "destructive-confirm" in G4.OWNS and hasattr(G4, "confirmations"))
 
 
 def main(argv=None) -> int:

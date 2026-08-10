@@ -59,6 +59,13 @@ class Illegal(NamedTuple):
                 f"{', ' + str(self.step.value) if self.step.value else ''}): {self.says}")
 
 
+# ⇒ WHAT GATE 3 OWNS: whether one OPERATION is legal. Not whether the world can hold a thing
+#   (gate 2), not whether the request said it (gate 1), not whether it is worth doing (gate 4).
+OWNS = frozenset({"no-such-handle", "wrong-kind-operator", "value-missing",
+                  "value-is-an-object", "wrong-kind-value", "value-not-declared",
+                  "circular-probe", "not-settled-yet"})
+
+
 def _setter_for(operator: str) -> Optional[Dict]:
     """The manifest's declaration of this operation, wherever it lives."""
     from planner.ir import config as _config
@@ -160,11 +167,12 @@ def check(operations: List[Operation], table, board: Optional[Board] = None,
                                f"{step.on!r} was never declared"))
             continue
 
-        # 1 · AN UNSETTLED KIND CANNOT BE OPERATED ON.
+        # ⇒ AN UNSETTLED KIND IS **GATE 2's QUESTION** AND THIS GATE STAYS OUT OF IT.
+        #   `kind-not-settled` and this rule were the same fact reported twice: on rung 9 the
+        #   one fact *nothing says what n1 is* came back FIVE times, three from gate 2 and two
+        #   from here. A gate that re-derives another gate's finding is not adding a check, it
+        #   is adding noise — and it is how a check ends up owned by nobody.
         if row.object_type == S.UNKNOWN_KIND:
-            out.append(Illegal(step, "unknown-kind",
-                               f"nothing says what {step.on!r} is, so {step.operator!r} "
-                               f"cannot be applied to it — say what it is first"))
             continue
 
         # 4 · AN OPERATOR BELONGS TO A KIND, AND MAY NOT BE APPLIED TO ANOTHER.

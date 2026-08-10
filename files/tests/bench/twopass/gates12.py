@@ -42,6 +42,16 @@ class Finding(NamedTuple):
         return f"[gate {self.gate}] {self.about}: {self.says}"
 
 
+# ⇒ THE RULE NAMES EACH GATE OWNS. Declared so `test_each_gate_owns_its_own_checks` can hold
+#   them apart — the thing that would have caught the destructive guard living in the pipeline
+#   and `role-unsettled` living in the grammar gate, instead of me noticing weeks later.
+GATE1_OWNS = frozenset({"invented", "invented-value", "left-over", "unread-value",
+                        "unused-declaration", "uncreated-declaration"})
+GATE2_OWNS = frozenset({"unknown-kind", "kind-not-settled", "no-such-attribute",
+                        "illegal-value", "cannot-be-made", "unread-descriptor",
+                        "already-there", "not-there", "unverifiable"})
+
+
 def _words(text: str) -> set:
     return {w.strip(".,'\"!?:;()[]").lower() for w in str(text).split() if w.strip(".,'\"!?:;()")}
 
@@ -121,6 +131,73 @@ def gate1(rows: List[S.Declared], request: str,
     return out
 
 
+def completeness(rows: List[S.Declared], operations, table,
+                 board: Optional[Board] = None) -> List[Finding]:
+    """GATE 1's OTHER HALF — nothing declared may go unused.
+
+    ⇒ **THIS IS THE LEFTOVER RULE, ONE LEVEL UP.** Gate 1 already asks which WORDS no
+      declaration claimed; this asks which DECLARATIONS no operation claimed. Same question,
+      same gate, the other side of the pair — *an object may stand alone, but a thing nobody
+      does anything with is a step missing*.
+
+    ⇒ **AND IT LIVED IN THE LINGUISTICS GATE, WHICH OWNS GRAMMAR AND NOT COMPLETENESS.** It
+      was written there because that is where I happened to be, and a check owned by the wrong
+      gate is a check nobody audits. It needs BOTH artifacts, which is why it is a second entry
+      point rather than part of `gate1` itself.
+    """
+    from planner.ir import config as _config
+
+    def _creators(kind: str) -> set:
+        spec = (_config.KINDS or {}).get(kind) or {}
+        return {f"create_{kind}" if n == "create" else f"{n}_{kind}"
+                for n in (spec.get("creators") or {})}
+
+    used = {str(op.on) for op in operations}
+    used |= {str(op.value) for op in operations if op.value}
+    out: List[Finding] = []
+    for sym in table:
+        if sym.row.object_type == S.UNKNOWN_KIND:
+            continue
+
+        # ⇒⇒ A THING DECLARED **NEW** MUST BE MADE BY SOMETHING. The other half of completeness,
+        #   and the one rung 6 needed.
+        #
+        #   *"put the blue ones on a DIFFERENT network"* declares a second network, pass 1 marks
+        #   it NEW, and the program served `add_vm_to_network(blue_vms, 'network_2')` with no
+        #   `create_network` anywhere. Every check passed it: gate 2 stays quiet BECAUSE it is
+        #   new — a new thing is not expected to exist yet — and `unused-declaration` stays quiet
+        #   because it IS used. Used, but never made.
+        #
+        #   ⇒ AND IT IS THE SAME QUESTION AS THE LINE ABOVE, NOT A NEW ONE: does the program
+        #     account for every declaration? One asks whether anything TOUCHES it; this asks
+        #     whether anything BRINGS IT ABOUT.
+        # ⇒ ONLY A SINGLE THING SOMETHING ELSE DEPENDS ON. Two guards, and rung 11 bought both:
+        #     A SET IS A SELECTION, NOT AN OBJECT. `vms` is *every vm* — declared NEW by pass 1's
+        #     weakest field (85%, and every error toward NEW) — and demanding a creator for it
+        #     bounced the one rung this whole design was built for.
+        #     AND THE HARM IS DEPENDENCE, not the existence flag. `add_vm_to_network(blue_vms,
+        #     'network_2')` needs `network_2` to be there; a row nobody relies on is harmless
+        #     however it was labelled. Keying on dependence rather than on `existence` alone
+        #     stops a weak field becoming a hard bounce.
+        depended_on = any(str(op.value) == sym.handle for op in operations if op.value)
+        if (sym.row.existence == S.NEW and not sym.row.is_set and depended_on
+                and sym.row.kind in (board or Board()).kinds):
+            makers = _creators(sym.row.kind)
+            if not any(op.operator in makers and str(op.on) == sym.handle
+                       for op in operations):
+                out.append(Finding(1, "uncreated-declaration", sym.handle,
+                                   f"{sym.handle!r} is declared as something new and no step "
+                                   f"creates it — it will not exist when it is used"))
+                continue
+
+        if sym.handle in used:
+            continue
+        out.append(Finding(1, "unused-declaration", sym.handle,
+                           f"{sym.handle!r} was declared and no operation touches it — either "
+                           f"it is not a thing, or a step is missing"))
+    return out
+
+
 def bounces(findings: List[Finding]) -> List[Finding]:
     """What goes BACK TO THE MODEL rather than to the operator.
 
@@ -129,7 +206,8 @@ def bounces(findings: List[Finding]) -> List[Finding]:
       carries. The operator already said it, so failing to read it is the model's miss, which
       is precisely the test that decides this list.
     """
-    return [f for f in findings if f.kind in ("left-over", "unread-value")]
+    return [f for f in findings if f.kind in ("left-over", "unread-value",
+                                          "unused-declaration", "uncreated-declaration")]
 
 
 def residues(rows: List[S.Declared], request: str, board: Optional[Board] = None,
@@ -225,6 +303,28 @@ def conflicts(rows: List[S.Declared], world, board: Optional[Board] = None) -> L
         if not value and row.identity:
             value = row.identity
         if not value:
+            # ⇒⇒ AN UNIDENTIFIABLE ROW WAS SKIPPED **SILENTLY**, AND THAT IS THIS GATE'S HOLE.
+            #
+            #   `conflicts` asks the lab whether a declared thing is there, and gives up the
+            #   moment it has no name to ask about. So a row with no key value is never checked
+            #   AT ALL — it is assumed to exist, quietly, and everything downstream trusts it.
+            #
+            #   ⇒ RUNG 6 IS WHAT THAT COSTS. *"put the blue ones on a different network"*
+            #     declares a second network with no name; nothing creates it; and the program
+            #     served `add_vm_to_network(blue_vms, 'network_2')` — machines onto a network
+            #     that will not exist when the step runs. Every later check passed it: the
+            #     handle resolves in the symbol table and it IS used, so nothing called it
+            #     orphaned.
+            #
+            #   ⇒ **A SINGLE THING MUST BE IDENTIFIABLE; A SET NEED NOT BE.** A set is defined
+            #     by its filter and is looked up by that, so `5 vms` is not missing a name. One
+            #     unnamed thing asserted to exist is a question, and asking it is exactly what
+            #     this gate is for.
+            if not row.is_set and row.existence == S.EXISTING:
+                out.append(Finding(2, "unverifiable", row.name,
+                                   f"{row.name!r} is referred to as if it exists, and it has "
+                                   f"no name to look up — which {row.kind} is it, or should "
+                                   f"one be made?"))
             continue
         try:
             there = bool(world.select({"kind": row.kind, key_attr: value}))

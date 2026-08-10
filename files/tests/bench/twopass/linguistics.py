@@ -77,6 +77,13 @@ class Finding(NamedTuple):
         return f"[linguistics/{self.rule}] {self.about}: {self.says}"
 
 
+# ⇒ WHAT THE LINGUISTICS GATE OWNS: the request's GRAMMAR against the program's STRUCTURE.
+#   `role-unsettled` used to be here and is not grammar — it is completeness, and it moved to
+#   gate 1 where the leftover rule already lives.
+OWNS = frozenset({"mood-achieve", "unexpressed-exclusion", "count-ignored",
+                  "unasked-step", "light-verb-object"})
+
+
 def mood_of(request: str) -> str:
     """DO or ACHIEVE. A light verb over an adjective marks a state to hold, not an act.
 
@@ -440,20 +447,6 @@ def findings(request: str, rows: List[S.Declared], operations: List[Operation], 
                                f"no clause of the request asks for {op.operator!r} — no part "
                                f"of it warrants this step", "model"))
 
-    # 4 · A ROW NO VERB SETTLED. It reached pass 2 and pass 2 never mentioned it.
-    for sym in table:
-        if sym.handle in targets:
-            continue
-        if any(str(op.value) == sym.handle for op in operations):
-            continue
-        # ⇒ NOT WHILE ITS KIND IS STILL UNSETTLED. Gate 2 is already asking what `n3` IS, and
-        #   the model could not act on it if it wanted to — faulting the plan for leaving it
-        #   untouched sends a bounce that outranks the question actually blocking it.
-        if sym.row.object_type == S.UNKNOWN_KIND:
-            continue
-        out.append(Finding("role-unsettled", sym.handle,
-                           f"{sym.handle!r} was declared and no operation touches it — either "
-                           f"it is not a thing, or a step is missing", "model"))
     return out
 
 
