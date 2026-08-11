@@ -177,11 +177,27 @@ def evidence_for(operator: str, board: Optional[Board] = None) -> set:
         for group in ("setters", "unsetters"):
             meta = (spec.get(group) or {}).get(operator)
             if meta:
-                out |= {w for w in str(operator).lower().split("_") if w not in nouns}
+                # ⇒⇒ **A GRAMMAR WORD IS NEVER EVIDENCE, AND `to` COST RUNG 10 A WHOLE STEP.**
+                #   Splitting `add_vm_to_network` on underscores yields `add`, `to`, `network` —
+                #   and `to` is a preposition. *"clone golden INTO 3 new vms"* contains `into`,
+                #   which matched, so a phantom `add_vm_to_network(vms, '3')` counted as WARRANTED
+                #   BY THE REQUEST, anchored to a clause, and entered the program. There is no
+                #   network in that sentence at all.
+                #   ⇒ **THE HOUSEKEEPING TIERING IS WHAT SHOULD HAVE DROPPED IT** — an unwarranted
+                #     step gets no clause anchor and becomes a SUGGESTION, shown and never run.
+                #     A two-letter preposition was enough to defeat that, so the operator saw a
+                #     bounce about a network they never mentioned.
+                from .scan import GRAMMAR
+                out |= {w for w in str(operator).lower().split("_")
+                        if w not in nouns and w not in GRAMMAR}
                 if meta.get("attr"):
                     out.add(str(meta["attr"]).lower())
                 for alias, real in (spec.get("aliases") or {}).items():
-                    if real == meta.get("attr"):
+                    # ⇒ AND AN ALIAS THAT IS A GRAMMAR WORD IS NOT EVIDENCE EITHER. `on` is
+                    #   declared as an alias for `network`, and `clone` CONTAINS it — so rung
+                    #   10's phantom `add_vm_to_network` stayed warranted even after `to` was
+                    #   excluded. Same rule, the other source.
+                    if real == meta.get("attr") and str(alias).lower() not in GRAMMAR:
                         out.add(str(alias).lower())
                 # ⇒ **AN ATTRIBUTE'S VALUES ARE NOT EVIDENCE, AND ADDING THEM SERVED A
                 #   SELF-CONTRADICTING PROGRAM.** `stopped` is a value of `status`, so it
@@ -251,7 +267,16 @@ def anchor_to_clauses(request: str, operations: List[Operation],
             hit = len(warrant & words)
             if hit and str(op.on).lower() in clause.lower():
                 hit += 2
-            if op.value and str(op.value).lower() in clause.lower():
+            # ⇒⇒ **AND THE VALUE BONUS IS A TIE-BREAKER, NOT EVIDENCE — IT WAS UNGUARDED.**
+            #   The target bonus above is gated on `hit`, this one was not, so an operation
+            #   warranted by NOTHING could still anchor if its value happened to appear in the
+            #   text. Rung 10: `add_vm_to_network(vms, '3')` has zero overlap with its warrant,
+            #   and `'3'` appears in *"3 new vms"* — so a step about a network the request never
+            #   mentions scored 1, anchored, entered the program and bounced at the operator.
+            #   ⇒ **THIS IS WHO SHOULD HAVE DROPPED IT.** An unwarranted step gets no clause and
+            #     becomes a SUGGESTION — shown, never run. A tie-breaker able to create a match
+            #     from nothing defeated that, which is why the housekeeping tier never saw it.
+            if hit and op.value and str(op.value).lower() in clause.lower():
                 hit += 1
             if hit > score:
                 best, score = clause, hit
@@ -347,6 +372,7 @@ def settle_with_verb(operations: List[Operation], table,
 
 # ── the reporting half · IT CHANGES NOTHING ───────────────────────────────────────────
 def findings(request: str, rows: List[S.Declared], operations: List[Operation], table,
+             goals: Optional[List[dict]] = None,
              board: Optional[Board] = None) -> List[Finding]:
     """Where the request's GRAMMAR says something the program does not express."""
     board = board or Board()
@@ -355,7 +381,17 @@ def findings(request: str, rows: List[S.Declared], operations: List[Operation], 
     targets = {str(op.on) for op in operations}
 
     # 1 · THE MOOD. A goal is not a plan.
-    if mood_of(request) == ACHIEVE and operations:
+    #
+    # ⇒⇒ **AND IT ONLY COMPLAINS WHEN NOTHING STATES THE GOAL.** The finding says *"the plan
+    #   only performs actions — nothing here checks it afterwards or corrects it"*, which was
+    #   true while the scaffold carried steps and nothing else. As of 2026-08-11 an ACHIEVE
+    #   request also carries the STATE it asks to hold (`schema.predicate_of`), and gate 4
+    #   asks `planner.ir.derive` whether that state is reachable. When a goal is captured, the
+    #   sentence above stops being true and the ASK stops being honest.
+    #
+    #   ⇒ THE UNCLOSEABLE CASE IS STILL ASKED — by GATE 4, which has the world and can say
+    #     WHY. Rungs whose mood is ACHIEVE and whose goal nothing can state still land here.
+    if mood_of(request) == ACHIEVE and operations and not goals:
         out.append(Finding("mood-achieve", request[:40],
                            "this asks for a state to HOLD, and the plan only performs "
                            "actions — nothing here checks it afterwards or corrects it",
@@ -371,11 +407,17 @@ def findings(request: str, rows: List[S.Declared], operations: List[Operation], 
     low = request.lower()
     excluders = [w for w in ("except", "excluding", "besides", "instead", "apart from")
                  if w in low]
-    if excluders and operations:
-        # ⇒ AND IT GOES TO THE OPERATOR, NOT THE MODEL, BECAUSE THE VOCABULARY CANNOT SAY IT.
-        #   There is no exclusion in the operation schema at all — no `except`, no set
-        #   difference — so bouncing this would be asking the model again for something
-        #   unsayable, which is the trap three refusal attempts already walked into.
+    # ⇒⇒ **AND IT IS EXPRESSED NOW, WHEN THE SET CARRIES IT.** 2026-08-11: an `except` clause
+    #   attaches to the set it narrows (`pass1.attach_exclusions`), so `every vm … except db`
+    #   declares `vm_set {network: core} EXCLUDES db` rather than leaving a floating row. The
+    #   comment above — *"no operation can express an exclusion"* — was true of the OPERATION
+    #   vocabulary and always missed the point: the exclusion belongs to the SET, not the step.
+    #
+    #   ⇒ SO THE CHECK NOW ASKS WHETHER ANYTHING CARRIES IT, and only complains when nothing
+    #     does. A detector standing in front of a hole becomes a detector standing behind a
+    #     fix — which is the only honest reason to keep one.
+    carried = any(getattr(row, "excludes", ()) for row in (rows or ()))
+    if excluders and operations and not carried:
         out.append(Finding("unexpressed-exclusion", excluders[0],
                            f"the request excludes something ({excluders[0]!r}) and no "
                            f"operation can express an exclusion — every step applies to the "
@@ -404,6 +446,16 @@ def findings(request: str, rows: List[S.Declared], operations: List[Operation], 
         #   effected/affected distinction again, and it settles this better than the mood does
         #   — rung 4 is in the ACHIEVE mood too, because of a different clause entirely.
         if any(op.operator in creators for op in operations if str(op.on) == sym.handle):
+            continue
+        # ⇒⇒ **AND A COUNT A GOAL STATES IS NOT A COUNT NOBODY EXPRESSED.** This finding says
+        #   *"no operation expresses the bound"* — true while steps were the only way to say
+        #   anything. As of 2026-08-11 an ACHIEVE request carries the bound AS A PREDICATE, and
+        #   the goal is precisely a statement of that count. Complaining here would be accusing
+        #   the scaffold of omitting the thing it now leads with.
+        #   ⇒ THIRD CHECK TODAY THAT ASSUMED STEPS WERE THE ONLY EXPRESSION — after
+        #     `mood-achieve` and gate 1's `unused-declaration`. When a new way to SAY something
+        #     is added, every check that tested for the old way is quietly wrong.
+        if any(S.governs(g, sym.row) for g in (goals or ())):
             continue
         bound = f"{sym.row.comparator or 'eq'} {sym.row.count}"
         out.append(Finding("count-ignored", sym.handle,
@@ -451,7 +503,7 @@ def findings(request: str, rows: List[S.Declared], operations: List[Operation], 
 
 
 def report(request: str, rows: List[S.Declared], operations: List[Operation], table,
-           board: Optional[Board] = None):
+           board: Optional[Board] = None, goals: Optional[List[dict]] = None):
     """Settle first, then report on what survived. Returns (rows, table, findings)."""
     board = board or Board()
     # ⇒ THE HANDLES ARE CARRIED THROUGH UNCHANGED, NEVER REGENERATED. `symbol_table` assigns
@@ -460,5 +512,5 @@ def report(request: str, rows: List[S.Declared], operations: List[Operation], ta
     #   dangling one, inside the step whose whole purpose is keeping references sound.
     fresh_table, notes = settle_with_verb(operations, table, board)
     settled = [sym.row for sym in fresh_table]
-    return settled, fresh_table, notes + findings(request, settled, operations,
-                                                  fresh_table, board)
+    return settled, fresh_table, notes + findings(request, settled, operations, fresh_table,
+                                                  goals=goals, board=board)

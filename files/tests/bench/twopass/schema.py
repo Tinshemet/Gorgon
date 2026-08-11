@@ -61,6 +61,28 @@ class Declared(NamedTuple):
     comparator: Optional[str] = None     # eq · min · max — READ from in front of it
     span: str = ""                       # the noun phrase the request actually wrote
     identity: Optional[str] = None       # a CANDIDATE name — only the lab confirms it
+    # ⇒ THE ROUTING STAGE WAS RUN AND SAID NO. Not "we do not know what this is" but "this is
+    #   not one of the things this lab keeps" — a different sentence, and a different question
+    #   to the operator. Only ever set by `settle_by_routing`; kindless rows nobody asked about
+    #   stay False, so absence of the mark means UNASKED rather than ROUTABLE.
+    unroutable: bool = False
+    # ⇒⇒ WHAT THIS SET LEAVES OUT — the handles/names an `except` clause removes from it.
+    #
+    #   The operator, 2026-08-11, on rung 8: *"it needs to produce a set, `all_vms_but_db`,
+    #   which is a legal set, and then put db in its own set."* Before this the exclusion was
+    #   DETECTED (`linguistics.unexpressed-exclusion`) and never EXPRESSED, so `every vm` still
+    #   meant every vm and the program would have put `db` on BOTH networks.
+    #
+    #   ⇒ IT LIVES ON THE SET, NOT AS A ROW OF ITS OWN. `except db` arriving as a floating
+    #     kindless row is what made it invisible — a row nothing connects to is a clause
+    #     nobody applied.
+    #
+    # ⇒⇒ **EACH ENTRY IS A FILTER, NOT A NAME, AND THAT IS THE WHOLE CORRECTNESS OF IT.**
+    #   A tuple of strings assumes exclusion-BY-NAME, which is the special case: *"every vm
+    #   except THE RUNNING ONES"* has no name to store. Exclusion is by PREDICATE, so an entry
+    #   is `{'name': 'db'}` or `{'status': 'running'}` — **exactly the shape the IR's `not`
+    #   block takes**, so nothing has to translate it on the way to the engine.
+    excludes: tuple = ()
 
     @property
     def kind(self) -> str:
@@ -158,6 +180,67 @@ TYPE_Q = (
     "is a GROUP of them."
 )
 
+
+# ── THE RESIDUAL ROUTING QUESTION ─────────────────────────────────────────────────────
+#
+# ⇒⇒ `nouns` IS A WORD LIST, AND THE OPERATOR'S CRITIQUE OF WORD LISTS IS THE REASON THIS
+#   EXISTS. 2026-08-11: *"SSOT of nouns and verbs worked in the tool regime because each tool
+#   only has finite slots and words related to it, while in the program regime one noun is
+#   still legal due to how the sentence is structured."*
+#
+#   The manifest indexes 48 words. `computers`, `workstations`, `vlans`, `segments`,
+#   `backups`, `documents`, `blueprints` are not among them and are ordinary English for
+#   things this lab holds. Every one of them becomes an ASK today.
+#
+# ⇒ SO THE LADDER IS: the manifest's `nouns` (deterministic) -> the lab (deterministic) ->
+#   THIS (one model call, on the residual only) -> the ASK. Cheapest and most-verified first,
+#   which is [[gorgon-vague-request-ladder]]'s ordering by WHO VERIFIED THE ARTIFACT.
+NO_KIND = "none of these"
+
+# ⇒⇒ THE STEER IS LOAD-BEARING AND THE CONTROL PROVES IT — both arms in ONE process, so no
+#   model reload could void the comparison ([[gorgon-handover-2026-08-11]] item 2):
+#
+#       arm              correct  synonyms  null arm  order-stable  FALSE MATCH
+#       steered            13/20      3/10     10/10         20/20            0
+#       offered only       13/20      4/10      9/10         18/20            2
+#
+#   OFFERING THE NULL ARM IS NOT ENOUGH. Arm B has it and still forced two confident wrong
+#   kinds — `backups -> file`, `users -> file`. **`file` is the SINK KIND**, the same shape as
+#   `name` being a sink for every clause it cannot hold. The option must EXIST and the model
+#   must be TOLD TO PREFER IT; one without the other buys a false match.
+#
+#   ⇒ AND THE COST IS ONE SYNONYM. That is the trade [[gorgon-vague-request-ladder]] already
+#     priced: a FALSE AVOID costs far more than an unnecessary question.
+ROUTE_Q = (
+    "What sort of thing is {name!r} in this request? Choose ONE option.\n\n{nouns}\n"
+    "  {none} — it is not any of the above, or the word names nothing this lab keeps\n\n"
+    "Choose {none!r} rather than the closest fit. A wrong match is worse than no match."
+)
+
+
+def route_schema(board: Optional[Board] = None, reverse: bool = False) -> dict:
+    """The kinds plus a way to decline them. NOTE THE DIFFERENCE FROM `type_schema`.
+
+    ⇒ **`type_schema` HAS NO NULL ARM** — six kinds and `required: ["answer"]`, so a word that
+      is none of them cannot be answered honestly and comes back as a confident wrong kind.
+      That is why the routing question could not simply be re-enabled: the schema had no way
+      to say no. Left untouched here because `kindfirst` still uses it and is not measured by
+      this change.
+
+    ⇒⇒ **AND IT IS OFFERED IN TWO ORDERS ON PURPOSE, BECAUSE ONE ORDER MEASURED NOTHING.**
+      Verified 2026-08-11 at n=3: the manifest order routed `routers` to `network` twice in
+      three, and `blueprints` to `profile` twice in three; the reversed order refused both.
+      Neither ordering is the right one — **an answer that moves with the order was decided by
+      the order**, which is the reversal probe's own rule. So `settle_by_routing` asks BOTH and
+      keeps only what agrees, and the enum ordering stops being a hidden parameter rather than
+      being pinned to whichever value happened to score well.
+    """
+    board = board or Board()
+    kinds = list(board.kinds)
+    options = ([*reversed(kinds), NO_KIND] if reverse else [NO_KIND, *kinds])
+    return {"type": "object", "additionalProperties": False, "required": ["answer"],
+            "properties": {"answer": {"type": "string", "enum": options}}}
+
 WHERE_Q = (
     "Which conditions pick out the members of {name!r}? Use only conditions the sentence "
     "actually states. If {name!r} means all of them with no condition, or is one named thing, "
@@ -236,6 +319,94 @@ def existence_schema() -> dict:
     # relapse into first-member picking shows up as over-refusal rather than over-creation.
     return {"type": "object", "additionalProperties": False, "required": ["answer"],
             "properties": {"answer": {"type": "string", "enum": [EXISTING, NEW]}}}
+
+
+def select_of(row: Declared, board: Optional[Board] = None) -> Optional[dict]:
+    """The IR select this declaration denotes — AND THE ONLY PLACE THAT SHAPE IS BUILT.
+
+    ⇒⇒ **ONE BUILDER, BECAUSE TWO WOULD DIVERGE.** Gate 4 checks whether an exclusion is
+      honourable and the engine eventually has to honour it. If each constructed its own
+      select, gate 4 would be validating a select nobody runs — which is the defect this
+      session found seven times in other clothes. Same function, same shape, one owner.
+
+    ⇒⇒ **AND THE MULTI-EXCLUSION FORM IS `all` OF `not`s, NOT ONE MERGED `not`.** Measured
+      against the IR's validator 2026-08-11: `{"not": {"name": "db", "status": "running"}}`
+      VALIDATES — and means *exclude things that are BOTH named db AND running*, which is an
+      AND where the operator said two separate exclusions. **A semantically wrong select that
+      passes validation is worse than one that fails**, so the shape is chosen here rather
+      than discovered by whether the checker complains:
+
+          one exclusion       not: {name: db}
+          several             all: [{not: f1}, {not: f2}]     ⇐ AND of nots = exclude both
+
+    Returns None when the kind is not one the manifest holds — there is no select to build.
+    """
+    board = board or Board()
+    if row.kind not in board.kinds:
+        return None
+    sel: dict = {"kind": row.kind, **(row.where or {})}
+    carved = [dict(f) for f in (row.excludes or ()) if f]
+    if not carved:
+        return sel
+    if len(carved) == 1:
+        sel["not"] = carved[0]
+    else:
+        sel["all"] = [{"not": f} for f in carved]
+    return sel
+
+
+def governs(goal: dict, row: Declared) -> bool:
+    """Does this GOAL speak about this ROW? The one place that question is answered.
+
+    ⇒⇒ **IT WAS THE SAME DICT COMPARISON IN THREE FILES** — `linguistics.count-ignored`,
+      `gates12.completeness` and the pipeline's `_governed` each wrote out *kind matches and
+      the wheres are equal*. Three copies of one question is how they drift, and it broke the
+      moment a goal stopped being a simple equality: rung 9's reach goal selects THREE named
+      machines with `{name: {in: [...]}}`, which no equality test can match.
+
+    ⇒ MEMBERSHIP COUNTS AS GOVERNING. A goal over `{name: {in: [n1, n2, n3]}}` speaks about the
+      row named `n1` just as surely as a goal over `{name: n1}` does.
+    """
+    sel = goal.get("select") or {}
+    if sel.get("kind") != row.kind:
+        return False
+    where = {k: v for k, v in sel.items() if k != "kind"}
+    if where == dict(row.where or {}):
+        return True
+    for attr, want in where.items():
+        if isinstance(want, dict) and "in" in want:
+            mine = str((row.where or {}).get(attr, ""))
+            if mine and mine in [str(x) for x in want["in"]]:
+                return True
+    return False
+
+
+def predicate_of(row: Declared, board: Optional[Board] = None) -> Optional[dict]:
+    """The STATE this row asserts, as an IR predicate — or None if it asserts none.
+
+    ⇒⇒ **RUNG 7 NEEDS NO MODEL CALL AND NEVER DID.** *"make sure exactly 3 vms carry the 'prod'
+      label"* — pass 1 already reads the enumerator (`count=3`, `comparator='eq'`) and the
+      modifiers (`where={'label': 'prod'}`), so the predicate is arithmetic over a row that
+      already exists:
+
+          {'shape': 'count', 'select': {'kind': 'vm', 'label': 'prod'}, 'eq': 3}
+
+    ⇒ **AND `planner.ir.derive` HAS BEEN ABLE TO CLOSE IT ALL ALONG.** Its own docstring names
+      this rung: llama oscillated 6 -> 4 -> 7 -> 5 and never computed *six exist, three wanted,
+      remove three* — *"the harness computes it in one line. So it should."* It was never
+      reachable from the front seam. The eighth built-and-never-called of the day.
+
+    ⇒ THE SELECT COMES FROM `select_of`, SO A GOAL OVER A CARVED SET HONOURS THE CARVE-OUT.
+      *"make sure exactly 3 vms except db carry prod"* must not count `db`, and it will not,
+      because the goal and the set are the same select.
+    """
+    board = board or Board()
+    if row.count is None or not row.comparator or not isinstance(row.count, int):
+        return None
+    sel = select_of(row, board)
+    if sel is None:
+        return None
+    return {"shape": "count", "select": sel, row.comparator: int(row.count)}
 
 
 def declare_from(name: str, object_type: str, where: Dict[str, object], existence: str,

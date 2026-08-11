@@ -17,6 +17,7 @@ WHAT THIS PINS, in order of what matters:
 from __future__ import annotations
 
 import os
+import pathlib
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -1049,15 +1050,39 @@ def test_a_refusal_is_only_a_refusal_when_nobody_could_answer_it():
     try:
         r9 = "make sure n1, n2 and n3 can all ping each other"
         unknown = PL.run(r9, board=board, world=Lab())
-        # ⇒ OWNERSHIP MOVED, THE ANSWER DID NOT. An unsettled kind is GATE 2's question; gate 3
-        #   used to re-derive it, so one fact came back five times. The VERDICT is unchanged,
-        #   which is the property a relocation has to have.
-        check("gate 3 is silent while the kinds are unsettled", not unknown.illegal)
-        check("and the operator is still the one asked", unknown.outcome == PL.ASK)
+        # ⇒⇒ **THE KINDS ARE NO LONGER UNSETTLED, AND THAT IS THE POINT OF THE CHANGE.**
+        #   2026-08-11, the operator: *"rung 9 is wrong to be an ASK, since the only thing that
+        #   can ping is a vm."* `alive` is observed on `vm` and on nothing else, so the request
+        #   SAYS what n1 is and `settle_by_affordance` reads it. Asking *what is n1?* was asking
+        #   a question the request had already answered.
+        #
+        #   ⇒ **THE DISTINCTION THIS TEST EXISTS FOR SURVIVES INTACT — ONLY THE FIRST BRANCH'S
+        #     REASON CHANGED.** With a lab that does not hold them, the faults are things the
+        #     MODEL can fix (it labelled machines with machines, and used machines nothing
+        #     establishes), so it is not a refusal. With a lab that does, only *you cannot label
+        #     a machine WITH a machine* survives, and nobody can answer that.
+        check("the kinds are settled by what the request asks them to DO",
+              all(s.row.object_type == "vm" for s in unknown.table))
+        check("and it is not a refusal, because the model can still fix it",
+              unknown.outcome != PL.REFUSE)
 
-        known = PL.run(r9, board=board, world=_NamedLab("n1", "n2", "n3"))
-        check("with the kinds settled it is still illegal", len(known.illegal) == 4)
-        check("and now nobody can answer it, so it REFUSES", known.outcome == PL.REFUSE)
+    finally:
+        channel.constrained = was
+
+    # ⇒⇒ **THE REFUSE BRANCH NEEDS A WARRANTED-BUT-ILLEGAL PROGRAM, AND THE MESH STOPPED BEING
+    #   ONE.** It used rung 9's `add_label` mesh — and `add_label` is warranted by the word
+    #   *label*, which that request never says. As of 2026-08-11 an unwarranted step gets no
+    #   clause anchor and is demoted to a SUGGESTION before gate 3 sees it, so the mesh now
+    #   yields an EMPTY program: correctly, but it exercises nothing.
+    #   ⇒ SO THE FIXTURE SAYS `label` OUT LOUD. The step is then genuinely warranted, genuinely
+    #     illegal — *you cannot label a machine WITH a machine* — and nobody can answer it,
+    #     which is the distinction this test exists to hold.
+    channel, was = _canned([("add_label", "n1", "n2")])
+    try:
+        known = PL.run("give n1 the n2 label", board=board,
+                       world=_NamedLab("n1", "n2"))
+        check("a warranted step can still be illegal", len(known.illegal) == 1)
+        check("and nobody can answer that, so it REFUSES", known.outcome == PL.REFUSE)
     finally:
         channel.constrained = was
 
@@ -1072,11 +1097,30 @@ def test_a_destructive_operation_over_a_whole_set_asks_first():
     try:
         got = PL.run("make sure there are exactly two machines left", board=board, world=Lab())
         check("gate 3 stays silent — it is not illegal", not got.illegal)
-        check("but it does not SERVE", got.outcome != PL.SERVE)
-        check("it asks the operator to confirm",
-              any("Confirm before this runs" in a for a in got.asks))
-        check("and says what would be removed",
-              any("NOTHING NARROWS IT" in a for a in got.asks))
+        # ⇒⇒ **THE GOAL REPLACED THE STEPS, SO THE GUARD HAD TO FOLLOW THEM.** As of 2026-08-11
+        #   an ACHIEVE request carries the STATE it asks to hold and the steps that closed it are
+        #   dropped — so `delete_vm(vms)` is no longer proposed and `confirmations`, which
+        #   watches operations, saw nothing. **A confirmation that disappears because the
+        #   request got a better representation is a guard failing exactly when the request is
+        #   understood properly.** `destructive_goals` asks `derive` what the GOAL would do.
+        #
+        #   ⇒ AND AGAINST THIS LAB THERE IS NOTHING TO CONFIRM: it holds exactly two machines,
+        #     so *make sure there are exactly two* closes with no removal at all. Silence is the
+        #     correct answer here, which is why the real assertion is the six-machine case below.
+        check("with the lab already correct, nothing is removed and nothing is asked",
+              not any("Confirm before this runs" in a for a in got.asks))
+    finally:
+        channel.constrained = was
+
+    # ⇒⇒ THE CASE THE GUARD EXISTS FOR: the same goal, against a lab holding SIX.
+    channel, was = _canned([])
+    try:
+        crowded = PL.run("make sure there are exactly two machines left", board=board,
+                         world=_NamedLab(*[f"v{i}" for i in range(6)]))
+        check("holding a count DOWN is destructive, and it asks first",
+              any("Confirm before this runs" in a for a in crowded.asks))
+        check("and it says how many would be removed",
+              any("REMOVING 4" in a for a in crowded.asks))
     finally:
         channel.constrained = was
 
@@ -1115,13 +1159,18 @@ def test_the_retry_hands_the_model_its_own_miss():
     from tests.bench.twopass.metrics import Lab
     board = Board()
 
-    # first answer is illegal (a profile's delete on machines); the second is legal
-    bad = [("add_label", "prod_vms", "prod"), ("delete_profile", "prod_vms", None)]
-    good = [("add_label", "prod_vms", "prod")]
+    # ⇒⇒ **A `DO` REQUEST, DELIBERATELY.** This used rung 7 — and as of 2026-08-11 an ACHIEVE
+    #   request carries a GOAL that REPLACES the steps it governs, so `got.operations` came back
+    #   empty and the assertion was reading the wrong artifact. The retry's behaviour is what is
+    #   under test here, not the goal machinery, so the fixture uses a request with no mood.
+    r3 = "create a network called lab and a vm named web, then put web on lab"
+    bad = [("create_network", "lab", None), ("create_vm", "web", None),
+           ("add_vm_to_network", "web", "web")]           # a vm in a vm's slot
+    good = [("create_network", "lab", None), ("create_vm", "web", None),
+            ("add_vm_to_network", "web", "lab")]
     channel, was, calls = _canned_sequence(bad, good)
     try:
-        got = PL.run("make sure exactly 3 vms carry the 'prod' label",
-                     board=board, world=Lab(), retries=1)
+        got = PL.run(r3, board=board, world=Lab(), retries=1)
         check("the model was asked twice", calls["n"] == 2)
         check("and the second, legal answer is the one kept",
               [(o.operator, o.on, o.value) for o in got.operations] == list(good))
@@ -1131,11 +1180,10 @@ def test_the_retry_hands_the_model_its_own_miss():
 
     # ⇒ A RETRY THAT MAKES THINGS WORSE IS DISCARDED. Taking the later answer because it came
     #   second is how a repair loop degrades while looking busy.
-    worse = [("delete_profile", "prod_vms", None), ("delete_network", "prod_vms", None)]
+    worse = [("add_vm_to_network", "web", "web"), ("add_vm_to_network", "lab", "web")]
     channel, was, calls = _canned_sequence(bad, worse)
     try:
-        got = PL.run("make sure exactly 3 vms carry the 'prod' label",
-                     board=board, world=Lab(), retries=1)
+        got = PL.run(r3, board=board, world=Lab(), retries=1)
         check("a worse retry is rejected and the first answer stands",
               [(o.operator, o.on, o.value) for o in got.operations] == list(bad))
     finally:
@@ -1143,12 +1191,15 @@ def test_the_retry_hands_the_model_its_own_miss():
 
     # ⇒ AND AN UNANSWERABLE KIND IS NEVER RETRIED. Only the operator or the lab can say what
     #   `n1` is, so re-asking would be inviting the model to guess.
-    mesh = [("add_label", "n1", "n2"), ("add_label", "n2", "n1")]
-    channel, was, calls = _canned_sequence(mesh, mesh)
+    # ⇒⇒ **AND IT NEEDS A ROW NOTHING CAN SETTLE.** This used rung 9 — whose kinds are now
+    #   settled by what the request asks them to DO (*only a vm can ping*), so the guard was no
+    #   longer being exercised at all. `create` belongs to five kinds and settles nothing, so
+    #   `zibbet` stays genuinely kindless, which is the case the rule exists for.
+    blind = [("add_label", "zibbet", "prod")]
+    channel, was, calls = _canned_sequence(blind, blind)
     try:
-        got = PL.run("make sure n1, n2 and n3 can all ping each other",
-                     board=board, world=Lab(), retries=2)
-        check("an unknown kind is not handed back to the model", calls["n"] == 1)
+        got = PL.run("create zibbet", board=board, world=Lab(), retries=2)
+        check("an unsettled kind is not handed back to the model", calls["n"] == 1)
         check("it goes to the operator instead", got.outcome == PL.ASK)
     finally:
         channel.constrained = was
@@ -1286,6 +1337,42 @@ def test_a_later_mention_marked_distinct_is_a_second_thing():
         channel.constrained = was
 
 
+def test_every_finding_reaches_an_audience():
+    """A finding nobody can receive is not a check — it is a comment.
+
+    ⇒⇒ **WRITTEN 2026-08-11 BECAUSE THIS EXACT DEFECT HAPPENED TWICE IN ONE DAY.**
+      `uncreated-declaration` was computed at `pipeline.py:258`, AFTER the retry loop exited,
+      so the model it was addressed to never saw it — and the conclusion drawn from that
+      silence was that *handing findings back does not work*. It works; the finding never
+      arrived. Hours later `duplicate_creations` was written into the same dead spot.
+
+    ⇒ **THE RULE: EVERY GATE-3 RULE NAME IS EITHER ANSWERABLE BY THE OPERATOR OR REACHABLE BY
+      THE RETRY.** There is no third option. A rule in neither set is a finding produced for
+      nobody, and this test names it the moment it is added rather than a day later.
+
+    ⇒ AND IT IS A CONTRACT, NOT A COUNT: adding a gate 3 rule now forces a decision about who
+      hears it, which is the discipline that was missing.
+    """
+    print("\n[audience] a finding computed where nobody can act on it is a comment, and that "
+          "happened twice today before anything said so")
+    from tests.bench.twopass import gate3 as G3, pipeline as P
+
+    # every gate 3 rule must be answerable by the operator, or land in the retry's rejection
+    # list; `_split` sends everything that is neither ANSWERABLE nor WANTS_A_STEP to `drop`,
+    # so the real requirement is that the two sets partition OWNS with nothing orphaned.
+    reaches_model = G3.OWNS - P.ANSWERABLE
+    check(f"every gate 3 rule has an audience ({len(G3.OWNS)} rules)",
+          bool(reaches_model) and reaches_model | P.ANSWERABLE == G3.OWNS)
+    check("the operator-answerable set is a subset of what gate 3 owns",
+          P.ANSWERABLE <= G3.OWNS)
+
+    # and the one rule that asks for a step to be ADDED must travel in the `needed` section,
+    # not the rejection list — remove-vocabulary cannot request an addition (measured on rung 8)
+    src = (pathlib.Path(__file__).parent / "bench" / "twopass" / "pipeline.py").read_text()
+    check("a rule that wants a step ADDED is routed to `needed`, not to the rejections",
+          "WANTS_A_STEP" in src and "needed=needed" in src)
+
+
 def test_each_gate_owns_its_own_checks():
     print("\n[gates] a check in the wrong gate is a check nobody audits — three were, and one "
           "of them is why a fix for rung 6 landed in gate 3 instead of gate 2")
@@ -1307,6 +1394,17 @@ def test_each_gate_owns_its_own_checks():
           "unused-declaration" in G.GATE1_OWNS and "role-unsettled" not in L.OWNS)
     check("impact belongs to gate 4, and gate 4 exists",
           "destructive-confirm" in G4.OWNS and hasattr(G4, "confirmations"))
+    # ⇒ THE FOURTH, ADDED 2026-08-11 BECAUSE THE MOVE PASSED UNNOTICED. `uncreated-declaration`
+    #   left gate 1 for gate 3 as `unestablished-referent` — the operator: *"gate 2 for the world
+    #   check, and gate 3 to identify network_2 has been referenced with no maker/fetch."* The
+    #   whole suite stayed green through it, which is exactly the silence this test exists to
+    #   break, so the NEW placement is pinned too.
+    #   ⇒ It is gate 3's because it is statable about ONE operation — *this step's referent is
+    #     never established* — where *no step creates it* reads as an absence and looked gate
+    #     4's. Same fact, and the grain is decided by which sentence is true of one step.
+    check("an unestablished referent belongs to gate 3, not gate 1",
+          "unestablished-referent" in G3.OWNS
+          and "uncreated-declaration" not in G.GATE1_OWNS)
 
 
 def main(argv=None) -> int:

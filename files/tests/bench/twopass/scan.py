@@ -200,6 +200,77 @@ def _operation_words(board: Board) -> set:
     return out - {"network", "snapshot", "template", "profile", "file", "vm"}
 
 
+# ── THE DETERMINER DECIDES EXISTENCE, WHERE IT DECIDES AT ALL ─────────────────────────
+#
+# ⇒⇒ WHY THIS IS NOT THE WORD LIST THE OPERATOR RULED OUT. The 2026-08-11 critique:
+#   *"SSOT of nouns and verbs worked in the tool regime because each tool only has finite slots
+#   and words related to it, while in the program regime one noun is still legal due to how the
+#   sentence is structured."* Right — and it applies to CONTENT words, which are open class and
+#   cannot be enumerated. **DETERMINERS ARE A CLOSED FUNCTION-WORD CLASS**: about thirty words,
+#   fixed for centuries, and independent of the manifest. A new kind or an unlisted verb does
+#   not change them, which is exactly what `ACHIEVE_MARKERS` cannot say for itself.
+#
+# ⇒ WHAT IT FIXES: rung 6's verdict was a COIN. `existence` is asked of the model at 85% with
+#   every error toward NEW, and two complementary checks — `unverifiable` (gate 2, EXISTING) and
+#   `uncreated-declaration` (gate 1, NEW) — fire on opposite faces of it. Measured n=3: BOUNCE,
+#   BOUNCE, ASK on BYTE-IDENTICAL operations. The coin decided only WHO GOT TOLD.
+#
+# ⇒ *"put the blue ones on A DIFFERENT network"* — an indefinite with no prior referent IS a new
+#   one. Nothing needs asking.
+INDEFINITE = {"a", "an", "another", "some"}
+DEFINITE = {"the", "this", "that", "these", "those", "its", "their", "his", "her", "our", "your"}
+UNIVERSAL = {"every", "all", "each", "any", "both"}
+# CONTRASTIVE determiners — they introduce a referent the sentence has not mentioned.
+#
+# ⇒⇒ **TRIMMED FROM EIGHT WORDS TO TWO, 2026-08-11, AND THE SIX WERE MY OWN SSOT VIOLATION.**
+#   Measured by emptying the set and re-reading every corpus span: exactly TWO entries change
+#   any answer — `own` BLOCKS a wrong reading (*their own network* would otherwise read
+#   `existing`, because `their` is definite) and `new` SUPPLIES a right one (*3 new vms*).
+#   `different`, `separate`, `second`, `spare`, `fresh`, `extra` changed nothing: rung 6's
+#   *"a different network"* is settled by the indefinite article alone.
+#
+#   ⇒ I justified this file's determiner sets as a CLOSED FUNCTION-WORD CLASS, which is true of
+#     INDEFINITE / DEFINITE / UNIVERSAL and **false of these** — contrastive adjectives are open
+#     class, so `provisioned`, `standalone`, `dedicated` are missing and always would be. That is
+#     the unfinishable word list the operator ruled out, shipped hours later at small enough
+#     scale to look harmless.
+#   ⇒ AND IT REMOVES A DRIFT HAZARD: `different` and `same` also live in `GRAMMAR` and in
+#     `residue.RELATIONAL_WORDS`. Three copies of one idea, and R2's correctness rested on
+#     this one. Dropping them here leaves each word with a single owner.
+NOVEL = {"new", "own"}
+
+
+def existence_from_determiner(span: str) -> Optional[str]:
+    """NEW, EXISTING, or None when the span's determiner does not settle it.
+
+    ⇒ **NONE IS A REAL ANSWER AND MOST SPANS GET IT.** A bare name (`db`, `golden`, `n1`) and a
+      bare plural (`5 vms`) carry no determiner at all, and this returns None so the model's
+      answer stands. So the rule is STRICTLY NO-WORSE by construction: it can only replace a
+      guess with a reading, never remove a reading that was already there.
+
+    ⇒ **AND A CONTESTED SPAN IS UNDECIDED RATHER THAN GUESSED.** `their own network` is novel
+      (a network not mentioned before) while `the different ones` is contrastive selection over
+      things that already exist — same two word-classes, opposite readings, and nothing in the
+      determiner alone separates them. Rather than invent a precedence rule I cannot defend,
+      a span carrying BOTH a definite and a contrastive word returns None and falls back.
+      Rung 6 does not need it: *"a different network"* has no definite determiner at all.
+    """
+    from . import schema as S
+    words = re.findall(r"[a-z']+", (span or "").lower())
+    novel = any(w in NOVEL for w in words)
+    known = any(w in DEFINITE or w in UNIVERSAL for w in words)
+    if novel and known:
+        return None                       # contested — the model's answer stands
+    if novel:
+        return S.NEW
+    for word in words:                    # otherwise the FIRST determiner decides
+        if word in INDEFINITE:
+            return S.NEW
+        if word in DEFINITE or word in UNIVERSAL:
+            return S.EXISTING
+    return None
+
+
 def kinds_named(request: str, board: Optional[Board] = None) -> List[str]:
     """Which kinds this request mentions at all — used to give a pronoun-headed set its kind."""
     board = board or Board()

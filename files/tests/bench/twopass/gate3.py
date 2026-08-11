@@ -63,7 +63,113 @@ class Illegal(NamedTuple):
 #   (gate 2), not whether the request said it (gate 1), not whether it is worth doing (gate 4).
 OWNS = frozenset({"no-such-handle", "wrong-kind-operator", "value-missing",
                   "value-is-an-object", "wrong-kind-value", "value-not-declared",
-                  "circular-probe", "not-settled-yet"})
+                  "circular-probe", "not-settled-yet", "unestablished-referent",
+                  "wrong-creation-source", "incomplete-creation"})
+
+
+def _makers(kind: str) -> set:
+    """Operators that BRING ABOUT one of this kind — off the manifest, nothing hardcoded."""
+    from planner.ir import config as _config
+    spec = (_config.KINDS or {}).get(kind) or {}
+    return {f"create_{kind}" if n == "create" else f"{n}_{kind}"
+            for n in (spec.get("creators") or {})}
+
+
+def _made_kind(operator: str, board: Board) -> Optional[str]:
+    """The kind this operator BRINGS ABOUT, or None if it is not a creator."""
+    for kind in board.kinds:
+        if operator in _makers(kind):
+            return kind
+    return None
+
+
+def _creation_sources(kind: str, board: Board) -> list:
+    """Kinds a `create_{kind}` must be made FROM — [] when it is made from nothing.
+
+    ⇒⇒ **`Board.makeable` WAS WRITTEN FOR THIS AND HAD NEVER BEEN CALLED.** Its docstring says
+      *"kinds that can be created ONE PER MEMBER of this kind — rung 12's snapshot"*, and it
+      computes exactly that from `create_args`. Another built-and-never-called, and it cost rung
+      12 two weeks parked behind a claim that the manifest could not express the request.
+
+    Only `create_snapshot` is constrained here (to `vm`); every other creator comes back
+    unconstrained, so this rule cannot reach any other rung.
+    """
+    return [m for m in board.kinds if kind in board.makeable(m)]
+
+
+def _referents(step, by_handle, row_here) -> list:
+    """What this step needs to ALREADY BE THERE when it runs.
+
+    ⇒ A CREATOR'S OWN TARGET IS NOT A REFERENT. `create_network(network_2)` does not presuppose
+      `network_2` — it is what brings it about, so requiring it beforehand would make every
+      creation illegal and every program unservable.
+    """
+    out = []
+    makes_it = row_here is not None and step.operator in _makers(row_here.kind)
+    # ⇒⇒ **A SOURCING CREATOR WITH ONE ARGUMENT IS AIMED AT ITS SOURCE, NOT ITS PRODUCT.**
+    #   `clone_vm` declares `from: source_name` (manifest `creators.clone`), so it takes a thing
+    #   it does NOT make. Rung 10 emits `clone_vm(golden)` with no second argument — and with
+    #   only one argument, that argument can only be the source. Exempting it as *the creator's
+    #   own target* let a clone from a NONEXISTENT source serve clean, because nothing then
+    #   required `golden` to be there at all.
+    #   ⇒ READ OFF THE MANIFEST, so a lab whose creators change gets this without an edit.
+    if makes_it and step.value is None and _takes_a_source(step.operator):
+        makes_it = False
+    if not makes_it and row_here is not None:
+        out.append(str(step.on))
+    if step.value is not None and str(step.value) in by_handle:
+        out.append(str(step.value))
+    return [r for r in out if r in by_handle]
+
+
+def _creator_spec(operator: str) -> Optional[Dict]:
+    """The manifest's declaration of this creator, or None if the operator is not one."""
+    from planner.ir import config as _config
+    for kind, spec in (_config.KINDS or {}).items():
+        if not isinstance(spec, dict):
+            continue
+        for name, creator in (spec.get("creators") or {}).items():
+            made = f"create_{kind}" if name == "create" else f"{name}_{kind}"
+            if made == operator and isinstance(creator, dict):
+                return creator
+    return None
+
+
+def _takes_a_source(operator: str) -> bool:
+    """Does this creator declare a `from` — a thing it copies rather than makes?"""
+    return bool((_creator_spec(operator) or {}).get("from"))
+
+
+def _has_something_to_find_by(row, board: Board) -> bool:
+    """Is there a value a FETCH could look this up by? A name, or a confirmed identity."""
+    from planner.gates import claims as _claims
+    if row.kind not in board.kinds:
+        return False
+    key = _claims.key_of(row.kind, board.kinds)
+    return bool(row.identity or (key and (row.where or {}).get(key)))
+
+
+def _in_the_world(row, world) -> bool:
+    """Does the lab already hold this ONE thing? Then a FETCH establishes it.
+
+    ⇒ THIS IS GATE 2's QUESTION ASKED AS A FACT, NOT RE-REPORTED AS A FINDING. Gate 2 says
+      whether the world CAN hold a thing and complains when it cannot; this only needs the
+      answer in order to decide whether the PROGRAM still owes a maker. Line 170's rule — a
+      gate that re-derives another gate's finding is adding noise — is about duplicating the
+      COMPLAINT, not about being forbidden to look.
+    """
+    if world is None:
+        return False
+    from planner.gates import claims as _claims
+    from planner.ir import config as _config
+    key = _claims.key_of(row.kind, _config.KINDS or {})
+    value = row.identity or (row.where or {}).get(key)
+    if not key or not value:
+        return False                      # nothing to look it up BY — no fetch can settle it
+    try:
+        return bool(world.select({"kind": row.kind, key: value}))
+    except Exception:
+        return False                      # cannot ask -> cannot claim it is there
 
 
 def _setter_for(operator: str) -> Optional[Dict]:
@@ -141,6 +247,7 @@ def check(operations: List[Operation], table, board: Optional[Board] = None,
             for fact in (spec.get("observed") or {}):
                 probe_for[str(fact)] = f"probe_{fact}"
     settled_now: set = set()
+    established: set = set()
 
     for step in operations:
         row_here = by_handle.get(step.on)
@@ -158,6 +265,58 @@ def check(operations: List[Operation], table, board: Optional[Board] = None,
                                    f"{step.on!r} is decided by asking the machines and nothing "
                                    f"has asked yet — {', '.join(sorted(wanted))} must run first"))
                 continue
+
+        # ⇒⇒ EVERY REFERENT NEEDS AN ESTABLISHER, AND ONE MUST RUN BEFORE THIS STEP.
+        #
+        #   The operator, 2026-08-11: *"it just forgot that a prerequisite to use it is to check
+        #   if it exists, and if not, create it. If something is referenced but not created, you
+        #   need to supply it either through a FETCH or CREATE."*
+        #
+        #   ⇒ **`not-settled-yet` ABOVE IS ALREADY THIS RULE, FOR ONE ESTABLISHER.** A
+        #     probe-defined set is established by a PROBE; a thing the lab holds is established
+        #     by a FETCH; anything else must be established by a CREATOR. Same rule, three
+        #     establishers, one grain — this step and its own referents.
+        #
+        #   ⇒ **AND IT IS WHY THIS IS GATE 3's AND NOT GATE 4's.** Phrased as *no step creates
+        #     network_2* it reads as an absence, which is the whole program's business. Phrased
+        #     as *this step's referent is never established* it is a fact about THIS operation's
+        #     own soundness, statable without reference to any other step — the re-charter's own
+        #     grain test. It replaces `uncreated-declaration`, which sat in gate 1.
+        #
+        #   ⇒ **A SET IS EXEMPT, AND RUNG 11 BOUGHT THAT GUARD.** `every vm` is a SELECTION over
+        #     the world, not an object anybody makes; demanding a maker for one bounced the rung
+        #     this design exists for. Only a single thing can be owed a creator.
+        for referent in _referents(step, by_handle, row_here):
+            ref_row = by_handle[referent]
+            if referent in established or ref_row.is_set or ref_row.residual:
+                continue
+            # ⇒⇒ AN UNSETTLED KIND IS GATE 2's QUESTION, AND THIS RULE MUST STAY OUT OF IT —
+            #   the same rule the SECOND loop already obeys, and I broke it here on the first
+            #   attempt. Rung 9's `n1` is unsettled AND absent from the lab, so this fired
+            #   `unestablished-referent`, and a BOUNCE outranks an ASK — turning *"nothing says
+            #   what n1 is"*, which is the honest and correct answer, into a demand that the
+            #   model go and make one. **You cannot owe a creator for a thing nobody has said
+            #   the kind of.** Establishment is only a question once the kind is settled.
+            if ref_row.object_type == S.UNKNOWN_KIND or ref_row.kind not in board.kinds:
+                continue
+            if _in_the_world(ref_row, world):
+                continue                  # a FETCH establishes it; nothing is owed
+            # ⇒⇒ **AND WITH NO WORLD TO ASK, NOTHING IS OWED EITHER — ABSENCE IS NOT A VERDICT
+            #   UNTIL SOMEBODY HAS LOOKED.** `planner/gates/truth.py` states this as decision 6
+            #   and I broke it on 2026-08-11: `_in_the_world(row, None)` returns False, which
+            #   this rule read as *nothing establishes it*, so every named referent was flagged
+            #   whenever the caller passed no lab. A thing with a name to look up by is UNKNOWN
+            #   without a world, not missing.
+            #   ⇒ AN UNNAMED ROW IS DIFFERENT AND STILL FLAGGED: no probe could ever find it,
+            #     so it needs a maker whether or not a lab is attached. That is rung 6.
+            if world is None and _has_something_to_find_by(ref_row, board):
+                continue
+            out.append(Illegal(step, "unestablished-referent",
+                               f"{referent!r} is used here and nothing establishes it first — "
+                               f"the lab does not hold one and no earlier step makes one"))
+
+        if row_here is not None and step.operator in _makers(row_here.kind):
+            established.add(step.on)      # THIS step is what brings it about
         settled_now.add(step.operator)
 
     for step in operations:
@@ -166,6 +325,38 @@ def check(operations: List[Operation], table, board: Optional[Board] = None,
             out.append(Illegal(step, "no-such-handle",
                                f"{step.on!r} was never declared"))
             continue
+
+        # ⇒⇒ A CREATOR MUST BE AIMED AT WHAT IT IS MADE **FROM**.
+        #
+        #   Rung 12 — *"take a snapshot of every running vm"* — came back as
+        #   `create_snapshot(snapshot)`: a snapshot OF the snapshot. The manifest says what one
+        #   is made from (`snapshot.create_args = {"vm": "name"}`) and `Board.makeable` already
+        #   computes it; nothing read either, so the wrong target was perfectly legal.
+        #
+        #   ⇒⇒ **THE MODEL WAS ASKED WHY, 2026-08-11, AND IT PAIRED BY SPELLING.** Verbatim and
+        #     identical 3/3: *"I aimed the step at 'snapshot' because it is more specific and
+        #     directly related to the action being taken, whereas 'running_vms' is a collection
+        #     of VMs that happen to be running."* The operator `create_snapshot` and the row
+        #     `snapshot` share a name, so it matched them — and then dismissed the set the
+        #     request is ABOUT. A rationalisation of a spelling collision, not a reason.
+        #
+        #   ⇒ **AND IT HAS NO PER-MEMBER SEMANTICS.** Asked how many snapshots
+        #     `create_snapshot(running_vms)` makes over four running vms, it answered **5**,
+        #     three times out of three — not 4, not 1. There is no FOR in its head, so no
+        #     wording can teach it one.
+        #
+        #   ⇒⇒ **BUT ASKED TO CHOOSE BETWEEN THE TWO STEPS IT PICKS CORRECTLY 3/3.** So the fix
+        #     does not need that gap repaired: REMOVE THE ILLEGAL TARGET and the only option
+        #     left is the right one. Subtractive — the one move measured to work here.
+        made = _made_kind(step.operator, board)
+        if made:
+            sources = _creation_sources(made, board)
+            if sources and row.kind not in sources:
+                out.append(Illegal(step, "wrong-creation-source",
+                                   f"a {made} is made from a {' or a '.join(sources)}, and "
+                                   f"{step.on!r} is a {row.kind} — aim it at what it is made "
+                                   f"FROM"))
+                continue
 
         # ⇒ AN UNSETTLED KIND IS **GATE 2's QUESTION** AND THIS GATE STAYS OUT OF IT.
         #   `kind-not-settled` and this rule were the same fact reported twice: on rung 9 the
@@ -185,7 +376,43 @@ def check(operations: List[Operation], table, board: Optional[Board] = None,
 
         meta = _setter_for(step.operator)
         if meta is None:
-            continue                       # a creator, a probe or a delete — no value contract
+            # ⇒⇒ **"A CREATOR HAS NO VALUE CONTRACT" IS TRUE OF `create` AND FALSE OF `clone`.**
+            #
+            #   `creators.clone` declares BOTH `key: new_name` AND `from: source_name` — two
+            #   arguments, a product and a source. Skipping every creator here let rung 10 serve
+            #   `clone_vm(golden)` with ONE argument: golden cloned into nothing, while
+            #   `create_vm(vms)` separately made three FRESH machines that are copies of nothing.
+            #   *"clone golden into 3 new vms"* asks for the new machines to BE copies, and the
+            #   served program silently dropped that.
+            #
+            #   ⇒ **AND IT WAS HIDDEN BEHIND A RIGHT-ANSWER-WRONG-REASON ASK.** Until the source
+            #     role was read, rung 10 asked *"you asked to create golden and there is already
+            #     one"* — a false premise that happened to stop a human before the bad program
+            #     ran. Fixing the premise removed the accidental guard and exposed this, which is
+            #     [[gorgon-be-stricter]] exactly: **a correct verdict for a wrong reason survives
+            #     every check that only looks at verdicts.**
+            #
+            #   ⇒ READ OFF THE MANIFEST, so a creator that gains a `from` gains this for free.
+            made = _creator_spec(step.operator)
+            if made and made.get("key") and made.get("from") and step.value in (None, ""):
+                out.append(Illegal(step, "incomplete-creation",
+                                   f"{step.operator!r} makes one thing FROM another — it needs "
+                                   f"both, and only {step.on!r} was given. What is it "
+                                   f"{'copied' if made.get('records') else 'built'} into?"))
+            # ⇒⇒ **AND A SOURCING CREATOR'S VALUE IS A REFERENCE, SO IT MUST RESOLVE.**
+            #   Rung 10 served `clone_vm(vms, 'from_template_vm')` — an OPERATOR NAME sitting in
+            #   the source slot, cloning from a thing that is not a thing. Nothing objected,
+            #   because `_setter_for` finds no setter for a creator and the walk `continue`d
+            #   before rule 5 ever ran. The same *"a creator has no value contract"* assumption
+            #   that hid `incomplete-creation` two hours earlier, in the same branch.
+            #   ⇒ D1 IS UNCHANGED BY WHO IS ASKING: a reference resolves or it is an error, and
+            #     a clone's source is as much a reference as a network's is.
+            if (made and made.get("from") and step.value not in (None, "")
+                    and str(step.value) not in by_handle):
+                out.append(Illegal(step, "value-not-declared",
+                                   f"{step.operator!r} copies from {step.value!r}, and nothing "
+                                   f"declares one — a source must be a thing that exists"))
+            continue                       # otherwise: a probe or a delete — no value contract
 
         refs = meta.get("refs")
         value_arg = meta.get("value_arg")
@@ -248,4 +475,10 @@ def refused(operations: List[Operation], table, board: Optional[Board] = None,
     """
     if not operations:
         return True
-    return len(check(operations, table, board, world)) == len(operations)
+    # ⇒⇒ **COUNT THE STEPS THAT HAVE A FINDING, NOT THE FINDINGS.** This read
+    #   `len(check(...)) == len(operations)`, which silently assumed ONE finding per step.
+    #   `unestablished-referent` can raise TWO for one step — its target and its value — so on
+    #   2026-08-11 rung 9's mesh produced 12 findings over 4 steps and a genuine refusal
+    #   reported False. Fragile before that rule existed; wrong after it.
+    bad = check(operations, table, board, world)
+    return len({id(i.step) for i in bad}) == len(operations)

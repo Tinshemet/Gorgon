@@ -234,7 +234,7 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
     intent (85%, errors all in the safe direction).
     """
     from engines.channel import constrained
-    from .scan import scan_all, conditions_from
+    from .scan import conditions_from, existence_from_determiner, scan_all
 
     board = board or Board()
 
@@ -440,9 +440,18 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
                      if first.kind else {})
             object_type = (f"{first.kind}{S.SET_SUFFIX}" if _is_group(first) else first.kind) \
                 if first.kind else UNKNOWN_KIND
-            existence = ask(S.EXISTENCE_Q.format(name=first.span, new=S.NEW,
-                                                 existing=S.EXISTING),
-                            S.existence_schema()) or S.EXISTING
+            # ⇒⇒ THE DETERMINER IS READ FIRST, AND THE MODEL IS ONLY ASKED WHAT IT DOES NOT
+            #   SETTLE. `existence` is the weakest field pass 1 has (85%, every error toward
+            #   NEW) and rung 6's verdict was flipping on it — BOUNCE, BOUNCE, ASK across three
+            #   runs with byte-identical operations. A determiner is not a guess.
+            #   ⇒ AND THE CALL IS SKIPPED ENTIRELY WHEN THE SPAN SETTLES ITSELF, so this is
+            #     cheaper as well as steadier — the doctrine is THE MODEL POINTS, THE CODE
+            #     READS, and here the code can read it outright.
+            existence = existence_from_determiner(first.span)
+            if existence is None:
+                existence = ask(S.EXISTENCE_Q.format(name=first.span, new=S.NEW,
+                                                     existing=S.EXISTING),
+                                S.existence_schema()) or S.EXISTING
             rows.append(S.declare_from(first.span, object_type, where, existence, board,
                                        references=[a.anchor for a in seen[1:]],
                                        count=first.count, comparator=first.comparator,
@@ -523,6 +532,356 @@ def settle_with_world(rows: List[S.Declared], world, board: Optional[Board] = No
                                   references=list(row.references), count=row.count,
                                   comparator=row.comparator, span=row.span, identity=word))
     return out
+
+
+EXCLUDERS = ("except", "excluding", "besides", "apart from", "other than", "but not")
+
+
+def _affording_kinds(board: Board) -> dict:
+    """{verb: {kinds that can be asked to do it}} — READ off the manifest, never listed.
+
+    A probe's own fact and the tool that gathers it both count: `observed.alive.by =
+    guest_ping` makes both `alive` and `ping` verbs a vm affords.
+    """
+    from planner.ir import config as _config
+    out: dict = {}
+    for kind, spec in (_config.KINDS or {}).items():
+        if not isinstance(spec, dict):
+            continue
+        verbs = set()
+        for group in ("setters", "unsetters", "acts", "creators"):
+            for name in (spec.get(group) or {}):
+                verbs.add(str(name).split("_")[0].lower())
+        for fact, meta in (spec.get("observed") or {}).items():
+            verbs.add(str(fact).lower())
+            by = (meta or {}).get("by")
+            if by:
+                verbs.add(str(by).split("_")[-1].lower())
+        for v in verbs:
+            out.setdefault(v, set()).add(kind)
+    return out
+
+
+def settle_by_affordance(rows: List[S.Declared], request: str,
+                         board: Optional[Board] = None) -> List[S.Declared]:
+    """A thing asked to do something only one kind can do IS that kind.
+
+    ⇒⇒ **THE OPERATOR, 2026-08-11: *"rung 9 is wrong to be an ASK, since the only thing that can
+      ping is a vm."*** Right, and the manifest says so — `alive` is observed on `vm` and on
+      nothing else, gathered by `guest_ping`. *"make sure n1, n2 and n3 can all ping each other"*
+      therefore SAYS what n1 is, and asking *"what is n1?"* is asking a question the request
+      already answered.
+
+    ⇒ **THIS IS THE AFFORDANCE IDEA DONE AS A LOOKUP RATHER THAN A QUESTION.** Asked of the
+      MODEL it was vacuous — every word came back yes for every kind ([[gorgon-unfamiliar-nouns]]).
+      Asked of the MANIFEST it is arithmetic: which kinds declare this verb, and is there exactly
+      one? **The harness is an actioneer — a kind IS what can be done to it** — and that table
+      was in the manifest the whole time.
+
+    ⇒ **ZERO OR SEVERAL AFFORDING KINDS SETTLES NOTHING.** `create` belongs to five kinds and
+      says nothing; only a verb unique to one kind carries a reading. Same zero/one/several
+      honesty as everywhere else, and it is why this cannot quietly type a row as `vm` because
+      the request happened to mention a common verb.
+
+    ⇒ ⚠ AND IT ONLY EVER FILLS A KINDLESS ROW. A row the nouns, the lab or the routing settled
+      already is left exactly as it was — this adds a reading, it never overrides one.
+    """
+    board = board or Board()
+    afford = _affording_kinds(board)
+    from planner.gates import claims as _claims
+    from .scan import GRAMMAR, _operation_words
+
+    words = {w.strip(".,'\"—–?!").lower() for w in str(request).split()}
+    # every kind named by a verb only ONE kind affords
+    settled = {next(iter(afford[w])) for w in words
+               if afford.get(w) and len(afford[w]) == 1}
+    if len(settled) != 1:
+        return rows                       # nothing, or two different readings — settle neither
+    kind = settled.pop()
+    key = _claims.key_of(kind, board.kinds)
+
+    # ⇒⇒ **AND THE KIND MUST ARRIVE WITH THE NAME, OR SETTLING IT DESTROYS THE ROW.**
+    #   Measured 2026-08-11: typing `n1`/`n2`/`n3` as `vm` and stopping there renamed their
+    #   handles to `vm`, `vm_2`, `vm_3` — because `handle_for` gives a KINDLESS row its own word
+    #   and a typed row its kind. Rung 9 went from 3 clean declarations to three
+    #   indistinguishable enum members, 9 operations and 21 findings.
+    #   ⇒ `_stem_for`'s own comment warned about precisely this shape one layer down: *"three
+    #     indistinguishable enum members for three distinct objects, the surest way to make the
+    #     model pick the wrong one."* **A reading that removes information is not a settlement.**
+    #   ⇒ SO THE ROW'S OWN WORD BECOMES ITS KEY VALUE — `n1` is not merely a vm, it is the vm
+    #     NAMED `n1`, which is what the request says and what keeps the handle stable.
+    verbs = _operation_words(board)
+    out = []
+    for row in rows:
+        if row.object_type != UNKNOWN_KIND:
+            out.append(row)
+            continue
+        where = dict(row.where or {})
+        if key and not where.get(key):
+            span = [w.strip(".,'\"—–") for w in str(row.span or row.name).lower().split()]
+            free = [w for w in span if w and w not in GRAMMAR and w not in verbs]
+            if free:
+                where[key] = free[-1]
+        out.append(row._replace(object_type=kind, where=where))
+    return out
+
+
+def _sourcing_verbs(board: Board) -> set:
+    """Creator verbs that take a SOURCE they do not make — read off the manifest's `from`."""
+    from planner.ir import config as _config
+    out = set()
+    for spec in (_config.KINDS or {}).values():
+        if not isinstance(spec, dict):
+            continue
+        for name, creator in (spec.get("creators") or {}).items():
+            if isinstance(creator, dict) and creator.get("from"):
+                out.add(str(name).lower())
+    return out
+
+
+def settle_sources(rows: List[S.Declared], board: Optional[Board] = None) -> List[S.Declared]:
+    """What a CLONE is cloned FROM already exists. It is never the thing being created.
+
+    ⇒⇒ **RUNG 10, MEASURED 2026-08-11.** *"clone golden into 3 new vms"* declared `golden` with
+      `existence=NEW`, so gate 2 asked *"you asked to create 'golden' and there is already one"*
+      — **a question resting on a premise the request never contained.** Nothing asked to create
+      `golden`; it is what the copy is taken FROM.
+
+    ⇒ **AND THE RIGHT VERDICT WAS HIDING A REAL HOLE.** That ASK only appears because the lab
+      happens to hold a `golden`. With an empty lab nothing objects at all: gate 3 exempts a
+      creator's own target from needing an establisher, so `clone_vm(golden)` reads as *golden is
+      what I am making* and a clone from a nonexistent source serves clean.
+
+    ⇒ **THE MANIFEST HAS SAID SO ALL ALONG** — `creators.clone = {key: new_name, from:
+      source_name}`. The source role is DECLARED and nothing read it, which is the same shape as
+      `makeable`, `create_args`, `_creator_args` and the IR's `not`.
+
+    ⇒ AND IT IS A MANIFEST LOOKUP, NOT A VERB LIST: `_sourcing_verbs` reads which creators
+      declare a `from`, so a lab that gains one gains this for free (rule W5). The span carries
+      the verb — `golden`'s span IS *"clone golden into"* — so nothing has to be inferred.
+    """
+    board = board or Board()
+    verbs = _sourcing_verbs(board)
+    if not verbs:
+        return rows
+    out = []
+    for row in rows:
+        span = str(row.span or row.name).lower()
+        words = {w.strip(".,'\"—–") for w in span.split()}
+        # ⇒ THE PRODUCT IS EXEMPT, AND IT SAYS SO ITSELF. *"3 NEW vms"* carries the novelty
+        #   marker; the source never does. Without this the whole clause would settle EXISTING
+        #   and the thing being made would stop being made.
+        from .scan import NOVEL
+        if row.existence == S.NEW and (words & verbs) and not (words & NOVEL):
+            out.append(row._replace(existence=S.EXISTING))
+            continue
+        out.append(row)
+    return out
+
+
+def consume_reciprocal(rows: List[S.Declared], board: Optional[Board] = None
+                       ) -> List[S.Declared]:
+    """A reciprocal clause is a PREDICATE, not an object. It must not be declared as a thing.
+
+    ⇒⇒ **RUNG 13, MEASURED 2026-08-11.** *"...and make sure they all ping each other"* came back
+      as a declared row — `thing`, span *"all ping each other"* — and gate 2 asked, correctly
+      for what it was shown, *"the request does not say what 'all ping each other' is."* The
+      clause states a RELATION that must hold; there is no object in it to declare.
+
+    ⇒ **IT IS THE SAME DEFECT AS `except db` ARRIVING AS A FLOATING ROW** — a clause that is not
+      an object being declared as one, and then nothing able to make sense of it. There the fix
+      was to attach it to the set it narrows; here it is consumed by the GOAL
+      (`gate4.goals_of` reads the reciprocal directly off the request).
+
+    ⇒ **AND THE GUARD IS THAT IT NAMES NO KIND.** Anchor-and-scan's rule stands — a bare item is
+      still a thing, and a kindless row is normally declared so gate 2 can ask. What is dropped
+      here is narrower: a row with NO settled kind whose span carries a reciprocal pronoun,
+      which is a predicate however you read it. Rung 9's `n1`, `n2`, `n3` have their own spans
+      and are untouched, so it keeps asking *what is n1?* — the answer that rung needs.
+    """
+    from .gate4 import RECIPROCAL
+    from .scan import GRAMMAR, _operation_words
+    board = board or Board()
+    verbs = _operation_words(board)
+    out = []
+    for row in rows:
+        span = str(row.span or row.name).lower()
+        if row.object_type != UNKNOWN_KIND or not any(r in span for r in RECIPROCAL):
+            out.append(row)
+            continue
+        # ⇒⇒ **THE SPAN MUST BE *NOTHING BUT* THE PREDICATE — "CONTAINS ONE" IS TOO BROAD, AND
+        #   IT COST RUNG 9.** First attempt dropped any kindless row whose span held a
+        #   reciprocal; rung 9's third machine has the span *"n3 can all ping each other"*, so
+        #   `n3` was eaten, the rung lost a declaration and a CORRECT ASK became a WRONG BOUNCE.
+        #   Second time today a guard written one notch too wide swallowed a real finding.
+        #
+        #   ⇒ SO WHAT IS LEFT AFTER REMOVING THE RECIPROCAL, THE GRAMMAR AND THE VERBS DECIDES.
+        #     Nothing left -> the span is a predicate and nothing else. Anything left — `n3` —
+        #     is an object the operator named, and it stays.
+        rest = span
+        for r in RECIPROCAL:
+            rest = rest.replace(r, " ")
+        words = [w.strip(".,'\"—–") for w in rest.split()]
+        if any(w and w not in GRAMMAR and w not in verbs for w in words):
+            out.append(row)                # an object hides in here; not ours to drop
+    return out
+
+
+def attach_exclusions(rows: List[S.Declared], board: Optional[Board] = None
+                      ) -> List[S.Declared]:
+    """An `except X` clause becomes a CONDITION ON THE SET, not a row standing on its own.
+
+    ⇒⇒ **RUNG 8's REAL DEFECT, AND THE ASK WAS THE ONLY THING STANDING IN FRONT OF IT.**
+      *"put every vm on a network called core, except db — db goes on a network called dmz"*
+      declared `every vm {network: core}` and, separately, `except db`. Nothing joined them, so
+      the set still meant EVERY vm and `add_vm_to_network(core_vms, core)` would have put `db`
+      on **both** networks. `linguistics.unexpressed-exclusion` detected it and could not fix
+      it — a detector in front of a hole.
+
+    ⇒ **THE OPERATOR'S SHAPE, 2026-08-11:** *"it needs to produce a set, `all_vms_but_db`, which
+      is a legal set, and then put db in its own set… and then do the other part, the new
+      network."* So the excluded thing keeps its own row — later clauses refer to it, and rung
+      8's second half operates on it — and the SET it was taken out of records the subtraction.
+
+    ⇒ **THE EXCLUDED ROW IS NOT CONSUMED.** Deleting it would break `db goes on dmz`, which is
+      the whole second clause. One thing, two roles: absent from one set, the subject of the
+      next step.
+    """
+    board = board or Board()
+    out = list(rows)
+    for i, row in enumerate(out):
+        span = str(row.span or row.name).strip().lower()
+        if not any(span.startswith(w) for w in EXCLUDERS):
+            continue
+        # THE SET IT COMES OUT OF IS THE NEAREST PRECEDING ONE OF ITS OWN KIND. An exclusion is
+        # written directly after what it narrows, which is why proximity is the rule and not a
+        # guess — `except` binds to the phrase it follows.
+        for j in range(i - 1, -1, -1):
+            host = out[j]
+            if not host.is_set or (row.kind not in (host.kind, S.UNKNOWN_KIND)):
+                continue
+            # ⇒⇒ THE EXCLUDED ROW'S OWN CONDITIONS **ARE** THE FILTER. `except db` settles to
+            #   `vm {name: db}`, so the carve-out is `{name: db}` with nothing constructed;
+            #   *"except the running ones"* would settle to `{status: running}` and work the
+            #   same way. **Storing a NAME would have handled only the first of those** — an
+            #   exclusion is by predicate, and the predicate is already sitting on the row.
+            carve = dict(row.where or {})
+            if not carve:
+                key = _key_of(row.kind, board)
+                named = row.identity or row.name
+                carve = {key: str(named)} if key and named else {}
+            if carve and carve not in [dict(f) for f in host.excludes]:
+                out[j] = host._replace(excludes=tuple(host.excludes) + (carve,))
+            break
+    return out
+
+
+def _key_of(kind: str, board: Board):
+    from planner.gates import claims as _claims
+    return _claims.key_of(kind, board.kinds) if kind in board.kinds else None
+
+
+def settle_by_routing(rows: List[S.Declared], board: Optional[Board] = None,
+                      model=None, timeout: int = 120) -> List[S.Declared]:
+    """THE RESIDUAL — a row the manifest's nouns and the lab both missed, routed by the model.
+
+    ⇒⇒ **THIS IS THE ONE RUNG OF THE LADDER THE OPERATOR'S SSOT CRITIQUE DEMANDS.** `nouns`
+      indexes 48 words; `computers`, `workstations`, `vlans`, `segments`, `blueprints` are not
+      among them and are ordinary English for things this lab holds. A word list cannot be
+      completed — that is the operator's whole point — so what the list misses is routed by the
+      one component that is good at routing.
+
+    ⇒ **AND IT RUNS LAST, ON WHAT IS LEFT.** `settle_with_world` is a LOOKUP and costs nothing;
+      this is a MODEL CALL. Anything the manifest or the lab can answer never reaches here, so
+      the cost is paid only for words nothing else could settle
+      ([[gorgon-vague-request-ladder]] — the ladder is ordered by who verified the artifact).
+
+    ⇒ **`none of these` IS RECORDED, NOT DISCARDED.** The row stays kindless either way, but
+      `unroutable` distinguishes *"the request does not say what this is"* from *"this is not
+      one of the things this lab keeps"*. Those are different sentences and different questions
+      to the operator, and gate 2 asks the right one because of this flag.
+
+    ⇒ **IT DOES NOT ASK WHETHER THE ROW IS A SET.** Number is structural and pass 1 already
+      decided it from the enumerator, the plural noun and the pronoun. Asking again would be a
+      second question in one call, which is the form-size rule this project measured twice.
+
+    ⚠⚠ **OFF BY DEFAULT, AND IT HAS NOT EARNED BEING ON.** Set `GORGON_ROUTE_NOUNS=1` to run it.
+       Measured 2026-08-11 on 20 held-out words (10 unlisted synonyms, 7 kinds this lab does not
+       have, 3 nonsense), n=3:
+
+           correct 13/20 · synonyms 4/10 · null arm 9/10 · FALSE MATCH 3
+
+       **THREE FALSE MATCHES IS A FAIL, and the null arm is what fails.** `routers -> network`,
+       `blueprints -> profile`, `backups -> file` — each a confident wrong kind, which is a
+       FALSE SERVE, which is the one error this whole stage exists to prevent. An earlier arm
+       scored FALSE MATCH 0 and that was a LUCKY ENUM ORDER, not a property: it did not survive
+       re-ordering, and the reversal guard that was supposed to defend it made things worse.
+
+    ⇒ **WHAT IS ALREADY WORTH KEEPING, AND IT IS THE HALF THAT DOES NOT NEED THE MODEL:** the
+      `no-such-kind` FINDING. Gate 2 used to tell the operator *"the request does not say what
+      'routers' is"* — which is false, the request says it perfectly clearly and this lab has no
+      such thing. Those are two different questions and they wore one sentence.
+
+    ⇒ **THE NEXT MOVE IS NOT A BETTER PROMPT.** `file` and `network` behave as SINK KINDS — an
+      unforced choice drains into them, the same shape as `name` sinking every clause it cannot
+      hold. A closed enum over kinds always has a sink. Ask instead one yes/no PER KIND — *is
+      this another name for a vm?* — and a word with zero yeses or several is refused by
+      arithmetic rather than by the model's restraint.
+    """
+    import os
+
+    from engines.channel import constrained
+    board = board or Board()
+    if model is False:                     # an explicit opt-out for a no-model bench
+        return rows
+    if os.environ.get("GORGON_ROUTE_NOUNS") != "1":
+        return rows
+    out: List[S.Declared] = []
+    for row in rows:
+        if row.object_type != UNKNOWN_KIND:
+            out.append(row)
+            continue
+        span = str(row.span or row.name)
+        question = S.ROUTE_Q.format(name=span, nouns=S.nouns_offered(board), none=S.NO_KIND)
+
+        def once(reverse: bool):
+            try:
+                got = constrained(question, span, S.route_schema(board, reverse),
+                                  model=model, temp=0.0, timeout=timeout) or {}
+                return got.get("answer")
+            except Exception:
+                # ⇒ A FAILED CALL LEAVES THE ROW EXACTLY AS IT WAS. It must not read as
+                #   `NO_KIND`: that would turn a broken channel into the confident claim that
+                #   the operator asked for something this lab does not keep.
+                return None
+
+        # ⇒⇒ THE REVERSAL GUARD WAS TRIED HERE AND WITHDRAWN. MEASURED, 2026-08-11, n=3:
+        #
+        #       single call, manifest order    stable 18/20   FALSE MATCH 1
+        #       ask both orders, keep agreement stable 20/20   FALSE MATCH 3
+        #
+        #   **IT CONVERTED UNSTABLE-WRONG INTO STABLE-WRONG.** `routers -> network` and
+        #   `blueprints -> profile` AGREE in both orders — the variance was run-to-run jitter
+        #   at temp 0, not the enum's ordering, so requiring agreement only made the wrong
+        #   answer consistent. It cost two calls per row and bought nothing.
+        #
+        #   ⇒ THE LESSON IS ABOUT THE PROBE, NOT ABOUT THIS STAGE: the reversal probe finds
+        #     answers an ORDER decided. It cannot find an answer the MODEL simply has wrong,
+        #     and a stage whose defence is "ask it twice" inherits that blind spot.
+        answer = once(False)
+        if not answer or answer == S.NO_KIND:
+            out.append(row._replace(unroutable=answer == S.NO_KIND))
+            continue
+        if answer not in board.kinds:
+            out.append(row)                # the grammar should forbid this; belt and braces
+            continue
+        object_type = f"{answer}{S.SET_SUFFIX}" if row.is_set else answer
+        out.append(S.declare_from(row.name, object_type, row.where, row.existence, board,
+                                  references=list(row.references), count=row.count,
+                                  comparator=row.comparator, span=row.span,
+                                  identity=row.identity))
+    return out
+
 
 PLURAL_PRONOUNS = {"ones", "them", "they", "those", "these", "all", "both", "rest", "others"}
 

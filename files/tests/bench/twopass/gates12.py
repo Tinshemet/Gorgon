@@ -46,10 +46,17 @@ class Finding(NamedTuple):
 #   them apart — the thing that would have caught the destructive guard living in the pipeline
 #   and `role-unsettled` living in the grammar gate, instead of me noticing weeks later.
 GATE1_OWNS = frozenset({"invented", "invented-value", "left-over", "unread-value",
-                        "unused-declaration", "uncreated-declaration"})
-GATE2_OWNS = frozenset({"unknown-kind", "kind-not-settled", "no-such-attribute",
+                        "unused-declaration"})
+GATE2_OWNS = frozenset({"unknown-kind", "kind-not-settled", "no-such-kind",
+                        "no-such-attribute",
                         "illegal-value", "cannot-be-made", "unread-descriptor",
                         "already-there", "not-there", "unverifiable"})
+
+# ⇒ NEITHER OF THESE MAY BE RETRIED. Only the operator or the lab can say what a kindless row
+#   is, so handing it back to the model is inviting the guess the kindless row exists to
+#   prevent. Named here rather than spelled out at the guard, because it was already one
+#   literal in `pipeline.py` and a second copy is how the pair drifts apart.
+UNSETTLED_KIND = frozenset({"kind-not-settled", "no-such-kind"})
 
 
 def _words(text: str) -> set:
@@ -132,7 +139,8 @@ def gate1(rows: List[S.Declared], request: str,
 
 
 def completeness(rows: List[S.Declared], operations, table,
-                 board: Optional[Board] = None) -> List[Finding]:
+                 board: Optional[Board] = None,
+                 goals: Optional[List[dict]] = None) -> List[Finding]:
     """GATE 1's OTHER HALF — nothing declared may go unused.
 
     ⇒ **THIS IS THE LEFTOVER RULE, ONE LEVEL UP.** Gate 1 already asks which WORDS no
@@ -147,13 +155,41 @@ def completeness(rows: List[S.Declared], operations, table,
     """
     from planner.ir import config as _config
 
-    def _creators(kind: str) -> set:
-        spec = (_config.KINDS or {}).get(kind) or {}
-        return {f"create_{kind}" if n == "create" else f"{n}_{kind}"
-                for n in (spec.get("creators") or {})}
-
     used = {str(op.on) for op in operations}
     used |= {str(op.value) for op in operations if op.value}
+
+    # ⇒⇒ A CREATOR ACCOUNTS FOR WHAT IT PRODUCES, NOT ONLY FOR WHAT IT NAMES.
+    #
+    #   Rung 12 — *"take a snapshot of every running vm"* — declares TWO rows, and once the
+    #   program is right (`create_snapshot(running_vms)`) the second one looks orphaned:
+    #   `'snapshot' was declared and no operation touches it`. But `snapshot` is not an
+    #   independent object. **It is the PRODUCT of the step**, bound under *every*, and the
+    #   step that makes it is exactly the one that "does not touch" it.
+    #
+    #   ⇒ THIS IS `gate3._referents`' RULE FROM THE OTHER SIDE. There, a creator's own target is
+    #     exempt from needing an establisher, because *it is what brings it about*. Here, what a
+    #     creator brings about is exempt from needing a toucher, for the same reason. One fact,
+    #     two gates, and leaving it out of this one turned a CORRECT program into a bounce.
+    #
+    #   ⇒ AND IT IS READ OFF THE MANIFEST — the kind each operator creates, never a list.
+    from .gate3 import _made_kind as _makes
+    # ⇒⇒ **ONLY A ONE-PER-MEMBER CREATION ACCOUNTS FOR A ROW IT DOES NOT TARGET.**
+    #   This exempted any row whose KIND some creator produced, which was too wide and I said so
+    #   when I wrote it. It bit on rung 10: `clone_vm(vms, golden)` produces `vm`s, `golden` IS a
+    #   vm, so a DECLARED AND COMPLETELY UNUSED `golden` was silently exempted while the program
+    #   cloned from an operator name instead.
+    #   ⇒ THE DISTINCTION IS THE KINDS. Rung 12's `create_snapshot(running_vms)` makes SNAPSHOTS
+    #     from VMS — different kinds — so a `snapshot` row it never names is genuinely its
+    #     product. A clone makes vms from vms, so another vm row is NOT accounted for by it.
+    _board = board or Board()
+    by_handle = {sym.handle: sym.row for sym in table}
+    produced = set()
+    for op in operations:
+        kind = _makes(op.operator, _board)
+        target = by_handle.get(str(op.on))
+        if kind and target is not None and kind != target.kind:
+            produced.add(kind)
+
     out: List[Finding] = []
     for sym in table:
         if sym.row.object_type == S.UNKNOWN_KIND:
@@ -179,18 +215,31 @@ def completeness(rows: List[S.Declared], operations, table,
         #     'network_2')` needs `network_2` to be there; a row nobody relies on is harmless
         #     however it was labelled. Keying on dependence rather than on `existence` alone
         #     stops a weak field becoming a hard bounce.
-        depended_on = any(str(op.value) == sym.handle for op in operations if op.value)
-        if (sym.row.existence == S.NEW and not sym.row.is_set and depended_on
-                and sym.row.kind in (board or Board()).kinds):
-            makers = _creators(sym.row.kind)
-            if not any(op.operator in makers and str(op.on) == sym.handle
-                       for op in operations):
-                out.append(Finding(1, "uncreated-declaration", sym.handle,
-                                   f"{sym.handle!r} is declared as something new and no step "
-                                   f"creates it — it will not exist when it is used"))
-                continue
+        # ⇒⇒ `uncreated-declaration` LIVED HERE AND IS NOW GATE 3's `unestablished-referent`.
+        #
+        #   The operator placed it, 2026-08-11: *"gate 2 for the world check, and gate 3 to
+        #   identify network_2 has been referenced with no maker/fetch."* Restated as *this
+        #   step's referent is never established* it is a fact about ONE OPERATION's soundness,
+        #   which is gate 3's grain — where phrased as *no step creates it* it read as an
+        #   absence and looked like gate 4's.
+        #
+        #   ⇒ AND IT JOINED A RULE THAT ALREADY EXISTED THERE. `not-settled-yet` says a
+        #     probe-defined set must be probed first; this says a thing must be fetched or made
+        #     first. One rule, three establishers — a probe, a fetch, a creator.
+        #
+        #   ⇒ **THIS ALSO CONTRADICTS [[gorgon-orchestrator-proposes-a-scaffold]]**, which moved
+        #     it gate 1 -> gate 4 on 08-11 morning. The operator's restatement is what changed
+        #     it, and the memory is updated rather than left to drift.
 
-        if sym.handle in used:
+        # ⇒⇒ A ROW A GOAL IS ABOUT IS ACCOUNTED FOR. *"make sure there are exactly two machines
+        #   left"* declares `vms` and proposes NO steps over it — the engine derives whatever
+        #   closes the goal. Reporting it untouched would be complaining that a scaffold whose
+        #   whole content is a goal has not written the goal's implementation.
+        #   ⇒ SAME SHAPE AS THE CREATOR EXEMPTION ABOVE, AND AS `mood-achieve` AND
+        #     `count-ignored`: a check written when steps were the only expression.
+        if sym.handle in used or sym.row.kind in produced:
+            continue
+        if any(S.governs(g, sym.row) for g in (goals or ())):
             continue
         out.append(Finding(1, "unused-declaration", sym.handle,
                            f"{sym.handle!r} was declared and no operation touches it — either "
@@ -207,7 +256,7 @@ def bounces(findings: List[Finding]) -> List[Finding]:
       is precisely the test that decides this list.
     """
     return [f for f in findings if f.kind in ("left-over", "unread-value",
-                                          "unused-declaration", "uncreated-declaration")]
+                                          "unused-declaration")]
 
 
 def residues(rows: List[S.Declared], request: str, board: Optional[Board] = None,
@@ -253,9 +302,26 @@ def gate2(rows: List[S.Declared], board: Optional[Board] = None) -> List[Finding
             #   '?'"* the finding was unanswerable, which made the honest outcome of item 0
             #   look like a malfunction.
             if row.kind == S.UNKNOWN_KIND:
-                out.append(Finding(2, "kind-not-settled", row.name,
-                                   f"the request does not say what {row.name!r} is — "
-                                   f"this lab has {', '.join(sorted(board.kinds))}"))
+                # ⇒⇒ TWO DIFFERENT QUESTIONS WORE ONE SENTENCE UNTIL 2026-08-11.
+                #
+                #   *"the request does not say what X is"* is true of `n1` — a bare name that
+                #   could be a machine or could be noise. It is NOT true of `routers`: that
+                #   request says perfectly clearly what it wants and this lab has no such
+                #   thing. Asking the operator to disambiguate a word they used correctly is
+                #   the wrong question, and offering them six kinds none of which is the
+                #   answer is the closed slot that manufactures a confident wrong one.
+                #
+                #   `unroutable` is set only when the routing stage RAN and declined, so an
+                #   unmarked row means UNASKED rather than routable.
+                if row.unroutable:
+                    out.append(Finding(2, "no-such-kind", row.name,
+                                       f"{row.name!r} is not one of the things this lab keeps "
+                                       f"— it has {', '.join(sorted(board.kinds))}. Is there "
+                                       f"another name for it, or is this out of scope?"))
+                else:
+                    out.append(Finding(2, "kind-not-settled", row.name,
+                                       f"the request does not say what {row.name!r} is — "
+                                       f"this lab has {', '.join(sorted(board.kinds))}"))
             else:
                 out.append(Finding(2, "unknown-kind", row.name,
                                    f"this lab has no {row.kind!r}"))

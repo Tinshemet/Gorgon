@@ -81,24 +81,39 @@ def handle_for(row: S.Declared, board: Board, taken: Optional[set] = None) -> st
 
     ⇒ **THE KEY VALUE WINS WHENEVER THERE IS ONE**, because that is the word the operator used
       and the one the request will refer to again. `a vm named alpha` addresses as `alpha`.
+
+    ⇒⇒ **AND A SET THAT LEAVES SOMETHING OUT SAYS SO IN ITS NAME** — the operator's
+      `all_vms_but_db`. The suffix is applied HERE, at the single exit, because `_stem_for` has
+      five return paths and putting it on the last one meant it never fired for the row it was
+      written for: rung 8's set takes the `where`-condition branch and left as `core_vms`.
+      **A rule on one path of several is the defect this session found six times.**
     """
-    from planner.gates import claims as _claims
     taken = taken if taken is not None else set()
+    stem = _stem_for(row, board)
+    if row.excludes:
+        stem = f"{stem}_but_{'_'.join(_slug(v) for f in row.excludes for v in f.values())}"
+    return _free(stem, taken)
+
+
+def _stem_for(row: S.Declared, board: Board) -> str:
+    """The address before dedupe and before any exclusion suffix."""
+    from planner.gates import claims as _claims
+    taken: set = set()                    # local: dedupe belongs to `handle_for`
     kind = row.kind if row.kind in board.kinds else "thing"
 
     key_attr = _claims.key_of(kind, board.kinds) if kind in board.kinds else None
     if key_attr and (row.where or {}).get(key_attr):
-        return _free(str(row.where[key_attr]), taken)
+        return str(row.where[key_attr])
     if row.identity:
-        return _free(str(row.identity), taken)
+        return str(row.identity)
 
     # a CONDITION describes the set better than a number ever could
     for attr, value in (row.where or {}).items():
         if isinstance(value, bool) or str(value).lower() in ("true", "false"):
             truthy = value is True or str(value).lower() == "true"
             stem = f"{attr}_{_plural(kind)}" if truthy else f"not_{attr}_{_plural(kind)}"
-            return _free(stem, taken)
-        return _free(f"{_slug(value)}_{_plural(kind)}", taken)
+            return stem
+        return f"{_slug(value)}_{_plural(kind)}"
 
     # ⇒ A KINDLESS ROW STILL HAS THE OPERATOR'S OWN WORD IN IT, AND THAT BEATS `thing`.
     #   Rung 9's three machines addressed as `thing`, `thing_2`, `thing_3` — three
@@ -119,10 +134,9 @@ def handle_for(row: S.Declared, board: Board, taken: Optional[set] = None) -> st
         words = [w.strip(".,'\"—–") for w in str(row.span or row.name).lower().split()]
         free = [w for w in words if w and w not in GRAMMAR and w not in verbs and w not in attrs]
         if free:
-            return _free(free[-1], taken)
+            return free[-1]
 
-    base = _plural(kind) if row.is_set else kind
-    return _free(base, taken)
+    return _plural(kind) if row.is_set else kind
 
 
 def _slug(value) -> str:
@@ -155,8 +169,16 @@ def symbol_table(rows: List[S.Declared], board: Optional[Board] = None,
         handle = row.name if handles == "span" else handle_for(row, board, taken)
         where = ", ".join(f"{k} = {v}" for k, v in (row.where or {}).items())
         kind = row.kind if row.kind in board.kinds else "thing"
+        # ⇒⇒ THE EXCLUSION TRAVELS WITH THE SET, INTO THE ONLY THING PASS 2 READS.
+        #   Rung 8's set is `all vms but db`, and until now the payload said only *"the vms
+        #   where network = core"* — so the model was being asked to respect a subtraction it
+        #   was never shown. Declaring it (`Declared.excludes`) and not SAYING it would have
+        #   been the same defect one layer down.
+        gone = "; ".join(", ".join(f"{k} = {v}" for k, v in f.items())
+                         for f in (row.excludes or ()))
         definition = (f"{'the ' + kind if not row.is_set else 'the ' + _plural(kind)}"
-                      f"{' where ' + where if where else ''}")
+                      f"{' where ' + where if where else ''}"
+                      f"{' except ' + gone if gone else ''}")
         if row.count is not None:
             definition = f"{row.count} {definition}"
         out.append(Symbol(handle, row, definition, row.settled))
@@ -337,8 +359,375 @@ def _schema(handles: List[str], operators: List[str], require_one: bool = True,
     }
 
 
+def derive_creators(operations, table, board: Optional[Board] = None):
+    """A thing the program DEPENDS ON and never brings about — supplied by arithmetic.
+
+    ⇒⇒ **THIS IS A PRODUCER, NOT A DETECTOR, AND THAT DISTINCTION IS THE WHOLE POINT.**
+      `uncreated-declaration` has reported rung 6 correctly for days and the request still did
+      not get served, because a finding is a report and the operator wanted the machines on a
+      network. A day of adding checks moved served-correct from 4 to 4
+      ([[gorgon-detector-not-producer-again]]); rungs close by ADDING A FACT or REMOVING AN
+      OPTION. The manifest declares that a `network` is made by `create`, so
+      `create_network(network_2)` is not a guess — it is a lookup, the same shape as
+      `effects.conditions_after`, and there is NO MODEL CALL anywhere in it.
+
+    ⇒⇒ **THE DETERMINER MUST INDEPENDENTLY AGREE, AND THAT IS THE SAFETY PROPERTY.**
+      The operator's presupposition frame, 2026-08-11: a step like `add_vm_to_network`
+      PRESUPPOSES its argument, and when that presupposition fails the determiner decides
+      whether looking can settle it —
+
+          INDEFINITE   'a different network'   nothing ever established a referent, so no
+                       probe could find one -> the program must BRING IT ABOUT
+          DEFINITE
+          or NAMED     'golden', 'core', 'db'  there IS a referent to go and find -> ASK or
+                       probe. NEVER create: the operator named it, and quietly making a second
+                       one is the worst thing this could do.
+
+      So `row.existence` alone is not enough. It is the model's weakest field (85%, every error
+      toward NEW) and acting on it would let a wrong NEW BUILD A REAL NETWORK NOBODY ASKED FOR —
+      which is strictly worse than the spurious bounce it replaced. Requiring the determiner to
+      say NEW too means **a creator is only ever derived for something no one could have meant
+      to already exist.**
+
+    ⇒⇒ **THE OPERATOR'S RULE, 2026-08-11 — AND IT IS THE ORGANISING PRINCIPLE, NOT A CAVEAT:**
+
+        *"creation is not destructive, but we shouldn't create resources unless it's
+         NECESSARY, ALLOWED / INTENDED."*
+
+      Three conditions, and every guard here answers exactly one of them. They were bought
+      piecemeal from rung 11 and rung 8; this is what they were always for:
+
+        NECESSARY  something else DEPENDS on it — an operation names it in a value slot.
+                   A row nobody relies on is not missing a creator, it is just a row.
+        ALLOWED    the manifest declares a way to make one. A kind with no creator cannot
+                   be made, and inventing an operator for it would be fabrication.
+        INTENDED   there is NOTHING TO LOOK IT UP BY. See `_is_named`.
+
+      Anything failing one of the three is left alone and reported, never filled in.
+
+    ⇒⇒ **THE DETERMINER USED TO GATE THIS AND NO LONGER DOES — the operator, 2026-08-11:**
+
+        *"it seems like it identified correctly that there are 2 networks, it just forgot that
+         a prerequisite to use it is to check if it exists, and if not, create it. If something
+         is referenced but not created, you need to supply it either through a FETCH or CREATE."*
+
+      That is structural and needs no vocabulary. The earlier version read `a` / `the` /
+      `different` to infer NEW-vs-EXISTING — **but that question never had to be answered.**
+      What matters is whether the thing EXISTS, and that is found by LOOKING, not by reading an
+      article. The determiner was a proxy for a lookup, and it cost a word list (`scan.NOVEL`)
+      to maintain a guess the world could settle outright.
+
+      ⇒ SO THE SUPPLY IS DECIDED BY WHETHER THERE IS ANYTHING TO LOOK UP BY:
+
+            named or filtered   -> a FETCH establishes it; `settle_with_world` already ran and
+                                   the lab either held it or did not. NEVER created here.
+            nothing to find     -> no probe could resolve it, so the program must MAKE it.
+
+    ⇒ THIS IS ONE HALF OF A LARGER UNIFICATION THE OPERATOR PLACED IN **GATE 3** — every
+      referent needs an ESTABLISHER (a probe, a fetch, or a creator) and one must run before the
+      step that uses it. `not-settled-yet` is already that rule for probes. Not yet built.
+    """
+    board = board or Board()
+    operations = list(operations)
+    by_handle = {sym.handle: sym.row for sym in table}
+    makers = _creators_by_kind(board)
+
+    out = list(operations)
+    for handle, row in by_handle.items():
+        # ⚠ `row.existence` IS A PLACEHOLDER FOR THE FETCH THAT IS NOT BUILT, NOT A GUARD THAT
+        #   EARNS ITS PLACE. The operator's rule is *check whether it exists, and if not, create
+        #   it* — but for an UNNAMED row there is nothing to check WITH: `settle_with_world`
+        #   looks up by key value, and *"the network"* offers none. Without that lookup, dropping
+        #   this line would build a second network beside the one the lab already holds.
+        #   ⇒ AND IT IS A WEAK STAND-IN: the field reads 85% with EVERY ERROR TOWARD NEW, i.e.
+        #     toward creating. It fails in the unsafe direction. It goes when gate 3's
+        #     establisher rule lands and the world is asked properly.
+        if row.existence != S.NEW or row.is_set or row.kind not in board.kinds:
+            continue
+        if _is_named(row, board):
+            continue                      # ⇐ there is something to LOOK IT UP BY — see below
+        if not any(str(op.value) == handle for op in operations if op.value):
+            continue                      # nothing depends on it, so nothing is missing
+        kinds_makers = makers.get(row.kind) or set()
+        if any(op.operator in kinds_makers and str(op.on) == handle for op in operations):
+            continue                      # already made
+        if not kinds_makers:
+            continue                      # the manifest declares no way to make one
+        # ⇒⇒ ALLOWED MEANS DERIVABLE, NOT MERELY CREATABLE — and `planner.ir.derive` already
+        #   owns that judgement, so it is ASKED rather than re-decided here. `_creator_args`
+        #   returns the OTHER required arguments from `create_defaults`, or **None when a
+        #   required argument has no declaration** — *"the gap goes to the author"*.
+        #
+        #   Measured 2026-08-11: `snapshot` and `profile` both return None. Without this,
+        #   R2 emitted `create_snapshot(...)` for a kind the project's own deriver refuses,
+        #   producing a step that cannot run. `network` returns {} — which is the only reason
+        #   rung 6 was correct, and it was correct BY LUCK rather than by this check.
+        #
+        #   ⇒ AND `{}` IS THE ONLY ACCEPTABLE ANSWER HERE, not merely a non-None one. This
+        #     `Operation` carries (operator, on, value) and has NOWHERE to put `os_type`, so a
+        #     kind needing extra arguments — `vm` needs `{'os_type': 'linux'}` — must go to the
+        #     author too. Deriving it would silently drop the argument.
+        if _derivable_args(row.kind) != {}:
+            continue
+        # ⇒ IT GOES IN FRONT OF THE FIRST STEP THAT NEEDS IT. Binding time is an ORDER, and a
+        #   creator appended at the end would satisfy the CHECK while still running too late.
+        need = next(i for i, op in enumerate(out) if str(op.value) == handle)
+        out.insert(need, Operation(sorted(kinds_makers)[0], handle, None))
+    return out
+
+
+def merge_split_creation(operations, table, request: str,
+                         board: Optional[Board] = None):
+    """A creation the model split in two, rejoined. The clone's product became its own step.
+
+    ⇒⇒ **THE OPERATOR'S READING, 2026-08-11:** *"it reads it as it goes along, but this sentence
+      wraps back on itself."* Rung 10 — *"clone golden into 3 new vms"* — is emitted
+      left-to-right as `clone_vm(golden)` and then `create_vm(vms)`, because *"into 3 new vms"*
+      arrives after the verb and is taken as a fresh instruction. It is not: it is that verb's
+      OBJECT. The clause completes an earlier verb instead of starting a new one.
+
+            clone golden into 3 new vms
+                  ^^^^^^      ^^^^^^^^^^
+                  source      product — read as a separate creation
+
+    ⇒ **THE TWO HALVES IDENTIFY EACH OTHER, SO NOTHING IS GUESSED.** A sourcing creator with no
+      product has an empty slot; a same-kind creator in the SAME CLAUSE has a row with no verb
+      that needed it. `incomplete-creation` already proves the first half is broken. The clause
+      boundary is what licenses joining them — two halves of one clause, not two clauses.
+
+    ⇒ **AND IT REPAIRS BY MERGING INFORMATION ALREADY PRESENT, NOT BY RELAXING A CHECK.** Every
+      earlier attempt to make this rung SERVE loosened something and hid a real defect for
+      hours. `incomplete-creation` and `duplicate-creation` both stay armed: a clone with no
+      product and no orphan to pair with is still illegal, and two creators that do NOT pair
+      still bounce.
+
+    ⇒ EXACTLY ONE CANDIDATE, OR NOTHING HAPPENS. Two orphans in one clause would be a guess.
+    """
+    from .linguistics import anchor_to_clauses
+    from .gate3 import _made_kind, _takes_a_source
+    board = board or Board()
+    by_handle = {sym.handle: sym.row for sym in table}
+
+    clause_of = {}
+    for clause, op in anchor_to_clauses(request, list(operations), board):
+        clause_of[id(op)] = clause
+
+    incomplete = [op for op in operations
+                  if _takes_a_source(op.operator) and op.value in (None, "")]
+    if not incomplete:
+        return list(operations)
+
+    out, dropped = list(operations), set()
+    for broken in incomplete:
+        kind = _made_kind(broken.operator, board)
+        here = clause_of.get(id(broken))
+        orphans = [op for op in operations
+                   if op is not broken and id(op) not in dropped
+                   and clause_of.get(id(op)) == here
+                   and _made_kind(op.operator, board) == kind
+                   and str(op.on) in by_handle]
+        if len(orphans) != 1:
+            continue                       # nothing to pair with, or a guess — leave it
+        product = orphans[0]
+        dropped.add(id(product))
+        out = [Operation(broken.operator, str(product.on), str(broken.on))
+               if op is broken else op for op in out]
+    return [op for op in out if id(op) not in dropped]
+
+
+def drop_redundant_creators(operations, table, request: str,
+                            board: Optional[Board] = None):
+    """One row, two makers — keep the one the REQUEST names and drop the other.
+
+    ⇒⇒ **THE OPERATOR'S RULE, 2026-08-11:** *"if the model refuses to act on an error CAUGHT, it
+      should be fixed regardless, because it's a cancerous defect — like a brain tumour, since
+      everything but the reasoning is correct."* Rung 10 is exactly that: the reading, the roles,
+      the establisher and the ordering are all right, and one step is wrong in a way that does
+      not improve by asking. It was handed back three ways — a plain rejection, a split payload,
+      and a direct statement of the contradiction — and came back byte-identical each time.
+
+    ⇒ **AND THE PRECEDENT IS ALREADY HERE.** `housekeeping.sort_out` PURGES a cancerous
+      suggestion rather than reporting it, on the operator's own reasoning that *"a cancerous
+      housekeeping should be dropped but the core proposal shipped."* Same species, same remedy.
+
+    ⇒ **WHICH ONE SURVIVES IS READ OFF THE REQUEST, NOT CHOSEN.** *"CLONE golden into 3 new
+      vms"* names `clone` and never says `create`, so `clone_vm` is what was asked for. If BOTH
+      verbs appear, or NEITHER does, nothing is dropped and gate 4's `duplicate-creation` stands
+      — the same zero/one/several honesty used everywhere else, because a repair that guesses is
+      worse than a finding that asks.
+    """
+    from .gate3 import _makers
+    board = board or Board()
+    words = {w.strip(".,'\"—–?!").lower() for w in str(request).split()}
+    by_handle = {sym.handle: sym.row for sym in table}
+
+    made_by: Dict[str, list] = {}
+    for op in operations:
+        row = by_handle.get(str(op.on))
+        if row is not None and op.operator in _makers(row.kind):
+            made_by.setdefault(str(op.on), []).append(op)
+
+    doomed = set()
+    for handle, makers in made_by.items():
+        if len(makers) < 2:
+            continue
+        named = [op for op in makers if str(op.operator).split("_")[0].lower() in words]
+        if len(named) == 1:
+            doomed |= {id(op) for op in makers if op is not named[0]}
+    return [op for op in operations if id(op) not in doomed]
+
+
+def normalise_creator_args(operations, table, board: Optional[Board] = None):
+    """A sourcing creator's target is its PRODUCT and its value is its SOURCE. Put them that way.
+
+    ⇒⇒ **THE `Operation` TRIPLE IS POSITIONAL AND THE MANIFEST'S ROLES ARE NAMED.**
+      `creators.clone` declares `key: new_name` and `from: source_name`, but an Operation is
+      `(operator, on, value)` with nothing saying which is which. Rung 10 came back as
+      `clone_vm(golden, vms)` — the SOURCE in the target slot — and every downstream rule read
+      `on` as the thing being made, i.e. backwards.
+
+    ⇒ **THE ROWS SETTLE IT WITHOUT A MODEL CALL.** A clone's product is the thing that does not
+      exist yet and its source is the thing that does; `settle_sources` already marks `golden`
+      EXISTING and `3 new vms` NEW. So the order is arithmetic, and the convention it restores
+      is the one every other operation already follows — **`on` is what the step is ABOUT.**
+
+    ⇒ ⚠ **AND IT ONLY SWAPS WHEN THE ROWS ARE UNAMBIGUOUS** — one NEW, one EXISTING. Two NEW or
+      two EXISTING and nothing is touched, because guessing would be inventing a reading the
+      declarations do not support.
+    """
+    from .gate3 import _takes_a_source
+    board = board or Board()
+    by_handle = {sym.handle: sym.row for sym in table}
+    out = []
+    for op in operations:
+        target, source = by_handle.get(str(op.on)), by_handle.get(str(op.value or ""))
+        if (op.value is not None and _takes_a_source(op.operator)
+                and target is not None and source is not None
+                and target.existence == S.EXISTING and source.existence == S.NEW):
+            out.append(Operation(op.operator, str(op.value), str(op.on)))
+            continue
+        out.append(op)
+    return out
+
+
+def order_by_dependency(operations, table, board: Optional[Board] = None):
+    """Every establisher before its dependents. Deterministic, no model call.
+
+    ⇒⇒ **RUNG 8, MEASURED 2026-08-11.** Once the payload gained a `needed` section the model
+      supplied BOTH missing creators — and put one of them in the wrong place:
+
+          create_network(core) · add_vm_to_network(db, dmz) · create_network(dmz) · …
+                                 ^^^^ uses dmz              ^^^^ makes it, too late
+
+      Gate 3's establisher rule caught it, correctly: **binding time is an ORDER**, and a
+      creator that runs after its dependent is not a creator that ran.
+
+    ⇒ **AND ORDER IS NOT THE MODEL'S TO GET RIGHT.** Which step must precede which is a fact
+      about the manifest and the symbol table, computable by arithmetic — `derive_creators`
+      already places the creators IT inserts correctly, and only model-supplied ones went
+      unsorted. Asking for correct ordering would be inviting a guess where a lookup exists.
+
+    STABLE: an operation moves only far enough to sit behind what it needs, so a program that
+    was already ordered comes back byte-identical. Cycles are broken rather than followed.
+    """
+    from .gate3 import _makers
+    board = board or Board()
+    ops = list(operations)
+    by_handle = {sym.handle: sym.row for sym in table}
+
+    made_at: Dict[str, int] = {}
+    for i, op in enumerate(ops):
+        row = by_handle.get(str(op.on))
+        if row is not None and op.operator in _makers(row.kind):
+            made_at.setdefault(str(op.on), i)
+
+    out: List[Operation] = []
+    placed: set = set()
+
+    def needs(i: int) -> List[str]:
+        op = ops[i]
+        row = by_handle.get(str(op.on))
+        out_refs = []
+        if row is not None and op.operator not in _makers(row.kind):
+            out_refs.append(str(op.on))          # a creator does not presuppose its own target
+        if op.value is not None:
+            out_refs.append(str(op.value))
+        return out_refs
+
+    def emit(i: int, seen: set) -> None:
+        if i in placed or i in seen:
+            return                                # already down, or a cycle — leave it be
+        seen.add(i)
+        for ref in needs(i):
+            j = made_at.get(ref)
+            if j is not None and j != i:
+                emit(j, seen)
+        if i not in placed:
+            placed.add(i)
+            out.append(ops[i])
+
+    for i in range(len(ops)):
+        emit(i, set())
+    return out
+
+
+def _derivable_args(kind: str):
+    """`planner.ir.derive`'s own answer to *can a NEW of this kind be derived at all?*
+
+    ⇒ ASKED, NEVER RE-DECIDED. That module is the SSOT for what a derived creation may pass to
+      its creator, and a second copy of the rule here is how the pair drifts apart. Imported
+      through `importlib` because `planner.ir.__init__` re-exports the FUNCTION `derive`, which
+      shadows the module of the same name.
+    """
+    import importlib
+    try:
+        return importlib.import_module("planner.ir.derive")._creator_args(kind)
+    except Exception:
+        return None                       # cannot ask -> cannot derive. Fail closed.
+
+
+def _is_named(row, board: Board) -> bool:
+    """Does the request give this thing a NAME? Then it is INTENDED as a reference, not a make.
+
+    ⇒⇒ **MEASURED 2026-08-11, AND IT IS WHY THE DETERMINER ALONE IS NOT ENOUGH.** Rung 8 says
+      *"put every vm on A NETWORK CALLED CORE"*. The article is indefinite, so the determiner
+      answers NEW and R2 built `core` — verified, not theorised. But `core` is a NAME, and the
+      operator's presupposition frame settles what that means:
+
+          INDEFINITE AND UNNAMED   'a different network'   nothing ever established a referent,
+                                   so NO probe could find one -> the program must make it
+          NAMED                    'a network called core'  there IS a referent to go and look
+                                   for -> ASK or probe. **NEVER MAKE A SECOND ONE.**
+
+    ⇒ **AND `already-there` IS NOT SUFFICIENT COVER.** It fires only when the lab is PROBED and
+      holds one. Against an unseeded or unreachable kind it stays silent, and silence there is
+      indistinguishable from absence ([[gorgon-book-keeper]]'s decision 6). That is precisely
+      the case where quietly building a second `core` beside the operator's real one does the
+      most damage and reports nothing.
+
+    A name is either the row's confirmed identity or the kind's own KEY carried as a condition.
+    """
+    from planner.gates import claims as _claims
+    if row.identity:
+        return True
+    key = _claims.key_of(row.kind, board.kinds)
+    return bool(key and (row.where or {}).get(key))
+
+
+def _creators_by_kind(board: Board):
+    """{kind: {operator names that make one}} — read off the manifest, nothing hardcoded."""
+    from planner.ir import config as _config
+    out = {}
+    for kind in board.kinds:
+        spec = (_config.KINDS or {}).get(kind) or {}
+        out[kind] = {f"create_{kind}" if n == "create" else f"{n}_{kind}"
+                     for n in (spec.get("creators") or {})}
+    return out
+
+
 def _payload(request: str, table: List[Symbol], operators: List[str],
-             rejected: Optional[List[str]] = None) -> str:
+             rejected: Optional[List[str]] = None,
+             needed: Optional[List[str]] = None) -> str:
     """The symbol table, the operators, the request — and, on a retry, what was REJECTED.
 
     ⇒ **THE REJECTIONS GO IN THE PAYLOAD AND NEVER IN THE PROMPT, AND THAT IS THE WHOLE SAFETY
@@ -362,12 +751,31 @@ def _payload(request: str, table: List[Symbol], operators: List[str],
     if rejected:
         out += ("\n\nthese steps were rejected by the lab and cannot be used:\n  "
                 + "\n  ".join(rejected))
+    # ⇒⇒ A SECOND SECTION, BECAUSE ONE SECTION COULD ONLY EVER SAY "REMOVE THIS".
+    #
+    #   Measured on rung 8, 2026-08-11: `core` and `dmz` are both used and neither is supplied.
+    #   Both were reported, and the retry added `create_network(core)` and never `dmz` — at
+    #   `--retries 1`, `2` and `3`, byte-identical. The model was being handed a MISSING STEP
+    #   under a heading that says *cannot be used*, which is the opposite instruction, and it
+    #   inferred the addition once and could not repeat it.
+    #
+    #   ⇒ THE SPLIT IS BY WHAT THE FINDING ASKS FOR, not by which gate raised it. An illegal
+    #     step asks to be REMOVED; an unestablished referent asks for a step to be ADDED. Those
+    #     are different requests and a single list cannot carry both.
+    #
+    #   ⇒ AND IT STAYS EVIDENCE RATHER THAN INSTRUCTION (rule W7b): each line names a thing the
+    #     lab does not hold, which is a FACT the model did not have. Nothing here tells it how
+    #     to behave, and a request that succeeds first time never sees this section at all.
+    if needed:
+        out += ("\n\nthese things are used by a step but nothing in the program supplies them, "
+                "and the lab does not hold them:\n  " + "\n  ".join(needed))
     return out
 
 
 def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[Board] = None,
                          model=None, temp: float = 0.0, timeout: int = 300,
-                         rejected: Optional[List[str]] = None):
+                         rejected: Optional[List[str]] = None,
+                         needed: Optional[List[str]] = None):
     """ASK ONCE PER CLAUSE, AND KEEP WHICH CLAUSE EACH STEP CAME FROM.
 
     ⇒ **THIS IS A PRODUCER, NOT A DETECTOR, AND THAT IS THE WHOLE REASON FOR IT.** Asked over
@@ -394,7 +802,7 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
     operators = operators_offered(board)
     out = []
     for clause in clauses_of(request):
-        payload = (f"{_payload(request, table, operators, rejected)}\n\n"
+        payload = (f"{_payload(request, table, operators, rejected, needed)}\n\n"
                    f"the part to answer for: {clause}")
         try:
             got = constrained(CLAUSE_ASK, payload, _schema(names, operators, False, True),
@@ -411,7 +819,8 @@ def operations_for(request: str, rows: List[S.Declared], board: Optional[Board] 
                    model=None, temp: float = 0.0, timeout: int = 300,
                    handles: str = "derived", require_one: bool = True,
                    free_value: bool = True,
-                   rejected: Optional[List[str]] = None) -> List[Operation]:
+                   rejected: Optional[List[str]] = None,
+                   needed: Optional[List[str]] = None) -> List[Operation]:
     """THE ONE QUESTION PASS 2 ASKS. Everything in the answer is closed."""
     from engines.channel import constrained
     board = board or Board()
@@ -421,7 +830,7 @@ def operations_for(request: str, rows: List[S.Declared], board: Optional[Board] 
         return []
     operators = operators_offered(board)
     try:
-        got = constrained(ASK, _payload(request, table, operators, rejected),
+        got = constrained(ASK, _payload(request, table, operators, rejected, needed),
                           _schema(names, operators, require_one, free_value),
                           model=model, temp=temp, timeout=timeout) or {}
     except Exception:

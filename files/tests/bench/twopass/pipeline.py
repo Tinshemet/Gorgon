@@ -60,9 +60,21 @@ from .effects import Operation, conditions_after, flatten
 
 SERVE, BOUNCE, ASK, REFUSE = "SERVE", "BOUNCE", "ASK", "REFUSE"
 
-# ⇒ THE ONE RULE OF GATE 3 THE OPERATOR CAN ANSWER. Everything else is a statement about the
-#   operation itself and no answer changes it.
-ANSWERABLE = frozenset({"unknown-kind"})
+# ⇒⇒ **GATE 3 HAS NO OPERATOR-ANSWERABLE RULE, AND HAS NOT SINCE `unknown-kind` MOVED.**
+#
+#   This held `{"unknown-kind"}` — and gate 3 stopped owning that rule when the unsettled kind
+#   became GATE 2's question. So the set matched nothing, and the escape hatch it exists for —
+#   *every step is illegal, but the operator could answer one of them, so this is a QUESTION
+#   rather than a refusal* — has been dead code. Found 2026-08-11 by the audience test, not by
+#   anything failing: a REFUSE that should have been an ASK simply refused.
+#
+#   ⇒ **IT IS EMPTY RATHER THAN DELETED**, because the rule it encodes is still the right one
+#     and gate 3 may own an answerable finding again. `test_every_finding_reaches_an_audience`
+#     asserts the set stays a subset of what gate 3 actually owns, so this cannot silently rot
+#     a second time.
+#   ⇒ AND THE ANSWERABILITY THAT MATTERS NOW LIVES IN GATE 2: `kind-not-settled` and
+#     `no-such-kind` both go to the operator, and `UNSETTLED_KIND` stops the retry re-asking.
+ANSWERABLE: frozenset = frozenset()
 
 
 class Run(NamedTuple):
@@ -76,6 +88,9 @@ class Run(NamedTuple):
     illegal: List[gate3.Illegal]
     suggested: List[Operation] = ()   # legal, unasked, PRUDENT — shown, never run
     linguistics: List = ()
+    # ⇒ THE STATES AN ACHIEVE REQUEST ASKS TO HOLD. A scaffold carrying a goal and no steps is
+    #   COMPLETE, not empty — the engine derives what closes it.
+    goals: List[dict] = ()
     outcome: str = ""
 
     @property
@@ -90,6 +105,27 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
 
     rows = pass1.run_scanned(request, board=board, model=model, timeout=timeout)
     rows = pass1.settle_with_world(rows, world, board)
+    # ⇒⇒ THE LADDER, AND THE ORDER IS THE POINT: the manifest's `nouns` settled what it could
+    #   inside `run_scanned`, the LAB settled what it could on the line above, and only what
+    #   NEITHER could reach gets a model call. A row nothing settles stays kindless and gate 2
+    #   asks — but it now asks the RIGHT question, because the routing stage distinguishes
+    #   *"nobody said what this is"* from *"this lab keeps no such thing"*.
+    rows = pass1.settle_by_routing(rows, board, model=model, timeout=timeout)
+    # ⇒ AND AN `except` CLAUSE JOINS THE SET IT NARROWS. It runs AFTER settling because the
+    #   excluded thing is usually a bare name only the lab can identify — rung 8's `db` is a
+    #   machine because the lab says so, and nothing in English does.
+    rows = pass1.attach_exclusions(rows, board)
+    # ⇒ AND A RECIPROCAL CLAUSE IS A PREDICATE, NOT A THING. Rung 13 declared `all ping each
+    #   other` as an object; the goal reads it directly, so the row must not also exist.
+    rows = pass1.consume_reciprocal(rows, board)
+    # ⇒ AND WHAT A CLONE IS TAKEN FROM ALREADY EXISTS. `creators.clone` declares a `from` role;
+    #   reading it stops rung 10 asking *"you asked to create golden"* about a thing nobody
+    #   asked to create.
+    rows = pass1.settle_sources(rows, board)
+    # ⇒ AND A THING ASKED TO DO SOMETHING ONLY ONE KIND CAN DO IS THAT KIND. *"n1, n2 and n3 can
+    #   all PING each other"* — `alive` is observed on `vm` and nothing else, so the request
+    #   already says what n1 is. The affordance table was in the manifest the whole time.
+    rows = pass1.settle_by_affordance(rows, request, board)
 
     early = gates12.report(rows, request, board, world)
     asks: List[str] = list(early["asks"])
@@ -100,13 +136,94 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     # ⇒⇒ THE LINGUISTICS GATE RUNS BETWEEN PASS 2 AND GATE 3, AND EVERY EVALUATION GOES THROUGH
     #   IT — including each retry, from the PRISTINE table. Settling drops rows, so re-settling
     #   an already-settled table could never bring one back if a later answer needed it.
+    # ⇒⇒ AN ACHIEVE REQUEST CARRIES THE STATE IT ASKS TO HOLD, NOT ONLY THE STEPS.
+    #
+    #   *"make sure exactly 3 vms carry the 'prod' label"* is a GOAL. Pass 1 already read the
+    #   enumerator and the modifiers, so the predicate is arithmetic off an existing row — no
+    #   model call. The scaffold gains a goal; MEDUSA writes whatever closes it.
+    #
+    #   ⇒ THE ORCHESTRATOR NEVER EMITS THE LOOP. It states the goal and gate 4 asks the world
+    #     whether the goal is reachable — which is where the line between proposing and writing
+    #     sits ([[gorgon-orchestrator-proposes-a-scaffold]]).
+    goals = gate4.goals_of(rows, request, board)
+
+    def _governed(ops, tbl):
+        """Steps the GOAL replaces — the ones over the row it governs.
+
+        ⇒⇒ **A GOAL DOES NOT SIT BESIDE THE STEPS, IT STANDS IN FOR THEM.** Capturing the goal
+          and leaving pass 2's attempt in place gave rung 14 both — and the attempt was
+          `delete_vm(vms) · probe_alive(vms) · delete_vm(vms)`, i.e. DELETE EVERY MACHINE for
+          *"make sure there are exactly two machines left"*. That is the oscillation
+          `planner.ir.derive` was written to replace (*6 -> 4 -> 7 -> 5, it never computed
+          six exist, three wanted, remove three*), and serving it alongside the goal would be
+          shipping the very thing the goal exists to avoid.
+
+        ⇒ **THE GOAL GOVERNS ONE ROW, SO IT REPLACES ONLY THAT ROW'S STEPS.** Rungs 4 and 13
+          capture no goal, so nothing of theirs is dropped; a request that is part DO and part
+          ACHIEVE keeps its DO steps.
+        """
+        # ⇒⇒ **ONLY A `count` GOAL REPLACES STEPS.** A count goal is about a QUANTITY, so any
+        #   step changing that quantity is an attempt to close it — which is why rung 14's
+        #   `delete_vm(vms)` must go. A `reach` goal is about a RELATION, and rungs 4/13's
+        #   steps (`create 5 vms`, `give them the fleet label`, `put them in a network`) are
+        #   explicitly ASKED-FOR DO clauses that happen to touch the same row. Dropping them
+        #   would delete the request's own instructions and serve an empty scaffold.
+        #   ⇒ THE GOAL REPLACES WHAT ATTEMPTS IT, NOT EVERYTHING THAT TOUCHES ITS SUBJECT.
+        counted = [g for g in goals if g.get("shape") == "count"]
+        if not counted:
+            return list(ops), []
+        by_handle = {sym.handle: sym.row for sym in tbl}
+        owned = {sym.handle for sym in tbl
+                 if any(S.governs(goal, sym.row) for goal in counted)}
+        kept = [o for o in ops if str(o.on) not in owned]
+        return kept, [o for o in ops if str(o.on) in owned]
+
     def evaluate(ops):
         settled_rows, settled_table, notes = linguistics.report(
-            request, rows, ops, declared, board)
-        return settled_rows, settled_table, notes, gate3.check(ops, settled_table, board, world)
+            request, rows, ops, declared, board, goals=goals)
+        # ⇒⇒ **THE VERB SETTLE REBUILDS ROWS AND DROPS THE SOURCE READING, SO IT IS RE-APPLIED.**
+        #   Traced 2026-08-11: the first pass had `golden` EXISTING and the RETRY had it NEW
+        #   again — `settle_with_verb` reconstructs rows, and `settle_sources`' correction went
+        #   with them. `normalise_creator_args` then silently no-opped, because its swap needs
+        #   one NEW row and one EXISTING one.
+        #   ⇒ **A CORRECTION APPLIED ON ONE PATH AND LOST ON ANOTHER** — the same defect as
+        #     `completeness` after the retry loop and the guard on one of two gate 3 loops.
+        #     Applying it where EVERY evaluation passes is what makes it hold.
+        #   ⇒ AND THE HANDLES ARE PRESERVED RATHER THAN REBUILT: `symbol_table` renumbers on
+        #     collision, so regenerating here could rename a handle the operations point at.
+        fixed = pass1.settle_sources(settled_rows, board)
+        by_name = {r.name: r for r in fixed}
+        settled_table = [s._replace(row=by_name.get(s.row.name, s.row)) for s in settled_table]
+        # ⇒⇒ THE DUPLICATE CHECK RUNS HERE, INSIDE EVERY EVALUATION, SO THE RETRY CAN SEE IT.
+        #   Computed after the loop it was a report to nobody — the identical defect
+        #   `uncreated-declaration` had this morning, and the twelfth instance today of a
+        #   finding that is correct and unreachable. The model already knows a clone creates
+        #   (probed 3/3); it only needs telling that it counted the creation twice.
+        dups = gate4.duplicate_creations(ops, settled_table, board)
+        return (fixed, settled_table, notes,
+                gate3.check(ops, settled_table, board, world), dups)
 
     operations = pass2.operations_for(request, rows, board, model=model, timeout=timeout)
-    rows, table, ling, illegal = evaluate(operations)
+    # ⇒⇒ R2 — A THING DEPENDED ON AND NEVER BROUGHT ABOUT IS SUPPLIED BY ARITHMETIC, NOT ASKED
+    #   FOR AGAIN. It runs BEFORE `evaluate`, so gate 3 and the linguistics gate judge the
+    #   COMPLETED program: a step that only exists because the manifest requires it is still a
+    #   step, and hiding it from the gates would be exempting it from the rules.
+    #   ⇒ NO MODEL CALL. The determiner said NEW and the manifest says how a network is made.
+    operations = pass2.derive_creators(operations, pass2.symbol_table(rows, board), board)
+    # ⇒ AND THE ORDER IS ARITHMETIC TOO. An establisher that runs after its dependent has not
+    #   run at all; which step precedes which is a fact about the table, not a judgement.
+    # ⇒ A CREATION THE MODEL SPLIT IN TWO IS REJOINED FIRST — the clone's product became its
+    #   own step because the sentence wraps back on itself. Before the other assembly steps,
+    #   so they see one operation rather than two halves.
+    operations = pass2.merge_split_creation(
+        operations, pass2.symbol_table(rows, board), request, board)
+    operations = pass2.normalise_creator_args(operations, pass2.symbol_table(rows, board), board)
+    # ⇒ AND A ROW MADE TWICE KEEPS THE MAKER THE REQUEST NAMES. The model was told three ways
+    #   and would not drop the spare, and a caught error it will not act on is ours to fix.
+    operations = pass2.drop_redundant_creators(
+        operations, pass2.symbol_table(rows, board), request, board)
+    operations = pass2.order_by_dependency(operations, pass2.symbol_table(rows, board), board)
+    rows, table, ling, illegal, dups = evaluate(operations)
 
     # ⇒⇒ THE RETRY. A BOUNCE MEANS THE MODEL'S OWN MISS, SO THE MODEL GETS ANOTHER GO.
     #
@@ -128,7 +245,28 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
         return ([repr(b) for b in bad_steps if b.rule not in ANSWERABLE]
                 + [repr(n) for n in notes if n.audience == "model"])
 
+    # ⇒⇒ A FINDING THAT ASKS FOR A STEP TO BE **ADDED** CANNOT TRAVEL IN THE REJECTION LIST.
+    #
+    #   Measured on rung 8: `core` and `dmz` are both used and neither supplied. Both were
+    #   reported, and the retry added `create_network(core)` and never `dmz` — identical at
+    #   `--retries 1`, `2` and `3`. The missing step was being handed over under a heading that
+    #   reads *"cannot be used"*, i.e. the opposite instruction.
+    #
+    #   ⇒ THE SPLIT IS BY WHAT THE FINDING ASKS FOR, not by which gate raised it. `wants_a_step`
+    #     goes to the payload's `needed` section; everything else stays a rejection.
+    WANTS_A_STEP = frozenset({"unestablished-referent"})
+
+    def _split(bad_steps, notes, dups=()):
+        add = [repr(b) for b in bad_steps if b.rule in WANTS_A_STEP]
+        drop = ([repr(b) for b in bad_steps
+                 if b.rule not in ANSWERABLE and b.rule not in WANTS_A_STEP]
+                + [repr(n) for n in notes if n.audience == "model"]
+                # a duplicate asks for a step to be REMOVED, so it travels as a rejection
+                + list(dups or ()))
+        return drop, add
+
     rejected: List[str] = []
+    needed: List[str] = []
     for _round in range(max(0, retries)):
         # ⇒ NOT WHILE SOMETHING THE OPERATOR MUST ANSWER IS STILL OPEN. Rung 9's `add_label` is
         #   genuinely unwarranted and genuinely retryable — but what BLOCKS that rung is *what
@@ -136,23 +274,39 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
         #   to invite the guess the kindless row exists to prevent.
         # ⇒ GATE 2 OWNS THE UNSETTLED KIND NOW, so the guard reads gate 2's findings
         #   rather than a duplicate gate 3 was emitting. Same rule, one owner.
-        if any(f.kind == 'kind-not-settled' for f in early['findings']):
+        if any(f.kind in gates12.UNSETTLED_KIND for f in early['findings']):
             break
-        retryable = _faults(illegal, ling)
+        retryable = _faults(illegal, ling) + list(dups)
         if not retryable or not operations:
             break
-        rejected = sorted(set(retryable) | set(rejected))
+        drop_now, add_now = _split(illegal, ling, dups)
+        rejected = sorted(set(drop_now) | set(rejected))
+        needed = sorted(set(add_now) | set(needed))
         again = pass2.operations_for(request, rows, board, model=model, timeout=timeout,
-                                     rejected=rejected)
+                                     rejected=rejected, needed=needed)
         if not again:
             break
-        fresh_rows, fresh_table, fresh_ling, fresh = evaluate(again)
+        # ⇒⇒ THE RETRY GETS THE SAME TREATMENT AS THE FIRST PASS, AND IT DID NOT UNTIL NOW.
+        #   `derive_creators` and `order_by_dependency` ran only on the first answer, so a
+        #   retry's output was judged against rules its own steps had never been put through —
+        #   which is how rung 8 came back with `create_network(dmz)` sitting AFTER the step
+        #   that needs it. Two paths to the same gates must be prepared the same way.
+        _tbl = pass2.symbol_table(rows, board)
+        again = pass2.merge_split_creation(again, _tbl, request, board)
+        again = pass2.order_by_dependency(
+            pass2.drop_redundant_creators(
+                pass2.normalise_creator_args(
+                    pass2.derive_creators(again, _tbl, board), _tbl, board),
+                _tbl, request, board), _tbl, board)
+        fresh_rows, fresh_table, fresh_ling, fresh, fresh_dups = evaluate(again)
         # ⇒ KEEP THE BETTER ANSWER, NEVER THE LATER ONE. A retry that produces MORE illegal
         #   steps is a regression, and taking it because it came second would be the repair
         #   loop making things worse while looking busy.
-        if len(_faults(fresh, fresh_ling)) >= len(_faults(illegal, ling)):
+        if (len(_faults(fresh, fresh_ling)) + len(fresh_dups)
+                >= len(_faults(illegal, ling)) + len(dups)):
             break
-        operations, rows, table, ling, illegal = again, fresh_rows, fresh_table, fresh_ling, fresh
+        operations, rows, table, ling, illegal, dups = (
+            again, fresh_rows, fresh_table, fresh_ling, fresh, fresh_dups)
     # ⇒⇒ A WORD MAY BE ACCOUNTED FOR BY AN OPERATION, NOT ONLY BY A DECLARATION.
     #
     #   Gate 1's leftover rule was written when declarations were all there was, so it asks
@@ -211,6 +365,12 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     tiers = sort_out(suggested, operations, table, board)
     purged = [v.op for v in tiers[CANCEROUS]]
     suggested = [v.op for v in tiers[GOOD] + tiers[RISKY]]
+    # ⇒⇒ THE GOAL STANDS IN FOR THE STEPS IT GOVERNS — see `_governed`. This happens AFTER the
+    #   housekeeping tiering so a suggestion is judged on the program as pass 2 wrote it, and
+    #   BEFORE gate 3 and gate 4 so neither reports on steps that are no longer proposed.
+    #   A `delete_vm` that the goal replaced must not raise a destructive confirmation: the
+    #   scaffold is not asking to delete anything, it is asking for a count to hold.
+    operations, replaced = _governed(operations, table)
     illegal = gate3.check(operations, table, board, world)
 
     spent = {str(op.value).strip().lower() for op in operations + suggested if op.value}
@@ -254,15 +414,29 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     for bad in illegal:
         (asks if bad.rule in ANSWERABLE else bounces).append(repr(bad))
     asks += gate4.confirmations(operations, table, request, board)
+    # ⇒ AND A SET WHOSE EXCLUSION THE ENGINE COULD NOT EXPRESS IS NOT VIABLE. The declaration
+    #   is only worth making if something downstream can honour it; asked of the IR's own
+    #   validator so this cannot drift from what the engine actually accepts.
+    bounces += gate4.unhonourable_exclusions(table, board)
+    # ⇒ AND A ROW MADE TWICE IS THE SCAFFOLD CONTRADICTING ITSELF. The model's miss — the
+    #   request names one creator — so it bounces and the retry drops the spare.
+    bounces += list(dups)
+    # ⇒ AND A GOAL NOTHING COULD CLOSE IS THE OPERATOR'S TO HEAR. `derive` answers in three
+    #   values — already true, reachable, or nothing-can — and only the third is a question.
+    asks += gate4.unreachable_goals(goals, world, board)
+    # ⇒ AND A GOAL THAT CLOSES BY REMOVING THINGS IS CONFIRMED, exactly as a destructive STEP
+    #   is. The goal replacing the steps must not also replace the guard over them.
+    asks += gate4.destructive_goals(goals, world, board)
     # ⇒ GATE 1's OTHER HALF, which needs both artifacts: nothing declared may go unused.
-    bounces += [f.says for f in gates12.completeness(rows, operations, table, board)]
+    bounces += [f.says for f in gates12.completeness(rows, operations, table, board,
+                                                    goals=goals)]
 
     declared = {row.name: dict(row.where) for row in rows}
     conditions = flatten(conditions_after(declared, _aimed(operations, table), board))
 
     return Run(request, rows, table, operations, conditions,
-               asks, bounces, illegal, suggested, ling,
-               _verdict(operations, illegal, asks, bounces))
+               asks, bounces, illegal, suggested, ling, list(goals),
+               _verdict(operations, illegal, asks, bounces, goals))
 
 
 def _aimed(operations: List[Operation], table) -> List[Operation]:
@@ -279,7 +453,7 @@ def _aimed(operations: List[Operation], table) -> List[Operation]:
 
 
 def _verdict(operations: List[Operation], illegal: List[gate3.Illegal],
-             asks: List[str], bounces: List[str]) -> str:
+             asks: List[str], bounces: List[str], goals: List[dict] = ()) -> str:
     """REFUSE > BOUNCE > ASK > SERVE — and see the module note for why that order."""
     if operations and len(illegal) == len(operations):
         # ⇒ EVERY step illegal. If ANY of them is a question the operator could answer, this
@@ -287,7 +461,19 @@ def _verdict(operations: List[Operation], illegal: List[gate3.Illegal],
         #   this case, and it changes verdict when a lab is attached.
         if not any(bad.rule in ANSWERABLE for bad in illegal):
             return REFUSE
-    if not operations:
+    # ⇒⇒ A SCAFFOLD WITH A GOAL AND NO STEPS IS NOT EMPTY. *"make sure there are exactly two
+    #   machines left"* proposes a STATE; the steps that close it are the engine's to write, so
+    #   an empty operation list is the correct shape rather than a failure to produce one.
+    # ⇒⇒ **AND AN EMPTY PROGRAM WITH OPEN QUESTIONS IS AN ASK, NOT A REFUSAL.** REFUSE is
+    #   defined at the top of this file as *nothing legal remains AND NO ANSWER WOULD CHANGE
+    #   THAT*. The branch above already honours it — *"if ANY of them is a question the operator
+    #   could answer, this is not a refusal yet"* — and this branch never did.
+    #
+    #   Measured 2026-08-11: rung 9 came back with no operations at all (pass 2 emitted none)
+    #   and three open questions — *what is `n1`?* — and was REFUSED 3/3. An answer to any one
+    #   of them changes the whole reading, which is the definition of not-a-refusal.
+    #   ⇒ THE SAME RULE, WRITTEN IN TWO PLACES, AGREEING IN ONE OF THEM. Ninth time today.
+    if not operations and not goals and not asks:
         return REFUSE
     if bounces:
         return BOUNCE
