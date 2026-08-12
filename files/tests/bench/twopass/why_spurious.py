@@ -83,7 +83,7 @@ import argparse
 from collections import Counter
 from typing import Dict, List
 
-from .condition_probe import TABLES, _schema_a, _table_text, operators
+from tests.bench.twopass.condition_probe import TABLES, _schema_a, _table_text, operators
 
 CONTROL = "alpha"
 

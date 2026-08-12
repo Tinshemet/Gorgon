@@ -1,8 +1,8 @@
 """ITEM 3 — RUN PASS ONE AGAINST THE MODEL. The first real number for the new design.
 
-    PYTHONPATH=. python3 -m tests.bench.twopass.pass1            # all 14 rungs
-    PYTHONPATH=. python3 -m tests.bench.twopass.pass1 --only 11
-    PYTHONPATH=. python3 -m tests.bench.twopass.pass1 --runs 3
+    PYTHONPATH=. python3 -m orchestrator.seam.pass1            # all 14 rungs
+    PYTHONPATH=. python3 -m orchestrator.seam.pass1 --only 11
+    PYTHONPATH=. python3 -m orchestrator.seam.pass1 --runs 3
 
 Item 2 built the schema and the suite owns it. This is the first time those four questions
 meet a model.
@@ -101,11 +101,10 @@ It is NOT extraction. Names come back 14/14 in both arms. The failures are:
 ⇒ SO THE OPEN QUESTION IS NOT "can it name things" — IT CAN. It is **how to stop it naming
   things that are not things**, which is a different problem from anything item 1 tested.
 """
-import argparse
 from collections import Counter
 from typing import Dict, List, NamedTuple, Optional
 
-from ..formula.legal import Board
+from planner.formula.legal import Board
 from . import schema as S
 
 
@@ -133,8 +132,18 @@ def _conditions_from_goals(rung: int) -> List[Dict[str, object]]:
       a hand-written key drifts into. Deriving it removes the judgement: whatever the correct
       reading filters on is what pass 1 must find.
     """
-    from tests.bench.formula.slots import reduce as _reduce
-    from tests.test_ghost_writer import GOALS
+    from planner.formula.slots import reduce as _reduce
+    # ⇒⇒ **THE CORPUS IS THE BENCH'S AND THIS MODULE IS PRODUCTION'S — so the import is GUARDED,
+    #   exactly as `rig.staged_seams` guards its own reach into the bench.** Moving this package
+    #   out of `tests/` on 2026-08-13 made the coupling visible for the first time: `EXPECTED` is
+    #   the RUNG CORPUS, and it had been living inside a production module because production and
+    #   bench shared a directory. A sparse checkout, a shipped install, or anyone running without
+    #   the test tree gets an EMPTY expectation table rather than an ImportError — the corpus is
+    #   what GRADES pass 1, never what pass 1 needs to run.
+    try:
+        from tests.test_ghost_writer import GOALS
+    except Exception:
+        return []
     out: List[Dict[str, object]] = []
     for goal in GOALS.get(rung, []):
         where = _reduce(goal).filled.get("filter") or {}
@@ -1235,83 +1244,3 @@ def grade(rows: List[S.Declared], want: Expect) -> Dict[str, object]:
         "residual_ok": any(r.residual for r in rows) == want.residual,
         "new": sum(1 for r in rows if r.existence == S.NEW),
     }
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--only", type=int, default=None)
-    ap.add_argument("--runs", type=int, default=1)
-    ap.add_argument("--model", default=None)
-    ap.add_argument("--paired", action="store_true",
-                    help="ask NAME and TYPE together — the cascade fix (REJECTED, kept for A/B)")
-    ap.add_argument("--scanned", action="store_true",
-                    help="ANCHOR-AND-SCAN: the model points, the code reads, the world decides")
-    ap.add_argument("--forced-conditions", action="store_true",
-                    help="ask ALL-or-SOME first — MEASURED WORSE (32 invented against 16) "
-                         "because committing to SOME leaves no way to decline afterwards")
-    ap.add_argument("--no-expand", action="store_true",
-                    help="do NOT repair chunked names from the request")
-    ap.add_argument("--no-fold", action="store_true",
-                    help="do NOT fold repeated mentions — the pre-fold baseline")
-    args = ap.parse_args()
-
-    board = Board()
-    tally: Counter = Counter()
-    print("=" * 104)
-    print(f"ITEM 3 · PASS ONE AGAINST THE MODEL — "
-          f"{'ANCHOR-AND-SCAN' if args.scanned else ('PAIRED name+type' if args.paired else 'separate questions')}"
-          f"{'' if args.no_expand else ' + EXPAND'}"
-          f"{'' if args.no_fold else ' + FOLD'}, "
-          f"graded on structure, never on names")
-    print("=" * 104)
-
-    for n, want in sorted(EXPECTED.items()):
-        if args.only and n != args.only:
-            continue
-        print(f"\n{'─' * 104}\nrung {n} · “{want.request[:88]}”")
-        print(f"    want   names {want.identities}   conditions {want.conditions}   "
-              f"sets>={want.sets}   residual={want.residual}   rows {want.rows}")
-        for i in range(args.runs):
-            trace: List = []
-            rows = (run_scanned(want.request, board=board, model=args.model, trace=trace)
-                    if args.scanned else
-                    run_pass1(want.request, board=board, model=args.model, trace=trace,
-                              paired=args.paired, fold=not args.no_fold,
-                              expand_names=not args.no_expand,
-                              forced=args.forced_conditions))
-            g = grade(rows, want)
-            for row in rows:
-                mark = "  ⇐ RESIDUAL" if row.residual else ""
-                where = ", ".join(f"{k}={v}" for k, v in row.where.items()) or "—"
-                print(f"      {row.name[:28]:<30} {row.object_type:<14} {where:<26} "
-                      f"{row.existence}{mark}")
-            print(f"    run {i + 1}  names {g['identities']}  conditions {g['conditions']}  "
-                  f"invented {g['invented']}  sets {g['sets']}  residual {g['residual']}  "
-                  f"rows {g['rows']} (want {want.rows})  folded {g['folded']}")
-            tally["identities_ok"] += g["identities_ok"]
-            tally["folded"] += g["folded"]
-            tally["extra_rows"] += max(0, g["extra_rows"])
-            tally["conditions_ok"] += g["conditions_ok"]
-            tally["sets_ok"] += g["sets_ok"]
-            tally["residual_ok"] += g["residual_ok"]
-            tally["invented"] += g["invented"]
-            tally["new"] += g["new"]
-            tally["cells"] += 1
-
-    c = max(tally["cells"], 1)
-    print(f"\n{'=' * 104}")
-    print(f"  cells                    {tally['cells']}")
-    print(f"  named things found       {tally['identities_ok']}/{c}")
-    print(f"  SURPLUS rows declared    {tally['extra_rows']}    (over-declaration)")
-    print(f"  mentions FOLDED as refs  {tally['folded']}    (repeat mentions recognised)")
-    print(f"  every condition found    {tally['conditions_ok']}/{c}")
-    print(f"  groups declared as sets  {tally['sets_ok']}/{c}")
-    print(f"  residual correct         {tally['residual_ok']}/{c}   "
-          f"⇐ rung 11 is the only one that can score TRUE here")
-    print(f"  conditions invented      {tally['invented']}    (P4 said under- beats over-fill)")
-    print(f"  rows called NEW          {tally['new']}    (P5: near-zero means MY enum "
-          f"ordering backfired)")
-
-
-if __name__ == "__main__":
-    main()

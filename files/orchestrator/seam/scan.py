@@ -40,7 +40,7 @@ NOUNS are the manifest's own, so a kind added tomorrow is scanned for without an
 import re
 from typing import Dict, List, NamedTuple, Optional
 
-from ..formula.legal import Board
+from planner.formula.legal import Board
 
 # ⇒ THE COMPARATOR IS PART OF THE ENUMERATOR REGION, and it is the `(eq, 3)` the program needs.
 #   Longest first, so "no more than" wins over "no".

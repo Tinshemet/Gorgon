@@ -37,7 +37,7 @@ that could throw the answer away (see the harvest note in `pipeline.py`).
 """
 from typing import List, NamedTuple, Optional, Tuple
 
-from ..formula.legal import Board
+from planner.formula.legal import Board
 from . import gate3
 from .effects import Operation
 

@@ -35,7 +35,7 @@ this file, and everything it settled arrives here as a DECISION rather than a gu
 """
 from typing import Dict, List, NamedTuple, Optional
 
-from ..formula.legal import Board
+from planner.formula.legal import Board
 
 PLAN_TIME = "at plan time"
 RUN_TIME = "at run time"

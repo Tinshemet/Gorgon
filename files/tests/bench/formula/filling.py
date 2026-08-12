@@ -57,11 +57,11 @@ import argparse
 import json
 from typing import Dict, List, Optional
 
-from .fold import fold
-from .holdout import HELD_OUT
-from .legal import Board
-from .pipeline import Outcome, run, show
-from .slots import Move
+from planner.formula.fold import fold
+from planner.formula.holdout import HELD_OUT
+from planner.formula.legal import Board
+from planner.formula.pipeline import Outcome, run, show
+from planner.formula.slots import Move
 
 _PROMPT = """You are filling in a form about one sentence. Answer only what the sentence says.
 

@@ -132,7 +132,14 @@ def test_production_does_not_import_the_test_tree():
     #   somebody edits the lines above it, and rots SILENTLY, which is the whole failure mode
     #   this test exists to prevent.
     allowed = {"engines/rig.py -> tests.bench.sim_world",
-               "engines/rig.py -> tests.bench.tree_probe"}
+               "engines/rig.py -> tests.bench.tree_probe",
+               # ⇒ THE RUNG CORPUS, WHICH GRADES pass 1 AND IS NOT NEEDED TO RUN IT. Exposed on
+               #   2026-08-13 when the seam moved out of `tests/`: `EXPECTED` had been living in
+               #   a production module because production and bench shared a directory. The
+               #   import is GUARDED — a checkout without the test tree gets an empty expectation
+               #   table, never an ImportError — and it is listed here rather than merely guarded
+               #   because a silent reach into the test tree is what this check exists to find.
+               "orchestrator/seam/pass1.py -> tests.test_ghost_writer"}
     stray = sorted(set(offenders) - allowed)
     check(f"nothing shipped imports tests/ except the staged-lowering seam ({stray or 'none'})",
           not stray)

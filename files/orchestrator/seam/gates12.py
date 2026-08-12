@@ -28,7 +28,7 @@ where pass 1's 85% existence answer gets checked rather than trusted.
 """
 from typing import Dict, List, NamedTuple, Optional
 
-from ..formula.legal import Board
+from planner.formula.legal import Board
 from . import schema as S
 
 

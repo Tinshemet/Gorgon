@@ -38,7 +38,7 @@ operation says what to remove, and no gate compared the two.
 """
 from typing import List, Optional
 
-from ..formula.legal import Board
+from planner.formula.legal import Board
 from .effects import Operation
 
 # ⇒ THE COMPLETE SET OF ENGLISH RECIPROCAL PRONOUNS. Two of them, and there is no third —

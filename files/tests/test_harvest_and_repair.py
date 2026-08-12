@@ -11,11 +11,11 @@ inline block inside `pipeline.run`.
 ⇒ EACH CASE BELOW IS A DEFECT THAT REACHED THE SUITE, not an invented scenario. The names say
   which, so a future failure points at the day's finding rather than at an abstraction.
 """
-from tests.bench.formula.legal import Board
-from tests.bench.twopass import gate3, pass1, pass2, repair as R
-from tests.bench.twopass.effects import Operation
+from planner.formula.legal import Board
+from orchestrator.seam import gate3, pass1, pass2, repair as R
+from orchestrator.seam.effects import Operation
 from tests.bench.twopass.metrics import Lab
-from tests.bench.twopass.pipeline import harvest
+from orchestrator.seam.pipeline import harvest
 
 _FAIL = 0
 
@@ -167,9 +167,9 @@ def test_a_banned_tool_refuses_the_whole_program():
       tool is a confirmation and confirmations already live in gate 4; this answers the ban.
     """
     print("\n[redline] a program that names a banned tool may not run at all")
-    from tests.bench.twopass import pipeline as PL
+    from orchestrator.seam import pipeline as PL
     from tests.bench.twopass.metrics import Lab
-    from tests.bench.twopass.gate4 import forbidden_tools
+    from orchestrator.seam.gate4 import forbidden_tools
 
     ops = [_op("create_vm", "alpha"), _op("delete_vm", "alpha")]
     check("with no contract, nothing is forbidden — the degraded arm",
@@ -200,7 +200,7 @@ def test_the_red_line_check_cannot_fail_silently():
 
 def test_a_banned_program_refuses_end_to_end():
     print("\n[redline] and the chain returns REFUSE rather than SERVE")
-    from tests.bench.twopass import pipeline as PL
+    from orchestrator.seam import pipeline as PL
     from tests.bench.twopass.metrics import Lab
     import tests.test_twopass_schema as T
     channel, was = T._canned([("create_vm", "alpha", None)])
@@ -229,7 +229,7 @@ def test_the_seam_consults_the_contract_without_being_asked():
       It fails the moment the seam stops asking the contract on its own.
     """
     print("\n[redline] the barrier is fed by default, not only when a caller remembers")
-    from tests.bench.twopass import pipeline as PL
+    from orchestrator.seam import pipeline as PL
     from tests.bench.twopass.metrics import Lab
     import tests.test_twopass_schema as T
 

@@ -15,7 +15,7 @@ import json
 import urllib.request
 from typing import Dict, List
 
-from ..formula.legal import Board
+from planner.formula.legal import Board
 
 RUNGS = (4, 13, 11, 5)
 
@@ -23,7 +23,7 @@ RUNGS = (4, 13, 11, 5)
 def payload_for(rung: int, board: Board, order: str = "pinned", filtered: bool = False):
     """The exact question pass 2 asks, for one rung."""
     import engines.channel as channel
-    from . import pass1, pass2
+    from orchestrator.seam import pass1, pass2
     was, channel.constrained = channel.constrained, lambda *a, **k: {}
     try:
         rows = pass1.run_scanned(pass1.EXPECTED[rung].request, board=board)

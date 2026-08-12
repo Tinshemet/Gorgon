@@ -39,7 +39,7 @@ stage as a whole is allowed to settle.
 """
 from typing import Dict, List, NamedTuple, Optional, Tuple
 
-from ..formula.legal import Board
+from planner.formula.legal import Board
 from . import schema as S
 from .effects import Operation
 

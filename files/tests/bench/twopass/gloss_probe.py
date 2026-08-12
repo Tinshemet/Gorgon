@@ -68,7 +68,7 @@ GAP between them rather than whether it nudges one number.
 import argparse
 from typing import List, Tuple
 
-from .intent_probe import CASES, MAKE, REFER
+from tests.bench.twopass.intent_probe import CASES, MAKE, REFER
 
 BARE = ("Read the request. For the thing named, answer {a!r} if the request asks you to "
         "bring it into existence, or {b!r} if the request talks about one that already "

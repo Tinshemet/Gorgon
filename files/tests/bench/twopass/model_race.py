@@ -13,10 +13,10 @@ import argparse
 import json
 from typing import Dict, List, Tuple
 
-from ..formula.legal import Board
-from .effects import Operation
-from .housekeeping import BENIGN, CANCEROUS, GOOD, RISKY, classify
-from .token_probe import call, payload_for
+from planner.formula.legal import Board
+from orchestrator.seam.effects import Operation
+from orchestrator.seam.housekeeping import BENIGN, CANCEROUS, GOOD, RISKY, classify
+from tests.bench.twopass.token_probe import call, payload_for
 
 # the steps the request actually asks for, as (operator, target)
 REQUIRED: Dict[int, List[Tuple[str, str]]] = {
@@ -43,7 +43,7 @@ def main() -> None:
     board = Board()
     models = [m.strip() for m in args.models.split(",") if m.strip()]
 
-    from . import pass1, pass2
+    from orchestrator.seam import pass1, pass2
     import engines.channel as channel
 
     scores: Dict[str, Dict] = {}

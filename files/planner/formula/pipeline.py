@@ -1,6 +1,6 @@
 """THE FULL PIPELINE, MOCKED END TO END — request in, program out, nothing authored.
 
-    PYTHONPATH=. python3 -m tests.bench.formula.pipeline
+    PYTHONPATH=. python3 -m planner.formula.pipeline
 
 The operator's pipeline, with the formula in the seat the translator used to hold:
 

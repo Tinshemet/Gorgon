@@ -1,7 +1,7 @@
 """PASS TWO — WHAT HAS TO BE DONE. One question, three closed fields, over pass 1's own rows.
 
-    PYTHONPATH=. python3 -m tests.bench.twopass.pass2 --runs 3
-    PYTHONPATH=. python3 -m tests.bench.twopass.pass2 --only 11 --handles span
+    PYTHONPATH=. python3 -m orchestrator.seam.pass2 --runs 3
+    PYTHONPATH=. python3 -m orchestrator.seam.pass2 --only 11 --handles span
 
 # WHAT IS ALREADY PROVEN, AND WHAT IS NOT
 
@@ -55,12 +55,11 @@ So the order is declared here and pinned by a test, the same treatment `types_of
 #     bias; it does not fix a general defect. IF YOU CHANGE THE MODEL, re-measure the knobs or
 #     run `--order alpha` and accept the unfitted ceiling. Do not assume this transfers.
 
-import argparse
 import re
 from collections import Counter
 from typing import Dict, List, NamedTuple, Optional
 
-from ..formula.legal import Board
+from planner.formula.legal import Board
 from . import schema as S
 from .effects import Operation
 
@@ -868,55 +867,3 @@ def grade(got: List[Operation], want: List[tuple]) -> str:
     if sorted(steps, key=str) == sorted(want, key=str):
         return "SET-EQUAL"
     return f"{len(set(steps) & set(want))}/{len(want)} steps"
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--runs", type=int, default=3, help="rule V3 — never diagnose from n=1")
-    ap.add_argument("--only", type=int, default=None)
-    ap.add_argument("--model", default=None)
-    ap.add_argument("--handles", default="derived", choices=("derived", "span"),
-                    help="`span` offers pass 1's raw span as the enum member — the thing the "
-                         "original probe never tested")
-    args = ap.parse_args()
-
-    from . import pass1
-    from .metrics import Lab
-    board = Board()
-    tally: Counter = Counter()
-    print("=" * 100)
-    print(f"PASS 2 · WHAT HAS TO BE DONE — handles={args.handles}, n={args.runs}")
-    print("=" * 100)
-
-    for n, want in sorted(pass1.EXPECTED.items()):
-        if args.only and n != args.only:
-            continue
-        rows = pass1.settle_with_world(
-            pass1.run_scanned(want.request, board=board, model=args.model), Lab(), board)
-        table = symbol_table(rows, board, args.handles)
-        print(f"\n{'─' * 100}\nrung {n} · “{want.request[:78]}”")
-        for sym in table:
-            print(f"    {sym.handle:<18} {sym.row.object_type:<10} {sym.definition:<40} "
-                  f"{sym.settled}")
-        expected = WANT.get(n)
-        print(f"    WANT  {expected if expected else '— not keyed, reported only'}")
-        for i in range(args.runs):
-            got = operations_for(want.request, rows, board, model=args.model,
-                                 handles=args.handles)
-            steps = [(o.operator, o.on, o.value) for o in got]
-            if expected is None:
-                print(f"    run {i + 1}  {steps}")
-                continue
-            verdict = grade(got, expected)
-            tally[verdict.split("/")[0] if "/" in verdict else verdict] += 1
-            tally["cells"] += 1
-            print(f"    run {i + 1}  {verdict:<12} {steps}")
-
-    print(f"\n{'=' * 100}")
-    for verdict, count in sorted(tally.items()):
-        if verdict != "cells":
-            print(f"    {verdict:<12} {count}/{tally['cells']}")
-
-
-if __name__ == "__main__":
-    main()

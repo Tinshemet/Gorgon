@@ -14,8 +14,8 @@ were no answers to keep.
 """
 import engines.channel as channel
 
-from tests.bench.formula.legal import Board
-from tests.bench.twopass import asking, pass1, pass2, pipeline as PL
+from planner.formula.legal import Board
+from orchestrator.seam import asking, pass1, pass2, pipeline as PL
 from tests.bench.twopass.metrics import Lab
 
 _FAIL = 0

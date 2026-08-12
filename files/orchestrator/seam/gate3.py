@@ -44,7 +44,7 @@ is the thing three attempts at asking the model could not produce.
 """
 from typing import Dict, List, NamedTuple, Optional
 
-from ..formula.legal import Board
+from planner.formula.legal import Board
 from . import schema as S
 from .effects import Operation
 

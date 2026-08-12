@@ -48,9 +48,9 @@ import argparse
 from collections import Counter
 from typing import Dict, List, Optional
 
-from ..formula.legal import Board
-from . import schema as S
-from .pass1 import EXPECTED, grade
+from planner.formula.legal import Board
+from orchestrator.seam import schema as S
+from orchestrator.seam.pass1 import EXPECTED, grade
 
 # ONE QUESTION PER KIND. The kind is named in the question, so the answer cannot be a verb.
 COUNT_Q = (

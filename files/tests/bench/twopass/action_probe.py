@@ -80,8 +80,8 @@ import argparse
 from collections import Counter
 from typing import List, Tuple
 
-from .condition_probe import operators
-from .intent_probe import CASES, MAKE, REFER
+from tests.bench.twopass.condition_probe import operators
+from tests.bench.twopass.intent_probe import CASES, MAKE, REFER
 
 # roles a thing can play that are NOT an operation performed on it. Declared here rather than
 # derived because the manifest describes what can be DONE, not what can be REFERRED TO.

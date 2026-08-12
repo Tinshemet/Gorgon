@@ -14,9 +14,10 @@
 """
 from typing import Dict, List
 
-from ..formula.legal import Board
-from . import gates12, pass1, residue
-from .effects import Operation, conditions_after, flatten
+from planner.formula.legal import Board
+from orchestrator.seam import gates12, pass1
+from orchestrator.seam import residue
+from orchestrator.seam.effects import Operation, conditions_after, flatten
 
 # THE OPERATIONS, KEYED TO THE ROW NAMES PASS 1 ACTUALLY EMITS. Anything not listed runs with
 # no operations at all, which is correct — those rungs assert their conditions outright.

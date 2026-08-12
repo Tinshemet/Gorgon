@@ -112,6 +112,14 @@ _ALLOWED_LAZY = {
     # edge that should stay uncomfortable to look at.
     ("engines",  "engines/rig.py",           "tests.bench.sim_world"),
     ("engines",  "engines/rig.py",           "tests.bench.tree_probe"),
+    # THE RUNG CORPUS, WHICH GRADES pass 1 AND IS NOT NEEDED TO RUN IT. `EXPECTED` carries the
+    # fourteen requests and their correct readings, and it derives its condition key from
+    # `tests.test_ghost_writer.GOALS` — the readings this project calls correct. Guarded, so a
+    # checkout without the test tree gets an empty expectation table rather than an ImportError.
+    # ⇒ IT IS THE LAST PRODUCTION -> tests/ EDGE IN THE FRONT SEAM and it is a KNOWN DEBT, not a
+    #   design: the corpus belongs in the bench with the runners that read it, and the reason it
+    #   is still here is 44 call sites, not an argument. Filed on the open list.
+    ("orchestrator", "orchestrator/seam/pass1.py", "tests.test_ghost_writer"),
 }
 
 _PACKAGES = ("planner", "packages", "engines", "orchestrator")

@@ -51,9 +51,9 @@ Same word, three positions, three verdicts, and nothing ever asks what `grubnash
 import re
 from typing import Dict, List, NamedTuple, Optional, Tuple
 
-from ..formula.legal import Board
-from . import pass1, schema as S
-from .scan import (COMPARATORS, GRAMMAR, LINKING, NAMING_CUES, _operation_words, _stem, scan)
+from planner.formula.legal import Board
+from orchestrator.seam import pass1, schema as S
+from orchestrator.seam.scan import (COMPARATORS, GRAMMAR, LINKING, NAMING_CUES, _operation_words, _stem, scan)
 
 BOUNCE, ASK, RELATIONAL, REJECT = "BOUNCE", "ASK", "RELATIONAL", "REJECT"
 
@@ -357,46 +357,3 @@ def report(rows: List[S.Declared], request: str, board: Optional[Board] = None,
 #   the operator's question, so this was a second place phrasing the same thing and NOTHING
 #   CALLED IT — the dominant defect class in this project, produced again inside a file arguing
 #   for care. Grepping for callers is what caught it (rule W1).
-
-
-def score_heldout(cases, board: Optional[Board] = None, world=None) -> Dict[str, object]:
-    """Grade the SEALED set. Expectations live in `heldout.py` and are not read from here."""
-    import engines.channel as channel
-    was, channel.constrained = channel.constrained, lambda *a, **k: {}
-    board = board or Board()
-    try:
-        exact = silent_ok = 0
-        false_alarms: List[str] = []
-        missed: List[str] = []
-        wrong: List[str] = []
-        print(f"{'case':<5} {'verdict':<38} {'':<3} request")
-        print("─" * 104)
-        for case in cases:
-            rows = pass1.run_scanned(case.request, board=board)
-            got = {r.word: r.verdict for r in report(rows, case.request, board, world)}
-            ok = got == case.expect
-            exact += ok
-            silent_ok += ok and not case.expect
-            for word, verdict in got.items():
-                if word not in case.expect:
-                    false_alarms.append(f"{case.tag} {word!r} -> {verdict}")
-                elif case.expect[word] != verdict:
-                    wrong.append(f"{case.tag} {word!r} -> {verdict}, "
-                                 f"wanted {case.expect[word]}")
-            for word in case.expect:
-                if word not in got:
-                    missed.append(f"{case.tag} {word!r} — wanted {case.expect[word]}, silent")
-            shown = ", ".join(f"{w}:{v}" for w, v in got.items()) or "silent"
-            print(f"{case.tag:<5} {shown[:38]:<38} {'ok ' if ok else 'FAIL'} {case.request[:48]}")
-        total = len(cases)
-        quiet = sum(1 for c in cases if not c.expect)
-        print("=" * 104)
-        print(f"  exact                {exact}/{total}")
-        print(f"  clean stayed silent  {silent_ok}/{quiet}   ⇐ the false-alarm controls")
-        print(f"  FALSE ALARMS         {len(false_alarms)}   {false_alarms}")
-        print(f"  MISSED               {len(missed)}   {missed}")
-        print(f"  WRONG VERDICT        {len(wrong)}   {wrong}")
-        return {"exact": exact, "total": total, "false_alarms": false_alarms,
-                "missed": missed, "wrong": wrong}
-    finally:
-        channel.constrained = was

@@ -32,9 +32,9 @@ from typing import Dict, List
 
 from engines import extract as _extract
 
-from .fold import fold
-from .legal import Board, census
-from .slots import CMP, PRED, SLOTS, build, reduce
+from planner.formula.fold import fold
+from planner.formula.legal import Board, census
+from planner.formula.slots import CMP, PRED, SLOTS, build, reduce
 
 BAR = "─" * 100
 CORPUS = Path("tests/bench/corpus")

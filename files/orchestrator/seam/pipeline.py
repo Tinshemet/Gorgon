@@ -1,7 +1,7 @@
 """THE WHOLE CHAIN, IN ONE PLACE — request in, declarations · operations · a verdict out.
 
-    PYTHONPATH=. python3 -m tests.bench.twopass.pipeline
-    PYTHONPATH=. python3 -m tests.bench.twopass.pipeline --only 11
+    PYTHONPATH=. python3 -m orchestrator.seam.pipeline
+    PYTHONPATH=. python3 -m orchestrator.seam.pipeline --only 11
 
 # ⇒⇒ WHY THIS FILE IS THE ITEM AND NOT A CONVENIENCE
 
@@ -51,10 +51,9 @@ And the rest of the order follows from what each audience costs:
   Everything measured here was measured on llama3.1:8b. A different model needs the
   knobs re-measured, or `--order alpha` and its own unfitted ceiling.
 """
-import argparse
 from typing import Dict, List, NamedTuple, Optional
 
-from ..formula.legal import Board
+from planner.formula.legal import Board
 from . import asking, gate3, gate4, gates12, linguistics, pass1, pass2, repair, schema as S, surface
 from .effects import Operation, conditions_after, flatten
 
@@ -756,54 +755,3 @@ def _verdict(operations: List[Operation], illegal: List[gate3.Illegal],
     if asks:
         return ASK
     return SERVE
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--only", type=int, default=None)
-    ap.add_argument("--model", default=None)
-    ap.add_argument("--retries", type=int, default=1,
-                    help="how many times a BOUNCE is handed back to the model")
-    ap.add_argument("--no-lab", action="store_true",
-                    help="run with no world at all — every bare name stays kindless")
-    args = ap.parse_args()
-
-    from .metrics import Lab
-    board = Board()
-    world = None if args.no_lab else Lab()
-    tally: Dict[str, int] = {}
-
-    print("=" * 100)
-    print(f"THE WHOLE CHAIN{'  ·  NO LAB' if args.no_lab else '  ·  with a lab'}")
-    print("=" * 100)
-
-    for n, want in sorted(pass1.EXPECTED.items()):
-        if args.only and n != args.only:
-            continue
-        got = run(want.request, board=board, world=world, model=args.model,
-                  retries=args.retries)
-        tally[got.outcome] = tally.get(got.outcome, 0) + 1
-        print(f"\n{'─' * 100}\nrung {n} · “{want.request[:74]}”")
-        print(f"    declared   {', '.join(got.handles) or '—'}")
-        print(f"    operations {[(o.operator, o.on, o.value) for o in got.operations] or '—'}")
-        for r in got.repairs:
-            print(f"      REPAIRED {r}")
-        for n in got.notices:
-            print(f"      NOTICE   {n}")
-        if got.suggested:
-            print(f"    SUGGESTED  {[(o.operator, o.on, o.value) for o in got.suggested]}")
-        print(f"    conditions {got.conditions or '—'}")
-        for a in got.asks:
-            print(f"      ASK     {a[:92]}")
-        for b in got.bounces:
-            print(f"      BOUNCE  {b[:92]}")
-        print(f"    ⇒ {got.outcome}")
-
-    print(f"\n{'=' * 100}")
-    for outcome in (SERVE, BOUNCE, ASK, REFUSE):
-        if tally.get(outcome):
-            print(f"    {outcome:<8} {tally[outcome]}")
-
-
-if __name__ == "__main__":
-    main()

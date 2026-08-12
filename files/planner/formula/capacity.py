@@ -1,6 +1,6 @@
 """THE HELD-OUT CAPACITY TEST — twenty requests the formula was not fitted to.
 
-    PYTHONPATH=. python3 -m tests.bench.formula.capacity
+    PYTHONPATH=. python3 -m planner.formula.capacity
 
 The operator: *"the real test for the formula is to get a response it's not familiar with,
 and see it spew the number."*

@@ -16,9 +16,9 @@ from typing import List
 from tests.test_ghost_writer import GOALS
 from tests.bench.rungs import RUNGS
 
-from . import edges as _edges
-from .fold import fold
-from .slots import CMP, PRED, SLOTS, Move, build, reduce
+from planner.formula import edges as _edges
+from planner.formula.fold import fold
+from planner.formula.slots import CMP, PRED, SLOTS, Move, build, reduce
 
 BAR = "─" * 108
 

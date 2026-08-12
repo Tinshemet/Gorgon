@@ -1,6 +1,6 @@
 """WHAT AN OPERATION MAKES TRUE — computed from the manifest, never read out of English.
 
-    PYTHONPATH=. python3 -m tests.bench.twopass.effects
+    PYTHONPATH=. python3 -m orchestrator.seam.effects
 
 # THE QUESTION THIS ANSWERS
 
@@ -34,7 +34,7 @@ being assumed is the half already demonstrated.
 """
 from typing import Dict, List, NamedTuple, Optional, Tuple
 
-from ..formula.legal import Board
+from planner.formula.legal import Board
 
 
 class Operation(NamedTuple):

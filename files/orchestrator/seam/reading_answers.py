@@ -40,7 +40,7 @@ Measured on the spot, against a substring scan over kind names and manifest noun
 """
 from typing import List, Optional, Tuple
 
-from ..formula.legal import Board
+from planner.formula.legal import Board
 
 # ⇒ CLOSED FUNCTION-WORD CLASSES, and that is why they may be written down at all. Negation and
 #   comparison are grammar: finite, stable, and the same for every speaker. A list of NOUNS that

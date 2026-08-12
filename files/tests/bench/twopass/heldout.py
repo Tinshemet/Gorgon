@@ -128,15 +128,67 @@ ALL: List[Case] = (CLEAN + JUNK_DESCRIPTOR + JUNK_OPEN + JUNK_KINDLESS
                    + LOST_CLAUSE + EXISTENCE + RELATIONAL_CASES)
 
 
+# ⇒ THE GRADER LIVES HERE, NOT BESIDE THE CHECK IT GRADES. It sat in `residue.py` until
+#   2026-08-13, when that module moved to `orchestrator/seam/` — and it was the ONE thing in the file
+#   that reached up into `engines.channel` (to silence the model) and printed a scoreboard.
+#   A production module carrying its own bench harness is how the test tree gets shipped; the
+#   docstring already said the expectations live here, so the reading of them does too.
+def score_heldout(cases, board=None, world=None) -> Dict[str, object]:
+    """Grade the SEALED set against `orchestrator.seam.residue`."""
+    import engines.channel as channel
+
+    from planner.formula.legal import Board
+    from orchestrator.seam import pass1
+    from orchestrator.seam.residue import report
+
+    was, channel.constrained = channel.constrained, lambda *a, **k: {}
+    board = board or Board()
+    try:
+        exact = silent_ok = 0
+        false_alarms: List[str] = []
+        missed: List[str] = []
+        wrong: List[str] = []
+        print(f"{'case':<5} {'verdict':<38} {'':<3} request")
+        print("─" * 104)
+        for case in cases:
+            rows = pass1.run_scanned(case.request, board=board)
+            got = {r.word: r.verdict for r in report(rows, case.request, board, world)}
+            ok = got == case.expect
+            exact += ok
+            silent_ok += ok and not case.expect
+            for word, verdict in got.items():
+                if word not in case.expect:
+                    false_alarms.append(f"{case.tag} {word!r} -> {verdict}")
+                elif case.expect[word] != verdict:
+                    wrong.append(f"{case.tag} {word!r} -> {verdict}, "
+                                 f"wanted {case.expect[word]}")
+            for word in case.expect:
+                if word not in got:
+                    missed.append(f"{case.tag} {word!r} — wanted {case.expect[word]}, silent")
+            shown = ", ".join(f"{w}:{v}" for w, v in got.items()) or "silent"
+            print(f"{case.tag:<5} {shown[:38]:<38} {'ok ' if ok else 'FAIL'} {case.request[:48]}")
+        total = len(cases)
+        quiet = sum(1 for c in cases if not c.expect)
+        print("=" * 104)
+        print(f"  exact                {exact}/{total}")
+        print(f"  clean stayed silent  {silent_ok}/{quiet}   ⇐ the false-alarm controls")
+        print(f"  FALSE ALARMS         {len(false_alarms)}   {false_alarms}")
+        print(f"  MISSED               {len(missed)}   {missed}")
+        print(f"  WRONG VERDICT        {len(wrong)}   {wrong}")
+        return {"exact": exact, "total": total, "false_alarms": false_alarms,
+                "missed": missed, "wrong": wrong}
+    finally:
+        channel.constrained = was
+
+
 def main() -> None:
     print(f"{len(ALL)} held-out cases, sealed "
           f"({sum(1 for c in ALL if not c.expect)} of them SILENT)")
     try:
-        from . import residue                      # noqa: F401
+        from orchestrator.seam import residue                      # noqa: F401
     except ImportError:
         print("the check does not exist yet — which is the point of sealing this first")
         return
-    from .residue import score_heldout
     score_heldout(ALL)
 
 

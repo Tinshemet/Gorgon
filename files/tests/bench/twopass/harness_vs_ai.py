@@ -150,7 +150,7 @@ def ask_ai(pair: Pair, reversed_order: bool, model=None):
 
 def run_harness(pair: Pair, board, world, model=None):
     """The whole chain, and what it SAYS about this sentence."""
-    from . import pipeline
+    from orchestrator.seam import pipeline
     got = pipeline.run(pair.request, board=board, world=world, model=model, retries=0)
     rules = sorted({n.rule for n in (got.linguistics or ())})
     return got, rules
@@ -162,7 +162,7 @@ def main() -> None:
     ap.add_argument("--model", default=None)
     args = ap.parse_args()
 
-    from ..formula.legal import Board
+    from planner.formula.legal import Board
     from .metrics import Lab
     board, world = Board(), Lab()
 

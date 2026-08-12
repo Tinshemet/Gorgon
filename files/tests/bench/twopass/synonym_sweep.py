@@ -78,7 +78,7 @@ import argparse
 from collections import Counter
 from typing import Dict, List, Tuple
 
-from .intent_probe import CASES, MAKE, REFER
+from tests.bench.twopass.intent_probe import CASES, MAKE, REFER
 
 # the question, with two holes. NOTHING ELSE CHANGES BETWEEN CELLS.
 TEMPLATE = ("Read the request. For the thing named, answer {a!r} if the request asks you to "
