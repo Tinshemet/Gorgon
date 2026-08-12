@@ -378,6 +378,17 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
                     pass2.derive_creators(again, _tbl, board), _tbl, board),
                 _tbl, request, board), _tbl, board)
         fresh_rows, fresh_table, fresh_ling, fresh, fresh_dups = evaluate(again)
+        # ⇒⇒ **THE RETRY'S ANSWER IS REPAIRED TOO, AND IT WAS NOT UNTIL THE REVIEW OF 08-13.**
+        #
+        #   `repair` ran once, on the first answer, before this loop — so a `wrong-creation-source`
+        #   in a RETRY reached the model instead of the manifest that could settle it. **A rule
+        #   placed on one of two paths**, which is the defect class this project has now recorded
+        #   fourteen times, added by me hours after writing that sentence down. The two paths must
+        #   be prepared the same way, exactly as the note above `merge_split_creation` says.
+        again, more = repair.repair(again, fresh, fresh_table, board)
+        if more:
+            repaired.extend(more)
+            fresh_rows, fresh_table, fresh_ling, fresh, fresh_dups = evaluate(again)
         # ⇒⇒ **HARVEST THE CLEAN STEPS FROM BOTH ROUNDS — DO NOT CHOOSE BETWEEN THE ANSWERS.**
         #
         #   This compared TOTAL fault counts and kept whichever answer scored better, whole.
