@@ -102,7 +102,8 @@ class Model(NamedTuple):
 
 # ── the scaffold, compiled ────────────────────────────────────────────────────────────────
 
-def from_scaffold(operations, declarations, makers=None, sets=None) -> Model:
+def from_scaffold(operations, declarations, makers=None, sets=None,
+                  params=None) -> Model:
     """High-level code points -> computation. PLAIN DATA IN, so nothing imports the seam.
 
     ⇒ **THE INTERFACE IS TUPLES AND DICTS ON PURPOSE.** The scaffold is produced in the bench
@@ -114,6 +115,14 @@ def from_scaffold(operations, declarations, makers=None, sets=None) -> Model:
         declarations  {name: {kind, is_set}}    what each handle refers to
         makers        {op: kind}                which operations BRING SOMETHING ABOUT
         sets          {name}                    which handles hold several things
+        params        {op: (target, value)}     what the OPERATION calls its arguments
+
+    ⇒⇒ **`params` EXISTS BECAUSE THE SCAFFOLD SPEAKS IN HANDLES AND A TOOL TAKES NAMED
+      ARGUMENTS**, and the engine's validator said so on the first real run: *"statement 3:
+      add_vm_to_network requires 'net_name'"*. The scaffold's `(on, value)` are the row and the
+      thing it relates to; `net_name` is what the TOOL calls its second argument. Mapping the two
+      is a manifest lookup, so it is PASSED IN rather than read here — this layer must not import
+      a manifest any more than an emitter may.
 
     ⇒ AN OPERATION OVER A SET BECOMES AN `EACH`, and that is the one real decision here: the
       scaffold says *what*, and a set target is what turns a single point into iteration. It is
@@ -126,15 +135,26 @@ def from_scaffold(operations, declarations, makers=None, sets=None) -> Model:
     for op, on, value in operations:
         target = str(on)
         made = makers.get(op)
-        args = {"on": target}
+        on_name, value_name = (params or {}).get(op) or ("on", "value")
+        args = {on_name: target}
         if value not in (None, ""):
-            args["value"] = value
+            args[value_name] = value
         if made:
             # ⇒ A CREATOR IS A `MAKE`, NOT A `DO`, even though the executor call is identical.
             #   The distinction is not cosmetic: an emitter for a language with constructors
             #   wants it, and a MAKE is the only node that may BIND A NAME NOBODY DECLARED.
-            steps.append(Node(MAKE, of=made, op=op, args=args, bind=target,
-                              count=(declarations.get(target) or {}).get("count")))
+            #
+            # ⇒⇒ **AND A MAKE'S ARGUMENTS ARE THE DECLARATION'S, NEVER THE HANDLE.** The first
+            #   cut passed `on=<handle>` as a creator argument and the ENGINE'S OWN VALIDATOR
+            #   rejected it on the first real run: *"NEW vm also requires 'os_type' … NEW already
+            #   calls create_vm; do NOT add a separate create_vm call."* Right on both counts —
+            #   the handle is what this step BINDS, not something it takes, and what a creator
+            #   takes is what the request SAID about the thing, which the row already holds in
+            #   `where`. Caught the moment the model met a real executor, which is the argument
+            #   for wiring a layer to something that runs rather than to a second mock.
+            row = declarations.get(target) or {}
+            steps.append(Node(MAKE, of=made, op=op, args=dict(row.get("where") or {}),
+                              bind=target, count=row.get("count")))
             continue
         if target not in sets:
             steps.append(Node(DO, op=op, args=args))
@@ -146,7 +166,7 @@ def from_scaffold(operations, declarations, makers=None, sets=None) -> Model:
         #   two emitters: a model you can only inspect as a dataclass hides this.
         item = "it"
         inner = dict(args)
-        inner["on"] = _Ref(item)
+        inner[on_name] = _Ref(item)
         steps.append(Node(EACH, over=target, item=item,
                           body=[Node(DO, op=op, args=inner)]))
     return Model(tuple(steps))

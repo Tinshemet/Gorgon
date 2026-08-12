@@ -115,3 +115,53 @@ if __name__ == "__main__":
         if name.startswith("test_") and callable(fn):
             fn()
     print(f"\n{_FAIL} failed")
+
+
+# ── the engine ────────────────────────────────────────────────────────────────────────────
+
+def test_the_engine_runs_the_model_and_the_world_changes():
+    """THE WHOLE POINT: scaffold -> model -> IR -> the REAL executor, and a world that moved.
+
+    ⇒ **NO CHANGE TO THE ENGINE WAS NEEDED.** `execute.run` never wanted source, it wanted
+      statements — so the engine is reached by a THIRD EMITTER rather than by a bridge, and
+      `engines/medusa` is untouched.
+
+    ⇒ **AND RUNNING IT FOR REAL CAUGHT THREE BUGS A MOCK WOULD NOT HAVE.** A `MAKE` passed
+      `on=<handle>` as a creator argument (the handle is what it BINDS); a creator's arguments
+      are the declaration's `where`, being what the request SAID about the thing; and the
+      scaffold speaks in handles while tools take named parameters. Each was found by the layer
+      below refusing to run something wrong.
+    """
+    print("\n[cmodel] the engine consumes the model and the world moves")
+    from planner.ir import config, execute
+    from planner.model_world import World
+
+    world = World(kinds=config.KINDS)
+    makers, params = {}, {}
+    for kind, spec in config.KINDS.items():
+        for c in (spec.get("creators") or {}).values():
+            if isinstance(c, dict) and c.get("tool"):
+                makers[c["tool"]] = kind
+        for tool, s in (spec.get("setters") or {}).items():
+            params[tool] = (s.get("member_arg") or "name", s.get("value_arg") or "value")
+
+    decl = {"alpha": {"where": {"name": "alpha", "os_type": "linux"}},
+            "core": {"where": {"net_name": "core"}}}
+    ops = [("create_vm", "alpha", None), ("create_network", "core", None),
+           ("add_vm_to_network", "alpha", "core"), ("launch_vm", "alpha", None)]
+    m = cmodel.from_scaffold(ops, decl, makers, set(), params)
+    # ⇒ A PROGRAM MUST VOUCH FOR SOMETHING. Without a HOLD the engine refuses it before running:
+    #   *"nothing in this program produces a VERDICT — it fetches and acts but never asserts."*
+    #   That is the language's rule, and `HOLD` is the node that satisfies it.
+    m = Model(tuple(m.steps) + tuple(cmodel.holds(
+        [{"shape": "count", "select": {"kind": "vm"}, "eq": 1}])))
+
+    execute.run(emit.to_ir(m), world.execute)
+    called = [c[0] for c in world.calls]
+    check(f"every step reached the executor ({called})",
+          called == ["create_vm", "create_network", "add_vm_to_network", "launch_vm"])
+    check("the machine exists", "alpha" in (world.state.get("vm") or {}))
+    check("the network exists", "core" in (world.state.get("network") or {}))
+    alpha = (world.state.get("vm") or {}).get("alpha") or {}
+    check(f"it is on the network and running ({alpha})",
+          alpha.get("status") == "running" and "core" in (alpha.get("network") or set()))
