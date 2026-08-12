@@ -1134,6 +1134,66 @@ def test_labelling_a_machine_with_a_machine_is_illegal():
         channel.constrained = was
 
 
+
+def test_a_step_no_clause_warrants_never_runs():
+    """THE PROPERTY THE PER-CLAUSE DESIGN WAS PARKED ON, 2026-08-13.
+
+    `operations_by_clause` was built to make a spurious step UNREPRESENTABLE — asked per clause,
+    a step no clause warrants has no call it could come from. Measured that day it cost three
+    rungs (13 SERVE -> 10), N model calls instead of one, and INVENTED a destructive step on
+    rung 8, because a clause read in isolation changes meaning: `except db` becomes *remove db*.
+
+    ⇒ **IT WAS NOT WIRED BECAUSE ITS GOAL IS ALREADY MET.** `anchor_to_clauses` attributes
+      clauses to the WHOLE-request answer afterwards, and a step nothing warrants is demoted to
+      a SUGGESTION — shown, never run. The operator accepted that trade explicitly, on one
+      condition: *"as long as the 'unpure' never runs and gets dropped, it's an ok trade."*
+
+    **SO THAT CONDITION IS LOAD-BEARING AND THIS IS WHERE IT LIVES.** Nothing asserted it before
+    — only a bench probe touched `.suggested`, and a bench probe is not a guarantee.
+    """
+    print("\n[split] an unwarranted step is demoted, and a destructive one never is")
+    from tests.bench.twopass import pipeline as PL
+    from tests.bench.twopass.metrics import Lab
+    board = Board()
+
+    # `probe_alive` is legal and harmless, and no clause of this request asks for it.
+    channel, was = _canned([("create_vm", "alpha", None), ("probe_alive", "alpha", None)])
+    try:
+        got = PL.run("create a vm named alpha", board=board, world=Lab())
+        ran = [o.operator for o in got.operations]
+        check("the warranted step runs", "create_vm" in ran)
+        check("the unwarranted step does NOT run", "probe_alive" not in ran)
+        # ⇒⇒ **NOT OFFERED EITHER — AN ILLEGAL STEP MUST NOT BE SHOWN AS ADVICE.** But it is
+        #   RECORDED and it reaches an audience, which it did not until 2026-08-13. The operator:
+        #   *"I am fine with it existing as long as we treat it"* — dropping is not treating.
+        check("an illegal step is not offered as a suggestion",
+              "probe_alive" not in [o.operator for o in got.suggested])
+        check("but it is recorded rather than vanishing",
+              "probe_alive" in [o.operator for o in got.discarded])
+        check("and it reaches an audience — the model that emitted it",
+              any(n.audience == "model" and "probe_alive" in n.about
+                  for n in (got.linguistics or ())))
+        # ⇒ AND IT IS A NOTE, NEVER A BOUNCE. `_verdict` bounces the moment `bounces` is
+        #   non-empty, so raising one here would fail a CORRECT program because the model
+        #   emitted junk beside it — the detector-makes-it-worse trap of 08-10.
+        check("and the correct program is still served",
+              got.outcome == PL.SERVE)
+    finally:
+        channel.constrained = was
+
+    # ⇒ THE HALF THAT MATTERS MORE: a destructive step is never QUIETLY demoted, because a
+    #   suggestion is shown and not judged — and a delete nobody asked for must be judged.
+    channel, was = _canned([("create_vm", "alpha", None), ("delete_vm", "alpha", None)])
+    try:
+        got = PL.run("create a vm named alpha", board=board, world=Lab())
+        check("a destructive step is NOT demoted to a suggestion",
+              "delete_vm" not in [o.operator for o in got.suggested])
+        check("it stays where somebody has to answer for it",
+              "delete_vm" in [o.operator for o in got.operations] or bool(got.asks))
+    finally:
+        channel.constrained = was
+
+
 def test_a_destructive_operation_over_a_whole_set_asks_first():
     print("\n[chain] rung 14 SERVED `delete_vm` over every machine in the lab, and every "
           "check passed — nothing about it is ILLEGAL, which is exactly the problem")

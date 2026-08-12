@@ -96,6 +96,9 @@ class Run(NamedTuple):
     #   repair, which is most of them — and never silently non-empty: `main` prints it, so a
     #   reader always knows the program shown is not the one the author wrote.
     repairs: List = ()
+    # ⇒ STEPS THE MODEL EMITTED THAT NOTHING WARRANTED AND GATE 3 REFUSED. Not run, not
+    #   offered — but not vanished either. See the note at the drop site.
+    discarded: List[Operation] = ()
 
     @property
     def handles(self) -> List[str]:
@@ -161,7 +164,7 @@ def harvest(first, first_findings, again, again_findings):
 
 
 def run(request: str, board: Optional[Board] = None, world=None, model=None,
-        timeout: int = 300, retries: int = 1) -> Run:
+        timeout: int = 300, retries: int = 1, legal=None) -> Run:
     """The whole chain. Two model calls' worth of questions in pass 1, one in pass 2."""
     board = board or Board()
 
@@ -488,8 +491,34 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #   whole list, so rung 12's illegal `add_vm_to_network(running_vms)` — now merely a
     #   suggestion — made every operation look illegal and turned a servable request into a
     #   REFUSE. An offer we cannot stand behind is simply not offered.
+    # ⇒⇒ **AND WHAT IS DROPPED IS RECORDED, BECAUSE THE OPERATOR'S RULE IS "TREAT IT".**
+    #   2026-08-13: *"I am fine with it existing as long as we treat it."* An unwarranted step
+    #   that is ALSO illegal was the one case that met neither half — not run (right), not
+    #   offered (right, we cannot stand behind it), and **not recorded anywhere**, so the model
+    #   emitted something and nothing knew. That is the finding-with-no-audience shape this
+    #   project has now hit four times. It is not a bounce (re-asking invites it back) and not
+    #   an ask (nobody need answer) — it is an OBSERVATION, and it needs somewhere to be.
+    dropped = [op for op in suggested if gate3.check([op], table, board, world)]
     suggested = [op for op in suggested
                  if not gate3.check([op], table, board, world)]
+    # ⇒⇒ **AND EACH ONE GETS AN AUDIENCE, BECAUSE DROPPING IT IS NOT TREATING IT.**
+    #   The operator's rule, 2026-08-13: *"I am fine with it existing as long as we treat it"* —
+    #   and *"logging it AND treating it"*. This step is not run (right) and not offered (right,
+    #   we cannot stand behind an illegal suggestion), and until now it was also not RECORDED,
+    #   so the model emitted something and nothing anywhere knew.
+    #
+    #   ⇒ IT IS A NOTE, NOT A BOUNCE, AND THE DIFFERENCE IS DELIBERATE. `_verdict` returns
+    #     BOUNCE the moment `bounces` is non-empty, so raising one here would turn a CORRECT
+    #     program into a bounce because the model also emitted junk beside it — the
+    #     detector-makes-it-worse trap that moved served-correct 4 -> 4 on 08-10.
+    #   ⇒ AND WITH `retries >= 1` THE MODEL HAS ALREADY BEEN TOLD: this demotion runs AFTER the
+    #     retry loop, so the step was in `operations` while gate 3 judged it and travelled back
+    #     in the rejected list. The gap this closes is `retries = 0`, where nothing else says it.
+    for op in dropped:
+        ling.append(linguistics.Finding(
+            "unasked-step", f"{op.operator}({op.on})",
+            "no clause warrants this step and it is illegal besides — not run, not offered",
+            "model"))
 
     # ⇒⇒ A BAD SUGGESTION NEVER COSTS THE PROGRAM ITS VERDICT.
     #
@@ -572,9 +601,25 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     declared = {row.name: dict(row.where) for row in rows}
     conditions = flatten(conditions_after(declared, _aimed(operations, table), board))
 
+    # ⇒⇒ **THE RED LINE, ANSWERED ON THE COMPLETE PROGRAM AND BEFORE THE VERDICT.**
+    #   The operator, 2026-08-13: *"banned refuses, guarded runs — and gate 4 should be
+    #   responsible for legality, since only when the program is complete can we assess it."*
+    #   A ban is not a finding to weigh against others: nothing that follows changes it, and
+    #   the run must not report SERVE and be stopped later at execution.
+    #   ⇒ INJECTED, so a bench with no contract is unchanged: `legal=None` forbids nothing.
+    banned = gate4.forbidden_tools(operations, legal)
+    if banned:
+        asks = list(asks) + [f"[gate4/red-line] this program calls {', '.join(banned)}, which "
+                             f"the contract forbids — it may not run at all, and no answer "
+                             f"here changes that"]
+        return Run(request, rows, table, operations, conditions,
+                   asks, bounces, illegal, suggested, ling, list(goals),
+                   REFUSE, list(repaired), list(dropped))
+
     return Run(request, rows, table, operations, conditions,
                asks, bounces, illegal, suggested, ling, list(goals),
-               _verdict(operations, illegal, asks, bounces, goals), list(repaired))
+               _verdict(operations, illegal, asks, bounces, goals), list(repaired),
+               list(dropped))
 
 
 def _aimed(operations: List[Operation], table) -> List[Operation]:
@@ -650,6 +695,8 @@ def main() -> None:
         print(f"    operations {[(o.operator, o.on, o.value) for o in got.operations] or '—'}")
         for r in got.repairs:
             print(f"      REPAIRED {r}")
+        for d in got.discarded:
+            print(f"      DROPPED  {d.operator}({d.on}) — unasked and illegal; not run, not offered")
         if got.suggested:
             print(f"    SUGGESTED  {[(o.operator, o.on, o.value) for o in got.suggested]}")
         print(f"    conditions {got.conditions or '—'}")

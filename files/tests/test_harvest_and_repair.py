@@ -151,6 +151,71 @@ def test_repair_only_touches_rules_it_declares():
           R.OWNS <= gate3.OWNS)
 
 
+
+
+# ── the red line ──────────────────────────────────────────────────────────────────────────
+
+def test_a_banned_tool_refuses_the_whole_program():
+    """THE BARRIER THE TREE HAS AND THE FRONT SEAM DID NOT, until 2026-08-13.
+
+    Found by the operator: *"I do remember the tree having a legal barrier, we don't have it
+    here."* The red line was enforced in `engine_core` (per leaf), `consent.forbidden` (whole
+    program) and `executor._red_line` (the boundary) — and NOT in the seam that issues the
+    verdict. So a banned request came back SERVE and was stopped later, at execution.
+
+    ⇒ **BANNED REFUSES, GUARDED RUNS** — the operator's ruling, restating 2026-08-02. A guarded
+      tool is a confirmation and confirmations already live in gate 4; this answers the ban.
+    """
+    print("\n[redline] a program that names a banned tool may not run at all")
+    from tests.bench.twopass import pipeline as PL
+    from tests.bench.twopass.metrics import Lab
+    from tests.bench.twopass.gate4 import forbidden_tools
+
+    ops = [_op("create_vm", "alpha"), _op("delete_vm", "alpha")]
+    check("with no contract, nothing is forbidden — the degraded arm",
+          forbidden_tools(ops, None) == [])
+    check("a banned tool is named", forbidden_tools(ops, lambda t: t == "delete_vm")
+          == ["delete_vm"])
+    check("and a tool nobody banned is not",
+          forbidden_tools(ops, lambda t: t == "format_disk") == [])
+
+
+def test_the_red_line_check_cannot_fail_silently():
+    """A SAFETY CHECK THAT QUIETLY RETURNS [] IS WORSE THAN NO CHECK.
+
+    `forbidden_tools` delegates to `consent.forbidden`, which walks an IR PROGRAM — and this
+    seam holds `Operation` tuples, not IR. The translation is the one place this can rot: get
+    the shape wrong and `tools_named` finds no tools, the ban finds nothing, and every request
+    passes. **That failure is invisible from the outside**, which is exactly why it is asserted
+    here rather than trusted.
+    """
+    print("\n[redline] the Operation -> IR translation actually reaches tools_named")
+    from planner.ir import consent as _consent
+    ops = [_op("create_vm", "alpha"), _op("add_vm_to_network", "alpha", "core")]
+    body = [{"op": "call", "tool": o.operator, "args": {}} for o in ops]
+    seen = _consent.tools_named({"body": body})
+    check(f"every operator is visible to tools_named ({seen})",
+          set(seen) == {"create_vm", "add_vm_to_network"})
+
+
+def test_a_banned_program_refuses_end_to_end():
+    print("\n[redline] and the chain returns REFUSE rather than SERVE")
+    from tests.bench.twopass import pipeline as PL
+    from tests.bench.twopass.metrics import Lab
+    import tests.test_twopass_schema as T
+    channel, was = T._canned([("create_vm", "alpha", None)])
+    try:
+        served = PL.run("create a vm named alpha", board=Board(), world=Lab())
+        banned = PL.run("create a vm named alpha", board=Board(), world=Lab(),
+                        legal=lambda t: t == "create_vm")
+        check(f"unbanned it serves ({served.outcome})", served.outcome == PL.SERVE)
+        check(f"banned it REFUSES ({banned.outcome})", banned.outcome == PL.REFUSE)
+        check("and says which tool, so the operator knows why",
+              any("create_vm" in a and "forbids" in a for a in banned.asks))
+    finally:
+        channel.constrained = was
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

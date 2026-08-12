@@ -386,6 +386,53 @@ def confirmations(operations: List[Operation], table, request: str = "",
     return out
 
 
+def forbidden_tools(operations: List[Operation], legal=None) -> List[str]:
+    """The RED-LINED tools this program would call — empty when it may run.
+
+    ⇒⇒ **THE BARRIER THE TREE HAS AND THIS SEAM DID NOT.** Found by the operator, 2026-08-13:
+      *"I do remember the tree having a legal barrier, we don't have it here."* Correct — the
+      red line was enforced in three places and the front seam was none of them:
+
+          tree              engine_core.py   `if legal_filter and legal_filter(name, args)`
+          program regime    consent.forbidden(program, legal)
+          executor engine   executor._red_line
+          the front seam    -- nothing --
+
+      So a request the contract BANS came back **SERVE**, and the refusal happened later, at
+      execution. A SERVE is a claim that the request is servable, and *"nothing legal remains
+      and no answer would change that"* is this file's own definition of REFUSE.
+
+    ⇒ **AND IT IS THE SAME DEFECT `consent.forbidden` WAS WRITTEN TO FIX, ONE LAYER UP.** Its
+      docstring records it: *"the ban was enforced by leaving a tool out of the model's
+      toolkit, which is a filter on what a MODEL can ask for and NO FILTER AT ALL on a program
+      that names the tool itself."* This seam filters what the model may name via
+      `operators_offered(board)` — a manifest filter — and never asked whether the result is
+      PERMITTED.
+
+    ⇒ **GATE 4 OWNS IT, BY THE OPERATOR'S RULING:** *"only when the program is complete can we
+      assess legality."* A red line is a fact about the PROGRAM — `consent.forbidden` says the
+      same thing, *"knowable before the first call, so it is answered before the first call"* —
+      which is gate 4's question, not gate 3's one-operation one.
+
+    ⇒ **BANNED REFUSES; GUARDED RUNS.** The operator, 2026-08-13, restating the 08-02 ruling.
+      A guarded tool is a confirmation, and confirmations already live in this gate. This
+      answers only the ban.
+
+    ⇒ `legal` NONE MEANS NOBODY IS ANSWERING and nothing is forbidden — the same degraded arm
+      `consent.forbidden` documents, so a bench with no contract behaves exactly as before.
+      **It is injected, never imported**, for the reason the tree injects its own: a seam that
+      reached for the contract itself could not be handed a different one.
+    """
+    if not callable(legal):
+        return []
+    from planner.ir import consent as _consent
+    # ONE AUTHORITY FOR "WHICH TOOLS DOES THIS PROGRAM CALL". Re-deriving it here would be a
+    # second answer to a question `tools_named` already answers, and a red line is the worst
+    # place in the system to keep two of those.
+    body = [{"op": "call", "tool": op.operator, "args": {}} for op in operations]
+    return _consent.forbidden({"body": body}, legal)
+
+
 # ⇒ EVERY RULE NAME THIS GATE OWNS. `test_each_gate_owns_its_own_checks` asserts no other gate
 #   emits one of these, which is the thing that would have caught the destructive guard sitting
 #   in `pipeline.py` and `role-unsettled` sitting in the grammar gate.
@@ -400,4 +447,5 @@ def confirmations(operations: List[Operation], table, request: str = "",
 #   ⇒ `goal-unreachable` JOINS THE SET — `unreachable_goals` emitted findings this gate owned
 #     and could not name, so the roster was short as well as unenforced.
 OWNS = frozenset({"destructive-confirm", "exclusion-not-expressible",
-                  "duplicate-creation", "destructive-goal", "goal-unreachable"})
+                  "duplicate-creation", "destructive-goal", "goal-unreachable",
+                  "red-line"})
