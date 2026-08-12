@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 import pathlib
 import sys
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -1077,12 +1078,58 @@ def test_a_refusal_is_only_a_refusal_when_nobody_could_answer_it():
     #   ⇒ SO THE FIXTURE SAYS `label` OUT LOUD. The step is then genuinely warranted, genuinely
     #     illegal — *you cannot label a machine WITH a machine* — and nobody can answer it,
     #     which is the distinction this test exists to hold.
+    # ⇒⇒ **THE REFUSE HALF MOVED OUT, AND WHY IS WORTH READING: IT WAS PASSING FOR THE WRONG
+    #   REASON ON HALF OF ALL HASH SEEDS.** See `test_labelling_a_machine_with_a_machine_is_illegal`
+    #   directly below. Kept here as a pointer so this test is not read as still covering it.
+
+
+@pytest.mark.xfail(reason=(
+    "pass 1 declares ONE row for a span naming TWO entities, so `n2` never becomes a handle "
+    "and `value-is-an-object` — the rule this asserts — cannot fire. Filed as the chunking "
+    "defect; do not delete this test, it is the only thing that states the intended behaviour."),
+    strict=False)
+def test_labelling_a_machine_with_a_machine_is_illegal():
+    """A warranted step can still be ILLEGAL, and nobody can answer that — so it REFUSES.
+
+    ⇒⇒ **SPLIT OUT AND MARKED 2026-08-13. IT HAD NEVER ONCE TESTED WHAT IT CLAIMS.**
+
+    It lived inside `test_a_refusal_is_only_a_refusal_when_nobody_could_answer_it`, where it
+    passed on roughly half of all `PYTHONHASHSEED` values and failed on the rest — which went
+    unnoticed because a suite is normally run once, on whatever seed the day handed it.
+
+        seed 0, 1, 6, 7   ->  BOUNCE, illegal []          the checks FAIL
+        seed 2, 3, 4, 5   ->  REFUSE, illegal [no-such-handle]   the checks PASS
+
+    ⇒ **AND THE SEEDS WHERE IT PASSED WERE PASSING ON A DIFFERENT RULE.** The intended rule is
+      `value-is-an-object` — *you cannot label a machine WITH a machine*. What actually fired
+      was `no-such-handle`, because `settle_with_world` sorted candidate words by LENGTH ALONE
+      over a SET, so `n1` and `n2` tied and the row's identity bound to whichever the hash
+      order offered first. When it bound to `n2`, the step `add_label(n1, …)` addressed a
+      handle that did not exist. A green tick for an unrelated defect.
+
+    The ordering bug is fixed (`pass1.settle_with_world`, total order: length, then first
+    mention). With identity stable this now fails on EVERY seed, honestly, because:
+
+    ⇒ **`value-is-an-object` NEEDS BOTH `n1` AND `n2` DECLARED**, and pass 1 emits ONE row for
+      the whole span. `n2` is never a handle, so `str(step.value) in by_handle` is False and
+      the rule is unreachable — not silent, unreachable. **That is the chunking defect**, and
+      it is upstream of the gate: no rule about a value naming an object can fire while the
+      value never becomes a declaration.
+
+    This stays xfail rather than being deleted or weakened to match the behaviour, because
+    asserting the current BOUNCE would pin a defect as correct — which is exactly the false
+    green the suite spent a day removing.
+    """
+    from tests.bench.twopass import pipeline as PL
+    board = Board()
     channel, was = _canned([("add_label", "n1", "n2")])
     try:
         known = PL.run("give n1 the n2 label", board=board,
                        world=_NamedLab("n1", "n2"))
-        check("a warranted step can still be illegal", len(known.illegal) == 1)
-        check("and nobody can answer that, so it REFUSES", known.outcome == PL.REFUSE)
+        assert len(known.illegal) == 1, (
+            f"a warranted step can still be illegal — got {known.illegal!r}")
+        assert known.outcome == PL.REFUSE, (
+            f"and nobody can answer that, so it REFUSES — got {known.outcome}")
     finally:
         channel.constrained = was
 

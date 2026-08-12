@@ -55,7 +55,7 @@ import argparse
 from typing import Dict, List, NamedTuple, Optional
 
 from ..formula.legal import Board
-from . import gate3, gate4, gates12, linguistics, pass1, pass2, schema as S
+from . import gate3, gate4, gates12, linguistics, pass1, pass2, repair, schema as S
 from .effects import Operation, conditions_after, flatten
 
 SERVE, BOUNCE, ASK, REFUSE = "SERVE", "BOUNCE", "ASK", "REFUSE"
@@ -92,10 +92,72 @@ class Run(NamedTuple):
     #   COMPLETE, not empty — the engine derives what closes it.
     goals: List[dict] = ()
     outcome: str = ""
+    # ⇒ WHAT THE HARNESS CHANGED ON THE AUTHOR'S BEHALF. Empty on any run that needed no
+    #   repair, which is most of them — and never silently non-empty: `main` prints it, so a
+    #   reader always knows the program shown is not the one the author wrote.
+    repairs: List = ()
 
     @property
     def handles(self) -> List[str]:
         return [s.handle for s in self.table]
+
+
+
+def harvest(first, first_findings, again, again_findings):
+    """Merge two rounds of an answer: UPGRADE a step, REFUSE a new one, never DROP one.
+
+    ⇒⇒ **EXTRACTED 2026-08-13 AFTER THREE BUGS IN ONE AFTERNOON**, all of them from this being
+      an inline block nobody could test without a model. It carries more judgement than any
+      other piece of the retry, and it was the only piece with no test of its own.
+
+    The three, because each names a rule below:
+
+        1  it kept "every clean step from either round" — and AN EMPTY PROGRAM HAS ZERO FAULTS,
+           so the loop could always improve its score by deleting everything. `delete_network`
+           vanished with its own confirmation attached. **A dropped step takes its report with
+           it**, so dropping is never a repair.
+        2  it keyed steps by OPERATOR ALONE, so rung 8's `create_network(core)` and
+           `create_network(dmz)` collided and one establisher was lost.
+        3  (the first version) took the retry whole or not at all, so a repair arriving beside
+           an invented step was binned along with it — which is what made rung 12 a coin flip.
+
+    ⇒ THE RULE, stated once:
+
+        a step of round one is answered by the step in the SAME SLOT of the retry — slot being
+        (operator, which occurrence it is). If that answer is clean it supersedes; otherwise the
+        original stands, faulty and therefore still reported. A retry step in no slot of round
+        one is genuinely new, and joins only if it is clean.
+
+      Coverage never shrinks, so "better" can never mean "emptier".
+
+    ⇒ WHAT IS STILL AN ASSUMPTION, and it is the only one: that the k-th step of an operator in
+      one round CORRESPONDS to the k-th of the other. Both rounds answer the same request from
+      the same schema, so the order is stable in practice — but this is a heuristic, not a
+      lookup, and it is the piece held-out prompts would actually test. Every fault the manifest
+      can settle is repaired BEFORE the retry (`repair.py`) precisely so that less rides on it.
+    """
+    def _slots(ops):
+        seen, out = {}, {}
+        for op in ops:
+            k = seen.get(op.operator, 0)
+            seen[op.operator] = k + 1
+            out[(op.operator, k)] = op
+        return out
+
+    faulty_now = {id(f.step) for f in again_findings}
+    first_at, retry_at = _slots(first), _slots(again)
+    merged, used = [], set()
+    for slot, op in first_at.items():
+        better = retry_at.get(slot)
+        if better is not None and id(better) not in faulty_now:
+            used.add(slot)
+            merged.append(better)          # the retry repaired this one
+        else:
+            merged.append(op)              # stands: faulty, reported, confirmable
+    for slot, op in retry_at.items():      # genuinely new, and only when clean
+        if slot not in used and slot not in first_at and id(op) not in faulty_now:
+            merged.append(op)
+    return merged
 
 
 def run(request: str, board: Optional[Board] = None, world=None, model=None,
@@ -225,6 +287,23 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     operations = pass2.order_by_dependency(operations, pass2.symbol_table(rows, board), board)
     rows, table, ling, illegal, dups = evaluate(operations)
 
+    # ⇒⇒ **REPAIR BEFORE ASKING — compute the fix where the manifest determines it.**
+    #
+    #   Gate 3's objection on rung 12 NAMES ITS OWN REMEDY: *"a snapshot is made from a vm …
+    #   aim it at what it is made FROM"*, and `Board.makeable` computes the one legal target
+    #   from `create_args`. Until now we spent a model call asking that, and then judged the
+    #   reply on a rule that could discard it — so a rung whose fix was already derivable
+    #   turned on whether the model felt like inventing an extra step.
+    #
+    #   ⇒ IT RUNS BEFORE THE RETRY, so a determinable fault never reaches the model at all;
+    #     that is the whole point of the ordering (compute first, ask only when you cannot).
+    #   ⇒ AND THE RESULT IS RE-EVALUATED, never assumed correct — a repair is a change to the
+    #     program and gets judged like any other.
+    repaired: List[repair.Repaired] = []
+    operations, repaired = repair.repair(operations, illegal, table, board)
+    if repaired:
+        rows, table, ling, illegal, dups = evaluate(operations)
+
     # ⇒⇒ THE RETRY. A BOUNCE MEANS THE MODEL'S OWN MISS, SO THE MODEL GETS ANOTHER GO.
     #
     #   It is handed the steps that were rejected and the manifest's reason for each — evidence
@@ -299,14 +378,62 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
                     pass2.derive_creators(again, _tbl, board), _tbl, board),
                 _tbl, request, board), _tbl, board)
         fresh_rows, fresh_table, fresh_ling, fresh, fresh_dups = evaluate(again)
-        # ⇒ KEEP THE BETTER ANSWER, NEVER THE LATER ONE. A retry that produces MORE illegal
-        #   steps is a regression, and taking it because it came second would be the repair
-        #   loop making things worse while looking busy.
-        if (len(_faults(fresh, fresh_ling)) + len(fresh_dups)
+        # ⇒⇒ **HARVEST THE CLEAN STEPS FROM BOTH ROUNDS — DO NOT CHOOSE BETWEEN THE ANSWERS.**
+        #
+        #   This compared TOTAL fault counts and kept whichever answer scored better, whole.
+        #   Measured on rung 12 (2026-08-13), and it is why that rung read SERVE on 08-11 and
+        #   REFUSE today with nothing in between changing:
+        #
+        #       first   wrong-creation-source(create_snapshot) · value-missing(add_vm_to_network)
+        #       retry   unestablished-referent(add_label)      · wrong-kind-operator(add_label)
+        #
+        #   **The retry REPAIRED the thing we objected to** — `create_snapshot(snapshot)` became
+        #   `create_snapshot(running_vms)` and drew no finding at all. It also invented a junk
+        #   step, which drew two. Two against two, `>=` fired, and the whole answer went in the
+        #   bin TAKING THE REPAIR WITH IT — leaving the original wrong step to be refused.
+        #
+        #   ⇒ SO THE RUNG WAS NEVER SOLIDLY SERVED. It served whenever the model happened not to
+        #     bolt an extra step onto its second try, and refused when it did. A coin the model
+        #     flips, recorded as a result on a day it landed heads.
+        #
+        # ⇒ THE RULE: a step gate 3 found NO fault with is kept, whichever round produced it;
+        #   everything else is dropped. That is [[gorgon-detector-not-producer-again]]'s harvest
+        #   applied to the repair loop — a spurious step becomes unrepresentable rather than
+        #   fatal, so whether the model adds one no longer decides the verdict.
+        # ⇒⇒ **THE HARVEST MAY UPGRADE A STEP OR REFUSE A NEW ONE. IT MAY NEVER DROP ONE.**
+        #
+        #   The first version of this kept "every clean step from either round" — and an EMPTY
+        #   PROGRAM HAS ZERO FAULTS, so the loop could always improve its score by deleting
+        #   everything. Caught by the destruction guard, which is the right test to catch it:
+        #   `delete_network(dmz)` was dropped as faulty and came out
+        #
+        #       ops []   illegal []   asks []   ->  a destructive step SILENTLY GONE
+        #
+        #   ⇒ **A DROPPED STEP TAKES ITS FINDING WITH IT**, because findings are computed from
+        #     the operations. So dropping is not a quiet repair, it is the deletion of a report
+        #     — and for a destructive step it is the deletion of a confirmation. The wholesale
+        #     rule this replaced was accidentally guarding against exactly that.
+        #
+        #   ⇒ SO THE RULE IS ONE-WAY: a first-round step is replaced only by a CLEAN retry step
+        #     answering the same operator, and otherwise stands — faulty, reported, confirmable.
+        #     A retry step that answers nothing already present is added only if it is clean.
+        #     Coverage never shrinks, so "better" can never mean "emptier".
+        # ⇒ STEPS PAIR BY OPERATOR **AND OCCURRENCE**, never by operator alone. Keying on the
+        #   operator collapsed rung 8: it needs `create_network(core)` AND `create_network(dmz)`,
+        #   and one key held both, so the second establisher was dropped and the rung refused
+        #   for want of a network the retry had actually supplied. The k-th `create_network` of
+        #   one round answers the k-th of the other; anything past that is genuinely new.
+        merged = harvest(operations, illegal, again, fresh)
+        merged = pass2.order_by_dependency(merged, _tbl, board)
+        # ⇒ AND THE MERGE IS RE-JUDGED, NEVER ASSUMED. A step clean on its own can be faulty
+        #   beside another — an establisher's ordering is a property of the SET. Harvesting
+        #   without re-evaluating would be the same trust the wholesale rule at least refused.
+        merged_rows, merged_table, merged_ling, merged_ill, merged_dups = evaluate(merged)
+        if (len(_faults(merged_ill, merged_ling)) + len(merged_dups)
                 >= len(_faults(illegal, ling)) + len(dups)):
-            break
+            break                              # no progress — keep what we had
         operations, rows, table, ling, illegal, dups = (
-            again, fresh_rows, fresh_table, fresh_ling, fresh, fresh_dups)
+            merged, merged_rows, merged_table, merged_ling, merged_ill, merged_dups)
     # ⇒⇒ A WORD MAY BE ACCOUNTED FOR BY AN OPERATION, NOT ONLY BY A DECLARATION.
     #
     #   Gate 1's leftover rule was written when declarations were all there was, so it asks
@@ -436,7 +563,7 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
 
     return Run(request, rows, table, operations, conditions,
                asks, bounces, illegal, suggested, ling, list(goals),
-               _verdict(operations, illegal, asks, bounces, goals))
+               _verdict(operations, illegal, asks, bounces, goals), list(repaired))
 
 
 def _aimed(operations: List[Operation], table) -> List[Operation]:
@@ -510,6 +637,8 @@ def main() -> None:
         print(f"\n{'─' * 100}\nrung {n} · “{want.request[:74]}”")
         print(f"    declared   {', '.join(got.handles) or '—'}")
         print(f"    operations {[(o.operator, o.on, o.value) for o in got.operations] or '—'}")
+        for r in got.repairs:
+            print(f"      REPAIRED {r}")
         if got.suggested:
             print(f"    SUGGESTED  {[(o.operator, o.on, o.value) for o in got.suggested]}")
         print(f"    conditions {got.conditions or '—'}")

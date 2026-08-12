@@ -67,6 +67,16 @@ def seams(world):
                 if isinstance(kids, list) and kids:
                     if not combine(_matches(name, vm, k, scope) for k in kids):
                         return False
+            # A NESTED `not` IS A NEGATED SUB-MATCH, and stripping it below made every
+            # group child vacuously true — so `all:[{not:db},{not:log}]` matched everyone.
+            # THE SAME BLIND SPOT SAT IN ALL THREE SEAMS (here, program.py, model_world.py)
+            # because all three were written from the same shape, which is exactly what
+            # this module's header warns about: one authority per fact, or the copies drift
+            # together. The top-level carve below answers the flat form and is unaffected.
+            carve = filters.get("not")
+            if isinstance(carve, dict) and carve:
+                if _matches(name, vm, carve, scope):
+                    return False
             f = {alias.get(k, k): v for k, v in filters.items()
                  if k not in ("not", "any", "all")}
             # AN ATTRIBUTE THIS KIND DOES NOT HAVE MATCHES NOTHING. Every branch below

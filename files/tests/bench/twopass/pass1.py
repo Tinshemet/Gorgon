@@ -508,8 +508,32 @@ def settle_with_world(rows: List[S.Declared], world, board: Optional[Board] = No
         found = None
         # THE ROW'S OWN WORDS, LONGEST FIRST — a bare name is somewhere inside its span, and
         # the span may have picked up a verb or a connective on the way.
+        #
+        # ⇒⇒ **AND THE ORDER MUST BE TOTAL, WHICH IT WAS NOT UNTIL 2026-08-13.** This read
+        #   `sorted({w for w in words if w}, key=len, reverse=True)` — a SET, ordered by
+        #   length ALONE. Two candidates of equal length therefore kept the set's iteration
+        #   order, which python varies with `PYTHONHASHSEED`, and the first one the lab
+        #   recognises WINS THE ROW'S IDENTITY. Measured on *"give n1 the n2 label"* against
+        #   a lab holding both:
+        #
+        #       seed 0, 6   where={'name': 'n1'}  ->  handle n1  ->  BOUNCE
+        #       seed 2, 3   where={'name': 'n2'}  ->  handle n2  ->  REFUSE  (no-such-handle)
+        #
+        #   Same request, same operations, opposite verdict, decided by nothing. It is not a
+        #   tie-break detail: a row's IDENTITY is what pass 2 addresses by handle, so an
+        #   unstable identity makes a correct operation unaddressable.
+        #
+        # ⇒ THE TIE-BREAK IS FIRST MENTION, and it is not arbitrary either. Among equally
+        #   specific candidates the span's own order is the evidence available — in *"give n1
+        #   the n2 label"* the thing acted upon is named first and the modifier follows, which
+        #   is the ordinary English shape. Length still leads, because a longer match is a
+        #   more specific one.
         words = [w.strip(".,'\"—–") for w in str(row.span or row.name).lower().split()]
-        for word in sorted({w for w in words if w}, key=len, reverse=True):
+        first_at = {}
+        for i, w in enumerate(words):
+            if w and w not in first_at:
+                first_at[w] = i
+        for word in sorted(first_at, key=lambda w: (-len(w), first_at[w])):
             for kind in board.kinds:
                 key = _claims.key_of(kind, board.kinds)
                 if not key:

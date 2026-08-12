@@ -82,6 +82,16 @@ def make_select(library, findings=None) -> Callable[..., List[str]]:
             if isinstance(kids, list) and kids:
                 if not combine(_one(kind, name, record, k, scope) for k in kids):
                     return False
+        # A NESTED `not` IS A NEGATED SUB-MATCH. Skipping it made every group child
+        # VACUOUSLY TRUE, so `all:[{not:db},{not:log}]` — the shape `schema.select_of`
+        # emits for several carve-outs — selected EVERY member, including the two the
+        # request named to spare. Measured 2026-08-13: ['a','db','log'] where ['a'] was
+        # meant. The top-level carve in `select` handles the flat form and is unaffected;
+        # this is the nested one it never saw.
+        carve = filters.get("not")
+        if isinstance(carve, dict) and carve:
+            if _one(kind, name, record, carve, scope):
+                return False
         aliases = (config.KINDS.get(kind) or {}).get("aliases") or {}
         for raw, want in filters.items():
             if raw in ("kind", "not", "any", "all"):

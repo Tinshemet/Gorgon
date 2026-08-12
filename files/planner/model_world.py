@@ -169,8 +169,33 @@ def seams(world: World):
     question would be a different language wearing the same words.
     """
     def _match(row: Dict[str, Any], name: str, key: str, filters: Dict[str, Any]) -> bool:
+        # GROUPS AND THE CARVE-OUT ARE ANSWERED BY THIS SAME FUNCTION, so a nested filter
+        # can never mean something the flat form does not. Before 2026-08-13 this skipped
+        # `not` and did not know `any`/`all` at all, which broke it in BOTH directions:
+        #
+        #     all:[{not:db},{not:log}]  ->  []                  nobody, the group key read
+        #                                                       as an attribute name
+        #     any:[{name:a},{name:db}]  ->  []                  same cause
+        #
+        # `schema.select_of` emits exactly that `all:[{not:…}]` shape for several
+        # carve-outs, and this is the DRY RUN's world — the path that proves a program
+        # legal before it runs — so a two-exclusion program passed a `COUNT = 0` check by
+        # selecting nobody. See the sibling fix in `program.py::_one`, which had the same
+        # blind spot pointing the other way.
+        for group, combine in (("any", any), ("all", all)):
+            kids = filters.get(group)
+            if isinstance(kids, list) and kids:
+                if not combine(_match(row, name, key, k) for k in kids):
+                    return False
+        # A NESTED `not` IS A NEGATED SUB-MATCH, not a key to skip. The top-level carve in
+        # `select` computes the same thing for the flat form; it stays because it is
+        # idempotent — a row reaching it has already failed any `not` written here.
+        carve = filters.get("not")
+        if isinstance(carve, dict) and carve:
+            if _match(row, name, key, carve):
+                return False
         for attr, want in filters.items():
-            if attr in ("kind", "not"):
+            if attr in ("kind", "not", "any", "all"):
                 continue
             got = name if attr == key else row.get(attr)
             if isinstance(got, set):
