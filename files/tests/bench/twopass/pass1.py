@@ -805,6 +805,86 @@ def _key_of(kind: str, board: Board):
     return _claims.key_of(kind, board.kinds) if kind in board.kinds else None
 
 
+def settle_with_answers(rows: List[S.Declared], answers, board: Optional[Board] = None,
+                        world=None):
+    """Apply what the OPERATOR said a word is. The fourth settler, and the only one with a
+    person behind it.
+
+    ⇒⇒ **THE LADDER ALREADY HAD THREE AND THIS IS THE ONE IT WAS MISSING.** `run_scanned` settles
+      from the manifest's nouns, `settle_with_world` from the lab, `settle_by_affordance` from
+      what the request asks the thing to DO — and when all three fail, gate 2 asks. Until now the
+      answer had nowhere to go: an ask was prose and `run()` took no answers, so the same
+      question could be asked every time forever.
+
+    ⇒ **IT RUNS LAST, AND THAT ORDERING IS THE SAFETY PROPERTY.** A word the manifest, the lab or
+      the request already settled is NOT overridden — this only ever fills a row that reached the
+      end unsettled. An operator answer that could overwrite a lookup would make a stale
+      Encyclopedia entry stronger than the live world.
+
+    ⇒ **`answers` IS KEYED BY THE ROW, NOT BY THE WORD.** `asking.answered` resolves which
+      question an operator's word was about and hands this keys that already name rows. Two
+      contracts on purpose: one decides WHICH question is being answered, this one applies it.
+
+    ⇒ **AN ANSWER THAT NAMES NO KIND IS DECLINED, NOT GUESSED AT.** *"a grubnash is a computer"*
+      settles nothing unless `computer` is a kind this lab has — and saying so is the honest
+      answer, the same three-valued honesty a kindless row already has. Better to ask again than
+      to type a row from a word nobody can act on ([[gorgon-unfamiliar-nouns]]).
+    """
+    board = board or Board()
+    conflicts: List[str] = []
+    if not answers:
+        return rows, conflicts
+    from planner.gates import claims as _claims
+
+    from . import reading_answers as _reading
+
+    def _kind_named(said):
+        # ⇒ READ BY PASS 1, NOT SCANNED FOR. A substring scan over kind names stood here and was
+        #   wrong three times in seven on ordinary English — it read *"not a vm"* as `vm`, a
+        #   simile as an identity, and *"a vm or a network"* as `vm`. See `reading_answers`.
+        kind, _why = _reading.settle(said, board, world)
+        return kind
+
+    out: List[S.Declared] = []
+    for row in rows:
+        said = answers.get(str(row.name).strip().lower())
+        if not said:
+            out.append(row)
+            continue
+        # ⇒⇒ **WE CANNOT GROUND AN ANSWER. WE CAN SEE WHEN IT CONFLICTS.** The operator,
+        #   2026-08-13: *"we can't really ground what the user response is … but generally yes
+        #   we can see if the answers conflict."* Exactly — an answer is free text and nothing
+        #   here can check whether it is TRUE. Consistency is a different question and it is
+        #   answerable, so the two conflicts below are DETECTED AND SAID rather than swallowed.
+        #   Silently declining an answer is the same defect as silently dropping a step: the
+        #   operator did something and nothing told them what became of it.
+        if row.object_type != UNKNOWN_KIND:
+            claimed = _kind_named(said)
+            if claimed and claimed != row.object_type:
+                conflicts.append(
+                    f"you said {row.name!r} is a {claimed}, and it is already settled as a "
+                    f"{row.object_type} by the lab or the request — the world's answer stands, "
+                    f"so nothing was changed")
+            out.append(row)
+            continue
+        kind = _kind_named(said)
+        if not kind:
+            conflicts.append(
+                f"you said {row.name!r} is {str(said)!r}, and that names no kind this lab has "
+                f"({', '.join(sorted(board.kinds))}) — it is still unsettled")
+            out.append(row)               # named no kind we have — still unsettled, ask again
+            continue
+        key = _claims.key_of(kind, board.kinds)
+        where = dict(row.where)
+        if key:
+            where.setdefault(key, row.name)
+        out.append(S.declare_from(row.name, kind, where, row.existence, board,
+                                  references=list(row.references), count=row.count,
+                                  comparator=row.comparator, span=row.span,
+                                  identity=row.name))
+    return out, conflicts
+
+
 def settle_by_routing(rows: List[S.Declared], board: Optional[Board] = None,
                       model=None, timeout: int = 120) -> List[S.Declared]:
     """THE RESIDUAL — a row the manifest's nouns and the lab both missed, routed by the model.

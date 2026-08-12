@@ -55,7 +55,7 @@ import argparse
 from typing import Dict, List, NamedTuple, Optional
 
 from ..formula.legal import Board
-from . import gate3, gate4, gates12, linguistics, pass1, pass2, repair, schema as S, surface
+from . import asking, gate3, gate4, gates12, linguistics, pass1, pass2, repair, schema as S, surface
 from .effects import Operation, conditions_after, flatten
 
 SERVE, BOUNCE, ASK, REFUSE = "SERVE", "BOUNCE", "ASK", "REFUSE"
@@ -199,7 +199,8 @@ def harvest(first, first_findings, again, again_findings):
 
 
 def run(request: str, board: Optional[Board] = None, world=None, model=None,
-        timeout: int = 300, retries: int = 1, legal=None, permit=None) -> Run:
+        timeout: int = 300, retries: int = 1, legal=None, permit=None,
+        answers=None) -> Run:
     """The whole chain. Two model calls' worth of questions in pass 1, one in pass 2."""
     board = board or Board()
 
@@ -228,6 +229,29 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     rows = pass1.settle_by_affordance(rows, request, board)
 
     early = gates12.report(rows, request, board, world)
+    # ⇒⇒ **THE WRITE-BACK (B2). AN ANSWER FINDS THE ROW THAT ASKED FOR IT.**
+    #
+    #   Gate 2 asks *"what is a grubnash?"* and until 2026-08-13 the reply had nowhere to go:
+    #   an ask was PROSE — `[f.says for f in found]` threw away the gate, the rule and the name
+    #   the finding was about — and `run()` took no answers, so there was no key to accept one
+    #   against. **That, and not storage, was what blocked the Encyclopedia**: B1 is a place to
+    #   keep answers and there were no answers to keep.
+    #
+    #   ⇒ ASKED FIRST, ANSWERED SECOND, AND RE-ASKED IF THE ANSWER SETTLED NOTHING. The questions
+    #     are built from the findings so an answer can bind to `about`; what the operator said is
+    #     applied; then the gates run AGAIN over the settled rows, because a row that is now a vm
+    #     must be judged as one. Applying answers without re-judging would leave findings from a
+    #     reading nobody holds any more.
+    questions = asking.asks_of(early["findings"])
+    answer_conflicts: List[str] = []
+    said = asking.answered(questions, answers)
+    if said:
+        settled, clashes = pass1.settle_with_answers(rows, said, board)
+        answer_conflicts = clashes
+        if settled != rows:
+            rows = settled
+            early = gates12.report(rows, request, board, world)
+            questions = asking.asks_of(early["findings"])
     asks: List[str] = list(early["asks"])
     early_bounces = list(early["bounces"])
 
@@ -675,12 +699,12 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
         return Run(request, rows, table, operations, conditions,
                    asks, bounces, illegal, suggested, ling, list(goals),
                    REFUSE, list(repaired), list(dropped),
-                   surface.notices(suggested, dropped))
+                   surface.notices(suggested, dropped, answer_conflicts))
 
     return Run(request, rows, table, operations, conditions,
                asks, bounces, illegal, suggested, ling, list(goals),
                _verdict(operations, illegal, asks, bounces, goals), list(repaired),
-               list(dropped), surface.notices(suggested, dropped))
+               list(dropped), surface.notices(suggested, dropped, answer_conflicts))
 
 
 def _aimed(operations: List[Operation], table) -> List[Operation]:

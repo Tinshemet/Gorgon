@@ -42,7 +42,8 @@ def flagged(op: Operation, why: str) -> str:
             f"Deny it? [y/n], or chat about it.")
 
 
-def notices(suggested: List[Operation], discarded: List[Operation]) -> List[str]:
+def notices(suggested: List[Operation], discarded: List[Operation],
+            conflicts: Optional[List[str]] = None) -> List[str]:
     """Housekeeping, surfaced. Never a question, and never a reason to hold the program.
 
     ⇒⇒ **SURFACED, NOT ASKED — AND THE DIFFERENCE IS THE VERDICT.** `_verdict` returns ASK the
@@ -63,4 +64,9 @@ def notices(suggested: List[Operation], discarded: List[Operation]) -> List[str]
     for op in discarded or ():
         out.append(f"The AI wrote {call_of(op)} — nothing warrants it and it is not legal "
                    f"either, so it was dropped. Recorded so it is not silent.")
+    # ⇒ AN ANSWER THAT DID NOT TAKE IS NEWS. Nothing here can check whether what you said is
+    #   TRUE — but it can see that it conflicts, and a clarification that vanishes silently is
+    #   worse than one that is refused out loud.
+    for c in (conflicts or ()):
+        out.append(f"Your answer was not applied: {c}.")
     return out
