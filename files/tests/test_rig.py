@@ -109,18 +109,30 @@ def test_production_does_not_import_the_test_tree():
     import re
 
     root = pathlib.Path(__file__).resolve().parent.parent
-    pattern = re.compile(r"^\s*(from|import)\s+tests[.\s]", re.M)
+    pattern = re.compile(r"^\s*(?:from|import)\s+(tests[\w.]*)", re.M)
     offenders = []
-    for pkg in ("orchestrator", "client", "admin", "executor", "shared"):
-        for path in (root / pkg).rglob("*.py"):
+    # ⇒⇒ **`engines` AND `planner` WERE NOT SCANNED, AND THEY ARE WHERE THE FRONT SEAM LIVES.**
+    #   Found by the 2026-08-13 review. The two staged-lowering imports below sit in
+    #   `engines/rig.py` — a package this loop never looked at — so they were invisible to the
+    #   check BY OMISSION rather than allowed by policy, and the allowlist that named them had
+    #   never once been exercised. A new test-import in either package would have gone
+    #   unnoticed indefinitely.
+    for pkg in ("orchestrator", "client", "admin", "executor", "shared", "engines", "planner"):
+        pkg_dir = root / pkg
+        if not pkg_dir.is_dir():
+            continue
+        for path in pkg_dir.rglob("*.py"):
             if "__pycache__" in str(path):
                 continue
             for m in pattern.finditer(path.read_text()):
-                offenders.append(f"{path.relative_to(root)}:"
-                                 f"{path.read_text()[:m.start()].count(chr(10)) + 1}")
-    # THE TWO STAGED-LOWERING IMPORTS, NAMED. An allowlist rather than a count, so a NEW
-    # import cannot hide by replacing one of these.
-    allowed = {"engines/rig.py:32", "engines/rig.py:33"}
+                offenders.append(f"{path.relative_to(root)} -> {m.group(1)}")
+    # ⇒ THE ALLOWLIST IS (FILE -> MODULE), NEVER A LINE NUMBER. It read
+    #   `{"engines/rig.py:32", "engines/rig.py:33"}` and the imports had since moved to 39-40,
+    #   so it was stale as well as unreachable — a line-based allowlist rots every time
+    #   somebody edits the lines above it, and rots SILENTLY, which is the whole failure mode
+    #   this test exists to prevent.
+    allowed = {"engines/rig.py -> tests.bench.sim_world",
+               "engines/rig.py -> tests.bench.tree_probe"}
     stray = sorted(set(offenders) - allowed)
     check(f"nothing shipped imports tests/ except the staged-lowering seam ({stray or 'none'})",
           not stray)

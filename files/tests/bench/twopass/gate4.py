@@ -100,7 +100,7 @@ def unhonourable_exclusions(table, board: Optional[Board] = None) -> List[str]:
         problems = _validate._check_select(sel, f"select for {sym.handle}") if sel else []
         if problems:
             carved = "; ".join(str(f) for f in row.excludes)
-            out.append(f"{sym.handle!r} leaves out {carved} and the engine cannot express "
+            out.append(f"[gate4/exclusion-not-expressible] {sym.handle!r} leaves out {carved} and the engine cannot express "
                        f"that: {problems[0]}")
     return out
 
@@ -131,7 +131,7 @@ def duplicate_creations(operations, table, board: Optional[Board] = None) -> Lis
     out: List[str] = []
     for handle, makers in made_by.items():
         if len(makers) > 1:
-            out.append(f"{handle!r} is brought about twice — by "
+            out.append(f"[gate4/duplicate-creation] {handle!r} is brought about twice — by "
                        f"{' and by '.join(sorted(set(makers)))}. Only one of them was asked "
                        f"for; keep the one the request names and drop the other.")
     return out
@@ -178,7 +178,7 @@ def destructive_goals(goals: List[dict], world=None,
         sel = goal.get("select") or {}
         bound = ", ".join(f"{k} = {v}" for k, v in sel.items() if k != "kind")
         n = sum(len(s.get("in") or ()) for s in removed) or len(removed)
-        out.append(f"holding {sel.get('kind')}s{' where ' + bound if bound else ''} at the "
+        out.append(f"[gate4/destructive-goal] holding {sel.get('kind')}s{' where ' + bound if bound else ''} at the "
                    f"number you asked for means REMOVING {n} of them, and the request never "
                    f"says to remove anything. Confirm before this runs.")
     return out
@@ -351,11 +351,11 @@ def unreachable_goals(goals: List[dict], world=None,
                       if isinstance(named, dict) and "in" in named else None)
             who = f"{kind}s {listed}" if listed else f"{kind}s"
             if goal.get("shape") == "reach":
-                out.append(f"nothing here can make {who} able to reach each other — they are "
+                out.append(f"[gate4/goal-unreachable] nothing here can make {who} able to reach each other — they are "
                            f"not in the lab, so there is nothing to connect")
             else:
                 bound = ", ".join(f"{k} = {v}" for k, v in sel.items() if k != "kind")
-                out.append(f"nothing available can make {kind}s"
+                out.append(f"[gate4/goal-unreachable] nothing available can make {kind}s"
                            f"{' where ' + bound if bound else ''} come out at the number asked "
                            f"for — the goal is stated but not reachable from here")
     return out
@@ -381,7 +381,7 @@ def confirmations(operations: List[Operation], table, request: str = "",
         bound = ", ".join(f"{k} = {v}" for k, v in (sym.row.where or {}).items())
         narrow = (" — narrowed only by " + bound if bound else
                   " — NOTHING NARROWS IT" if sym.row.is_set else "")
-        out.append(f"{op.operator}({op.on}) removes {sym.definition}{narrow}, and the request "
+        out.append(f"[gate4/destructive-confirm] {op.operator}({op.on}) removes {sym.definition}{narrow}, and the request "
                    f"never asks to remove anything. Confirm before this runs.")
     return out
 
@@ -389,5 +389,15 @@ def confirmations(operations: List[Operation], table, request: str = "",
 # ⇒ EVERY RULE NAME THIS GATE OWNS. `test_each_gate_owns_its_own_checks` asserts no other gate
 #   emits one of these, which is the thing that would have caught the destructive guard sitting
 #   in `pipeline.py` and `role-unsettled` sitting in the grammar gate.
+# ⇒⇒ **AND EVERY NAME HERE IS NOW ACTUALLY EMITTED. Until 2026-08-13 NONE of them was.**
+#   This gate's findings were bare strings, so a name in this set matched nothing — and
+#   `test_each_gate_owns_its_own_checks`, which asserts no OTHER gate emits one of these,
+#   PASSED VACUOUSLY: trivially true when nobody emits them at all. Third instance of that
+#   shape after `ANSWERABLE` and the `_FAIL` counter, and the lesson is the same one —
+#   **a test whose subject does not exist is a stopped clock.**
+#   ⇒ THE TAG FORMAT IS THE LINGUISTICS GATE'S, deliberately: `[gate4/<rule>] …`, so a reader
+#     and a test can attribute a finding to the gate that raised it without a second registry.
+#   ⇒ `goal-unreachable` JOINS THE SET — `unreachable_goals` emitted findings this gate owned
+#     and could not name, so the roster was short as well as unenforced.
 OWNS = frozenset({"destructive-confirm", "exclusion-not-expressible",
-                  "duplicate-creation", "destructive-goal"})
+                  "duplicate-creation", "destructive-goal", "goal-unreachable"})
