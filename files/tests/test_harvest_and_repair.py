@@ -216,6 +216,39 @@ def test_a_banned_program_refuses_end_to_end():
         channel.constrained = was
 
 
+def test_the_seam_consults_the_contract_without_being_asked():
+    """THE GUARD AGAINST THE DEFECT THIS BARRIER WAS BORN WITH.
+
+    Built 2026-08-13 as an injected parameter defaulting to `None` — which is exactly the shape
+    filed as I9 that same morning: **plumbed end to end and never fed.** A red line nobody
+    supplies is not a red line, and the live contract currently forbids none of the seventeen
+    operators this seam can name, so THE RUNGS CANNOT TELL THE DIFFERENCE between wired and
+    unwired. Nothing else would notice if the default resolution were dropped.
+
+    ⇒ SO THIS FORBIDS SOMETHING AT THE CONTRACT and calls `run()` WITHOUT a `legal` argument.
+      It fails the moment the seam stops asking the contract on its own.
+    """
+    print("\n[redline] the barrier is fed by default, not only when a caller remembers")
+    from tests.bench.twopass import pipeline as PL
+    from tests.bench.twopass.metrics import Lab
+    import tests.test_twopass_schema as T
+
+    real = PL._the_red_line
+    channel, was = T._canned([("create_vm", "alpha", None)])
+    try:
+        # stand in for a contract that bans create_vm, resolved the way `None` resolves
+        PL._the_red_line = lambda legal: legal if callable(legal) else (lambda t: t == "create_vm")
+        got = PL.run("create a vm named alpha", board=Board(), world=Lab())   # no `legal=`
+        check(f"a banned tool refuses even with no legal argument ({got.outcome})",
+              got.outcome == PL.REFUSE)
+    finally:
+        PL._the_red_line = real
+        channel.constrained = was
+
+    check("and the real resolution reaches the contract's own is_forbidden",
+          getattr(PL._the_red_line(None), "__name__", "") == "is_forbidden")
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

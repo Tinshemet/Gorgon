@@ -55,7 +55,7 @@ import argparse
 from typing import Dict, List, NamedTuple, Optional
 
 from ..formula.legal import Board
-from . import gate3, gate4, gates12, linguistics, pass1, pass2, repair, schema as S
+from . import gate3, gate4, gates12, linguistics, pass1, pass2, repair, schema as S, surface
 from .effects import Operation, conditions_after, flatten
 
 SERVE, BOUNCE, ASK, REFUSE = "SERVE", "BOUNCE", "ASK", "REFUSE"
@@ -99,11 +99,46 @@ class Run(NamedTuple):
     # ⇒ STEPS THE MODEL EMITTED THAT NOTHING WARRANTED AND GATE 3 REFUSED. Not run, not
     #   offered — but not vanished either. See the note at the drop site.
     discarded: List[Operation] = ()
+    # ⇒⇒ HOUSEKEEPING, IN THE OPERATOR'S WORDS AND NEVER AS A QUESTION. Everything the AI did
+    #   beside what was asked, surfaced — *"all housekeeping should [be surfaced]"* — while the
+    #   verdict stays what the PROGRAM earned. See `surface.notices` for why these are not asks.
+    notices: List[str] = ()
 
     @property
     def handles(self) -> List[str]:
         return [s.handle for s in self.table]
 
+
+
+def _the_red_line(legal):
+    """The contract's `is_forbidden`, resolved the way every other regime resolves it.
+
+    ⇒⇒ **ROUTED TO PRODUCTION 2026-08-13.** Built an hour earlier as an injected parameter
+      defaulting to `None`, which gave it the exact shape of the defect filed the same morning
+      as I9: **plumbed end to end and never fed.** A barrier nobody supplies is not a barrier.
+
+    ⇒ `None` MEANS *ASK THE CONTRACT*, not *no filter* — the convention `engines/base.py` sets
+      for `legal_filter`, and the reason it gives is the one that matters here: *"the operator's
+      protection cannot depend on WHICH engine happened to serve the request."* One red line
+      across four regimes now, rather than three and a bench.
+
+    ⇒ **CALLED, NEVER WRAPPED**, and `base.py` says why in the one place it must not be
+      approximately right: `_deps` degrades to `None` in a sparse checkout, and a lazy wrapper
+      is itself a function — so `legal or _legal_default` would turn *no filter* into *a filter
+      that raises at call time*. Resolve it, then test what came back.
+
+    ⇒ AND A CALLER WITH NO CONTRACT TO CONSULT IS NOT AN ERROR. A bench, a sparse checkout and
+      an unconfigured install all land on `None`, and forbid nothing — the same degraded arm
+      `consent.forbidden` documents.
+    """
+    if callable(legal):
+        return legal
+    try:
+        from planner.score._deps import _legal_default
+        resolved = _legal_default()
+    except Exception:
+        return None
+    return resolved if callable(resolved) else None
 
 
 def harvest(first, first_findings, again, again_findings):
@@ -164,7 +199,7 @@ def harvest(first, first_findings, again, again_findings):
 
 
 def run(request: str, board: Optional[Board] = None, world=None, model=None,
-        timeout: int = 300, retries: int = 1, legal=None) -> Run:
+        timeout: int = 300, retries: int = 1, legal=None, permit=None) -> Run:
     """The whole chain. Two model calls' worth of questions in pass 1, one in pass 2."""
     board = board or Board()
 
@@ -607,19 +642,45 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #   A ban is not a finding to weigh against others: nothing that follows changes it, and
     #   the run must not report SERVE and be stopped later at execution.
     #   ⇒ INJECTED, so a bench with no contract is unchanged: `legal=None` forbids nothing.
-    banned = gate4.forbidden_tools(operations, legal)
+    # ⇒⇒ **AND A BAN IS NOT FINAL HERE, BECAUSE LEGALITY IN THIS REGIME IS THE USER'S.**
+    #   The operator, 2026-08-13: *"legality in the program regime is different than the tree,
+    #   because legality is now owned by the user, not by the contract."* Right, and the
+    #   production pair already says so — `execute.py` reads
+    #
+    #       banned = consent.forbidden(program, legal)
+    #       if banned and not consent.permitted(banned, permit):
+    #
+    #   The first build here omitted the second line and refused outright, which is STRICTER
+    #   THAN PRODUCTION: it denied something the operator may lift. The tree bans an autonomous
+    #   agent with nobody in the room; a program regime has somebody who can answer, and
+    #   `permitted` is that answer — *"a banned tool is the one thing that escalates to
+    #   RE-AUTHENTICATION … liftable by one party, in person, with a password, and by nothing
+    #   else."*
+    #
+    #   ⇒ ABSENT AN OPERATOR THE ANSWER IS STILL NO, exactly as `permitted` documents, so a
+    #     bench with no `permit` behaves as before. What changes is that the refusal now names
+    #     the route out instead of being a dead end.
+    banned = gate4.forbidden_tools(operations, _the_red_line(legal))
+    from planner.ir import consent as _consent
+    if banned and _consent.permitted(banned, permit):
+        banned = []                       # lifted, in person — it may run
     if banned:
-        asks = list(asks) + [f"[gate4/red-line] this program calls {', '.join(banned)}, which "
-                             f"the contract forbids — it may not run at all, and no answer "
-                             f"here changes that"]
+        # ⇒ ONE FLAG PER FLAGGED CALL, NOT ONE PER PROGRAM. The operator answers about a CALL —
+        #   *"the AI created this call … deny it? y/n"* — so a list of tool names would be the
+        #   wrong grain to answer at.
+        asks = list(asks) + [
+            surface.flagged(op, "the contract forbids it, and only you can lift a red line — "
+                                "in person, by re-authenticating")
+            for op in operations if op.operator in banned]
         return Run(request, rows, table, operations, conditions,
                    asks, bounces, illegal, suggested, ling, list(goals),
-                   REFUSE, list(repaired), list(dropped))
+                   REFUSE, list(repaired), list(dropped),
+                   surface.notices(suggested, dropped))
 
     return Run(request, rows, table, operations, conditions,
                asks, bounces, illegal, suggested, ling, list(goals),
                _verdict(operations, illegal, asks, bounces, goals), list(repaired),
-               list(dropped))
+               list(dropped), surface.notices(suggested, dropped))
 
 
 def _aimed(operations: List[Operation], table) -> List[Operation]:
@@ -695,8 +756,8 @@ def main() -> None:
         print(f"    operations {[(o.operator, o.on, o.value) for o in got.operations] or '—'}")
         for r in got.repairs:
             print(f"      REPAIRED {r}")
-        for d in got.discarded:
-            print(f"      DROPPED  {d.operator}({d.on}) — unasked and illegal; not run, not offered")
+        for n in got.notices:
+            print(f"      NOTICE   {n}")
         if got.suggested:
             print(f"    SUGGESTED  {[(o.operator, o.on, o.value) for o in got.suggested]}")
         print(f"    conditions {got.conditions or '—'}")
