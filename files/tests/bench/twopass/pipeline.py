@@ -103,6 +103,9 @@ class Run(NamedTuple):
     #   beside what was asked, surfaced — *"all housekeeping should [be surfaced]"* — while the
     #   verdict stays what the PROGRAM earned. See `surface.notices` for why these are not asks.
     notices: List[str] = ()
+    # ⇒ THE ADDRESSABLE FORM OF `asks`, so a ledger can file them and an answer can find them.
+    #   `asks` stays strings and is DERIVED from these — one authority, one rendered view.
+    questions: List = ()
 
     @property
     def handles(self) -> List[str]:
@@ -246,7 +249,11 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     answer_conflicts: List[str] = []
     said = asking.answered(questions, answers)
     if said:
-        settled, clashes = pass1.settle_with_answers(rows, said, board)
+        # ⇒ THE LAB REACHES THE ANSWER TOO. `settle_with_answers` takes a world and this call
+        #   omitted it for twenty minutes — a parameter plumbed and not fed, AGAIN. Without
+        #   it an answer like *"the same as db"* could not be settled by the one authority
+        #   that knows what `db` is, while the identical words in a REQUEST could.
+        settled, clashes = pass1.settle_with_answers(rows, said, board, world)
         answer_conflicts = clashes
         if settled != rows:
             rows = settled
@@ -704,7 +711,8 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     return Run(request, rows, table, operations, conditions,
                asks, bounces, illegal, suggested, ling, list(goals),
                _verdict(operations, illegal, asks, bounces, goals), list(repaired),
-               list(dropped), surface.notices(suggested, dropped, answer_conflicts))
+               list(dropped), surface.notices(suggested, dropped, answer_conflicts),
+               list(questions))
 
 
 def _aimed(operations: List[Operation], table) -> List[Operation]:

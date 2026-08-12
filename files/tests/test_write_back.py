@@ -68,7 +68,8 @@ def test_an_answer_naming_no_kind_settles_nothing():
     mis-settlement, which is worse than asking twice.
     """
     print("\n[b2] an answer that names no kind is declined, never guessed at")
-    rows, board, clashes = _rows({"a grubnash named alpha": "a grubnash is a wombat"})
+    rows, board, clashes = _rows(
+        {"a grubnash named alpha": ("kind-not-settled", "a grubnash is a wombat")})
     check("the row stays unsettled", all(r.object_type == "?" for r in rows))
     # ⇒ AND THE OPERATOR IS TOLD WHY. We cannot ground an answer — nothing here can check
     #   whether what a person said is TRUE — but we can see that it names no kind, and a
@@ -93,7 +94,8 @@ def test_an_answer_never_overrides_a_lookup():
     #   and hands this settler keys that already name rows; calling it with a bare word (as this
     #   test first did) silently matches nothing. The two halves have different contracts on
     #   purpose — one resolves WHICH question an answer is for, the other applies it.
-    settled, clashes = pass1.settle_with_answers(rows, {"launch db": "db is a network"}, board)
+    settled, clashes = pass1.settle_with_answers(
+        rows, {"launch db": ("kind-not-settled", "db is a network")}, board)
     after = [(r.name, r.object_type) for r in settled]
     check(f"the lab's answer stands ({before} -> {after})", before == after)
     check(f"and the disagreement is reported, not swallowed ({clashes})",
@@ -110,9 +112,12 @@ def test_an_answer_to_a_question_nobody_asked_is_ignored():
     asks = [asking.Ask("kind-not-settled", "a grubnash named alpha", "what is it?")]
     check("an answer for an unmentioned word binds to nothing",
           asking.answered(asks, {"wibble": "a wibble is a vm"}) == {})
-    check("and the one that WAS asked about binds",
+    # ⇒ THE RULE TRAVELS WITH THE ANSWER, because what an answer MEANS depends on what was
+    #   asked: "yes" to *should it be created?* sets an existence, "a vm" to *what is it?* sets
+    #   a kind. Inferring which from the text would be a guess where a person was explicit.
+    check("and the one that WAS asked about binds, carrying its rule",
           asking.answered(asks, {"grubnash": "a vm"}) ==
-          {"a grubnash named alpha": "a vm"})
+          {"a grubnash named alpha": ("kind-not-settled", "a vm")})
 
 
 def test_a_word_matches_on_boundaries_not_substrings():
@@ -128,7 +133,7 @@ def test_a_word_matches_on_boundaries_not_substrings():
     check("a shorter word inside another does not answer it",
           asking.answered(asks, {"db": "a vm"}) == {})
     check("the actual word does", asking.answered(asks, {"dbf": "a vm"}) ==
-          {"the dbf server": "a vm"})
+          {"the dbf server": ("kind-not-settled", "a vm")})
 
 
 if __name__ == "__main__":

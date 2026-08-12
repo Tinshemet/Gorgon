@@ -45,10 +45,37 @@ from ..formula.legal import Board
 # ⇒ CLOSED FUNCTION-WORD CLASSES, and that is why they may be written down at all. Negation and
 #   comparison are grammar: finite, stable, and the same for every speaker. A list of NOUNS that
 #   might mean `vm` would be the other kind of list, the kind that rots.
-NEGATION = {"not", "isn't", "isnt", "no", "never", "neither", "nor", "n't"}
+NEGATION = {"not", "isn't", "isnt", "no", "nope", "nah", "never", "neither",
+            "nor", "n't", "don't", "dont"}
 SIMILE = {"like", "similar", "resembles", "sort", "kind"}   # "like a vm", "sort of like a vm"
 
 AMBIGUOUS, NONE_NAMED, NEGATED, LIKENED = "ambiguous", "none", "negated", "likened"
+UNCLEAR = "unclear"
+
+# ⇒ AFFIRMATION IS A CLOSED CLASS TOO, and that is the whole licence for writing it down. These
+#   are the particles English uses to agree; a list of VERBS meaning "go ahead" would be the
+#   other kind of list, and would rot.
+AFFIRMATION = {"yes", "yeah", "yep", "yup", "sure", "ok", "okay", "aye", "please", "do", "y"}
+
+
+def yes_no(said: str) -> Optional[bool]:
+    """True / False / None — and None is a real answer, not a default.
+
+    ⇒⇒ **AN UNREADABLE YES IS NOT A NO.** *"should it be created?"* answered with *"whatever you
+      think"* has no reading, and guessing either way is worse than asking again: guessing NO
+      strands a request the operator wanted, and guessing YES BUILDS SOMETHING NOBODY ASKED FOR.
+      The second is the one that costs money and machines, which is why this declines instead.
+
+    ⇒ NEGATION IS CHECKED FIRST. *"no, don't create it"* holds both a negation and an
+      affirmation-shaped word, and the denial is the operative half — the same ordering
+      `settle` uses for a kind answer, and for the same reason.
+    """
+    words = {w.strip(".,;:!'\"()") for w in str(said).lower().split()}
+    if words & NEGATION:
+        return False
+    if words & AFFIRMATION:
+        return True
+    return None
 
 
 def kinds_named(said: str, board: Board, world=None, model=None, timeout: int = 300

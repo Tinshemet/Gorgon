@@ -34,6 +34,13 @@ KIND, YES_NO, FREE = "kind", "yes-no", "free"
 TAKES = {
     "kind-not-settled": KIND,      # "what is a grubnash?"        -> a kind name
     "no-such-kind": KIND,          # "this lab keeps no such thing"
+    # ⇒ THE TWO COMMON ONES, ADDED 2026-08-13 AFTER AN END-TO-END DEMO FOUND THEM MISSING.
+    #   The demo asked to *"launch every jumpbox"* — and `jumpbox` never needed a KIND answer,
+    #   because `settle_by_affordance` typed it `vm` from the verb (only a vm can be launched).
+    #   What survived was *"should it be created?"*, which had no entry here and no settler:
+    #   **the write-back was wired to the rules that rarely fire.**
+    "not-there": YES_NO,           # "… and the lab has none — should it be created?"
+    "already-there": YES_NO,       # "… there is already one — use it, or did you mean a second?"
     "invented": FREE,
     "unestablished-referent": YES_NO,
     "destructive-confirm": YES_NO,
@@ -78,8 +85,13 @@ def asks_of(findings, extra: Optional[List[str]] = None) -> List[Ask]:
     return out
 
 
-def answered(asks: List[Ask], answers: Optional[Dict[str, str]]) -> Dict[str, str]:
-    """The answers that match a question actually asked, keyed by the ROW the question is about.
+def answered(asks: List[Ask], answers: Optional[Dict[str, str]]) -> Dict[str, tuple]:
+    """The answers that match a question actually asked -> {row: (RULE, what they said)}.
+
+    ⇒ **THE RULE TRAVELS WITH THE ANSWER**, because what an answer MEANS depends on what was
+      asked. *"Yes"* to *"should it be created?"* sets an existence; *"a vm"* to *"what is it?"*
+      sets a kind. Handing the settler bare text and letting it infer which question it answers
+      would be a guess in the one place a person has already been explicit.
 
     ⇒ **AN ANSWER TO A QUESTION NOBODY ASKED IS IGNORED, NOT APPLIED.** The operator may hold a
       standing answer — from the Encyclopedia — for a hundred words this request never mentions.
@@ -107,11 +119,11 @@ def answered(asks: List[Ask], answers: Optional[Dict[str, str]]) -> Dict[str, st
         words = {w.strip(".,'\"()") for w in about.split()}
         # the rule-qualified key is the most specific answer and wins outright
         if a.key in lowered:
-            out[about] = lowered[a.key]
+            out[about] = (a.rule, lowered[a.key])
             continue
         hit = next((lowered[k] for k in (about,) if k in lowered), None)
         if hit is None:
             hit = next((lowered[w] for w in words if w in lowered), None)
         if hit is not None:
-            out[about] = hit
+            out[about] = (a.rule, hit)
     return out

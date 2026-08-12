@@ -66,6 +66,13 @@ class Declared(NamedTuple):
     #   to the operator. Only ever set by `settle_by_routing`; kindless rows nobody asked about
     #   stay False, so absence of the mark means UNASKED rather than ROUTABLE.
     unroutable: bool = False
+    # ⇒⇒ **THE OPERATOR SAID SO — provenance on `existence`, not a second copy of it.**
+    #   `existence` is the model's weakest field (85%, every error toward NEW), which is why
+    #   `derive_creators` refuses to mint anything NAMED: a wrong NEW would quietly build a
+    #   second `core`. That guard is about WHO SAID NEW, and an operator answering *"yes, create
+    #   them"* is the one authority allowed to say it. Set ONLY by `settle_with_answers`, so its
+    #   absence means "nobody was asked", never "somebody said no".
+    sanctioned: bool = False
     # ⇒⇒ WHAT THIS SET LEAVES OUT — the handles/names an `except` clause removes from it.
     #
     #   The operator, 2026-08-11, on rung 8: *"it needs to produce a set, `all_vms_but_db`,
@@ -413,7 +420,8 @@ def declare_from(name: str, object_type: str, where: Dict[str, object], existenc
                  board: Optional[Board] = None,
                  references: Optional[List[str]] = None,
                  count: object = None, comparator: Optional[str] = None,
-                 span: str = "", identity: Optional[str] = None) -> Declared:
+                 span: str = "", identity: Optional[str] = None,
+                 sanctioned: bool = False) -> Declared:
     """Assemble one row. `settled` is derived here and nowhere else.
 
     ⇒ `count` AND `comparator` ARE READ, NOT ASKED. They live in the request's enumerator
@@ -427,7 +435,8 @@ def declare_from(name: str, object_type: str, where: Dict[str, object], existenc
                     existence=existence if existence in (NEW, EXISTING) else EXISTING,
                     settled=settled_of(kind, where or {}, board),
                     references=list(references or []),
-                    count=count, comparator=comparator, span=span, identity=identity)
+                    count=count, comparator=comparator, span=span, identity=identity,
+                    sanctioned=bool(sanctioned))
 
 
 def render(rows: List[Declared]) -> str:

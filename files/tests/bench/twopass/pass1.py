@@ -845,11 +845,46 @@ def settle_with_answers(rows: List[S.Declared], answers, board: Optional[Board] 
         kind, _why = _reading.settle(said, board, world)
         return kind
 
+    KIND_RULES = {"kind-not-settled", "no-such-kind", "unknown-kind", ""}
+    EXISTS_RULES = {"not-there", "already-there"}
     out: List[S.Declared] = []
     for row in rows:
-        said = answers.get(str(row.name).strip().lower())
-        if not said:
+        got = answers.get(str(row.name).strip().lower())
+        if not got:
             out.append(row)
+            continue
+        rule, said = got if isinstance(got, tuple) else ("", got)
+
+        # ⇒⇒ **AN EXISTENCE ANSWER, WHICH IS THE ONE THE OPERATOR ACTUALLY MEETS.** Added
+        #   2026-08-13 after an end-to-end demo: asked to *"launch every jumpbox"*, the chain
+        #   never needed a KIND answer — affordance typed `jumpbox` as a vm from the verb — and
+        #   the question that survived was *"should it be created?"*, which had no settler at
+        #   all. **The write-back was wired to the rules that rarely fire.**
+        #
+        #   ⇒ SAYING YES SETS `NEW`, AND NOTHING ELSE. It does not add a step: `derive_creators`
+        #     already supplies the maker for a NEW row that something depends on, and duplicating
+        #     that here would be a second answer to a question arithmetic already answers.
+        #   ⇒ SAYING NO LEAVES THE ROW EXACTLY AS IT WAS, so gate 3 still reports that nothing
+        #     establishes it. A refusal to create is not a licence to proceed.
+        if rule in EXISTS_RULES:
+            wants = _reading.yes_no(said)
+            if wants is None:
+                conflicts.append(
+                    f"you were asked whether {row.name!r} should be created and said {said!r}, "
+                    f"which reads as neither yes nor no — nothing was changed")
+            elif wants:
+                # ⇒ SANCTIONED, not merely NEW. `derive_creators` refuses to mint anything NAMED
+                #   because the MODEL's `existence` errors toward NEW and a wrong one would build
+                #   a second `core`. That guard is about WHO SAID NEW — and the operator just did.
+                out.append(S.declare_from(row.name, row.object_type, dict(row.where), S.NEW,
+                                          board, references=list(row.references),
+                                          count=row.count, comparator=row.comparator,
+                                          span=row.span, identity=row.name, sanctioned=True))
+                continue
+            out.append(row)
+            continue
+        if rule not in KIND_RULES:
+            out.append(row)               # a rule this settler does not own — untouched
             continue
         # ⇒⇒ **WE CANNOT GROUND AN ANSWER. WE CAN SEE WHEN IT CONFLICTS.** The operator,
         #   2026-08-13: *"we can't really ground what the user response is … but generally yes

@@ -444,8 +444,11 @@ def derive_creators(operations, table, board: Optional[Board] = None):
         #     establisher rule lands and the world is asked properly.
         if row.existence != S.NEW or row.is_set or row.kind not in board.kinds:
             continue
-        if _is_named(row, board):
-            continue                      # ⇐ there is something to LOOK IT UP BY — see below
+        if _is_named(row, board) and not getattr(row, "sanctioned", False):
+            # ⇐ there is something to LOOK IT UP BY — see below. UNLESS THE OPERATOR SAID
+            #   CREATE IT: this guard exists because the model's NEW is untrustworthy, and an
+            #   operator answering *"yes, create them"* is the one authority that is.
+            continue
         if not any(str(op.value) == handle for op in operations if op.value):
             continue                      # nothing depends on it, so nothing is missing
         kinds_makers = makers.get(row.kind) or set()
