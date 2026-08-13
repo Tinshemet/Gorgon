@@ -3,13 +3,14 @@
 _CUSTOM_MODE / _NET_ENABLED are process state set via set_custom_mode(); read them
 through custom_mode()/net_enabled() so a change is seen live across modules.
 """
+import hashlib
 import json
 import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any, Dict, Optional
 
-from .config import _NET_TIMEOUT
+from .config import _NET_TIMEOUT, _CFG
 
 _NET_CACHE:  Dict[str, Any] = {}
 _NET_ENABLED = True

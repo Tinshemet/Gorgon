@@ -1,5 +1,6 @@
 """validate.py — host/internet validation of VM + profile args (the checks the
 create_vm/create_profile pre-flight calls)."""
+import os
 from typing import Any, Dict, List, Optional
 
 from orchestrator.executor_client import (
@@ -8,7 +9,7 @@ from orchestrator.executor_client import (
 from .net import custom_mode, net_enabled, _net_get
 from .qemu import _get_qemu_machine_types, _get_qemu_cpu_models, _is_arm_cpu, _is_x86_cpu
 from .product import _lookup_product
-from .config import _THRESHOLDS, _MS_WINDOWS_ISO_PAGE, _ARM_CPU_PREFIXES
+from .config import _THRESHOLDS, _MS_WINDOWS_ISO_PAGE, _ARM_CPU_PREFIXES, _CFG
 
 
 def _validate_with_internet(args: Dict[str, Any], verbose: bool = False) -> List[Dict]:

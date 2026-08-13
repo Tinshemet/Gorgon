@@ -2,7 +2,7 @@
 import subprocess
 from typing import Optional
 
-from .config import _ARM_CPU_PREFIXES, _X86_CPU_NAMES
+from .config import _ARM_CPU_PREFIXES, _X86_CPU_NAMES, _CFG
 
 _QEMU_MACHINES_CACHE: Optional[set] = None
 _QEMU_CPUS_CACHE:     Optional[set] = None

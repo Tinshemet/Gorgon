@@ -1,5 +1,6 @@
 """product.py — product-identity lookup (internet) + stealth SMBIOS inference."""
 import hashlib
+import urllib.parse
 from typing import Any, Dict
 
 from .net import _net_get

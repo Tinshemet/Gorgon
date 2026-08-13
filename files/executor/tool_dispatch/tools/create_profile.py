@@ -16,7 +16,7 @@ class CreateProfileTool(Tool):
             args["_notes"] = notes
         if not force:
             preflight = ctx.preflight_check(
-                "create_profile", {"profile_name": pname, **args}, manager, verbose
+                "create_profile", {"profile_name": pname, **args}, context.manager, verbose
             )
             action = preflight.get("action", "ok")
             if action == "abort":

@@ -8,6 +8,7 @@ from typing import Any, Dict, List
 from .base import PreflightCheck
 from .context import (
     _THRESHOLDS, VALID_MACHINE_TYPES, PLACEHOLDER_VM_NAMES, REAL_HOME, _resolve_iso,
+    _BAD_ISO_PATH_PATTERNS,
     _validate_with_internet, _validate_profile_for_host, get_all_profiles, _triage,
 )
 from .stealth import _validate_stealth_args
