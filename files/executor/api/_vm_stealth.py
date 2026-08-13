@@ -161,8 +161,21 @@ fi
 
 echo "=== Stealth guest setup: {name} ==="
 
+# ── 0. Restrict dmesg to root ────────────────────────────────────────────────
+# The kernel ring buffer names the hypervisor in strings nothing can spoof: the
+# OVMF build ("EFI v2.7 by ... EDK II"), the ACPI BGRT stamped EDK2, and the
+# std-VGA line ([1234:1111], bochs-drm). Measured 2026-08-13: 16 such strings on
+# a fully-stealthed guest, all readable by ANY unprivileged process — which is
+# what a browser or a userland fingerprinting check is. dmesg_restrict makes
+# them root-only. It does NOT hide them from the operator: Gorgon's own guest
+# agent runs as root, so run_guest_command still reads dmesg normally.
+echo "[1/5] Restricting dmesg to root..."
+printf 'kernel.dmesg_restrict = 1\\n' | sudo tee /etc/sysctl.d/10-dmesg-restrict.conf >/dev/null
+sudo sysctl -q -w kernel.dmesg_restrict=1
+echo "      dmesg_restrict = $(sysctl -n kernel.dmesg_restrict) (root-only; survives reboot)"
+
 # ── 1. Blacklist qemu_fw_cfg ─────────────────────────────────────────────────
-echo "[1/4] Blacklisting qemu_fw_cfg..."
+echo "[2/5] Blacklisting qemu_fw_cfg..."
 printf 'blacklist qemu_fw_cfg\\nblacklist cirrus_qemu\\n' | sudo tee /etc/modprobe.d/blacklist-qemu.conf >/dev/null
 if command -v update-initramfs &>/dev/null; then
     sudo update-initramfs -u -k all
@@ -174,7 +187,7 @@ fi
 echo "      Done — takes effect after reboot."
 
 # ── 2. Firefox stealth profile ────────────────────────────────────────────────
-echo "[2/4] Creating Firefox stealth profile..."
+echo "[3/5] Creating Firefox stealth profile..."
 FIREFOX_BIN="$(command -v firefox 2>/dev/null || command -v firefox-esr 2>/dev/null || echo '')"
 PROF_DIR="$HOME/.mozilla/firefox/stealth"
 mkdir -p "$PROF_DIR"
@@ -194,7 +207,7 @@ fi
 echo "      Profile written to $PROF_DIR"
 
 # ── 3. Stealth browser launcher ───────────────────────────────────────────────
-echo "[3/4] Creating stealth browser launcher..."
+echo "[4/5] Creating stealth browser launcher..."
 mkdir -p "$HOME/Desktop"
 LAUNCHER="$HOME/Desktop/stealth-browser.sh"
 if [ -n "$FIREFOX_BIN" ]; then
@@ -207,7 +220,7 @@ chmod +x "$LAUNCHER"
 echo "      Launcher: $LAUNCHER"
 
 # ── 4. lspci / lsmod stealth wrappers ────────────────────────────────────────
-echo "[4/4] Installing lspci/lsmod stealth wrappers..."
+echo "[5/5] Installing lspci/lsmod stealth wrappers..."
 
 LSPCI_BIN="$(command -v lspci 2>/dev/null || echo /usr/bin/lspci)"
 if [ ! -x "${{LSPCI_BIN}}.real" ]; then
