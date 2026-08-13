@@ -354,13 +354,27 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
           would leave `new`'s creator and the method form unguarded, which is precisely the
           rule-on-one-path-and-not-the-other defect that produced five of 2026-08-11's twelve.
 
-        ⇒ AND IT IS FINAL FOR THIS RUN — no `permit`, deliberately. Re-authentication is a
-          pre-flight act (*"knowable before the first call, so it is answered before the
-          first call"*); asking for a password once the lab has already moved is a worse
-          posture than stopping, and nobody has ruled that it should be offered here.
+        ⇒⇒ AND THE OPERATOR CAN LIFT IT HERE TOO — RULED 2026-08-13. The first build made a
+          runtime refusal final, reasoning that re-authentication is a pre-flight act. The
+          operator ruled the other way, and it follows from the frame that produced scopes at
+          all: *"legality in the program regime is owned by the USER, not by the contract"*
+          ([[gorgon-legality-is-the-users]]). **The tree bans an autonomous agent with nobody
+          in the room; a program regime has somebody who can answer** — and refusing to ask
+          them about a target only knowable now would be the contract owning it after all.
+
+        ⇒ ONE ASK PER TOOL, NOT PER CALL. A lift joins `lifted`, exactly as the pre-flight's
+          does, so a loop over fifty machines cannot turn one ruling into fifty prompts —
+          which is how a person stops reading them. Same grain as the pre-flight, which is
+          also handed tool NAMES.
+
+        ⇒ ABSENT AN OPERATOR THE ANSWER IS STILL NO. `permitted` refuses a non-callable and
+          will not accept `True` as a standing grant, so an unattended run cannot lift its
+          own red line — the fail-closed rule every other high-impact act here keeps.
         """
         if tool not in lifted and _consent.ask(legal, tool, args):
-            raise _RedLine(tool)
+            if not _consent.permitted([tool], permit):
+                raise _RedLine(tool)
+            lifted.add(tool)
         calls.append((tool, args))
         result = execute(tool, args)
         if isinstance(result, dict) and (result.get("success") is False or result.get("error")):
@@ -762,7 +776,7 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
             return {"ok": False, "failed": "forbidden", "forbidden": [stop.tool],
                     "why": (f"{stop.tool} is a red line for this agent on that target, so "
                             f"the run stopped here. Its target was not knowable before the "
-                            f"program started"),
+                            f"program started, and it takes the operator's password to lift"),
                     "scope": scope, "calls": calls, "failures": failures,
                     "abandoned": list(abandoned)}
         # A BREAK WITH NO LOOP AROUND IT is a program error, and `validate` refuses one before

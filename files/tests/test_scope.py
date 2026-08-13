@@ -266,6 +266,43 @@ def main():
     check("a 1-arg filter on the engine still answers (test_engines.py has one)",
           eng._red_line([doomed], kinds, never) is None)
 
+    print("\n  ⇒ MID-RUN RE-AUTHENTICATION — the operator can lift it HERE too (ruled 08-13)")
+    asked = []
+    ran = []
+    out = X.run(loop, lambda t, a: ran.append((t, a)) or {"success": True},
+                legal=pc.is_forbidden, consent=True,
+                permit=lambda banned: asked.append(list(banned)) or True)
+    check("a runtime refusal is put to the operator rather than being final",
+          asked == [["guest_ping"]])
+    check("...and on a yes the run CONTINUES through the out-of-scope target",
+          out.get("failed") != "forbidden"
+          and [a["name"] for _t, a in ran] == ["bench1", "prod1"])
+
+    many = {"body": [{"op": "foreach", "in": ["prod1", "prod2", "prod3"],
+                      "call": {"tool": "guest_ping", "args": {"name": f"${_c.LOOP_VAR}"}}}]}
+    asked, ran = [], []
+    X.run(many, lambda t, a: ran.append((t, a)) or {"success": True},
+          legal=pc.is_forbidden, consent=True,
+          permit=lambda banned: asked.append(list(banned)) or True)
+    check("ONE ASK PER TOOL, NOT PER CALL — three out-of-scope targets, one question",
+          len(asked) == 1 and len(ran) == 3)
+
+    asked, ran = [], []
+    out = X.run(loop, lambda t, a: ran.append((t, a)) or {"success": True},
+                legal=pc.is_forbidden, consent=True,
+                permit=lambda banned: asked.append(list(banned)) or False)
+    check("a NO still stops the run", out.get("failed") == "forbidden" and len(ran) == 1)
+    ran = []
+    out = X.run(loop, lambda t, a: ran.append((t, a)) or {"success": True},
+                legal=pc.is_forbidden, consent=True)
+    check("UNATTENDED CANNOT LIFT ITS OWN RED LINE — no permit is a no",
+          out.get("failed") == "forbidden")
+    ran = []
+    out = X.run(loop, lambda t, a: ran.append((t, a)) or {"success": True},
+                legal=pc.is_forbidden, consent=True, permit=True)
+    check("...and a STANDING grant cannot answer it either — only a callable, asked now",
+          out.get("failed") == "forbidden")
+
     print("\nCALLER 4 — THE FRONT SEAM: rung 14 finally has something to fail")
     from orchestrator.seam import gate4, schema as SC
     from orchestrator.seam.effects import Operation
