@@ -377,6 +377,24 @@
       "type": "boolean",
       "description": "Full hardware-fingerprint masking so the guest reads as bare metal; implies hardened. Only when the user asks for stealth/undetectable."
      },
+     "stealth_persona": {
+      "type": "string",
+      "enum": [
+       "laptop",
+       "desktop",
+       "server",
+       "any"
+      ],
+      "description": "Pins the FORM FACTOR of the randomly-assigned stealth persona (which real machine the guest presents as). Only has an effect with stealth=true and no profile/manufacturer/product_name given — naming hardware already decides the persona. Omit or 'any' picks across all form factors."
+     },
+     "slirp_subnet": {
+      "type": "string",
+      "description": "CIDR for QEMU user-mode NAT, e.g. '192.168.1.0/24' — gateway .1, DHCP from .100. Replaces QEMU's default 10.0.2.0/24, which betrays user-mode networking to anything reading the guest's own IP config. NAT mode only; stealth VMs already default to 192.168.1.0/24, so pass this only to choose a different one."
+     },
+     "passthrough_pci": {
+      "type": "string",
+      "description": "Host PCI address of a real GPU to hand the guest via vfio-pci, e.g. '0000:01:00.0' (the .1 audio function is added automatically; a comma-list is used as-is). Gives the guest genuine PCI vendor/device IDs — the only defeat for the emulated-display tell — and forces the VM headless on the host. Requires host IOMMU with the device already bound to vfio-pci. Only when the user supplies the address; never guess one."
+     },
      "guest_agent": {
       "type": "boolean",
       "description": "Enable in-VM command execution (run_guest_command) and liveness (guest_ping). Off by default. Only when the user asks for the guest agent."
