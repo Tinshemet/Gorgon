@@ -1,8 +1,10 @@
 """stealth.py — the stealth-VM SMBIOS/GPU/firmware/CPU checks (used by the create_vm
 pre-flight). Returns a list of issue dicts (severity error/warning/auto_fix)."""
 
+from types import SimpleNamespace
 from typing import Any, Dict, List
 
+from executor.api._qemu_args_devices import effective_gpu_device
 from .context import _QEMU_CPU_MODELS, _LAPTOP_TYPE_KEYWORDS, _stealth_infer_from_product
 
 
@@ -116,11 +118,18 @@ def _validate_stealth_args(args: Dict[str, Any]) -> List[Dict]:
     # virtio-vga / virtio-vga-gl carries PCI vendor 0x1af4 (Red Hat/QEMU).
     # lspci inside the guest shows this; it is one of the most common VM detection
     # vectors. create_vm auto-sets gpu="none" for stealth VMs that don't request a
-    # specific GPU (qemu_arg_builder then picks vmware-svga on Linux / VGA on
-    # Windows) — so this is informational only, not a blocking ask_user prompt.
+    # specific GPU, and the builder picks from there — so this is informational
+    # only, not a blocking ask_user prompt.
     gpu = str(args.get("gpu", "virtio")).lower()
     if gpu == "virtio" and "gpu" in args:
-        stealth_gpu_device = "VGA" if str(args.get("os_type", "")).lower() == "windows" else "vmware-svga"
+        # ASK THE BUILDER what it would emit; never restate it here. This message
+        # named vmware-svga for as long as it took someone to read it after
+        # 5416068 switched stealth to std VGA — preflight was telling the operator
+        # to drop an arg to get a device the builder had stopped choosing. Same
+        # drift 6fa4001 closed for the -tf audit, one reader later.
+        stealth_gpu_device = effective_gpu_device(
+            SimpleNamespace(gpu="none", stealth=True, os_type=str(args.get("os_type", "")))
+        )
         issues.append({
             "severity":  "warning",
             "message":   (
