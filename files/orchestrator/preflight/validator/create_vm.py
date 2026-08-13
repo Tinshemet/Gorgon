@@ -40,7 +40,12 @@ def _preflight_create_vm(args: Dict[str, Any], manager: object, verbose: bool,
             _known = {v.get("name") for v in (manager.list_vms() if manager else [])}
         except Exception:
             _known = set()
-        if name in _known:
+        # `overwrite` IS the answer to this question, so asking again would loop:
+        # the client's overwrite shortcut (chat/gates/manual_config.py) re-runs
+        # create_vm with overwrite set, and the executor deletes the existing VM
+        # before recreating. Same truthiness test the executor uses, so the two
+        # can never disagree about whether the answer was given.
+        if name in _known and not args.get("overwrite"):
             return {"action":"ask_user","reason":f"A VM named '{name}' already exists","question":f"A VM called '{name}' already exists. Overwrite it, or use a different name?","fix_field":"name","original_name":name,"options":[f"{name}-2",f"{name}-new","overwrite"],"correction":"Use a different name or delete the existing VM first."}
 
     # Destructive opt-in: unattended install WIPES the target disk — confirm first
