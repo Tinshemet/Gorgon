@@ -16,6 +16,41 @@ with open(os.path.join(os.path.dirname(__file__), "config.json")) as _f:
 _TIMEOUTS = _CFG["timeouts"]
 
 
+def effective_gpu_device(cfg) -> str:
+    """Return the display device the guest will ACTUALLY see, or "" for none.
+
+    The SSOT for the emulated-GPU choice: ``_display()`` emits it and
+    ``executor/fingerprint.py`` scores it. Reading ``cfg.gpu`` alone is wrong and
+    was a real audit bug — the default ``"none"`` does not mean "no GPU", it means
+    "let the builder pick", and the builder always emits a device.
+
+    Example::
+        effective_gpu_device(cfg)   # cfg.gpu="none", cfg.stealth=True  -> "VGA"
+    """
+    # getattr throughout: fingerprint.py scores configs loaded straight off disk,
+    # which may predate any of these fields.
+    if getattr(cfg, "gpu_passthrough_pci", ""):
+        return "vfio-pci"                       # a REAL GPU; not emulated
+    if getattr(cfg, "display", "") == "none":
+        return ""                               # -nographic: no display device
+    if getattr(cfg, "gpu", "none") == "none":
+        # Stealth (both OSes): std VGA. Its PCI ID 1234:1111 is readable as QEMU,
+        #   which is the price; every alternative is worse.
+        #   NOT vmware-svga: vmwgfx binds the device, deactivates the VGA console,
+        #   THEN rejects it ("running on an unsupported hypervisor") and unbinds.
+        #   No DRM node is ever created, so systemd-logind reports CanGraphical=no
+        #   and no display manager will ever start X — the guest boots headless with
+        #   a black screen. Measured on Kali 6.18: /sys/class/drm holds only
+        #   `version`, vmwgfx sits at 0 users, lightdm waits forever. Guests do not
+        #   ship xserver-xorg-video-vmware either, so X had no driver regardless.
+        #   std VGA binds bochs-drm, which yields a real DRM node.
+        # Windows stealth additionally avoids "VMware SVGA" in Device Manager.
+        # Non-stealth: cirrus-vga (loads cirrus_qemu, reveals hypervisor via lsmod).
+        return "VGA" if getattr(cfg, "stealth", False) else "cirrus-vga"
+    _g = getattr(cfg, "gpu", "none")
+    return GPU_PRESETS.get(_g) or str(_g)
+
+
 class _ArgsDevicesMixin:
     """_qemu_args_devices.py — QemuArgBuilder display/audio/usb/battery (peripheral) args."""
 
@@ -57,23 +92,9 @@ class _ArgsDevicesMixin:
             self.args += ["-nographic"]
             return
         if self.cfg.gpu == "none":
-            # Stealth (both OSes): std VGA. Its PCI ID 1234:1111 is readable as QEMU,
-            #   which is the price; every alternative is worse.
-            #   NOT vmware-svga: vmwgfx binds the device, deactivates the VGA console,
-            #   THEN rejects it ("running on an unsupported hypervisor") and unbinds.
-            #   No DRM node is ever created, so systemd-logind reports CanGraphical=no
-            #   and no display manager will ever start X — the guest boots headless with
-            #   a black screen. Measured on Kali 6.18: /sys/class/drm holds only
-            #   `version`, vmwgfx sits at 0 users, lightdm waits forever. Guests do not
-            #   ship xserver-xorg-video-vmware either, so X had no driver regardless.
-            #   std VGA binds bochs-drm, which yields a real DRM node.
-            # Windows stealth additionally avoids "VMware SVGA" in Device Manager.
-            # Non-stealth: cirrus-vga (loads cirrus_qemu, reveals hypervisor via lsmod).
-            if self.cfg.stealth:
-                device = "VGA"
-            else:
-                device = "cirrus-vga"
-            self.args += ["-device", device]
+            # Choice + rationale live in effective_gpu_device() so the fingerprint
+            # audit scores the same device this emits.
+            self.args += ["-device", effective_gpu_device(self.cfg)]
 
         gl_wanted = self.cfg.opengl and not self.is_arm
         gl_ok     = gl_wanted and self._gl_available()

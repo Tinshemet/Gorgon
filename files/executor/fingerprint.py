@@ -164,10 +164,22 @@ def tf_report(name: str, summary: bool = False) -> dict:
 
     # ── inxi -C: CPU ──────────────────────────────────────────────────────────
     cpu = (cfg.cpu_model or "host").lower()
-    if cfg.kvm:
+    # hardened masks the flag this check is about: _harden() appends -hypervisor,
+    # kvm=off, -vmx, +invtsc at arg-build time. Keying on cfg.kvm alone reported
+    # "hypervisor flag set" for every hardened VM while the host-security section
+    # below simultaneously reported it hidden — one report, two opposite answers
+    # about the same VM. The masking flags are NOT in cfg.cpu_features (that
+    # mutation happens on the in-memory config during build, not the saved one),
+    # so hardened is the only readable signal here.
+    if cfg.kvm and not getattr(cfg, "hardened", False):
         checks.append({"section": "inxi -C", "field": "Hypervisor flag",
                         "value": "KVM (kvm=True)", "status": "warn",
                         "detail": "KVM hypercall flags visible in /proc/cpuinfo — hypervisor flag set"})
+    elif cfg.kvm:
+        checks.append({"section": "inxi -C", "field": "Hypervisor flag",
+                        "value": "KVM, masked (hardened)", "status": "ok",
+                        "detail": "hardened adds -hypervisor/kvm=off/-vmx: CPUID hypervisor bit "
+                                  "and KVM paravirt leaves hidden, KVM acceleration still on"})
     else:
         checks.append({"section": "inxi -C", "field": "Hypervisor flag",
                         "value": "none (kvm=False)", "status": "ok",
@@ -225,8 +237,23 @@ def tf_report(name: str, summary: bool = False) -> dict:
                         "detail": "Intel HDA is common in real hardware but device ID may still indicate VM"})
 
     # ── inxi -G: GPU ──────────────────────────────────────────────────────────
-    gpu = (cfg.gpu or "none").lower()
-    if "virtio" in gpu:
+    # Score the device the guest ACTUALLY gets, not cfg.gpu. cfg.gpu defaults to
+    # "none", which does NOT mean "no GPU" — it means "builder picks", and the
+    # builder always emits one. Reading cfg.gpu scored every default VM as
+    # "No GPU — nothing to fingerprint", so this check could never fail: it did
+    # not flag vmware-svga on any real VM, and could not see the switch to std VGA.
+    from executor.api._qemu_args_devices import effective_gpu_device
+    gpu = (effective_gpu_device(cfg) or "").lower()
+    if not gpu:
+        checks.append({"section": "inxi -G", "field": "GPU driver",
+                        "value": "none (-nographic)", "status": "ok",
+                        "detail": "No display device is emitted — nothing to fingerprint"})
+    elif "vfio" in gpu:
+        checks.append({"section": "inxi -G", "field": "GPU driver",
+                        "value": "vfio-pci (passthrough)", "status": "ok",
+                        "detail": "A real GPU is passed through — PCI vendor/device IDs are "
+                                  "genuine hardware. The only way to fully defeat this tell."})
+    elif "virtio" in gpu:
         checks.append({"section": "inxi -G", "field": "GPU driver",
                         "value": gpu, "status": "fail",
                         "detail": "virtio-gpu is a paravirtual GPU — immediately identifies VM"})
@@ -237,11 +264,19 @@ def tf_report(name: str, summary: bool = False) -> dict:
     elif "vmware" in gpu:
         checks.append({"section": "inxi -G", "field": "GPU driver",
                         "value": "vmware-svga", "status": "fail",
-                        "detail": "VMware SVGA driver is a VM indicator even in QEMU"})
-    elif gpu == "none":
+                        "detail": "VMware SVGA driver is a VM indicator even in QEMU — and on "
+                                  "Linux guests vmwgfx rejects QEMU, leaving no DRM node at all"})
+    elif "cirrus" in gpu:
         checks.append({"section": "inxi -G", "field": "GPU driver",
-                        "value": "none", "status": "ok",
-                        "detail": "No GPU — nothing to fingerprint"})
+                        "value": "cirrus-vga", "status": "warn",
+                        "detail": "cirrus_qemu appears in lsmod — names the hypervisor outright"})
+    elif gpu in ("vga", "std", "bochs-display"):
+        checks.append({"section": "inxi -G", "field": "GPU driver",
+                        "value": "VGA (std)", "status": "warn",
+                        "detail": "PCI ID 1234:1111 reads as QEMU and binds bochs-drm. No emulated "
+                                  "GPU hides being virtual; this is the least-bad one and the only "
+                                  "one that yields a working DRM node. Use gpu_passthrough_pci to "
+                                  "remove the tell entirely."})
     else:
         checks.append({"section": "inxi -G", "field": "GPU driver",
                         "value": gpu, "status": "ok",
