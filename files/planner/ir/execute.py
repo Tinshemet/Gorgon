@@ -49,6 +49,21 @@ def _books():
     return ledger
 
 
+class _RedLine(Exception):
+    """A call reached dispatch that the contract will not allow — raised from `_do`.
+
+    AN EXCEPTION RATHER THAN A RETURN because `_do` is called in expression position (a
+    `new`'s creator, a `call`'s result, the method form) and its value is the TOOL's result.
+    A sentinel would have to be recognised at three call sites, and the one that forgot
+    would run the next statement over a refusal. `_LEAVE` gets away with being a sentinel
+    because a BREAK is a statement, not a value.
+    """
+
+    def __init__(self, tool):
+        super().__init__(f"{tool} is a red line for this agent")
+        self.tool = tool
+
+
 class Unsatisfied(Exception):
     """An `ensure` did not hold. Carries the predicate so the caller can feed the
     OBJECTION into revision rather than just reporting failure — the existing
@@ -246,13 +261,30 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
     # highest gate in the building: an unattended run cannot pass it, and an operator can,
     # deliberately, by proving they are the operator. `permit` absent is a NO, which is the
     # same fail-closed rule `consent` and `intent` already keep.
-    banned = _consent.forbidden(program, legal)
+    # ⇒ AND THE INVOCATION'S OWN ARGUMENTS ARE PART OF "BEFORE THE FIRST CALL". `params` is
+    #   in hand right here, so `CALL scan(net: $target)` invoked with `target=prod` is a
+    #   knowable fact now rather than a discovery halfway through. Without this the scope
+    #   half of the red line deferred on every parameterised program and the only thing left
+    #   to catch it was the runtime backstop in `_do` — which stops a run that has ALREADY
+    #   changed the lab, the exact half-run state this pre-flight exists to prevent.
+    banned = _consent.forbidden(program, legal, scope=params)
     if banned and not _consent.permitted(banned, permit):
         return {"ok": False, "failed": "forbidden", "forbidden": banned,
                 "why": (f"{', '.join(banned)} {'is' if len(banned) == 1 else 'are'} a red "
                         f"line for this agent, so this program does not run — not the call, "
                         f"the program. It takes the operator's password to lift"),
                 "scope": {}, "calls": []}
+
+    # WHAT A PERSON LIFTED STAYS LIFTED FOR THIS RUN. Reaching this line with `banned`
+    # non-empty means `permitted` said yes — an operator, in person, with a password. The
+    # runtime backstop in `_do` asks the same filter again and would get the same NO, so
+    # without this it would overturn the re-authentication one statement later and the
+    # password would buy nothing. Found by `test_a_banned_tool_stops_the_whole_program`,
+    # which asserts the lift works; the backstop broke it the moment it was added.
+    #   ⇒ THE LIFT IS PER TOOL, NOT PER TARGET, because that is what the operator was shown:
+    #     `permitted(banned, permit)` is handed tool NAMES and the refusal names tools. A
+    #     per-target lift would be a different question asked of a person who was never asked it.
+    lifted = set(banned or ())
 
     # AUTHORITY FIRST. A REQUEST was not given permission to change anything, so a
     # program written under one that contains an acting statement is refused outright —
@@ -312,7 +344,23 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
         exists, and that is not a broken run — which is why the authority on "did this
         work" is the ENSURE, not the call. But a program with failures and NO ensure has
         vouched for nothing, and is not allowed to pass: unverified is not done.
+
+        ⇒⇒ THE RED LINE, ASKED AGAIN WITH THE ARGUMENTS AS THEY ACTUALLY ARE. The pre-flight
+          answers the whole program before anything runs and answers it with everything
+          KNOWABLE then — literals, and `$params` bound at invocation. What it cannot know is
+          what a loop variable, a grafted result or a FETCH will turn out to be, and a scope
+          is a fact about the TARGET. So this is the backstop for the genuinely runtime case,
+          in the one place every dispatch passes through: putting it in the `call` branch
+          would leave `new`'s creator and the method form unguarded, which is precisely the
+          rule-on-one-path-and-not-the-other defect that produced five of 2026-08-11's twelve.
+
+        ⇒ AND IT IS FINAL FOR THIS RUN — no `permit`, deliberately. Re-authentication is a
+          pre-flight act (*"knowable before the first call, so it is answered before the
+          first call"*); asking for a password once the lab has already moved is a worse
+          posture than stopping, and nobody has ruled that it should be offered here.
         """
+        if tool not in lifted and _consent.ask(legal, tool, args):
+            raise _RedLine(tool)
         calls.append((tool, args))
         result = execute(tool, args)
         if isinstance(result, dict) and (result.get("success") is False or result.get("error")):
@@ -702,7 +750,21 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
         return out
 
     for i, st in enumerate(body):
-        bad = _one(st)
+        try:
+            bad = _one(st)
+        except _RedLine as stop:
+            # THE RUN STOPS HERE AND SAYS SO, INCLUDING WHAT IT HAD ALREADY DONE. `calls`
+            # and `failures` travel with the refusal because this is the one refusal that
+            # can arrive with the lab already changed — the pre-flight's whole purpose is
+            # to make this rare, and when it happens the operator needs the ledger, not
+            # just the verdict. `abandoned` records what never ran, as everywhere else.
+            abandoned.extend(body[i + 1:])
+            return {"ok": False, "failed": "forbidden", "forbidden": [stop.tool],
+                    "why": (f"{stop.tool} is a red line for this agent on that target, so "
+                            f"the run stopped here. Its target was not knowable before the "
+                            f"program started"),
+                    "scope": scope, "calls": calls, "failures": failures,
+                    "abandoned": list(abandoned)}
         # A BREAK WITH NO LOOP AROUND IT is a program error, and `validate` refuses one before
         # anything runs. This is the belt beside it: reported as a failure rather than
         # silently ending the run, because a program that stops early and says nothing is the

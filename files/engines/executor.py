@@ -39,6 +39,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from planner.ir import config as _config
+from planner.ir import consent as _consent
 from planner.ir import effects as _effects
 from .base import Engine
 
@@ -114,8 +115,13 @@ class ExecutorEngine(Engine):
                 # it. Refusing here on an exception would turn a routing decision into a
                 # security verdict.
                 continue
-            tool = (tile or (None, None))[0]
-            if tool and legal(tool):
+            # THE ARGS WERE ALWAYS HERE AND THIS LINE READ PAST THEM. `_one_call` returns
+            # (tool, args) and the red line asked about the tool alone, which is exactly
+            # the gap K5 names: the law could ban `delete_vm` and could not say WHICH
+            # machines it may touch. `consent.ask` puts the question to whatever arity the
+            # injected filter was written with.
+            tool, args = tile or (None, None)
+            if tool and _consent.ask(legal, tool, args):
                 return tool
         return None
 

@@ -101,6 +101,73 @@ def main():
     check("DECREE extends the goal predicate", rs.decrees() == [{"criterion": "mesh", "target": "fleet"}])
     check("by_weight groups the law into tiers", sorted(rs.by_weight().keys()) == [0, 1, 2])
 
+    print("\nSCOPE (K5) — an allowlist WITH A BINDING. This step carries the law; matching comes later")
+    scoped = [
+        {"w": 0, "kind": "access", "text": "recon is confined to the lab network",
+         "effect": {"scope": {"tools": ["scan_network"], "args": {"net_name": "lab"}}}},
+        {"w": 1, "kind": "access", "text": "and to the dmz",
+         "effect": {"scope": {"tools": ["scan_network"], "args": {"net_name": "dmz"}}}},
+        {"w": 1, "kind": "access", "text": "deletes only touch scratch machines",
+         "effect": {"scope": {"tools": ["delete_vm"],
+                              "object": {"kind": "vm", "label": "scratch"}}}},
+    ]
+    ss = RuleSet(scoped)
+    check("a scoped tool comes back with the context it is confined to",
+          [s["context"] for s in ss.scopes("scan_network")] == [{"net_name": "lab"}, {"net_name": "dmz"}])
+    check("BOTH scopes on one tool come back — a union, not a first-match cut (ruling c)",
+          len(ss.scopes("scan_network")) == 2)
+    check("scopes arrive strongest-first", [s["w"] for s in ss.scopes("scan_network")] == [0, 1])
+    check("an ARGS binding is marked as a literal", ss.scopes("scan_network")[0]["bind"] == "args")
+    check("an OBJECT binding is carried whole, not flattened into args",
+          ss.scopes("delete_vm")[0]["bind"] == "object"
+          and ss.scopes("delete_vm")[0]["context"] == {"kind": "vm", "label": "scratch"})
+    check("a scope carries its rule text, so a refusal can name what refused it",
+          ss.scopes("delete_vm")[0]["text"] == "deletes only touch scratch machines")
+
+    print("  the containment rule — one authored scope must not ban the world")
+    check("A TOOL NO SCOPE NAMES IS UNGOVERNED, NOT REFUSED",
+          ss.scopes("launch_vm") == [] and ss.forbids("launch_vm") is False)
+    check("a scope is not a ban: scoping scan_network does not forbid scan_network",
+          ss.forbids("scan_network") is False)
+    check("an empty/None law has no scopes", RuleSet([]).scopes("x") == [] and RuleSet(None).scopes("x") == [])
+
+    print("  ruling (b) — a scope CANNOT lift a ban, and the ban answers first")
+    check("delete_vm stays forbidden even though a scope grants it a context",
+          RuleSet(law + scoped).forbids("delete_vm") is True)
+    check("CONTROL: adding the scope law changes NO existing ban verdict",
+          all(RuleSet(law + scoped).forbids(t) == RuleSet(law).forbids(t)
+              for t in ("delete_vm", "scan_network", "launch_vm", "clone_vm", "wipe_disk"))
+          and RuleSet(law + scoped).allowed_tools() == RuleSet(law).allowed_tools())
+
+    print("\nSCOPE coherence — an unreadable scope is refused at SIGN, never resolved at run")
+    def _one(effect):
+        return conflicts([{"w": 1, "kind": "access", "text": "x", "effect": effect}])
+    check("a scope naming no tools is flagged",
+          any("binds nothing to nothing" in p for p in _one({"scope": {"args": {"net_name": "lab"}}})))
+    check("a scope with no context is flagged — that is an allow, not a scope",
+          any("not a scope" in p for p in _one({"scope": {"tools": ["scan_network"]}})))
+    check("a scope binding BOTH args and object is flagged (union is not an AND)",
+          any("BOTH args and object" in p for p in
+              _one({"scope": {"tools": ["t"], "args": {"a": 1}, "object": {"kind": "vm"}}})))
+    check("a scope that is not an object at all is flagged",
+          any("must be an object" in p for p in _one({"scope": ["scan_network"]})))
+    check("an OBJECT binding carrying a group is flagged — a scope is a conjunction",
+          any("write a set of permitted targets as two scopes" in p for p in
+              _one({"scope": {"tools": ["delete_vm"],
+                              "object": {"kind": "vm", "any": [{"label": "a"}, {"label": "b"}]}}})))
+    check("an OBJECT binding with no kind is flagged — a select without one denotes nothing",
+          any("names no kind" in p for p in
+              _one({"scope": {"tools": ["delete_vm"], "object": {"label": "scratch"}}})))
+    check("an OBJECT binding narrowing nothing beyond the kind is flagged (admits every member)",
+          any("narrows nothing beyond the kind" in p for p in
+              _one({"scope": {"tools": ["delete_vm"], "object": {"kind": "vm"}}})))
+    check("a well-formed scope law is clean", conflicts(scoped) == [])
+    check("DEAD LAW: a scope on a tool the same law BANS is flagged",
+          any("can never admit anything" in p for p in conflicts(law + scoped)))
+    check("...and lifting the ban clears it (the control — the check tracks the ban, not the name)",
+          not any("can never admit anything" in p for p in
+                  conflicts([r for r in law if (r.get("effect") or {}).get("forbid") != ["delete_vm"]] + scoped)))
+
     print("\ncoherence + backward-compat")
     check("clean law → no conflicts", conflicts(law) == [])
     check("unknown kind flagged", any("unknown kind" in p for p in conflicts([{"w": 1, "kind": "wat", "text": "x", "effect": {"a": 1}}])))

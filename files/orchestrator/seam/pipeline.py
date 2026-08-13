@@ -690,7 +690,7 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #   ⇒ ABSENT AN OPERATOR THE ANSWER IS STILL NO, exactly as `permitted` documents, so a
     #     bench with no `permit` behaves as before. What changes is that the refusal now names
     #     the route out instead of being a dead end.
-    banned = gate4.forbidden_tools(operations, _the_red_line(legal))
+    banned = gate4.forbidden_tools(operations, _the_red_line(legal), table, board)
     from planner.ir import consent as _consent
     if banned and _consent.permitted(banned, permit):
         banned = []                       # lifted, in person — it may run

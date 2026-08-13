@@ -39,6 +39,14 @@ def main():
     check("delegation with no effect rejected", P.validate("delegation", {}) is not None)
     check("access with forbid is valid", P.validate("access", {"forbid": ["delete_vm"]}) is None)
     check("documentary 'rule' needs no effect", P.validate("rule", None) is None)
+    check("access with a SCOPE is valid (K5 — a grant bounded by a context)",
+          P.validate("access", {"scope": {"tools": ["scan_network"],
+                                          "args": {"net_name": "lab"}}}) is None)
+    check("a scope bound to an OBJECT is valid too",
+          P.validate("access", {"scope": {"tools": ["delete_vm"],
+                                          "object": {"kind": "vm", "label": "scratch"}}}) is None)
+    check("a MALFORMED scope is refused before the operator ever sees it",
+          P.validate("access", {"scope": {"tools": ["scan_network"]}}) is not None)
 
     print("\npropose — a referendum lands as pending; malformed is refused")
     try:

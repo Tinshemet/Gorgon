@@ -259,12 +259,44 @@ class Contract:
         never remove from it."""
         return self.fields["forbidden"].read(self.contract)
 
-    def is_forbidden(self, tool: str, args: Optional[Dict[str, Any]] = None) -> bool:
+    def refusal(self, tool: str, args: Optional[Dict[str, Any]] = None,
+                selector: Optional[Dict[str, Any]] = None) -> Optional[str]:
+        """WHY this call may not run, or None — the one decision procedure for legality.
+
+        TWO QUESTIONS IN THE ORDER THE OPERATOR SET, 2026-08-13:
+
+            1  IS IT BANNED?   the denylist. `rules.forbids` — unchanged, and answered
+                               FIRST, because *"a scope CAN'T lift a ban"*
+            2  IS IT IN SCOPE? the allowlist with a binding. Only reached when the tool is
+                               not banned, and only ever refuses a tool some scope GOVERNS
+
+        `is_forbidden` is this function seen as a predicate, so the two can never drift —
+        one procedure, two views. The string is what a caller SURFACES: it names the rule
+        that refused, which "forbidden" alone never could.
+
+        ARGS ABSENT IS NOT ARGS REFUSED. A caller with only a name in hand (chat's toolkit
+        filter) gets the ban answered and the scope DEFERRED, by `scope.outside`'s rule —
+        never refuse on information this caller does not have.
+
+        `selector` IS THE FRONT SEAM'S EVIDENCE — a `schema.select_of` shape, because that
+        seam reads a request before any literal exists. Two kinds of evidence, one law.
+        """
+        if self.rules.forbids(tool):
+            return f"{tool} is a red line for this agent"
+        from . import scope as _scope
+        return _scope.outside(tool, self.rules.scopes(tool), args=args, selector=selector)
+
+    def is_forbidden(self, tool: str, args: Optional[Dict[str, Any]] = None,
+                     selector: Optional[Dict[str, Any]] = None) -> bool:
         """LEGAL FILTER (gauntlet step A): a hard, categorical red line the tree may NEVER
         cross — dropped up front, never costed. Resolved via the LAW: the highest-precedence
         ACCESS rule that mentions the tool decides (a w:0 forbid — incl. the migrated legacy
-        `forbidden` list — is inviolable; an explicit allow can lift a weaker forbid)."""
-        return self.rules.forbids(tool)
+        `forbidden` list — is inviolable; an explicit allow can lift a weaker forbid).
+
+        AND SINCE 2026-08-13 IT ALSO ANSWERS SCOPE (K5): a tool a scope governs is refused
+        for a call that call has not shown to be inside it. `args` was accepted and
+        DISCARDED here since the day it was written; it is now the evidence."""
+        return self.refusal(tool, args, selector) is not None
 
     def consent_verb(self, tool: str) -> str:
         """A human-readable consequence to SURFACE in a consent referendum."""
@@ -394,8 +426,9 @@ def campaign_reward() -> float: return ACTIVE.campaign_reward()
 def reward_cost_cfg() -> Dict[str, Any]: return ACTIVE.reward_cost_cfg()
 
 
-def is_forbidden(tool: str, args: Optional[Dict[str, Any]] = None) -> bool:
-    return ACTIVE.is_forbidden(tool, args)
+def is_forbidden(tool: str, args: Optional[Dict[str, Any]] = None,
+                 selector: Optional[Dict[str, Any]] = None) -> bool:
+    return ACTIVE.is_forbidden(tool, args, selector)
 
 
 def consent_verb(tool: str) -> str: return ACTIVE.consent_verb(tool)

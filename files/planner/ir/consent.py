@@ -18,6 +18,7 @@ structural error and a request for consent arrive as the same kind of complaint.
 """
 from __future__ import annotations
 
+import inspect
 from typing import Any, Dict, List, Optional
 
 from . import config, master
@@ -308,7 +309,129 @@ def tools_named(program: Any, seen: Optional[set] = None) -> List[str]:
     return out
 
 
-def forbidden(program: Any, legal: Optional[Any]) -> List[str]:
+def ask(legal: Optional[Any], tool: str, args: Optional[Dict[str, Any]] = None,
+        selector: Optional[Dict[str, Any]] = None) -> bool:
+    """Put the red-line question to an INJECTED filter, whatever arity it was written with.
+
+    TWO CONVENTIONS ARE ALREADY IN THE WILD AND BOTH ARE LOAD-BEARING: the tree asks
+    `legal_filter(name, args)` while this file and `executor._red_line` asked `legal(tool)`.
+    A filter is injected rather than imported precisely so a caller can be handed a
+    different one, so the arity is not something this side gets to legislate — and a red
+    line that raises TypeError is worse than either verdict it could have returned.
+
+    A ONE-ARGUMENT FILTER IS ASKED THE ONE-ARGUMENT QUESTION, which is the deferral rule
+    rather than a workaround: a scope cannot refuse through a filter that never sees the
+    evidence, and the ban it CAN answer is answered exactly as before.
+
+    ⇒ AND ARGS ARE PASSED ONLY WHEN THEY ARE EVIDENCE. An unresolved `$reference` is
+      missing information, not proof of being out of scope — `refs.names` owns that
+      question, because the day the validator and the visitor each answered it themselves
+      is recorded in `refs.py`'s own docstring. `{}` means *this caller has no args*, not
+      *this call has none*, and defers for the same reason an empty selector does.
+    """
+    if not callable(legal):
+        return False
+    try:
+        params = list(inspect.signature(legal).parameters.values())
+    except (TypeError, ValueError):          # builtins / C callables have no signature
+        params = []
+    positional = [p for p in params
+                  if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]
+    if not (any(p.kind is p.VAR_POSITIONAL for p in params) or len(positional) >= 2):
+        return bool(legal(tool))
+    # A SELECTOR IS OFFERED ONLY TO A FILTER THAT NAMES ONE. The front seam holds a selector
+    # and never a literal, so this is the only way its evidence reaches the law; a filter
+    # written before selectors existed keeps answering the question it always answered,
+    # which is the deferral rule and not a compromise.
+    if selector is not None and any(p.name == "selector" for p in params):
+        return bool(legal(tool, _evidence(args), selector=selector))
+    return bool(legal(tool, _evidence(args)))
+
+
+def _evidence(args: Any) -> Optional[Dict[str, Any]]:
+    """The args a red line may judge — or None when they prove nothing."""
+    if not isinstance(args, dict) or not args:
+        return None
+    from . import refs as _refs
+    return None if any(_refs.names(v) for v in args.values()) else args
+
+
+def _bind(args: Any, scope: Optional[Dict[str, Any]]) -> Any:
+    """Args with everything the invocation ALREADY KNOWS substituted in.
+
+    THIS IS WHAT KEEPS A SCOPE CHECK A PRE-FLIGHT. `run(program, params={"target": "prod"})`
+    knows what `$target` is before the first statement, so a program whose target is out of
+    scope can be refused the way the operator's ruling wants it refused — *"not the call, the
+    program"* — instead of dying halfway with the lab already changed.
+
+    AN UNBOUND REFERENCE SURVIVES AS ITSELF, which is `refs.resolve`'s documented behaviour
+    and exactly right here: it still carries a sigil, so `_evidence` defers on it. Only what
+    is genuinely knowable at runtime — a loop variable, a grafted result, a fetched value —
+    reaches the backstop inside `execute._do`.
+    """
+    if not scope or not isinstance(args, dict):
+        return args
+    from . import refs as _refs
+    out = {}
+    for k, v in args.items():
+        try:
+            out[k] = _refs.resolve(v, scope)
+        except Exception:
+            out[k] = v                      # unresolvable is not evidence; leave it be
+    return out
+
+
+def calls_named(program: Any, stack: tuple = (),
+                scope: Optional[Dict[str, Any]] = None) -> List[tuple]:
+    """Every (tool, args) this program would call, procedures expanded, in program order.
+
+    THE SIBLING OF `tools_named`, AND IT DELIBERATELY DOES NOT DE-DUPLICATE. That function
+    answers a MEMBERSHIP question — which tools does this program call — and a set is the
+    right answer to it. A scope asks a PER-CALL question, and collapsing
+    `delete_vm(scratch1)` and `delete_vm(prod1)` into one entry would answer it about
+    whichever came first. Same walk, different question, so: a different function rather
+    than a flag on that one.
+
+    CYCLES ARE BROKEN BY THE EXPANSION PATH, not by a global seen-set, for the same reason:
+    a procedure legitimately called twice must be walked twice, while one that calls itself
+    must not be walked forever. `stack` is the chain of procedures currently being expanded.
+    """
+    from . import effects as _effects
+    from .validate import coerce_body
+
+    out: List[tuple] = []
+    for st in _walk(coerce_body(program) or []):
+        op = st.get("op")
+        if op == "new" and st.get("kind"):
+            tool = _effects.creator_for(st["kind"], st.get("tool"),
+                                        bool(st.get("from"))).get("tool")
+            if tool:
+                out.append((tool, _bind(dict(st.get("args") or {}), scope)))
+        elif op == "call" and st.get("tool"):
+            name = str(st["tool"])
+            args = _bind(dict(st.get("args") or {}), scope)
+            if name in stack:                       # a library that calls itself
+                continue
+            inner = None
+            try:
+                from .. import procedures as _procs
+                inner = _procs.LIBRARY.get(name)
+            except Exception:
+                inner = None
+            if inner is None:
+                out.append((name, args))
+            else:
+                # THE CALLER'S ARGUMENTS BECOME THE CALLEE'S SCOPE — the same rule the
+                # visitor keeps (`execute.py`: *"a procedure that could read the caller's
+                # bindings would be a program whose meaning depends on where it was called
+                # from"*). Threading the OUTER scope in would resolve an inner `$x` against
+                # an unrelated outer one, which is worse than not resolving it at all.
+                out += calls_named(inner, stack + (name,), args)
+    return out
+
+
+def forbidden(program: Any, legal: Optional[Any],
+              scope: Optional[Dict[str, Any]] = None) -> List[str]:
     """The red-lined tools this program would call — empty when it may run.
 
     THE OPERATOR'S RULING, 2026-08-02: *"a tool that is allowed but guarded should still run
@@ -330,12 +453,17 @@ def forbidden(program: Any, legal: Optional[Any]) -> List[str]:
     `legal` NONE MEANS NOBODY IS ANSWERING, and then nothing is forbidden. That is the
     degraded arm of `_deps` (a sparse checkout with no contract), not a default policy —
     a caller with red lines to enforce passes them.
+
+    ⇒ SINCE 2026-08-13 IT ALSO CARRIES THE TARGET (K5). The walk is `calls_named`, so each
+      call is judged with its own arguments and a tool that is fine on one target and out of
+      scope on another is caught on the one that is. A tool already listed is not re-asked —
+      once a program crosses a line, it crosses it.
     """
     if not callable(legal):
         return []
     out: List[str] = []
-    for tool in tools_named(program):
-        if tool not in out and legal(tool):
+    for tool, args in calls_named(program, scope=scope):
+        if tool not in out and ask(legal, tool, args):
             out.append(tool)
     return out
 

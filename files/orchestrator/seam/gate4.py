@@ -386,7 +386,8 @@ def confirmations(operations: List[Operation], table, request: str = "",
     return out
 
 
-def forbidden_tools(operations: List[Operation], legal=None) -> List[str]:
+def forbidden_tools(operations: List[Operation], legal=None, table=None,
+                    board: Optional[Board] = None) -> List[str]:
     """The RED-LINED tools this program would call — empty when it may run.
 
     ⇒⇒ **THE BARRIER THE TREE HAS AND THIS SEAM DID NOT.** Found by the operator, 2026-08-13:
@@ -422,15 +423,42 @@ def forbidden_tools(operations: List[Operation], legal=None) -> List[str]:
       `consent.forbidden` documents, so a bench with no contract behaves exactly as before.
       **It is injected, never imported**, for the reason the tree injects its own: a seam that
       reached for the contract itself could not be handed a different one.
+
+    ⇒⇒ **AND SINCE 2026-08-13 IT CARRIES THE TARGET — WHICH IS THE ONLY THING THAT COULD
+      EVER HAVE CAUGHT RUNG 14** (K5). `delete_vm` over the unfiltered set of every machine
+      passed every check this seam had, because there was nothing to CATCH: no banned tool,
+      no illegal operation, no missing confirmation. A scope inverts the question — the call
+      must SHOW itself inside a permitted context — and an unbound set shows nothing.
+
+      The evidence is a `schema.select_of` SELECTOR, not a literal, because this seam reads a
+      request before any literal exists. Same law, different evidence: `contract.refusal`
+      takes both and `scope.outside` decides which it can read.
+
+    ⇒ **THE OPERATIONS ARE ALREADY THE TOOL LIST**, so this asks per operation rather than
+      through `consent.tools_named`. That function answers *"which tools does this program
+      call"* over an IR BODY with procedures to expand and creators to resolve; an
+      `Operation` is a resolved operator with a declared target attached. Synthesising a body
+      to re-derive what `op.operator` already says would throw the target away at exactly the
+      seam that has one — which was the previous version's actual defect.
+
+    ⇒ WITHOUT `table` THIS IS THE BAN CHECK ALONE, unchanged. A caller that cannot resolve a
+      target defers the scope question by `scope.outside`'s rule rather than guessing at it.
     """
     if not callable(legal):
         return []
     from planner.ir import consent as _consent
-    # ONE AUTHORITY FOR "WHICH TOOLS DOES THIS PROGRAM CALL". Re-deriving it here would be a
-    # second answer to a question `tools_named` already answers, and a red line is the worst
-    # place in the system to keep two of those.
-    body = [{"op": "call", "tool": op.operator, "args": {}} for op in operations]
-    return _consent.forbidden({"body": body}, legal)
+    from . import schema as _schema
+    board = board or Board()
+    by_handle = {sym.handle: sym for sym in (table or ())}
+    out: List[str] = []
+    for op in operations:
+        if op.operator in out:
+            continue
+        sym = by_handle.get(str(op.on))
+        selector = _schema.select_of(sym.row, board) if sym is not None else None
+        if _consent.ask(legal, op.operator, selector=selector):
+            out.append(op.operator)
+    return out
 
 
 # ⇒ EVERY RULE NAME THIS GATE OWNS. `test_each_gate_owns_its_own_checks` asserts no other gate

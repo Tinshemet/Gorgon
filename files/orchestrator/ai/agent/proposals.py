@@ -59,10 +59,19 @@ def validate(kind: str, effect: Optional[Dict[str, Any]]) -> Optional[str]:
     eff = effect or {}
     if not eff:
         return f"a {kind} proposal must declare an effect"
-    ok = {"access": ("forbid", "allow"), "delegation": ("tier",),
+    ok = {"access": ("forbid", "allow", "scope"), "delegation": ("tier",),
           "provisions": ("reward_cost",), "decree": ("success_predicate",)}[kind]
     if not any(k in eff for k in ok):
         return f"a {kind} effect must set one of {ok}"
+    # A SCOPE MUST BE COHERENT TO BE PROPOSABLE, for the same reason the rest of this
+    # function exists: a proposal is a would-be rule, and one that could not be signed is
+    # not something to put in front of the operator. Shape owned by `rules`, never
+    # re-stated here — a second definition of a legal scope is a second law.
+    if "scope" in eff:
+        from .contract.rules import _scope_problems
+        problems = _scope_problems(0, eff["scope"])
+        if problems:
+            return problems[0].replace("rule 0 [access] ", "")
     return None
 
 
