@@ -170,18 +170,42 @@ class _ArgsDevicesMixin:
             self.args += ["-device", "hda-duplex,audiodev=audio0"]
 
     def _usb(self) -> None:
-        """Append the NEC xHCI controller, USB keyboard, and pointing device.
+        """Append the NEC xHCI controller and, on non-stealth VMs, USB HID input.
 
-        Stealth forces a relative ``usb-mouse`` instead of ``usb-tablet``: the
-        absolute-positioning tablet is a hypervisor-console convention (bare-metal
-        machines don't have one) that virt-detection reads as a VM tell. The
-        tradeoff is relative pointer motion over VNC/SDL for stealth VMs.
+        STEALTH EMITS NO USB HID AT ALL, and that is the whole point. QEMU writes
+        its own name into the HID USB descriptors — "QEMU USB Keyboard" and
+        "QEMU USB Mouse" under vendor 0627 — and no argument renames them, so on
+        a machine whose SMBIOS, ACPI, MAC, disk and CPUID are all spoofed the
+        input devices still announce the hypervisor: seven lines of it in guest
+        dmesg, measured on kali-testbox 2026-08-13, plus lsusb and
+        /proc/bus/input/devices. Nothing can be substituted, so the fix is
+        SUBTRACTIVE — drop the devices and let the machine's own i8042 carry
+        input. The guest then reports "AT Translated Set 2 keyboard" and
+        "ImExPS/2 Generic Explorer Mouse", which is exactly what a real laptop's
+        internal keyboard and touchpad report. Both were verified present on the
+        live VM (serio0/serio1, i8042 PNP0303/PNP0f13) BEFORE the USB devices
+        were removed, so this trades a tell for hardware that is already there.
+
+        NOT on ARM: the virt machine has no i8042, so removing HID there would
+        leave the guest with no input at all.
+
+        The xHCI controller stays either way — its PCI IDs are a real NEC part, a
+        machine with no USB controller is odd in itself, and the unattended
+        installer medium hangs off bus=usb.0.
+
+        Non-stealth is unchanged: usb-kbd plus usb-tablet for absolute pointer
+        positioning over VNC/SDL, or usb-mouse when cfg.tablet is off.
         """
         # nec-usb-xhci: NEC uPD720200 USB 3.0 (PCI 1033:0194) — real chip PCI IDs.
         # qemu-xhci uses 1b36 (Red Hat/QEMU) which inxi detects as virtual.
-        self.args += ["-device", "nec-usb-xhci,id=usb", "-device", "usb-kbd"]
-        use_tablet = self.cfg.tablet and not self.cfg.stealth
-        self.args += ["-device", "usb-tablet" if use_tablet else "usb-mouse"]
+        self.args += ["-device", "nec-usb-xhci,id=usb"]
+        if not (self.cfg.stealth and not self.is_arm):
+            self.args += ["-device", "usb-kbd"]
+            # ARM stealth still lands here (no i8042 to fall back to), and the
+            # absolute-positioning tablet is itself a hypervisor-console
+            # convention — so stealth keeps taking the relative mouse.
+            use_tablet = self.cfg.tablet and not self.cfg.stealth
+            self.args += ["-device", "usb-tablet" if use_tablet else "usb-mouse"]
 
         # Unattended Windows: attach the FAT answer medium as a removable USB stick.
         # OVMF mounts FAT (unlike the plain answer ISO), so the UEFI shell auto-runs
