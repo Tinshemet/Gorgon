@@ -203,7 +203,12 @@ def _statement(st: Any, indent: str, binds: Optional[Dict[str, str]] = None) -> 
         return _with_tail([f"{indent}{_w('foreach')} {member} {_w('in')} {src}{par} {{"]
                           + body + [f"{indent}}}"], st, indent, binds)
 
-    if op == "fetch":
+    if op in ("fetch", "query"):
+        # ⇒ ONE BRANCH, TWO KEYWORDS, AND THE WORD COMES FROM THE SURFACE TABLE. `query` reads
+        #   exactly what `fetch` reads — the difference is what may be done with the binding
+        #   afterwards, which is a rule about the PROGRAM and not about this line. Rendering
+        #   them apart would be two spellings of one shape drifting from each other, which is
+        #   the duplication the surface table exists to prevent.
         # A PLAIN SELECT BINDS A SET; a COUNT binds a number and so binds nothing here.
         if st.get("select") and st.get("var"):
             kind = (st["select"] or {}).get("kind")
@@ -213,7 +218,7 @@ def _statement(st: Any, indent: str, binds: Optional[Dict[str, str]] = None) -> 
         inner = _select(q)
         body = f"{_w('count')}({inner})" if st.get("count") else inner
         return [f"{indent}{config.SURFACE['bind']} {st.get('var', '?')} = "
-                f"{_w('fetch')} {body};"]
+                f"{_w(op)} {body};"]
 
     if op in ("ensure", "achieve"):
         # The keyword comes from the surface table, so a word renamed there is renamed

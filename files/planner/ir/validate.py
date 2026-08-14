@@ -380,9 +380,14 @@ def validate(program: Any, known_tools=None, known_names=None,
                         f"{', '.join(repr(m) for m in missing)} — put them in this "
                         f"statement's own arguments, e.g. NEW {kind}({shown}). NEW "
                         f"already calls {creator}; do NOT add a separate {creator} call.")
-        elif op == "fetch":
+        elif op in ("fetch", "query"):
             # A read binds a name the same way a creation does — that is the whole point
             # of it, and the reason it is a statement rather than an expression.
+            #
+            # ⇒ `query` BINDS IDENTICALLY AND MUST BE SEEN TO. Leaving it out of this list
+            #   made every reference to a query's own variable read as *"never created"* —
+            #   found end to end rather than by the invariants, which check that an op is
+            #   REGISTERED and cannot know which readers still have to learn its name.
             problems += _check_select(st.get("select") or st.get("count"), where, sets)
             if st.get("var"):
                 bound.add(str(st["var"]).lstrip(config.SIGIL))
@@ -537,7 +542,7 @@ def validate(program: Any, known_tools=None, known_names=None,
             # so copying one is exactly the case where creation IS the request). A named
             # single creation is already covered by the duplicate-creation rule.
             have = census.get(st.get("kind"), 0)
-            reads = any(k.get("op") == "fetch" for k in body[:i]
+            reads = any(k.get("op") in ("fetch", "query") for k in body[:i]
                         if isinstance(k, dict))
             if have and not reads:
                 problems.append(

@@ -306,6 +306,82 @@ def test_intent_is_enforced_before_anything_runs():
           intent.resolve("do something vague") == intent.FETCH)
 
 
+def test_query_looks_and_does_not_touch():
+    """QUERY, added 2026-08-14. The operator: *"fetch 'brings' the item to the code, you
+    ACTIVELY prepare the item to be modified, like touch in linux; QUERY is more like a
+    cat/grep — it doesn't modify or prep anything for modification, it only gets the
+    information, NOT TOUCHING IT."*
+
+    ⇒ **THE ENFORCEMENT IS THE POINT AND IS WHY THIS TEST EXISTS.** QUERY reads through the
+      same seam as FETCH and binds the same shape, so without a check on what the binding may
+      go on to do it would be a second spelling of one op — and this language has no room for
+      that. The check is `intent.reporting_only`, static, before a line runs.
+    """
+    from planner.ir import execute, effects as _effects, intent, parse
+    from planner.ir.render import render
+    from planner.model_world import World, seams
+
+    w = World(kinds=config.KINDS)
+    for n in ("alpha", "beta"):
+        w.execute("create_vm", {"name": n, "os_type": "linux"})
+    select, holds = seams(w)
+    acting = _effects.actors(config.KINDS)
+
+    def run(p, want=None):
+        return execute.run(p, w.execute, select=select, holds=holds, intent=want,
+                           acting_tools=acting)
+
+    counted = {"op": "query", "var": "n", "count": {"kind": "vm"}}
+    listed = {"op": "query", "var": "vms", "select": {"kind": "vm"}}
+
+    # 1 · IT READS AND REPORTS, AT THE BOTTOM RUNG.
+    answering = {"body": [counted, {"op": "publish", "fact": "n"}]}
+    got = run(answering, intent.FETCH)
+    check("a query that only reports runs", got.get("ok"))
+    check("and the value is the world's, not the program's", got["scope"]["n"] == 2)
+    check("and it is legal at the rung that may not change the lab",
+          not intent.violations(answering, intent.FETCH))
+
+    # 2 · THE CASE THE OP EXISTS FOR — and it is refused at EVERY rung, because the promise
+    #     was the AUTHOR's. An operator licensed to act who wrote `query` still wrote `query`.
+    touched = {"body": [listed, {"op": "call", "tool": "delete_vm",
+                                 "args": {"name": "$vms"}}]}
+    bad = run(touched, intent.ACHIEVE)
+    check("acting on what a query bound is refused",
+          not bad.get("ok") and bad.get("failed") == "query_was_touched")
+    check("even under an ACHIEVE, which may otherwise use the whole language",
+          "does not touch" in (bad.get("why") or ""))
+
+    # 3 · THE LAUNDERED PATH. A loop never mentions `$vms` in the acting statement.
+    laundered = {"body": [listed, {"op": "foreach", "in": "$vms",
+                                   "call": {"op": "call", "tool": "delete_vm",
+                                            "args": {"name": "$item"}}}]}
+    check("a foreach cannot launder a query binding into an act",
+          intent.reporting_only(laundered, acting))
+
+    # 4 · THE CONTROLS. Each is a way this could be over-eager rather than merely weak.
+    worked = {"body": [{"op": "fetch", "var": "vms", "select": {"kind": "vm"}},
+                       {"op": "foreach", "in": "$vms",
+                        "call": {"op": "call", "tool": "delete_vm",
+                                 "args": {"name": "$item"}}}]}
+    check("the SAME program with FETCH is clean — that is the whole distinction",
+          not intent.reporting_only(worked, acting))
+    probing = {"body": [listed, {"op": "foreach", "in": "$vms",
+                                 "call": {"op": "call", "tool": "guest_ping",
+                                          "args": {"name": "$item"}}}]}
+    check("looping over a query to PROBE is not touching", not intent.reporting_only(probing, acting))
+    check("a program with no query at all is never accused",
+          not intent.reporting_only(worked))
+
+    # 5 · IT SURVIVES THE ROUND TRIP. `verify_file` reparses what the renderer wrote, so a
+    #     keyword the renderer emits and the parser rejects breaks every file holding one.
+    text = render(answering)
+    check("it renders with its own keyword", "QUERY" in text)
+    check("and reparses as a query, not as a fetch",
+          parse.parse(text)["body"][0]["op"] == "query")
+    check("and the round trip is stable", render(parse.parse(text)) == text)
+
+
 def test_a_courtesy_cannot_grant_write_authority():
     """A PLEASANTRY WAS A PRIVILEGE ESCALATION. Filed and fixed 2026-08-14 —
     [[gorgon-courtesy-escalates-intent]].

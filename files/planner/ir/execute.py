@@ -290,6 +290,17 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
     # program written under one that contains an acting statement is refused outright —
     # before grounding, because "did you authorise this at all" precedes "did you check
     # your work". See intent.py: the operator decides, and it is enforced, not advised.
+    # ⇒ AND A PROMISE THE PROGRAM MADE ITSELF, CHECKED AT EVERY RUNG INCLUDING THE TOP.
+    #   `violations` asks what the OPERATOR granted; this asks what the AUTHOR said. A
+    #   statement spelled QUERY promised to look without touching, and that promise does not
+    #   become void because an ACHIEVE was granted — an author licensed to act who wrote
+    #   `query` still wrote `query`. So it sits OUTSIDE the `intent is not None` guard: unlike
+    #   authority, there is no such thing as "nobody said" here. The author said.
+    touched = _intent.reporting_only(program, actors=acting_tools)
+    if touched:
+        return {"ok": False, "failed": "query_was_touched", "problems": touched,
+                "why": touched[0], "scope": {}, "calls": []}
+
     promoted = None
     if intent is not None:
         # `acting_tools` TRAVELS BESIDE `known_tools` AND IS NOT THE SAME SET. One says what
@@ -620,11 +631,18 @@ def run(program: Any, execute: Callable[[str, Dict], Any], *,
             if st.get("graft"):
                 scope[st["graft"]] = result
 
-        elif op == "fetch":
+        elif op in ("fetch", "query"):
             # THE WORLD-READ. It goes through the SAME injected `select` seam every query
             # in the language already uses — the Active Library for registry attributes,
             # the findings ledger for what was observed. Nothing new had to be built to
             # answer it; it only had to be bound to a name.
+            #
+            # ⇒ `query` RUNS IDENTICALLY AND THAT IS DELIBERATE. Its promise is about what may
+            #   be done with the binding AFTERWARDS, and that is a property of the whole
+            #   program, so it is settled by `intent.reporting_only` before a line runs rather
+            #   than re-litigated here per statement. A runtime that re-asked the question
+            #   would be a second reader of one rule — the defect this file already carries a
+            #   comment about at the `publish` branch.
             if select is None:
                 return {"ok": False, "failed": "no select evaluator",
                         "scope": scope, "calls": calls}

@@ -81,8 +81,12 @@ _PERMITS = {
     # `break` SITS AT EVERY RUNG, like `if`. It reaches nothing, changes nothing and asserts
     # nothing — it only shortens the loop it is inside — so withholding it from a FETCH would
     # forbid a retrieval from stopping early, which is a restriction with no rung behind it.
-    FETCH:   {"fetch", "publish", "call", "foreach", "if", "break"},
-    ENSURE:  {"fetch", "ensure", "publish", "call", "foreach", "if", "break"},
+    # `query` SITS AT EVERY RUNG FOR THE SAME REASON `publish` DOES — it cannot change the
+    # lab by construction, and a rung that may read but not LOOK is not a rung. It is the
+    # weaker of the two reads: `fetch` binds a handle to work on, `query` binds a value to
+    # report, and what a query bound may never reach an acting statement.
+    FETCH:   {"fetch", "query", "publish", "call", "foreach", "if", "break"},
+    ENSURE:  {"fetch", "query", "ensure", "publish", "call", "foreach", "if", "break"},
     ACHIEVE: None,                # the whole language
 }
 
@@ -180,6 +184,83 @@ def resolve(goal: str, asked: Any = None) -> str:
         if answer in _PERMITS:
             return answer
     return FETCH
+
+
+def _refs_in(value: Any) -> set:
+    """Every `$name` anywhere inside a statement — args, selects, lists, nested blocks."""
+    out: set = set()
+    if isinstance(value, str):
+        if value.startswith(config.SIGIL):
+            out.add(value[len(config.SIGIL):])
+    elif isinstance(value, dict):
+        for v in value.values():
+            out |= _refs_in(v)
+    elif isinstance(value, (list, tuple)):
+        for v in value:
+            out |= _refs_in(v)
+    return out
+
+
+def reporting_only(program: Any, actors: Optional[set] = None) -> List[str]:
+    """What a QUERY bound, reaching a statement that ACTS. Empty when the program is honest.
+
+    ⇒⇒ **THIS IS THE WHOLE DIFFERENCE BETWEEN `query` AND `fetch`, AND IT HAD TO BE CHECKED
+      OR THE OP WOULD BE A SYNONYM.** The operator, 2026-08-14: *"fetch 'brings' the item to
+      the code, you ACTIVELY prepare the item to be modified, like touch in linux; QUERY is
+      more like a cat/grep… it only gets the information, NOT TOUCHING IT."* Both read the
+      world through the same seam and bind the same shape. What separates them is what the
+      binding may go on to do, so that is where the separation is enforced.
+
+    ⇒ **STATIC, AND BEFORE ANYTHING RUNS.** It is a property of the whole program, not of a
+      line, so the executor does not re-ask it per statement — one rule, one reader, which is
+      the duplication `master.statement_acts` was written to end after the same question got
+      three slightly different answers in three places.
+
+    ⇒ **THE INDIRECT PATH IS COVERED, BECAUSE IT IS THE OBVIOUS ESCAPE.** `FOREACH $item IN
+      $q { CALL delete_vm(...) }` never mentions `$q` in the acting statement — the loop
+      launders it into `$item`. A foreach whose source is a query binding and whose body acts
+      is the same trespass one level in, and is reported against the loop.
+
+    ⚠ **WHAT IT DOES NOT CATCH, SAID RATHER THAN LEFT LOOKING COMPLETE:** a value copied out
+      of a query binding by something other than a foreach. Nothing in the language does that
+      today — `fetch` and `query` bind from a SELECT and never from another variable — so the
+      gap is closed by the grammar rather than by this function. If an op is ever added that
+      binds from a name, this becomes incomplete on the day it lands.
+    """
+    from . import master
+    from .consent import _walk
+    from .validate import coerce_body
+
+    body = coerce_body(program) or []
+    bound = {str(st.get("var")) for st in _walk(body)
+             if st.get("op") == "query" and st.get("var")}
+    if not bound:
+        return []
+
+    out: List[str] = []
+    for i, st in enumerate(_walk(body)):
+        op = st.get("op")
+        if op == "query":
+            continue
+        # A FOREACH IS ITS BODY — the same reading `statement_acts` already takes — so a loop
+        # over a query binding is judged by whether anything inside it acts.
+        if op == "foreach" and _refs_in(st.get("in")) & bound:
+            inner = st.get("do") or ([st["call"]] if st.get("call") else [])
+            if any(master.statement_acts(s, actors) for s in _walk(inner)):
+                named = ", ".join(sorted(_refs_in(st.get("in")) & bound))
+                out.append(f"statement {i + 1}: `foreach` acts on every member of "
+                           f"${named}, which a QUERY bound — a query looks and does not "
+                           f"touch. Use `fetch` if this is meant to be worked on.")
+            continue
+        if not master.statement_acts(st, actors) and op != ACHIEVE:
+            continue
+        hit = _refs_in(st) & bound
+        if hit:
+            named = ", ".join(f"${h}" for h in sorted(hit))
+            out.append(f"statement {i + 1}: `{op}` acts on {named}, which a QUERY bound — "
+                       f"a query looks and does not touch. Use `fetch` if this is meant to "
+                       f"be worked on.")
+    return out
 
 
 def permits(intent: str) -> bool:

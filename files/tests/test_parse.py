@@ -64,6 +64,11 @@ CORPUS = {
     "publish": {"body": [{"op": "publish", "fact": "done"}]},
     "fetch": {"body": [{"op": "fetch", "var": "n", "count": {"kind": "vm"}}]},
     "fetch of a set": {"body": [{"op": "fetch", "var": "all", "select": {"kind": "vm"}}]},
+    # QUERY IS FETCH'S SHAPE UNDER A DIFFERENT PROMISE, so it round-trips through the same
+    # production and needs its own case to prove the keyword survives — the renderer emits
+    # QUERY and `verify_file` reparses what the renderer wrote.
+    "query": {"body": [{"op": "query", "var": "n", "count": {"kind": "vm"}}]},
+    "query of a set": {"body": [{"op": "query", "var": "seen", "select": {"kind": "vm"}}]},
     "foreach over a set": {"body": [{"op": "foreach", "select": {"kind": "vm"}, "do": [
         {"op": "call", "tool": "launch_vm", "args": {"name": "$item"}}]}]},
     "foreach over a literal list": {"body": [{"op": "foreach", "in": ["a", "b"], "do": [

@@ -32,6 +32,7 @@
         "achieve",
         "break",
         "fetch",
+        "query",
         "if"
       ],
       "predicates": [
@@ -184,6 +185,24 @@
       ],
       "doc": "READ the world and bind what you find. `count` binds HOW MANY match (a number); `select` binds the matching names (a set). This is the only way to write one program that is correct whatever the lab already holds — read first, then act on the difference."
     },
+    "query": {
+      "required": [
+        "var"
+      ],
+      "one_of": [
+        [
+          "select",
+          "count"
+        ]
+      ],
+      "fields": [
+        "var",
+        "select",
+        "count"
+      ],
+      "doc": "LOOK at the world without taking hold of it. Same shape as FETCH and a different promise: the operator, 2026-08-14 — *\"fetch 'brings' the item to the code, you ACTIVELY prepare the item to be modified, like touch in linux; QUERY is more like a cat/grep, it doesn't modify or prep anything for modification, it only gets the information, NOT TOUCHING IT.\"* So FETCH's `var` is a HANDLE to work on and QUERY's is a VALUE to report: what a query binds may be PUBLISHED and may not be passed to anything that acts. That is not a naming convention, it is checked — an op whose distinction is only in its documentation is a synonym, and this language has no room for two spellings of one thing. Use FETCH when a later statement acts on what you found; use QUERY when the answer IS the deliverable.",
+      "reads": true
+    },
     "publish": {
       "required": [
         "fact"
@@ -276,6 +295,7 @@
       "ops": [
         "new",
         "fetch",
+        "query",
         "publish",
         "call",
         "foreach",
@@ -290,6 +310,7 @@
       "ops": [
         "new",
         "fetch",
+        "query",
         "publish",
         "call",
         "foreach",
@@ -304,6 +325,7 @@
       "ops": [
         "new",
         "fetch",
+        "query",
         "publish",
         "call",
         "ensure",
@@ -316,6 +338,7 @@
       "ops": [
         "new",
         "fetch",
+        "query",
         "publish",
         "call",
         "foreach",
@@ -331,6 +354,7 @@
     "structural": [
       "new",
       "call",
+      "query",
       "foreach",
       "if",
       "break"
@@ -989,6 +1013,7 @@
     },
     "achieve": "ACHIEVE",
     "fetch": "FETCH",
+    "query": "QUERY",
     "new": "NEW",
     "foreach": "FOREACH",
     "in": "IN",
@@ -1155,7 +1180,8 @@
     "select_hint": {
       "needs": [
         "foreach",
-        "fetch"
+        "fetch",
+        "query"
       ]
     },
     "reference": {

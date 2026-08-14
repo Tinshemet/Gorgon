@@ -478,9 +478,15 @@ def _bound(cur: _Cursor) -> Dict[str, Any]:
     cur.take("=")
     if cur.at(_word("new")):
         return _new(cur, var)
-    if cur.at(_word("fetch")):
+    # ⇒ ONE BRANCH, TWO KEYWORDS — the same shape read two ways. `QUERY` binds exactly what
+    #   `FETCH` binds; the difference is what the program may do with it afterwards, which is
+    #   `intent.reporting_only`'s question and not the grammar's. Parsing them apart would be
+    #   two copies of one production drifting, and `verify_file` round-trips through here, so
+    #   an unparseable keyword the RENDERER emits breaks every file that contains it.
+    if cur.at(_word("fetch")) or cur.at(_word("query")):
+        reading = "query" if cur.at(_word("query")) else "fetch"
         cur.take()
-        st: Dict[str, Any] = {"op": "fetch", "var": var}
+        st: Dict[str, Any] = {"op": reading, "var": var}
         if cur.at(_word("count")):
             cur.take()
             cur.take("(")
@@ -499,7 +505,7 @@ def _bound(cur: _Cursor) -> Dict[str, Any]:
         return st
     if cur.at(_word("call")):
         return _call(cur, graft=var)
-    raise ParseError(f"expected NEW, FETCH or CALL after '{var} ='", cur.tok.line)
+    raise ParseError(f"expected NEW, FETCH, QUERY or CALL after '{var} ='", cur.tok.line)
 
 
 def _new(cur: _Cursor, var: str) -> Dict[str, Any]:

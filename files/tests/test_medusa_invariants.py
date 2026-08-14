@@ -140,6 +140,9 @@ _OP_EFFECT = {
     "new":     "issues a creator call",
     "call":    "issues its tool",
     "fetch":   "binds what it read",
+    # THE SAME READ, A WEAKER BINDING. `fetch` binds a handle a later statement may act on;
+    # `query` binds a value that may only be reported — the operator's `touch` versus `cat`.
+    "query":   "binds what it read, for reporting only",
     "publish": "submits a finding upward",
     "foreach": "issues a call per member",
     "ensure":  "produces a verdict",

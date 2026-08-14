@@ -37,10 +37,26 @@ class Lab:
       deployment has one — but a bench does not, so this is it. It holds exactly the objects
       the requests REFER TO as already existing, and nothing else: adding a row the corpus
       does not mention would be flattering the number.
+
+    ⇒⇒ **n1 · n2 · n3 ADDED 2026-08-14, AT THE OPERATOR'S INSTRUCTION, AND IT IS NOT A FREE
+      ROW.** Rung 9 names them and nothing in English says they are machines — the same
+      argument that put `db` here, so they belong by this fixture's own rule. But they are the
+      first rows that change what **`every vm`** MEANS: rungs 5, 8, 11 and 12 all select over
+      the unfiltered set, which went from 2 members to 5. Any movement on those four is this
+      change, not the code under test.
+
+    ⇒ **AND THEY EXIST SO THE WORLD ARM CAN BE MEASURED AT ALL.** `residue.classify` separates
+      a real name from a meaningless one by asking whether the lab HAS it — `lab_has`. With no
+      row for `n1`, rung 9's spans and the word `doorman` are the same word to that check, so
+      the act-vs-answer residue signal could not be measured on this corpus. `running` because
+      rung 9 asks them to ping each other and a stopped machine cannot.
     """
     ROWS = [
         {"kind": "vm", "name": "db", "status": "running"},        # rung 8's `except db`
         {"kind": "vm", "name": "golden", "status": "stopped"},    # rung 10's clone source
+        {"kind": "vm", "name": "n1", "status": "running"},        # rung 9's mesh
+        {"kind": "vm", "name": "n2", "status": "running"},
+        {"kind": "vm", "name": "n3", "status": "running"},
     ]
 
     def select(self, query):
