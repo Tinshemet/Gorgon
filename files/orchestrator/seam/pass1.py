@@ -625,14 +625,33 @@ def settle_by_affordance(rows: List[S.Declared], request: str,
     from planner.gates import claims as _claims
     from .scan import GRAMMAR, _operation_words
 
-    words = {w.strip(".,'\"—–?!").lower() for w in str(request).split()}
-    # every kind named by a verb only ONE kind affords
-    settled = {next(iter(afford[w])) for w in words
-               if afford.get(w) and len(afford[w]) == 1}
-    if len(settled) != 1:
-        return rows                       # nothing, or two different readings — settle neither
-    kind = settled.pop()
-    key = _claims.key_of(kind, board.kinds)
+    # ⇒⇒ **A VERB SETTLES THE SPANS IN ITS OWN CLAUSE, NOT EVERY SPAN IN THE REQUEST.**
+    #   Added 2026-08-14. This read the affordance off `str(request).split()`, so ONE verb
+    #   unique to one kind typed EVERY kindless row in the sentence as that kind — and a
+    #   request whose lab-facing clause says `stop` typed its greeting as a machine, which is
+    #   how gate 2 came to ask whether to create one. The rule is right and its SCOPE was the
+    #   whole sentence.
+    #
+    #   ⇒ **THE CLAUSE IS THE SCOPE BECAUSE THE SPAN IS TOO NARROW.** Rung 9's spans are
+    #     *"make sure n1"*, *"n2"* and *"n3 can all ping each other"* — only the last contains
+    #     `ping`, so a span-scoped rule would settle one row of three and leave the rung
+    #     exactly as broken as it was before this function existed. The clause holds all three.
+    #
+    #   ⇒ **AND A SPAN NO CLAUSE CONTAINS SETTLES NOTHING**, rather than falling back to the
+    #     request — a fallback is the old behaviour wearing a guard.
+    from .pass2 import clauses_of
+    _clauses = clauses_of(request) or [str(request)]
+
+    def _kind_for(row) -> Optional[str]:
+        """The kind afforded by the clause this row's span sits in, or None."""
+        span = str(row.span or row.name).lower().strip()
+        holder = next((c for c in _clauses if span and span in c.lower()), None)
+        if holder is None:
+            return None
+        here = {w.strip(".,'\"—–?!").lower() for w in holder.split()}
+        found = {next(iter(afford[w])) for w in here
+                 if afford.get(w) and len(afford[w]) == 1}
+        return found.pop() if len(found) == 1 else None
 
     # ⇒⇒ **AND THE KIND MUST ARRIVE WITH THE NAME, OR SETTLING IT DESTROYS THE ROW.**
     #   Measured 2026-08-11: typing `n1`/`n2`/`n3` as `vm` and stopping there renamed their
@@ -650,6 +669,11 @@ def settle_by_affordance(rows: List[S.Declared], request: str,
         if row.object_type != UNKNOWN_KIND:
             out.append(row)
             continue
+        kind = _kind_for(row)
+        if not kind:
+            out.append(row)
+            continue
+        key = _claims.key_of(kind, board.kinds)
         where = dict(row.where or {})
         if key and not where.get(key):
             span = [w.strip(".,'\"—–") for w in str(row.span or row.name).lower().split()]

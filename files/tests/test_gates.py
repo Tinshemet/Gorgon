@@ -1521,6 +1521,48 @@ def test_being_spoken_to_is_not_being_asked_to_build_something():
 
 
 
+def test_an_affordance_verb_settles_its_own_clause_and_not_the_sentence():
+    """A VERB UNIQUE TO ONE KIND SAYS WHAT ITS CLAUSE IS ABOUT — not what every span is.
+
+    ⇒ **THE RULE IS RIGHT AND ITS SCOPE WAS THE WHOLE SENTENCE.** `settle_by_affordance` read
+      the affordance off `str(request).split()`, so one verb anywhere typed EVERY kindless row
+      in the request as that kind. A request whose lab-facing clause says `stop` therefore
+      typed its unrelated spans as machines, and gate 2 asked whether to create them — correct
+      for what it was shown, and a question about something that was never a thing.
+
+    ⇒ **THE CLAUSE, BECAUSE THE SPAN IS TOO NARROW.** Rung 9's spans are *"make sure n1"*,
+      *"n2"* and *"n3 can all ping each other"*: only the last contains `ping`, so a
+      span-scoped rule settles one row of three and leaves the rung as broken as it was before
+      this function existed. The FIRST check below is that rung, and it is the control.
+
+    ⚠ **THE SECOND CASE IS SYNTHETIC ON PURPOSE.** It is not lifted from the measured arms —
+      a rule derived from the spans a particular sentence happened to produce is three special
+      cases wearing a general name. What is asserted is the PROPERTY: a clause carrying no
+      affording verb settles nothing, whatever it happens to contain.
+    """
+    from planner.formula.legal import Board
+    from orchestrator.seam import pass1 as P
+
+    board = Board()
+    # 1 · THE CONTROL — the rung this rule exists for. One clause, one affording verb, and
+    #     every bare name in it is settled by it.
+    nine = P.EXPECTED[9].request
+    settled = P.settle_by_affordance(P.run_scanned(nine, board=board), nine, board)
+    check("a clause's affording verb still settles every bare name in that clause",
+          all(r.object_type == "vm" for r in settled))
+
+    # 2 · THE PROPERTY — a span in a clause with no affording verb is left kindless, however
+    #     the rest of the sentence reads.
+    req = "some preamble here; launch every vm that is currently stopped"
+    rows = P.run_scanned(req, board=board)
+    after = P.settle_by_affordance(rows, req, board)
+    unrelated = [r for r in after if "preamble" in str(r.span or r.name).lower()]
+    check("a clause carrying no affording verb settles nothing in it",
+          all(r.object_type == P.UNKNOWN_KIND for r in unrelated) if unrelated else True)
+    check("while the clause that does carry one is unaffected",
+          any(r.object_type != P.UNKNOWN_KIND for r in after))
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "gates")
