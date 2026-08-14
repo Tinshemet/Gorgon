@@ -294,10 +294,69 @@ def test_intent_is_enforced_before_anything_runs():
     check("and nothing ran", res["calls"] == [])
     check("the same program is allowed under an ACHIEVE",
           _run(acting, w, intent=intent.ACHIEVE)["ok"])
-    check("several markers take the HIGHEST rung, not a conflict",
-          intent.declared("check golden exists, then spin up two") == intent.ACHIEVE)
+    # ⚠ THIS ASSERTION CHANGED ON 2026-08-14 AND IT IS A DELIBERATE SEMANTIC CHANGE, not a
+    #   key edited to make a run pass (rule V5). It used to read `== intent.ACHIEVE`. A word
+    #   may no longer name the one rung that can change the lab — see
+    #   [[gorgon-courtesy-escalates-intent]] and `declared()`'s own docstring.
+    check("a sentence that NAMES AN ACT declares nothing — the person is asked",
+          intent.declared("check golden exists, then spin up two") is None)
+    check("several markers still take the HIGHEST rung among the ones that cannot harm",
+          intent.declared("check golden exists, then list the vms") == intent.ENSURE)
     check("with nobody to ask the answer is the bottom rung",
           intent.resolve("do something vague") == intent.FETCH)
+
+
+def test_a_courtesy_cannot_grant_write_authority():
+    """A PLEASANTRY WAS A PRIVILEGE ESCALATION. Filed and fixed 2026-08-14 —
+    [[gorgon-courtesy-escalates-intent]].
+
+    `get`, `bring`, `build` and `make it` are ACHIEVE markers AND ordinary polite English, so
+    every one of these granted the maximum rung to a request that, said plainly, declares
+    nothing and floors to FETCH. **The harm was not the rung — it was that `resolve()` asks
+    the operator exactly when `declared()` returns None, so a courtesy meant the one question
+    was never put to the person and the answer supplied on their behalf was the grant.**
+
+    THE CONTROL IS THE OTHER DIRECTION. `permits()` says fetch and ensure cannot change the
+    lab, so only ACHIEVE was ever dangerous — and a fix that quietly took the safe rungs with
+    it would be a different regression wearing this one's name.
+    """
+    base = "take a snapshot of every running vm"
+    check("the bare request declares nothing and floors to the bottom rung",
+          intent.declared(base) is None and intent.resolve(base) == intent.FETCH)
+
+    # THE SEVEN PHRASINGS MEASURED THE DAY IT WAS FOUND. Not a sample — every one of them
+    # returned ACHIEVE before the fix, and each carries a DIFFERENT marker, which is the
+    # argument against trimming the list instead of withdrawing its authority.
+    for courtesy in ("when you get a chance, {g}",
+                     "could you get to this? {g}",
+                     "{g} - make it quick",
+                     "please bring me up to speed, then {g}",
+                     "lets get started: {g}",
+                     "{g} when you get a moment",
+                     "i need you to build up a picture: {g}"):
+        said = courtesy.format(g=base)
+        check(f"a courtesy grants nothing: {courtesy.format(g='…')!r}",
+              intent.declared(said) is None)
+        check("and with nobody to ask it floors to FETCH, which cannot change the lab",
+              intent.resolve(said) == intent.FETCH and not intent.permits(intent.FETCH))
+
+    # ⇒ THE OPERATOR'S OWN WORD IS STILL TRUSTED. Inference is what was untrusted, never the
+    #   person — a typed prefix declares anything it likes.
+    check("an explicit prefix still declares an ACHIEVE",
+          intent.declared(f"achieve: {base}") == intent.ACHIEVE)
+    check("and the question is asked precisely when nothing was declared",
+          intent.question(base) is not None
+          and intent.question(f"achieve: {base}") is None)
+
+    # ⇒ THE SAFE HALF OF THE LIST IS UNTOUCHED — the control for this fix.
+    check("a fetch marker still declares", intent.declared("list the vms") == intent.FETCH)
+    check("an ensure marker still declares", intent.declared("check that alpha is up")
+          == intent.ENSURE)
+    # ⇒ AND THE HIGHEST-RUNG RULE STILL OPERATES ACROSS THE TWO SAFE RUNGS. *"how many vms
+    #   ARE THERE"* names both `how many` (fetch) and `are there` (ensure) — my first draft
+    #   of this test asserted FETCH and was wrong about the sentence, not about the code.
+    check("a sentence naming both safe rungs takes the higher one",
+          intent.declared("how many vms are there") == intent.ENSURE)
 
 
 def test_a_standing_goal_below_its_granted_authority_is_raised():

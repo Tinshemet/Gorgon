@@ -100,6 +100,23 @@ def declared(goal: str) -> Optional[str]:
 
     None rather than a nearest match. A marker set that reaches is a vocabulary, and
     vocabularies are the thing this language exists to delete.
+
+    ⇒⇒ **A WORD MAY NAME A RUNG THAT CANNOT HARM. IT MAY NEVER NAME THE ONE THAT CAN.**
+      Fixed 2026-08-14 — [[gorgon-courtesy-escalates-intent]]. `get`, `bring`, `build` and
+      `make it` are ACHIEVE markers AND ordinary polite English, so *"when you get a chance,
+      take a snapshot of every running vm"* declared ACHIEVE where the bare sentence declares
+      nothing and floors to FETCH. **7 of 7 ordinary courtesies escalated.** `permits()` is
+      the whole stake: fetch and ensure may not change the lab and achieve may, so only one
+      direction of this list was ever dangerous and only that direction is withdrawn.
+
+    ⇒ **AND THE HARM WAS NOT THE RUNG — IT WAS SKIPPING THE PERSON.** `resolve()` asks the
+      operator exactly when this returns None, and every other branch of that design floors
+      to FETCH (no answer, bad answer, absent terminal). A courtesy made this function
+      CONFIDENT, so the one question was never put to the human and the answer supplied on
+      their behalf was the maximum grant. Returning None here hands it back to them.
+
+    ⇒ **AN EXPLICIT PREFIX STILL DECLARES ANYTHING**, because the operator typed the word
+      `achieve:` themselves. Inference is what is untrusted, not the operator.
     """
     if not isinstance(goal, str) or not goal.strip():
         return None
@@ -111,13 +128,22 @@ def declared(goal: str) -> Optional[str]:
 
     hits = {meaning for meaning, words in _markers().items()
             for w in words if text.startswith(w + " ") or f" {w} " in f" {text} "}
+    if ACHIEVE in hits:
+        # ⇒ DECLINE RATHER THAN FALL BACK TO THE NEXT RUNG DOWN. Answering `ensure` to a
+        #   sentence that named an act would under-grant SILENTLY and surface as a refusal
+        #   three layers later; None asks the person whose grant it is. This is the case the
+        #   question was written for.
+        return None
     if not hits:
         return None
-    # SEVERAL MARKERS IS NOT AMBIGUITY. "check golden exists, then spin up two" wants a
-    # verification AND a command, and the ladder already says a command may contain both.
+    # SEVERAL MARKERS IS NOT AMBIGUITY. "check golden exists, then list the vms" wants a
+    # verification AND a report, and the ladder already says a command may contain both.
     # So the answer is the HIGHEST rung named — the authority the program needs — and the
-    # lower words describe parts of it rather than competing with it. This is the three
-    # working together rather than three choices to pick between.
+    # lower words describe parts of it rather than competing with it.
+    #
+    # ⚠ THIS RULE IS WHY THE ESCALATION WAS SO CHEAP, and it is kept rather than repaired:
+    #   it is correct for the rungs that remain, where the worst a wrong answer buys is a
+    #   check nobody wanted. It was only ever dangerous with ACHIEVE in the set.
     return max(hits, key=_RUNG.__getitem__)
 
 
