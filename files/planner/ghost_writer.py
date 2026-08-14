@@ -26,7 +26,7 @@ version had: a precondition met by an earlier tile is simply true by the time it
 from __future__ import annotations
 
 import copy
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 from .ir import config
 from .ir import effects
@@ -59,6 +59,30 @@ def _seams_of(world):
     return got
 
 Call = Tuple[str, Dict[str, Any]]
+
+
+class Loop(NamedTuple):
+    """ONE TILE PLACED OVER A SET INSTEAD OF OVER A MEMBER — the timeless form of a call.
+
+    ⇒⇒ **WHY THE PLAN NEEDED A SECOND SHAPE AT ALL.** `Call` is `(tool, args)`, so a plan is a
+      flat list of invocations and **a loop cannot be written in it**. That is the whole reason
+      the writer resolves a select while writing and emits one call per name it finds: measured
+      2026-08-14, **7 of the 14 rungs carry a name read out of the lab**, and such a program is
+      correct only for the lab it was written against. The operator: *"instead of thinking in
+      write time we force it to think outside time, more generic, applicable forever."*
+
+    ⇒ **IT IS A THREE-FIELD RECORD ON PURPOSE, AND THAT IS A SAFETY FEATURE.** Every existing
+      consumer unpacks the plan as `for tool, args in plan`. Handed a `Loop`, that raises
+      immediately instead of quietly reading `over` as something else — a loud stop at the one
+      site somebody forgot beats a program that runs and means something different. The same
+      reasoning `Declared` uses: one shape, one meaning, and no shape that can pass for another.
+
+    `args` CARRIES THE LOOP VARIABLE, not a name — the key argument is `$item`, and `over` is
+    the select it ranges across, evaluated when the program RUNS rather than when it is written.
+    """
+    tool: str
+    args: Dict[str, Any]
+    over: Dict[str, Any]
 
 
 class Unsolvable(Exception):
@@ -855,6 +879,22 @@ def groundable(goal: Dict[str, Any]) -> bool:
     return not ("_call" in goal or "observe" in goal)
 
 
+def _as_loop(step: "Loop", kinds) -> Dict[str, Any]:
+    """A set-shaped tile as a Medusa `foreach` over a SELECT — resolved when the program runs.
+
+    ⇒ **`select`, NEVER `in`.** `foreach` accepts both, and the difference is exactly the one
+      this shape exists for: `in` takes a literal list, which is the write-time answer written
+      down again, while `select` carries the QUESTION and is answered at run time. Emitting
+      `in` here would render a loop that is precisely as stale as the calls it replaced.
+
+    ⇒ **NEVER A `new`.** `_as_statement` promotes a creation to the `new` operator because that
+      is how the runtime mints and binds a name — and a loop over an existing set is the one
+      case that is definitionally not a creation. It ranges over members that already exist.
+    """
+    return {"op": "foreach", "select": dict(step.over),
+            "call": {"op": "call", "tool": step.tool, "args": dict(step.args)}}
+
+
 def _as_statement(tool: str, args: Dict[str, Any], kinds) -> Dict[str, Any]:
     """One placed tile as a Medusa statement — `new` for a creation, `call` for the rest.
 
@@ -1024,12 +1064,24 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
     # PERFORMS IT. Fixed in `cover` on 2026-08-01 and missed here; found the first time a
     # QEMU mount met a real library, by an executor that refused to act.
     scratch = _scratch_of(world) if world is not None else None
-    if scratch is not None:
-        for tool, args in plan:
-            scratch.execute(tool, args)
     select = _seams_of(scratch)[0] if scratch is not None else (lambda s, scope=None: [])
+    if scratch is not None:
+        for step in plan:
+            # ⇒ A LOOP IS REPLAYED AS THE MEMBERS IT WOULD TOUCH *AT THIS POINT IN THE PLAN*.
+            #   The replay exists to compute the closing witness's number, and that number is
+            #   about the world the program leaves behind — so the select is resolved HERE,
+            #   against a scratch that earlier statements have already moved, and not once up
+            #   front. Resolving it early would witness a world the program never produces.
+            if isinstance(step, Loop):
+                key = (effects._K(_kinds(scratch)).get(
+                    effects._kind_of(step.tool, _kinds(scratch))) or {}).get("key")
+                for m in select(step.over):
+                    scratch.execute(step.tool, {**step.args, key: m} if key else step.args)
+            else:
+                scratch.execute(*step)
     kinds_now = _kinds(scratch)
-    body = _by_reference([_as_statement(t, a, kinds_now) for t, a in plan], kinds_now)
+    body = _by_reference([_as_loop(s, kinds_now) if isinstance(s, Loop)
+                          else _as_statement(s[0], s[1], kinds_now) for s in plan], kinds_now)
 
     # THE DELIVERABLE — ask the thing the member was CREATED IN ORDER TO ANSWER.
     #

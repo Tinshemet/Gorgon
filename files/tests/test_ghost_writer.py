@@ -483,6 +483,65 @@ def test_the_no_model_path_only_ever_emits_the_core():
     check(f"and no core op goes unemitted ({sorted(unused)})", not unused)
 
 
+def test_a_plan_can_carry_a_loop_and_the_program_names_nobody():
+    """STEP 1 of writing OUTSIDE TIME. The operator, 2026-08-14: *"instead of thinking in
+    write time we force it to think 'outside' time, more generic, applicable forever."*
+
+    ⇒ **THE BLOCKER WAS THE PLAN'S TYPE, NOT THE TILES.** `Call` is `(tool, args)`, so a plan
+      is a flat list of invocations and a loop cannot be written in one — which is why the
+      writer resolves a select while writing and emits one call per name it finds. Measured
+      the same day: **7 of 14 rungs carry a name read out of the lab**, and such a program is
+      correct only for the lab it was written against.
+
+    NOTHING EMITS A `Loop` YET. This pins the shape before the writer produces one, so the
+    step that flips `_lower` over has something to be judged against rather than a claim.
+    """
+    from planner.ir import config, execute
+    from planner.ir.render import render
+    from planner.model_world import World, seams
+    from tests.bench.ghost_writer import Loop
+
+    def lab(*rows):
+        w = World(kinds=config.KINDS)
+        for name, status in rows:
+            w.execute("create_vm", {"name": name, "os_type": "linux"})
+            w.execute("launch_vm", {"name": name})
+            if status == "stopped":
+                w.execute("stop_vm", {"name": name})
+        return w
+
+    goal = [{"shape": "count", "select": {"kind": "vm", "status": "stopped"}, "eq": 0}]
+    over = {"kind": "vm", "status": "stopped"}
+    plan = [Loop("launch_vm", {"name": config.SIGIL + config.LOOP_VAR}, over)]
+
+    author = lab(("alpha", "stopped"), ("beta", "stopped"))
+    prog = as_program(plan, goal, author)
+    text = render(prog)
+
+    check("a loop-carrying plan renders a foreach", "FOREACH" in text)
+    # ⇒ THE POINT OF THE WHOLE EXERCISE, ASSERTED DIRECTLY: no machine the writer LOOKED UP
+    #   may appear. `alpha` and `beta` were in the lab when this was written.
+    check("and the program names nobody it looked up",
+          "alpha" not in text and "beta" not in text)
+    # ⇒ `select`, NOT `in`. A literal list would be the write-time answer written down again.
+    loop = next(s for s in prog["body"] if s.get("op") == "foreach")
+    check("it carries the QUESTION, not the answer",
+          loop.get("select") == over and "in" not in loop)
+    check("the closing witness is still computed and still timeless",
+          any(s.get("op") == "ensure"
+              and (s["predicate"].get("select") or {}).get("status") == "stopped"
+              for s in prog["body"]))
+
+    # ⇒ AND IT SURVIVES THE LAB MOVING, which is the entire reason for the shape. Written
+    #   against two stopped machines, run against three.
+    runtime = lab(("alpha", "stopped"), ("beta", "stopped"), ("gamma", "stopped"))
+    sel, holds = seams(runtime)
+    res = execute.run(prog, runtime.execute, select=sel, holds=holds)
+    check("it runs against a lab that MOVED since it was written", res.get("ok"))
+    check("and it acted on the machine that was not there at write time",
+          runtime.state["vm"]["gamma"].get("status") == "running")
+
+
 def main():
     from tests import _suite
     sys.exit(_suite.run(sys.modules[__name__], "ghost writer"))
