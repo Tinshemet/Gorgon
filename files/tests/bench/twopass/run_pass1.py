@@ -12,6 +12,7 @@ from typing import List
 
 from planner.formula.legal import Board
 from orchestrator.seam.pass1 import EXPECTED, grade, run_pass1, run_scanned
+from tests.bench import mutate as _mutate
 
 
 def main() -> None:
@@ -19,6 +20,11 @@ def main() -> None:
     ap.add_argument("--only", type=int, default=None)
     ap.add_argument("--runs", type=int, default=1)
     ap.add_argument("--model", default=None)
+    ap.add_argument("--mutate", default="", metavar="ARM",
+                    help="perturb each request before reading it. MUTATIONS preserve the "
+                         "goal (filler, synonym, terse, verbose, reorder, casing, typo) — "
+                         "the scoreboard reads normally. FRAMINGS do not (asked, framed) "
+                         "— see the banner they print")
     ap.add_argument("--paired", action="store_true",
                     help="ask NAME and TYPE together — the cascade fix (REJECTED, kept for A/B)")
     ap.add_argument("--scanned", action="store_true",
@@ -32,6 +38,16 @@ def main() -> None:
                     help="do NOT fold repeated mentions — the pre-fold baseline")
     args = ap.parse_args()
 
+    # ⇒ A REFRAMED ARM INVERTS THE SCOREBOARD, so it is announced before a single number is
+    #   printed rather than in a footnote. `vacuum_probe.py` voided a whole run because a
+    #   grader marked a correct answer wrong, and this is the same hazard from the other
+    #   side: every column below is "how much of the ACTIONABLE reading came back", which is
+    #   the goal under a MUTATION and the DEFECT under a FRAMING.
+    reframed = args.mutate in _mutate.FRAMINGS
+    if args.mutate and args.mutate not in _mutate.MUTATIONS and not reframed:
+        ap.error(f"unknown arm {args.mutate!r} — "
+                 f"mutations {sorted(_mutate.MUTATIONS)} · framings {sorted(_mutate.FRAMINGS)}")
+
     board = Board()
     tally: Counter = Counter()
     print("=" * 104)
@@ -40,19 +56,38 @@ def main() -> None:
           f"{'' if args.no_expand else ' + EXPAND'}"
           f"{'' if args.no_fold else ' + FOLD'}, "
           f"graded on structure, never on names")
+    if args.mutate:
+        print(f"{'FRAMING' if reframed else 'MUTATION'} ARM · {args.mutate}"
+              + ("   (the goal is preserved; read the scoreboard normally)"
+                 if not reframed else ""))
+    if reframed:
+        print("⚠ " + "─" * 101)
+        print("⚠ THE GOAL IS NOT PRESERVED. THESE REQUESTS ASK ABOUT AN ACT, THEY DO NOT ORDER ONE.")
+        print("⚠ The correct reading of a reframed request is NOT the rung's reading, so every")
+        print("⚠ column below is INVERTED: a HIGH score is the DEFECT — it means the seam read an")
+        print("⚠ information request as an instruction. `rows 0` is the outcome to hope for.")
+        print("⚠ " + "─" * 101)
     print("=" * 104)
 
     for n, want in sorted(EXPECTED.items()):
         if args.only and n != args.only:
             continue
+        # THE REQUEST IS PERTURBED; `want` IS NOT. Grading a reframed request against the
+        # unchanged expectation is the whole measurement — it asks how much of a reading
+        # the request no longer orders still came back.
+        request = _mutate.apply(want.request, args.mutate) if args.mutate else want.request
         print(f"\n{'─' * 104}\nrung {n} · “{want.request[:88]}”")
+        if request != want.request:
+            print(f"    {'ASKED' if reframed else 'SENT '}  “{request}”")
+        elif args.mutate:
+            print(f"    ⚠ arm {args.mutate} left this rung UNCHANGED — it is a literal, not a cell")
         print(f"    want   names {want.identities}   conditions {want.conditions}   "
               f"sets>={want.sets}   residual={want.residual}   rows {want.rows}")
         for i in range(args.runs):
             trace: List = []
-            rows = (run_scanned(want.request, board=board, model=args.model, trace=trace)
+            rows = (run_scanned(request, board=board, model=args.model, trace=trace)
                     if args.scanned else
-                    run_pass1(want.request, board=board, model=args.model, trace=trace,
+                    run_pass1(request, board=board, model=args.model, trace=trace,
                               paired=args.paired, fold=not args.no_fold,
                               expand_names=not args.no_expand,
                               forced=args.forced_conditions))
@@ -88,6 +123,11 @@ def main() -> None:
     print(f"  conditions invented      {tally['invented']}    (P4 said under- beats over-fill)")
     print(f"  rows called NEW          {tally['new']}    (P5: near-zero means MY enum "
           f"ordering backfired)")
+    if reframed:
+        # Repeated at the bottom because this is the half a person copies into a note.
+        print(f"\n⚠ FRAMING ARM `{args.mutate}` — READ EVERY NUMBER ABOVE UPSIDE DOWN.")
+        print("⚠ Nothing was ordered. A found name, a found condition and a declared row are")
+        print("⚠ each the seam reading an information request as an instruction.")
 
 
 if __name__ == "__main__":

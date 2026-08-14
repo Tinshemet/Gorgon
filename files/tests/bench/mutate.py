@@ -32,7 +32,13 @@ Every mutation is DETERMINISTIC in its input: the seed is derived from the goal 
 the mutation's own name, so the same rung mutates the same way on every run and a result
 is reproducible without storing the mutated sentences.
 
-Run:  PYTHONPATH=. python3 -m tests.bench.mutate      # print every mutation of every rung
+TWO REGISTRIES, AND THE SPLIT IS THE POINT. `MUTATIONS` preserves the goal, as everything
+above says. `FRAMINGS` (added 2026-08-14 for N3) deliberately does NOT — it keeps every
+word and changes what the sentence is FOR, so a reframed rung's correct reading is not the
+rung's reading and a probe grading PASS against the rung would score it upside down. They
+are separate so that iterating one can never reach the other; `apply()` reaches both.
+
+Run:  PYTHONPATH=. python3 -m tests.bench.mutate      # print every arm of every rung
 """
 from __future__ import annotations
 
@@ -247,9 +253,77 @@ MUTATIONS: Dict[str, Callable[[str], str]] = {
 }
 
 
+# ── the reframings ───────────────────────────────────────────────────────────────────
+# ⚠ EVERYTHING BELOW THIS LINE BREAKS THIS MODULE'S LOAD-BEARING RULE, DELIBERATELY.
+#
+# A MUTATION PRESERVES THE GOAL; A REFRAMING DOES NOT, AND THAT IS THE MEASUREMENT. It
+# keeps every word of the request and changes only what the sentence is FOR — an order
+# becomes a question. So the correct reading of a reframed rung is NOT the rung's reading,
+# and a run that reproduces the rung's reading has FAILED, not passed.
+#
+# THEY ARE IN THEIR OWN REGISTRY FOR EXACTLY THAT REASON. `mutation_probe.py` grades PASS
+# against a rung and iterates `MUTATIONS` when no `-k` is given; a reframing dropped in
+# there would be scored upside down by every default run, and a grader that marks a
+# correct answer wrong is the defect `vacuum_probe.py` already voided one run over.
+# Anything reading these must state the inversion at its own output.
+#
+# N3, 2026-08-14 — the operator: *"'good morning doorman, dont start any changes, but how
+# do create a new machine?' might trigger the AI to act even though its not the intent."*
+# Verified before writing this: `mood_of` returns `do` for that sentence AND for the bare
+# imperative `create a new machine`. Byte-identical. The seam has no third mood.
+def asked(goal: str) -> str:
+    """The goal as a request for INFORMATION — the isolated variable of N3.
+
+    Nothing is added but the frame, so this arm differs from the literal by exactly one
+    thing: whether the sentence asks for an act or asks about one. `filler` is the
+    courtesy-only control and `framed` is the compound; between the three, a cost can be
+    attributed rather than averaged.
+
+    ⚠ NO `can you …` FRAME, AND IT IS NOT AN OVERSIGHT. *"can you delete the vms?"* is an
+      order wearing a question mark — a polite imperative, which is the one phrasing that
+      does NOT partition into asking-vs-ordering. Every frame here takes a bare verb
+      phrase and can only be read as a request for information.
+    """
+    rng = _seed(goal, "asked")
+    frames = ["how do i {g}?", "how would i {g}?", "what's the way to {g}?"]
+    return rng.choice(frames).format(g=goal.rstrip(". "))
+
+
+def framed(goal: str) -> str:
+    """The operator's own shape: a greeting, an instruction NOT to act, and a question.
+
+    THREE CLAUSES, THREE DIFFERENT FAILURES — which is why the compound is measured as
+    well as the parts. The greeting names the agent and nothing in the lab; the negation
+    is an instruction about the CONVERSATION rather than about the lab, and nothing in the
+    seam reads scope-of-instruction; the question is `asked`.
+
+    Built on top of `asked()` rather than beside it, so `framed` minus `asked` is exactly
+    the greeting-plus-negation delta and neither arm can drift from the other.
+
+    `doorman` is the system's real default agent (`shared/agent_select.py`), so the
+    greeting addresses the assistant by name — a word that names nothing in the lab.
+    """
+    rng = _seed(goal, "framed")
+    greetings = ["good morning doorman, ", "hey doorman, ", "morning doorman, "]
+    refusals = ["don't start any changes, but ", "don't do anything yet, but ",
+                "hold off on touching anything, but "]
+    return rng.choice(greetings) + rng.choice(refusals) + asked(goal)
+
+
+FRAMINGS: Dict[str, Callable[[str], str]] = {
+    "asked": asked,
+    "framed": framed,
+}
+
+
 def apply(goal: str, name: str) -> str:
-    """One named mutation, or the goal unchanged if the name is unknown."""
-    fn = MUTATIONS.get(name)
+    """One named mutation OR reframing, or the goal unchanged if the name is unknown.
+
+    Both registries are reachable here so a caller can name any arm, and SEPARATE above so
+    that iterating `MUTATIONS` — which is what a meaning-preserving probe wants — cannot
+    pick up an arm that changes the meaning on purpose.
+    """
+    fn = MUTATIONS.get(name) or FRAMINGS.get(name)
     return fn(goal) if fn else goal
 
 
@@ -260,3 +334,6 @@ if __name__ == "__main__":                                     # pragma: no cove
         for nm in MUTATIONS:
             out = apply(r.goal, nm)
             print(f"   {nm:9}: {out}" + ("   (no change)" if out == r.goal else ""))
+        for nm in FRAMINGS:
+            # Printed under their own heading because they answer a different question.
+            print(f"   {nm:9}⚠ {apply(r.goal, nm)}")
