@@ -655,6 +655,29 @@ def cover(goals: List[Dict[str, Any]], world, trace: List[str] = None,
     raise Unsolvable("goals do not settle — they may be pulling against each other")
 
 
+def replay(plan, world) -> None:
+    """Perform a plan against a world — the one place that knows how to run a `Loop`.
+
+    ⇒ **EXTRACTED THE DAY `Loop` LANDED, because there were about to be three copies.**
+      `as_program` replays a plan to compute its closing witness, and the suites replay one to
+      set up a second pass. Both unpacked `for tool, args in plan`, which a three-field `Loop`
+      refuses outright — by design, so the sites that had not learned about it stopped loudly
+      instead of reading `over` as an argument. This is what they were stopping to be given.
+
+    A LOOP IS PERFORMED AS THE MEMBERS IT WOULD TOUCH *AT THIS POINT*, resolved against a world
+    the earlier steps have already moved — not once up front, which would visit a set the
+    program never actually ranges over.
+    """
+    select = _seams_of(world)[0]
+    for step in plan:
+        if isinstance(step, Loop):
+            key = (effects._K(_kinds(world)).get(step.over.get("kind")) or {}).get("key")
+            for m in select(step.over):
+                world.execute(step.tool, {**step.args, key: m} if key else step.args)
+        else:
+            world.execute(*step)
+
+
 def _achieve(goal, scratch, plan, trace, depth, internal=False, temps=None, asked=None,
              asked_kinds=None, acting=True, without=None):
     if depth > 12:
@@ -890,9 +913,15 @@ def _as_loop(step: "Loop", kinds) -> Dict[str, Any]:
     ⇒ **NEVER A `new`.** `_as_statement` promotes a creation to the `new` operator because that
       is how the runtime mints and binds a name — and a loop over an existing set is the one
       case that is definitionally not a creation. It ranges over members that already exist.
+
+    ⇒ ⚠ **`do`, NOT THE `call` SHORTHAND.** `foreach` accepts either and they mean the same
+      thing, but the PARSER only ever produces `do` — so emitting the shorthand wrote a
+      program that read back as a different one, and `test_every_program_the_writer_emits_
+      READS_BACK` caught it on six rungs. The writer emits the canonical form, because what
+      it writes has to survive `verify_file` reparsing it.
     """
     return {"op": "foreach", "select": dict(step.over),
-            "call": {"op": "call", "tool": step.tool, "args": dict(step.args)}}
+            "do": [{"op": "call", "tool": step.tool, "args": dict(step.args)}]}
 
 
 def _as_statement(tool: str, args: Dict[str, Any], kinds) -> Dict[str, Any]:
@@ -1066,19 +1095,10 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
     scratch = _scratch_of(world) if world is not None else None
     select = _seams_of(scratch)[0] if scratch is not None else (lambda s, scope=None: [])
     if scratch is not None:
-        for step in plan:
-            # ⇒ A LOOP IS REPLAYED AS THE MEMBERS IT WOULD TOUCH *AT THIS POINT IN THE PLAN*.
-            #   The replay exists to compute the closing witness's number, and that number is
-            #   about the world the program leaves behind — so the select is resolved HERE,
-            #   against a scratch that earlier statements have already moved, and not once up
-            #   front. Resolving it early would witness a world the program never produces.
-            if isinstance(step, Loop):
-                key = (effects._K(_kinds(scratch)).get(
-                    effects._kind_of(step.tool, _kinds(scratch))) or {}).get("key")
-                for m in select(step.over):
-                    scratch.execute(step.tool, {**step.args, key: m} if key else step.args)
-            else:
-                scratch.execute(*step)
+        # THE REPLAY EXISTS TO COMPUTE THE CLOSING WITNESS'S NUMBER, and that number is about
+        # the world the program leaves behind — so it is performed, loops and all, by the one
+        # function that knows how.
+        replay(plan, scratch)
     kinds_now = _kinds(scratch)
     body = _by_reference([_as_loop(s, kinds_now) if isinstance(s, Loop)
                           else _as_statement(s[0], s[1], kinds_now) for s in plan], kinds_now)
