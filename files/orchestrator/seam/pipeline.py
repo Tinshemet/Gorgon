@@ -75,6 +75,49 @@ SERVE, BOUNCE, ASK, REFUSE = "SERVE", "BOUNCE", "ASK", "REFUSE"
 #     `no-such-kind` both go to the operator, and `UNSETTLED_KIND` stops the retry re-asking.
 ANSWERABLE: frozenset = frozenset()
 
+# ⇒⇒ WHAT A READING CAN BE TURNED INTO — `act`, `ask`, or NEITHER.
+ACT, ASK_FOR, NEITHER = "act", "ask", "neither"
+
+
+def produces(operations, goals) -> str:
+    """Which artifact this reading can yield. A PRODUCER TEST, never a classifier.
+
+    ⇒⇒ **THE OPERATOR, 2026-08-14, asking for a third type: *"not actionable, not questioning
+      — how do we filter something that doesn't answer those two?"*** A greeting is not a
+      program with no steps; it is not a program. And the test for it is not what the sentence
+      MEANS — it is what can be BUILT from the reading:
+
+          an acting operation exists      -> ACT
+          a goal a QUERY could answer     -> ASK
+          neither                         -> NEITHER
+
+    ⇒ **WHY THIS AND NOT A JUDGEMENT.** Asked directly — *"is this telling me to carry
+      something out, or asking me for information?"* — the model scored **30/60 over the four
+      measured arms, which is chance**, and read 0 of 14 POLITE ORDERS as instructions. Three
+      times today a model judgement has come back near-chance where a lookup was exact. This
+      asks only what the deterministic half already computed.
+
+    ⇒ ⚠ **`NEITHER` IS NOT A FOURTH VERDICT AND MUST NOT BECOME ONE.** Every outcome this
+      pipeline returns — SERVE, BOUNCE, ASK, REFUSE — is a statement about a program. A
+      sentence that is not a program has no business being judged as one; it belongs to the
+      DOOR, which decides whether the program regime was the right place at all (N1). This
+      reports; routing on it is that item's, not this one's.
+
+    ⇒ **AND `NEITHER` IS A FORK, NOT A DEAD END.** An ASSERTIVE — *"n1 is the jumpbox"* — is
+      the operator TEACHING, and belongs to the Encyclopedia. A DECLARATION — *"treat prod as
+      read-only"* — is an amendment, and belongs to the contract's referendum. Both currently
+      land here, and both are worth more than either branch above.
+    """
+    from planner.ghost_writer import queryable as _queryable
+    from planner.ir import config as _config, effects as _effects
+
+    acting = _effects.actors(_config.KINDS)
+    if any(op.operator in acting for op in (operations or ())):
+        return ACT
+    if any(_queryable(g) for g in (goals or ())):
+        return ASK_FOR
+    return NEITHER
+
 
 class Run(NamedTuple):
     request: str
@@ -105,6 +148,9 @@ class Run(NamedTuple):
     # ⇒ THE ADDRESSABLE FORM OF `asks`, so a ledger can file them and an answer can find them.
     #   `asks` stays strings and is DERIVED from these — one authority, one rendered view.
     questions: List = ()
+    # ⇒ WHAT THIS READING COULD BE TURNED INTO — see `produces`. Reported, not
+    #   routed on: `neither` is the door's business, not a verdict.
+    produces: str = ""
 
     @property
     def handles(self) -> List[str]:
@@ -714,13 +760,14 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
         return Run(request, rows, table, operations, conditions,
                    asks, bounces, illegal, suggested, ling, list(goals),
                    REFUSE, list(repaired), list(dropped),
-                   surface.notices(suggested, dropped, answer_conflicts))
+                   surface.notices(suggested, dropped, answer_conflicts),
+                   produces=produces(operations, goals))
 
     return Run(request, rows, table, operations, conditions,
                asks, bounces, illegal, suggested, ling, list(goals),
                _verdict(operations, illegal, asks, bounces, goals), list(repaired),
                list(dropped), surface.notices(suggested, dropped, answer_conflicts),
-               list(questions))
+               list(questions), produces(operations, goals))
 
 
 def _aimed(operations: List[Operation], table) -> List[Operation]:
