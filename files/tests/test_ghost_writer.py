@@ -483,6 +483,64 @@ def test_the_no_model_path_only_ever_emits_the_core():
     check(f"and no core op goes unemitted ({sorted(unused)})", not unused)
 
 
+def test_a_read_only_program_answers_the_question_instead_of_saying_done():
+    """THE FETCH RUNG DROPPED EVERY GOAL AND PUBLISHED THE WORD `done`. Fixed 2026-08-14.
+
+    ⇒ **THE GOAL WAS NEVER UNANSWERABLE — IT WAS DISCARDED.** `as_program` read
+      `if not witness or not groundable(g): continue`, so a read-only program for
+      *"launch every stopped machine"* came out as `PUBLISH(done);` — the word done and no
+      data. Asked a question, it answered nothing.
+
+    ⇒ **A FETCH MAY NOT ASSERT. IT MAY READ AND REPORT.** The ENSURE is withheld at this rung
+      and rightly so; the same predicate one rung down is a QUERY and a PUBLISH.
+
+    ⇒ **AND IT IS THE FIRST THING IN THE SYSTEM TO EMIT A `query`.** The op was built the same
+      day and nothing produced one — reachable only by an operator typing it. `intent.
+      reporting_only` holds the binding to its promise: nothing acting may touch it.
+    """
+    from planner.ir import config, effects, execute, intent
+    from planner.ir.render import render
+    from planner.model_world import World, seams
+
+    def lab(*rows):
+        w = World(kinds=config.KINDS)
+        for name, status in rows:
+            w.execute("create_vm", {"name": name, "os_type": "linux"})
+            w.execute("launch_vm", {"name": name})
+            if status == "stopped":
+                w.execute("stop_vm", {"name": name})
+        return w
+
+    goal = [{"shape": "count", "select": {"kind": "vm", "status": "stopped"}, "eq": 0}]
+    author = lab(("alpha", "stopped"), ("beta", "stopped"))
+    read = as_program(cover(goal, author, acting=False), goal, author, witness=False)
+    text = render(read)
+
+    check("it asks the question rather than publishing `done`",
+          "QUERY" in text and "done" not in text)
+    check("it asserts nothing — a fetch may not judge",
+          not any(s.get("op") in ("ensure", "achieve") for s in read["body"]))
+    check("and it publishes what it asked",
+          [s["fact"] for s in read["body"] if s.get("op") == "publish"]
+          == [s["var"] for s in read["body"] if s.get("op") == "query"])
+
+    check("it is legal at the rung that may not change the lab",
+          not intent.violations(read, intent.FETCH))
+    check("and nothing acting touches what the query bound",
+          not intent.reporting_only(read, effects.actors(config.KINDS)))
+
+    # ⇒ THE ANSWER IS READ WHEN THE PROGRAM RUNS, which is the half the acting program cannot
+    #   claim — written against two stopped machines, run against three, it answers THREE.
+    runtime = lab(("alpha", "stopped"), ("beta", "stopped"), ("gamma", "stopped"))
+    sel, holds = seams(runtime)
+    res = execute.run(read, runtime.execute, select=sel, holds=holds, intent=intent.FETCH)
+    check("it runs and answers", res.get("ok") and res.get("published"))
+    check("and the answer counts the machine added after it was written",
+          res["scope"]["answer1"] == 3)
+    check("while changing nothing",
+          all(r.get("status") == "stopped" for r in runtime.state["vm"].values()))
+
+
 def test_a_plan_can_carry_a_loop_and_the_program_names_nobody():
     """STEP 1 of writing OUTSIDE TIME. The operator, 2026-08-14: *"instead of thinking in
     write time we force it to think 'outside' time, more generic, applicable forever."*

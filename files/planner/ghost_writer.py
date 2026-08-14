@@ -1185,8 +1185,39 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
     made = {(st.get("kind"), (st.get("args") or {}).get(
         (effects._K(kinds_now).get(st.get("kind")) or {}).get("key")))
         for st in body if st.get("op") == "new"}
+    asked_for: List[str] = []
     for g in goals:
-        if not witness or not groundable(g):
+        if not witness:
+            # ⇒⇒ AT THE FETCH RUNG THE GOAL IS NOT DROPPED — IT IS ASKED.
+            #
+            #   This read `continue`, and that is why a read-only program came out as
+            #   `PUBLISH(done);` — the word *done* and no data. The goal was never
+            #   unanswerable; it was discarded. **A fetch may not ASSERT, which is why the
+            #   ENSURE is withheld and rightly so. It may absolutely READ AND REPORT the very
+            #   thing the ENSURE would have judged.** Same predicate, one rung down:
+            #
+            #       achieve   ENSURE COUNT(SELECT vm WHERE stopped) = 0;
+            #       fetch     STORE n = QUERY COUNT(SELECT vm WHERE stopped);  PUBLISH(n);
+            #
+            #   ⇒ `query`, NOT `fetch`-the-op. What is bound here is an ANSWER TO REPORT, and
+            #     `intent.reporting_only` holds that to it — nothing acting may touch it. That
+            #     is the operator's own distinction: fetch BRINGS the item to the code, query
+            #     only looks. It is also the first thing in the system to emit a `query` at
+            #     all, which until now no request could reach.
+            #
+            #   ⇒ AND IT IS READ WHEN THE PROGRAM RUNS, so unlike the calls around it this
+            #     answer cannot be a snapshot of the lab as it was when it was written.
+            sel = g.get("select") if isinstance(g.get("select"), dict) else None
+            if g.get("shape") != "count" or not sel:
+                # ONLY THE COUNT SHAPE, AND SAID RATHER THAN LEFT LOOKING COMPLETE. `reach` is
+                # a finding rather than a select, and `every`/`per` are components the query
+                # form has no spelling for yet. They stay dropped — visibly, here.
+                continue
+            var = f"answer{len(asked_for) + 1}"
+            body.append({"op": "query", "var": var, "count": dict(sel)})
+            asked_for.append(var)
+            continue
+        if not groundable(g):
             continue
         if _self_vouched(g, body, kinds_now, select):
             continue
@@ -1208,7 +1239,11 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
     # PUBLISH THE THING, NOT THE WORD. A program that made something has an answer to give —
     # the binding it just created — and `done` is what a program says when it has nothing.
     # The operator's form: `PUBLISH(vm)`.
-    said = [{"op": "publish", "fact": f} for f in dict.fromkeys(deliverables)]
+    # ⇒ WHAT WAS ASKED COMES FIRST, because on a fetch it IS the answer. A read-only program
+    #   that queried and then published `done` would be the original defect wearing a query.
+    said = [{"op": "publish", "fact": v} for v in asked_for]
+    said += [{"op": "publish", "fact": f} for f in dict.fromkeys(deliverables)
+             if f not in asked_for]
     if not said and minted:
         said = [{"op": "publish", "fact": v} for v in dict.fromkeys(
             st.get("var") for st in body if st.get("op") == "new")]
