@@ -386,8 +386,16 @@ def confirmations(operations: List[Operation], table, request: str = "",
     return out
 
 
+# ⇒ DECLARED, NOT FITTED, and it must stay that way until held-out prompts exist. The measured
+#   shares are literal 21% · filler 58% · asked 54% · framed 72%, so a half is comfortably above
+#   the plain-order band without being tuned to sit between any two arms — and it separates
+#   NOTHING on its own, which is why it is the one input that cannot promote by itself. Anything
+#   more precise than a round number here would be fitted to fourteen sentences.
+_ANSWER_CONFIDENCE = 0.5
+
+
 def answer_not_act(operations: List[Operation], table=(), request: str = "",
-                   board: Optional[Board] = None, world=None) -> List[str]:
+                   board: Optional[Board] = None, world=None, goals=None) -> List[str]:
     """THE REQUEST ASKED TO BE TOLD SOMETHING AND THE PROGRAM WOULD CHANGE THE LAB.
 
     ⇒⇒ **WHY THIS IS GATE 4's AND NOT THE DOOR'S.** At the door there is only a sentence, and
@@ -453,11 +461,61 @@ def answer_not_act(operations: List[Operation], table=(), request: str = "",
     #     honestly do: residue cannot tell a POLITE ORDER from a question — both carry
     #     wrapper — so it fires on courtesy too. A question costs a question; executing one
     #     cannot be taken back.
-    leftover = _kindless(list(table and [s.row for s in table]) or [], request, board, world)
+    # ⚠⚠ **RESIDUE IS THE TRIGGER AND IT IS A STAND-IN. The trigger should be INTENT.**
+    #
+    #   The operator, 2026-08-14, naming the three jobs: *"intent for information is measurable
+    #   in linguistics; a viable query is evidence the question can be answered; the confidence
+    #   threshold is a way to make sure the AI didn't make an educated guess."* Read that way
+    #   the parts are WANTED / POSSIBLE / RELIABLE — and residue is the third, not the first.
+    #
+    #   ⇒ **THE COST OF HAVING IT FIRST IS MEASURED, NOT FEARED.** *"list the vms and remove the
+    #     fleet label from them"* declares a read AND would act — the case this rule exists for
+    #     — and carries no wrapper at all, so a residue trigger is silent on it. A plainly
+    #     worded question leaves nothing over to detect.
+    #
+    #   ⇒ **AND `intent.declared()` IS NOT THE ANSWER EITHER**, which is why it is not wired
+    #     back in: it is a hand-written marker list that returns None the moment a sentence
+    #     names an act, so it fired or not depending on which verb the request happened to use
+    #     ([[gorgon-courtesy-escalates-intent]] is the same list, one harm earlier).
+    #
+    #   THE REAL TRIGGER IS AN INFORMATION-INTENT READING FROM THE LINGUISTICS, and `mood_of`
+    #   has two values today. Until it has three, this fires on what it can see.
+    rows = [s.row for s in table] if table else []
+    leftover = _kindless(rows, request, board, world)
     if not leftover:
         return []
+
     calls = ", ".join(dict.fromkeys(f"{op.operator}({op.on})" for op in hits))
     spans = ", ".join(repr(r.span or r.name) for r in leftover[:3])
+
+    # ⇒⇒ **THREE THINGS DECIDE WHAT TO SAY, AND ONLY THE FIRST TWO ARE REQUIRED.** The operator,
+    #   2026-08-14: *"a query and intent are needed, confidence is not but it's taken into
+    #   consideration; above a certain confidence it's allowed."*
+    #
+    #   1 · A VIABLE QUERY — could the answer actually be given? An ask that offers a branch
+    #       the system cannot honour invites the operator to choose a failure. Where none is
+    #       producible the finding still SAYS what it read, and offers nothing.
+    #   2 · THE USER'S OWN INTENT, as evidence and never as inference. Absent it, ask.
+    #   3 · CONFIDENCE — the share of the reading nothing in the world accounts for. Considered,
+    #       never required, and it cannot promote on its own.
+    from planner.ghost_writer import queryable as _queryable
+    from planner.ir import intent as _intent
+
+    answerable = any(_queryable(g) for g in (goals or ()))
+    said = _intent.declared(request)
+    evidence = said in (_intent.FETCH, _intent.ENSURE)
+    share = len(leftover) / len(rows) if rows else 0.0
+
+    if not answerable:
+        # ⇒ SAY WHAT WAS READ, OFFER NOTHING. The choice is withheld because it could not be
+        #   honoured — `reach`, `observe` and `per` goals take no query form yet.
+        return [f"[gate4/answer-not-act] this program would run {calls}, and the request "
+                f"carries words the lab cannot account for — {spans}. Read as an instruction; "
+                f"there is no answerable form of it to offer instead."]
+    if evidence and share >= _ANSWER_CONFIDENCE:
+        return [f"[gate4/answer-not-act] the request names a {said}, {share:.0%} of the "
+                f"reading is words the lab cannot account for, and it can be answered rather "
+                f"than run — {calls} withheld. Say so if you meant it done."]
     return [f"[gate4/answer-not-act] this program would run {calls}, and the request carries "
             f"words the lab cannot account for — {spans}. Did you mean it done, or asked?"]
 

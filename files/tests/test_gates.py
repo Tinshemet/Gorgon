@@ -1467,7 +1467,33 @@ def test_gate_4_asks_when_the_request_wanted_an_answer_and_the_program_would_act
     check("with no world it declines to judge",
           not gate4.answer_not_act(acts, wrapped, "how do i stop every vm", board, None))
 
-    # 4 · IT IS WIRED, AND ITS NAME IS DECLARED — both halves of the defect class this
+    # 4 · THE THREE INPUTS, AND THEY DO DIFFERENT JOBS. The operator, 2026-08-14: *"intent
+    #     for information is measurable in linguistics; a viable query is evidence the question
+    #     can be answered; the confidence threshold is a way to make sure the AI didn't make an
+    #     educated guess."* WANTED / POSSIBLE / RELIABLE — and only the first two are required.
+    COUNT_GOAL = [{"shape": "count", "select": {"kind": "vm"}, "eq": 2}]
+    REACH_GOAL = [{"shape": "reach", "select": {"kind": "vm"}, "min": 3}]
+
+    # ⇒ NO ANSWERABLE FORM -> SAY WHAT WAS READ, OFFER NOTHING. An ask that invites the operator
+    #   to pick a branch the system cannot honour is worse than silence.
+    unanswerable = gate4.answer_not_act(acts, wrapped, "how do i stop", board, lab, REACH_GOAL)
+    check("with no viable query it offers no choice it could not honour",
+          unanswerable and "no answerable form" in unanswerable[0])
+    # ⇒ ANSWERABLE BUT NO EVIDENCE OF INTENT -> ask, plainly.
+    plain = gate4.answer_not_act(acts, wrapped, "how do i stop", board, lab, COUNT_GOAL)
+    check("answerable but with no evidence of intent, it asks",
+          plain and "done, or asked?" in plain[0])
+    # ⇒ EVIDENCE *AND* CONFIDENCE -> it may withhold the acting form and say so. Confidence
+    #   cannot promote on its own, which is what the previous check pins.
+    allowed = gate4.answer_not_act(acts, P2.symbol_table(
+        [S.declare_from(t, S.UNKNOWN_KIND, {}, S.NEW, board, span=t)
+         for t in ("how do i", "what is")], board),
+        "list the vms", board, lab, COUNT_GOAL)
+    check("with intent evidence and confidence above the line, it withholds and says so",
+          allowed and "withheld" in allowed[0])
+    check("and the threshold is DECLARED, not fitted", gate4._ANSWER_CONFIDENCE == 0.5)
+
+    # 5 · IT IS WIRED, AND ITS NAME IS DECLARED — both halves of the defect class this
     #     codebase keeps recording.
     check("the rule is in gate 4's OWNS", "answer-not-act" in gate4.OWNS)
     src = open(os.path.join(os.path.dirname(__file__), "..", "orchestrator", "seam",

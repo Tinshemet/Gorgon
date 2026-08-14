@@ -887,6 +887,30 @@ def kinds_of(goal: Dict[str, Any]) -> set:
 #      exactly what must be true before a tool runs, from the manifest, with no prompt and
 #      no model. The blinders half dissolved when context became O(1) in engines.
 
+def queryable(goal: Dict[str, Any]) -> bool:
+    """Can this goal be ASKED rather than pursued — is a viable QUERY producible from it?
+
+    ⇒ **THE OPERATOR, 2026-08-14: decide *"whether you can produce a viable query."*** A
+      question the system could not answer is not worth offering as a choice: an ask that
+      invites the operator to pick a branch which would then fail is noise, and dishonest
+      besides. So the offer is gated on the answer existing.
+
+    ⇒ **ONLY THE COUNT SHAPE TAKES A QUERY TODAY**, and that is a coverage gap in the emitter
+      rather than a fact about the request. `reach` is a FINDING, read out of the ledger by a
+      probe, not a select; `observe` is a thing DONE; `every` and `per` are components the
+      query form has no spelling for. Measured over the corpus: **11 of 14 rungs**.
+
+    ⇒ ⚠ **AND IT IS NOT A CLASSIFIER.** Rung 1 — *"create a vm named alpha"*, an unambiguous
+      order — is queryable, because *how many vms are called alpha* is a perfectly viable
+      program and a useless answer. This says whether an ANSWER COULD BE GIVEN, never whether
+      one was wanted. Measuring that distinction is what kept it out of the decider.
+
+    SSOT with `as_program`'s fetch-rung skip, for the reason `groundable` records: the two had
+    to agree, and agreeing by coincidence is how twins start.
+    """
+    return goal.get("shape") == "count" and isinstance(goal.get("select"), dict)
+
+
 def groundable(goal: Dict[str, Any]) -> bool:
     """Can this goal have a closing witness at all?
 
@@ -1207,14 +1231,17 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
             #
             #   ⇒ AND IT IS READ WHEN THE PROGRAM RUNS, so unlike the calls around it this
             #     answer cannot be a snapshot of the lab as it was when it was written.
-            sel = g.get("select") if isinstance(g.get("select"), dict) else None
-            if g.get("shape") != "count" or not sel:
+            if not queryable(g):
                 # ONLY THE COUNT SHAPE, AND SAID RATHER THAN LEFT LOOKING COMPLETE. `reach` is
                 # a finding rather than a select, and `every`/`per` are components the query
                 # form has no spelling for yet. They stay dropped — visibly, here.
+                #
+                # ⇒ ASKED THROUGH `queryable` SO GATE 4 AND THIS CANNOT DISAGREE about whether
+                #   an answer was available — the gate offers the choice only when this would
+                #   honour it.
                 continue
             var = f"answer{len(asked_for) + 1}"
-            body.append({"op": "query", "var": var, "count": dict(sel)})
+            body.append({"op": "query", "var": var, "count": dict(g["select"])})
             asked_for.append(var)
             continue
         if not groundable(g):

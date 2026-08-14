@@ -654,7 +654,7 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #   question one notch wider — that one asks whether the operator meant to REMOVE, this
     #   asks whether they meant to DO anything at all. It is an ASK and never a refusal, and
     #   it is silent unless the request positively names a rung that may not change the lab.
-    asks += gate4.answer_not_act(operations, table, request, board, world)
+    asks += gate4.answer_not_act(operations, table, request, board, world, goals)
     # ⇒ AND A SET WHOSE EXCLUSION THE ENGINE COULD NOT EXPRESS IS NOT VIABLE. The declaration
     #   is only worth making if something downstream can honour it; asked of the IR's own
     #   validator so this cannot drift from what the engine actually accepts.
