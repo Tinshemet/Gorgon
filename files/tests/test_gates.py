@@ -1409,6 +1409,60 @@ def test_an_unhelpable_request_is_never_asked_about():
     check("and it refuses outright", out.get("outcome") == "UNTRANSLATED")
 
 
+def test_gate_4_asks_when_the_request_wanted_an_answer_and_the_program_would_act():
+    """ACT OR ANSWER, decided where the evidence is. Added 2026-08-14.
+
+    The door has only a sentence, and *"is this a question?"* is the call the model was
+    measured at near-chance on. Gate 4 has the sentence AND what the program would DO, so it
+    asks K5's question instead: this program acts — did the request authorise acting?
+
+    THE BAR IS THE SAME AS GATE 1's AND IT IS THE FIRST CHECK BELOW: **silent on every known
+    good reading.** A guard that fires on the corpus has taught the operator to ignore it.
+    """
+    from orchestrator.seam import gate4
+    from orchestrator.seam.effects import Operation
+    from orchestrator.seam.pass1 import EXPECTED
+
+    acts = [Operation("create_vm", "alpha"), Operation("add_label", "alpha", "prod")]
+    probes = [Operation("guest_ping", "alpha")]
+
+    # 1 · SILENT ON ALL FOURTEEN RUNGS. Every one declares None — absence is not evidence, and
+    #     firing on it would have turned 13 SERVE into 14 ASK.
+    noisy = [n for n, w in EXPECTED.items() if gate4.answer_not_act(acts, w.request)]
+    check("silent on every rung in the corpus, with an ACTING program", not noisy)
+
+    # 2 · THE CASE IT OWNS — the request positively names a rung that may not change the lab.
+    told = gate4.answer_not_act(acts, "list the vms")
+    check("a request that asks to be TOLD, with a program that acts, is asked about",
+          len(told) == 1 and "[gate4/answer-not-act]" in told[0])
+    check("and it names the calls rather than just complaining",
+          "create_vm(alpha)" in told[0] and "add_label(alpha)" in told[0])
+    check("an ENSURE request that would act is the same case",
+          gate4.answer_not_act(acts, "check that alpha is up"))
+
+    # 3 · ONE FINDING PER PROGRAM, NOT PER CALL. The mismatch is one fact about the request.
+    check("a four-step program still reports the mismatch once",
+          len(gate4.answer_not_act(acts + acts, "list the vms")) == 1)
+
+    # 4 · THE CONTROLS — each is a way this could be wrong rather than merely unhelpful.
+    check("a program that only PROBES is silent — it already answers",
+          not gate4.answer_not_act(probes, "list the vms"))
+    check("no operations at all is silent",
+          not gate4.answer_not_act([], "list the vms"))
+    check("the operator's own ACHIEVE prefix is obeyed, not second-guessed",
+          not gate4.answer_not_act(acts, "achieve: list the vms"))
+    check("a request declaring nothing is silent — it may NEVER grant, only ask",
+          not gate4.answer_not_act(acts, "create a vm named alpha"))
+
+    # 5 · IT IS WIRED, AND ITS NAME IS DECLARED. Both halves of the defect class this
+    #     codebase keeps recording: a gate that owns a name it never emits, and a gate
+    #     function with no caller.
+    check("the rule is in gate 4's OWNS", "answer-not-act" in gate4.OWNS)
+    src = open(os.path.join(os.path.dirname(__file__), "..", "orchestrator", "seam",
+                            "pipeline.py")).read()
+    check("and the pipeline calls it", "gate4.answer_not_act(" in src)
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "gates")

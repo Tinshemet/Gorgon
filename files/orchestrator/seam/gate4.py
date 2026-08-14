@@ -386,6 +386,57 @@ def confirmations(operations: List[Operation], table, request: str = "",
     return out
 
 
+def answer_not_act(operations: List[Operation], request: str = "",
+                   board: Optional[Board] = None) -> List[str]:
+    """THE REQUEST ASKED TO BE TOLD SOMETHING AND THE PROGRAM WOULD CHANGE THE LAB.
+
+    ⇒⇒ **WHY THIS IS GATE 4's AND NOT THE DOOR'S.** At the door there is only a sentence, and
+      *"is this a question?"* is a call the model was measured at near-chance on (2026-08-14:
+      asked whether `ping` was a thing or an action, 2/3 on one rung and 0/3 on its twin).
+      Here there are four sources of evidence — what was said, what it was read as, **what the
+      program would DO**, and what the lab holds. So the question does not have to be the hard
+      linguistic one. It is K5's shape instead: *this program acts; did the request authorise
+      acting?* Prove authority rather than detect an interrogative.
+
+    ⇒⇒ **IT MAY ASK. IT MAY NEVER GRANT.** The asymmetry is `intent.permits`': FETCH and
+      ENSURE cannot change the lab and ACHIEVE can, so only one direction of this decision is
+      irreversible. This function can turn a proposed act into a question and can do nothing
+      else — it never hands out an authority the operator did not, and it never silently
+      re-routes. Same rule, same reason as [[gorgon-courtesy-escalates-intent]].
+
+    ⇒ **ABSENCE IS NOT EVIDENCE, AND THAT IS WHAT KEEPS THE LADDER WHOLE.** It fires only when
+      `declared()` POSITIVELY names a rung that cannot change the lab. Measured over all
+      fourteen rungs on 2026-08-14: every one returns `None`, so this is silent on the entire
+      corpus and cannot cost a SERVE. Firing on absence instead would have turned 13 SERVE
+      into 14 ASK — the whole ladder — which is what a guard looks like when it is written
+      against the case its author had in mind rather than against the corpus.
+
+    ⇒ ⚠ **IT IS NOT A SECOND `intent.violations`.** That function REFUSES an acting op under a
+      granted FETCH, and it is the enforcement. This one exists because the front seam grants
+      nothing at all — `pipeline.py` never resolves an intent, so `violations(program, None)`
+      refuses nothing and there is no authority step on this path. The two do not overlap:
+      one guards a grant that was made, this guards a request that was never granted.
+
+    ONE FINDING, NOT ONE PER OPERATION. The mismatch is a single fact about the request — it
+    asked to be told — and reporting it once per acting call would report the same fact four
+    times for a four-step program. The calls are named inside it instead.
+    """
+    board = board or Board()
+    from planner.ir import config as _config, effects as _effects, intent as _intent
+
+    said = _intent.declared(request)
+    if said not in (_intent.FETCH, _intent.ENSURE):
+        return []
+    acting = _effects.actors(_config.KINDS)
+    hits = [op for op in operations if op.operator in acting]
+    if not hits:
+        return []                      # it already answers rather than acts — nothing to ask
+    calls = ", ".join(dict.fromkeys(f"{op.operator}({op.on})" for op in hits))
+    return [f"[gate4/answer-not-act] the request asks to be told something — it names a "
+            f"{said}, which may not change the lab — but this program would run {calls}. "
+            f"Confirm you want it done rather than reported."]
+
+
 def forbidden_tools(operations: List[Operation], legal=None, table=None,
                     board: Optional[Board] = None) -> List[str]:
     """The RED-LINED tools this program would call — empty when it may run.
@@ -476,4 +527,4 @@ def forbidden_tools(operations: List[Operation], legal=None, table=None,
 #     and could not name, so the roster was short as well as unenforced.
 OWNS = frozenset({"destructive-confirm", "exclusion-not-expressible",
                   "duplicate-creation", "destructive-goal", "goal-unreachable",
-                  "red-line"})
+                  "red-line", "answer-not-act"})
