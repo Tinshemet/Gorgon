@@ -101,6 +101,7 @@ It is NOT extraction. Names come back 14/14 in both arms. The failures are:
 ⇒ SO THE OPEN QUESTION IS NOT "can it name things" — IT CAN. It is **how to stop it naming
   things that are not things**, which is a different problem from anything item 1 tested.
 """
+import re
 from collections import Counter
 from typing import Dict, List, NamedTuple, Optional
 
@@ -710,6 +711,71 @@ def settle_sources(rows: List[S.Declared], board: Optional[Board] = None) -> Lis
             continue
         out.append(row)
     return out
+
+
+def agent_name() -> str:
+    """The active agent's own name, without its bundle extension. `doorman` by default.
+
+    ⇒ **THE SYSTEM HAS ALWAYS KNOWN THIS AND THE SEAM COULD NOT SEE IT.** `shared.agent_select`
+      resolves it from the env var, then the persisted selection, then the shipped default —
+      and every consumer so far has been a CLI command. Read here rather than passed in,
+      because the reading is about the request and the agent is not a parameter of it.
+    """
+    try:
+        from shared import agent_select as _sel
+        return str(_sel.resolve()).rsplit(".", 1)[0].strip().lower()
+    except Exception:
+        return ""
+
+
+def consume_self_address(rows: List[S.Declared], board: Optional[Board] = None,
+                         world=None) -> List[S.Declared]:
+    """A span that names the AGENT is being ADDRESSED, not declared.
+
+    ⇒⇒ **THE OPERATOR, 2026-08-14: *"gate 2 is a world check, and we have nothing to check for
+      the agent's name."*** *"good morning doorman, …"* came back as a declared row, was typed
+      `vm` by the affordance rule, and gate 2 asked the only question it could — *"'doorman' is
+      referred to as if it exists and the lab has none — should it be created?"* Correct for
+      what it was shown, and the wrong question: the lab has no `doorman` because `doorman` is
+      **who was being spoken to**.
+
+    ⇒ **THE WORLD MODEL HAS NO CATEGORY FOR THE CONVERSATION** — it knows machines, networks
+      and snapshots, not the agent, the operator or the request. This closes the tractable
+      part of that: the agent's own name. What is left — *"don't start any changes"*, *"how do
+      i stop"* — names nothing in any world and needs the structural answer, not a lookup.
+
+    ⇒ **AND IT IS THE ALLOWED KIND OF FACT** ([[gorgon-encyclopedia]]'s rule): *never write down
+      what the model already knows better than you; always write down what it CANNOT know.* Its
+      own name is the second — unknowable to the model, already declared by the system, and
+      fixable by teaching. That is exactly the test that permits the Encyclopedia and forbids a
+      stop-word list.
+
+    ⇒ ⚠ **THE LAB STILL WINS.** A machine really called `doorman` is a machine — the row is kept
+      whenever the world holds one by that name. So this can only ever remove a row nothing in
+      the lab accounts for, which is the same world-first discipline `lab_has` already uses.
+      With NO world it changes nothing, deliberately: absence of a lab is not evidence.
+
+    ⇒ **AND ONLY A KINDLESS ROW**, the same guard `consume_reciprocal` keeps. A row the nouns
+      or the lab already settled is a reading somebody made; this only ever drops one nobody
+      could.
+    """
+    name = agent_name()
+    if not name or world is None:
+        return rows
+    out = []
+    for row in rows:
+        span = str(row.span or row.name).lower()
+        names_me = row.object_type == S.UNKNOWN_KIND and re.search(rf"\b{re.escape(name)}\b", span)
+        if names_me and not _lab_holds(name, world, board):
+            continue
+        out.append(row)
+    return out
+
+
+def _lab_holds(word: str, world, board: Optional[Board] = None) -> bool:
+    """Does the lab hold anything keyed by this word? The same question `residue.lab_has` asks."""
+    from .residue import lab_has
+    return bool(lab_has(word, world, board=board or Board()))
 
 
 def consume_reciprocal(rows: List[S.Declared], board: Optional[Board] = None

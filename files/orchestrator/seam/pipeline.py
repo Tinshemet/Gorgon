@@ -221,6 +221,10 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     # ⇒ AND A RECIPROCAL CLAUSE IS A PREDICATE, NOT A THING. Rung 13 declared `all ping each
     #   other` as an object; the goal reads it directly, so the row must not also exist.
     rows = pass1.consume_reciprocal(rows, board)
+    # ⇒ AND A SPAN THAT NAMES THE AGENT IS BEING SPOKEN TO, NOT DECLARED. Before the affordance
+    #   rule, which would otherwise type it as whatever kind the request's verbs afford — that
+    #   is how *"good morning doorman"* became a machine and gate 2 asked whether to create it.
+    rows = pass1.consume_self_address(rows, board, world)
     # ⇒ AND WHAT A CLONE IS TAKEN FROM ALREADY EXISTS. `creators.clone` declares a `from` role;
     #   reading it stops rung 10 asking *"you asked to create golden"* about a thing nobody
     #   asked to create.
@@ -650,7 +654,7 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #   question one notch wider — that one asks whether the operator meant to REMOVE, this
     #   asks whether they meant to DO anything at all. It is an ASK and never a refusal, and
     #   it is silent unless the request positively names a rung that may not change the lab.
-    asks += gate4.answer_not_act(operations, request, board)
+    asks += gate4.answer_not_act(operations, table, request, board, world)
     # ⇒ AND A SET WHOSE EXCLUSION THE ENGINE COULD NOT EXPRESS IS NOT VIABLE. The declaration
     #   is only worth making if something downstream can honour it; asked of the IR's own
     #   validator so this cannot drift from what the engine actually accepts.

@@ -934,11 +934,29 @@ def test_gate_3_computes_the_refusal_the_model_will_not_give():
         # ⇒ OWNERSHIP CHANGED, NOT THE VERDICT. An unsettled kind is GATE 2's question, and
         #   gate 3 used to re-derive it — the one fact *nothing says what n1 is* came back five
         #   times, three from gate 2 and two from here. Gate 3 now trusts the table it is given.
+        # ⚠ A LAB THAT DOES NOT KNOW THEM, AND IT USED TO BE THE DEFAULT ONE. `Lab` gained
+        #   `n1 · n2 · n3` on 2026-08-14 so the residue check's world arm could be measured at
+        #   all — and with them present `settle_with_world` settles rung 9 outright, which is
+        #   exactly what a lab is FOR. So gate 2 correctly reports nothing there now, and the
+        #   case this assertion owns — *nobody has said what n1 is* — needs a lab that has not.
+        class _Unknowing(Lab):
+            ROWS = [r for r in Lab.ROWS if r["name"] in ("db", "golden")]
+
         rows9 = P.settle_with_world(P.run_scanned(P.EXPECTED[9].request, board=board),
-                                    Lab(), board)
+                                    _Unknowing(), board)
         asks9 = [f for f in G.gate2(rows9, board) if f.kind == "kind-not-settled"]
         check("GATE 2 reports the unsettled kinds", len(asks9) == 3)
-        check("and gate 3 stays out of it", not G3.check(mesh, t9, board))
+        # ⇒ AND FROM THE SAME UNKNOWING LAB, for the same reason: with the kinds SETTLED gate 3
+        #   does refuse the mesh, and that is the very case the next block asserts. Built from
+        #   the default lab these two branches had quietly become the same one.
+        check("and gate 3 stays out of it",
+              not G3.check(mesh, table(9, _Unknowing()), board))
+        # ⇒ AND THE OTHER HALF OF THE SAME FACT, worth pinning now that it is true: given a lab
+        #   that DOES hold them, nothing is unsettled and gate 2 has nothing to ask.
+        settled9 = P.settle_with_world(P.run_scanned(P.EXPECTED[9].request, board=board),
+                                       Lab(), board)
+        check("and a lab that knows them leaves gate 2 nothing to ask",
+              not [f for f in G.gate2(settled9, board) if f.kind == "kind-not-settled"])
 
         # ⇒ AND IT STILL REFUSES WHEN THE LAB DOES KNOW THEM — a different rule catches it.
         #   You cannot label a machine WITH a machine, whoever those machines are.

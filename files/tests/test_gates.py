@@ -1412,55 +1412,113 @@ def test_an_unhelpable_request_is_never_asked_about():
 def test_gate_4_asks_when_the_request_wanted_an_answer_and_the_program_would_act():
     """ACT OR ANSWER, decided where the evidence is. Added 2026-08-14.
 
-    The door has only a sentence, and *"is this a question?"* is the call the model was
-    measured at near-chance on. Gate 4 has the sentence AND what the program would DO, so it
-    asks K5's question instead: this program acts — did the request authorise acting?
+    ⇒ **THE TRIGGER IS RESIDUE, AND IT WAS `intent.declared()` FOR ONE DAY.** The rule fired
+      only on a POSITIVE fetch/ensure — and the courtesy fix shipped the same morning makes
+      `declared()` return None whenever the sentence names an ACT. A request that should
+      trigger this declares a read AND acts, and the reason it acts is almost always a verb on
+      the achieve list, so the rule was near-unreachable:
 
-    THE BAR IS THE SAME AS GATE 1's AND IT IS THE FIRST CHECK BELOW: **silent on every known
-    good reading.** A guard that fires on the corpus has taught the operator to ignore it.
+          "list the vms and stop the ones running"    -> None   (stop is a marker)  silent
+          "list the vms and remove the fleet label"   -> fetch  (remove is not)     FIRED
+
+      **Whether the safety rule engaged depended on which verb the request happened to use.**
+      Residue is measured where that was arbitrary.
+
+    ⇒ **THE BAR IS GATE 1's AND IT IS THE FIRST CHECK BELOW: silent on a correct reading.** A
+      guard that fires on the corpus has taught the operator to ignore it.
     """
-    from orchestrator.seam import gate4
+    from planner.formula.legal import Board
+    from orchestrator.seam import gate4, pass1 as P, pass2 as P2, schema as S
     from orchestrator.seam.effects import Operation
-    from orchestrator.seam.pass1 import EXPECTED
+    from tests.bench.twopass.metrics import Lab
 
-    acts = [Operation("create_vm", "alpha"), Operation("add_label", "alpha", "prod")]
-    probes = [Operation("guest_ping", "alpha")]
+    board, lab = Board(), Lab()
+    acts = [Operation("delete_vm", "vms")]
+    probes = [Operation("guest_ping", "vms")]
 
-    # 1 · SILENT ON ALL FOURTEEN RUNGS. Every one declares None — absence is not evidence, and
-    #     firing on it would have turned 13 SERVE into 14 ASK.
-    noisy = [n for n, w in EXPECTED.items() if gate4.answer_not_act(acts, w.request)]
-    check("silent on every rung in the corpus, with an ACTING program", not noisy)
+    def table_of(*rows):
+        return P2.symbol_table(list(rows), board)
 
-    # 2 · THE CASE IT OWNS — the request positively names a rung that may not change the lab.
-    told = gate4.answer_not_act(acts, "list the vms")
-    check("a request that asks to be TOLD, with a program that acts, is asked about",
-          len(told) == 1 and "[gate4/answer-not-act]" in told[0])
-    check("and it names the calls rather than just complaining",
-          "create_vm(alpha)" in told[0] and "add_label(alpha)" in told[0])
-    check("an ENSURE request that would act is the same case",
-          gate4.answer_not_act(acts, "check that alpha is up"))
+    clean = table_of(S.declare_from("every vm", "vm_set", {}, S.EXISTING, board,
+                                    span="every vm"))
+    wrapped = table_of(
+        S.declare_from("every vm", "vm_set", {}, S.EXISTING, board, span="every vm"),
+        S.declare_from("how do i stop", S.UNKNOWN_KIND, {}, S.NEW, board,
+                       span="how do i stop"))
 
-    # 3 · ONE FINDING PER PROGRAM, NOT PER CALL. The mismatch is one fact about the request.
-    check("a four-step program still reports the mismatch once",
-          len(gate4.answer_not_act(acts + acts, "list the vms")) == 1)
+    # 1 · SILENT ON A CLEAN READING, however destructive the program.
+    check("a reading with no leftover wrapper is not questioned",
+          not gate4.answer_not_act(acts, clean, "stop every vm", board, lab))
 
-    # 4 · THE CONTROLS — each is a way this could be wrong rather than merely unhelpful.
+    # 2 · THE CASE IT OWNS — the request carries words the lab cannot account for.
+    fired = gate4.answer_not_act(acts, wrapped, "how do i stop every vm", board, lab)
+    check("a program that acts, beside words the lab cannot account for, is asked about",
+          len(fired) == 1 and "[gate4/answer-not-act]" in fired[0])
+    check("and it names both halves — the calls and the words",
+          "delete_vm(vms)" in fired[0] and "how do i stop" in fired[0])
+
+    # 3 · THE CONTROLS. Each is a way this could be wrong rather than merely weak.
     check("a program that only PROBES is silent — it already answers",
-          not gate4.answer_not_act(probes, "list the vms"))
+          not gate4.answer_not_act(probes, wrapped, "how do i stop every vm", board, lab))
     check("no operations at all is silent",
-          not gate4.answer_not_act([], "list the vms"))
-    check("the operator's own ACHIEVE prefix is obeyed, not second-guessed",
-          not gate4.answer_not_act(acts, "achieve: list the vms"))
-    check("a request declaring nothing is silent — it may NEVER grant, only ask",
-          not gate4.answer_not_act(acts, "create a vm named alpha"))
+          not gate4.answer_not_act([], wrapped, "how do i stop every vm", board, lab))
+    # ⇒ WITHOUT A LAB IT SAYS NOTHING, deliberately: `lab_has` cannot tell a real name from a
+    #   meaningless one with no world, so every row would look like wrapper.
+    check("with no world it declines to judge",
+          not gate4.answer_not_act(acts, wrapped, "how do i stop every vm", board, None))
 
-    # 5 · IT IS WIRED, AND ITS NAME IS DECLARED. Both halves of the defect class this
-    #     codebase keeps recording: a gate that owns a name it never emits, and a gate
-    #     function with no caller.
+    # 4 · IT IS WIRED, AND ITS NAME IS DECLARED — both halves of the defect class this
+    #     codebase keeps recording.
     check("the rule is in gate 4's OWNS", "answer-not-act" in gate4.OWNS)
     src = open(os.path.join(os.path.dirname(__file__), "..", "orchestrator", "seam",
                             "pipeline.py")).read()
     check("and the pipeline calls it", "gate4.answer_not_act(" in src)
+
+
+def test_being_spoken_to_is_not_being_asked_to_build_something():
+    """THE AGENT'S OWN NAME IS NOT A MACHINE. Added 2026-08-14.
+
+    ⇒ **THE OPERATOR: *"gate 2 is a world check, and we have nothing to check for the agent's
+      name."*** *"good morning doorman, …"* was declared as a row, typed `vm` by the affordance
+      rule, and gate 2 asked the only question available to it — *"'doorman' is referred to as
+      if it exists and the lab has none — should it be created?"* Correct for what it was
+      shown. The lab has no `doorman` because `doorman` is who was being spoken to.
+
+    ⇒ **THE THREE BEHAVIOURS ARE THE WHOLE OF IT**, and the second is what keeps it honest:
+      the LAB WINS. A machine really called `doorman` is a machine.
+    """
+    from planner.formula.legal import Board
+    from orchestrator.seam import pass1 as P, schema as S
+    from tests.bench.twopass.metrics import Lab
+
+    class LabWithOne(Lab):
+        ROWS = Lab.ROWS + [{"kind": "vm", "name": "doorman", "status": "running"}]
+
+    board = Board()
+    check("the agent knows its own name", P.agent_name() == "doorman")
+
+    rows = [S.declare_from("good morning doorman", S.UNKNOWN_KIND, {}, S.NEW, board,
+                           span="good morning doorman"),
+            S.declare_from("every vm that is running", "vm_set", {}, S.EXISTING, board,
+                           span="every vm that is running")]
+
+    check("a span naming the agent is not declared",
+          [r.name for r in P.consume_self_address(rows, board, Lab())]
+          == ["every vm that is running"])
+    # ⇒ THE CONTROL. Without it this rule would delete a machine from the reading because of
+    #   what the operator happened to call their agent.
+    check("but a machine really called doorman survives — the lab wins",
+          len(P.consume_self_address(rows, board, LabWithOne())) == 2)
+    # ⇒ AND ABSENCE OF A LAB IS NOT EVIDENCE, the same arm `classify` already stays quiet on.
+    check("with no world at all it changes nothing",
+          len(P.consume_self_address(rows, board, None)) == 2)
+
+    # ⇒ AND ONLY A KINDLESS ROW — a reading somebody made is never dropped by this.
+    typed = [S.declare_from("doorman", "vm", {"name": "doorman"}, S.EXISTING, board,
+                            span="doorman")]
+    check("a row the nouns or the lab already settled is untouched",
+          len(P.consume_self_address(typed, board, Lab())) == 1)
+
 
 
 def main(argv=None) -> int:

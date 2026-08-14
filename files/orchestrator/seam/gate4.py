@@ -386,8 +386,8 @@ def confirmations(operations: List[Operation], table, request: str = "",
     return out
 
 
-def answer_not_act(operations: List[Operation], request: str = "",
-                   board: Optional[Board] = None) -> List[str]:
+def answer_not_act(operations: List[Operation], table=(), request: str = "",
+                   board: Optional[Board] = None, world=None) -> List[str]:
     """THE REQUEST ASKED TO BE TOLD SOMETHING AND THE PROGRAM WOULD CHANGE THE LAB.
 
     ⇒⇒ **WHY THIS IS GATE 4's AND NOT THE DOOR'S.** At the door there is only a sentence, and
@@ -422,19 +422,44 @@ def answer_not_act(operations: List[Operation], request: str = "",
     times for a four-step program. The calls are named inside it instead.
     """
     board = board or Board()
-    from planner.ir import config as _config, effects as _effects, intent as _intent
+    from planner.ir import config as _config, effects as _effects
+    from .residue import kindless as _kindless
 
-    said = _intent.declared(request)
-    if said not in (_intent.FETCH, _intent.ENSURE):
-        return []
     acting = _effects.actors(_config.KINDS)
     hits = [op for op in operations if op.operator in acting]
     if not hits:
         return []                      # it already answers rather than acts — nothing to ask
+
+    # ⇒⇒ THE TRIGGER IS RESIDUE, AND IT USED TO BE `intent.declared()`. Changed 2026-08-14
+    #   after testing the rule end to end rather than assuming it worked.
+    #
+    #   THE MARKER LIST COULD NOT BE THE TRIGGER. The rule fired only on a POSITIVE
+    #   fetch/ensure — and the courtesy fix shipped the same morning makes `declared()` return
+    #   None whenever the sentence names an ACT. A request that should trigger this declares a
+    #   read AND acts, and the reason it acts is almost always a verb on the achieve list:
+    #
+    #       "list the vms and stop the ones running"    -> None   (stop is a marker)  silent
+    #       "list the vms and remove the fleet label"   -> fetch  (remove is not)     FIRED
+    #
+    #   **So whether the safety rule engaged depended on whether the acting verb happened to
+    #   be on a hand-written English list.** That is a coin toss, not a trigger.
+    #
+    #   ⇒ RESIDUE IS MEASURED WHERE THAT WAS ARBITRARY: a span the world cannot account for is
+    #     conversational wrapper, and wrapper is what a request carries when it is asking
+    #     rather than ordering. literal 1/14 · filler 14/14 · asked 11/14 · framed 14/14,
+    #     bit-stable over three seeds and reproduced against a real lab.
+    #
+    #   ⚠ IT TRIGGERS A QUESTION AND NEVER A VERDICT, which is the whole of what it can
+    #     honestly do: residue cannot tell a POLITE ORDER from a question — both carry
+    #     wrapper — so it fires on courtesy too. A question costs a question; executing one
+    #     cannot be taken back.
+    leftover = _kindless(list(table and [s.row for s in table]) or [], request, board, world)
+    if not leftover:
+        return []
     calls = ", ".join(dict.fromkeys(f"{op.operator}({op.on})" for op in hits))
-    return [f"[gate4/answer-not-act] the request asks to be told something — it names a "
-            f"{said}, which may not change the lab — but this program would run {calls}. "
-            f"Confirm you want it done rather than reported."]
+    spans = ", ".join(repr(r.span or r.name) for r in leftover[:3])
+    return [f"[gate4/answer-not-act] this program would run {calls}, and the request carries "
+            f"words the lab cannot account for — {spans}. Did you mean it done, or asked?"]
 
 
 def forbidden_tools(operations: List[Operation], legal=None, table=None,

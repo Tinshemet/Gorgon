@@ -333,6 +333,45 @@ def _names_declared_here(rows: List[S.Declared], board: Board) -> set:
     return out
 
 
+def kindless(rows: List[S.Declared], request: str, board: Optional[Board] = None,
+             world=None) -> List[S.Declared]:
+    """Declared rows the world cannot account for at all — the conversational residue.
+
+    ⇒⇒ **THE SECOND EXIT FOR A `?` ROW.** `unread()` skips a kindless row entirely and says
+      why: every modifier of one looks unread, and gate 2 is already asking about it. That is
+      right for `n1` — the lab settles it. It is wrong for *"good morning doorman"*, where
+      gate 2's question has no answer because the span is not a thing. Same row type, two
+      populations, and until now one exit.
+
+    ⇒ **THE DISCRIMINATOR IS THE WORLD, AND IT IS `classify`'s ALREADY.** A row is a REFERENCE
+      if any word in it names something the lab holds; otherwise nothing can account for it.
+      Measured 2026-08-14 against a lab holding the corpus's own machines: **5/5 real names
+      kept, 0/8 junk words wrongly kept**, and on live readings it keeps exactly `except db`,
+      `…n1`, `n2`, `n3 can` and `…clone golden into` while flagging every courtesy.
+
+    ⇒ ⚠ **AND WITHOUT A WORLD IT REPORTS NOTHING, DELIBERATELY.** `lab_has` returns None with
+      no lab, so every row would look like residue and a caller with no world would flag the
+      whole reading. The same arm `classify` already stays quiet on rather than guessing —
+      absence of a lab is not evidence about a word.
+
+    ⇒ **NO STOP LIST.** Every word in the span is offered to `classify`; the ones that mean
+      nothing simply do not come back BOUNCE, so they cost nothing and need no enumerating.
+      A hand-written English list here would be the fourth in this system and the least
+      defensible ([[gorgon-encyclopedia]]'s rule).
+    """
+    if world is None:
+        return []
+    board = board or Board()
+    out: List[S.Declared] = []
+    for row in rows:
+        if row.object_type != S.UNKNOWN_KIND:
+            continue
+        words = re.findall(r"[A-Za-z0-9_]+", (row.span or row.name or "").lower())
+        if not any(classify(w, row.object_type, request, world)[0] == BOUNCE for w in words):
+            out.append(row)
+    return out
+
+
 def report(rows: List[S.Declared], request: str, board: Optional[Board] = None,
            world=None) -> List[Residue]:
     """Every word in every declaration that nothing can account for, with its verdict."""
