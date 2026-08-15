@@ -210,6 +210,35 @@ def test_a_ratified_entry_settles_a_row_the_world_could_not():
           pass1.settle_from_archive([live], board, archive=taught)[0].object_type == "network")
 
 
+def test_a_signed_entry_can_be_changed_and_withdrawn():
+    """⇒⇒ **THE OPERATOR ASKED HOW YOU REMOVE A WORD AND THE ANSWER WAS: YOU CANNOT.**
+
+    `ratify` supersedes an old entry when a NEW one replaces it, and `reject` drops a PENDING
+    proposal — so a wrong fact could be overwritten and never simply withdrawn. That is the
+    exact risk this store was designed around: *"the real risk is one misspoken answer becoming
+    permanent and silent."* An archive is meant to be the REPAIRABLE SSOT — the one whose wrong
+    entries are fixable by teaching — and an unwithdrawable entry would make it the other kind.
+    """
+    a = A.Archive()
+    a.propose("jumpbox", "a vm", kind="vm")
+    a.ratify("jumpbox")
+    check("it routes", a.kind_of("jumpbox") == "vm")
+
+    # CHANGE — say the new thing and sign it. No special verb needed.
+    a.propose("jumpbox", "a network", kind="network")
+    a.ratify("jumpbox")
+    check("changed by stating the new fact", a.kind_of("jumpbox") == "network")
+
+    # REMOVE — withdraw what is in force.
+    gone = a.retract("jumpbox")
+    check("withdrawn", gone is not None and a.known("jumpbox") is None)
+    check("and it settles nothing now", a.kind_of("jumpbox") is None)
+    check("but every version is still on record",
+          len([e for e in a.rows() if e.word == "jumpbox"]) == 2)
+    check("withdrawing what is not in force says so",
+          a.retract("jumpbox") is None)
+
+
 def test_reject_refuses_without_deleting():
     """Refused, not erased — *who told it that, and when did we say no* has to be answerable."""
     a = A.Archive()

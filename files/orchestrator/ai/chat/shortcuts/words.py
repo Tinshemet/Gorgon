@@ -2,7 +2,12 @@
 
     words                  every entry — what routes, and what is proposed
     words ratify <word>    sign it. From now on it settles readings
-    words reject <word>    refuse the proposals for it
+    words reject <word>    refuse the PENDING proposals for it
+    words forget <word>    withdraw one already in force. It stops routing; the record stays
+
+⇒ CHANGING a word needs no special verb: state the new fact, ratify it, and the old entry is
+  superseded. REMOVING one is `forget`, and it existed nowhere until the operator asked how
+  you would do it — the store could be overwritten and not unsaid.
 
 # ⇒⇒ THE AUDIT SURFACE IS PART OF THE DESIGN, NOT A CONVENIENCE
 
@@ -49,6 +54,18 @@ class Words(Shortcut):
                               + (f"  -> kind {entry.kind}" if entry.kind else ""))
             else:
                 console.print(f"[warn]nothing pending for {word!r}[/warn]")
+            return
+
+        # ⇒ WITHDRAWING A SIGNED ENTRY. `reject` refuses something PENDING; this takes back
+        #   something already in force, which is the half that was missing — a signature you
+        #   cannot take back is a trapdoor rather than a signature.
+        if rest.lower().startswith("forget "):
+            word = rest[len("forget"):].strip()
+            gone = ARCHIVE.retract(word)
+            ARCHIVE.save()
+            console.print(f"[bold]withdrawn[/bold] {gone.word!r} — it no longer settles "
+                          f"anything [dim](the record is kept)[/dim]" if gone
+                          else f"[warn]nothing in force for {word!r}[/warn]")
             return
 
         if rest.lower().startswith("reject "):

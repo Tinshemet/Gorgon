@@ -186,6 +186,30 @@ class Archive:
         self._rows = out
         return n
 
+    def retract(self, word: str) -> Optional[Entry]:
+        """WITHDRAW a ratified entry. It stops routing; the record stays.
+
+        ⇒⇒ **THE STORE COULD BE CHANGED AND NOT UNSAID, AND THAT IS THE WRONG HALF TO HAVE.**
+          `ratify` supersedes the old entry when a new one replaces it, and `reject` drops a
+          PENDING proposal — so a wrong fact could be overwritten but never simply withdrawn.
+          The operator asked the question directly and it had no answer.
+
+        ⇒ **IT IS THE EXACT RISK THIS STORE WAS DESIGNED AROUND**, in its own words: *"the real
+          risk is one misspoken answer becoming permanent and silent."* A signature you cannot
+          take back is not a signature, it is a trapdoor — and an archive is meant to be the
+          repairable SSOT, the one whose wrong entries are fixable BY TEACHING. Unfixable
+          entries would make it the other kind of list.
+
+        ⇒ AND NOTHING IS DELETED, for the same reason supersession keeps the old row: *who told
+          it that, and when did we take it back* has to stay answerable.
+        """
+        word = str(word).strip().lower()
+        gone = self.known(word)
+        if gone is None:
+            return None
+        self._rows = [e._replace(status=SUPERSEDED) if e is gone else e for e in self._rows]
+        return gone
+
     def pending(self) -> List[Entry]:
         """Everything waiting for a person. The audit surface reads this."""
         return [e for e in self._rows if e.status == PENDING]
