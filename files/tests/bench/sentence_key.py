@@ -203,6 +203,13 @@ CONTROLS: List[Keyed] = [
           "existential `there` as the inverted subject"),
     Keyed("did the snapshot finish", (DIRECTIVE_INFORM,),
           "past-tense auxiliary over a lab thing — asking about a result, not asking for one"),
+    Keyed("don't you have a vm called alpha?", (DIRECTIVE_INFORM,),
+          "INVERTED OVER THE ADDRESSEE AND STILL A QUESTION — the addressee alone read as an "
+          "ORDER until 2026-08-16. `have` is not a verb the lab performs; `delete` is, and "
+          "that is the whole difference"),
+    Keyed("isn't alpha running?", (DIRECTIVE_INFORM,),
+          "a NEGATED polar question whose subject is a bare NAME, not a pronoun — it fell "
+          "through to the imperative branch and came back META-CONTROL"),
 
     # ⇒⇒ THE REST OF THE INTERROGATIVE TAXONOMY — added 2026-08-15 at the operator's ask,
     #   *"not just wh and yes/no, all of them"*. Keyed BEFORE any rule was written for them,

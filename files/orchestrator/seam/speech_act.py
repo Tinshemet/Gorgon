@@ -132,6 +132,17 @@ WHETHER = frozenset({"whether"})
 #     FOR me — and this rule cannot tell that from a recipient. It fails toward asking.
 RECIPIENT = frozenset({"me", "us"})
 
+# ⇒ THE DEONTIC MODALS — obligation and permission. Every one is already a member of
+#   `AUXILIARIES`; naming them again here is not a second list but a SUBSET of one, because
+#   what separates *"must keep a snapshot"* from *"is keeping a snapshot"* is which auxiliary
+#   it is. Closed, and closed in the strong sense: English gains no new modal.
+DEONTIC = frozenset({"must", "should", "shall", "may", "ought"})
+
+# ⇒ AND THE FREQUENCY ADVERBS. **A rule quantifies over TIME** — that is what makes *"never
+#   delete a vm"* a standing rule and *"don't delete the vms"* an instruction about now. Two
+#   words, closed, and the distinction they draw is the whole of the declaration reading.
+FREQUENCY = frozenset({"never", "always"})
+
 # ⇒ LEADING PARTICLES that carry no proposition. Stripped before the clause is read, because
 #   `please stop every vm` is `stop every vm` and nothing else.
 OPENERS = frozenset({"please", "kindly", "just", "now", "then", "also",
@@ -354,8 +365,15 @@ def act_of(clause: str, board: Optional[Board] = None, world=None) -> Optional[s
     # ⇒ 2 · INVERSION. An auxiliary in first position, and THE SUBJECT DECIDES. This is the
     #   test that nearly shipped inverted — see the module note on `is alpha running?`.
     if head in AUXILIARIES:
-        subject = _inverted_subject(words)
-        if subject in ADDRESSEE:
+        subject = _inverted_subject(words, clause)
+        # ⇒⇒ **AND THE ADDRESSEE ALONE IS NOT ENOUGH — IT NEEDS AN ACTING VERB.** This returned
+        #   ORDER for any inversion over `you`, so *"don't you have a vm called alpha?"* — a
+        #   plain question about the lab's contents — read as `directive-act`. A FALSE SERVE.
+        #   ⇒ *"can you DELETE the vms"* asks us to act and `delete` is the lab's own verb;
+        #     *"do you HAVE a vm"* asks what is true. The wh-branch has required this since it
+        #     was written; the inversion branch did not, and the asymmetry was the bug.
+        if subject in ADDRESSEE and (_acting_verb_in(words, board)
+                                     or _lab_predicate_in(words, board)):
             return DIRECTIVE_ACT           # "can you delete the vms"
         if subject is None:
             # ⇒ AN AUXILIARY WITH NO SUBJECT AT ALL IS A NEGATIVE IMPERATIVE, not a question:
@@ -368,6 +386,48 @@ def act_of(clause: str, board: Optional[Board] = None, world=None) -> Optional[s
     #   pronouns settle it — the speaker and the addressee — and both are closed class.
     if head in FIRST_PERSON and _addressed_to_us(words) and _acting_verb_in(words, board):
         return DIRECTIVE_ACT
+
+    # ⇒ AND THE SECOND-PERSON DEONTIC IS AN ORDER, NOT A RULE. *"YOU should stop the vms"*
+    #   obliges US and means now; *"prod vms must keep a snapshot"* obliges a CLASS and means
+    #   always. Same modal, and the subject is the entire difference — the whimperative
+    #   distinction one more time.
+    if head in ADDRESSEE and any(w in DEONTIC for w in words) and _acting_verb_in(words, board):
+        return DIRECTIVE_ACT
+
+    # ⇒⇒ 3a · **A RULE ABOUT FUTURE BEHAVIOUR IS A DECLARATION, NOT AN ORDER.** *"prod vms must
+    #   always keep a snapshot"* read as `directive-act` and would have TAKEN A SNAPSHOT NOW
+    #   instead of recording a rule — a false serve, and the expensive kind, produced by the
+    #   half of the statement type that was never built.
+    #
+    #   ⇒ **THE SIGNAL IS CLOSED-CLASS TWICE OVER.** A deontic modal (`must`, `should`, `shall`,
+    #     `may`, `ought`) is a member of the same auxiliary class this file already reads, and
+    #     `never`/`always` are frequency adverbs — English gains neither. A rule quantifies over
+    #     TIME, and those are the words that do it.
+    #
+    #   ⇒ ⚠ **AND THE ADDRESSEE IS THE EXCEPTION, exactly as it is for the whimperative.**
+    #     *"you should stop the vms"* is a polite ORDER to us; *"prod vms must keep a snapshot"*
+    #     binds a CLASS. Second person means it is aimed at us now; anything else is a standing
+    #     rule about the world.
+    if not _addressed_to_us(words) and (words[0] not in AUXILIARIES) \
+            and any(w in DEONTIC or w in FREQUENCY for w in words):
+        return DECLARATION
+
+    # ⇒⇒ 3a-ii · **A UNIVERSAL IN SUBJECT POSITION OVER A NON-COPULA VERB IS ALSO A RULE.**
+    #   *"from now on every new vm gets the 'fleet' label"* carries no modal and no frequency
+    #   adverb, and is plainly legislation: it binds a CLASS across FUTURE instances. `UNIVERSAL`
+    #   is a closed class `scan` already owns, so this adds no vocabulary.
+    #
+    #   ⇒ **THREE TESTS, AND EACH ONE IS LOAD-BEARING:**
+    #
+    #       the clause is NOT an imperative   *"PUT every vm on a network"* is an order about
+    #                                         now, and its head is an open-class verb
+    #       a UNIVERSAL is present            `every` / `all` / `each` — what makes it a class
+    #       the verb is NOT a copula          *"every vm IS running"* states a fact about today;
+    #                                         *"every new vm GETS the label"* states a standing
+    #                                         rule. Dynamic verb versus predication.
+    if (_is_function_word(head) and not _main_clause_copula(words)
+            and any(w in _universals() for w in words)):
+        return DECLARATION
 
     # ⇒ 3b · THE EMBEDDED QUESTION UNDER A FIRST-PERSON MATRIX. *"i want to know WHICH vms are
     #   stopped"* is a declarative sentence containing an interrogative clause — no inversion,
@@ -565,6 +625,12 @@ def _has_predicate(words: Sequence[str], board: Optional[Board] = None) -> bool:
         or _any_manifest_verb(words, board) or _lab_predicate_in(words, board)
 
 
+def _universals() -> frozenset:
+    """The universal determiners, read from `scan` — one owner for the closed class."""
+    from .scan import UNIVERSAL
+    return frozenset(UNIVERSAL)
+
+
 def _is_determiner(word: str) -> bool:
     """The determiner classes, read from `scan` rather than re-listed — one owner."""
     from .scan import DEFINITE, INDEFINITE, NOVEL, UNIVERSAL
@@ -658,7 +724,7 @@ def _strip_imperative_frame(words: Sequence[str]) -> List[str]:
     return out
 
 
-def _inverted_subject(words: Sequence[str]) -> Optional[str]:
+def _inverted_subject(words: Sequence[str], clause: str = "") -> Optional[str]:
     """The subject an inverted auxiliary jumped over, or None when there is not one.
 
     ⇒ NEGATORS AND ADVERBS ARE SKIPPED, because *"can you please delete"* and *"did the
@@ -682,7 +748,14 @@ def _inverted_subject(words: Sequence[str]) -> Optional[str]:
         #
         #   Both are instructions not to act, read as requests for information. Asking what a
         #   word IS needs an open-class lexicon; asking what it IS NOT needs two closed ones.
-        if negated and not (w in SUBJECT_PRONOUNS or _is_determiner(w)):
+        #   ⇒ ⚠ **AND A QUESTION MARK BLOCKS THE IMPERATIVE READING OUTRIGHT.** A negative
+        #     imperative does not carry one. Without this, *"isn't alpha running?"* — whose
+        #     subject is a bare NAME rather than a pronoun or a determiner — fell through to
+        #     the imperative branch and came back META-CONTROL, which is neither its type nor
+        #     its force. The mark cannot say a sentence IS a question; it can say this one is
+        #     not an order.
+        if negated and not _asks_outright(clause) \
+                and not (w in SUBJECT_PRONOUNS or _is_determiner(w)):
             return None                    # "do not touch …" — an imperative, not a question
         # ⇒⇒ **A VERB WHERE THE SUBJECT SHOULD BE MEANS THERE IS NO SUBJECT** — `do not START
         #   any changes` is a negative imperative, not a question about `start`. Without this
@@ -770,10 +843,23 @@ def _lab_predicate_in(words: Sequence[str], board: Optional[Board] = None) -> bo
       subtraction is a lookup and not a hand-kept exception list. Without it *"how many VMS are
       there"* would look like a question about an act and swallow the clause after it.
     """
-    from .scan import _index, _operation_words
+    from .scan import _index, _operation_words, _stem
     board = board or Board()
     doings = _operation_words(board) - set(_index(board))
-    return any(w in doings and w not in COPULA for w in words)
+    for w in words:
+        if w in COPULA:
+            continue
+        if w in doings:
+            return True
+        # ⇒⇒ **AN INFLECTED FORM IS THE SAME VERB.** *"would you mind STOPPING the web server"*
+        #   is a polite order and `stopping` is not `stop`, so a bare membership test read it
+        #   as a question — a keyed control, broken by a fix to a different rule. `_stem`
+        #   gives `stopp` (the doubled consonant survives), so the match is by PREFIX in
+        #   either direction, which is the same trick `NAMING_CUES` documents for `named`.
+        stem = _stem(w)
+        if len(stem) > 2 and any(d.startswith(stem) or stem.startswith(d) for d in doings):
+            return True
+    return False
 
 
 def read(request: str, board: Optional[Board] = None,

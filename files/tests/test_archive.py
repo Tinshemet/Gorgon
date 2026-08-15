@@ -407,6 +407,71 @@ def test_every_words_command_is_reachable_in_sentence_form():
               not A.effect_of(said, board, store=A.Archive()))
 
 
+def test_a_declaration_governs_and_is_only_proposed():
+    """The other half of the statement type — *"never delete a vm without asking me"*.
+
+    ⇒⇒ **IT WAS A FALSE SERVE UNTIL 2026-08-16.** *"prod vms must always keep a snapshot"*
+      read as `directive-act` and would have TAKEN A SNAPSHOT NOW — carrying out, once, a
+      sentence that was legislating forever.
+
+    ⇒ **AND IT IS PROPOSED, NEVER SIGNED, WHICH IS THE OPPOSITE OF THE ARCHIVE ON PURPOSE.** A
+      statement that TEACHES is signed on the spot: the operator's own words are the signature,
+      and a wrong entry is repairable by teaching. A statement that GOVERNS is not, because a
+      rule constrains every future act and the contract already has a formal amendment path.
+      `proposals.py`'s own note: *"The AI can propose but never enact."*
+    """
+    from orchestrator.seam import governing as G, speech_act as SA
+    from planner.formula.legal import Board
+    board = Board()
+
+    for said in ("never delete a vm without asking me",
+                 "prod vms must always keep a snapshot",
+                 "snapshots are never to be deleted without asking me"):
+        check(f"a rule reads as a DECLARATION — {said[:38]!r}",
+              SA.DECLARATION in [a for _, a in SA.read(said, board)])
+        check(f"and it is proposed — {said[:38]!r}", G.rules_from(said, board))
+
+    # ⇒ THE SUBJECT IS THE WHOLE DIFFERENCE, exactly as it is for the whimperative: a deontic
+    #   over the ADDRESSEE obliges us NOW; over a class it binds forever.
+    check("`you should stop the vms` is an ORDER, not a rule",
+          SA.verdict("you should stop the vms", board) == SA.ORDER)
+    check("and it proposes nothing", not G.rules_from("you should stop the vms", board))
+
+    # ⇒⇒ **AND A UNIVERSAL IN SUBJECT POSITION OVER A NON-COPULA VERB IS A RULE TOO.** *"from
+    #   now on every new vm gets the 'fleet' label"* carries no modal and no frequency adverb
+    #   and is plainly legislation. Three tests, each load-bearing — see `speech_act` 3a-ii.
+    for said in ("from now on every new vm gets the fleet label",
+                 "every new vm gets the fleet label"):
+        check(f"a class-binding rule is read — {said[:38]!r}", G.rules_from(said, board))
+    check("but a FACT about the class is not a rule — 'every vm is running'",
+          not G.rules_from("every vm is running", board))
+    check("and an ORDER over the class is not either — 'put every vm on a network'",
+          not G.rules_from("put every vm on a network called core", board))
+
+    # ⇒⇒ **AND THIS STORE'S OWN FRAME, DECLARED AT THE OPERATION.** *"treat prod as
+    #   read-only"* carries no closed-class marker at all — no modal, no frequency adverb, no
+    #   universal — and is plainly legislation. `CONTRACT_VERBS` declares that in THIS system
+    #   `treat X as Y` names an act of governing, the same move `OPERATION_VERBS` makes for
+    #   `forget`. A fact about the system, which the admission test accepts.
+    for said in ("treat prod as read-only", "regard prod as read-only",
+                 "consider db as critical"):
+        check(f"a declared contract frame is read — {said[:34]!r}", G.rules_from(said, board))
+    check("the `as` complement is required — 'treat it carefully' assigns nothing",
+          not G.rules_from("treat it carefully", board))
+    # ⇒ ⚠ AND A DECLARED VERB CAN NEVER SHADOW ONE THE LAB OWNS. Same `X as Y` shape, and
+    #   `mark` IS a manifest verb (`mark_as_template`), so it stays an ORDER.
+    check("`mark alpha as a template` is still an order, not a rule",
+          not G.rules_from("mark alpha as a template", board))
+
+    # ⇒ AND AN ORDINARY ORDER IS UNTOUCHED — no rung carries a modal, so the ladder cannot move.
+    for said in ("stop every vm", "create a vm named alpha", "don't delete the vms"):
+        check(f"{said!r} proposes no rule", not G.rules_from(said, board))
+
+    from tests.bench.rungs import RUNGS
+    noisy = [r.n for r in RUNGS if G.rules_from(r.goal, board)]
+    check(f"silent on every literal rung — {noisy or 'all 14'}", not noisy)
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "archive")

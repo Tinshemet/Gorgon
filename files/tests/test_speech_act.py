@@ -432,6 +432,7 @@ def test_where_it_is_wired():
         pipeline              the leftover exemption for meta-control's own words
         shortcuts/plan.py     `plan --seam <request>` — the opt-in door
         archive.taught_by     an ASSERTIVE offers a knowledge entry
+        governing.rules_from  a DECLARATION proposes a rule
 
     ⇒ **A NAMED LIST, NOT A COUNT.** [[gorgon-built-and-never-called]] is this project's
       dominant defect class and its mirror is a thing called from more places than anyone
@@ -451,8 +452,9 @@ def test_where_it_is_wired():
          os.path.join(root, "engines")],
         capture_output=True, text=True).stdout
     callers = {os.path.basename(p) for p in out.split() if not p.endswith("speech_act.py")}
-    check(f"the reader's importers are exactly the five named here — {sorted(callers)}",
-          callers == {"gate4.py", "pass1.py", "pipeline.py", "plan.py", "archive.py"})
+    check(f"the reader's importers are exactly the six named here — {sorted(callers)}",
+          callers == {"gate4.py", "pass1.py", "pipeline.py", "plan.py", "archive.py",
+                      "governing.py"})
 
 
 def main(argv=None) -> int:

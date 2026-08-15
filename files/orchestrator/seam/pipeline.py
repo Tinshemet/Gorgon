@@ -159,6 +159,9 @@ class Run(NamedTuple):
     # ⇒⇒ ANSWERS THE SEAM CAN GIVE WITH NO PROGRAM AT ALL. *"what is kaya?"* is a lookup in
     #   the archive, not a select over the lab — the one question shape that needs no QUERY.
     answered: List[str] = ()
+    # ⇒⇒ RULES THIS REQUEST PROPOSES. A declaration GOVERNS — reported here, filed by the
+    #   door, and enacted by nobody but the operator with a weight.
+    governs: List[dict] = ()
 
     @property
     def handles(self) -> List[str]:
@@ -361,6 +364,9 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     # ⇒ AND WHAT THE ARCHIVE CAN ANSWER OUTRIGHT. Ratified entries only — a question must not
     #   be answered with something nobody signed.
     answered = _archive.asked_about(request, board, world)
+    # ⇒ AND THE OTHER HALF OF THE STATEMENT TYPE: a rule about what may be done, ever.
+    from . import governing as _governing
+    governs = _governing.rules_from(request, board, world)
 
     def _governed(ops, tbl):
         """Steps the GOAL replaces — the ones over the row it governs.
@@ -825,13 +831,14 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
                    REFUSE, list(repaired), list(dropped),
                    surface.notices(suggested, dropped, answer_conflicts),
                    produces=produces(operations, goals), teaches=teaches,
-                   answered=answered)
+                   answered=answered, governs=governs)
 
     return Run(request, rows, table, operations, conditions,
                asks, bounces, illegal, suggested, ling, list(goals),
                _verdict(operations, illegal, asks, bounces, goals), list(repaired),
                list(dropped), surface.notices(suggested, dropped, answer_conflicts),
-               list(questions), produces(operations, goals), teaches, answered)
+               list(questions), produces(operations, goals), teaches, answered,
+               governs)
 
 
 def _aimed(operations: List[Operation], table) -> List[Operation]:

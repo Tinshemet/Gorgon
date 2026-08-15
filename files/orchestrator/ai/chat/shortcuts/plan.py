@@ -261,6 +261,12 @@ class Plan(Shortcut):
         # ⇒ WHAT THE ARCHIVE ANSWERED OUTRIGHT — no program, no lab, just what it was told.
         for a in got.answered:
             console.print(f"    [bold green]answer[/bold green]     {a}")
+        # ⇒ RULES IT PROPOSES. Shown as an offer and filed by nobody here — a declaration
+        #   governs every future act, and `proposals.py`'s own rule is that the AI may propose
+        #   and never enact.
+        for g in got.governs:
+            console.print(f"    [bold]rule[/bold]       {g['text']!r}   "
+                          f"[dim](proposed — enforces nothing until you sign it)[/dim]")
         for t in got.teaches:
             console.print(f"    [bold]teaches[/bold]    {t['word']!r} = {t['description']!r}"
                           + (f"  -> kind {t['kind']}" if t.get("kind") else "")
