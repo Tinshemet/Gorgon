@@ -1462,10 +1462,20 @@ def test_gate_4_asks_when_the_request_wanted_an_answer_and_the_program_would_act
           not gate4.answer_not_act(probes, wrapped, "how do i stop every vm", board, lab))
     check("no operations at all is silent",
           not gate4.answer_not_act([], wrapped, "how do i stop every vm", board, lab))
-    # ⇒ WITHOUT A LAB IT SAYS NOTHING, deliberately: `lab_has` cannot tell a real name from a
-    #   meaningless one with no world, so every row would look like wrapper.
-    check("with no world it declines to judge",
-          not gate4.answer_not_act(acts, wrapped, "how do i stop every vm", board, None))
+    # ⇒⇒ **THIS PIN INVERTED ON 2026-08-15, AND THE OLD ONE WAS A SYMPTOM RATHER THAN A RULE.**
+    #
+    #   It read *"with no world it declines to judge"*, justified as: *`lab_has` cannot tell a
+    #   real name from a meaningless one with no world, so every row would look like wrapper.*
+    #   That is entirely a statement about RESIDUE, which was the stand-in trigger — and the
+    #   trigger is now `speech_act`, which consults no world at all. The weakness the pin
+    #   protected against no longer exists, so protecting against it would only mean **staying
+    #   silent about a question because the lab happened not to be attached.**
+    #
+    #   ⇒ A SENTENCE IS ENOUGH TO KNOW IT ASKED. What the world is for is deciding whether the
+    #     answer can be given, and that is `queryable`'s job two paragraphs down — not this
+    #     one's. Same asymmetry as everywhere else: a question costs a question.
+    check("with no world it still hears the question — the reader needs none",
+          gate4.answer_not_act(acts, wrapped, "how do i stop every vm", board, None))
 
     # 4 · THE THREE INPUTS, AND THEY DO DIFFERENT JOBS. The operator, 2026-08-14: *"intent
     #     for information is measurable in linguistics; a viable query is evidence the question

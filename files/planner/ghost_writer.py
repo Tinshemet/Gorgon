@@ -895,10 +895,14 @@ def queryable(goal: Dict[str, Any]) -> bool:
       invites the operator to pick a branch which would then fail is noise, and dishonest
       besides. So the offer is gated on the answer existing.
 
-    ⇒ **ONLY THE COUNT SHAPE TAKES A QUERY TODAY**, and that is a coverage gap in the emitter
-      rather than a fact about the request. `reach` is a FINDING, read out of the ledger by a
-      probe, not a select; `observe` is a thing DONE; `every` and `per` are components the
-      query form has no spelling for. Measured over the corpus: **11 of 14 rungs**.
+    ⇒ **TWO SHAPES TAKE A QUERY: `count` AND `members`.** Added 2026-08-15, and the second was
+      not a new capability — `render` has always had it (*"a plain SELECT binds a set; a COUNT
+      binds a number"*). What was missing is that nothing ever ASKED for the set, so *"which
+      vms are running"* was answered with a number. The wh-word says which is wanted, and
+      `speech_act.answer_shape` reads it.
+
+    ⇒ `reach` is a FINDING, read out of the ledger by a probe, not a select; `observe` is a
+      thing DONE; `every` and `per` are components the query form has no spelling for. Measured over the corpus: **11 of 14 rungs**.
 
     ⇒ ⚠ **AND IT IS NOT A CLASSIFIER.** Rung 1 — *"create a vm named alpha"*, an unambiguous
       order — is queryable, because *how many vms are called alpha* is a perfectly viable
@@ -908,7 +912,7 @@ def queryable(goal: Dict[str, Any]) -> bool:
     SSOT with `as_program`'s fetch-rung skip, for the reason `groundable` records: the two had
     to agree, and agreeing by coincidence is how twins start.
     """
-    return goal.get("shape") == "count" and isinstance(goal.get("select"), dict)
+    return goal.get("shape") in ("count", "members") and isinstance(goal.get("select"), dict)
 
 
 def groundable(goal: Dict[str, Any]) -> bool:
@@ -1232,7 +1236,7 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
             #   ⇒ AND IT IS READ WHEN THE PROGRAM RUNS, so unlike the calls around it this
             #     answer cannot be a snapshot of the lab as it was when it was written.
             if not queryable(g):
-                # ONLY THE COUNT SHAPE, AND SAID RATHER THAN LEFT LOOKING COMPLETE. `reach` is
+                # COUNT AND MEMBERS, AND SAID RATHER THAN LEFT LOOKING COMPLETE. `reach` is
                 # a finding rather than a select, and `every`/`per` are components the query
                 # form has no spelling for yet. They stay dropped — visibly, here.
                 #
@@ -1241,7 +1245,14 @@ def as_program(plan: List[Call], goals: List[Dict[str, Any]], world=None,
                 #   honour it.
                 continue
             var = f"answer{len(asked_for) + 1}"
-            body.append({"op": "query", "var": var, "count": dict(g["select"])})
+            # ⇒⇒ **THE QUESTION'S OWN SHAPE DECIDES WHAT IS BOUND.** `render` reads these two
+            #   keys as the whole difference — *"a plain SELECT binds a set; a COUNT binds a
+            #   number"* — so the same statement answers *"how many vms are running"* with a
+            #   number and *"which vms are running"* with the machines themselves.
+            #   ⇒ IT WAS HARD-CODED TO `count` UNTIL 2026-08-15, which meant every question
+            #     reaching here was answered as if it had asked *how many*.
+            key = "select" if g.get("shape") == "members" else "count"
+            body.append({"op": "query", "var": var, key: dict(g["select"])})
             asked_for.append(var)
             continue
         if not groundable(g):

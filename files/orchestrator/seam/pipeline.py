@@ -326,6 +326,14 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #     whether the goal is reachable — which is where the line between proposing and writing
     #     sits ([[gorgon-orchestrator-proposes-a-scaffold]]).
     goals = gate4.goals_of(rows, request, board)
+    # ⇒⇒ **AND A QUESTION ASKS ABOUT A STATE RATHER THAN FOR ONE.** This is what makes
+    #   `produces()`'s `ask` branch reachable: it has existed since 2026-08-14 and nothing
+    #   could ever return it, because a queryable goal only came from the ACHIEVE mood and a
+    #   question is not in it. Measured live the same day — four real questions, `ops=0
+    #   goals=0` every time, and one of them served as `add_label`.
+    #   ⇒ THE GOALS ARE MARKED (`gate4.ASKED`) and every consumer that treats a goal as a
+    #     DEMAND skips them: `_governed`, `destructive_goals`, `unreachable_goals`.
+    goals = list(goals) + gate4.asked_goals(rows, request, board)
 
     def _governed(ops, tbl):
         """Steps the GOAL replaces — the ones over the row it governs.
@@ -349,7 +357,13 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
         #   explicitly ASKED-FOR DO clauses that happen to touch the same row. Dropping them
         #   would delete the request's own instructions and serve an empty scaffold.
         #   ⇒ THE GOAL REPLACES WHAT ATTEMPTS IT, NOT EVERYTHING THAT TOUCHES ITS SUBJECT.
-        counted = [g for g in goals if g.get("shape") == "count"]
+        # ⇒⇒ **AND A QUESTION'S GOAL REPLACES NOTHING.** It is `shape: count` like an ACHIEVE's,
+        #   and it is not a demand — so without the mark, *"how many vms are there, and stop
+        #   the stopped ones"* would have its `stop_vm` deleted by the question beside it. A
+        #   question that silently cancels the order it was asked with is the worst possible
+        #   reading of a compound request. See `gate4.asked_goals`.
+        counted = [g for g in goals
+                   if g.get("shape") == "count" and not g.get(gate4.ASKED)]
         if not counted:
             return list(ops), []
         by_handle = {sym.handle: sym.row for sym in tbl}
@@ -701,6 +715,11 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #   asks whether they meant to DO anything at all. It is an ASK and never a refusal, and
     #   it is silent unless the request positively names a rung that may not change the lab.
     asks += gate4.answer_not_act(operations, table, request, board, world, goals)
+    # ⇒ AND A REQUEST THAT SAID NOT TO ACT IS HELD, whatever the rest of it asked for. Beside
+    #   the two above because it is the same question a third way: that one asks whether the
+    #   operator meant to REMOVE, `answer_not_act` whether they meant to DO anything at all,
+    #   and this one whether they meant to do it YET. All three ask; none refuses.
+    asks += gate4.told_not_to_act(operations, request, board)
     # ⇒ AND A SET WHOSE EXCLUSION THE ENGINE COULD NOT EXPRESS IS NOT VIABLE. The declaration
     #   is only worth making if something downstream can honour it; asked of the IR's own
     #   validator so this cannot drift from what the engine actually accepts.

@@ -166,7 +166,11 @@ def destructive_goals(goals: List[dict], world=None,
     destroyers = set(_destroyers(board))
     select = _name_select(world, board)
     out: List[str] = []
-    for goal in goals:
+    # ⇒ A QUESTION'S GOAL IS NOT A DEMAND, SO CLOSING IT IS NOT A THING THAT HAPPENS. Asking
+    #   `derive` how to reach a count nobody asked to reach would invent a deletion and then
+    #   confirm it — a destructive confirmation raised over a sentence that asked to be told
+    #   a number. See `asked_goals` for why the mark exists.
+    for goal in [g for g in goals if not g.get(ASKED)]:
         try:
             plan = _derive.derive(goal, select, {}, _INTENT_ACHIEVE) or []
         except Exception:
@@ -181,6 +185,92 @@ def destructive_goals(goals: List[dict], world=None,
         out.append(f"[gate4/destructive-goal] holding {sel.get('kind')}s{' where ' + bound if bound else ''} at the "
                    f"number you asked for means REMOVING {n} of them, and the request never "
                    f"says to remove anything. Confirm before this runs.")
+    return out
+
+
+# ⇒⇒ THE MARK THAT SEPARATES A QUESTION'S GOAL FROM A REQUEST'S GOAL. Both are `shape: count`
+#   and only one of them is a DEMAND, so every consumer that acts on a goal has to be able to
+#   tell them apart. Keyed rather than typed because a goal is a plain dict all the way into
+#   the engine, and adding a class here would be a second representation of the same thing.
+ASKED = "asks"
+
+
+def asked_goals(rows, request: str, board: Optional[Board] = None) -> List[dict]:
+    """The states a QUESTION asks ABOUT — a viable QUERY per informing clause, or nothing.
+
+    ⇒⇒ **THE BRANCH THAT EXISTED WITH NOTHING TO FEED IT.** `produces()` has returned `act`,
+      `ask` or `neither` since 2026-08-14 and **`ask` was unreachable**: it needs a queryable
+      goal, `goals_of` only builds goals in the ACHIEVE mood, and a question is not in the
+      ACHIEVE mood. So four real questions went through the live chain with `ops=0 goals=0`,
+      and one of them — *"how many machines carry the 'fleet' label"* — came back as an
+      instruction to apply labels.
+
+    ⇒ **AND PASS 1 HAD ALREADY DONE THE WORK.** *"which vms are running"* reads as one row,
+      kind `vm`, `where={'status': 'running'}`, and `select_of` turns it into
+      `{'kind': 'vm', 'status': 'running'}`. The select was there the whole time; nothing ever
+      asked for it, because nothing knew the sentence was a question.
+
+    ⇒ **THE GOAL CARRIES NO BOUND, AND THAT IS THE WHOLE DIFFERENCE.** `predicate_of` needs a
+      count and a comparator because an ACHIEVE states what must HOLD; a question states none,
+      which is why it is asking. `ghost_writer.queryable` already accepts an unbounded count —
+      `shape == 'count'` and a select — so this is producible today with no new IR:
+
+          ACHIEVE   {'shape': 'count', 'select': {...}, 'eq': 3}     make it so
+          ASKED     {'shape': 'count', 'select': {...}, 'asks': True} what is it
+
+    ⇒ ⚠ **AND IT IS MARKED, BECAUSE THREE THINGS ALREADY ACT ON A `count` GOAL.** `_governed`
+      drops the steps a count goal replaces, `destructive_goals` asks whether closing it
+      removes anything, and `unreachable_goals` asks `derive` whether it can be closed. All
+      three are about a DEMAND. Letting a question in unmarked would delete the steps of
+      *"how many vms are there, and stop the stopped ones"* — a question silently cancelling
+      the order beside it.
+    """
+    from . import schema as S, speech_act
+    board = board or Board()
+    low = str(request).lower()
+
+    # ⇒ WHICH CLAUSES ARE ASKING. The reader settles it from closed classes plus one manifest
+    #   lookup; nothing here re-decides it ([[gorgon-sentence-processing]]).
+    asking: List[tuple] = []
+    at = 0
+    for clause, act in speech_act.read(request, board):
+        where = low.find(str(clause).strip().lower(), at)
+        if where < 0:
+            where = at
+        span = (where, where + len(str(clause).strip()))
+        at = span[1]
+        if act != speech_act.DIRECTIVE_INFORM:
+            continue
+        # ⇒⇒ **WHAT SHAPE OF ANSWER WAS ASKED FOR, AND `None` IS A REAL ANSWER.** Every asked
+        #   goal used to be a count, so *"which vms are running"* would have been answered with
+        #   a NUMBER. And a bare *"how do i create a vm?"* wants a procedure, which no select
+        #   produces — so it yields no goal, `queryable` stays false, and `answer_not_act`
+        #   reaches its honest branch instead of offering an answer of the wrong kind.
+        shape = speech_act.answer_shape(clause, board)
+        if shape:
+            asking.append((span, shape))
+    if not asking:
+        return []
+
+    # ⇒ A ROW BELONGS TO THE CLAUSE ITS SPAN FALLS IN — the same positional test `goals_of`
+    #   uses for the ACHIEVE marker, and for the same reason: a request may be part question
+    #   and part order, and only the asking half may become a query.
+    out: List[dict] = []
+    seen = set()
+    for row in rows:
+        text = str(row.span or row.name).strip().lower()
+        where = low.find(text)
+        shape = next((sh for (a, b), sh in asking if a <= where < b), None)
+        if where < 0 or shape is None:
+            continue
+        sel = S.select_of(row, board)
+        if not sel:
+            continue
+        key = (shape, tuple(sorted(sel.items())))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"shape": shape, "select": sel, ASKED: True})
     return out
 
 
@@ -331,7 +421,11 @@ def unreachable_goals(goals: List[dict], world=None,
     select = _name_select(world, board or Board())
 
     out: List[str] = []
-    for goal in goals:
+    # ⇒ AND A QUESTION'S GOAL IS NEVER UNREACHABLE, because reaching is not what it asks for.
+    #   `derive` answers *how do I make this true*; the honest answer for *"how many vms are
+    #   there"* is a number, and asking the reachability question about it would ASK the
+    #   operator to resolve a goal nobody set.
+    for goal in [g for g in goals if not g.get(ASKED)]:
         try:
             plan = _derive.derive(goal, select, {}, _INTENT_ACHIEVE)
         except Exception:
@@ -478,15 +572,38 @@ def answer_not_act(operations: List[Operation], table=(), request: str = "",
     #     names an act, so it fired or not depending on which verb the request happened to use
     #     ([[gorgon-courtesy-escalates-intent]] is the same list, one harm earlier).
     #
-    #   THE REAL TRIGGER IS AN INFORMATION-INTENT READING FROM THE LINGUISTICS, and `mood_of`
-    #   has two values today. Until it has three, this fires on what it can see.
-    rows = [s.row for s in table] if table else []
-    leftover = _kindless(rows, request, board, world)
-    if not leftover:
+    # ⇒⇒ **AND AS OF 2026-08-15 IT IS THE REAL TRIGGER. RESIDUE IS RETIRED FROM THIS ROLE.**
+    #
+    #   The paragraph above ends *"until `mood_of` has three values, this fires on what it can
+    #   see"*. `speech_act` is the third value: a clause read as DIRECTIVE_INFORM is an
+    #   information-intent reading taken from CLOSED CLASSES plus one manifest lookup, which is
+    #   what residue was standing in for.
+    #
+    #   ⇒ **IT IS STRICTLY BETTER IN BOTH DIRECTIONS, AND BOTH ARE MEASURED.**
+    #
+    #       the filler arm    residue fires 14/14 — i.e. on every POLITE ORDER, because a
+    #                         courtesy leaves wrapper behind. The reader reads those as orders
+    #                         (14/14), so the false asks go away.
+    #       "list the vms     the case this rule exists for. It carries NO wrapper, so residue
+    #        and remove the   was silent on it — the one sentence the guard most had to catch.
+    #        fleet label"     Its first clause reads DIRECTIVE_INFORM, so this fires.
+    #
+    #   ⇒ **PER CLAUSE, NEVER PER SENTENCE.** That compound is an ORDER overall — an acting
+    #     clause makes it one — so a sentence-level test would be silent again. What matters is
+    #     that SOME clause asked while the program acts.
+    #   ⇒ AND IT STAYS SILENT ON THE LADDER: no literal rung has an informing clause, so this
+    #     cannot cost a SERVE. Same property the residue trigger had, now for a reason.
+    from . import speech_act as _speech
+    asking = [c for c, act in _speech.read(request, board)
+              if act == _speech.DIRECTIVE_INFORM]
+    if not asking:
         return []
 
+    rows = [s.row for s in table] if table else []
+    leftover = _kindless(rows, request, board, world)
+
     calls = ", ".join(dict.fromkeys(f"{op.operator}({op.on})" for op in hits))
-    spans = ", ".join(repr(r.span or r.name) for r in leftover[:3])
+    spans = ", ".join(repr(c.strip()) for c in asking[:3])
 
     # ⇒⇒ **THREE THINGS DECIDE WHAT TO SAY, AND ONLY THE FIRST TWO ARE REQUIRED.** The operator,
     #   2026-08-14: *"a query and intent are needed, confidence is not but it's taken into
@@ -509,15 +626,61 @@ def answer_not_act(operations: List[Operation], table=(), request: str = "",
     if not answerable:
         # ⇒ SAY WHAT WAS READ, OFFER NOTHING. The choice is withheld because it could not be
         #   honoured — `reach`, `observe` and `per` goals take no query form yet.
-        return [f"[gate4/answer-not-act] this program would run {calls}, and the request "
-                f"carries words the lab cannot account for — {spans}. Read as an instruction; "
-                f"there is no answerable form of it to offer instead."]
+        return [f"[gate4/answer-not-act] this program would run {calls}, and {spans} asks to "
+                f"be told rather than done. Read as an instruction; there is no answerable "
+                f"form of it to offer instead."]
     if evidence and share >= _ANSWER_CONFIDENCE:
-        return [f"[gate4/answer-not-act] the request names a {said}, {share:.0%} of the "
-                f"reading is words the lab cannot account for, and it can be answered rather "
-                f"than run — {calls} withheld. Say so if you meant it done."]
-    return [f"[gate4/answer-not-act] this program would run {calls}, and the request carries "
-            f"words the lab cannot account for — {spans}. Did you mean it done, or asked?"]
+        return [f"[gate4/answer-not-act] {spans} asks to be told, the request names a {said}, "
+                f"and it can be answered rather than run — {calls} withheld. Say so if you "
+                f"meant it done."]
+    return [f"[gate4/answer-not-act] this program would run {calls}, and {spans} asks to be "
+            f"told rather than done. Did you mean it done, or asked?"]
+
+
+def told_not_to_act(operations: List[Operation], request: str = "",
+                    board: Optional[Board] = None) -> List[str]:
+    """THE REQUEST SAID NOT TO DO ANYTHING, AND THE PROGRAM WOULD DO SOMETHING.
+
+    ⇒⇒ **THE OPERATOR'S OWN EXAMPLE, N3, 2026-08-14:** *"'good morning doorman, dont start any
+      changes, but how do i create a new machine?' might trigger the AI to act even though its
+      not the intent."* Verified the same day: `mood_of` returned `do` for that sentence AND
+      for the bare imperative `create a new machine` — **byte-identical**. The instruction not
+      to act was read as an instruction to act.
+
+    ⇒ **WHY THIS ONE IS BUILDABLE WHEN THE OTHER TWO ARE NOT.** An ASSERTIVE needs somewhere to
+      put a fact — the Encyclopedia, which is zero code — and a DECLARATION needs an amendment
+      filed. Meta-control needs neither: it **REMOVES AN OPTION**, which is the other way a
+      rung closes and the only one available with no new store
+      ([[gorgon-detectors-not-producers]]). Nothing has to be built for it to mean something.
+
+    ⇒ **IT ASKS. IT NEVER REFUSES AND IT NEVER GRANTS.** Same asymmetry as `answer_not_act`:
+      the operator may well mean *"not yet — but go on"*, and the reading may be wrong. What it
+      cannot do is let a program run past a sentence that said don't.
+
+    ⇒ ⚠ **THE OBJECT IS WHAT MAKES IT META, AND IT IS NOT A WORD LIST.** *"stop the vms"* takes
+      a kind the manifest knows and is an ORDER; *"don't start any changes"* takes `changes`,
+      which is not a kind, so it is about the conversation instead. `speech_act` settles that
+      from the manifest's own index — the discriminator the research named and the reason this
+      needs no vocabulary of its own.
+
+    ⇒ AND IT IS SILENT ON THE LADDER BY CONSTRUCTION: no rung carries a meta-control clause, so
+      this cannot cost a SERVE on the corpus. Measured, not assumed — see `test_speech_act`.
+    """
+    from . import speech_act as _speech
+    from planner.ir import config as _config, effects as _effects
+
+    acting = _effects.actors(_config.KINDS)
+    hits = [op for op in operations if op.operator in acting]
+    if not hits:
+        return []                          # nothing would change — there is nothing to hold back
+    held = [c for c, act in _speech.read(request, board)
+            if act == _speech.META_CONTROL]
+    if not held:
+        return []
+    calls = ", ".join(dict.fromkeys(f"{op.operator}({op.on})" for op in hits))
+    said = ", ".join(repr(c.strip()) for c in held[:2])
+    return [f"[gate4/told-not-to-act] you said {said}, and this program would run {calls}. "
+            f"Nothing has been run. Say so if you meant it done anyway."]
 
 
 def forbidden_tools(operations: List[Operation], legal=None, table=None,
