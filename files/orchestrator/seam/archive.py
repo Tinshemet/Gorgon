@@ -160,15 +160,58 @@ class Archive:
                 return e
         return None
 
-    def kind_of(self, word: str) -> Optional[str]:
-        """The manifest kind this word resolves to — step 2 of the settling ladder.
+    def kind_of(self, word: str, _seen=None) -> Optional[str]:
+        """The manifest kind this word resolves to — THROUGH ITS CLASSES, not only directly.
+
+        ⇒⇒ **`kaya is a printer` HAS TO MEAN SOMETHING, AND IT ONLY CAN IF `printer` IS ALSO AN
+          ENTRY.** The operator, 2026-08-16. A word that resolves only when the predicate
+          happens to name a MANIFEST kind is a store that can learn `kaya is a vm` and nothing
+          else — and the whole design is *a manifest-shaped row for a noun the manifest does
+          not have*. So an entry may name a CLASS, and the class may be another entry:
+
+              kaya    -> classes ('printer',)
+              printer -> kind 'vm'
+              ⇒ kaya resolves to vm, and everything the lab can do to a vm it can do to kaya
+
+        ⇒ **A DIRECT KIND STILL WINS, AND THE WALK IS THE FALLBACK.** `kaya is a vm` needs no
+          chain, and a chain must never override something said plainly.
+
+        ⇒ ⚠ **CYCLE-SAFE BY CONSTRUCTION.** *"a is a b"* and *"b is an a"* are both sayable, and
+          two true-sounding sentences must not hang the seam. `_seen` is the whole guard.
 
         ⇒ A NEGATIVE ENTRY ANSWERS None AND THAT IS NOT THE SAME AS SILENCE. *"routers are not
           a thing this lab keeps"* is a ratified fact; `holds` False says the question is
           settled and the answer is no. A caller that needs to tell the two apart asks `known`.
         """
         entry = self.known(word)
-        return entry.kind if entry and entry.holds else None
+        if entry is None or not entry.holds:
+            return None
+        if entry.kind:
+            return entry.kind
+        seen = set(_seen or ())
+        seen.add(str(word).strip().lower())
+        for cls in entry.classes:
+            cls = str(cls).strip().lower()
+            if cls in seen:
+                continue                       # "a is a b, b is an a" — say nothing, do not hang
+            found = self.kind_of(cls, seen)
+            if found:
+                return found
+        return None
+
+    def classes_of(self, word: str) -> Tuple[str, ...]:
+        """The chain of classes this word belongs to, nearest first. Empty when it has none."""
+        out: List[str] = []
+        seen = set()
+        cur = str(word).strip().lower()
+        while cur and cur not in seen:
+            seen.add(cur)
+            entry = self.known(cur)
+            if entry is None or not entry.holds or not entry.classes:
+                break
+            cur = str(entry.classes[0]).strip().lower()
+            out.append(cur)
+        return tuple(out)
 
     def reject(self, word: str) -> int:
         """Refuse every pending proposal for a word. Returns how many were dropped.
@@ -254,6 +297,62 @@ def _home() -> str:
 ARCHIVE = Archive(_home())
 
 
+def asked_about(request: str, board=None, world=None, store=None) -> List[str]:
+    """Answers to *"what is X?"* — read straight out of the archive, with no program at all.
+
+    ⇒⇒ **THE ONE QUESTION SHAPE THAT NEEDS NO QUERY.** *"how many vms are running"* becomes a
+      program the engine runs against the lab. *"what is kaya?"* is answered by a lookup here
+      and nothing else — there is no select to write, because `kaya` is not a thing the lab
+      keeps, it is a WORD the lab was taught.
+
+    ⇒ **AND `nothing on file` IS AN ANSWER, NOT A FAILURE.** It is the honest reply, it is
+      instant, and it tells the operator exactly what to do about it — which is the same
+      three-valued honesty a kindless row already has.
+
+    ⇒ IT READS THE RATIFIED STORE ONLY, so a pending proposal does not answer as though it were
+      known. A question must not be answered with something nobody signed.
+    """
+    from planner.formula.legal import Board
+    from . import speech_act
+    from .issues import word_of
+
+    board = board or Board()
+    archive = ARCHIVE if store is None else store
+    out: List[str] = []
+    for clause, act in speech_act.read(request, board, world):
+        if act != speech_act.DIRECTIVE_INFORM:
+            continue
+        if speech_act.answer_shape(clause, board) != speech_act.MEANING:
+            continue
+        # ⇒⇒ **THE INTERROGATIVE FRAME COMES OFF FIRST, AND ONLY THEN THE SUBTRACTION.**
+        #   `word_of` was written for a declarative phrase — *"a jumpbox named alpha"* — and
+        #   knows nothing about wh-words, so asked directly it answered `'what'` for every
+        #   question. Stripping the frame is not a second rule: it is the SAME closed classes
+        #   `speech_act` already reads, removed before the ledger's rule runs on what is left.
+        #   ⇒ Then `word_of` takes the HEAD of the remainder, which is the word being asked
+        #     about — *"what is kaya now?"* leaves `kaya now` and answers `kaya`.
+        frame = (speech_act.WH_WORDS | speech_act.AUXILIARIES | speech_act.OPENERS)
+        rest = " ".join(w for w in speech_act.words_of(clause) if w not in frame)
+        word = word_of(rest, board)
+        if not word:
+            continue
+        entry = archive.known(word)
+        if entry is None:
+            out.append(f"nothing on file for {word!r} — say what it is and I will remember it")
+        elif not entry.holds:
+            # ⇒ THE DESCRIPTION IS ONLY ADDED WHEN IT SAYS SOMETHING THE SENTENCE DOES NOT.
+            #   A negative entry's own text is usually *"not a thing this lab keeps"*, and
+            #   printing both reads as a stutter.
+            extra = entry.description.strip()
+            said = f"{word!r} is not a thing this lab keeps"
+            out.append(f"{said} — {extra}" if extra and extra.lower() not in said.lower()
+                       else said)
+        else:
+            out.append(f"{word!r} is {entry.description}"
+                       + (f" (kind {entry.kind})" if entry.kind else ""))
+    return out
+
+
 # ── the first writer: an operator teaching, unprompted ───────────────────────────────
 def taught_by(request: str, board=None, world=None) -> List[dict]:
     """What an ASSERTIVE in this request offers to teach. Proposals, never entries.
@@ -316,8 +415,21 @@ def taught_by(request: str, board=None, world=None) -> List[dict]:
         from .scan import _index
         index = _index(board)
         kind = next((index[w] for w in predicate if w in index), None)
+        # ⇒⇒ **AND WHEN THE PREDICATE NAMES NO MANIFEST KIND, IT NAMES A CLASS.** *"kaya is a
+        #   printer"* binds `kaya` to `printer`, and `printer` may be an entry of its own with
+        #   its own kind, methods and attributes. Without this the store could learn *"kaya is
+        #   a vm"* and nothing else — and the design is a manifest-shaped row for a noun the
+        #   manifest does NOT have.
+        #   ⇒ THE HEAD OF THE PREDICATE, by the same subtraction the rest of the seam uses:
+        #     determiners off, and never the word itself (*"a vm is a vm"* is not a class).
+        classes: Tuple[str, ...] = ()
+        if kind is None:
+            head = [w for w in predicate if w not in determiners]
+            if head and head[0] != subject[0]:
+                classes = (head[0],)
         out.append({"word": subject[0],
                     "description": " ".join(predicate),
                     "kind": kind,
+                    "classes": classes,
                     "said": clause.strip()})
     return out

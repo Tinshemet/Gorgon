@@ -135,6 +135,12 @@ def test_the_question_decides_the_shape_of_its_answer():
                        ("list the vms", SA.MEMBERS),
                        ("show me the vms", SA.MEMBERS),
                        ("how do i create a vm named alpha?", None),
+                       # ⇒ THE THREE WH-WORDS WHOSE ANSWERS THIS SYSTEM CANNOT PRODUCE: a
+                       #   place, a time, a reason. `where` was listed as a member-word and
+                       #   routed *"where is alpha"* to a select — answering a different
+                       #   question confidently, which is worse than declining.
+                       ("where is alpha", None),
+                       ("when did you stop it?", None),
                        ("why did db stop", None)]:
         check(f"{text!r} wants {want}", SA.answer_shape(text, board) == want)
 
@@ -149,12 +155,48 @@ def test_the_question_decides_the_shape_of_its_answer():
     check("a count question renders as COUNT(...)", "COUNT(" in counted)
     check("a members question renders as a plain SELECT", "COUNT(" not in listed and "SELECT" in listed)
 
+
+
     from planner.ghost_writer import as_program, queryable
     check("both shapes are answerable",
           queryable({"shape": "count", "select": {"kind": "vm"}})
           and queryable({"shape": "members", "select": {"kind": "vm"}}))
     check("and a shape with no query form still is not",
           not queryable({"shape": "reach", "select": {"kind": "vm"}}))
+
+    # ⇒⇒ **AND IT VALIDATES AND RUNS AND RETURNS THE RIGHT ANSWER.** The operator asked
+    #   directly — *"does the pipeline work end to end, even at the medusa level?"* — and
+    #   until this ran, the honest answer was that a program had been EMITTED and never
+    #   executed. Rendering the right text is not the same claim as answering the question.
+    #
+    #   ⇒ ⚠ **AGAINST THE SIMULATED WORLD, WHICH IS THE LIMIT OF THE CLAIM.**
+    #     `planner.model_world.World` is a real IR interpreter over a world that cannot
+    #     refuse. Real QEMU has never executed a program from this layer (I13), and the
+    #     simulator says yes to things QEMU does not.
+    import importlib
+    from planner.ir import config as _config
+    from planner.model_world import World
+    _exec = importlib.import_module("planner.ir.execute")
+
+    world = World(kinds=_config.KINDS)
+    for nm, status in (("a", "running"), ("b", "running"), ("c", "stopped")):
+        world.state.setdefault("vm", {})[nm] = {"name": nm, "status": status}
+    select, holds = world.seams
+
+    def _answer(shape):
+        prog = as_program([], [{"shape": shape, "select": {"kind": "vm", "status": "running"},
+                                "asks": True}], world=None, witness=False)
+        ok, problems = importlib.import_module("planner.ir.validate").validate(prog)
+        out = _exec.run(prog, world.execute, select=select, holds=holds)
+        return ok and not problems, out
+
+    ok_c, ran_c = _answer("count")
+    ok_m, ran_m = _answer("members")
+    check("both query programs VALIDATE", ok_c and ok_m)
+    check(f"a count question answers with the number — {ran_c.get('scope')}",
+          ran_c["ok"] and ran_c["scope"].get("answer1") == 2)
+    check(f"a members question answers with the machines — {ran_m.get('scope')}",
+          ran_m["ok"] and ran_m["scope"].get("answer1") == ["a", "b"])
 
     # ⇒⇒ **AND THE WHOLE WAY THROUGH TO A PROGRAM, WHICH IS THE ONLY VERSION THAT COUNTS.**
     #   The emitter was changed to honour the shape and NOT run end to end for an hour — the

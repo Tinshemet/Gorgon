@@ -239,6 +239,84 @@ def test_a_signed_entry_can_be_changed_and_withdrawn():
           a.retract("jumpbox") is None)
 
 
+def test_a_question_about_a_word_is_answered_from_the_archive():
+    """*"what is kaya?"* — the one question shape that needs no QUERY.
+
+    ⇒⇒ **A QUESTION ABOUT A WORD IS NOT A SELECT.** *"how many vms are running"* becomes a
+      program the engine runs against the lab; `kaya` is not a thing the lab keeps, it is a
+      WORD the lab was taught, so the answer is a lookup and nothing else. Without this the
+      question read correctly, produced a goal with an empty selector, and was answerable by
+      nothing at all.
+
+    ⇒ THE DISCRIMINATOR IS THE MANIFEST, as everywhere else: *"what is on the LAB NETWORK"*
+      names a kind and stays a select.
+    """
+    from orchestrator.seam import speech_act as SA
+    from planner.formula.legal import Board
+    board = Board()
+
+    st = A.Archive()
+    st.propose("kaya", "a vm", kind="vm")
+    st.ratify("kaya")
+    st.propose("router", "", holds=False)
+    st.ratify("router")
+
+    check("a question about a word wants a MEANING",
+          SA.answer_shape("what is kaya", board) == SA.MEANING)
+    check("a question about a KIND still wants a select",
+          SA.answer_shape("what is on the lab network", board) == SA.MEMBERS)
+
+    said = A.asked_about("what is kaya now?", board, store=st)
+    check(f"and it is answered from the store — {said}",
+          said and "kaya" in said[0] and "a vm" in said[0])
+    check("a negative entry answers NO rather than nothing",
+          "not a thing this lab keeps" in (A.asked_about("what is router", board,
+                                                         store=st) or [""])[0])
+    check("an unknown word says so, and says what to do about it",
+          "nothing on file" in (A.asked_about("what is a jumpbox", board,
+                                              store=st) or [""])[0])
+
+    # ⇒ AND A PENDING ENTRY DOES NOT ANSWER. A question must not be answered with something
+    #   nobody signed — the same rule that stops it settling a reading.
+    st2 = A.Archive()
+    st2.propose("kaya", "a vm", kind="vm")
+    check("a proposal answers nothing",
+          "nothing on file" in (A.asked_about("what is kaya", board, store=st2) or [""])[0])
+
+
+def test_an_entry_can_name_a_class_that_is_another_entry():
+    """*"kaya is a printer"* has to mean something — the operator, 2026-08-16.
+
+    ⇒⇒ **A STORE THAT RESOLVES ONLY WHEN THE PREDICATE NAMES A MANIFEST KIND CAN LEARN
+      *"kaya is a vm"* AND NOTHING ELSE.** The design is *a manifest-shaped row for a noun the
+      manifest does not have*, so an entry may name a CLASS and the class may be another entry:
+
+          kaya    -> classes ('printer',)
+          printer -> kind 'vm'
+          ⇒ kaya resolves to vm, and what the lab can do to a vm it can do to kaya
+    """
+    check("a predicate naming no manifest kind becomes a CLASS",
+          A.taught_by("kaya is a printer")[0]["classes"] == ("printer",))
+    check("and one that DOES name a kind still binds it directly",
+          A.taught_by("kaya is a vm")[0]["kind"] == "vm")
+
+    a = A.Archive()
+    a.propose("kaya", "a printer", classes=("printer",))
+    a.ratify("kaya")
+    check("an unresolved class settles nothing yet", a.kind_of("kaya") is None)
+
+    a.propose("printer", "a vm", kind="vm")
+    a.ratify("printer")
+    check("teaching the CLASS resolves everything under it", a.kind_of("kaya") == "vm")
+    check("and the chain is readable", a.classes_of("kaya") == ("printer",))
+
+    # ⇒ ⚠ TWO TRUE-SOUNDING SENTENCES MUST NOT HANG THE SEAM.
+    cyc = A.Archive()
+    cyc.propose("a", "a b", classes=("b",)); cyc.ratify("a")
+    cyc.propose("b", "an a", classes=("a",)); cyc.ratify("b")
+    check("a cycle says nothing rather than hanging", cyc.kind_of("a") is None)
+
+
 def test_reject_refuses_without_deleting():
     """Refused, not erased — *who told it that, and when did we say no* has to be answerable."""
     a = A.Archive()

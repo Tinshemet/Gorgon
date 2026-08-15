@@ -436,16 +436,21 @@ def act_of(clause: str, board: Optional[Board] = None, world=None) -> Optional[s
 
 
 # ── WHAT SHAPE OF ANSWER THE QUESTION ASKED FOR ──────────────────────────────────────
-COUNT, MEMBERS = "count", "members"
+COUNT, MEMBERS, MEANING = "count", "members", "meaning"
 
 # ⇒ THE WH-WORD NAMES THE ANSWER, and this is the second job the closed class does. `which`
 #   asks for the members; `how many` asks for a number. Same nine words, read for a different
 #   question — no new vocabulary, and no way for the two readings to drift apart.
-_MEMBER_WORDS = frozenset({"which", "what", "who", "whom", "whose", "where"})
+#   ⇒ ⚠ **`where` IS NOT ONE OF THEM, AND THAT IS A CORRECTION.** It was listed here and
+#     *"where is alpha"* routed to a select or a meaning lookup — neither of which is a
+#     LOCATION. It joins `when` and `why` in the honest branch below: three wh-words whose
+#     answers are a place, a time and a reason, and this system can produce none of the three.
+#     Saying so is better than answering a different question confidently.
+_MEMBER_WORDS = frozenset({"which", "what", "who", "whom", "whose"})
 
 
-def answer_shape(clause: str, board: Optional[Board] = None) -> Optional[str]:
-    """COUNT, MEMBERS, or None when no select can answer this at all.
+def answer_shape(clause: str, board: Optional[Board] = None, world=None) -> Optional[str]:
+    """COUNT, MEMBERS, MEANING, or None when nothing can answer this at all.
 
     ⇒⇒ **A QUESTION READ IS NOT A QUESTION ANSWERED.** Every asked goal was `shape: count`, so
       *"which vms are running"* would have come back **3** — a number, to a question that asked
@@ -468,6 +473,15 @@ def answer_shape(clause: str, board: Optional[Board] = None) -> Optional[str]:
         if w == "how" and i + 1 < len(words) and words[i + 1] in ("many", "much"):
             return COUNT
     if any(w in _MEMBER_WORDS for w in words):
+        # ⇒⇒ **A QUESTION ABOUT A WORD IS ANSWERED FROM THE ARCHIVE, NOT FROM THE LAB.**
+        #   *"what is kaya?"* names nothing the manifest knows, so there is no select to run
+        #   and `members` would produce a goal with an empty selector — a question read
+        #   correctly and then answerable by nothing. What is being asked for is a MEANING,
+        #   and the store that holds meanings is the archive.
+        #   ⇒ THE DISCRIMINATOR IS THE MANIFEST, as everywhere else: *"what is on the LAB
+        #     NETWORK"* names a kind and stays a select; *"what is a JUMPBOX"* does not.
+        if not names_something(words, board, world):
+            return MEANING
         return MEMBERS
     # ⇒ A BARE `how` / `why` / `when` ASKS FOR A PROCEDURE, A REASON OR A TIME. No select
     #   answers any of those, so the honest answer is that we have none.

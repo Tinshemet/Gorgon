@@ -156,6 +156,9 @@ class Run(NamedTuple):
     #   capability without more corpus. Carried so a caller can OFFER them for ratification;
     #   nothing routes on an unratified entry, so this cannot change a reading.
     teaches: List[dict] = ()
+    # ⇒⇒ ANSWERS THE SEAM CAN GIVE WITH NO PROGRAM AT ALL. *"what is kaya?"* is a lookup in
+    #   the archive, not a select over the lab — the one question shape that needs no QUERY.
+    answered: List[str] = ()
 
     @property
     def handles(self) -> List[str]:
@@ -355,6 +358,9 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #   describes and never permits, so this cannot change a reading in this run or any other.
     from . import archive as _archive
     teaches = _archive.taught_by(request, board, world)
+    # ⇒ AND WHAT THE ARCHIVE CAN ANSWER OUTRIGHT. Ratified entries only — a question must not
+    #   be answered with something nobody signed.
+    answered = _archive.asked_about(request, board, world)
 
     def _governed(ops, tbl):
         """Steps the GOAL replaces — the ones over the row it governs.
@@ -818,13 +824,14 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
                    asks, bounces, illegal, suggested, ling, list(goals),
                    REFUSE, list(repaired), list(dropped),
                    surface.notices(suggested, dropped, answer_conflicts),
-                   produces=produces(operations, goals), teaches=teaches)
+                   produces=produces(operations, goals), teaches=teaches,
+                   answered=answered)
 
     return Run(request, rows, table, operations, conditions,
                asks, bounces, illegal, suggested, ling, list(goals),
                _verdict(operations, illegal, asks, bounces, goals), list(repaired),
                list(dropped), surface.notices(suggested, dropped, answer_conflicts),
-               list(questions), produces(operations, goals), teaches)
+               list(questions), produces(operations, goals), teaches, answered)
 
 
 def _aimed(operations: List[Operation], table) -> List[Operation]:
