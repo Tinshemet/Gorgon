@@ -12,4 +12,6 @@ class PlanCommand(ShortcutCommand):
     # is the request. The shortcut's own `matches` decides, and usage is printed.
     shortcut = ("plan", "Plan")
     usage = ("gorgon plan <request>         plan it and run it",
-             "gorgon plan --dry <request>   plan it and show it, WITHOUT acting")
+             "gorgon plan --dry <request>   plan it and show it, WITHOUT acting",
+             "gorgon plan --seam <request>  READ it with the two-pass seam and show what "
+             "each stage made of it, WITHOUT acting")

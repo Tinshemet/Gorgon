@@ -186,13 +186,125 @@ class Plan(Shortcut):
             return False
         return said.strip().lower() in ("y", "yes")
 
+    @staticmethod
+    def _seam_world():
+        """The real lab, shaped the way the seam asks for one: `select(query)` and `names()`.
+
+        ⇒ **THE PRODUCTION REGISTRY, NOT A SECOND ONE.** `active_library.LIBRARY` is what the
+          engine path already folds every call back into, and `program.make_select` is the
+          selector the planner already evaluates its ENSUREs against. Building a third reader
+          of the lab here would be a third answer to *what does the world hold*.
+
+        ⇒ **NAMES OR ROWS, EITHER IS FINE** — `gate4._name_select` already normalises both, and
+          says so at its own definition. Nothing has to be reshaped on the way in.
+
+        ⇒ AND `None` IS A LEGITIMATE ANSWER. A client-only checkout has no orchestrator
+          registry; the seam runs with no world at all, every bare name stays kindless, and
+          gate 2 asks about each one. Degraded, honest, and identical to the bench's
+          `--no-lab` arm — never a silent empty lab, which is the failure `qemu.names` records.
+        """
+        try:
+            from orchestrator.ai.active_library import LIBRARY
+            from planner.program import make_select
+        except Exception:
+            return None
+        chooser = make_select(LIBRARY)
+
+        class _Lab:
+            def select(self, query):
+                try:
+                    return chooser(query) or []
+                except Exception:
+                    return []
+
+            def names(self):
+                try:
+                    return set(LIBRARY.known_names())
+                except Exception:
+                    return set()
+
+        return _Lab()
+
+    def _read_with_seam(self, request: str, verbose: bool) -> None:
+        """Run the two-pass seam over one request and print what each stage read.
+
+        ⇒ **EVERY STAGE NAMED, WHICH IS THE WHOLE REASON THIS DOOR IS WORTH HAVING.** The
+          argument this file makes for printing the engine path applies unchanged: *"a wrong
+          answer says WHICH half was wrong. Under the old path a bad program could mean the
+          goal was misread or the writing fumbled and nothing distinguished them."* Here the
+          reading, the declarations, the steps and the verdict are four separate lines.
+        """
+        from planner.formula.legal import Board
+        from orchestrator.seam import speech_act as _speech
+        from orchestrator.seam.pipeline import run as _seam_run
+
+        world = self._seam_world()
+        console.print(f"\n[bold]the two-pass seam[/bold]"
+                      f"{'' if world else '  ·  [warn]no lab — every bare name stays kindless[/warn]'}")
+        # ⇒ THE READING FIRST, BECAUSE IT IS WHAT DECIDES WHETHER A PROGRAM SHOULD EXIST AT
+        #   ALL. An order, a question, or neither — per clause, and printed per clause.
+        for clause, act in _speech.read(request, Board(), world):
+            console.print(f"    [dim]{str(act or 'unread'):16}[/dim] {clause.strip()}")
+        console.print(f"    [bold]-> {_speech.verdict(request, Board(), world)}[/bold]")
+
+        got = _seam_run(request, board=Board(), world=world)
+        console.print(f"\n    declared   {', '.join(got.handles) or '—'}")
+        console.print(f"    steps      "
+                      f"{[(o.operator, o.on, o.value) for o in got.operations] or '—'}")
+        if got.goals:
+            console.print(f"    goals      {list(got.goals)}")
+        if got.suggested:
+            console.print(f"    suggested  "
+                          f"{[(o.operator, o.on, o.value) for o in got.suggested]}")
+        for note in got.notices:
+            console.print(f"      [dim]NOTICE   {note}[/dim]")
+        for a in got.asks:
+            console.print(f"      [bold yellow]ASK[/bold yellow]      {a}")
+        for b in got.bounces:
+            console.print(f"      [dim]BOUNCE   {b}[/dim]")
+        console.print(f"\n    [bold]{got.outcome}[/bold]   "
+                      f"[dim]produces: {got.produces or '—'}[/dim]")
+        # ⇒ SAID EVERY TIME, NOT ONCE IN A DOCSTRING. This door reads; it does not act, and an
+        #   operator who typed a destructive request should be told plainly that nothing ran.
+        console.print("[dim]    nothing was run — `--seam` reads and shows[/dim]")
+
     def run(self, ui: str, messages: List[dict], runtime_drift_count: int,
             verbose: bool) -> None:
         request = ui.strip()[len(_PREFIX):].strip()
-        dry = False
+        dry = seam = False
         for flag in ("--dry", "-n"):
             if request.lower().startswith(flag + " "):
                 dry, request = True, request[len(flag):].strip()
+        for flag in ("--seam",):
+            if request.lower().startswith(flag + " "):
+                seam, request = True, request[len(flag):].strip()
+
+        # ⇒⇒ **THE TWO-PASS SEAM, OPT-IN, AND IT RETURNS BEFORE ANYTHING ELSE HAPPENS.**
+        #
+        #   This file already argues the case for the default path, and the argument still
+        #   holds: *"the extractor turns English into components at 6/39, so making this the
+        #   default would replace a chat flow that works with one that mistranslates two
+        #   requests in three"*, and shipping anyway would be *"the exact failure of
+        #   2026-07-31 — a mechanism believed good because the parts around it were."*
+        #
+        #   ⇒ **THE SEAM HAS THE SAME PROBLEM ONE LEVEL UP.** It reads 12/14 of the rung
+        #     corpus — a corpus it was designed against — and until today it had NO PRODUCTION
+        #     CALLER AT ALL: five importers, every one a test or a bench. A month of
+        #     measurement about a component nobody could type at.
+        #
+        #   ⇒ **SO IT EARNS THE SWAP THE WAY `plan` ITSELF DID.** This flag is the same move
+        #     this file made for the engine path — sit beside the thing that works, take real
+        #     requests, print what each stage did. Held-out prompts are the only evidence that
+        #     settles whether 12/14 beats 6/39, and a door is how they get typed.
+        #
+        #   ⇒ **IT READS AND SHOWS. IT NEVER ACTS**, which is why it needs no intent grant and
+        #     no consent prompt: the seam PROPOSES A SCAFFOLD and the engine is what runs one
+        #     ([[gorgon-orchestrator-proposes-a-scaffold]]). Returning here rather than
+        #     threading a flag through the engine path is also what keeps the default
+        #     byte-identical — there is no branch below this line that can see `seam`.
+        if seam:
+            self._read_with_seam(request, verbose)
+            return
 
         # THE OPERATOR'S INTENT, AND THIS IS WHERE IT IS SETTLED — the front seam, the one
         # place with a person to ask. `ir/intent.py` says so in as many words: the safe
