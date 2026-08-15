@@ -269,3 +269,69 @@ if __name__ == "__main__":                                     # pragma: no cove
             print(f"   {p.text}")
         print()
     print(f"awaited: {', '.join(AWAITED)}")
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════
+# ⇒⇒ THE SEALED PREDICTION — written 2026-08-16, BEFORE the run, by the author of the rules
+# ═════════════════════════════════════════════════════════════════════════════════════
+#
+# Rule V5: a measurement gets its expected answer written down BEFORE it runs. A prediction
+# made after the fact is a rationalisation, and the author of the rules is the person most
+# able to produce one.
+#
+# ⇒⇒ **AND THERE IS A SECOND REASON THIS IS HERE, WHICH IS THE MORE IMPORTANT ONE.**
+#   I have now READ all 51 sentences. That partly contaminates me: I know which specific cases
+#   will fail. **If I go and fix those cases, the set is destroyed without ever having been
+#   run** — fitted to held-out data, which is the one thing it exists to prevent.
+#   ⇒ SO THIS FILE BINDS THE AUTHOR: nothing named below may be repaired before the run. A
+#     rule may be changed for a reason found elsewhere; it may not be changed because it is
+#     listed here. If a fix lands on one of these predictions, this comment is the evidence.
+#
+# ⇒ WHAT IS BEING PREDICTED IS THE READING — the act/answer/neither/refuse projection — and
+#   NOT the pipeline verdict. Most of these name things the manifest has never heard of
+#   (`fleet`, `agent`, `TinshemetOS`, `DC1`, `OSINT-vm`), so gate 2 will ask about them by
+#   design. An ASK for an unknown noun is the ladder WORKING and must not be counted a miss.
+
+PREDICTION = {
+    "overall reading":        "60-70% correct on the projection",
+    "false serves expected":  "3 to 6, and every one of them costs more than all the "
+                              "false avoids combined",
+
+    # ⇒ WHERE IT SHOULD DO WELL
+    "setting up":       "4-5/5. Verb-initial imperatives are the shape everything was "
+                        "built around.",
+    "mid-conversation": "4-5/5. Mostly wh-questions behind an interjection, and the "
+                        "opener-stripping already handles that.",
+    "teaching":         "4/5. The copula rule is solid; the two with a future or a rule "
+                        "mixed in are the risk.",
+
+    # ⇒ WHERE IT SHOULD DO BADLY, AND THE REASON IS STRUCTURAL RATHER THAN A BUG
+    "diagnosing":       "1-2/5, THE WORST CATEGORY. A symptom report is grammatically a "
+                        "STATEMENT — 'tsurugi-test crashed', 'vm2 isnt working' — and there "
+                        "is no rule anywhere that says a statement about something broken is "
+                        "a request to fix it. The reader will call these teaching or nothing. "
+                        "⇒ THIS IS A MISSING SENTENCE TYPE, not a missing case.",
+    "setting policy":   "3/6. Every one carries a QUALIFIER — a condition, an exception, a "
+                        "time — and part 2 is knowingly unbuilt, so the rule will be read and "
+                        "its scope discarded.",
+    "half-formed":      "3/5. `clos e it` breaks the tokenizer's word, and `close` is not a "
+                        "manifest verb at all (the lab says `stop`).",
+
+    # ⇒ THE NAMED FALSE SERVES — the specific predictions that bind hardest
+    "false serve 1":    "'there should only be 3 vms running, is that right?' — a deontic "
+                        "over a DEFINITE subject reads as an order to MAKE it so. It is a "
+                        "question. This is the rule I added today, firing on a confirmation.",
+    "false serve 2":    "'can you check what is network1's ip address range?' — inversion "
+                        "over the addressee plus `check`, which the manifest calls an ACTING "
+                        "tool (`guest_probe`). A request for information read as an act.",
+    "false serve 3":    "the `should refuse` category, in a bench with no contract loaded. "
+                        "The READER is right to call them orders; refusal is the law layer's "
+                        "job and the law is not wired to the seam. Expect 4-5 to come back as "
+                        "acts, and DO NOT read that as the reader failing — it is I0 and the "
+                        "door, showing up as a number.",
+
+    # ⇒ AND THE ONE I AM LEAST SURE OF
+    "least confident":  "`changing state` and `destructive`. They hinge on whether `move`, "
+                        "`close` and `unlabel` are in the lab's English at all, and I have "
+                        "deliberately not looked.",
+}
