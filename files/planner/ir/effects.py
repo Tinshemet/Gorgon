@@ -517,15 +517,54 @@ def tools_of(kinds=None) -> set:
 
 
 def askers(kinds=None) -> set:
-    """Every tool that only ASKS — `kinds.<k>.observed.<fact>.by`. Derived, never listed.
+    """Every tool that only ASKS. Derived from three manifest facts, never listed.
 
     A probe changes nothing, which is why it is the one thing a FETCH may still call. The set
     was already being derived by hand in `test_medusa_rungs` to answer "did the second pass
     repeat any WORK?", and a second copy of it would drift the first time a kind grows an
     observation — silently, and in the direction of calling a probe an act.
+
+    # ⇒⇒ **IT HELD TWO TOOLS AND SHOULD HAVE HELD FIFTEEN. FOUND 2026-08-15.**
+
+    It read only `observed.<fact>.by`, so `askers` was `{guest_ping, local_probe}` and
+    `actors` — its complement — claimed **every enumerator and every read-back in the
+    manifest**: `list_vms`, `vm_status`, `show_config`, `get_vm_logs`, `snapshot_list`,
+    `check_disk`, `print_command`, `fingerprint_vm`, `monitor_vm`. Consequences, both live:
+
+        produces()        returned `act` for a program whose whole body is `vm_status` —
+                          a report classified as a change to the world
+        speech_act        `show me the vms` read as an ORDER at the front seam, because the
+                          verb's operation looked like one that changes things
+
+    ⇒ **AND IT COULD NOT BE DERIVED, WHICH IS WHY IT IS NOW DECLARED.** `state` (*"ask the
+      process what state it is in"*) and `kill` (*"stop it NOW"*) are structurally identical
+      in the manifest — same keys, same shape — and differ only in prose. Prose is not a
+      lookup, so the fact had to be written down where the tool is: `"reads": true`.
+
+    ⇒ **THE THREE SOURCES, AND EACH IS A FACT THE MANIFEST ALREADY OWNS:**
+
+        observed.<fact>.by   a probe — the original, unchanged
+        acts.<name>.reads    declared at the tool, 2026-08-15
+        <kind>.list          an enumerator. A kind that gains one gains this for free, and
+                             `list_*` was invisible to BOTH sets before — absent from
+                             `tools_of` entirely, so neither acting nor asking.
+
+    ⇒ ⚠ **AND THE MARKING IS DELIBERATELY CONSERVATIVE.** `guest_probe`, `open_shell`,
+      `open_display` and `send_monitor_cmd` describe themselves as asking, watching or
+      showing, and every one of them EXECUTES or ATTACHES something. They stay acting. The
+      dangerous direction here is calling a mutating tool a reader — that is what would let a
+      `fetch` change the lab — so anything short of certain is left where it was.
     """
-    return {o["by"] for spec in _K(kinds).values()
-            for o in (spec.get("observed") or {}).values() if o.get("by")}
+    out = {o["by"] for spec in _K(kinds).values()
+           for o in (spec.get("observed") or {}).values() if o.get("by")}
+    for spec in _K(kinds).values():
+        if spec.get("list"):
+            out.add(str(spec["list"]))
+        for group in ("acts", "setters", "unsetters"):
+            for entry in (spec.get(group) or {}).values():
+                if isinstance(entry, dict) and entry.get("reads") and entry.get("tool"):
+                    out.add(str(entry["tool"]))
+    return out
 
 
 def actors(kinds=None) -> set:

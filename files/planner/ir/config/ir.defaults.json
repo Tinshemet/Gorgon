@@ -605,6 +605,7 @@
         },
         "logs": {
           "tool": "get_vm_logs",
+          "reads": true,
           "member_arg": "name",
           "takes": [
             "lines"
@@ -613,16 +614,19 @@
         },
         "watch": {
           "tool": "monitor_vm",
+          "reads": true,
           "member_arg": "name",
           "doc": "watch what it is doing right now"
         },
         "state": {
           "tool": "vm_status",
+          "reads": true,
           "member_arg": "name",
           "doc": "ask the process what state it is in"
         },
         "disk": {
           "tool": "check_disk",
+          "reads": true,
           "member_arg": "name",
           "doc": "check its disks"
         },
@@ -636,6 +640,7 @@
         },
         "fingerprint": {
           "tool": "fingerprint_vm",
+          "reads": true,
           "member_arg": "name",
           "takes": [
             "summary"
@@ -654,6 +659,7 @@
         },
         "snapshots": {
           "tool": "snapshot_list",
+          "reads": true,
           "member_arg": "name",
           "doc": "list the restore points taken of it"
         },
@@ -669,11 +675,13 @@
         },
         "config": {
           "tool": "show_config",
+          "reads": true,
           "member_arg": "name",
           "doc": "read its configuration back"
         },
         "command": {
           "tool": "print_command",
+          "reads": true,
           "member_arg": "name",
           "doc": "show the command line it is launched with"
         }
@@ -753,6 +761,7 @@
       "acts": {
         "compatible": {
           "tool": "check_profile_compatibility",
+          "reads": true,
           "member_arg": "profile_name",
           "doc": "ask whether this spec is one the host can honour"
         }
