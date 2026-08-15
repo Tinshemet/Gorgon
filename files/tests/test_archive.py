@@ -327,6 +327,86 @@ def test_reject_refuses_without_deleting():
     check("but the row is still on record", any(e.word == "grubnash" for e in a.rows()))
 
 
+def test_every_words_command_is_reachable_in_sentence_form():
+    """The operator's spec, 2026-08-16: *"in a statement sentence you can do all the commands
+    `words` do … all `words` commands are reachable in sentence form."*
+
+    ⇒⇒ **AND IT IS SIGNED IMMEDIATELY, WHICH CORRECTS A POSITION I ARGUED.** I said
+      ratification must never be automatic. The danger was never a PERSON stating a fact — it
+      was an IMPORTED or INFERRED entry routing with nobody answering for it, and `source`
+      already draws that line. **The signature is not the ceremony, it is who spoke.**
+
+    ⇒ **THE ASK MOVES FROM ASSERTION TO CONTRADICTION.** Do not interrupt someone teaching you
+      something new; interrupt them when the new fact disagrees with one already on file.
+    """
+    from planner.formula.legal import Board
+    board = Board()
+
+    def taught():
+        st = A.Archive()
+        A.apply_effects(A.effect_of("kaya is a vm", board, store=st), store=st)
+        return st
+
+    st = taught()
+    check("a statement TEACHES and is signed on the spot — no ratify step",
+          st.kind_of("kaya") == "vm")
+
+    st = taught()
+    A.apply_effects(A.effect_of("kaya is now a network", board, store=st), store=st)
+    check("a second statement CHANGES the fact", st.kind_of("kaya") == "network")
+
+    st = taught()
+    eff = A.effect_of("kaya isnt a vm", board, store=st)
+    check("a denial that NAMES A KIND contradicts what is on file",
+          [e["op"] for e in eff] == [A.CONTRADICTS])
+    check("and contradicting is never performed — it is a question",
+          "which stands?" in A.apply_effects(eff, store=st)[0]
+          and st.kind_of("kaya") == "vm")
+
+    st = taught()
+    A.apply_effects(A.effect_of("kaya doesn't exist", board, store=st), store=st)
+    check("a denial that names NOTHING withdraws the word", st.known("kaya") is None)
+
+    # ⇒ THE ARCHIVE'S OWN VERBS WITHDRAW A WORD. Declared at the operation, scoped to this
+    #   store, and unambiguous because no lab operation shares them.
+    for said in ("forget kaya", "unlearn kaya", "discard kaya"):
+        st = taught()
+        A.apply_effects(A.effect_of(said, board, store=st), store=st)
+        check(f"{said!r} withdraws it", st.known("kaya") is None)
+
+    # ⇒⇒ **AND A LAB DELETER OVER A WORD WE WERE ONLY TAUGHT IS A QUESTION, NEVER A GUESS.**
+    #   The operator: *"erase is a deleting verb not a forgetting one … we can also use context
+    #   to understand what the user is demanding but we can also ASK."* `delete kaya` is one
+    #   sentence and two operations, and only one of them can be undone.
+    for said in ("delete kaya", "remove kaya"):
+        st = taught()
+        eff = A.effect_of(said, board, store=st)
+        check(f"{said!r} asks rather than guessing",
+              [e["op"] for e in eff] == [A.AMBIGUOUS_REMOVAL])
+        A.apply_effects(eff, store=st)
+        check(f"and {said!r} changed nothing while it asks", st.kind_of("kaya") == "vm")
+
+    # ⇒ AND A PROHIBITION ABOUT THE LAB IS NOT A STATEMENT ABOUT THE WORD.
+    st = taught()
+    check("`don't delete kaya` touches the archive not at all",
+          not A.effect_of("don't delete kaya", board, store=st))
+
+    # ⇒ A DENIAL ABOUT A WORD NOBODY TAUGHT IS NOISE, NOT A CORRECTION.
+    check("a denial with nothing on file does nothing",
+          not A.effect_of("zzz isnt a vm", board, store=A.Archive()))
+
+    # ⇒⇒ **AND A CONDITION IS NOT AN ASSERTION.** *"if kaya is a vm, launch it"* predicates
+    #   exactly like a statement and asserts nothing — filing it would teach a permanent fact
+    #   from a sentence that named a CASE. It was already safe by accident (the conjunction
+    #   survived the determiner strip and made the subject two words); a guard that holds
+    #   because of an unrelated rule vanishes the first time that rule changes.
+    for said in ("if kaya is a vm, launch it",
+                 "if the vm is stopped, launch it",
+                 "unless db is running, stop it"):
+        check(f"a conditional teaches nothing — {said[:34]!r}",
+              not A.effect_of(said, board, store=A.Archive()))
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "archive")

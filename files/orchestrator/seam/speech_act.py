@@ -183,15 +183,29 @@ NEGATORS = frozenset({"not", "never", "no"})
 # ⇒ AUXILIARY CONTRACTIONS, expanded so POSITION can be read. `don't start` is `do not start`
 #   — an imperative — and without expansion its first token is neither an auxiliary nor a verb.
 #   Contractions of function words are as closed as the function words themselves.
+# ⇒⇒ **THE APOSTROPHE-LESS FORM IS THE ONE PEOPLE ACTUALLY TYPE, AND HALF OF THEM WERE
+#   MISSING.** `dont` and `cant` were here; `isnt`, `doesnt`, `arent` were not — so *"kaya isnt
+#   a vm"* kept `isnt` as one unknown token, the clause looked like a verb-initial imperative,
+#   and a DENIAL read as **directive-act**. A false serve produced by a table that was
+#   inconsistent rather than wrong.
+#   ⇒ Contractions of function words are as closed as the function words themselves, so the
+#     completion is a lookup and not a vocabulary.
 CONTRACTIONS = {
     "don't": ("do", "not"), "dont": ("do", "not"),
-    "doesn't": ("does", "not"), "didn't": ("did", "not"),
+    "doesn't": ("does", "not"), "doesnt": ("does", "not"),
+    "didn't": ("did", "not"), "didnt": ("did", "not"),
     "can't": ("can", "not"), "cant": ("can", "not"),
-    "won't": ("will", "not"), "wouldn't": ("would", "not"),
-    "shouldn't": ("should", "not"), "couldn't": ("could", "not"),
-    "isn't": ("is", "not"), "aren't": ("are", "not"),
-    "wasn't": ("was", "not"), "weren't": ("were", "not"),
-    "haven't": ("have", "not"), "hasn't": ("has", "not"), "hadn't": ("had", "not"),
+    "won't": ("will", "not"), "wont": ("will", "not"),
+    "wouldn't": ("would", "not"), "wouldnt": ("would", "not"),
+    "shouldn't": ("should", "not"), "shouldnt": ("should", "not"),
+    "couldn't": ("could", "not"), "couldnt": ("could", "not"),
+    "isn't": ("is", "not"), "isnt": ("is", "not"),
+    "aren't": ("are", "not"), "arent": ("are", "not"),
+    "wasn't": ("was", "not"), "wasnt": ("was", "not"),
+    "weren't": ("were", "not"), "werent": ("were", "not"),
+    "haven't": ("have", "not"), "havent": ("have", "not"),
+    "hasn't": ("has", "not"), "hasnt": ("has", "not"),
+    "hadn't": ("had", "not"), "hadnt": ("had", "not"),
     "what's": ("what", "is"), "who's": ("who", "is"), "where's": ("where", "is"),
     "how's": ("how", "is"), "that's": ("that", "is"), "it's": ("it", "is"),
     "i'd": ("i", "would"), "i'll": ("i", "will"), "i'm": ("i", "am"), "i've": ("i", "have"),

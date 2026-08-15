@@ -282,6 +282,191 @@ class Archive:
                       for r in rows if isinstance(r, dict) and r.get("word")]
 
 
+# ⇒⇒ WHAT A STATEMENT ASKS THE ARCHIVE TO DO. One vocabulary for the four effects, so a caller
+#   routes on a value rather than re-reading the sentence.
+TEACH, FORGET, CONTRADICTS = "teach", "forget", "contradicts"
+
+# ⇒⇒ **THE ARCHIVE'S OWN OPERATIONS, DECLARED THE WAY THE MANIFEST DECLARES A KIND'S — and
+#   the operator drew this line: *"forgetting is specific for `words`, forget plus its
+#   synonyms."***
+#
+#   I had removed `forget` as an English list and that was the wrong correction. The test this
+#   project uses is *is it a fact about ENGLISH, or a fact about THE WORLD* — and **which verb
+#   names an operation of MY store is the second kind.** `vm.nouns` says this lab calls a
+#   machine a `box`; nothing about English says so, and nobody would expect the model to know
+#   it. This is that declaration for a store the manifest does not cover.
+#
+#   ⇒ **WHAT MADE THE FIRST VERSION WRONG WAS PLACEMENT, NOT EXISTENCE.** It sat inline in
+#     `effect_of` as a bare set, next to `delete`/`remove` which the MANIFEST already owns —
+#     so it was both a second source for a derivable fact and an undeclared vocabulary for a
+#     non-derivable one. Split: the manifest's deleters are READ, and the archive's own verbs
+#     are DECLARED here, once, where the operation is defined.
+#
+#   ⇒ ⚠ **AND IT IS SCOPED TO THIS STORE.** These verbs mean *withdraw an ENTRY*; they say
+#     nothing about the lab, where removal is `delete_vm` and friends. A word here can never
+#     authorise anything — `effect_of` only ever reaches `retract`, which un-signs a fact.
+#   ⇒ ⚠ **`erase` WAS HERE AND THE OPERATOR TOOK IT OUT: *"erase is a deleting verb not a
+#     forgetting one."*** Right, and the distinction is the whole design — these three name an
+#     operation on THIS STORE and nothing else. A verb that means *destroy a thing in the lab*
+#     borrowed for *withdraw a word* would make the two removals indistinguishable, which is
+#     exactly the confusion `AMBIGUOUS_REMOVAL` below exists to refuse to guess at.
+OPERATION_VERBS: Dict[str, Tuple[str, ...]] = {
+    FORGET: ("forget", "unlearn", "discard"),
+}
+
+# ⇒⇒ **AND WHERE THE TWO REMOVALS MEET, THE OBJECT DECIDES — AND WHEN IT CANNOT, WE ASK.**
+#   The operator: *"we can also use context to understand what the user is demanding but we can
+#   also ASK."* `delete kaya` is one sentence and two operations:
+#
+#       delete kaya   kaya is a MACHINE the lab holds     -> destroy the thing (the lab's)
+#       delete kaya   kaya is only a WORD we were taught  -> ambiguous. It could be either, and
+#                                                            one of them cannot be undone.
+#
+#   ⇒ **SO A LAB DELETER OVER AN ARCHIVE-ONLY WORD IS A QUESTION, NEVER A GUESS.** The same
+#     asymmetry as every gate here: forgetting a word you meant to delete costs a re-teach;
+#     deleting a machine you meant to forget cannot be taken back.
+AMBIGUOUS_REMOVAL = "ambiguous-removal"
+
+
+def effect_of(request: str, board=None, world=None, store=None) -> List[dict]:
+    """Every `words` operation this request performs IN SENTENCE FORM.
+
+    ⇒⇒ **THE OPERATOR'S OWN SPEC, 2026-08-16:** *"in a statement sentence you can do all the
+      commands `words` do … all `words` commands are reachable in sentence form."*
+
+        from now on kaya means a vm    TEACH        a new entry
+        kaya is now a network          TEACH        changing a declared fact
+        kaya isn't a vm                CONTRADICTS  disagrees with what is on file -> ASK
+        kaya doesn't exist             FORGET
+        forget kaya                    FORGET
+
+    ⇒⇒ **AND IT IS SIGNED IMMEDIATELY, WHICH CORRECTS A POSITION I ARGUED.** I wrote that
+      ratification must never be automatic. Wrong as stated: the danger was never *a person
+      stating a fact*, it was an IMPORTED or INFERRED entry routing with nobody answering for
+      it — and `Entry.source` already draws exactly that line. **The signature is not the
+      ceremony, it is who spoke.** The operator's own words ARE the signing; a bulk lexicon
+      still needs a person.
+
+    ⇒ **THE ASK MOVES FROM ASSERTION TO CONTRADICTION**, which is kinder and no weaker: do not
+      interrupt someone teaching you something new — interrupt them when the new fact disagrees
+      with one already on file. `known(word)` is exactly that test, and it is the only case
+      worth a question.
+
+    ⇒ ⚠ **WHAT IS STRUCTURAL HERE AND WHAT IS NOT, SAID PLAINLY.** The teach and contradict
+      readings are closed-class throughout — a copula, a negation, a determiner. The REMOVAL
+      needs a verb, and two of the three (`delete`, `remove`) are the manifest's own destructive
+      verbs while `forget` is one word that is not. That is a one-entry English list and it is
+      declared rather than hidden; it is the smallest thing that makes the operator's own
+      phrasing work, and [[gorgon-open-list]]'s A3 is the standing warning about growing it.
+    """
+    from planner.formula.legal import Board
+    from . import speech_act
+    from .issues import word_of
+    from .reading_answers import NEGATION
+
+    board = board or Board()
+    archive = ARCHIVE if store is None else store
+    out: List[dict] = []
+
+    # ⇒ TWO SOURCES, EACH ANSWERING FOR ITS OWN STORE: the manifest's deleters say how the LAB
+    #   removes something, and `OPERATION_VERBS` says how the ARCHIVE does. Neither is guessed
+    #   and neither is a fact about English — see the note at the declaration.
+    from planner.ir import config as _config, effects as _effects
+    lab_removers = {str(t).split("_")[0].lower() for t in _effects.deleters(_config.KINDS)}
+    ours = set(OPERATION_VERBS[FORGET])
+    removers = lab_removers | ours
+
+    for clause, act in speech_act.read(request, board, world):
+        words = speech_act.words_of(clause)
+        if not words:
+            continue
+        negated = any(w in NEGATION for w in words)
+        head = speech_act._after_openers(words)
+        head = head[0] if head else ""
+
+        # ⇒ 1 · REMOVAL BY IMPERATIVE — *"forget kaya"*. The object is a word, not a lab thing,
+        #   which is what makes it addressed to the archive at all.
+        if head in removers:
+            word = word_of(" ".join(w for w in words if w not in removers), board)
+            if word:
+                # ⇒ AN ARCHIVE VERB IS UNAMBIGUOUS; A LAB DELETER OVER A WORD WE WERE ONLY
+                #   TAUGHT is two operations wearing one sentence — see `AMBIGUOUS_REMOVAL`.
+                if head in ours:
+                    out.append({"op": FORGET, "word": word, "said": clause.strip()})
+                elif archive.known(word) is not None:
+                    out.append({"op": AMBIGUOUS_REMOVAL, "word": word,
+                                "said": clause.strip()})
+            continue
+
+        # ⇒⇒ 2/3 · A DENIAL, AND **WHAT IT NAMES DECIDES WHICH KIND IT IS.** No word list at
+        #   all — the first cut needed one for *"exist"*, and the split is structural:
+        #
+        #       kaya isn't a vm        the denial NAMES A KIND     -> CONTRADICTS the entry
+        #       kaya doesn't exist     the denial names NOTHING    -> WITHDRAWS the word
+        #
+        #   ⇒ AND EITHER WAY, ONLY WHEN SOMETHING IS ON FILE TO DENY. A denial about a word
+        #     nobody ever taught is not a correction, it is noise.
+        #   ⇒ ⚠ **AND IT IS NOT GATED ON A COPULA.** The first cut required one, so *"kaya
+        #     doesn't exist"* — which predicates with a lexical verb over the auxiliary `does`
+        #     — fell through unread. What identifies a denial is the NEGATION plus a subject
+        #     already on file; the copula was a proxy for that and a leaky one.
+        #   ⇒ **A DIRECTIVE IS EXCLUDED, THOUGH**, because *"don't delete kaya"* is a
+        #     prohibition about the LAB and not a statement about the word.
+        if negated and act not in (speech_act.DIRECTIVE_ACT, speech_act.DIRECTIVE_INFORM):
+            word = word_of(" ".join(w for w in words if w not in NEGATION), board)
+            on_file = archive.known(word) if word else None
+            if on_file is not None:
+                from .scan import _index
+                index = _index(board)
+                rest = [w for w in words
+                        if w not in NEGATION and w not in speech_act.COPULA and w != word]
+                names_a_kind = any(w in index or archive.known(w) for w in rest)
+                if names_a_kind:
+                    out.append({"op": CONTRADICTS, "word": word, "said": clause.strip(),
+                                "on_file": on_file.description})
+                else:
+                    out.append({"op": FORGET, "word": word, "said": clause.strip()})
+            continue
+
+        # ⇒ 4 · TEACHING — the assertive reader owns it, and this adds nothing to that rule.
+        if act == speech_act.ASSERTIVE:
+            for proposal in taught_by(clause, board, world):
+                out.append({"op": TEACH, **proposal})
+    return out
+
+
+def apply_effects(effects: List[dict], who: str = "operator", store=None) -> List[str]:
+    """Carry out what a statement asked for, and say what happened in the operator's terms.
+
+    ⇒ **TEACH AND FORGET ARE PERFORMED; CONTRADICTS IS NEVER PERFORMED.** A disagreement is a
+      question, and answering it by picking one of the two facts is exactly the guessing every
+      gate in this seam exists to avoid.
+    """
+    archive = ARCHIVE if store is None else store
+    said: List[str] = []
+    for eff in effects:
+        word = eff.get("word")
+        if eff["op"] == TEACH:
+            archive.propose(word, eff.get("description", ""), kind=eff.get("kind"),
+                            classes=eff.get("classes") or (), said=eff.get("said", ""),
+                            who=who, source=TOLD)
+            entry = archive.ratify(word, who=who)          # THE OPERATOR'S OWN WORDS SIGN IT
+            said.append(f"noted — {word!r} is {eff.get('description','')}"
+                        + (f" (kind {entry.kind})" if entry and entry.kind else ""))
+        elif eff["op"] == FORGET:
+            gone = archive.retract(word)
+            archive.reject(word)
+            said.append(f"forgotten — {word!r}" if gone
+                        else f"nothing on file for {word!r}")
+        elif eff["op"] == AMBIGUOUS_REMOVAL:
+            said.append(f"{word!r} is a word you taught me, and {eff.get('said')!r} could mean "
+                        f"forget the word or delete the thing. Nothing was done — which?")
+        elif eff["op"] == CONTRADICTS:
+            said.append(f"you told me {word!r} is {eff.get('on_file')!r}, and this says "
+                        f"otherwise — which stands?")
+    return said
+
+
 def _home() -> str:
     """Where the archive lives. `GORGON_HOME` then `~/.gorgon`, the same convention the
     creation ledger uses — one storage root, asked rather than re-derived."""
@@ -398,6 +583,16 @@ def taught_by(request: str, board=None, world=None) -> List[dict]:
         if act != speech_act.ASSERTIVE:
             continue
         words = speech_act.words_of(clause)
+        # ⇒⇒ **A CONDITION IS NOT AN ASSERTION.** *"IF the vm is stopped, launch it"* predicates
+        #   exactly like a statement and asserts nothing — it names the case in which to act.
+        #   Filing it would teach *"a vm is stopped"* as a permanent fact from a sentence that
+        #   said no such thing.
+        #   ⇒ ⚠ **IT WAS ALREADY SAFE, BY ACCIDENT, AND THAT IS WHY THIS IS EXPLICIT.** `if`
+        #     survives the determiner strip and made the subject two words, so the one-word
+        #     test declined it. A guard that holds because of an unrelated rule is a guard that
+        #     disappears the first time the unrelated rule changes.
+        if words and words[0] in speech_act.CONJUNCTIONS:
+            continue
         split = next((i for i, w in enumerate(words) if w in speech_act.COPULA), None)
         if split is None:
             continue
