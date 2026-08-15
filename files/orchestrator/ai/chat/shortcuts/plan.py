@@ -256,6 +256,12 @@ class Plan(Shortcut):
         if got.suggested:
             console.print(f"    suggested  "
                           f"{[(o.operator, o.on, o.value) for o in got.suggested]}")
+        # ⇒ WHAT THE REQUEST OFFERED TO TEACH. Shown as an OFFER — nothing is filed and nothing
+        #   routes until a person ratifies it, which is the archive's whole safety property.
+        for t in got.teaches:
+            console.print(f"    [bold]teaches[/bold]    {t['word']!r} = {t['description']!r}"
+                          + (f"  -> kind {t['kind']}" if t.get("kind") else "")
+                          + "   [dim](proposed — not filed)[/dim]")
         for note in got.notices:
             console.print(f"      [dim]NOTICE   {note}[/dim]")
         for a in got.asks:

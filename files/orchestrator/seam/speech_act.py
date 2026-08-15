@@ -205,7 +205,14 @@ def words_of(clause: str) -> List[str]:
     """The clause as tokens, with auxiliary contractions expanded so POSITION can be read."""
     import re
     out: List[str] = []
-    for raw in re.findall(r"[a-z']+|[0-9]+", str(clause).lower()):
+    # ⇒⇒ **AN IDENTIFIER IS ONE TOKEN.** `[a-z']+|[0-9]+` split `n1` into `n` and `1`, so every
+    #   bare name the corpus uses — `n1`, `n2`, `n3`, `mesh0`, `vm1` — arrived as TWO words. It
+    #   read harmlessly for the mood (both halves are content words), and it broke the moment
+    #   something counted them: the archive asks whether the subject is exactly ONE word, and
+    #   *"n1 is the jumpbox"* looked like a two-word phrase and was declined.
+    #   ⇒ A BARE NUMBER STAYS ITS OWN TOKEN — `5 vms` is a count and `_is_function_word` reads
+    #     it as one. Only a digit ATTACHED to a word joins it.
+    for raw in re.findall(r"[a-z][a-z0-9']*|[0-9]+", str(clause).lower()):
         token = raw.strip("'")
         if not token:
             continue

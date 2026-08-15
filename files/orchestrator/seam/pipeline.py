@@ -151,6 +151,11 @@ class Run(NamedTuple):
     # ⇒ WHAT THIS READING COULD BE TURNED INTO — see `produces`. Reported, not
     #   routed on: `neither` is the door's business, not a verdict.
     produces: str = ""
+    # ⇒⇒ WHAT THE REQUEST OFFERS TO TEACH — proposed archive entries, never filed here.
+    #   An ASSERTIVE is the operator teaching, and it is the only channel that grows
+    #   capability without more corpus. Carried so a caller can OFFER them for ratification;
+    #   nothing routes on an unratified entry, so this cannot change a reading.
+    teaches: List[dict] = ()
 
     @property
     def handles(self) -> List[str]:
@@ -259,6 +264,12 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #   NEITHER could reach gets a model call. A row nothing settles stays kindless and gate 2
     #   asks — but it now asks the RIGHT question, because the routing stage distinguishes
     #   *"nobody said what this is"* from *"this lab keeps no such thing"*.
+    # ⇒⇒ WHAT THE LAB WAS TAUGHT, BETWEEN THE WORLD AND THE MODEL. A ratified entry settles a
+    #   row the manifest and the lab could not — and only such a row, so a remembered fact can
+    #   never beat a live one. It runs BEFORE the model call for the reason the whole ladder
+    #   exists: compute what can be computed, ask only what cannot.
+    #   ⇒ INERT UNTIL SOMEBODY RATIFIES SOMETHING, so wiring it moves no measurement.
+    rows = pass1.settle_from_archive(rows, board)
     rows = pass1.settle_by_routing(rows, board, model=model, timeout=timeout)
     # ⇒ AND AN `except` CLAUSE JOINS THE SET IT NARROWS. It runs AFTER settling because the
     #   excluded thing is usually a bare name only the lab can identify — rung 8's `db` is a
@@ -338,6 +349,12 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #   ⇒ THE GOALS ARE MARKED (`gate4.ASKED`) and every consumer that treats a goal as a
     #     DEMAND skips them: `_governed`, `destructive_goals`, `unreachable_goals`.
     goals = list(goals) + gate4.asked_goals(rows, request, board)
+    # ⇒⇒ AND WHAT THE REQUEST OFFERS TO TEACH. An ASSERTIVE — *"a jumpbox is a vm"* — is the
+    #   operator supplying a fact, and it is the only channel that grows capability without
+    #   more corpus. Read here, carried on the Run, and FILED BY NOBODY: an unratified entry
+    #   describes and never permits, so this cannot change a reading in this run or any other.
+    from . import archive as _archive
+    teaches = _archive.taught_by(request, board, world)
 
     def _governed(ops, tbl):
         """Steps the GOAL replaces — the ones over the row it governs.
@@ -738,6 +755,9 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #   operator meant to REMOVE, `answer_not_act` whether they meant to DO anything at all,
     #   and this one whether they meant to do it YET. All three ask; none refuses.
     asks += gate4.told_not_to_act(operations, request, board)
+    # ⇒ AND A STATEMENT IS NOT AN INSTRUCTION EITHER. The third of the family: *"a jumpbox is a
+    #   vm"* is the operator teaching, and it was coming back with `create_vm(jumpbox)`.
+    asks += gate4.statement_not_act(operations, request, board)
     # ⇒ AND A SET WHOSE EXCLUSION THE ENGINE COULD NOT EXPRESS IS NOT VIABLE. The declaration
     #   is only worth making if something downstream can honour it; asked of the IR's own
     #   validator so this cannot drift from what the engine actually accepts.
@@ -798,13 +818,13 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
                    asks, bounces, illegal, suggested, ling, list(goals),
                    REFUSE, list(repaired), list(dropped),
                    surface.notices(suggested, dropped, answer_conflicts),
-                   produces=produces(operations, goals))
+                   produces=produces(operations, goals), teaches=teaches)
 
     return Run(request, rows, table, operations, conditions,
                asks, bounces, illegal, suggested, ling, list(goals),
                _verdict(operations, illegal, asks, bounces, goals), list(repaired),
                list(dropped), surface.notices(suggested, dropped, answer_conflicts),
-               list(questions), produces(operations, goals))
+               list(questions), produces(operations, goals), teaches)
 
 
 def _aimed(operations: List[Operation], table) -> List[Operation]:

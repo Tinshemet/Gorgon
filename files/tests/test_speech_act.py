@@ -149,12 +149,29 @@ def test_the_question_decides_the_shape_of_its_answer():
     check("a count question renders as COUNT(...)", "COUNT(" in counted)
     check("a members question renders as a plain SELECT", "COUNT(" not in listed and "SELECT" in listed)
 
-    from planner.ghost_writer import queryable
+    from planner.ghost_writer import as_program, queryable
     check("both shapes are answerable",
           queryable({"shape": "count", "select": {"kind": "vm"}})
           and queryable({"shape": "members", "select": {"kind": "vm"}}))
     check("and a shape with no query form still is not",
           not queryable({"shape": "reach", "select": {"kind": "vm"}}))
+
+    # ⇒⇒ **AND THE WHOLE WAY THROUGH TO A PROGRAM, WHICH IS THE ONLY VERSION THAT COUNTS.**
+    #   The emitter was changed to honour the shape and NOT run end to end for an hour — the
+    #   built-and-never-called shape, introduced by the person who had spent the morning
+    #   writing about it. A goal that produces the right dict and no program answers nobody.
+    def _text(shape):
+        prog = as_program([], [{"shape": shape, "select": {"kind": "vm", "status": "running"},
+                                "asks": True}], world=None, witness=False)
+        return render.render(prog)
+
+    counted_prog, listed_prog = _text("count"), _text("members")
+    check("a count question becomes STORE … = QUERY COUNT(…); PUBLISH(…)",
+          "QUERY COUNT(SELECT vm WHERE status = 'running')" in counted_prog
+          and "PUBLISH(answer1)" in counted_prog)
+    check("a members question becomes STORE … = QUERY SELECT …; PUBLISH(…)",
+          "QUERY SELECT vm WHERE status = 'running'" in listed_prog
+          and "COUNT(" not in listed_prog and "PUBLISH(answer1)" in listed_prog)
 
 
 def test_a_subordinate_wh_is_not_a_question():
@@ -222,6 +239,38 @@ def test_an_instruction_not_to_act_holds_the_program():
     #   clause, so this cannot cost a SERVE on the corpus.
     from tests.bench.rungs import RUNGS
     noisy = [r.n for r in RUNGS if gate4.told_not_to_act(acts, r.goal, board)]
+    check(f"silent on every literal rung — {noisy or 'all 14'}", not noisy)
+
+
+def test_a_statement_does_not_build_anything():
+    """*"a jumpbox is a vm"* came back with `create_vm(jumpbox)` attached.
+
+    ⇒⇒ **TELLING THE SYSTEM WHAT A WORD MEANS WOULD HAVE BUILT A MACHINE CALLED `jumpbox`.**
+      An assertive is the highest-value input this system can receive — the only channel that
+      teaches without more corpus — and it was being answered with a creation. Found by
+      pointing the `--seam` door at it, ten minutes after the door existed.
+
+    ⇒ THE THIRD OF ONE FAMILY, each guarding a different sentence type and all three asking
+      rather than refusing: answer_not_act · told_not_to_act · statement_not_act.
+    """
+    from orchestrator.seam import gate4
+    from orchestrator.seam.effects import Operation
+    board = Board()
+    acts = [Operation("create_vm", "jumpbox", None)]
+
+    check("a statement beside an acting program is asked about",
+          gate4.statement_not_act(acts, "a jumpbox is a vm", board))
+    check("an ORDER is untouched",
+          not gate4.statement_not_act(acts, "create a vm named jumpbox", board))
+    check("a QUESTION is untouched — answer_not_act owns that one",
+          not gate4.statement_not_act(acts, "how many vms are there", board))
+    check("and a read-only program is not held — nothing would change",
+          not gate4.statement_not_act([Operation("vm_status", "vms", None)],
+                                      "a jumpbox is a vm", board))
+
+    # ⇒ THE LADDER CONTROL: no rung is read as a statement, so this cannot cost a SERVE.
+    from tests.bench.rungs import RUNGS
+    noisy = [r.n for r in RUNGS if gate4.statement_not_act(acts, r.goal, board)]
     check(f"silent on every literal rung — {noisy or 'all 14'}", not noisy)
 
 
@@ -340,6 +389,7 @@ def test_where_it_is_wired():
         pass1.consume_meta_control   a clause about the conversation declares nothing
         pipeline              the leftover exemption for meta-control's own words
         shortcuts/plan.py     `plan --seam <request>` — the opt-in door
+        archive.taught_by     an ASSERTIVE offers a knowledge entry
 
     ⇒ **A NAMED LIST, NOT A COUNT.** [[gorgon-built-and-never-called]] is this project's
       dominant defect class and its mirror is a thing called from more places than anyone
@@ -359,8 +409,8 @@ def test_where_it_is_wired():
          os.path.join(root, "engines")],
         capture_output=True, text=True).stdout
     callers = {os.path.basename(p) for p in out.split() if not p.endswith("speech_act.py")}
-    check(f"the reader's importers are exactly the four named here — {sorted(callers)}",
-          callers == {"gate4.py", "pass1.py", "pipeline.py", "plan.py"})
+    check(f"the reader's importers are exactly the five named here — {sorted(callers)}",
+          callers == {"gate4.py", "pass1.py", "pipeline.py", "plan.py", "archive.py"})
 
 
 def main(argv=None) -> int:

@@ -796,6 +796,57 @@ def consume_self_address(rows: List[S.Declared], board: Optional[Board] = None,
     return out
 
 
+def settle_from_archive(rows: List[S.Declared], board: Optional[Board] = None,
+                        archive=None) -> List[S.Declared]:
+    """A row nothing live could settle, settled by what the lab was TAUGHT.
+
+    ⇒⇒ **STEP 2 OF THE SETTLING LADDER, AND IT IS THE ONLY ONE THAT GROWS WITHOUT CORPUS.**
+
+        1  the manifest's `nouns`   the built-in vocabulary       lookup
+        2  THE ARCHIVE              what is known / was told      lookup   <- this
+        3  the lab                  what exists right now         lookup
+        4  the ASK                  the operator settles it       -> written back into 2
+
+    ⇒ **IT RUNS AFTER THE WORLD, NOT BEFORE, AND THAT IS THE SAFETY RULE RATHER THAN THE
+      LISTING ORDER.** [[gorgon-encyclopedia]]: *"a remembered fact can only fill a row nothing
+      live settled. A stale memory must never beat the world."* So this touches KINDLESS rows
+      only — it can add a reading and can never replace one.
+
+    ⇒ **AND IT IS INERT UNTIL A PERSON RATIFIES SOMETHING.** `known()` returns ratified-and-told
+      entries only, so an empty archive — which is every archive until an operator signs an
+      entry — makes this a no-op. That is why it can be wired without moving any measurement:
+      the ladder is unchanged because there is nothing in the store, by construction rather
+      than by luck.
+    """
+    from .archive import ARCHIVE
+    store = ARCHIVE if archive is None else archive
+    out = []
+    for row in rows:
+        if row.object_type != S.UNKNOWN_KIND:
+            out.append(row)                    # the manifest or the lab already answered
+            continue
+        # ⇒⇒ **THE WORD, NOT THE PHRASE — AND IT IS `issues.word_of` THAT KNOWS WHICH.** The
+        #   first cut of this looked the row's NAME up in the archive, and a row is named by
+        #   the phrase that produced it: the real reading of *"create a jumpbox named alpha"*
+        #   declares `a jumpbox named alpha`. So a ratified entry for `jumpbox` matched
+        #   nothing, and the whole teach-then-settle loop would have silently never closed.
+        #
+        #   ⇒ **THAT IS THE EXACT DEFECT THE LEDGER ALREADY PAID FOR** — its own docstring:
+        #     *"an issue was filed under `'a jumpbox named bastion'`, so answering 'a jumpbox
+        #     is a vm' matched nothing and the next request learned nothing."* One rule for
+        #     phrase-to-word, asked rather than re-derived, or the two stores drift apart on
+        #     the one key they must agree on.
+        from .issues import word_of
+        word = word_of(str(row.span or row.name or ""), board)
+        kind = store.kind_of(word) if word else None
+        if kind and kind in (board or Board()).kinds:
+            out.append(row._replace(object_type=kind,
+                                    settled=S.settled_of(kind, row.where or {}, board)))
+            continue
+        out.append(row)
+    return out
+
+
 def consume_meta_control(rows: List[S.Declared], request: str,
                          board: Optional[Board] = None, world=None) -> List[S.Declared]:
     """A clause about the CONVERSATION declares nothing. Its spans are not things.

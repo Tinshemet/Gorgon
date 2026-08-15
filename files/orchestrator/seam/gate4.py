@@ -683,6 +683,46 @@ def told_not_to_act(operations: List[Operation], request: str = "",
             f"Nothing has been run. Say so if you meant it done anyway."]
 
 
+def statement_not_act(operations: List[Operation], request: str = "",
+                      board: Optional[Board] = None) -> List[str]:
+    """THE REQUEST STATED A FACT AND THE PROGRAM WOULD CHANGE THE LAB.
+
+    ⇒⇒ **FOUND THROUGH THE `--seam` DOOR, 2026-08-15, AND IT IS THE WORST OF THE THREE.**
+      *"a jumpbox is a vm"* — the operator TEACHING — came back with `create_vm(jumpbox)`
+      attached. **Telling the system what a word means would have built a machine called
+      `jumpbox`.** An assertive is the highest-value input this system can receive and it was
+      being answered with a creation.
+
+    ⇒ **THE THIRD OF ONE FAMILY, AND THEY DIFFER ONLY IN WHICH SENTENCE TYPE THEY GUARD:**
+
+        answer_not_act     the request ASKED to be told           -> did you mean it done?
+        told_not_to_act    the request said NOT to act            -> did you mean it yet?
+        statement_not_act  the request STATED something           -> did you mean it done?
+
+      Each asks, none refuses, none grants — the asymmetry every gate here runs on. A false
+      avoid costs a question; a false serve cannot be taken back.
+
+    ⇒ AND IT IS SILENT ON THE LADDER BY CONSTRUCTION: no rung is read as a statement, so this
+      cannot cost a SERVE on the corpus. Measured in `test_speech_act`, not assumed.
+    """
+    from . import speech_act as _speech
+    from planner.ir import config as _config, effects as _effects
+
+    acting = _effects.actors(_config.KINDS)
+    hits = [op for op in operations if op.operator in acting]
+    if not hits:
+        return []
+    stated = [c for c, act in _speech.read(request, board)
+              if act == _speech.ASSERTIVE]
+    if not stated:
+        return []
+    calls = ", ".join(dict.fromkeys(f"{op.operator}({op.on})" for op in hits))
+    said = ", ".join(repr(c.strip()) for c in stated[:2])
+    return [f"[gate4/statement-not-act] {said} states something rather than asking for it, "
+            f"and this program would run {calls}. Nothing has been run — say so if you meant "
+            f"it built, or ratify it as something the lab should know."]
+
+
 def forbidden_tools(operations: List[Operation], legal=None, table=None,
                     board: Optional[Board] = None) -> List[str]:
     """The RED-LINED tools this program would call — empty when it may run.
