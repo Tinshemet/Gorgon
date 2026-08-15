@@ -559,31 +559,66 @@ def _main_clause_copula(words: Sequence[str]) -> bool:
 def _imperative(words: Sequence[str], board: Optional[Board] = None,
                 world=None) -> Optional[str]:
     """An imperative's own three-way split: report, act, or talk about the conversation."""
+    negated = any(w in NEGATORS for w in words)
     words = [w for w in words if w not in NEGATORS]
     if not words:
         return None
     changes = changes_the_world(words[0], board)
     if changes is False:
         return DIRECTIVE_INFORM            # "list the vms" — the operation cannot touch anything
+    # ⇒⇒ **A MANIFEST VERB WITH NO ARGUMENT AT ALL IS ADDRESSED TO US.** Bare `stop` shouted at
+    #   the agent, versus `stop the vms`. The object's ABSENCE is the whole signal, and absence
+    #   is only readable when there is nothing there — not when there is something we failed to
+    #   recognise, which is the distinction the next paragraph exists for.
+    if changes and len(words) == 1:
+        return META_CONTROL
     # ⇒ AN INSTRUCTION THAT NAMES NOTHING THE LAB KEEPS IS ABOUT THE CONVERSATION. Bare `stop`
     #   addressed to the agent, and `don't start any changes` where `changes` is not a kind.
     #   ⇒ **THE OBJECT IS THE DISCRIMINATOR, AND IT IS THE ONLY ONE THAT WORKS.** `stop` is a
     #     manifest verb in both *"stop the vms"* and a bare *"stop"* shouted at the agent; no
     #     property of the VERB separates them, which is why the research named the object.
-    if not names_something(words[1:], board, world):
-        return META_CONTROL
     # ⇒ AND A VERB THE MANIFEST DOES NOT KNOW STILL ACTS WHEN IT NAMES SOMETHING THE LAB KEEPS.
     #   `put every vm on a network`, `ping every vm`, `take a snapshot` — ordinary English for
     #   operations the manifest spells `add_vm_to_network`, `guest_ping`, `snapshot_create`.
     #   Translating those words is pass 2's job, not this file's; all this says is that an
     #   instruction was given.
-    return DIRECTIVE_ACT
+    if names_something(words[1:], board, world):
+        return DIRECTIVE_ACT
+    # ⇒⇒ **AN ACTING VERB THE LAB HAS IS AN ORDER, WHATEVER IT NAMES.** This branch read
+    #   *"create a grubnash named alpha"* as a CONVERSATION CONTROL, because `grubnash` is not
+    #   a kind the manifest knows — so `consume_meta_control` dropped the row, the operator's
+    #   answer *"a grubnash is a vm"* had nothing left to bind to, and a request that should
+    #   have become a program stayed REFUSED. Caught by `test_write_back`, which is exactly
+    #   the case it was written for.
+    #
+    #   ⇒ **AN UNKNOWN NOUN IS NOT AN ABSENT ONE** ([[gorgon-unfamiliar-nouns]]: *the verb half
+    #     dissolves, the noun half does not*). `create` is the lab's own verb and something was
+    #     named; that the lab cannot yet type the word is a question for gate 2, not grounds
+    #     for deciding the sentence was never about the lab.
+    if changes:
+        return DIRECTIVE_ACT
+    # ⇒ AN INSTRUCTION THAT NAMES NOTHING THE LAB KEEPS **AND IS NEGATED** IS ABOUT THE
+    #   CONVERSATION — *"don't start any changes"*, where `start` names no operation and
+    #   `changes` is not a kind. The negation is load-bearing: without it this claimed every
+    #   imperative built on a verb the manifest happens not to spell.
+    if negated:
+        return META_CONTROL
+    # ⇒ AND OTHERWISE NOTHING SETTLES IT. `treat prod as read-only` lands here — a DECLARATION,
+    #   which has no rule yet and must not be guessed at as an order.
+    return None
 
 
 def _strip_imperative_frame(words: Sequence[str]) -> List[str]:
-    """Drop a leading auxiliary and its negator — `do not stop` -> `stop`."""
+    """Drop the leading auxiliary of a negative imperative — `do not stop` -> `not stop`.
+
+    ⇒⇒ **THE NEGATOR STAYS, AND IT USED TO GO.** `_imperative` reads the negation to tell a
+      conversation control from an order (*"don't start any changes"* vs *"create a grubnash
+      named alpha"*), and this stripped it one call earlier — so that test always saw an
+      unnegated clause and every negative imperative fell to unsettled. A signal removed by
+      the function that prepares the input for the function that needs it.
+    """
     out = list(words)
-    while out and (out[0] in AUXILIARIES or out[0] in NEGATORS):
+    while out and out[0] in AUXILIARIES:
         out = out[1:]
     return out
 

@@ -796,6 +796,53 @@ def consume_self_address(rows: List[S.Declared], board: Optional[Board] = None,
     return out
 
 
+def consume_meta_control(rows: List[S.Declared], request: str,
+                         board: Optional[Board] = None, world=None) -> List[S.Declared]:
+    """A clause about the CONVERSATION declares nothing. Its spans are not things.
+
+    ⇒⇒ **`consume_self_address` NAMED THIS CASE AS THE ONE IT COULD NOT CLOSE:** *"What is left
+      — 'don't start any changes', 'how do i stop' — names nothing in any world and needs THE
+      STRUCTURAL ANSWER, not a lookup."* The structural answer is `speech_act`, and this is it.
+
+    ⇒ **FOUND BY POINTING THE NEW `--seam` DOOR AT THE OPERATOR'S OWN N3 EXAMPLE**, which is
+      what an opt-in door is for. *"don't start any changes, but create a vm named alpha"*
+      declared `alpha`, `changes` AND `changes_2`, and asked four questions about them:
+
+          the request does not say what "don't start any changes" is
+          the request does not say what 'any changes' is
+          "don't start any changes" is referred to as if it exists …
+          'any changes' is referred to as if it exists …
+
+      Every one correct for what it was shown, and every one about a clause that was already
+      read as an instruction NOT TO ACT. The real finding — that the program was held — sat
+      underneath four spurious ones, which is the misdirection the residue accounting was
+      fixed for on rung 6.
+
+    ⇒ **THE LAB STILL WINS, exactly as it does for the agent's name.** A machine really called
+      `changes` is a machine, and its row is kept. So this can only remove a row nothing in the
+      world accounts for — and with no world it removes nothing, because absence of a lab is
+      not evidence.
+
+    ⇒ **AND ONLY A KINDLESS ROW**, the guard `consume_reciprocal` and `consume_self_address`
+      both keep. A row the nouns or the lab already settled is a reading somebody made; this
+      drops only ones nobody could.
+    """
+    from . import speech_act
+    held = [c.strip().lower() for c, act in speech_act.read(request, board, world)
+            if act == speech_act.META_CONTROL]
+    if not held:
+        return rows
+    out = []
+    for row in rows:
+        span = str(row.span or row.name).strip().lower()
+        inside = span and any(span in clause for clause in held)
+        if (inside and row.object_type == S.UNKNOWN_KIND
+                and not _lab_holds(str(row.name), world, board)):
+            continue
+        out.append(row)
+    return out
+
+
 def _lab_holds(word: str, world, board: Optional[Board] = None) -> bool:
     """Does the lab hold anything keyed by this word? The same question `residue.lab_has` asks."""
     from .residue import lab_has

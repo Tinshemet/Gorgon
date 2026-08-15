@@ -336,6 +336,10 @@ def test_where_it_is_wired():
                               return `ask` — the branch that shipped with nothing to feed it
         gate4.answer_not_act  the information-intent trigger the file's own note asked for,
                               replacing residue as a stand-in
+        gate4.told_not_to_act an instruction not to act holds the program
+        pass1.consume_meta_control   a clause about the conversation declares nothing
+        pipeline              the leftover exemption for meta-control's own words
+        shortcuts/plan.py     `plan --seam <request>` — the opt-in door
 
     ⇒ **A NAMED LIST, NOT A COUNT.** [[gorgon-built-and-never-called]] is this project's
       dominant defect class and its mirror is a thing called from more places than anyone
@@ -355,8 +359,8 @@ def test_where_it_is_wired():
          os.path.join(root, "engines")],
         capture_output=True, text=True).stdout
     callers = {os.path.basename(p) for p in out.split() if not p.endswith("speech_act.py")}
-    check(f"the reader's importers are exactly the ones step 3 wired — {sorted(callers)}",
-          callers == {"gate4.py"})
+    check(f"the reader's importers are exactly the four named here — {sorted(callers)}",
+          callers == {"gate4.py", "pass1.py", "pipeline.py", "plan.py"})
 
 
 def main(argv=None) -> int:

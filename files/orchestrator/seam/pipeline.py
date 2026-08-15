@@ -271,6 +271,10 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #   rule, which would otherwise type it as whatever kind the request's verbs afford — that
     #   is how *"good morning doorman"* became a machine and gate 2 asked whether to create it.
     rows = pass1.consume_self_address(rows, board, world)
+    # ⇒ AND A CLAUSE ABOUT THE CONVERSATION DECLARES NOTHING EITHER. Beside the self-address
+    #   rule because it is the case that rule's own docstring says it could not close —
+    #   *"don't start any changes"* names nothing in any world, and now something can say so.
+    rows = pass1.consume_meta_control(rows, request, board, world)
     # ⇒ AND WHAT A CLONE IS TAKEN FROM ALREADY EXISTS. `creators.clone` declares a `from` role;
     #   reading it stops rung 10 asking *"you asked to create golden"* about a thing nobody
     #   asked to create.
@@ -671,6 +675,20 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
 
     spent = {str(op.value).strip().lower() for op in operations + suggested if op.value}
     spent |= {str(op.on).strip().lower() for op in operations + suggested}
+    # ⇒⇒ **AND A WORD IS ACCOUNTED FOR BY THE READING, NOT ONLY BY A DECLARATION OR A STEP.**
+    #
+    #   Gate 1's leftover rule asks which words nothing claimed, and a meta-control clause
+    #   deliberately claims none: `consume_meta_control` drops its rows precisely because
+    #   *"don't start any changes"* is not a thing. So the two rules met and produced
+    #   *"you did not account for 'don't', 'changes'"* — a bounce telling the model to go and
+    #   declare the clause we just finished deciding must not be declared.
+    #
+    #   ⇒ IT IS THE SAME EXEMPTION THE OPERATION ARGUMENTS GET, one reading further out: the
+    #     word IS read, and what read it is the speech act rather than a row.
+    from . import speech_act as _speech
+    for clause, act in _speech.read(request, board, world):
+        if act == _speech.META_CONTROL:
+            spent |= {w.strip(" '\".,") for w in str(clause).lower().split() if w.strip(" '\".,")}
     # ⇒⇒ AND A WORD CARRIED BY A ROW THE PROGRAM OPERATES ON HAS ALSO BEEN USED.
     #
     #   The same accounting, one level down, and leaving it out made rung 6 lie. `red` is
