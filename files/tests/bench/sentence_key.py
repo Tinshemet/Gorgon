@@ -207,6 +207,27 @@ CONTROLS: List[Keyed] = [
           "INVERTED OVER THE ADDRESSEE AND STILL A QUESTION — the addressee alone read as an "
           "ORDER until 2026-08-16. `have` is not a verb the lab performs; `delete` is, and "
           "that is the whole difference"),
+    # ⇒⇒ THE FIRST-PERSON REQUESTS — four sentences that were ONE defect, found only when the
+    #   operator asked what was still open. The subject test knew `you` and nothing else.
+    Keyed("can we stop the vms?", (DIRECTIVE_ACT,),
+          "the same request as `can you stop the vms` with a different pronoun"),
+    Keyed("let's stop the vms", (DIRECTIVE_ACT,),
+          "HORTATIVE — an imperative whose subject is the room. Opens on `let`, so no "
+          "inversion test can see it"),
+    Keyed("let me stop the vms", (DIRECTIVE_ACT,),
+          "asking us to PERMIT, not asking us what to think"),
+    Keyed("do it again", (DIRECTIVE_ACT,),
+          "the PRO-VERB imperative. `do it again` and `does it run?` both put `it` after the "
+          "auxiliary; only the second has a predicate following, so only it is an inversion"),
+    Keyed("should i delete db or keep it?", (DIRECTIVE_INFORM,),
+          "DELIBERATIVE — the speaker weighing their own act. The speaker ALONE deliberates; "
+          "the speaker WITH US proposes, and grammatical number is that line"),
+    Keyed("the vms should be stopped", (DIRECTIVE_ACT,),
+          "a passive deontic over a DEFINITE subject — these machines, now. A modal alone read "
+          "it as legislation"),
+    Keyed("make me a vm", (DIRECTIVE_ACT,),
+          "RETIRED AS A MISS 2026-08-16: a recipient receives information UNLESS something is "
+          "being brought into being for them. An indefinite over a manifest kind is the signal"),
     Keyed("isn't alpha running?", (DIRECTIVE_INFORM,),
           "a NEGATED polar question whose subject is a bare NAME, not a pronoun — it fell "
           "through to the imperative branch and came back META-CONTROL"),

@@ -115,6 +115,36 @@ COPULA = frozenset({"is", "are", "was", "were", "am", "be", "been", "'s", "'re"}
 ADDRESSEE = frozenset({"you", "u", "ya"})
 FIRST_PERSON = frozenset({"i", "we"})
 
+# ⇒⇒ **THE CONVERSATION'S OWN PARTICIPANTS — and this is the generalisation the addressee test
+#   should always have been.** A request to ACT is aimed at somebody in the room; a question is
+#   aimed at the lab. `can YOU stop the vms` and `can WE stop the vms` are the same request
+#   with a different pronoun, and only the first was read as one:
+#
+#       can you stop the vms      the addressee        -> an ORDER
+#       can we stop the vms       speaker AND hearer   -> an ORDER, and it read as a QUESTION
+#       let's stop the vms        the same, hortative  -> an ORDER
+#       is alpha running          a LAB THING          -> a QUESTION
+#
+#   ⇒ **FOUR SENTENCES WERE ONE DEFECT.** `do it again`, `let's …`, `let me …` and `can we …`
+#     were recorded as four unrelated curiosities until the operator asked what was still open;
+#     every one is the subject test knowing only `you`. Personal pronouns are a closed class,
+#     and *who is in the conversation* is the honest boundary.
+#   ⇒ ⚠ **AND IT IS THE PLURAL, NOT THE FIRST PERSON.** The first cut took every participant
+#     and read *"SHOULD I delete db or keep it?"* as an order — a deliberative question, the
+#     speaker weighing their own act. **The speaker ALONE is deliberating; the speaker WITH US
+#     is proposing**, and grammatical number is exactly that line:
+#
+#         can WE stop the vms       joint action     -> an ORDER
+#         should I delete db        deliberation     -> a QUESTION
+#
+#     `i`/`me` are therefore deliberately absent. `let me …` still reads as an order, from the
+#     hortative branch, because `let` asks us to permit rather than asking us what to think.
+PARTICIPANTS = ADDRESSEE | frozenset({"we", "us"})
+
+# ⇒ THE HORTATIVE. `let us / let me` proposes an act by the participants — an imperative whose
+#   subject is the room. One verb, and it is the only English word that does this job.
+HORTATIVE = frozenset({"let"})
+
 # ⇒ EXISTENTIAL `there` — the inverted subject of *"are there any stopped vms"*. It names
 #   nothing, so the subject test needs it by name or it reads as an unknown thing.
 EXISTENTIAL = frozenset({"there"})
@@ -372,9 +402,9 @@ def act_of(clause: str, board: Optional[Board] = None, world=None) -> Optional[s
         #   ⇒ *"can you DELETE the vms"* asks us to act and `delete` is the lab's own verb;
         #     *"do you HAVE a vm"* asks what is true. The wh-branch has required this since it
         #     was written; the inversion branch did not, and the asymmetry was the bug.
-        if subject in ADDRESSEE and (_acting_verb_in(words, board)
-                                     or _lab_predicate_in(words, board)):
-            return DIRECTIVE_ACT           # "can you delete the vms"
+        if subject in PARTICIPANTS and (_acting_verb_in(words, board)
+                                        or _lab_predicate_in(words, board)):
+            return DIRECTIVE_ACT           # "can you delete the vms" · "can we stop the vms"
         if subject is None:
             # ⇒ AN AUXILIARY WITH NO SUBJECT AT ALL IS A NEGATIVE IMPERATIVE, not a question:
             #   `do not start any changes`. It falls through to the imperative reading below.
@@ -394,6 +424,12 @@ def act_of(clause: str, board: Optional[Board] = None, world=None) -> Optional[s
     if head in ADDRESSEE and any(w in DEONTIC for w in words) and _acting_verb_in(words, board):
         return DIRECTIVE_ACT
 
+    # ⇒ 2b · THE HORTATIVE — *"let's stop the vms"*, *"let me stop the vms"*. An imperative
+    #   whose subject is the room. It opens on `let`, so no inversion test can see it.
+    if head in HORTATIVE and (_acting_verb_in(words, board)
+                              or _lab_predicate_in(words, board)):
+        return DIRECTIVE_ACT
+
     # ⇒⇒ 3a · **A RULE ABOUT FUTURE BEHAVIOUR IS A DECLARATION, NOT AN ORDER.** *"prod vms must
     #   always keep a snapshot"* read as `directive-act` and would have TAKEN A SNAPSHOT NOW
     #   instead of recording a rule — a false serve, and the expensive kind, produced by the
@@ -408,9 +444,21 @@ def act_of(clause: str, board: Optional[Board] = None, world=None) -> Optional[s
     #     *"you should stop the vms"* is a polite ORDER to us; *"prod vms must keep a snapshot"*
     #     binds a CLASS. Second person means it is aimed at us now; anything else is a standing
     #     rule about the world.
+    #   ⇒⇒ **AND THE SCOPE DECIDES, NOT THE MODAL.** *"THE VMS should be stopped"* names
+    #     particular machines and is a request about them NOW; *"PROD VMS must ALWAYS keep a
+    #     snapshot"* binds a class forever. A modal alone read both as rules, so a passive
+    #     order came back as legislation. The determiner classes already draw this line —
+    #     `DEFINITE` versus `UNIVERSAL` — and a frequency adverb settles it outright.
     if not _addressed_to_us(words) and (words[0] not in AUXILIARIES) \
             and any(w in DEONTIC or w in FREQUENCY for w in words):
-        return DECLARATION
+        from .scan import DEFINITE, UNIVERSAL
+        binds_a_class = (any(w in FREQUENCY for w in words)
+                         or any(w in UNIVERSAL for w in words)
+                         or not any(w in DEFINITE for w in words))
+        if binds_a_class:
+            return DECLARATION
+        if _acting_verb_in(words, board) or _lab_predicate_in(words, board):
+            return DIRECTIVE_ACT           # "the vms should be stopped" — these, now
 
     # ⇒⇒ 3a-ii · **A UNIVERSAL IN SUBJECT POSITION OVER A NON-COPULA VERB IS ALSO A RULE.**
     #   *"from now on every new vm gets the 'fleet' label"* carries no modal and no frequency
@@ -444,7 +492,21 @@ def act_of(clause: str, board: Optional[Board] = None, world=None) -> Optional[s
     #   ⇒ POSITION MATTERS — the recipient is the verb's FIRST argument. *"give THEM the fleet
     #     label"* has a recipient too and it is not the speaker, so it stays an act.
     if len(words) > 1 and words[1] in RECIPIENT:
-        return DIRECTIVE_INFORM
+        # ⇒⇒ **AND WHAT IS BEING HANDED OVER DECIDES — A NEW THING, OR NEWS ABOUT OLD ONES.**
+        #   *"make me a VM"* and *"show me THE VMS"* put the same pronoun in the same slot.
+        #   The first asks for a machine that does not exist yet; the second asks about ones
+        #   that do. An INDEFINITE determiner over a manifest kind is the whole signal, and
+        #   both classes are already owned — `scan.INDEFINITE` and the kind index.
+        #   ⇒ IT WAS KEYED AS A MISS RATHER THAN GUESSED AT, and this is the general rule that
+        #     retires it: *a recipient receives information UNLESS something is being brought
+        #     into being for them.*
+        from .scan import INDEFINITE, _index
+        index = _index(board or Board())
+        tail = words[2:]
+        makes_new = any(tail[i] in INDEFINITE and any(x in index for x in tail[i + 1:i + 4])
+                        for i in range(len(tail)))
+        if not makes_new:
+            return DIRECTIVE_INFORM
 
     # ⇒ 3d · AND THE EMBEDDED POLAR QUESTION — *"check whether alpha is running"*. `whether`
     #   introduces one and does nothing else in English, so its presence anywhere settles it.
@@ -720,7 +782,16 @@ def _strip_imperative_frame(words: Sequence[str]) -> List[str]:
     """
     out = list(words)
     while out and out[0] in AUXILIARIES:
-        out = out[1:]
+        # ⇒⇒ **AN AUXILIARY WITH NOTHING TO SUPPORT IS THE MAIN VERB.** *"DO it again"* — `do`
+        #   is the pro-verb standing in for whatever was last asked, and stripping it left
+        #   `it again`, which predicates nothing and read as unsettled. An auxiliary is only
+        #   auxiliary TO something; where no other predicate follows, it is carrying the clause
+        #   itself and must stay.
+        rest = out[1:]
+        if rest and not any(x in AUXILIARIES or x in COPULA for x in rest) \
+                and not _lab_predicate_in(rest) and not _acting_verb_in(rest):
+            break
+        out = rest
     return out
 
 
@@ -757,6 +828,17 @@ def _inverted_subject(words: Sequence[str], clause: str = "") -> Optional[str]:
         if negated and not _asks_outright(clause) \
                 and not (w in SUBJECT_PRONOUNS or _is_determiner(w)):
             return None                    # "do not touch …" — an imperative, not a question
+        # ⇒⇒ **A CANDIDATE SUBJECT WITH NO PREDICATE AFTER IT IS AN OBJECT.** *"do it again"*
+        #   and *"does it run?"* both put `it` after the auxiliary, and only the second has a
+        #   verb following — so only the second is an inversion. Without this the pro-verb
+        #   imperative read as a question, which is the same defect as the hortative one rule
+        #   up: an ORDER whose subject slot is not filled by a lab thing.
+        #   ⇒ ASKED OF THE LAB'S OWN VOCABULARY, not of a verb list — the same test the scope
+        #     rule and the addressee rule already use.
+        rest = [x for x in words[words.index(w) + 1:]]
+        if not _asks_outright(clause) and rest and not _lab_predicate_in(rest) \
+                and not _acting_verb_in(rest) and not any(x in COPULA for x in rest):
+            return None                    # "do it again" — `it` is the object of `do`
         # ⇒⇒ **A VERB WHERE THE SUBJECT SHOULD BE MEANS THERE IS NO SUBJECT** — `do not START
         #   any changes` is a negative imperative, not a question about `start`. Without this
         #   the auxiliary rule read the operator's own *"don't start any changes"* as a

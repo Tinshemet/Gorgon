@@ -299,7 +299,24 @@ def clauses_of(request: str) -> List[str]:
         words = [w.strip(".,'\"—–").lower() for w in piece.split()]
         content = [w for w in words if w and w not in GRAMMAR]
         has_verb = any(w in verbs for w in words)
-        if kept and content and not has_verb and len(content) <= 2:
+        # ⇒⇒ **A PIECE WITH ITS OWN PREDICATE IS A CLAUSE, NOT A LIST MEMBER.** *"n1 is the
+        #   jumpbox, so put it on core"* was rejoined whole — `n1 is the jumpbox` names no
+        #   manifest verb and has two content words, so it looked exactly like `n2`. The order
+        #   half then never got read at all.
+        #   ⇒ A COPULA IS THE TEST, and it is what a list member never has: `n2` predicates
+        #     nothing, `n1 IS the jumpbox` predicates. Rung 9's member list is untouched
+        #     because none of its pieces carries one.
+        #   ⇒ ⚠ AND THE TEST IS ON THE ABSORBING PIECE, NOT THE ABSORBED ONE. `so put it on
+        #     core` carries no copula either — what makes it a separate clause is that the
+        #     piece before it ALREADY predicates and has nothing left to take.
+        from .speech_act import COPULA as _COPULA
+        #   ⇒ EITHER SIDE SETTLES IT: a piece that already predicates has nothing left to
+        #     take, and a piece that predicates on its own was never a list member.
+        def _predicates(text):
+            return any(w.strip(".,'\"—–").lower() in _COPULA for w in text.split())
+        holds_a_predicate = (_predicates(kept[-1]) if kept else False) or _predicates(piece)
+        if (kept and content and not has_verb and not holds_a_predicate
+                and len(content) <= 2):
             kept[-1] = f"{kept[-1].rstrip()}, {piece.strip()}"
             continue
         if piece.strip():
