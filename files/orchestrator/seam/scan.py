@@ -190,6 +190,40 @@ def anchors_in(request: str, board: Optional[Board] = None) -> List[str]:
     return found
 
 
+def clause_around(request: str, span: str) -> str:
+    """The whole clause a span sits in — from the boundary before it to the boundary after.
+
+    ⇒⇒ **BECAUSE A SPAN IS NOT A WINDOW BIG ENOUGH TO HOLD ITS OWN EVIDENCE.** `pass1`'s
+      contextual kind lets a noun-less span inherit the request's kind, but only on proof of a
+      pro-form — and it asked `_has_pronoun` about the SPAN. *"create a vm named alpha. give it
+      4 cores."* draws that row's span as `4 cores`, because the left walk stops at the
+      enumerator, so `give it` was never in the window and the row stayed `?` with an empty
+      `where`. The pronoun that licenses the whole rule was one word outside the only place
+      anybody looked.
+
+    ⇒ **AND THE CLAUSE IS THE RIGHT WINDOW, NOT THE REQUEST.** Widening to the whole request
+      would let any pronoun anywhere license any kindless span — which is the laundering the
+      pro-form guard exists to stop. `BOUNDARIES` already marks where one clause ends; the
+      evidence for a clause is what that clause says.
+    """
+    low, target = str(request).lower(), str(span).strip().lower()
+    at = low.find(target)
+    if at < 0:
+        return str(request)
+    toks = _tokens(request)
+    first = next((i for i, t in enumerate(toks) if t[2] > at), 0)
+    last = next((i for i, t in enumerate(toks) if t[1] >= at + len(target)), len(toks))
+    left = first
+    while left > 0 and toks[left - 1][0] not in BOUNDARIES:
+        left -= 1
+    right = last
+    while right < len(toks) and toks[right][0] not in BOUNDARIES:
+        right += 1
+    if right <= left:
+        return str(span)
+    return request[toks[left][1]:toks[right - 1][2]]
+
+
 def uncovered(request: str, spans, board: Optional[Board] = None) -> List[str]:
     """Content words no span has claimed — CANDIDATE OBJECTS, and lost clauses, together.
 
@@ -364,8 +398,23 @@ def scan_all(anchor: str, request: str,
 
 
 def scan(anchor: str, request: str, board: Optional[Board] = None,
-         at: Optional[int] = None) -> Optional[Scanned]:
-    """Find the anchor, then read outward to the edges of its clause."""
+         at: Optional[int] = None, kind_hint: Optional[str] = None) -> Optional[Scanned]:
+    """Find the anchor, then read outward to the edges of its clause.
+
+    ⇒⇒ **`kind_hint` IS FOR A SPAN WHOSE KIND IS IN A DIFFERENT CLAUSE, AND FOR NOTHING ELSE.**
+      *"create a vm named alpha. give it 4 cores."* has no noun in its second clause, so this
+      function returns `kind=None` — and everything downstream of the kind then goes wrong in
+      the same direction: the demotion rule cannot ask whether `cores` is a declared attribute,
+      so `4` is taken as an ENUMERATOR, and the row reads as FOUR MACHINES.
+
+      `pass1` already resolves that kind from the pro-form, but it did so by patching the field
+      on a row that had been READ without it. **Setting a kind is not the same as reading with
+      one.** Supplying it here lets the rules that were already written do their job, instead
+      of a second copy of them living in `pass1`.
+
+    ⇒ ⚠ **IT NEVER OVERRIDES A KIND THE REQUEST STATES.** A noun in the span wins; the hint
+      only fills a hole. Otherwise a caller could rename a thing the operator named.
+    """
     board = board or Board()
     nouns = _index(board)
     low = request.lower()
@@ -409,7 +458,7 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
     #   anchored on `golden`, "clone golden into 3 new vms" was answering `vm`. A bare name has
     #   no kind here, and that is correct: only the lab can say what `golden` is.
     head = [t[0] for t in toks[left:last] if t[0] not in BOUNDARIES]
-    kind = _kind_of(head, nouns)
+    kind = _kind_of(head, nouns) or kind_hint      # a stated noun always wins; the hint fills a hole
 
     # ⇒⇒ **A NUMERAL IN FRONT OF A DECLARED ATTRIBUTE IS THAT ATTRIBUTE'S VALUE, NOT A COUNT.**
     #   *"a 4 star hotel"* is ONE hotel rated four, and *"a 4 core vm"* is ONE machine with

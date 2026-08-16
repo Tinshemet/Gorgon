@@ -611,6 +611,64 @@ def test_an_unquoted_multi_word_name_is_a_KNOWN_LIMIT_and_the_naive_fix_is_forbi
               "called dmz instead"))
 
 
+def test_a_clause_takes_its_kind_from_the_clause_that_named_it():
+    """⇒⇒ **`create a vm named alpha. give it 4 cores.` READ THE CORES AS NOTHING.**
+
+    The second clause names no kind, so `scan` returned `kind=None`, and the row came out `?`
+    with an empty `where` — the cores extracted nowhere and attached to nothing.
+
+    ⇒ **THE MECHANISM WAS ALREADY THERE AND COULD NOT REACH ITS EVIDENCE.** `pass1`'s
+      contextual kind lets a noun-less span inherit the request's kind on proof of a pro-form,
+      and it asked `_has_pronoun(first.span)`. That row's span is drawn as `4 cores` — the left
+      walk stops at the enumerator — so `give it` was never in the window. **The pro-form that
+      licenses the whole rule sat one word outside the only place anybody looked.** Rung 11
+      passed throughout because ITS pro-form happens to fall inside its span. The clause is the
+      right window; `BOUNDARIES` already marks it.
+
+    ⇒ ⚠ **AND SETTING A KIND IS NOT THE SAME AS READING WITH ONE — THAT HALF WAS A REGRESSION
+      AND WAS MEASURED BEFORE IT SHIPPED.** `_replace(kind=…)` patches the field on a row read
+      WITHOUT a kind, and every rule downstream of the kind had already made the kindless
+      choice: the demotion could not ask whether `cores` names a declared attribute, so `4` was
+      spent as an ENUMERATOR and the row emerged as a vm_set of **FOUR MACHINES**. An honest
+      `?` (which asks) became a confident wrong reading (which acts). `scan` now takes a
+      `kind_hint` and the rules that already exist do the rest.
+
+    ⇒ **A STATED NOUN ALWAYS WINS.** The hint only fills a hole, or a caller could rename a
+      thing the operator named.
+    """
+    from orchestrator.seam import pass1 as P
+    from orchestrator.seam.scan import clause_around, scan
+    board = Board()
+
+    def rows(text):
+        return [(r.object_type, r.count, r.where) for r in P.run_scanned(text, board=board)]
+
+    check("the clause is the window, not the span",
+          clause_around("create a vm named alpha. give it 4 cores.", "4 cores").strip()
+          == "give it 4 cores")
+    check("a following clause is read against the kind that was named",
+          ("vm_set", None, {"cpu_cores": "4"})
+          in rows("create a vm named alpha. give it 4 cores."))
+    check("and the same across `and` rather than a full stop",
+          ("vm_set", None, {"cpu_cores": "4"})
+          in rows("create a vm named alpha and give it 4 cores"))
+    check("the numeral is NOT a count — that reading was four machines",
+          all(r[1] != 4 for r in rows("create a vm named alpha. give it 4 cores.")))
+
+    # ⇒ THE CONTROLS. The pro-form guard exists because of `grubnash`; rung 11 inherits a kind
+    #   too and so is directly in the blast radius; and a clause with NO pro-form must still
+    #   decline, because gate 2 asking is the honest answer.
+    check("junk in its own clause still declines — the grubnash case",
+          ("?", None, {}) in rows("create a vm named alpha and launch it, grubnash"))
+    check("rung 11 is unmoved",
+          ("vm_set", None, {"alive": False})
+          in rows("ping every vm and stop the ones that do not answer"))
+    check("no pro-form, no inheritance",
+          ("?", None, {}) in rows("create a vm named alpha, with 4 cores"))
+    check("a stated noun outranks the hint",
+          scan("network", "create a vm and a network", board, kind_hint="vm").kind == "network")
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "structure")

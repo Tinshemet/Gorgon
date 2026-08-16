@@ -259,7 +259,7 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
     from .scan import anchors_in, kinds_named
     # THE MANIFEST'S NOUNS ARE ANCHORS AND NEED NO ASKING. The model's answers are ADDED to
     # them, for the things the manifest cannot list — a pronoun-headed set, a bare name.
-    from .scan import uncovered, scan
+    from .scan import clause_around, uncovered, scan
     said = ask(S.NAMES_Q, S.names_schema()) or []
     anchors = anchors_in(request, board) + [a for a in said if a.lower() in request.lower()]
     # ⇒ AND ANYTHING STILL UNCLAIMED IS A CANDIDATE OBJECT — TO A FIXPOINT.
@@ -347,8 +347,33 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
             #   So the rule now demands the EVIDENCE it was written for. Without a pro-form the
             #   kind stays `?` and gate 2 asks — which is the honest answer anyway, since only the
             #   lab can say whether `grubnash` is a machine name or noise.
-            if first.kind is None and len(present) == 1 and _has_pronoun(first.span):
-                first = first._replace(kind=present[0])
+            #   ⇒⇒ **AND THE PROOF IS SOUGHT IN THE CLAUSE, NOT THE SPAN.** The rule asked
+            #     `_has_pronoun(first.span)` and *"create a vm named alpha. give it 4 cores."*
+            #     draws that row's span as `4 cores` — the left walk stops at the enumerator,
+            #     so `give it` was never in the window. The pro-form that licenses the whole
+            #     rule sat one word outside the only place anybody looked, and the row stayed
+            #     `?` with an empty `where`: the cores were read as nothing and attached to
+            #     nothing. Rung 11 passed throughout because ITS pro-form happens to fall
+            #     inside the span.
+            #   ⇒ **THE CLAUSE AND NO WIDER.** The whole request would let a pronoun anywhere
+            #     license a kindless span anywhere, which is the laundering above. `grubnash`
+            #     is its own clause and still has no pro-form, so it still declines.
+            #   ⇒⇒ ⚠ **AND IT RE-READS THE SPAN — PATCHING THE FIELD WAS A REGRESSION.**
+            #     `_replace(kind=…)` sets a kind onto a row that was READ without one, and
+            #     every rule downstream of the kind had already made the kindless choice. The
+            #     demotion in `scan` could not ask whether `cores` names a declared attribute,
+            #     so `4` had been spent as an ENUMERATOR — and the row came out of here as a
+            #     vm_set of FOUR MACHINES from *"give it 4 cores"*. That turns an honest ASK
+            #     into a wrong ACT, which is worse than the `?` it replaced. Measured, and
+            #     backed out, before this line was written.
+            #
+            #     **Setting a kind is not the same as reading with one.** `scan` takes the
+            #     hint and the rules that already exist do the rest — no second copy of them
+            #     here.
+            if first.kind is None and len(present) == 1 and _has_pronoun(
+                    clause_around(request, first.span)):
+                again = scan(anchor, request, board, at=first.start, kind_hint=present[0])
+                first = again or first._replace(kind=present[0])
 
             # ⇒ A KINDLESS THING IS STILL A THING. Dropping it lost every bare proper name —
             #   db, core, dmz, n1, n2, n3, golden — and rung 9, which contains no declared noun at
