@@ -571,7 +571,25 @@ def act_of(clause: str, board: Optional[Board] = None, world=None) -> Optional[s
     # ⇒ 7 · AND WHAT PRODUCES NOTHING IS EXPRESSIVE — no list required, which is the producer
     #   method paying for itself. A greeting holds no manifest verb, no manifest kind and no
     #   name the lab knows, so `hi` / `yo` / `cheers` never has to be enumerated.
+    # ⇒⇒⇒ ⚠ **AND IT MUST BE PREDICATELESS, WHICH IS WHAT 574 SEGMENTS OF SOMEBODY ELSE'S
+    #   CORPUS COST TO LEARN.** Measured against DialogBank's gold Map Task annotations,
+    #   2026-08-16: this branch answered SOCIAL OBLIGATIONS / GREETING to 574 of 779 segments —
+    #   three quarters of a corpus containing four greetings. **469 of them open on a CONTENT
+    #   WORD**, so the very next branch would have called them imperatives; it never ran,
+    #   because this one is in front and its test is weaker.
+    #
+    #   ⇒ **THE DISCRIMINATOR WAS ALREADY IN THIS FILE, ONE BRANCH UP.** The exclamative rung
+    #     argues it in as many words: *"both are PREDICATELESS: no copula, no auxiliary, no
+    #     verb the lab knows. A question always has one."* That is true of a GREETING too —
+    #     `hi`, `cheers`, `good morning doorman` have no predicate and *"you're starting above
+    #     the diamond mine"* has one. The reader held the right test and applied it to the
+    #     neighbouring case only.
+    #
+    #   ⇒ **AND THE FAILURE WAS NOT IGNORANCE, WHICH WOULD HAVE BEEN HONEST.** Recognising
+    #     nothing is a fine thing to say. This branch turned *I recognise nothing* into *this
+    #     is a pleasantry* — a positive claim — on every sentence outside one manifest.
     if (not _any_manifest_verb(words, board) and not names_something(words, board, world)
+            and not _has_predicate(words, board)
             # ⇒⇒ ⚠ **A SUBORDINATE CLAUSE PRODUCES NOTHING AND IS NOT SMALL TALK**, and the
             #   difference decides whether it survives. EXPRESSIVE is a POSITIVE claim — *this
             #   is a greeting* — and everything that reaches this branch produces nothing, so

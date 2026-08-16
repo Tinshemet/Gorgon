@@ -41,6 +41,7 @@ disagreeing: change the reading and this changes with it.
   constant is what the Encyclopedia's rule forbids, so it stays empty until somebody TEACHES
   it. An empty qualifier is a gap; a guessed one is a wrong annotation that scores as right.
 """
+import re
 from typing import Dict, List, NamedTuple, Optional
 
 from planner.formula.legal import Board
@@ -89,6 +90,77 @@ HEDGES = frozenset({"maybe", "perhaps", "probably", "possibly", "presumably", "a
                     "likely", "seemingly"})
 EMPHATIC = frozenset({"definitely", "certainly", "surely", "obviously", "clearly",
                       "undoubtedly", "absolutely"})
+
+
+# ⇒⇒ **FEEDBACK — TWO WHOLE DIMENSIONS WE EMITTED NOTHING FOR, AND THEY ARE A QUARTER OF REAL
+#   DIALOGUE.** Measured against DialogBank's gold Map Task annotations, 2026-08-16: 165
+#   autoFeedback and 50 alloFeedback segments out of 779, and we answered GREETING to every one.
+#
+#   ⇒ **THE STRUCTURAL KEY IS POSITION, AND IT REUSES A CLASS ALREADY DECLARED.** A discourse
+#     particle that IS the whole utterance is feedback; the same particle in front of a clause
+#     is an opener. `speech_act.OPENERS` already holds `ok`, `okay`, `yeah`, `well` and calls
+#     them *"leading particles that carry no proposition"* — standing alone they carry one
+#     proposition exactly: **I am still with you.**
+#
+#   ⇒ **AND THE GOLD SAYS THE CLASS IS SMALL.** Seven forms cover ~150 of the 165: `right` (75),
+#     `okay` (33), `mmhmm` (13), `uh-huh` (13), `right okay` (10), `yeah`, `oh`. A closed class
+#     in the strong sense — English adds a backchannel about once a generation.
+BACKCHANNEL = frozenset({"right", "mmhmm", "mmhm", "mhm", "mm", "uh-huh", "uhhuh", "uhuh",
+                         "aye", "sure", "gotcha", "indeed", "quite", "i see", "got it"})
+
+# ⇒ AND THE NEGATIVE HALF — *I did NOT follow that.* Far rarer in the gold (7 of 165) and the
+#   one that matters most, because it is the operator saying the reading went wrong.
+TROUBLE = frozenset({"sorry", "pardon", "what", "huh", "again", "eh"})
+
+# ⇒⇒ ⚠ **AND A BARE `sorry` IS AN APOLOGY, NOT A REQUEST TO REPEAT** — measured, and it cost
+#   every Social Obligations segment in the corpus. All four gold SOM segments in the Map Task
+#   set are the single word `sorry`, and sweeping it into TROUBLE took us from 4 of 4 to 0.
+#   ⇒ **THE MARK SPLITS IT, WHICH IS THE RULE ALREADY USED ONE CLASS UP.** `right` reports and
+#     `right?` asks; `sorry` apologises and `sorry?` asks. I built that discrimination for the
+#     backchannels and failed to apply it to the word beside them.
+APOLOGY = frozenset({"sorry", "apologies", "oops", "my bad"})
+
+
+def feedback_of(segment: str) -> Optional[tuple]:
+    """(dimension, function) when this segment is FEEDBACK, else None.
+
+    ⇒ **THE WHOLE SEGMENT MUST BE PARTICLES.** *"okay"* is feedback; *"okay, stop the vms"* is
+      an opener in front of an instruction, and `_after_openers` already exists to strip it.
+      Position is the whole rule and it costs no judgement.
+
+    ⇒ **AND THE MARK SPLITS THE TWO FEEDBACK DIRECTIONS.** `right` reports that I followed you;
+      `right?` asks whether YOU followed ME — which ISO calls feedback elicitation and files
+      under Allo-Feedback. One character, two dimensions, and the gold carries 20 of them.
+    """
+    from . import speech_act as SA
+
+    text = str(segment).strip().lower()
+    if not text:
+        return None
+    asked = text.endswith("?")
+    # ⇒ ⚠ **A HYPHENATED BACKCHANNEL IS ONE TOKEN TO A PERSON AND TWO TO THE TOKENIZER.**
+    #   `uh-huh` split into `uh` + `huh` and came back a GREETING, because `huh` is in TROUBLE
+    #   and `uh` is in nothing. The de-hyphenated whole form is tested first — `uhhuh`, `mmhm`
+    #   — which is one lookup rather than a second spelling of every entry.
+    bare = re.sub(r"[^a-z]", "", text)
+    if bare in BACKCHANNEL:
+        return (ALLO_FB, "feedbackElicitation") if asked else (AUTO_FB, "autoPositive")
+    words = [w for w in SA.words_of(text) if w]
+    if not words:
+        return None
+    particles = SA.OPENERS | BACKCHANNEL
+    if all(w in particles for w in words):
+        return (ALLO_FB, "feedbackElicitation") if asked else (AUTO_FB, "autoPositive")
+    if all(w in APOLOGY for w in words):
+        return (SOCIAL, "Apology") if not asked else (AUTO_FB, "autoNegative")
+    if all(w in TROUBLE for w in words):
+        return (AUTO_FB, "autoNegative")
+    # ⇒ AND THE OPERATOR SAYING WE READ THEM WRONG — the repair grid's missing cell, and the
+    #   one piece of feedback that has somewhere to GO. A negation over a reference to MEANING.
+    if any(w in SA.NEGATORS for w in words) and (
+            "mean" in text or "meant" in text or "said" in text):
+        return (ALLO_FB, "alloNegative")
+    return None
 
 
 class Annotation(NamedTuple):
@@ -192,6 +264,11 @@ def annotate(request: str, board: Optional[Board] = None, world=None) -> List[An
     #   TURN rather than about the task. ISO files both under Own Communication Management, and
     #   the segment that follows is still whatever it is — an Instruct the operator amended is
     #   an Instruct and an amendment, not one or the other.
+    # ⇒ FEEDBACK IS ASKED BEFORE THE SPEECH ACT, because `speech_act` has no type for it and
+    #   would reach EXPRESSIVE — which is how 574 segments came back GREETING.
+    fb = feedback_of(request)
+    if fb:
+        return [Annotation(request.strip(), fb[0], fb[1], {})]
     mend = SR.read(request)
     # ⇒⇒ ⚠ **AND THE TASK ACT IS READ FROM WHAT WAS ASKED, NOT FROM THE RAW STRING.** With the
     #   repair still in it, *"stop alpha — sorry, i meant beta"* split into three segments and
