@@ -847,9 +847,61 @@ def settle_from_archive(rows: List[S.Declared], board: Optional[Board] = None,
     return out
 
 
+# ⇒⇒ **THE SPEECH ACTS THAT PUT A THING INTO A PROGRAM. EVERY OTHER KIND OF CLAUSE DECLARES
+#   NOTHING, AND THAT IS ONE RULE RATHER THAN A LIST OF EXCEPTIONS.**
+#
+#   The operator, 2026-08-16, on the courtesy measurement: *"filtering for not just junk but
+#   also meta control, rules etc — again the whole 'is this an action? is this a question? is
+#   this a statement?' on each chunk of the sentence."*
+#
+#   ⇒ **THAT IS THE PRODUCER TEST, APPLIED WHERE IT WAS ALREADY BEING APPLIED TO ONE CASE.**
+#     `speech_act.read` answers it per clause and has since it was built; this function asked
+#     about META_CONTROL and ignored the other five answers. So a rule clause, a piece of
+#     teaching and a courtesy were all still declaring things, each for its own reason, and
+#     each would have needed its own patch.
+#
+#   ⇒ **`None` IS NOT IN EITHER SET AND MUST NOT BE.** A clause the reader could not settle is
+#     UNREAD, not unproductive, and the file's own doctrine is that an unread clause leaves the
+#     caller doing whatever it would have done. Dropping on `None` would turn every gap in the
+#     reader into silently discarded evidence.
+BUILDS = frozenset({"directive-act", "directive-inform"})
+
+
 def consume_meta_control(rows: List[S.Declared], request: str,
                          board: Optional[Board] = None, world=None) -> List[S.Declared]:
-    """A clause about the CONVERSATION declares nothing. Its spans are not things.
+    """A clause that cannot BUILD anything declares nothing. Its spans are not things.
+
+    ⇒⇒ **GENERALISED 2026-08-16 FROM META-CONTROL TO EVERY UNPRODUCTIVE ACT**, on the
+      operator's instruction and after the courtesy measurement. What each act does with its
+      spans, and where they are read instead:
+
+          directive-act      *stop the vms*             BUILDS — the spans are things
+          directive-inform   *how many vms are there*   BUILDS — the spans are things
+          assertive          *a jumpbox is a vm*        the ARCHIVE reads the clause itself
+          declaration        *never delete a vm*        `governing.rules_from` reads the clause
+          meta-control       *don't start any changes*  nothing to read
+          expressive         *if you don't mind*        nothing to read, BY CONSTRUCTION —
+                                                        `act_of` reaches this branch only when
+                                                        the clause names nothing at all
+          commissive         *i'll add it tomorrow*     parked; nothing emits it yet
+
+    ⇒ **AND NEITHER THE ARCHIVE NOR THE RULE STORE LOSES ANYTHING**, which is what makes the
+      wider set safe: `taught_by` and `rules_from` both read `speech_act.read(request)` and
+      never these rows, so a statement still teaches and a rule still proposes after its spans
+      are dropped from the PROGRAM.
+
+    ⇒⇒ **MEASURED, AND THIS IS THE DEFECT IT WAS WIDENED FOR.** N2's courtesy probe, two
+      seeds: 12 SERVE / 2 ASK became 0 SERVE, with `mind` declared on 13 runs and `chance` on
+      6 — both from *"if you don't mind"* and *"when you get a chance"*, both EXPRESSIVE, and
+      neither reachable by a rule keyed on META_CONTROL. Rung 6 planned `create_vm('mind')`
+      four times; rung 14 planned `delete_vm('mind')`.
+
+    ⇒ ⚠ **WHAT IT STILL DOES NOT REACH, AND THE PROBE SAYS SO:** a trailing `please`/`thanks`
+      sits INSIDE the directive clause, and *"i'd like you to …"* is one clause read as
+      DIRECTIVE_ACT — a keyed control, correctly. Both are junk inside a productive chunk, and
+      no clause-grain rule can see them.
+
+    THE ORIGINAL CASE, KEPT BECAUSE IT IS THE ARGUMENT:
 
     ⇒⇒ **`consume_self_address` NAMED THIS CASE AS THE ONE IT COULD NOT CLOSE:** *"What is left
       — 'don't start any changes', 'how do i stop' — names nothing in any world and needs THE
@@ -880,7 +932,7 @@ def consume_meta_control(rows: List[S.Declared], request: str,
     """
     from . import speech_act
     held = [c.strip().lower() for c, act in speech_act.read(request, board, world)
-            if act == speech_act.META_CONTROL]
+            if act is not None and act not in BUILDS]
     if not held:
         return rows
     out = []

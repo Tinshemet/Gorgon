@@ -714,9 +714,18 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #
     #   ⇒ IT IS THE SAME EXEMPTION THE OPERATION ARGUMENTS GET, one reading further out: the
     #     word IS read, and what read it is the speech act rather than a row.
+    #
+    #   ⇒⇒ ⚠ **AND IT WAS THE SAME RULE WRITTEN TWICE AND WIDENED ONCE, WHICH IS THE DEFECT
+    #     SHAPE THIS PROJECT HAS FILED MOST.** `consume_meta_control` and this exemption are
+    #     one rule on two paths — *a clause that builds nothing declares nothing, and its words
+    #     are still read* — and generalising only the first turned N2's ASK into a BOUNCE:
+    #     `mind` stopped being declared and immediately became a word nobody accounted for.
+    #     **Measured on rung 1 between the two edits.** So both read `pass1.BUILDS`, and there
+    #     is one table rather than two conditions that have to be remembered together.
     from . import speech_act as _speech
+    from .pass1 import BUILDS as _BUILDS
     for clause, act in _speech.read(request, board, world):
-        if act == _speech.META_CONTROL:
+        if act is not None and act not in _BUILDS:
             spent |= {w.strip(" '\".,") for w in str(clause).lower().split() if w.strip(" '\".,")}
     # ⇒⇒ AND A WORD CARRIED BY A ROW THE PROGRAM OPERATES ON HAS ALSO BEEN USED.
     #
