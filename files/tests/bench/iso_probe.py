@@ -37,6 +37,39 @@ corpus one of us wrote, which is the standing ceiling on every figure here.
   all, because being polite does not change what you asked for — and an annotator that says
   otherwise is reading stance as illocution, which is the mistake the whole taxonomy exists to
   stop.
+# ⇒⇒⇒ THE SEALED PREDICTION — WRITTEN 2026-08-16, BEFORE ANY DIALOGBANK DATA WAS IN HAND
+#
+# Rule V5: a measurement gets its expected answer written down BEFORE it runs. It matters more
+# here than anywhere else in this project, because this is the FIRST measurement not made
+# against a corpus one of us wrote — and therefore the one most tempting to rationalise
+# afterwards. The operator, the same day: *"i do want you to not rig the test"* · *"if it fails
+# it fails."*
+#
+# ⇒ **THE HEADLINE: I EXPECT THIS TO GO BADLY, AND FOR A REASON THAT IS NOT A DEFECT.** Every
+#   rule in `speech_act` was built against lab-administration English — fourteen rungs about
+#   virtual machines. DialogBank is human-human conversation about maps, trains and telephone
+#   small talk. **A reader that transfers well would be the surprise.**
+#
+#   DIMENSION   40-60%.  `Task` is the plurality of segments in any task-oriented dialogue and
+#               we emit it by default, so this number is inflated by a coin landing our way.
+#   FUNCTION    25-40%.  Lower, and the honest one: we emit SIX functions and ISO has ~30.
+#
+# ⇒⇒ **AND THE BIGGEST SINGLE MISS WILL BE FEEDBACK, WHICH IS A WRONG ANSWER RATHER THAN A
+#   GAP.** Real dialogue is full of *"okay"*, *"mm-hm"*, *"right"*, *"yeah"* — Auto- and
+#   Allo-Positive, and by some counts a fifth of all segments. We emit NEITHER, and worse, the
+#   producer test will reach EXPRESSIVE for them and we will confidently answer **Social
+#   Obligations Management / Greeting**. A systematic wrong label, not a decline.
+#
+# ⇒ THREE MORE, NAMED SO THEY CANNOT BE CLAIMED AS INSIGHTS AFTERWARDS:
+#     1  TURN MANAGEMENT will be ~0. There is no floor to contest in a CLI and we never built it
+#     2  Our `Set Question` will over-fire, because every wh-question we can read is one and ISO
+#        splits Set / Check / Choice
+#     3  The QUALIFIERS will be near-empty — three of four are read and `sentiment` is declined,
+#        and conversational data carries far more sentiment than a lab request does
+#
+# ⚠ **AND WHAT WOULD MAKE THIS MEASUREMENT WORTHLESS IS FIXING ANY OF THE ABOVE FIRST.** Nothing
+#   named in this prediction may be repaired before the run. A rule may change for a reason
+#   found elsewhere; it may not change because it is listed here.
 """
 from typing import Dict, List, NamedTuple, Optional, Tuple
 
