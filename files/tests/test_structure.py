@@ -201,6 +201,35 @@ def test_a_quoted_clause_is_evidence_not_a_value():
               quoted_clauses(value) == ())
 
 
+def test_a_magnitude_comparison_is_read_and_named():
+    """⇒⇒ **`over 6gb` WAS LOST AND `ram` BECAME A MACHINE.** The full seam declared
+    `('ram', 'vm', {'name': 'ram'})` and asked whether to create it — because `ram` is a
+    declared ALIAS for `memory_mb` and pass 1 read it as a member name.
+
+    ⇒ `where` holds ONE VALUE per attribute and cannot hold a comparison. That is a
+      REPRESENTATION limit, not a reading one — so the comparison is read and named, the same
+      move the choice and the quotation make.
+    ⇒ The comparator class is new and closed; the ATTRIBUTE is the manifest's own, through
+      `aliases`. A comparison whose attribute is undeclared is not raised at all.
+    """
+    from orchestrator.seam.scan import magnitudes_in
+    board = Board()
+    check("`over 6gb of ram` resolves to memory_mb",
+          magnitudes_in("stop every vm with over 6gb of ram", board)
+          == (("gt", 6, "gb", "memory_mb"),))
+    check("`more than 4 cores` resolves to cpu_cores",
+          magnitudes_in("stop vms with more than 4 cores", board)
+          == (("gt", 4, "cores", "cpu_cores"),))
+    # ⇒ THE CONTROLS. A COUNT comparator is not a magnitude — `exactly 3 vms` belongs to
+    #   `COMPARATORS` and rung 7 rests on it — and an undeclared attribute is not guessed at.
+    check("a count comparator is not a magnitude",
+          magnitudes_in("make sure exactly 3 vms carry the 'prod' label", board) == ())
+    check("an undeclared attribute is not raised",
+          magnitudes_in("stop every vm with over 6 widgets", board) == ())
+    check("no comparison, nothing raised",
+          magnitudes_in("stop every vm that is running", board) == ())
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "structure")

@@ -85,9 +85,14 @@ MAP: List[Feature] = [
     Feature(PHRASE, "reciprocal", "make sure they all ping each other",
             "pass1.consume_reciprocal", "a PREDICATE, not an object — rung 13"),
     Feature(PHRASE, "magnitude comparative", "stop every vm with over 6gb of ram",
-            "",
-            "⚠ MEASURED: `over`, `6gb` and `ram` all come back unread. `scan.COMPARATORS` "
+            "scan.MAGNITUDE + magnitudes_in -> linguistics/unexpressed-magnitude",
+            partial=True,
+            note="⚠ MEASURED: `over`, `6gb` and `ram` all come back unread. `scan.COMPARATORS` "
             "declares the COUNT comparators and nothing declares the magnitude ones. "
+            "⇒ **READ 2026-08-16** as (gt, 6, gb, memory_mb) — the comparator class is new and "
+            "closed, the attribute is the manifest's own through `aliases`. ⚠ PARTIAL: `where` "
+            "holds one VALUE per attribute and cannot hold a comparison, so it is NAMED rather "
+            "than applied. A representation limit, not a reading one. "
             "⇒ **DOWNGRADED FROM DANGEROUS 2026-08-16 BY RUNNING THE FULL SEAM**: it BOUNCES. "
             "`over` and `6gb` reach the span-grain residue check and are asked about, so the "
             "cost is service and not safety. My first grading said *stops the wrong machines* "
@@ -165,10 +170,13 @@ MAP: List[Feature] = [
             "teaching. A concession names an EXCEPTION the operator has already thought about",
             danger=True),
     Feature(CLAUSE, "alternative", "stop alpha or beta",
-            "",
-            "⚠ `or` unread and the clause does not split. **A disjunction is a CHOICE and the "
-            "operator has to make it** — reading it as a conjunction acts on both",
-            danger=True),
+            "linguistics/unexpressed-choice", partial=True,
+            note="⇒ **READ 2026-08-16.** It produced `[stop_vm(beta), stop_vm(beta)]` — alpha "
+            "dropped, beta doubled — and REFUSED only because the lab held neither machine. "
+            "**Graded on the operations, not the verdict.** ⚠ PARTIAL: the choice is RAISED "
+            "and not made, because only the operator can make it. And the clause must NOT be "
+            "split — splitting a disjunction produces two orders, which is the acting-on-both "
+            "this exists to stop"),
     Feature(CLAUSE, "comparison across clauses", "stop more vms than you did last time",
             "",
             "needs the previous turn AND an ordering. Blocked twice over"),

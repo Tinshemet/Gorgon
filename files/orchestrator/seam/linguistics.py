@@ -82,7 +82,7 @@ class Finding(NamedTuple):
 #   gate 1 where the leftover rule already lives.
 OWNS = frozenset({"mood-achieve", "unexpressed-exclusion", "count-ignored",
                   "unasked-step", "light-verb-object", "unexpressed-choice",
-                  "quoted-evidence"})
+                  "quoted-evidence", "unexpressed-magnitude"})
 
 
 def mood_of(request: str) -> str:
@@ -396,6 +396,28 @@ def findings(request: str, rows: List[S.Declared], operations: List[Operation], 
         out.append(Finding("mood-achieve", request[:40],
                            "this asks for a state to HOLD, and the plan only performs "
                            "actions — nothing here checks it afterwards or corrects it",
+                           "operator"))
+
+    # ⇒⇒ 1c · A NUMERIC COMPARISON THE CONDITION CANNOT HOLD.
+    #
+    #   *"stop every vm with over 6gb of ram"* loses `over` and `6gb` into the span-grain
+    #   residue check and declares A MACHINE CALLED `ram` — because `ram` is a declared ALIAS
+    #   for `memory_mb` and pass 1 read it as a member name. It BOUNCES rather than serving,
+    #   so the cost is service; the reading is still wrong.
+    #
+    #   ⇒ **`where` HOLDS ONE VALUE PER ATTRIBUTE AND CANNOT HOLD A COMPARISON**, which is a
+    #     representation limit rather than a reading one. So this READS the comparison and says
+    #     so, exactly as the choice and the quotation do — three findings, one shape: *the
+    #     sentence says something the program does not express*.
+    #   ⇒ THE COMPARATOR CLASS IS NEW AND THE ATTRIBUTE IS NOT: `scan.MAGNITUDE` is a closed
+    #     class of English comparatives, and `ram`/`cores` resolve through the manifest's own
+    #     `aliases`. A comparison whose attribute is undeclared is not raised at all.
+    from .scan import magnitudes_in as _magnitudes
+    for how, amount, unit, attr in _magnitudes(request, board):
+        out.append(Finding("unexpressed-magnitude", f"{attr} {how} {amount}{unit}",
+                           f"the request compares {attr} against {amount}{unit} — a condition "
+                           f"here holds one VALUE, not a comparison, so that filter is not "
+                           f"expressed",
                            "operator"))
 
     # ⇒⇒ 1a · A QUOTED CLAUSE IS EVIDENCE, AND NOTHING HAS EVER READ ONE.

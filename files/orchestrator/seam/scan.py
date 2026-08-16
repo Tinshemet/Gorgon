@@ -470,6 +470,65 @@ def quoted_clauses(request: str) -> tuple:
     return tuple(out)
 
 
+# ⇒⇒ THE MAGNITUDE COMPARATORS — a closed class of English, and NOT the ones above.
+#   `COMPARATORS` declares the COUNT comparators (`at most`, `exactly`) and they answer *how
+#   many things*. These answer *how big a value*, which is a different question over a
+#   different slot, and nothing has ever declared them.
+#   ⇒ Longest first, so `more than` wins over `more`.
+MAGNITUDE: Dict[str, str] = {
+    "no more than": "le", "no less than": "ge", "greater than": "gt", "more than": "gt",
+    "less than": "lt", "fewer than": "lt", "at or above": "ge", "at or below": "le",
+    "over": "gt", "above": "gt", "under": "lt", "below": "lt", "beyond": "gt",
+}
+
+# ⇒ A QUANTITY WITH A UNIT GLUED TO IT — `6gb`, `500mb`, `2x`. One token to a person and two to
+#   a naive tokenizer, which is how `9pm` came to be read as the number 9 at the door.
+_QUANTITY = re.compile(r"\b(\d+)\s*([a-z]+)?\b")
+
+
+def magnitudes_in(request: str, board: Optional[Board] = None) -> tuple:
+    """Numeric comparisons the request makes — (comparator, amount, unit, attribute).
+
+    ⇒⇒ **`where` HOLDS ONE VALUE PER ATTRIBUTE AND CANNOT HOLD A COMPARISON**, so this READS
+      the comparison and does not try to store it. That is the whole point: *"stop every vm
+      with over 6gb of ram"* currently loses `over` and `6gb` into the residue check and
+      declares A MACHINE CALLED `ram`, because `ram` is a declared ALIAS and pass 1 read it as
+      a member name. Naming the comparison is what lets somebody say so.
+
+    ⇒ **THE ATTRIBUTE IS THE MANIFEST'S**, found through `attrs` and `aliases` — `ram` and
+      `memory` both resolve to `memory_mb`, `cores` to `cpu_cores`. Nothing is guessed: a
+      comparison whose attribute is not declared is not returned at all.
+    """
+    from planner.ir import config as _config
+    board = board or Board()
+    low = str(request).lower()
+    attrs: Dict[str, str] = {}
+    for kind in board.kinds:
+        spec = _config.KINDS.get(kind) or {}
+        for a in (spec.get("attrs") or ()):
+            attrs[str(a).lower()] = str(a)
+        for alias, real in (spec.get("aliases") or {}).items():
+            attrs[str(alias).lower()] = str(real)
+
+    out = []
+    for phrase, how in sorted(MAGNITUDE.items(), key=lambda kv: -len(kv[0])):
+        at = low.find(f" {phrase} ")
+        if at < 0 and not low.startswith(f"{phrase} "):
+            continue
+        tail = low[max(at, 0) + len(phrase) + 1:]
+        m = _QUANTITY.search(tail)
+        if not m:
+            continue
+        # ⇒ THE ATTRIBUTE IS THE FIRST DECLARED ONE AFTER THE AMOUNT — *"over 6gb of RAM"* —
+        #   and the UNIT itself counts when it names one, as `cores` does.
+        after = [w.strip(".,'\"") for w in tail[m.end():].split()]
+        unit = m.group(2) or ""
+        attr = next((attrs[w] for w in ([unit] + after) if w in attrs), None)
+        if attr:
+            out.append((how, int(m.group(1)), unit, attr))
+    return tuple(out)
+
+
 NEGATORS = frozenset({"not", "n't", "never", "no"})
 
 
