@@ -220,6 +220,17 @@ def _operation_words(board: Board) -> set:
 INDEFINITE = {"a", "an", "another", "some"}
 DEFINITE = {"the", "this", "that", "these", "those", "its", "their", "his", "her", "our", "your"}
 UNIVERSAL = {"every", "all", "each", "any", "both"}
+
+# ⇒⇒ **AND THE QUANTIFIER BETWEEN ONE AND ALL, WHICH NOTHING HAS EVER READ.** ISO 24617-2
+#   carries PARTIALITY as one of its four qualifiers on a dialogue act, and we had UNIVERSAL
+#   and the cardinals with a hole between them: *"stop MOST of the vms"* read as *stop the
+#   vms*, which is every machine instead of a majority nobody has identified.
+#   ⇒ **IT SITS HERE BECAUSE `scan` OWNS DETERMINERS**, beside the class it is the complement
+#     of — a second quantifier table somewhere else is how the two would drift.
+#   ⇒ ⚠ AND IT NAMES AN AMOUNT NOBODY CAN COMPUTE. Unlike `every` or `3`, a partial quantifier
+#     does not say WHICH members, so the honest reading is a QUALIFIER on the act and a
+#     question to the operator — never a set the writer picks.
+PARTIAL = {"most", "some", "several", "few", "half", "many", "part", "majority", "couple"}
 # CONTRASTIVE determiners — they introduce a referent the sentence has not mentioned.
 #
 # ⇒⇒ **TRIMMED FROM EIGHT WORDS TO TWO, 2026-08-11, AND THE SIX WERE MY OWN SSOT VIOLATION.**

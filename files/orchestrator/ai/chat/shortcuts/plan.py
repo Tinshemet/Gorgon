@@ -333,10 +333,40 @@ class Plan(Shortcut):
             console.print(f"      [dim]{str(act or 'unread'):14}[/dim] {clause.strip()}")
         console.print("[dim]    nothing was run — `--door` reads and shows[/dim]")
 
+    def _read_with_iso(self, request: str) -> None:
+        """Annotate one request in ISO 24617-2's vocabulary and print it.
+
+        ⇒⇒ **THE POINT IS NOT THE PRINTOUT, IT IS THAT AN ISO-SHAPED OUTPUT EXISTS AT ALL.**
+          Every number in this project is measured against a corpus one of us wrote. A
+          published, ISO-annotated dialogue corpus is the first measurement that is not ours —
+          and comparing to it needs our reading said in their terms.
+
+        ⇒ **IT COSTS NO MODEL CALL**, like `--door`: `speech_act`, `temporal` and `scan` are
+          all lookups. And it READS AND SHOWS — nothing routes on an annotation, and nothing
+          will until the open list is done, which is the operator's standing gate.
+        """
+        from orchestrator.seam.iso import QUALIFIERS, annotate
+
+        world = self._seam_world()
+        console.print(f"\n[bold]ISO 24617-2[/bold]"
+                      f"{'' if world else '  ·  [warn]no lab[/warn]'}")
+        for a in annotate(request, world=world):
+            console.print(f"    [bold]{a.dimension} / {a.function or '—'}[/bold]")
+            console.print(f"      [dim]segment[/dim]    {a.segment}")
+            for q in QUALIFIERS:
+                got = a.qualifiers.get(q)
+                if got:
+                    console.print(f"      [dim]{q:14}[/dim] {got}")
+        # ⇒ SAID EVERY TIME: `sentiment` is the one qualifier that needs a teacher rather than
+        #   a class, so its absence is a design decision and not an oversight.
+        console.print("[dim]    sentiment is not read — it is the one qualifier that needs "
+                      "vocabulary, so it waits for the archive[/dim]")
+        console.print("[dim]    nothing was run — `--iso` reads and shows[/dim]")
+
     def run(self, ui: str, messages: List[dict], runtime_drift_count: int,
             verbose: bool) -> None:
         request = ui.strip()[len(_PREFIX):].strip()
-        dry = seam = door = False
+        dry = seam = door = iso = False
         for flag in ("--dry", "-n"):
             if request.lower().startswith(flag + " "):
                 dry, request = True, request[len(flag):].strip()
@@ -346,6 +376,18 @@ class Plan(Shortcut):
         for flag in ("--door",):
             if request.lower().startswith(flag + " "):
                 door, request = True, request[len(flag):].strip()
+        for flag in ("--iso",):
+            if request.lower().startswith(flag + " "):
+                iso, request = True, request[len(flag):].strip()
+
+        # ⇒⇒ **THE ISO ANNOTATION, OPT-IN, AND IT RETURNS BEFORE ANYTHING ELSE.** Scaffolding
+        #   by design: the operator, 2026-08-16 — *"we only wire it once the open list is
+        #   done"*, and *"we will wire this without the REPL and just pure prompt"*. So this
+        #   flag is a window to type at while the destination is the default prompt path with
+        #   no command in front of it at all.
+        if iso:
+            self._read_with_iso(request)
+            return
 
         # ⇒⇒ **THE REGIME LADDER, OPT-IN, AND IT RETURNS BEFORE ANYTHING ELSE HAPPENS.** N1
         #   decides WHICH REGIME a request wants, and until the open list is finished nothing

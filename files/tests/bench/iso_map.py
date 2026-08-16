@@ -46,22 +46,14 @@ functions are partly sourced and partly reconstructed, and every reconstructed o
 """
 from typing import Dict, List, NamedTuple, Optional
 
-# ── the nine dimensions ──────────────────────────────────────────────────────────────
-TASK = "Task"
-AUTO_FB = "Auto-Feedback"
-ALLO_FB = "Allo-Feedback"
-TURN = "Turn Management"
-TIME = "Time Management"
-DISCOURSE = "Discourse Structuring"
-OWN_COMM = "Own Communication Management"
-PARTNER_COMM = "Partner Communication Management"
-SOCIAL = "Social Obligations Management"
-
-DIMENSIONS = (TASK, AUTO_FB, ALLO_FB, TURN, TIME, DISCOURSE, OWN_COMM, PARTNER_COMM, SOCIAL)
-
-# ⇒ THE FOUR QUALIFIERS. Orthogonal to every function above — a modifier on an act, not a kind
-#   of act. **WE HAVE NONE OF THEM**, and that is Phase 2.
-QUALIFIERS = ("certainty", "conditionality", "partiality", "sentiment")
+# ⇒⇒ **THE VOCABULARY IS PRODUCTION'S, READ AND NEVER RESTATED.** It began here and moved to
+#   `orchestrator/seam/iso.py` the moment an EMITTER existed: two copies of a standard's names
+#   is exactly the drift this file was written to prevent, and a bench that declares the same
+#   strings as the thing it describes has stopped describing it.
+from orchestrator.seam.iso import (  # noqa: E402
+    ALLO_FB, AUTO_FB, DIMENSIONS, DISCOURSE, OWN_COMM, PARTNER_COMM, PLACED, QUALIFIERS,
+    SOCIAL, TASK, TIME, TURN,
+)
 
 
 class Cell(NamedTuple):
@@ -179,22 +171,13 @@ MAP: List[Cell] = [
 # ⇒⇒ **OUR TYPES, AND WHERE EACH ONE LANDS.** The direction that matters for `--check`: a type
 #   of ours with nowhere to go means the map is incomplete, and adding one forces the question
 #   *what is this, in a vocabulary somebody else validated?*
-OURS: Dict[str, str] = {
-    "directive-act": "Task / Instruct + Request",
-    "directive-inform": "Task / Set Question + Check Question",
-    "assertive": "Task / Inform",
-    "answer": "Task / Answer",
-    "meta-control": "Time Management / Pausing",
-    "expressive": "Social Obligations Management / Greeting",
-    "commissive": "Task / Promise",
-    # ⇒ ⚠ **THE ONE THAT DOES NOT FIT, AND SAYING SO IS THE POINT OF MAPPING.** A standing rule
-    #   — *"never delete a vm without asking me"* — is a DECLARATION in Searle's sense: it
-    #   changes what is permitted by being said. ISO's Task dimension has no such function,
-    #   because ISO annotates dialogue about a task rather than dialogue that LEGISLATES over
-    #   one. Filed as Task/Inform with a qualifier, and it is a genuine mismatch rather than a
-    #   gap in either scheme.
-    "declaration": "Task / Inform  ⚠ NO ISO FUNCTION — see the note",
-}
+OURS: Dict[str, str] = {t: f"{d} / {f}" for t, (d, f) in PLACED.items()}
+# ⇒ ⚠ **AND THE ONE THAT DOES NOT FIT IS ANNOTATED HERE RATHER THAN IN THE TABLE.** A standing
+#   rule — *"never delete a vm without asking me"* — is a DECLARATION in Searle's sense: it
+#   changes what is PERMITTED by being said. ISO's Task dimension has no such function, because
+#   ISO annotates dialogue ABOUT a task rather than dialogue that LEGISLATES over one. `PLACED`
+#   files it under Inform; this is the note saying that is a compromise and not a fit.
+MISMATCH = {"declaration": "no ISO function legislates — filed under Task/Inform"}
 
 
 def holes() -> List[Cell]:
@@ -223,10 +206,22 @@ def check() -> List[str]:
     for t in OURS:
         if t not in ours:
             faults.append(f"{t!r} is mapped and is not one of our types any more")
-    # ⇒ AND THE QUALIFIER AXIS IS ASSERTED EMPTY, so the day one is built this file fails and
-    #   somebody has to come and say where it went.
-    if any(q in str(OURS) for q in QUALIFIERS):
-        faults.append("a qualifier appears in the mapping — Phase 2 landed and this is stale")
+    # ⇒⇒ ⚠ **AND THE QUALIFIER CHECK HAD TO BE REWRITTEN THE DAY IT WAS MEANT TO FIRE.** The
+    #   first version asserted the axis was EMPTY by looking for a qualifier name inside
+    #   `OURS`, so that the day one was built this file would fail and somebody would come and
+    #   say where it went. **It did not fire** — `OURS` was refactored to derive from `PLACED`
+    #   the same hour, and the string it was watching stopped existing. A check that watches a
+    #   REPRESENTATION rather than a FACT stops watching when the representation moves.
+    #   ⇒ It now asks the emitter, which is the fact: three qualifiers are read and `sentiment`
+    #     is declined, and if that ever changes silently this fails.
+    from orchestrator.seam import iso as _iso
+    reads = {q for q in QUALIFIERS
+             if any(q in _iso.qualifiers_of(s) for s in
+                    ("maybe stop them", "if alpha is stopped", "stop most of the vms"))}
+    if reads != {"certainty", "conditionality", "partiality"}:
+        faults.append(f"the qualifiers the emitter reads have changed — {sorted(reads)}")
+    if "sentiment" in reads:
+        faults.append("`sentiment` is being read — it was declined until somebody TEACHES it")
     return faults
 
 
@@ -259,8 +254,15 @@ if __name__ == "__main__":                                       # pragma: no co
     print(f"\n{'─' * 96}\n  OUR TYPES, PLACED")
     for t, where in sorted(OURS.items()):
         print(f"    {t:18} -> {where}")
-    print(f"\n  THE QUALIFIER AXIS — orthogonal to every function above, and WE HAVE NONE:")
+    from orchestrator.seam import iso as _iso
+    print(f"\n  THE QUALIFIER AXIS — orthogonal to every function above:")
+    probes = {"certainty": "maybe stop them", "conditionality": "if alpha is stopped",
+              "partiality": "stop most of the vms", "sentiment": "ugh, stop them"}
+    read = 0
     for q in QUALIFIERS:
-        print(f"    {q}")
+        got = _iso.qualifiers_of(probes[q]).get(q)
+        read += 1 if got else 0
+        print(f"    {q:16} {got or '*** NOT READ ***'}"
+              + ("   ⚠ the one that needs a TEACHER, not a class" if q == "sentiment" else ""))
     print(f"\n  {len(MAP) - len(holes())} of {len(MAP)} ISO functions filled · "
-          f"0 of {len(QUALIFIERS)} qualifiers")
+          f"{read} of {len(QUALIFIERS)} qualifiers read")

@@ -300,6 +300,43 @@ def test_the_archive_can_teach_an_attribute():
     check("an unratified entry resolves nothing", c.attribute_of("vram") is None)
 
 
+def test_the_iso_annotation():
+    """⇒⇒ **THE READING, SAID IN SOMEBODY ELSE'S VOCABULARY** — and the reason it matters is
+    not the printout. Every number in this project is measured against a corpus one of us
+    wrote; a published ISO-annotated corpus is the first that is not, and comparing to it
+    needs our reading in their terms.
+
+    ⇒ **A CONDITION IS NOT A SECOND ACT.** ISO carries conditionality as a QUALIFIER, so
+      *"if alpha is stopped, launch it"* is ONE Instruct held conditionally. The first cut
+      emitted TWO, because `speech_act` reads the condition clause as directive-act.
+    """
+    from orchestrator.seam import iso
+    got = iso.annotate("if alpha is stopped, launch it")
+    check(f"a conditional is ONE act — {[str(a) for a in got]}", len(got) == 1)
+    check("held conditionally", got[0].qualifiers.get("conditionality") == "conditional")
+    check("and it is the INSTRUCT that survives", got[0].segment == "launch it")
+
+    got = iso.annotate("maybe stop most of the vms")[0]
+    check("hedged", got.qualifiers.get("certainty") == "uncertain")
+    check("partial", got.qualifiers.get("partiality") == "partial")
+    check("definitely -> certain",
+          iso.annotate("definitely stop them")[0].qualifiers.get("certainty") == "certain")
+
+    # ⇒ THE CONTROLS. `how many` is a COUNT question and not a partial quantifier — one word
+    #   apart from `many vms`, which is — and an ordinary order carries no qualifier at all.
+    check("`how many` is not partiality",
+          "partiality" not in iso.annotate("how many vms are running")[0].qualifiers)
+    check("`many vms` IS partiality",
+          iso.annotate("many vms are stopped")[0].qualifiers.get("partiality") == "partial")
+    check("a plain order carries no qualifier", not iso.annotate("stop alpha")[0].qualifiers)
+    # ⇒ AND SENTIMENT IS DECLINED — the one qualifier that needs a teacher rather than a class.
+    check("sentiment is not read",
+          "sentiment" not in iso.annotate("ugh, stop the vms")[0].qualifiers)
+    # ⇒ EVERY TYPE OF OURS LANDS SOMEWHERE, and the emitter owns that table.
+    check("the dimension is one of the nine",
+          all(a.dimension in iso.DIMENSIONS for a in iso.annotate("good morning doorman")))
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "structure")

@@ -433,6 +433,13 @@ def test_where_it_is_wired():
         shortcuts/plan.py     `plan --seam <request>` — the opt-in door
         archive.taught_by     an ASSERTIVE offers a knowledge entry
         governing.rules_from  a DECLARATION proposes a rule
+        ⇒ ⚠ AND `temporal.py` IS DELIBERATELY NOT ON THIS LIST. It needs `AUXILIARIES` to tell
+          an interrogative `when` from an adjunct one, and takes `speech_act` as a PARAMETER
+          rather than importing it. I added it to this pin anyway and the pin said eight — a
+          design I had made myself, forgotten within the hour, and caught by the count.
+        iso.facts             the ISO 24617-2 emitter. **A PROJECTION, NOT A SECOND OPINION** —
+                              it says the reading in a published vocabulary so the seam can be
+                              measured against a corpus neither of us wrote
         door.facts            N1 — the reading is a fact the regime ladder reads. **AND THIS
                               PIN IS WHY THE ADDITION IS RECORDED**: `door.py` is the first
                               caller that is not part of the seam, and it reads the speech act
@@ -456,9 +463,9 @@ def test_where_it_is_wired():
          os.path.join(root, "engines")],
         capture_output=True, text=True).stdout
     callers = {os.path.basename(p) for p in out.split() if not p.endswith("speech_act.py")}
-    check(f"the reader's importers are exactly the seven named here — {sorted(callers)}",
+    check(f"the reader's importers are exactly the eight named here — {sorted(callers)}",
           callers == {"gate4.py", "pass1.py", "pipeline.py", "plan.py", "archive.py",
-                      "governing.py", "door.py"})
+                      "governing.py", "door.py", "iso.py"})
 
 
 def main(argv=None) -> int:
