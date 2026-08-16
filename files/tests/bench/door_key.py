@@ -149,14 +149,35 @@ GOVERNANCE = "governance"
 CHAT = "chat"
 TOOL = "tool"
 PROCEDURE = "procedure"
+ROUTINE = "routine"
+TRIGGER = "trigger"
 PROGRAM = "program"
 ASK = "ask"
 
-DESTINATIONS = (SELF, GOVERNANCE, CHAT, TOOL, PROCEDURE, PROGRAM, ASK)
+DESTINATIONS = (SELF, GOVERNANCE, CHAT, TOOL, PROCEDURE, ROUTINE, TRIGGER, PROGRAM, ASK)
+
+# ⇒⇒ **PROCEDURE · ROUTINE · TRIGGER ARE ONE OBJECT AND THREE DESTINATIONS**, added on the
+#   operator's instruction, 2026-08-16: *"we do need to add routing for: procedure, trigger or
+#   routine. procedure is the basic, routine requires a temporal reference (date, time, hour,
+#   etc), and trigger needs a meta-declaration, IE a rule."*
+#
+#   `routines.py` says the same thing from the store's side, and its wording is the design:
+#   *"A PROCEDURE IS A TOOL YOU WROTE. A ROUTINE is one the CLOCK calls; a TRIGGER is one the
+#   WORLD calls. Same object, one extra field — `every: "1h"` or `when: <predicate>` — because
+#   making them separate kinds would mean three stores, three validators and three places to
+#   look, for a difference that is entirely about WHO DECIDES TO START IT."*
+#
+#   ⇒ **SO THE DOOR'S QUESTION IS NOT *WHAT IS IT* BUT *WHO STARTS IT*, and the answers are
+#     closed:** the operator now (PROCEDURE), the clock (ROUTINE), the world (TRIGGER).
+#   ⇒ THE OPERATOR'S OWN EXAMPLE OF A TRIGGER: *"from now on after you are done with a vm,
+#     delete it — thats a trigger, the rule is 'delete vm' triggered by 'stop vm/being done
+#     with it'."* A rule PLUS an event that starts it. A rule with no event is GOVERNANCE.
 
 # ⇒ THE LAB LADDER, IN ORDER, so a miss can be given a DIRECTION rather than a tick. The three
 #   off-ladder destinations are deliberately absent: there is no "one rung up" from SELF.
-LADDER: Tuple[str, ...] = (TOOL, PROCEDURE, PROGRAM, ASK)
+#   ⇒ ROUTINE and TRIGGER sit BESIDE PROCEDURE because they are the same stored artifact — the
+#     rung is *does a written program already cover this*, and who starts it is the field.
+LADDER: Tuple[str, ...] = (TOOL, PROCEDURE, ROUTINE, TRIGGER, PROGRAM, ASK)
 
 # ⇒ THE CELLS THAT ARE NOT MERELY WRONG. Named here so the probe cannot report them as one
 #   accuracy figure, and each one has its reason in the header above.
@@ -165,6 +186,17 @@ CRITICAL_MISSES = (
     (PROGRAM, TOOL),        # a set request served by one call — partial execution
     (TOOL, PROGRAM),        # the unfiltered-count destruction, measured 2026-08-02
     (GOVERNANCE, "*lab*"),  # a rule enacted instead of proposed
+    # ⇒⇒ **AND SCHEDULED WORK CARRIED OUT NOW, which is the shape [[gorgon-linguistic-sweep]]
+    #   already calls the dangerous one:** *"stop every vm at 9pm runs NOW."* Measured on
+    #   2026-08-16 before these destinations existed — `stop alpha tomorrow` reached TOOL and
+    #   `take a snapshot of every vm every hour` reached PROGRAM, both immediately. A request
+    #   whose whole point is WHEN, executed at the wrong when, is a false serve that reads as
+    #   a success.
+    (ROUTINE, TOOL), (ROUTINE, PROGRAM),
+    # ⇒ AND A TRIGGER RUN ONCE IS WORSE THAN A RULE ENACTED ONCE: the operator asked for
+    #   standing behaviour and got a single act, so the thing they asked for silently does not
+    #   exist while looking like it was done.
+    (TRIGGER, TOOL), (TRIGGER, PROGRAM),
 )
 
 
@@ -378,6 +410,64 @@ CONTROLS: List[Keyed] = [
           "RUNG 12, AND THE CONTROL FOR THE RUNG ABOVE: no stored procedure covers it, so rung "
           "2 must not swallow it. A procedure store that matches loosely is a false avoid "
           "wearing a verified artifact's clothes"),
+
+    # ⇒⇒ WHO STARTS IT — the clock. **A TEMPORAL REFERENCE IS THE WHOLE SIGNAL**, on the
+    #   operator's instruction: *"routine requires a temporal reference (date, time, hour,
+    #   etc)."* Written before any temporal reader existed.
+    Keyed("take a snapshot of every vm every night", ROUTINE,
+          "A RECURRENCE, and the shape the store already holds — `every: 1d`. Note the sentence "
+          "carries `every` TWICE and only one of them quantifies over machines"),
+    Keyed("back up the vms daily", ROUTINE,
+          "an adverb of frequency doing the same job as `every day`, and the only word in the "
+          "sentence that says the request is not about now"),
+    Keyed("restart alpha every 2 hours", ROUTINE,
+          "`every <n> <unit>` is `_SPAN`'s own form spelled in English — the one case where the "
+          "store's vocabulary and the operator's are the same thing"),
+    Keyed("stop every vm at 9pm", ROUTINE,
+          "⚠ THE MEASURED FALSE SERVE, 2026-08-16: this reached PROGRAM and RAN NOW. A ONE-OFF "
+          "CLOCK TIME, and the store has no field for one — `every` recurs and `when` is a "
+          "world predicate. Keyed ROUTINE because that is where scheduled work belongs and the "
+          "store's gap is the store's, not the door's",
+          hard=True),
+    Keyed("launch db tomorrow", ROUTINE,
+          "a deictic date. Same gap as the row above and none of the same words",
+          hard=True),
+
+    # ⇒⇒ WHO STARTS IT — the world. **A RULE PLUS AN EVENT**, and the operator's own example is
+    #   the first row: *"the rule is 'delete vm' triggered by 'stop vm/being done with it'."*
+    Keyed("from now on after you are done with a vm, delete it", TRIGGER,
+          "THE OPERATOR'S OWN EXAMPLE, 2026-08-16. `from now on` makes it standing, `after …` "
+          "is the event, `delete it` is the act. **Every part is needed: drop the event and it "
+          "is GOVERNANCE, drop the standing frame and it is a one-off nothing can hold**"),
+    Keyed("whenever a vm stops, take a snapshot of it", TRIGGER,
+          "`whenever` is standing AND an event in one word — the tightest form the shape has"),
+    Keyed("every time a new vm is created, put it on the lab network", TRIGGER,
+          "`every time` is the same word doing the same job, and it is where a UNIVERSAL and a "
+          "TEMPORAL reference collide: `every` here quantifies over OCCASIONS, not machines"),
+    Keyed("once a snapshot finishes, delete the old one", TRIGGER,
+          "`once` as a subordinator, which is the reading that is not the numeral. The event is "
+          "a completion — the same thing `when: <predicate>` is for",
+          hard=True),
+
+    # ⇒⇒ AND THE CONTROLS THAT MUST NOT BECOME EITHER — where a schedule or an event is not
+    #   what the word is doing. **These are the rows that make the two above worth having.**
+    Keyed("when did you stop it", CHAT,
+          "⚠ INTERROGATIVE `when`, NOT AN ADJUNCT — a question about the PAST. This exact "
+          "sentence already broke one rule on 2026-08-16 (a temporal adjunct read as "
+          "interrogative `when`); this is the same pair pointed the other way, and a trigger "
+          "reader that keys on `when` alone gets it wrong",
+          also=ASK),
+    Keyed("launch every vm that is currently stopped", PROGRAM,
+          "RUNG 5 AS A CLOCK CONTROL, and `currently` is the trap — a time word that fixes NOW, "
+          "which is the one time that is not a schedule"),
+    # ⇒ AND TWO CONTROLS ARE ALREADY IN THIS FILE AND ARE NOT REPEATED HERE — `check()` caught
+    #   the attempt, which is the duplicate test paying for itself:
+    #     `take a snapshot of every running vm`   PROGRAM — `running` is a declared STATE VALUE,
+    #                                             not a time, and `every` quantifies over
+    #                                             machines
+    #     `never delete a vm without asking me`   GOVERNANCE — a rule with no event and no
+    #                                             clock, which is what keeps TRIGGER from
+    #                                             swallowing every standing rule
 
     # ⇒⇒ ASK — the request does not settle it. The ladder's own default, and rungs 1-3 are
     #   attempts to avoid spending the operator's attention.
