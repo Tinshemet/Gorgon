@@ -433,6 +433,10 @@ def test_where_it_is_wired():
         shortcuts/plan.py     `plan --seam <request>` — the opt-in door
         archive.taught_by     an ASSERTIVE offers a knowledge entry
         governing.rules_from  a DECLARATION proposes a rule
+        door.facts            N1 — the reading is a fact the regime ladder reads. **AND THIS
+                              PIN IS WHY THE ADDITION IS RECORDED**: `door.py` is the first
+                              caller that is not part of the seam, and it reads the speech act
+                              BEFORE anything decides a request belongs to the seam at all
 
     ⇒ **A NAMED LIST, NOT A COUNT.** [[gorgon-built-and-never-called]] is this project's
       dominant defect class and its mirror is a thing called from more places than anyone
@@ -452,9 +456,9 @@ def test_where_it_is_wired():
          os.path.join(root, "engines")],
         capture_output=True, text=True).stdout
     callers = {os.path.basename(p) for p in out.split() if not p.endswith("speech_act.py")}
-    check(f"the reader's importers are exactly the six named here — {sorted(callers)}",
+    check(f"the reader's importers are exactly the seven named here — {sorted(callers)}",
           callers == {"gate4.py", "pass1.py", "pipeline.py", "plan.py", "archive.py",
-                      "governing.py"})
+                      "governing.py", "door.py"})
 
 
 def main(argv=None) -> int:
