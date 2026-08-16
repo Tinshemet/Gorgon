@@ -155,14 +155,37 @@ def anchors_in(request: str, board: Optional[Board] = None) -> List[str]:
 
     The model is still needed for what the manifest cannot list — a pronoun-headed set like
     *"the ones that do not answer"* — so its answers are added to these, never replaced by them.
+
+    ⇒⇒ ⚠ **A DECLARED NOUN MAY BE MORE THAN ONE WORD, AND THIS SCANNED SINGLE TOKENS.** The
+      manifest declares `restore point`, `hardware profile` and `golden image`, and none of the
+      three could ever be found — `[\\w']+` cannot match across a space. `_kind_of` was written
+      for exactly this case and says so in its own docstring — *"longest noun wins, 'restore
+      point' before 'point'"* — and **that branch was unreachable from here**, which is the
+      built-and-never-called defect in its purest form.
+
+      What it cost, on the manifest we ship:
+        *"delete every restore point older than a week"*   -> ZERO anchors. Read as NOTHING.
+        *"clone the golden image into 3 vms"*              -> template `identity = image`,
+                                                              so the template is CALLED image
+      The first is a destructive request that reads as empty; the second is a confidently
+      wrong name. Neither reports a problem.
+
+    ⇒ **LONGEST WINS, AND ONE PASS DOES IT.** The alternation is sorted longest-first and
+      Python's `|` is leftmost-first, so `golden image` is claimed whole and the `image` inside
+      it is never offered a second time. Request order is preserved because `finditer` walks
+      left to right — the clause split downstream depends on it.
     """
     board = board or Board()
     nouns = _index(board)
+    if not nouns:
+        return []
     low = request.lower()
+    pattern = re.compile(r"(?<![\w'])(" + "|".join(
+        re.escape(n) for n in sorted(nouns, key=len, reverse=True)) + r")(?![\w'])")
     found: List[str] = []
-    for match in re.finditer(r"[\w']+", low):
-        word = match.group(0)
-        if word in nouns and word not in found:
+    for match in pattern.finditer(low):
+        word = match.group(1)
+        if word not in found:
             found.append(word)
     return found
 
@@ -409,7 +432,18 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
     #   `network 1` and `network 2` produced the SAME span and the fold merged two distinct
     #   networks into one — a confidently wrong program, not a visible error.
     identity = None
-    spent_at: set = set() if count_at is None else {count_at}
+    # ⇒ **A DECLARED ANCHOR'S OWN WORDS ARE THE HEAD, NEVER MODIFIERS OF IT.** A one-word
+    #   declared anchor was already covered by the `not in nouns` test below, which cannot see
+    #   `hardware` or `restore` — only the whole PHRASE is declared — so *"a hardware profile
+    #   called fast"* offered `hardware` as a descriptor of itself.
+    # ⇒ ⚠ **AND THE TEST IS *DECLARED*, NOT *MULTI-WORD*.** An anchor the manifest does not
+    #   know is a NAME the operator typed, and stripping it deleted the very word the naming
+    #   cue points at: `scan("alpha", "create a vm named alpha")` came back `named`, so
+    #   `name = alpha` could never be read again. `web server one` fails the same way.
+    anchored = str(anchor).strip().lower() in nouns
+    spent_at: set = set(range(first, last)) if anchored else set()
+    if count_at is not None:
+        spent_at.add(count_at)
     if kind:
         noun_at = next((i for i in range(left, right)
                         if toks[i][0] in nouns and nouns[toks[i][0]] == kind), None)
@@ -422,7 +456,11 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
             if tail > noun_at + 1:
                 identity = request[toks[noun_at][1]:toks[tail - 1][2]]
                 spent_at.update(range(noun_at + 1, tail))   # `network 1` — the 1 is the name
-            elif count is None and comparator is None:
+            elif count is None and comparator is None and not (anchored and last - first > 1):
+                # ⇒ **BUT NEVER A DECLARED PHRASE.** One is fully specified by the
+                #   manifest and cannot also be somebody's name: *"clone the golden image"*
+                #   took `image` as the template's identity, so the reading said the template
+                #   is CALLED image and the operator's actual word `golden` was a modifier.
                 # ⇒ A BARE NOUN-WORD MAY BE A NAME. `box` is a declared noun for `vm` AND a
                 #   plausible machine name, and nothing in the request settles which — only the
                 #   lab does. Carry it as a CANDIDATE so gate 2 can ask; deciding here would be

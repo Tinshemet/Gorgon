@@ -460,6 +460,55 @@ def test_a_numeral_is_a_value_unless_it_was_spent_as_a_count():
                                   board=board) for r in rows))
 
 
+def test_a_declared_noun_may_be_more_than_one_word():
+    """⇒⇒ **THREE DECLARED NOUNS THE READER COULD NEVER MATCH, ON THE MANIFEST WE SHIP.**
+
+    `hardware profile`, `restore point` and `golden image` are in `KINDS`, and `anchors_in`
+    scanned `[\\w']+` — a pattern that cannot cross a space. So none of the three was ever
+    found, and **`_kind_of` says in its own docstring that it exists for this case** — *"longest
+    noun wins, 'restore point' before 'point'"*. That branch was unreachable from the anchor
+    path: built, and never called.
+
+        *"delete every restore point older than a week"*  -> ZERO anchors. Read as NOTHING.
+        *"clone the golden image into 3 vms"*             -> template `identity = image`
+
+    The first is a destructive request that reads as empty. The second is worse than empty: it
+    reads as a template CALLED image, which is a confidently wrong name from a sentence that
+    looks perfectly understood.
+
+    ⇒ ⚠ **AND THE ANCHOR-IS-THE-HEAD RULE TESTS *DECLARED*, NOT *MULTI-WORD*.** An anchor the
+      manifest does not know is a NAME the operator typed. The first cut stripped every
+      anchor's own tokens out of the modifiers and deleted the very word the naming cue points
+      at — `scan("alpha", "create a vm named alpha")` came back `named`. Five checks caught it.
+    """
+    from orchestrator.seam.scan import anchors_in, scan
+    board = Board()
+
+    check("a two-word declared noun is found at all",
+          anchors_in("delete every restore point older than a week", board) == ["restore point"])
+    got = scan("restore point", "delete every restore point older than a week", board)
+    check("and it carries its own kind", got.kind == "snapshot" and got.count == "all")
+    check("and its own words are not modifiers of itself", got.modifiers == "older than week")
+    check("the longest declared noun wins over the word inside it",
+          anchors_in("clone the golden image into 3 vms", board) == ["golden image", "vms"])
+    check("a declared phrase is never somebody's NAME",
+          scan("golden image", "clone the golden image into 3 vms", board).identity is None)
+    check("a naming cue reaches a two-word noun's key",
+          scan("hardware profile", "create a hardware profile called fast", board).modifiers
+          == "called fast")
+
+    # ⇒ THE CONTROLS. An UNDECLARED anchor is a name and keeps every one of its own words, and
+    #   a one-word declared noun behaves exactly as it did.
+    check("an undeclared anchor keeps its own word",
+          scan("alpha", "create a vm named alpha", board).modifiers == "named alpha")
+    check("a bare declared noun may still be a name",
+          scan("box", "stop box", board).identity == "box")
+    check("and the ordinary reading is untouched",
+          scan("vm", "stop every vm that is running", board).modifiers == "that is running")
+    check("anchors stay in request order",
+          anchors_in("create 3 vms on a network called lab", board) == ["vms", "network"])
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "structure")
