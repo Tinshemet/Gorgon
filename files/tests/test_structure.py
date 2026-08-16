@@ -560,6 +560,57 @@ def test_a_quoted_run_is_one_value_and_its_words_are_not_cues():
           quoted_clauses("3 vms labelled 'red'") == ())
 
 
+def test_an_unquoted_multi_word_name_is_a_KNOWN_LIMIT_and_the_naive_fix_is_forbidden():
+    """⇒⇒ **A NEGATIVE RESULT, PINNED SO IT IS NOT RE-ATTEMPTED.**
+
+    *"create a vm named data pipeline"* reads `name = data`. The key takes ONE word, so the lab
+    would hold a machine under a name nobody typed — a confident wrong reading, which is worse
+    than a missing one.
+
+    ⇒ **THE OBVIOUS FIX WAS BUILT ON 2026-08-16 AND A KEYED CONTROL KILLED IT.** The rule tried
+      was the operator's own — the open naming slot accepts whatever no declaration claims
+      ([[slot-decides-junk]]) — so the name runs on through words that are in no manifest
+      column and no closed class, stopping at an OPENER (`please`), a RELATIVIZER (`which`), a
+      LINKING word (`with`), a BOUNDARY, or a declared value. Eleven traps held. **Rung 8 did
+      not:**
+
+          "…put them on a network called dmz instead"   ->   net_name = 'dmz instead'
+
+      `instead` is a discourse adverb, and there is NO structural difference between
+      `dmz instead` and `data pipeline` — both are a bare unclaimed word after the name at the
+      end of a clause. Separating them needs a list of English adverbs, which is an OPEN class
+      and is exactly what this project forbids ([[gorgon-deterministic-rules]]).
+
+    ⇒ **SO THE BOUNDARY MUST BE DECLARED, NOT GUESSED.** Quotes are the operator's own boundary
+      mark and those already work — see the quoted-run check above. The right resolution for
+      the unquoted case is an ASK at gate 2 (*is the name `dmz` or `dmz instead`?*), not a
+      cleverer scan. Reading one word and declining the rest is the correct behaviour until
+      that ask exists.
+
+    ⇒ ⚠ **AND ONE REAL BUG WAS FOUND ON THE WAY, WHICH SURVIVES THE REVERT AS KNOWLEDGE:** rule
+      2 CLOBBERS rule 0's key. `named` stems to `nam`, a vm's key is `name`, so `_cue_hit`
+      fires and the descriptor arm overwrites the naming arm. It is invisible today only
+      because both arms currently produce the same single word — anything that widens rule 0
+      must fix this first.
+    """
+    from orchestrator.seam import pass1 as P
+    board = Board()
+
+    def where(text):
+        return [row.where for row in P.run_scanned(text, board=board)]
+
+    check("the limit is real and is one word",
+          where("create a vm named data pipeline") == [{"name": "data"}])
+    check("the quoted form is NOT limited — the operator drew the boundary",
+          where("create a vm named 'data pipeline'") == [{"name": "data pipeline"}])
+    # ⇒ THE CONTROL THAT FORBIDS THE NAIVE FIX. If a future change makes this `dmz instead`,
+    #   that change is the one this test exists to stop.
+    check("rung 8's trailing adverb is not part of the name",
+          {"net_name": "dmz"} in where(
+              "put every vm on a network called core except db, put db on a network "
+              "called dmz instead"))
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "structure")
