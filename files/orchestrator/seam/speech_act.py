@@ -557,7 +557,17 @@ def act_of(clause: str, board: Optional[Board] = None, world=None) -> Optional[s
     # ⇒ 7 · AND WHAT PRODUCES NOTHING IS EXPRESSIVE — no list required, which is the producer
     #   method paying for itself. A greeting holds no manifest verb, no manifest kind and no
     #   name the lab knows, so `hi` / `yo` / `cheers` never has to be enumerated.
-    if not _any_manifest_verb(words, board) and not names_something(words, board, world):
+    if (not _any_manifest_verb(words, board) and not names_something(words, board, world)
+            # ⇒⇒ ⚠ **A SUBORDINATE CLAUSE PRODUCES NOTHING AND IS NOT SMALL TALK**, and the
+            #   difference decides whether it survives. EXPRESSIVE is a POSITIVE claim — *this
+            #   is a greeting* — and everything that reaches this branch produces nothing, so
+            #   the branch cannot tell *"if alpha is stopped"* from *"good morning"* without
+            #   asking what OPENED the clause.
+            #   ⇒ The cost of getting it wrong is not symmetric: `pass1.BUILDS` drops an
+            #     EXPRESSIVE clause's rows and keeps an UNREAD one's, so a condition read as a
+            #     pleasantry is discarded in silence while a condition read as `None` is still
+            #     reported. Falling through to `None` is the honest answer while E5 stands.
+            and not (words and words[0] in SUBORDINATING)):
         return EXPRESSIVE
 
     # ⇒⇒ 8 · AN IMPERATIVE THE MANIFEST HAS NO VERB FOR. English imperatives carry NO SUBJECT,
@@ -709,8 +719,38 @@ def _is_function_word(word: str) -> bool:
             or word in UNIVERSAL or word in NOVEL or word.isdigit())
 
 
+# ⇒⇒ **THE SUBORDINATING CONJUNCTIONS — A SUBSET OF A CLASS THIS FILE ALREADY DECLARES**, and
+#   not a new list. `CONJUNCTIONS` holds both kinds; these are the ones that open a clause
+#   BENEATH another, and the coordinating members — `and`, `or`, `but`, `nor`, `yet` — are
+#   deliberately absent, because a clause joined by one of those IS a main clause.
+#   ⇒ The same move `DEONTIC` makes on `AUXILIARIES`: a subset, named where it is used.
+#   ⇒ `since`, `until`, `after` and `before` are in `PREPOSITIONS` and do this job too when a
+#     SUBJECT follows them; they are included here for the copula test only, where a bare
+#     preposition reading cannot arise.
+SUBORDINATING = frozenset({"if", "unless", "while", "because", "although", "though",
+                           "whether", "since", "until", "after", "before", "once",
+                           "whenever"}) | RELATIVIZERS
+
+
 def _main_clause_copula(words: Sequence[str]) -> bool:
-    """Is there a copula that belongs to THIS clause rather than to one inside it?"""
+    """Is there a copula that belongs to THIS clause rather than to one inside it?
+
+    ⇒⇒ ⚠ **THE FIRST WORD WAS NEVER LOOKED AT, AND THAT MADE A CONDITION READ AS TEACHING.**
+      The loop starts at index 1 — right for a relativizer, which arrives mid-clause — so a
+      clause that OPENS on a subordinator was never recognised as subordinate. *"if alpha is
+      stopped"* found `is` and came back ASSERTIVE: a CONDITION read as a piece of teaching.
+      Adding `if` to `RELATIVIZERS` would not have helped; the bound was the bug.
+
+    ⇒ **AND IT HAD BECOME SILENT RATHER THAN MERELY WRONG.** The per-chunk producer rule of
+      2026-08-16 drops the rows of any clause that cannot BUILD, and ASSERTIVE is one of those.
+      So a condition stopped being mis-declared and started being discarded without a word.
+      Returning False here lets the clause fall through to `None` — UNREAD, which nothing
+      drops — and that is the honest answer while E5 stands.
+
+    ⇒ Found by `structure_map`, which runs every feature rather than describing it.
+    """
+    if words and words[0] in SUBORDINATING:
+        return False                       # this clause hangs off another; its copula is not ours
     for i, w in enumerate(words[1:], start=1):
         if w in RELATIVIZERS:
             return False                   # everything after this belongs to the subordinate

@@ -125,13 +125,13 @@ MAP: List[Feature] = [
             "temporal.clock_in", "built 2026-08-16"),
     Feature(CLAUSE, "conditional", "if alpha is stopped, launch it",
             "",
-            "⚠⚠ MEASURED AND WORSE THAN IT LOOKS: the `if` clause reads **ASSERTIVE** — a "
-            "piece of teaching — because `_main_clause_copula` scans from `words[1:]` and "
-            "**never checks whether the clause OPENS on a subordinator**. `if` is not in "
-            "RELATIVIZERS, and adding it would not help while the loop skips index 0. "
-            "⇒ AND SINCE 2026-08-16 THE PER-CHUNK PRODUCER RULE DROPS ASSERTIVE ROWS, so the "
-            "condition is now discarded SILENTLY where it used to raise a complaint. E5 is "
-            "the RESOLVE half; this is the READ half and it is separate",
+            "⇒ **HALF CLOSED 2026-08-16.** It read ASSERTIVE — a piece of teaching — because "
+            "`_main_clause_copula` scanned from `words[1:]` and never checked whether the "
+            "clause OPENS on a subordinator; the per-chunk producer rule then dropped its rows "
+            "in SILENCE. Now `None`: **UNREAD, which nothing drops**, so the condition is still "
+            "reported. ⚠ STILL A HOLE — the condition is VISIBLE and not UNDERSTOOD. ISO "
+            "24617-2 says the next step is to carry it as a QUALIFIER on the act (conditionality) "
+            "rather than as clause structure, which closes READ without touching E5",
             danger=True),
     Feature(CLAUSE, "purpose", "stop the vms to free up memory",
             "",
@@ -139,13 +139,15 @@ MAP: List[Feature] = [
             "request never named — Part 2"),
     Feature(CLAUSE, "cause", "stop the vms because they are stuck",
             "",
-            "⚠ `because` and `stuck` unread. **A cause is a SYMPTOM, and a symptom is D1's "
-            "input** — this is the diagnosis hole wearing a subordinate clause",
+            "⚠ `because` and `stuck` unread; the clause now reads `None` rather than as "
+            "teaching (2026-08-16, the same subordinator bound). **A cause is a SYMPTOM, and a "
+            "symptom is D1's input** — this is the diagnosis hole wearing a subordinate clause",
             danger=True),
     Feature(CLAUSE, "concession", "stop the vms even though alpha is busy",
             "",
-            "⚠ `even`, `though`, `alpha`, `busy` all unread, and it stays ONE clause. A "
-            "concession names an EXCEPTION the operator has already thought about",
+            "⚠ `even`, `though`, `alpha`, `busy` all unread, and it stays ONE clause. `though` "
+            "is now a declared subordinator so a split clause would read `None` rather than as "
+            "teaching. A concession names an EXCEPTION the operator has already thought about",
             danger=True),
     Feature(CLAUSE, "alternative", "stop alpha or beta",
             "",
