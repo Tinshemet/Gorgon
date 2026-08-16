@@ -437,6 +437,39 @@ def _config_kinds():
     return _config.KINDS or {}
 
 
+# ⇒ ⚠ **AN APOSTROPHE INSIDE A WORD IS NOT A QUOTE, AND THE FIRST CUT OF THIS MISSED IT.**
+#   `won't boot, the error says 'cannot allocate memory'` matched from the apostrophe in
+#   `won't` to the one opening the real quotation, and reported *"t boot, the error says"* as
+#   evidence. **Measured end to end, not by the unit test** — whose examples all happened to
+#   avoid contractions. So a single quote counts only when a letter does not stand on the
+#   inside of it: `won't` and `alpha's` are words, `'cannot allocate memory'` is a quotation.
+_QUOTED = re.compile(r"(?<![A-Za-z])'([^']{2,})'(?![A-Za-z])" + r'|"([^"]{2,})"')
+
+
+def quoted_clauses(request: str) -> tuple:
+    """Quoted spans of MORE THAN ONE WORD — data the operator is handing us, not values.
+
+    ⇒⇒ **QUOTES ALREADY MEAN *A VALUE* HERE, AND THAT IS RIGHT FOR ONE WORD.**
+      `residue.classify` bounces on a quoted word — *"3 vms labelled 'red'"* binds `red` — and
+      every quoted span in the fourteen rungs is a single word.
+
+    ⇒ **A QUOTED CLAUSE IS A DIFFERENT ACT.** *"the error says 'cannot allocate memory'"* is
+      EVIDENCE: it correlates with no kind, no member and no archive entry — the exact profile
+      of something unrelated — and it is what a diagnosis would run on. Read as a value it
+      becomes a machine name; read as nothing it is the most important part of the sentence,
+      discarded.
+
+    ⇒ **THE DISCRIMINATOR IS LENGTH AND IT IS STRUCTURAL** — no vocabulary, and it matches the
+      corpus exactly. One word is a value; two or more is a quotation.
+    """
+    out = []
+    for m in _QUOTED.finditer(str(request)):
+        span = (m.group(1) or m.group(2) or "").strip()
+        if len(span.split()) > 1:
+            out.append(span)
+    return tuple(out)
+
+
 NEGATORS = frozenset({"not", "n't", "never", "no"})
 
 

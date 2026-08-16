@@ -214,10 +214,12 @@ MAP: List[Feature] = [
             "⚠ one clause, and the colon is not a boundary. A pasted list is how an operator "
             "gives a set, and the member-list rule keys on `and`"),
     Feature(SURFACE, "pasted data", "the error says 'cannot allocate memory'",
-            "",
-            "⚠ the quoted half is EVIDENCE. The quotes are structural, so this costs no "
-            "vocabulary — and nothing reads them",
-            danger=True),
+            "scan.quoted_clauses -> linguistics/quoted-evidence",
+            "⇒ **READ 2026-08-16.** A quoted span of TWO OR MORE words is evidence; one word "
+            "is a value, which is what quotes already mean here and what every quoted span in "
+            "the corpus is. Structural, so it costs no vocabulary. ⚠ IT IS NAMED, NOT USED — "
+            "until D1 gives evidence somewhere to go, the finding says so out loud rather "
+            "than swallowing the words"),
     Feature(SURFACE, "identifiers and paths", "tail /var/log/alpha.log",
             "",
             "⚠ a path is one token to a person and several to the tokenizer"),

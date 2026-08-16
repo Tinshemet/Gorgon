@@ -164,6 +164,43 @@ def test_a_disjunction_is_a_choice_nobody_made():
     check("the rule belongs to linguistics", "unexpressed-choice" in L.OWNS)
 
 
+def test_a_quoted_clause_is_evidence_not_a_value():
+    """⇒⇒ **QUOTES ALREADY MEAN *A VALUE* IN THIS SYSTEM, AND THAT IS RIGHT FOR ONE WORD.**
+    `residue.classify` bounces on a quoted word — *"3 vms labelled 'red'"* binds `red` — and
+    the whole corpus quotes labels that way.
+
+    ⇒ **A QUOTED CLAUSE IS A DIFFERENT ACT.** *"the error says 'cannot allocate memory'"* is
+      the operator handing us DATA: it correlates with no kind, no member and no archive entry
+      — the exact profile of something unrelated — and it is the EVIDENCE a diagnosis runs on.
+
+    ⇒ **THE DISCRIMINATOR IS LENGTH AND IT IS STRUCTURAL.** One word inside quotes is a value;
+      two or more is a quotation. No vocabulary, and it matches the corpus exactly — every
+      quoted span in the fourteen rungs is a single word.
+    """
+    from orchestrator.seam.scan import quoted_clauses
+    check("a multi-word quote is evidence",
+          quoted_clauses("the error says 'cannot allocate memory'")
+          == ("cannot allocate memory",))
+    check("double quotes read the same",
+          quoted_clauses('it said "no space left on device"')
+          == ("no space left on device",))
+    # ⇒⇒ ⚠ THE CONTRACTION, AND IT IS HERE BECAUSE THE UNIT TEST MISSED IT. Every example
+    #   above avoids apostrophes, so the first cut matched from the one in `won't` to the one
+    #   opening the real quotation and reported "t boot, the error says" as evidence. Found by
+    #   running the whole seam, which is why the end-to-end check is not optional.
+    check("an apostrophe inside a word is not a quote",
+          quoted_clauses("alpha won't boot, the error says 'cannot allocate memory'")
+          == ("cannot allocate memory",))
+    check("a possessive does not open a quote",
+          quoted_clauses("delete alpha's snapshots") == ())
+    # ⇒ THE CONTROLS — every quoted span in the rung corpus is a single word, and must stay one.
+    for value in ("make sure exactly 3 vms carry the 'prod' label",
+                  "create 3 vms labelled 'red' and 2 vms labelled 'blue'",
+                  "give them all the 'fleet' label"):
+        check(f"a quoted VALUE is not evidence — {value[:34]!r}",
+              quoted_clauses(value) == ())
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "structure")

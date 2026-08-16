@@ -81,7 +81,8 @@ class Finding(NamedTuple):
 #   `role-unsettled` used to be here and is not grammar — it is completeness, and it moved to
 #   gate 1 where the leftover rule already lives.
 OWNS = frozenset({"mood-achieve", "unexpressed-exclusion", "count-ignored",
-                  "unasked-step", "light-verb-object", "unexpressed-choice"})
+                  "unasked-step", "light-verb-object", "unexpressed-choice",
+                  "quoted-evidence"})
 
 
 def mood_of(request: str) -> str:
@@ -395,6 +396,26 @@ def findings(request: str, rows: List[S.Declared], operations: List[Operation], 
         out.append(Finding("mood-achieve", request[:40],
                            "this asks for a state to HOLD, and the plan only performs "
                            "actions — nothing here checks it afterwards or corrects it",
+                           "operator"))
+
+    # ⇒⇒ 1a · A QUOTED CLAUSE IS EVIDENCE, AND NOTHING HAS EVER READ ONE.
+    #
+    #   *"alpha won't boot, the error says 'cannot allocate memory'"* — the quoted half
+    #   correlates with no kind, no member and no archive entry, which is the exact profile of
+    #   something unrelated, and it is the most important part of the sentence. Read as a value
+    #   it becomes a machine name; read as nothing it is discarded.
+    #
+    #   ⇒ **SAID RATHER THAN SWALLOWED.** The alternative was to exempt those words quietly so
+    #     they stop being candidate objects, and a word dropped without a word said is how a
+    #     request gets half-read and looks whole. Until D1 gives evidence somewhere to GO, the
+    #     honest move is to name it.
+    #   ⇒ **AND ONE WORD IN QUOTES IS STILL A VALUE** — `scan.quoted_clauses` requires two,
+    #     which is the whole of the rule and matches every quoted span in the corpus.
+    from .scan import quoted_clauses as _quoted
+    for _span in _quoted(request):
+        out.append(Finding("quoted-evidence", _span[:40],
+                           f"the request quotes {_span!r} — that reads as EVIDENCE rather "
+                           f"than as anything to build, and nothing here can use it yet",
                            "operator"))
 
     # ⇒⇒ 1b · A DISJUNCTION IS A CHOICE, AND THE PROGRAM MADE IT WITHOUT ASKING.
