@@ -175,6 +175,9 @@ class Facts(NamedTuple):
     # ── gorgon's own surfaces ────────────────────────────────────────────────────────
     addressed: bool                     # the request calls the agent by its own name
     governs: Tuple[str, ...]            # clauses that LEGISLATE rather than instruct
+    clock: str                          # recurrence · instant — a time the request names
+    event: bool                         # something HAPPENING is what would start it
+    standing: bool                      # …and it means every future occasion, not this one
     shortcut: str                       # the shortcut that WOULD take this, or ""
     gorgon: Tuple[str, ...]             # Gorgon's own objects the request names
     procedure: str                      # a stored procedure named outright, or ""
@@ -195,7 +198,7 @@ def facts(request: str, board: Optional[Board] = None, world=None) -> Facts:
     like `alpha` and `db` cannot be recognised, so they land in `unknown` — which is honest,
     and is what `plan --seam` already prints as *"no lab — every bare name stays kindless"*.
     """
-    from .seam import scan, speech_act
+    from .seam import scan, speech_act, temporal as _temporal
     from .seam.linguistics import mood_of
 
     board = board or Board()
@@ -231,6 +234,9 @@ def facts(request: str, board: Optional[Board] = None, world=None) -> Facts:
         postcondition=mood_of(request) == "achieve",
         addressed=_agent_name() in words if _agent_name() else False,
         governs=_governs(request, board, world),
+        clock=_temporal.clock_in(request),
+        event=_temporal.events_in(request, speech_act),
+        standing=_temporal.standing_in(request) or _temporal.standing_event(request),
         shortcut=_shortcut(low),
         gorgon=tuple(w for w in dict.fromkeys(words) if w in GORGON_NOUNS),
         procedure=_procedure(low, world),
@@ -440,6 +446,9 @@ def _members(words: Sequence[str], world) -> Tuple[str, ...]:
 #                               rung declines to ASK
 SELF, GOVERNANCE, CHAT = "self", "governance", "chat"
 TOOL, PROCEDURE, PROGRAM, ASK = "tool", "procedure", "program", "ask"
+# ⇒⇒ **THE SAME STORED OBJECT, TOLD APART BY WHO STARTS IT** — the operator, 2026-08-16, and
+#   `routines.py` from the store's side: the operator now, the CLOCK, or the WORLD.
+ROUTINE, TRIGGER = "routine", "trigger"
 
 # ⇒ WHICH TIER OWNS EACH OF GORGON'S OWN OBJECTS. Keyed by the OWNER `GORGON_NOUNS` declares,
 #   never by the noun, so a new synonym inherits its tier and cannot land in the wrong one.
@@ -469,6 +478,25 @@ def route(f: Facts) -> Decision:
       probe can say which.
     """
     say = lambda goes, rung: Decision(goes, rung, f)
+
+    # ── 0 · A RULE PLUS AN EVENT IS A TRIGGER, AND IT IS ASKED FIRST ─────────────────
+    # ⇒⇒ **THE OPERATOR'S OWN DEFINITION, 2026-08-16:** *"trigger needs a meta-declaration, IE
+    #   a rule — 'from now on after you are done with a vm, delete it', the rule is 'delete vm'
+    #   triggered by 'stop vm/being done with it'."* Both halves are required and each is
+    #   already owned: the EVENT by `temporal.events_in`, the STANDING half by
+    #   `governing.rules_from` or by the event generalising over occasions.
+    # ⇒ **BEFORE GOVERNANCE, because a trigger IS a rule** and the plain-rule rung would take
+    #   it first — `when: <predicate>` is the field it wants, and a rule filed without one
+    #   never fires.
+    if f.event and (f.standing or f.governs):
+        return say(TRIGGER, "a rule the world starts")
+    # ⇒ AND AN EVENT WITH NO STANDING FRAME IS THE CONDITIONAL, WHICH HAS NO HOME. *"delete the
+    #   vm after it stops"* is one occasion, and E5 is the named blocker: the writer cannot
+    #   emit `if` at all, so there is nothing to lower a condition into. Declining is the
+    #   honest answer and it names the reason.
+    if f.event:
+        return say(ASK, "it waits on something happening, and only this once — "
+                        "nothing here can hold a condition")
 
     # ── 1 · GOVERNANCE, BEFORE ANY LAB RUNG ──────────────────────────────────────────
     # A rule quantified over time names `delete` and `vm` and is still legislation; enacting
@@ -591,6 +619,21 @@ def route(f: Facts) -> Decision:
         # what time, etc."* The verb slot is filled by a light verb; what is missing is which.
         return say(ASK, f"it names {', '.join(f.kinds) or 'a thing'} and neither an operation "
                         f"nor which ones")
+
+    # ── 4b · THE CLOCK STARTS IT ─────────────────────────────────────────────────────
+    # ⇒⇒ **AFTER the lab gate and BEFORE the tool/program choice, and both placements are the
+    #   rule.** After, because a bare *"tomorrow"* names no work to schedule. Before, because
+    #   everything below this line answers *what shall I run* and a scheduled request is not
+    #   asking that — measured on 2026-08-16, `stop alpha tomorrow` reached TOOL and ran now.
+    # ⇒ **A REQUEST WHOSE POINT IS *WHEN*, CARRIED OUT AT THE WRONG WHEN, IS A FALSE SERVE THAT
+    #   READS AS A SUCCESS**, which is why `ROUTINE -> TOOL` and `ROUTINE -> PROGRAM` are keyed
+    #   critical.
+    # ⇒ ⚠ THE RECURRENCE HAS A FIELD AND THE INSTANT DOES NOT — `every: <span>` recurs and
+    #   `when:` is a world predicate, so nothing in the store holds *"at 9pm, once"*. The rung
+    #   says which it is so the gap lands where it belongs rather than being rounded away.
+    if f.clock:
+        return say(ROUTINE, "the clock starts it" + (" — and it recurs" if f.clock == "recurrence"
+                            else ", once, which no field holds yet"))
 
     # ── 5 · TOOL OR PROGRAM — STRUCTURE DECIDES ──────────────────────────────────────
     # ⇒ `regime_probe`'s own three-way judgement, moved from the node to the door: one call
@@ -774,7 +817,11 @@ def _unknown(request: str, board: Board, world, scan) -> Tuple[str, ...]:
             known |= {str(n).lower() for n in (world.names() or ())}
         except Exception:
             pass
-    return tuple(w for w in left if w not in known and not _taught(w))
+    # ⇒ AND A CLOCK TIME IS A SHAPE RATHER THAN A WORD, so it cannot be in the set above and
+    #   still has a reader. `9pm` quoted back as a word nobody knows is a wrong question.
+    from .seam.temporal import CLOCK
+    return tuple(w for w in left
+                 if w not in known and not CLOCK.match(w) and not _taught(w))
 
 
 def _head_unknown(parts: Sequence[str], unknown: Sequence[str], speech_act) -> bool:
@@ -834,6 +881,15 @@ def _declared(board: Board) -> set:
     out |= {w for phrase in SC.COMPARATORS for w in phrase.split()}
     out |= {w for phrase in COUNTING for w in phrase.split()}
     out |= EXCEPTING | UNIVERSAL_PRONOUNS
+    # ⇒⇒ **AND TIME, THE MOMENT SOMETHING READS IT.** `daily`, `9pm` and `after` were showing
+    #   up as words nobody accounts for while `temporal.py` was accounting for them — and
+    #   `unknown` is what the ASK rungs quote back to the operator, so a stale entry there
+    #   becomes a wrong question. A vocabulary that gains a reader has to leave this set on
+    #   the same day.
+    from .seam import temporal as _t
+    out |= (_t.UNITS | _t.COARSE | _t.FREQUENCY | _t.DEICTIC | _t.WEEKDAYS | _t.MONTHS
+            | _t.RECURRING | _t.EVENTS | _t.ALWAYS_STANDING)
+    out |= {w for phrase in (_t.EVENT_PHRASES + _t.STANDING) for w in phrase.split()}
 
     for kind, spec in (_config.KINDS or {}).items():
         if not isinstance(spec, dict):

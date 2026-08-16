@@ -417,12 +417,23 @@ CONTROLS: List[Keyed] = [
     Keyed("take a snapshot of every vm every night", ROUTINE,
           "A RECURRENCE, and the shape the store already holds — `every: 1d`. Note the sentence "
           "carries `every` TWICE and only one of them quantifies over machines"),
-    Keyed("back up the vms daily", ROUTINE,
+    Keyed("take a snapshot of the vms daily", ROUTINE,
           "an adverb of frequency doing the same job as `every day`, and the only word in the "
           "sentence that says the request is not about now"),
-    Keyed("restart alpha every 2 hours", ROUTINE,
+    Keyed("stop alpha every 2 hours", ROUTINE,
           "`every <n> <unit>` is `_SPAN`'s own form spelled in English — the one case where the "
           "store's vocabulary and the operator's are the same thing"),
+    # ⇒⇒ ⚠ **AND THE CONFOUND, KEPT AS ITS OWN ROW RATHER THAN DELETED.** The first draft of
+    #   the two rows above said *"back up the vms daily"* and *"restart alpha every 2 hours"*,
+    #   and both MISSED — not because the clock was unread but because **the lab has no `back
+    #   up` and no `restart`**. They were testing the verb gate while claiming to test the
+    #   clock. Rewritten above with operations the manifest actually declares, and the shape
+    #   is preserved here with the destination it really deserves.
+    Keyed("back up the vms daily", ASK,
+          "⇒ A SCHEDULE OVER AN OPERATION THE LAB DOES NOT HAVE, and **the verb gate wins**: "
+          "filing a routine for something we cannot do is a routine that never works, while "
+          "asking costs a question. `back up` is not `snapshot_create` until somebody says so — "
+          "which is the archive's job, not the door's"),
     Keyed("stop every vm at 9pm", ROUTINE,
           "⚠ THE MEASURED FALSE SERVE, 2026-08-16: this reached PROGRAM and RAN NOW. A ONE-OFF "
           "CLOCK TIME, and the store has no field for one — `every` recurs and `when` is a "
