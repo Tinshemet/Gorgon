@@ -69,6 +69,19 @@ _CUTOFF = re.compile(r"[—–]|\.\.\.|--")
 
 REPAIRED, RETRACTED = "repaired", "retracted"
 
+# ⇒⇒ **A WORD THAT CANNOT END AN UTTERANCE.** A speaker who breaks off mid-constituent has
+#   abandoned the phrase — `just at the`, `there's`, `i'll`, `and it's got a`. Determiners,
+#   prepositions, auxiliaries and conjunctions all DEMAND a complement, so ending on one is
+#   structure telling you the turn was cut short. No vocabulary of repair words is involved.
+DANGLING = frozenset({
+    "the", "a", "an", "this", "that", "these", "those", "my", "your", "its", "their",
+    "at", "on", "in", "to", "of", "with", "from", "by", "for", "into", "onto", "over",
+    "and", "or", "but", "so", "just", "very", "quite",
+    "is", "are", "was", "were", "be", "been", "being", "am",
+    "have", "has", "had", "will", "would", "can", "could", "shall", "should", "do", "does",
+    "i'll", "i've", "i'm", "there's", "we're", "we'll", "you're", "it's", "that's",
+})
+
 
 class Mend(NamedTuple):
     """A repair the operator made to their own request, inside one turn."""
@@ -117,11 +130,78 @@ def read(request: str) -> Optional[Mend]:
     if got:
         marker, at, _end = got
         return Mend(RETRACTED, marker, _trim(str(request)[:at]) or str(request).strip(), "")
+    # ⇒ THE DISFLUENT FORM IS TESTED AFTER THE LEXICAL ONE, because *"stop alpha — sorry, i
+    #   meant beta"* carries BOTH a cut-off and a marker, and the marker says more.
     got = _find(low, CORRECTIONS)
+    if not got:
+        by_shape = restarted(request)
+        if by_shape:
+            return by_shape
     if got:
         marker, at, end = got
         return Mend(REPAIRED, marker, _trim(str(request)[:at]),
                     str(request)[end:].strip(" ,.—–"))
+    return None
+
+
+def broke_off(segment: str) -> bool:
+    """Did this segment stop mid-constituent? Structure, and no repair vocabulary at all.
+
+    ⇒⇒ **MEASURED AND DELIBERATELY NOT USED ALONE, WHICH IS THE POINT OF THIS NOTE.** Against
+      DialogBank's 31 gold self-corrections it catches 7 — 22% — and fires on 21 segments the
+      gold files elsewhere, for a precision of 25%. **A detector that is wrong three times in
+      four is worse than the zero it replaces**, so it is one half of a pair and never a rule.
+    """
+    from .scan import _tokens
+    words = [w for w, _s, _e in _tokens(str(segment).lower())]
+    return bool(words) and words[-1] in DANGLING
+
+
+def restarted(request: str) -> Optional[Mend]:
+    """A fragment the speaker ABANDONED and then redid, inside one turn.
+
+    ⇒⇒ **THE OPERATOR, 2026-08-16: *"fix the self-correction, its fragments not markers."***
+      Right, and the gold proves it: 27 of 31 self-corrections are `go`, `you're pass`,
+      `vertically in line` — abandoned fragments, not *"sorry, i meant"*. The lexical reader
+      built in Phase 4 scores **0 of 31** on real dialogue.
+
+    ⇒ **THE SIGNAL IS THE RESTART, NOT THE FRAGMENT.** `go` alone is a complete imperative; it
+      is a self-correction only because the speaker said it and then began again. So the pair
+      is what is read: a clause that BREAKS OFF, immediately followed by one that RESUMES it —
+      sharing its opening word, or picking up where it stopped.
+
+    ⇒ ⚠ **AND THIS CANNOT BE MEASURED ON THE MAP TASK CORPUS, WHICH IS SAID HERE RATHER THAN
+      DISCOVERED LATER.** DialogBank hands us ONE functional segment at a time, so the fragment
+      and its restart arrive as two separate rows and the pair is never visible. It is
+      detectable in what an OPERATOR TYPES — a whole turn — which is the input this system
+      actually takes.
+    """
+    from .scan import _tokens
+    # ⇒⇒ **THE SEPARATOR DECIDES HOW MUCH EVIDENCE A REPEAT IS**, and without that distinction
+    #   *"stop alpha, stop beta"* — a perfectly ordinary two-clause request — reads as a
+    #   disfluency. A CUT-OFF is the speaker interrupting themselves, so a repeat after one is
+    #   a restart on its own; after a COMMA the head must also break off mid-constituent.
+    pieces = re.split(r"([—–]|--|\.\.\.|,)", str(request))
+    parts, seps = [], []
+    for i, piece in enumerate(pieces):
+        if i % 2 == 0:
+            if piece.strip():
+                parts.append(piece.strip())
+                seps.append(pieces[i - 1] if i else "")
+        # odd indices are the separators themselves
+    for i in range(len(parts) - 1):
+        head, tail = parts[i], parts[i + 1]
+        cut = seps[i + 1] not in (",", "")
+        if not (broke_off(head) or cut):
+            continue
+        hw = [w for w, _s, _e in _tokens(head.lower())]
+        tw = [w for w, _s, _e in _tokens(tail.lower())]
+        if not hw or not tw:
+            continue
+        # ⇒ A RESTART RESUMES: it opens on the same word the abandoned run opened on, or it
+        #   repeats the word the speaker stalled on. Anything else is a new clause.
+        if tw[0] == hw[0] or (len(hw) > 1 and tw[0] == hw[-2]):
+            return Mend(REPAIRED, "restart", head, tail)
     return None
 
 

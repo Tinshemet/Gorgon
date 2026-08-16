@@ -380,6 +380,41 @@ def test_the_operator_taking_something_back():
           not any(a.function == "Greeting" for a in ann))
 
 
+def test_self_correction_is_a_fragment_not_a_marker():
+    """⇒⇒ **THE OPERATOR, 2026-08-16: *"fix the self-correction, its fragments not markers."***
+
+    DialogBank's gold proves it. 27 of 31 self-corrections are `go`, `you're pass`,
+    `vertically in line` — ABANDONED FRAGMENTS. The lexical reader built in Phase 4 scores
+    **0 of 31** on real dialogue: I built the tidy written form of a phenomenon that is
+    overwhelmingly spoken and messy.
+
+    ⇒ **THE SIGNAL IS THE RESTART, NOT THE FRAGMENT.** `go` alone is a complete imperative; it
+      is a self-correction only because the speaker said it and began again.
+    ⇒ **AND THE SEPARATOR DECIDES HOW MUCH A REPEAT IS WORTH** — after a CUT-OFF a repeat is a
+      restart on its own; after a COMMA the head must also break off mid-constituent, or
+      *"stop alpha, stop beta"* reads as a disfluency.
+    ⇒ ⚠ AND THE BARE FRAGMENT RULE IS MEASURED AND NOT SHIPPED ALONE: 22% recall at 25%
+      precision against the gold. A detector wrong three times in four is worse than the zero
+      it replaces.
+    """
+    from orchestrator.seam import self_repair as SR
+
+    for text, kept in (("go— go south from the mine", "go south from the mine"),
+                       ("stop the— stop the vms on lab", "stop the vms on lab"),
+                       ("launch a— launch alpha", "launch alpha")):
+        got = SR.read(text)
+        check(f"a restart is read — {text!r}", got and got.kind == SR.REPAIRED)
+        check(f"and the resumed half is kept — {kept!r}", got and got.offered == kept)
+
+    # ⇒ THE CONTROLS. Two clauses that repeat a verb are a REQUEST, not a disfluency.
+    for text in ("stop alpha, stop beta", "stop alpha and stop beta",
+                 "create a vm, then launch it", "put web on lab, and db on dmz", "stop alpha"):
+        check(f"not a disfluency — {text!r}", SR.read(text) is None)
+    # ⇒ AND THE LEXICAL FORM STILL WINS WHERE BOTH ARE PRESENT — a marker says more than a mark.
+    got = SR.read("stop alpha — sorry, i meant beta")
+    check("a marker outranks a cut-off", got and got.marker == "i meant")
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "structure")
