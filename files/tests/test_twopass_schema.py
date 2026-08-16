@@ -1220,7 +1220,14 @@ def test_a_destructive_operation_over_a_whole_set_asks_first():
     board = Board()
     channel, was = _canned([("delete_vm", "vms", None), ("probe_exists", "vms", None)])
     try:
-        got = PL.run("make sure there are exactly two machines left", board=board, world=Lab())
+        # ⇒⇒ ⚠ **A LAB THAT REALLY HOLDS TWO, AND `Lab()` HAS NOT SINCE 2026-08-14.** This
+        #   check read `Lab()` and its premise is *the lab is already correct*, so it was a
+        #   silence control. `metrics.Lab` says in its OWN docstring that adding n1/n2/n3 took
+        #   the unfiltered set "from 2 members to 5" — which turned this cell into a 5 -> 2
+        #   removal, and the guard has been correctly asking to confirm it ever since. The
+        #   FIXTURE moved and the check did not, so a passing guard read as a failure.
+        got = PL.run("make sure there are exactly two machines left", board=board,
+                     world=_NamedLab("v0", "v1"))
         check("gate 3 stays silent — it is not illegal", not got.illegal)
         # ⇒⇒ **THE GOAL REPLACED THE STEPS, SO THE GUARD HAD TO FOLLOW THEM.** As of 2026-08-11
         #   an ACHIEVE request carries the STATE it asks to hold and the steps that closed it are
