@@ -120,6 +120,16 @@ TROUBLE = frozenset({"sorry", "pardon", "what", "huh", "again", "eh"})
 #     backchannels and failed to apply it to the word beside them.
 APOLOGY = frozenset({"sorry", "apologies", "oops", "my bad"})
 
+# ⇒⇒ **THE FILLED PAUSES — HESITATION, AND IT IS NOT A BACKCHANNEL.** `er` · `um` · `uh` ·
+#   `ehm` are 27 of the 29 Time Management segments in the gold, all of them `stalling`: the
+#   speaker holding the floor while they think. A closed class, and one English has had
+#   unchanged for as long as anybody has written it down.
+#   ⇒ ⚠ **AND THEY ARE THE SAME TOKENS THE GOLD ALSO MARKS `turnKeep`**, because a filled pause
+#     does two jobs at once — that is ISO's multidimensionality, not an ambiguity. We emit the
+#     TIME reading only: it is the one we can establish from the word alone. Claiming the turn
+#     reading too would score better and mean less, because we cannot see whose turn it was.
+FILLED_PAUSE = frozenset({"er", "erm", "ehm", "um", "uhm", "uh", "eh", "hmm", "hm"})
+
 
 def feedback_of(segment: str) -> Optional[tuple]:
     """(dimension, function) when this segment is FEEDBACK, else None.
@@ -143,6 +153,8 @@ def feedback_of(segment: str) -> Optional[tuple]:
     #   and `uh` is in nothing. The de-hyphenated whole form is tested first — `uhhuh`, `mmhm`
     #   — which is one lookup rather than a second spelling of every entry.
     bare = re.sub(r"[^a-z]", "", text)
+    # ⇒ THE BACKCHANNEL IS TESTED FIRST, because `uh-huh` de-hyphenates to `uhhuh` while a bare
+    #   `uh` is a filled pause — one is *I follow you* and the other is *wait, I am thinking*.
     if bare in BACKCHANNEL:
         return (ALLO_FB, "feedbackElicitation") if asked else (AUTO_FB, "autoPositive")
     words = [w for w in SA.words_of(text) if w]
@@ -151,6 +163,8 @@ def feedback_of(segment: str) -> Optional[tuple]:
     particles = SA.OPENERS | BACKCHANNEL
     if all(w in particles for w in words):
         return (ALLO_FB, "feedbackElicitation") if asked else (AUTO_FB, "autoPositive")
+    if bare in FILLED_PAUSE or (words and all(w in FILLED_PAUSE for w in words)):
+        return (TIME, "stalling")
     if all(w in APOLOGY for w in words):
         return (SOCIAL, "Apology") if not asked else (AUTO_FB, "autoNegative")
     if all(w in TROUBLE for w in words):
@@ -161,6 +175,32 @@ def feedback_of(segment: str) -> Optional[tuple]:
             "mean" in text or "meant" in text or "said" in text):
         return (ALLO_FB, "alloNegative")
     return None
+
+
+# ⇒⇒⇒ ⚠ **WHAT IS DELIBERATELY NOT READ, AND WHY EACH ONE IS A DECLINE RATHER THAN A GAP.**
+#   Measured against DialogBank's Map Task gold, 2026-08-16. Five dimensions sit at 0 and four
+#   of them CANNOT be read from a single string by anybody:
+#
+#     TURN MANAGEMENT (74)   the gold marks `okay` · `right` · `er` — THE SAME TOKENS as
+#                            feedback and stalling. Whether a particle TAKES the floor or
+#                            merely acknowledges depends on whose turn it was, and we are
+#                            handed one string with no speaker
+#     ALLO-FEEDBACK (50)     `okay` is alloFeedback where we say auto. Same word; the direction
+#                            is WHO IS CHECKING WHOM. DiAML carries `sender`; we see none
+#     OWN COMM MGMT (31)     27 of 31 are `selfCorrection`, and they look like `go` ·
+#                            `you're pass` · `vertically in line` — ABANDONED FRAGMENTS, not
+#                            lexical markers. ⚠ **I BUILT THE LEXICAL FORM IN PHASE 4 AND IT
+#                            SCORES 0 HERE**: real self-repair is disfluency, and detecting it
+#                            needs the segment AFTER it
+#     PARTNER COMM (3)       completing somebody else's utterance — the same problem
+#     CONTACT MGMT (4)       a tenth dimension we never named
+#
+#   ⇒⇒ **AND EMITTING THEM ANYWAY WOULD SCORE BETTER AND MEAN LESS.** The gold files the same
+#     words as SEPARATE segments, one per dimension, so answering *"feedback AND turn AND
+#     contact"* to every particle would collect three hits for one reading. That is the shotgun,
+#     and the operator's rule stands: *"i do want you to not rig the test."*
+#   ⇒ So the honest count is that **162 of 779 segments need the speaker and the previous
+#     turn** — which is Part 3, with a number on it at last.
 
 
 class Annotation(NamedTuple):
