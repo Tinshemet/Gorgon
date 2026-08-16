@@ -41,6 +41,15 @@ class Feature(NamedTuple):
     example: str
     reads_it: str        # what turns this structure into a usable fact today; "" is a hole
     note: str = ""
+    # ⇒⇒ ⚠ **GRADED ON THE OPERATIONS, NEVER ON THE VERDICT — CORRECTED 2026-08-16.** Four rows
+    #   were marked dangerous from the free readers alone, and running the full seam showed two
+    #   of them BOUNCE: the unread words reach the span-grain residue check and are asked about.
+    #   ⇒ **AND THE OTHER TWO STAYED DANGEROUS FOR A REASON THE VERDICT HID.** They REFUSED —
+    #     but because the lab did not hold the machines they named, not because the structure
+    #     was caught. `stop alpha or beta` produced `[stop_vm(beta), stop_vm(beta)]`: alpha
+    #     dropped, beta doubled. Against a lab that HAS them, that serves.
+    #   ⇒ So the test is *what would it DO*, and a refusal caused by an absent machine proves
+    #     nothing about the reading.
     danger: bool = False # a hole that changes WHAT RUNS rather than what is understood
     partial: bool = False
 
@@ -78,9 +87,12 @@ MAP: List[Feature] = [
     Feature(PHRASE, "magnitude comparative", "stop every vm with over 6gb of ram",
             "",
             "⚠ MEASURED: `over`, `6gb` and `ram` all come back unread. `scan.COMPARATORS` "
-            "declares the COUNT comparators and nothing declares the magnitude ones. **The "
-            "sentence READS as a perfectly good order and stops the wrong machines** — Part 2",
-            danger=True),
+            "declares the COUNT comparators and nothing declares the magnitude ones. "
+            "⇒ **DOWNGRADED FROM DANGEROUS 2026-08-16 BY RUNNING THE FULL SEAM**: it BOUNCES. "
+            "`over` and `6gb` reach the span-grain residue check and are asked about, so the "
+            "cost is service and not safety. My first grading said *stops the wrong machines* "
+            "and was taken from the free readers alone. ⚠ It does declare a MACHINE CALLED "
+            "`ram` — the alias `ram`->memory_mb read as a member name — which is its own bug"),
     Feature(PHRASE, "superlative", "stop the biggest vm",
             "",
             "⚠ `biggest` unread. A superlative needs an ORDERING over an attribute, which is a "
@@ -90,8 +102,9 @@ MAP: List[Feature] = [
             "",
             "⚠⚠ MEASURED: the whole sentence reads as **None** — unread. `give` is a LIGHT "
             "VERB and `4 cores`/`8gb` are quantity+unit, which nothing pairs. A spec-giving "
-            "request is the commonest thing an operator types and it has no reading at all",
-            danger=True),
+            "request is the commonest thing an operator types and it has no reading at all. "
+            "⇒ DOWNGRADED FROM DANGEROUS: the full seam BOUNCES, declaring a vm named `4` and "
+            "one named `8gb` and complaining about both. Lossy, not unsafe"),
     Feature(PHRASE, "possessive", "delete alpha's snapshots",
             "",
             "⚠ `alpha's` unread as one token — the apostrophe survives tokenisation and the "
@@ -111,10 +124,12 @@ MAP: List[Feature] = [
             "⚠ MEASURED: splits into two clauses and reads EXPRESSIVE + DIRECTIVE_INFORM. An "
             "apposition RENAMES — it is the archive's own `X is a Y` in a different shape"),
     Feature(PHRASE, "negated filter", "stop every vm that is not running",
-            "speech_act.NEGATORS exists; the filter half does not", partial=True,
-            note="⚠⚠ `running` reads as a value and the NEGATION over it is not carried into the "
-            "condition. **Reads as an order to stop the RUNNING ones** — the opposite set",
-            danger=True),
+            "scan._negates -> the complement of a closed two-valued set",
+            note="⇒ **CLOSED 2026-08-16, AND IT WAS THE GENUINELY DANGEROUS ONE.** `running` "
+            "read as a value with the negation discarded, giving `{status: running}` — a "
+            "WELL-FORMED condition naming the exact set the operator excluded, which every "
+            "gate accepts. `attr_values` declares the closed set, so with two members the "
+            "complement is exact; with more it DECLINES rather than guessing"),
 
     # ── CLAUSE ───────────────────────────────────────────────────────────────────────
     Feature(CLAUSE, "coordination", "create a vm named beta and then launch it",

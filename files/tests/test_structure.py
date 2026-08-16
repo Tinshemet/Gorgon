@@ -95,6 +95,42 @@ def test_a_condition_is_not_dropped_in_silence():
           not any("if alpha" in c for c in dropped))
 
 
+def test_a_negation_selects_the_complement():
+    """⇒⇒ **A NEGATED FILTER WAS READING AS ITS OWN OPPOSITE.** *"every vm that is NOT
+    running"* came back `{status: running}` — the exact set the operator excluded.
+
+    `conditions_from` computes `negated` and spends it on ONE of its three rules: an OBSERVED
+    attribute gets `out[attr] = not negated`. Rule 1 — a declared VALUE naming its own
+    attribute — ignored it, and rule 1 is the one every status filter goes through.
+
+    ⇒ **AND THE MANIFEST MAKES THE FIX EXACT RATHER THAN APPROXIMATE.** `attr_values.status`
+      is a CLOSED set of exactly two — `running` and `stopped` — so the complement of one is
+      the other, by declaration. Nothing is inferred and no new field is needed.
+    ⇒ **WITH MORE THAN TWO IT DECLINES**, because the complement is then a SET and `where`
+      holds one value. Saying nothing leaves gate 2 to ask; saying `stopped` when there are
+      four states would be confidently wrong.
+    """
+    from orchestrator.seam.scan import conditions_from
+    board = Board()
+    got = conditions_from("that is not running", "vm", board)
+    check(f"`not running` is the complement — {got}", got.get("status") == "stopped")
+    got = conditions_from("that is not stopped", "vm", board)
+    check(f"`not stopped` is the complement — {got}", got.get("status") == "running")
+    # ⇒ THE ALIAS RESOLVES FIRST, so the complement is taken of what the lab stores.
+    got = conditions_from("that is not up", "vm", board)
+    check(f"`not up` resolves then complements — {got}", got.get("status") == "stopped")
+
+    # ⇒ THE CONTROLS: an unnegated filter is untouched, and a negator belonging to a DIFFERENT
+    #   value must not reach this one.
+    check("`that is running` is unchanged",
+          conditions_from("that is running", "vm", board).get("status") == "running")
+    check("`currently stopped` is unchanged",
+          conditions_from("that is currently stopped", "vm", board).get("status") == "stopped")
+    # ⇒ AND THE OBSERVED ARM, WHICH ALREADY HAD THE NEGATION, STILL HAS IT — rung 11.
+    got = conditions_from("that do not answer", "vm", board)
+    check(f"the observed arm still negates — {got}", got.get("alive") is False)
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "structure")

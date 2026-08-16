@@ -437,6 +437,25 @@ def _config_kinds():
     return _config.KINDS or {}
 
 
+NEGATORS = frozenset({"not", "n't", "never", "no"})
+
+
+def _negates(words: List[str], at: int, values: Dict[str, tuple]) -> bool:
+    """Is the value at `at` under a negation OF ITS OWN?
+
+    ⇒ **SCOPED BY ADJACENCY, WHICH IS THE ONLY SCOPE AVAILABLE WITHOUT A PARSE.** A negator
+      binds the nearest value after it, so another declared value standing between them ends
+      its reach — *"not running and labelled prod"* negates `running` and leaves `prod` alone.
+      Crude, and strictly better than the clause-wide flag it replaces.
+    """
+    for j in range(at - 1, -1, -1):
+        if words[j] in values:
+            return False                     # a nearer value already took that negator
+        if words[j] in NEGATORS:
+            return True
+    return False
+
+
 def conditions_from(modifiers: str, kind: Optional[str],
                     board: Optional[Board] = None, span: str = "") -> Dict[str, object]:
     """Read a phrase like *"labelled 'red'"* into `{label: red}` — from the manifest alone.
@@ -508,6 +527,26 @@ def conditions_from(modifiers: str, kind: Optional[str],
     for i, word in enumerate(words):
         if word in values:                                   # 1 · a value names its attribute
             attr, value = values[word]
+            # ⇒⇒ **A NEGATION SELECTS THE COMPLEMENT, AND THE MANIFEST MAKES THAT EXACT.**
+            #   Until 2026-08-16 this rule ignored `not` entirely, so *"every vm that is NOT
+            #   running"* came back `{status: running}` — **the exact set the operator
+            #   excluded**, from a sentence that reads as perfectly understood. `negated` was
+            #   already computed here and spent only on the observed arm below.
+            #
+            #   ⇒ `attr_values` DECLARES the closed set, so with exactly two members the
+            #     complement of one IS the other. Nothing is inferred and no new field is
+            #     needed — `where` still holds one value.
+            #   ⇒ ⚠ **WITH MORE THAN TWO IT DECLINES**, because the complement is then a SET
+            #     and this dict cannot hold one. Saying nothing leaves gate 2 to ask; naming
+            #     one of three would be confidently wrong.
+            #   ⇒ **AND THE NEGATOR MUST BE THIS VALUE'S OWN.** `negated` is clause-wide, so
+            #     *"not running and labelled prod"* would negate the label too. The negator
+            #     counts only when no OTHER declared value stands between it and this word.
+            if _negates(words, i, values):
+                allowed = [str(v).lower() for v in (spec.get("attr_values") or {}).get(attr, ())]
+                if len(allowed) != 2:
+                    continue                  # the complement is a set — decline, do not guess
+                value = next(v for v in allowed if v != str(value).lower())
             out[attr] = value
             continue
         stem = _stem(word)                                   # 2 · an attribute takes a value
