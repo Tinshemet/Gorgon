@@ -84,7 +84,8 @@ def test_the_ladder_makes_no_lookups():
         request="", clauses=(), acts=(), says="neither", mood="do",
         kinds=(), members=(), acting=(), asking=(), lab_predicate=False,
         universal=False, numeral=None, comparator="", counted=False, filtered=False,
-        ordered=False, postcondition=False, addressed=False, governs=(), shortcut="",
+        ordered=False, postcondition=False, shape="", existential=False, addressed=False,
+        governs=(), shortcut="",
         gorgon=(), procedure="", unknown=(),
     )
     got = door.route(empty)

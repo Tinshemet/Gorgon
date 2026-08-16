@@ -167,6 +167,8 @@ class Facts(NamedTuple):
     numeral: Optional[int]              # the largest declared count, or None
     comparator: str                     # max · min · eq, from scan.COMPARATORS
     counted: bool                       # `how many` · `how much`
+    shape: str                          # count · members · meaning — what would answer it
+    existential: bool                   # `is there …` — asks whether a thing is there at all
     filtered: bool                      # a relative clause, or an exclusion
     ordered: bool                       # more than one clause
     postcondition: bool                 # mood is achieve
@@ -220,6 +222,8 @@ def facts(request: str, board: Optional[Board] = None, world=None) -> Facts:
         numeral=numeral,
         comparator=_comparator(low, scan),
         counted=any(c in low for c in COUNTING),
+        shape=_shape(parts, board, world, speech_act),
+        existential=any(w in speech_act.EXISTENTIAL for w in words),
         filtered=_filtered(parts, speech_act),
         ordered=len(parts) > 1,
         postcondition=mood_of(request) == "achieve",
@@ -282,6 +286,26 @@ def _verbs(words: Sequence[str], board: Board,
         elif verdict is False:
             asking.append(w)
     return tuple(acting), tuple(asking)
+
+
+def _shape(parts: Sequence[str], board: Board, world, speech_act) -> str:
+    """WHAT WOULD ANSWER THIS QUESTION — a count, the members, a meaning, or nothing.
+
+    ⇒⇒ **`speech_act.answer_shape` OWNS IT AND ALREADY SAYS THE HARD PART:** *"`where` joins
+      `when` and `why` in the honest branch — three wh-words whose answers are a place, a time
+      and a reason, and this system can produce none of the three."* A question with NO shape
+      is one the lab has no operation for, and that is a routing fact, not a failure.
+
+    ⇒ The first clause that yields one wins; a request with no shape anywhere returns "".
+    """
+    for clause in parts:
+        try:
+            got = speech_act.answer_shape(clause, board, world)
+        except Exception:
+            got = None
+        if got:
+            return str(got)
+    return ""
 
 
 def _lab_predicate(words: Sequence[str], board: Board, speech_act) -> bool:
@@ -479,22 +503,39 @@ def route(f: Facts) -> Decision:
     # ⇒ AND A QUESTION OVER A KIND CARRIES ITS OWN OPERATION. *"what profiles are there"* names
     #   no verb; the kind's own `list` is what answers it, and the manifest declares one for
     #   every kind that has members to enumerate.
-    if f.says == "question" and f.kinds:
+    #   ⇒ ⚠ **BUT ONLY WHEN SOMETHING COULD ANSWER IT.** A shape of `""` means `answer_shape`
+    #     declined — a place, a time or a reason, which no manifest operation produces. Without
+    #     that guard *"why is qemu slow on windows guests"* implied an enumeration, because
+    #     `guest` is a declared noun for `vm`.
+    if f.says == "question" and f.kinds and (f.shape or f.asking):
         doing = True
 
     if not thing:
         # ⇒⇒ **AN ORDER THAT NAMES NOTHING WE OWN IS NOT SMALL TALK.** Somebody is telling us
         #   to do something and we cannot tell what — *"sort out n1"*, *"make it faster"* — and
-        #   sending that to the model is the `lab -> CHAT` cell, the one with no gate behind
-        #   it. **The speech act is the discriminator and it costs no new lookup**: a question
-        #   or an expressive naming nothing is a person talking to us, and the model is the
-        #   right answer for exactly that.
+        #   sending that to the model is the `lab -> CHAT` cell, the one with no gate behind it.
         if f.says == "order":
             return say(ASK, "an order, and nothing we own is named in it")
-        # ⇒ THE ONLY PLACE THE MODEL IS RIGHT, and it is reached positively rather than by
-        #   falling through.
-        return say(CHAT, "it names nothing we own")
+        # ⇒⇒ **AND CHAT NEEDS POSITIVE EVIDENCE, WHICH IS THE WHOLE POINT OF THAT CELL BEING
+        #   CRITICAL.** Three things are evidence that a person is talking to us rather than
+        #   asking for work: it is a QUESTION, it CALLS US BY NAME, or every word in it is one
+        #   some vocabulary already accounts for.
+        #   ⇒ ⚠ **THIS IS A DELIBERATE TRADE AND IT HAS A VISIBLE COST.** *"sort out n1"* and
+        #     *"thanks, that worked"* have IDENTICAL facts — expressive, unaddressed, two words
+        #     nobody owns — so no rule separates them and one of the two must be wrong. The
+        #     key's own scoring says which way to be wrong: `lab -> CHAT` is critical and
+        #     `anything -> ASK` is cheap. So the greeting pays a question and the request does
+        #     not reach the model ungated.
+        if f.says == "question" or f.addressed or not f.unknown:
+            return say(CHAT, "it names nothing we own")
+        return say(ASK, "nothing we own is named, and words nobody accounts for are")
     if not doing:
+        # ⇒ A QUESTION NOTHING CAN ANSWER, ABOUT NO PARTICULAR THING, IS ABOUT THE WORLD.
+        #   *"why is qemu slow on windows guests"* names a kind only because `guest` is one of
+        #   `vm`'s declared nouns. Nothing is being asked OF the lab, and the model genuinely
+        #   knows this better than the manifest does.
+        if f.says == "question" and not f.shape and not f.members:
+            return say(CHAT, "the lab has no operation that would answer it")
         return say(ASK, "it names a thing and no doing")
 
     # ── 5 · TOOL OR PROGRAM — STRUCTURE DECIDES ──────────────────────────────────────
@@ -520,6 +561,21 @@ def route(f: Facts) -> Decision:
         if f.asking and not f.acting:
             return say(TOOL, "an enumerator absorbs the universal")
         return say(PROGRAM, "an act over a set")
+    # ⇒⇒ **AN EXISTENTIAL QUESTION IS A MEMBERSHIP TEST, AND A MEMBERSHIP TEST IS A FILTER.**
+    #   *"is there a machine called alpha"* is answered by enumerating and then deciding, which
+    #   is a computation over rows — while *"is alpha running?"* is `vm_status(alpha)`, one
+    #   call whose output is the answer. **The two sit one word apart and the key calls that
+    #   pair the sharpest statement of this line.**
+    #   ⇒ TWO OWNERS, NO NEW VOCABULARY: `EXISTENTIAL` is a closed class of one that
+    #     `speech_act` already declares, and `answer_shape` says what would answer it —
+    #     *"what profiles are there"* carries the same `there` and asks for the MEMBERS, which
+    #     the enumerator returns whole.
+    #   ⇒ ⚠ **AND THE TEST IS `!= members`, NOT `not shape`, WHICH THE FIRST CUT GOT WRONG.**
+    #     `answer_shape` returns `count` as the DEFAULT for a polar question rather than None —
+    #     correctly, since a yes/no about existence is answered by a count being non-zero — so
+    #     a shape is always present here and `not shape` fired never.
+    if f.existential and f.shape != "members":
+        return say(PROGRAM, "an existential question is a membership test over rows")
     return say(TOOL, "one call, and its output or effect is the answer")
 
 

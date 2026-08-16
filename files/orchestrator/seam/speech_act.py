@@ -828,6 +828,21 @@ def _inverted_subject(words: Sequence[str], clause: str = "") -> Optional[str]:
         if negated and not _asks_outright(clause) \
                 and not (w in SUBJECT_PRONOUNS or _is_determiner(w)):
             return None                    # "do not touch …" — an imperative, not a question
+        # ⇒⇒ **EXISTENTIAL `there` IS A SUBJECT AND CAN NEVER BE AN OBJECT**, so it is settled
+        #   before the object test below and not by it. This file's own note on the class says
+        #   it *"names nothing, so the subject test needs it by name"* — and the object test
+        #   asks whether a PREDICATE follows, which *"is there a machine"* does not have.
+        #   ⇒ ⚠ **MEASURED, AND IT WAS A FALSE SERVE.** *"is there a machine called alpha"*
+        #     returned no subject, fell through to the imperative branch and came back an
+        #     ORDER — a question about the lab's contents read as an instruction to act on
+        #     them. *"are there any stopped vms"* survived only because `stopped` stems onto
+        #     the manifest's `stop`, and *"is there a vm on the lab network"* survived only
+        #     because `lab` prefix-matched `label`. **Two right answers for wrong reasons,
+        #     and the second stops being right the moment that prefix rule is narrowed.**
+        #   ⇒ Found by `tests/bench/door_key`, written before the door existed and without
+        #     opening the held-out set.
+        if w in EXISTENTIAL:
+            return w                       # "is there a machine" — existential, and asking
         # ⇒⇒ **A CANDIDATE SUBJECT WITH NO PREDICATE AFTER IT IS AN OBJECT.** *"do it again"*
         #   and *"does it run?"* both put `it` after the auxiliary, and only the second has a
         #   verb following — so only the second is an inversion. Without this the pro-verb
@@ -936,10 +951,25 @@ def _lab_predicate_in(words: Sequence[str], board: Optional[Board] = None) -> bo
         # ⇒⇒ **AN INFLECTED FORM IS THE SAME VERB.** *"would you mind STOPPING the web server"*
         #   is a polite order and `stopping` is not `stop`, so a bare membership test read it
         #   as a question — a keyed control, broken by a fix to a different rule. `_stem`
-        #   gives `stopp` (the doubled consonant survives), so the match is by PREFIX in
-        #   either direction, which is the same trick `NAMING_CUES` documents for `named`.
+        #   gives `stopp` (the doubled consonant survives), so the match is by PREFIX.
+        #
+        # ⇒⇒ ⚠ **AND IT USED TO MATCH IN EITHER DIRECTION, WHICH IS TWO FALSE POSITIVES.**
+        #   `d.startswith(stem)` lets a word SHORTER than the verb claim it, and an inflected
+        #   form is never shorter than its base — that is not morphology, it is a prefix
+        #   collision. Both of these were measured on 2026-08-16:
+        #
+        #       lab   -> label   *"clean up the lab"* named a doing it does not name, and a
+        #                        vague request was served by one call instead of asked about
+        #       good  -> go      *"good morning doorman"* named a doing, so a greeting looked
+        #                        like an order whose object had gone missing
+        #
+        #   ⇒ **SO: ONE DIRECTION, AND TWO BOUNDS.** The base must be a real verb rather than a
+        #     two-letter particle (`go`, `do`), and an inflection may add at most two
+        #     characters — `stopp`/`stop` and `labell`/`label` are both +1, and nothing English
+        #     does to a verb ending adds more without changing the word.
         stem = _stem(w)
-        if len(stem) > 2 and any(d.startswith(stem) or stem.startswith(d) for d in doings):
+        if len(stem) > 2 and any(len(d) >= 3 and stem.startswith(d) and len(stem) - len(d) <= 2
+                                 for d in doings):
             return True
     return False
 
