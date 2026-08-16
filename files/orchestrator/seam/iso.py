@@ -185,10 +185,23 @@ def annotate(request: str, board: Optional[Board] = None, world=None) -> List[An
       A condition read as its own segment is the mistake that had it filed as teaching for a
       month; here the flag rides on the clause that BUILDS, which is what a qualifier is.
     """
-    from . import speech_act as SA
+    from . import self_repair as SR, speech_act as SA
 
     board = board or Board()
-    read = SA.read(request, board, world)
+    # ⇒⇒ **A REPAIR IS ITS OWN DIALOGUE ACT AND IT IS EMITTED FIRST**, because it is about the
+    #   TURN rather than about the task. ISO files both under Own Communication Management, and
+    #   the segment that follows is still whatever it is — an Instruct the operator amended is
+    #   an Instruct and an amendment, not one or the other.
+    mend = SR.read(request)
+    # ⇒⇒ ⚠ **AND THE TASK ACT IS READ FROM WHAT WAS ASKED, NOT FROM THE RAW STRING.** With the
+    #   repair still in it, *"stop alpha — sorry, i meant beta"* split into three segments and
+    #   `i meant beta` came back a GREETING — the producer test reaching EXPRESSIVE because the
+    #   fragment names no verb. The repair markers are not part of the request; they are the
+    #   operator managing their own turn, and they are already annotated above.
+    #   ⇒ **THIS IS NOT THE SUBSTITUTION WE REFUSE TO MAKE.** Reading the act from what was
+    #     SAID is not the same as deciding what the correction REPLACES — that alignment is
+    #     still asked, by `linguistics/self-correction`, and nothing here guesses it.
+    read = SA.read(mend.withdrawn if mend else request, board, world)
     segments = [(c, a) for c, a in read]
 
     # ⇒ THE CONDITION'S OWN SEGMENT CARRIES NO FUNCTION, so its qualifier is lifted onto the
@@ -212,4 +225,8 @@ def annotate(request: str, board: Optional[Board] = None, world=None) -> List[An
     #   was understood* is a reading and an empty list is an absence of one.
     if not out and segments:
         out.append(Annotation(request.strip(), TASK, "", carried))
+    if mend:
+        out.insert(0, Annotation(
+            mend.withdrawn or request.strip(), OWN_COMM,
+            "Retraction" if mend.kind == SR.RETRACTED else "Self-Correction", {}))
     return out

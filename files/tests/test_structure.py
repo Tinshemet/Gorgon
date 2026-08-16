@@ -337,6 +337,49 @@ def test_the_iso_annotation():
           all(a.dimension in iso.DIMENSIONS for a in iso.annotate("good morning doorman")))
 
 
+def test_the_operator_taking_something_back():
+    """⇒⇒ **PHASE 4 — SELF-REPAIR, AND THE TWO CASES ARE TREATED DIFFERENTLY ON PURPOSE.**
+
+        A RETRACTION IS UNAMBIGUOUS   "never mind" withdraws, and withdrawing is a complete
+                                      instruction
+        A CORRECTION IS NOT           substituting a constituent needs an alignment, and the
+                                      wrong one STOPS THE WRONG MACHINE — so it is reported
+                                      and ASKED, never silently applied
+
+    ⇒ And the grid's third cell was already built: **every gate-2 ASK is an other-initiated
+      repair initiation.** Naming it that way is what showed the rest.
+    """
+    from orchestrator.seam import iso, self_repair as SR
+
+    got = SR.read("stop alpha — sorry, i meant beta")
+    check(f"a correction is read — {got!r}", got and got.kind == SR.REPAIRED)
+    check("the trouble source is trimmed of its apology", got.withdrawn == "stop alpha")
+    check("and the replacement is offered", got.offered == "beta")
+
+    got = SR.read("stop the vms. actually, never mind")
+    check(f"a retraction is read — {got!r}", got and got.kind == SR.RETRACTED)
+
+    # ⇒⇒ ⚠ THE CONTROL THAT MATTERS MOST. `sorry` is an APOLOGY on its own — ISO files it under
+    #   Social Obligations Management — and treating it as a repair would HOLD A REQUEST NOBODY
+    #   WITHDREW.
+    check("`sorry to bother you` is not a repair",
+          SR.read("sorry to bother you, restart alpha") is None)
+    check("an ordinary order is not a repair", SR.read("stop every vm") is None)
+    # ⇒ AND A CUT-OFF ALONE IS PUNCTUATION, not a repair — it counts only beside a marker.
+    check("a dash alone is not a repair", SR.read("stop alpha — the one on lab") is None)
+
+    # ⇒ THE ISO SIDE: the repair is its own act, and the TASK act is read from what was ASKED
+    #   rather than from the raw string — with the markers still in, `i meant beta` came back
+    #   a GREETING.
+    ann = iso.annotate("stop alpha — sorry, i meant beta")
+    check(f"the repair is its own act — {[str(a) for a in ann]}",
+          ann[0].dimension == iso.OWN_COMM and ann[0].function == "Self-Correction")
+    check("and the task act is what was asked",
+          any(a.dimension == iso.TASK and a.segment == "stop alpha" for a in ann))
+    check("no segment reads as a greeting",
+          not any(a.function == "Greeting" for a in ann))
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "structure")

@@ -192,10 +192,13 @@ MAP: List[Feature] = [
     Feature(TURN, "ellipsis, cross turn", "the same for db",
             "", "⚠ Part 3. Nothing to resolve against"),
     Feature(TURN, "repair", "stop alpha — sorry, i meant beta",
-            "",
-            "⚠⚠ IT REWRITES THE REQUEST, and every stance rule wants to discard it as an "
-            "apology. Found 2026-08-16",
-            danger=True),
+            "self_repair.read -> linguistics/self-correction + ISO Own Comm Management",
+            partial=True,
+            note="⇒ **READ 2026-08-16.** The markers are a closed class and the cut-off is "
+            "structural. ⚠ PARTIAL AND DELIBERATELY SO: the correction is REPORTED and ASKED, "
+            "never substituted — knowing WHICH constituent it replaces needs an alignment, and "
+            "the wrong one stops the wrong machine. A RETRACTION is unambiguous and is acted "
+            "on; a correction is not and is asked"),
     Feature(TURN, "topic shift", "list the vms. anyway, is alpha running?",
             "",
             "⚠ a SECOND request. The clause splitter joins them into one reading",

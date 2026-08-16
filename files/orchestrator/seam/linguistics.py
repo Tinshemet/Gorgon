@@ -82,7 +82,8 @@ class Finding(NamedTuple):
 #   gate 1 where the leftover rule already lives.
 OWNS = frozenset({"mood-achieve", "unexpressed-exclusion", "count-ignored",
                   "unasked-step", "light-verb-object", "unexpressed-choice",
-                  "quoted-evidence", "unexpressed-magnitude"})
+                  "quoted-evidence", "unexpressed-magnitude",
+                  "self-correction", "retraction"})
 
 
 def mood_of(request: str) -> str:
@@ -418,6 +419,33 @@ def findings(request: str, rows: List[S.Declared], operations: List[Operation], 
                            f"the request compares {attr} against {amount}{unit} — a condition "
                            f"here holds one VALUE, not a comparison, so that filter is not "
                            f"expressed",
+                           "operator"))
+
+    # ⇒⇒ 0 · THE OPERATOR TOOK SOMETHING BACK, AND IT IS ASKED BEFORE ANYTHING ELSE.
+    #
+    #   *"stop alpha — sorry, i meant beta"* — every stance rule wants to discard `sorry, i
+    #   meant` as an apology, and discarding it STOPS ALPHA. That is a wrong action rather than
+    #   a lost answer, which is why this sits first among the findings.
+    #
+    #   ⇒ **A RETRACTION IS ACTED ON AND A CORRECTION IS ASKED**, and the asymmetry is safety:
+    #     withdrawing is a complete instruction, while substituting a constituent needs an
+    #     alignment that could stop the wrong machine. Both reach the operator; only one of
+    #     them claims to know the answer.
+    #   ⇒ ⚠ AND THE RETRACTION SIDE HAS MEASURED HARM BEHIND IT: the word `cancel` once CREATED
+    #     A VM ([[gorgon-confirm-answer-rule]]). A rule guards the confirm PROMPT; a retraction
+    #     arriving as an ordinary turn has been unread ever since.
+    from .self_repair import REPAIRED, RETRACTED, read as _mend
+    _m = _mend(request)
+    if _m and _m.kind == RETRACTED:
+        out.append(Finding("retraction", _m.marker,
+                           f"you took it back — {_m.marker!r}. Nothing was run. Did you mean "
+                           f"to withdraw {_m.withdrawn!r} entirely?",
+                           "operator"))
+    elif _m:
+        out.append(Finding("self-correction", _m.marker,
+                           f"you corrected yourself — {_m.withdrawn!r} became {_m.offered!r}. "
+                           f"**Which part does {_m.offered!r} replace?** Nothing is substituted "
+                           f"on a guess: the wrong alignment stops the wrong machine",
                            "operator"))
 
     # ⇒⇒ 1a · A QUOTED CLAUSE IS EVIDENCE, AND NOTHING HAS EVER READ ONE.

@@ -88,7 +88,8 @@ MAP: List[Cell] = [
          "the one cross-turn reader that exists"),
     Cell(TASK, "Confirm", "reading_answers.AFFIRMATION", "yes, that one"),
     Cell(TASK, "Disconfirm", "reading_answers.NEGATION", "no, not that one"),
-    Cell(TASK, "Correction", "", "stop alpha — sorry, i meant beta",
+    Cell(TASK, "Correction", "self_repair.read (reported, never substituted)",
+         "stop alpha — sorry, i meant beta",
          "⚠⚠ IT REWRITES THE REQUEST and every stance rule wants to discard it. ISO files it "
          "under Own Communication Management too — see there"),
 
@@ -142,12 +143,14 @@ MAP: List[Cell] = [
          "good morning doorman", "the agent's own name is the discriminator"),
 
     # ── OWN COMMUNICATION MANAGEMENT · repairing our own talk ────────────────────────
-    Cell(OWN_COMM, "Self-Correction", "", "stop alpha — sorry, i meant beta",
+    Cell(OWN_COMM, "Self-Correction", "self_repair.read -> linguistics/self-correction",
+         "stop alpha — sorry, i meant beta",
          "⚠⚠ THE OPERATOR REPAIRING THEIR OWN REQUEST. Schegloff, Jefferson & Sacks give the "
          "four-way grid — self/other initiated x self/other repair — and we have built ONE "
          "cell of it without knowing it was a grid (see Auto-Negative, which is an "
          "other-initiated repair INITIATION)"),
-    Cell(OWN_COMM, "Retraction", "", "actually, never mind — cancel that",
+    Cell(OWN_COMM, "Retraction", "self_repair.read -> linguistics/retraction",
+         "actually, never mind — cancel that",
          "⚠⚠ MEASURED HARM: the word `cancel` once CREATED A VM. One rule guards the confirm "
          "prompt; a retraction arriving as an ordinary turn is unread"),
 
