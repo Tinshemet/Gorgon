@@ -509,6 +509,57 @@ def test_a_declared_noun_may_be_more_than_one_word():
           anchors_in("create 3 vms on a network called lab", board) == ["vms", "network"])
 
 
+def test_a_quoted_run_is_one_value_and_its_words_are_not_cues():
+    """⇒⇒ **THE OPERATOR QUOTED THE NAME AND WE TRUNCATED IT ANYWAY.**
+
+        *"a vm named 'web server one'"*   -> `{name: web}`   — a machine created under a
+                                                                name nobody typed
+        *"a network called 'core net'"*   -> `{name: core, network: core}`
+
+    The second is the worse one. `net`, INSIDE the operator's quotes, prefix-matched the
+    `network` alias and MINTED A SECOND CONDITION out of a literal — so the reading invented a
+    constraint the request never carried, from characters the operator had explicitly fenced.
+
+    ⇒ **`quoted_clauses` HAS READ THESE SINCE IT WAS WRITTEN, AND `span` HAS BEEN A PARAMETER
+      OF `conditions_from` SINCE GATE 1.** The two were never joined. `_tokens` drops the quote
+      marks, so by the time `modifiers` exists the boundary is gone and the span is the only
+      place it survives.
+
+    ⇒ **AND THIS BOUNDS THE LENGTH RULE RATHER THAN CONTRADICTING IT.** `quoted_clauses` calls
+      a run of two or more words a QUOTATION — evidence, not a value — and that stays true of
+      a quote no cue governs. A quote a cue DOES govern is that cue's value at any length,
+      because the slot decides, never the length and never the meaning.
+    """
+    from orchestrator.seam.scan import conditions_from, quoted_clauses
+    board = Board()
+
+    check("a quoted name is taken whole",
+          conditions_from("named 'web server one'", "vm", board,
+                          span="a vm named 'web server one'") == {"name": "web server one"})
+    check("and so is a quoted label",
+          conditions_from("labelled 'prod fleet'", "vm", board,
+                          span="vms labelled 'prod fleet'") == {"label": "prod fleet"})
+    check("a word inside the quotes cannot mint a second condition",
+          conditions_from("called 'core net'", "network", board,
+                          span="a network called 'core net'") == {"net_name": "core net"})
+
+    # ⇒ THE CONTROLS. Every quoted value in the fourteen rungs is ONE word and must be
+    #   untouched, and a quotation NO cue governs is still a quotation.
+    for mods, kind, span, want in (
+            ("labelled 'red'", "vm", "3 vms labelled 'red'", {"label": "red"}),
+            ("labelled 'blue'", "vm", "2 vms labelled 'blue'", {"label": "blue"}),
+            ("carry the 'prod' label", "vm", "exactly 3 vms carry the 'prod' label",
+             {"label": "prod"}),
+            ("named alpha", "vm", "a vm named alpha", {"name": "alpha"}),
+            ("called lab", "network", "a network called lab", {"net_name": "lab"})):
+        check(f"unchanged — {span!r}", conditions_from(mods, kind, board, span=span) == want)
+    check("a quotation no cue governs is still a quotation",
+          quoted_clauses("the error says 'cannot allocate memory'")
+          == ("cannot allocate memory",))
+    check("and one quoted word is still not a quotation",
+          quoted_clauses("3 vms labelled 'red'") == ())
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "structure")

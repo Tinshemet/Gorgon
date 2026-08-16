@@ -565,11 +565,20 @@ def quoted_clauses(request: str) -> tuple:
 
     ⇒ **THE DISCRIMINATOR IS LENGTH AND IT IS STRUCTURAL** — no vocabulary, and it matches the
       corpus exactly. One word is a value; two or more is a quotation.
+    ⇒ ⚠ **BUT LENGTH DECIDES ONLY WHERE NO SLOT CLAIMS IT.** `conditions_from` overrides this
+      when a CUE governs the quote — *"a vm named 'web server one'"* is a name, not evidence,
+      however many words it runs to. That is the operator's own rule ([[slot-decides-junk]]):
+      the slot decides, never the length and never the meaning.
     """
+    return tuple(q for q in _quoted_runs(request) if len(q.split()) > 1)
+
+
+def _quoted_runs(request: str) -> tuple:
+    """EVERY quoted run, whatever its length — the operator's own boundary marks, read raw."""
     out = []
     for m in _QUOTED.finditer(str(request)):
         span = (m.group(1) or m.group(2) or "").strip()
-        if len(span.split()) > 1:
+        if span:
             out.append(span)
     return tuple(out)
 
@@ -718,6 +727,27 @@ def conditions_from(modifiers: str, kind: Optional[str],
     negated = "not" in words or "n't" in words
     out: Dict[str, object] = {}
 
+    # ⇒⇒ **A QUOTED RUN IS ONE VALUE, AND THE WORDS INSIDE IT ARE NOT CUES.** The operator's
+    #   quotes ARE the boundary, and reading past them is not a judgement call — yet
+    #   *"a vm named 'web server one'"* came back `name = web`, so the machine would have been
+    #   created under a name nobody typed. Worse, *"a network called 'core net'"* returned
+    #   `{name: core, network: core}`: `net` inside the quotes prefix-matched the `network`
+    #   alias and MINTED A SECOND CONDITION out of the operator's own literal.
+    #
+    #   ⇒ `quoted_clauses` has read these since it was written and `span` has been a parameter
+    #     here since gate 1 — the two were never joined. `_tokens` drops the quote marks, so by
+    #     the time `modifiers` exists the boundary is gone; the SPAN is the only place it
+    #     survives.
+    #   ⇒ **AND THIS DOES NOT CONTRADICT THE LENGTH RULE, IT BOUNDS IT.** A long quote with no
+    #     cue over it is still evidence. A quote a CUE governs is that cue's value, because the
+    #     slot decides — never the length, never the meaning.
+    runs = [q.lower() for q in _quoted_runs(span or "") if q.split()]
+    literal = {w for q in runs for w in q.split()[1:]}      # every word but each run's first
+
+    def _whole(pick: Optional[str]) -> Optional[str]:
+        """The whole quoted run a picked value opens, or the pick unchanged."""
+        return next((q for q in runs if q.split()[0] == pick), pick)
+
     from planner.gates import claims as _claims
     key_attr = _claims.key_of(kind, board.kinds)
     nouns_here = {}
@@ -742,9 +772,9 @@ def conditions_from(modifiers: str, kind: Optional[str],
         if nearest is not None and nearest != kind:
             continue
         nxt = next((w for w in words[i + 1:]
-                    if w not in LINKING and w not in NAMING_CUES), None)
+                    if w not in LINKING and w not in NAMING_CUES and w not in literal), None)
         if nxt:
-            out[key_attr] = nxt
+            out[key_attr] = _whole(nxt)
             break
 
     for i, word in enumerate(words):
@@ -772,6 +802,8 @@ def conditions_from(modifiers: str, kind: Optional[str],
                 value = next(v for v in allowed if v != str(value).lower())
             out[attr] = value
             continue
+        if word in literal:                   # inside the operator's quotes — a literal, not a cue
+            continue
         for cue, real in attrs.items():                      # 2 · an attribute takes a value
             if _cue_hit(word, cue):                          #     (the test is `_cue_hit`)
                 # LOOK BOTH WAYS. English puts the value either side of the attribute word —
@@ -784,14 +816,14 @@ def conditions_from(modifiers: str, kind: Optional[str],
                 #   what one of its own attributes equals.
                 after = next((w for w in words[i + 1:]
                               if w not in LINKING and w not in attrs
-                              and w not in nouns_here), None)
+                              and w not in nouns_here and w not in literal), None)
                 before = next((w for w in reversed(words[:i])
                                if w not in LINKING and w not in attrs
-                               and w not in nouns_here), None)
+                               and w not in nouns_here and w not in literal), None)
                 pick = after if (after and after not in values) else (
                     before if (before and before not in values) else None)
                 if pick:
-                    out[real] = pick
+                    out[real] = _whole(pick)
                 break
 
     for attr, meta in (spec.get("observed") or {}).items():   # 3 · observed, through its doc
