@@ -71,11 +71,21 @@ def _world(use_lab: bool):
     return got, "THE REAL LAB"
 
 
-def rows() -> List[Tuple[str, str, bool, str]]:
-    """Every keyed request: (text, keyed destination, hard, where it came from)."""
-    out = [(k.text, k.goes, k.hard, "control") for k in K.CONTROLS]
-    out += [(r.goal, K.RUNG_DESTINATION[r.n], False, f"rung {r.n}") for r in RUNGS]
+def rows() -> List[Tuple[str, str, bool, str, str]]:
+    """Every keyed request: (text, keyed destination, hard, where it came from, second ok)."""
+    out = [(k.text, k.goes, k.hard, "control", k.also) for k in K.CONTROLS]
+    out += [(r.goal, K.RUNG_DESTINATION[r.n], False, f"rung {r.n}", "") for r in RUNGS]
     return out
+
+
+def reached(keyed: str, also: str, got: str) -> bool:
+    """Did the door land on a destination the key accepts?
+
+    ⇒ `also` is a SECOND right answer the operator ruled equally correct, and counting it as a
+      hit is the honest reading — a row with two right moves has two right moves. Every use is
+      named in the key's own `why`, so this cannot quietly widen a row.
+    """
+    return got == keyed or (bool(also) and got == also)
 
 
 def run(use_lab: bool = False, stub_library: bool = True):
@@ -92,9 +102,9 @@ def run(use_lab: bool = False, stub_library: bool = True):
                        (f" + {len(stored)} stored" if stored else "")
 
     out = []
-    for text, keyed, hard, where in rows():
+    for text, keyed, hard, where, also in rows():
         got = route(facts(text, world=world))
-        out.append((text, keyed, got, hard, where))
+        out.append((text, keyed, got, hard, also))
     return out, world_says, library_says
 
 
@@ -103,8 +113,8 @@ def report(results, world_says: str, library_says: str, misses_only: bool = Fals
     print(f"\n  world    {world_says}")
     print(f"  library  {library_says}")
 
-    hit = [r for r in results if r[1] == r[2].goes]
-    miss = [r for r in results if r[1] != r[2].goes]
+    hit = [r for r in results if reached(r[1], r[4], r[2].goes)]
+    miss = [r for r in results if not reached(r[1], r[4], r[2].goes)]
     directions = Counter(K.direction(keyed, got.goes) for _, keyed, got, _, _ in miss)
     critical = [r for r in miss if K.direction(r[1], r[2].goes) == "CRITICAL"]
     critical_soft = [r for r in critical if r[3]]
@@ -112,7 +122,7 @@ def report(results, world_says: str, library_says: str, misses_only: bool = Fals
 
     if not misses_only:
         print(f"\n── EVERY ROW ───────────────────────────────────────────────────────")
-        for text, keyed, got, hard, where in results:
+        for text, keyed, got, hard, also in results:
             mark = "  " if keyed == got.goes else "->"
             flag = K.direction(keyed, got.goes)
             note = "" if keyed == got.goes else f"  [{flag}]"
@@ -121,13 +131,20 @@ def report(results, world_says: str, library_says: str, misses_only: bool = Fals
             print(f"  {'':24} [dim]{got.rung}[/dim]".replace("[dim]", "").replace("[/dim]", ""))
 
     print(f"\n── WHERE THE MISSES WENT ───────────────────────────────────────────")
-    for text, keyed, got, hard, where in miss:
+    for text, keyed, got, hard, also in miss:
         print(f"  {K.direction(keyed, got.goes):10} {keyed} -> {got.goes:10} {text}"
               + ("   ⚠hard" if hard else ""))
         print(f"  {'':10} the rung that said so: {got.rung}")
 
     print(f"\n── THE TALLY, BY DIRECTION AND NEVER AS ONE NUMBER ─────────────────")
-    print(f"  {len(hit)} of {len(results)} rows reached the keyed destination")
+    second = [r for r in hit if r[1] != r[2].goes]
+    print(f"  {len(hit)} of {len(results)} rows reached a destination the key accepts")
+    if second:
+        # ⇒ ⚠ A HIT ON THE SECOND ANSWER IS STILL A HIT AND IS NOT THE SAME HIT. Printed apart
+        #   so a reader can see how much of the score rests on a row having two right moves.
+        print(f"  {len(second)} of those landed on the SECOND accepted destination, not the first:")
+        for text, keyed, got, _, also in second:
+            print(f"       {keyed}/{also} -> {got.goes}   {text}")
     for name in ("CRITICAL", "up", "down", "off-ladder"):
         if directions.get(name):
             print(f"  {directions[name]:3} {name}")

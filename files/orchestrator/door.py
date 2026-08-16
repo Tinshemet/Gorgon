@@ -180,6 +180,7 @@ class Facts(NamedTuple):
     procedure: str                      # a stored procedure named outright, or ""
     # ── what nobody owns ─────────────────────────────────────────────────────────────
     unknown: Tuple[str, ...]            # content words no vocabulary accounts for
+    head_unknown: bool                  # …and one of them is where the VERB goes
 
     @property
     def lab(self) -> bool:
@@ -206,6 +207,7 @@ def facts(request: str, board: Optional[Board] = None, world=None) -> Facts:
 
     acting, asking = _verbs(words, board, speech_act)
     numeral, universal = _counts(words)
+    unknown = _unknown(request, board, world, scan)
 
     return Facts(
         request=request,
@@ -232,7 +234,8 @@ def facts(request: str, board: Optional[Board] = None, world=None) -> Facts:
         shortcut=_shortcut(low),
         gorgon=tuple(w for w in dict.fromkeys(words) if w in GORGON_NOUNS),
         procedure=_procedure(low, world),
-        unknown=_unknown(request, board, world, scan),
+        unknown=unknown,
+        head_unknown=_head_unknown(parts, unknown, speech_act),
     )
 
 
@@ -515,7 +518,17 @@ def route(f: Facts) -> Decision:
         #   to do something and we cannot tell what — *"sort out n1"*, *"make it faster"* — and
         #   sending that to the model is the `lab -> CHAT` cell, the one with no gate behind it.
         if f.says == "order":
-            return say(ASK, "an order, and nothing we own is named in it")
+            # ⇒⇒ **AND THE OPERATOR NAMED WHAT THIS ACTUALLY IS, 2026-08-16:** *"it couldn't
+            #   understand that its a request for diagnosis, similar to the 'make sure' issue
+            #   we had."* `sort out n1` asks for a STATE to hold — the machine to be well —
+            #   with the target implicit and the symptom as its evidence. `make sure` reads
+            #   today only because it is a DECLARED achieve marker, and *sort out* is the same
+            #   move waiting to be made (D1).
+            #   ⇒ **THE DESTINATION IS RIGHT EITHER WAY AND THE REASON IS NOT.** Until a
+            #     diagnosis reading exists, the honest sentence is that nothing in the request
+            #     can be grounded — so it names the words it could not place.
+            return say(ASK, f"an order i cannot ground — nothing names anything i keep"
+                            + (f" ({', '.join(f.unknown[:3])})" if f.unknown else ""))
         # ⇒⇒ **AND CHAT NEEDS POSITIVE EVIDENCE, WHICH IS THE WHOLE POINT OF THAT CELL BEING
         #   CRITICAL.** Three things are evidence that a person is talking to us rather than
         #   asking for work: it is a QUESTION, it CALLS US BY NAME, or every word in it is one
@@ -528,15 +541,49 @@ def route(f: Facts) -> Decision:
         #     not reach the model ungated.
         if f.says == "question" or f.addressed or not f.unknown:
             return say(CHAT, "it names nothing we own")
-        return say(ASK, "nothing we own is named, and words nobody accounts for are")
+        # ⇒⇒ **AND THE OPERATOR SAID WHAT THE LOSING SIDE OF THIS TRADE ACTUALLY IS,
+        #   2026-08-16:** *"thanks, that worked — its probably a resolution to a problem, this
+        #   would be a statement then, 'X is resolved/working, the matter is closed'."* **A
+        #   RESOLUTION IS A SENTENCE TYPE NOTHING READS.** It is not a pleasantry and not an
+        #   order; it CLOSES a ticket, and `Issues.answers()` is the writer that would take one
+        #   (D3). Until something produces that reading, both sentences land here.
+        #   ⇒ ⚠ **SO THE REASON MUST NOT PICK ONE.** *"sort out n1"* is a request for diagnosis
+        #     and *"thanks, that worked"* is a resolution being reported; the reader calls both
+        #     EXPRESSIVE and nothing here can tell them apart. Saying *"it reports rather than
+        #     instructs"* would be confidently wrong half the time — **naming the ambiguity is
+        #     the honest sentence**, and it is also the one that describes the missing reading.
+        return say(ASK, "i cannot tell a request from a remark — nothing in it names "
+                        "anything i keep")
     if not doing:
         # ⇒ A QUESTION NOTHING CAN ANSWER, ABOUT NO PARTICULAR THING, IS ABOUT THE WORLD.
         #   *"why is qemu slow on windows guests"* names a kind only because `guest` is one of
         #   `vm`'s declared nouns. Nothing is being asked OF the lab, and the model genuinely
         #   knows this better than the manifest does.
         if f.says == "question" and not f.shape and not f.members:
+            # ⇒ ⚠ **AND THE OPERATOR RULED ASK EQUALLY CORRECT HERE, 2026-08-16**, on the
+            #   ground that `guests` could mean vms OR clients: *"it should be either
+            #   connecting the dots to a vm or ask if it meant client or vm, neither are wrong
+            #   here."* The real shape is an AMBIGUOUS REFERENCE — every declared noun is also
+            #   an ordinary English word, and the manifest sense is taken as certain
+            #   everywhere in the seam. That is its own item, not a rung.
             return say(CHAT, "the lab has no operation that would answer it")
-        return say(ASK, "it names a thing and no doing")
+        # ⇒⇒ **THREE DIFFERENT QUESTIONS WORE ONE SENTENCE, AND THE OPERATOR SEPARATED THEM,
+        #   2026-08-16.** *"most of these are correct, just need the 'why' to be tuned better."*
+        #   A door that says the same thing about three unrelated gaps has told the operator
+        #   nothing, and the ASK it produces is the text a person actually reads.
+        if f.universal and not f.kinds and not f.members:
+            # *"forget everything we said"* — *"a classic ASK due to blast radius, everything
+            # could mean session, could mean all of the archive."*
+            return say(ASK, "the target is unscoped — how far does it reach?")
+        if f.head_unknown:
+            # *"clean up the lab"* — *"it cant resolve what clean up means, delete everything?
+            # stop them? remove labels?"* The VERB is the unresolved half, not the target.
+            return say(ASK, f"{f.unknown[0]!r} is not an operation this lab has — "
+                            f"which one is meant?")
+        # *"do the nightly snapshots"* — *"ASK is correct due to lack of context, which vms,
+        # what time, etc."* The verb slot is filled by a light verb; what is missing is which.
+        return say(ASK, f"it names {', '.join(f.kinds) or 'a thing'} and neither an operation "
+                        f"nor which ones")
 
     # ── 5 · TOOL OR PROGRAM — STRUCTURE DECIDES ──────────────────────────────────────
     # ⇒ `regime_probe`'s own three-way judgement, moved from the node to the door: one call
@@ -721,6 +768,30 @@ def _unknown(request: str, board: Board, world, scan) -> Tuple[str, ...]:
         except Exception:
             pass
     return tuple(w for w in left if w not in known and not _taught(w))
+
+
+def _head_unknown(parts: Sequence[str], unknown: Sequence[str], speech_act) -> bool:
+    """Is a word nobody owns sitting where the VERB goes?
+
+    ⇒⇒ **THIS IS THE DIFFERENCE BETWEEN TWO QUESTIONS A PERSON WOULD ASK BACK**, and the
+      operator asked for exactly that distinction on 2026-08-16: *"most of these are correct,
+      just need the 'why' to be tuned better."*
+
+          clean up the lab        the head is `clean` -> WHICH OPERATION did you mean?
+          grubnash the vms        the head is `grubnash` -> same question, harsher answer
+          do the nightly …        the head is `do`, a light verb -> WHICH ONES, and when?
+
+    ⇒ **AN ENGLISH IMPERATIVE OPENS ON ITS VERB**, which is `speech_act`'s own stated test and
+      needs no lexicon — so the first word after the openers IS the verb slot. Reusing
+      `_after_openers` keeps `please clean up the lab` reading the same as its bare form.
+    """
+    if not parts or not unknown:
+        return False
+    try:
+        head = speech_act._after_openers(speech_act.words_of(parts[0]))
+    except Exception:
+        return False
+    return bool(head) and head[0] in set(unknown)
 
 
 def _declared(board: Board) -> set:

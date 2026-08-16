@@ -169,12 +169,19 @@ CRITICAL_MISSES = (
 
 
 class Keyed(NamedTuple):
-    """One request and where it should GO. `why` is the argument, not a restatement."""
+    """One request and where it should GO. `why` is the argument, not a restatement.
+
+    ⇒ `also` IS A SECOND DEFENSIBLE ANSWER, and it exists because the operator gave one. Some
+      requests have two right moves and picking either is not a miss — recording that is more
+      honest than pretending the key knows which. It is never used to widen a row after a run
+      unless the operator says so, and every use names them.
+    """
     text: str
     goes: str
     why: str = ""
     hard: bool = False      # a known-hard case; a miss here is recorded, not a surprise
     needs: str = ""         # a stored procedure this row assumes — the probe SKIPS without it
+    also: str = ""          # a second destination the operator ruled equally correct
 
 
 # ⇒ THE PROCEDURES THE `PROCEDURE` ROWS ASSUME. Rung 2 of the ladder cannot be measured against
@@ -303,10 +310,14 @@ CONTROLS: List[Keyed] = [
     #   manifest kinds*, and that is the same discriminator used everywhere else in the seam.
     Keyed("clear the session", SELF,
           "conversation state. Nothing in the lab is touched"),
-    Keyed("forget everything we said", SELF,
-          "⚠ `forget` IS TWO OPS. `clear session`'s own phrase set holds it, and `words forget "
-          "<x>` withdraws a signed archive entry. The object settles it — `everything we said` "
-          "is the session — but a door that reads the verb alone gets this wrong",
+    Keyed("forget everything we said", ASK,
+          "⇒⇒ **RE-KEYED SELF -> ASK BY THE OPERATOR, 2026-08-16, AFTER THE FIRST RUN:** *\"i "
+          "think this is a classic ASK due to blast radius, everything could mean session, "
+          "could mean all of the archive.\"* The original argument was that `everything we "
+          "said` settles the object as the session — and it does not: `forget` is TWO ops "
+          "(`clear session` holds the phrase, `words forget <x>` withdraws a signed archive "
+          "entry) and `everything` scopes to neither. **An unscoped object over an op that "
+          "exists twice is a blast-radius question, not a routing one**",
           hard=True),
     Keyed("turn verbose on", SELF,
           "a display toggle"),
@@ -353,9 +364,16 @@ CONTROLS: List[Keyed] = [
     #   These are the only rows with a fixture, and they SKIP rather than lie without it.
     Keyed("run the nightly snapshot", PROCEDURE,
           "names the stored program outright", needs="nightly_snapshot"),
-    Keyed("do the nightly snapshots", PROCEDURE,
-          "PHRASED AS A GOAL, not as a call — the rung only pays for itself if it is reached "
-          "without the operator knowing the procedure's name", needs="nightly_snapshot"),
+    Keyed("do the nightly snapshots", ASK,
+          "⇒⇒ **RE-KEYED PROCEDURE -> ASK BY THE OPERATOR, 2026-08-16, AFTER THE FIRST RUN:** "
+          "*\"i think ASK is the correct one due to lack of context, which vms, what time, "
+          "etc.\"* The original argument was that rung 2 only pays for itself if a procedure is "
+          "reached without the operator knowing its name — which is true and is a matter for "
+          "the WRITER, where `Store.covering()` matches a goal structurally. **At the door the "
+          "phrase names no target and no time**, and a library hit on a bare noun phrase would "
+          "be a false avoid wearing a verified artifact's clothes. `needs` is KEPT: the "
+          "procedure IS stored, and the row asserts the door asks anyway",
+          needs="nightly_snapshot"),
     Keyed("take a snapshot of every running vm", PROGRAM,
           "RUNG 12, AND THE CONTROL FOR THE RUNG ABOVE: no stored procedure covers it, so rung "
           "2 must not swallow it. A procedure store that matches loosely is a false avoid "
@@ -372,10 +390,19 @@ CONTROLS: List[Keyed] = [
           "about or rejected, never guessed at"),
     Keyed("sort out n1", ASK,
           "RUNG 9'S OWN CASE: `n1` is genuinely kindless, and `sort out` names no operation. "
-          "The ask is the correct next step, which is not the same as the ticket closing"),
+          "The ask is the correct next step, which is not the same as the ticket closing. "
+          "⇒⇒ **AND THE OPERATOR NAMED THE REAL SHAPE, 2026-08-16:** *\"it couldn't understand "
+          "that its a request for diagnosis, similar to the 'make sure' issue we had.\"* "
+          "`make sure` became readable by DECLARING it an achieve marker; *sort out* is the "
+          "same move for D1 — an ACHIEVE whose target is implicit. **The destination is "
+          "unchanged and the REASON is the finding**"),
     Keyed("clean up the lab", ASK,
           "a real intent with no kind, no operation and no target. The honest answer is a "
-          "question"),
+          "question — and the operator sharpened WHICH question, 2026-08-16: *\"it cant "
+          "resolve what clean up means, delete everything? stop them? remove labels? that's "
+          "more about what is 'clean up' considered.\"* **THE VERB IS THE UNRESOLVED HALF, NOT "
+          "THE TARGET** — `lab` is a network the world holds, and `clean up` is one phrase "
+          "standing for three different operations with three different blast radii"),
     Keyed("make it faster", ASK,
           "an anaphor with no previous turn (Part 3) over an attribute nothing declares"),
     Keyed("fix vm2", ASK,
@@ -393,7 +420,13 @@ CONTROLS: List[Keyed] = [
           "settles it with nothing added"),
     Keyed("thanks, that worked", CHAT,
           "and `that` is deliberately not in ANAPHORA: counting it as a named object read a "
-          "pleasantry as an order to act"),
+          "pleasantry as an order to act. "
+          "⇒⇒ **AND IT IS NOT A PLEASANTRY, WHICH THE OPERATOR CORRECTED ON 2026-08-16:** "
+          "*\"its probably a resolution to a problem, this would be a statement then, 'X is "
+          "resolved/working, the matter is closed'.\"* **A RESOLUTION IS A SENTENCE TYPE "
+          "NOTHING READS** — it closes a ticket, and `Issues.answers()` is the writer that "
+          "would take it. Kept CHAT because no reader produces one yet",
+          also=ASK),
     Keyed("who are you", CHAT,
           "a question about the system, answerable in words, touching nothing"),
     Keyed("what's a hypervisor?", CHAT,
@@ -401,8 +434,14 @@ CONTROLS: List[Keyed] = [
           "genuinely knows this better than the manifest does"),
     Keyed("why is qemu slow on windows guests", CHAT,
           "⚠ `guest` IS A DECLARED NOUN FOR `vm`, so a noun-membership test alone routes this "
-          "into the lab. Nothing is being asked OF the lab",
-          hard=True),
+          "into the lab. Nothing is being asked OF the lab. "
+          "⇒⇒ **AND THE OPERATOR RULED ASK EQUALLY CORRECT, 2026-08-16:** *\"it should either "
+          "ask what 'guests' mean because 'guests' could mean vms, or clients, so it should be "
+          "either connecting the dots to a vm or ask if it meant client or vm, neither are "
+          "wrong here.\"* **THE REAL SHAPE IS AN AMBIGUOUS REFERENCE**, not a chat/lab split: "
+          "every declared noun is also an ordinary English word, and the manifest sense is "
+          "taken as certain everywhere. Recorded here; the general case is its own item",
+          hard=True, also=ASK),
 
     # ⇒⇒ THE DANGEROUS DIRECTION — a lab question that must never reach chat, because there
     #   the model answers it from memory and no gate is in front of the answer.
@@ -472,6 +511,10 @@ def check() -> List[str]:
         if k.needs and k.needs not in FIXTURE_PROCEDURES:
             faults.append(f"control {k.text!r}: needs {k.needs!r}, which is not a declared "
                           f"fixture")
+        if k.also and k.also not in DESTINATIONS:
+            faults.append(f"control {k.text!r}: second destination {k.also!r} is not one")
+        if k.also == k.goes:
+            faults.append(f"control {k.text!r}: `also` repeats the keyed destination")
         if k.goes == PROCEDURE and not k.needs:
             faults.append(f"control {k.text!r}: keyed PROCEDURE and names no procedure, so it "
                           f"would pass against an empty library")

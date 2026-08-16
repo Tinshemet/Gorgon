@@ -86,7 +86,7 @@ def test_the_ladder_makes_no_lookups():
         universal=False, numeral=None, comparator="", counted=False, filtered=False,
         ordered=False, postcondition=False, shape="", existential=False, addressed=False,
         governs=(), shortcut="",
-        gorgon=(), procedure="", unknown=(),
+        gorgon=(), procedure="", unknown=(), head_unknown=False,
     )
     got = door.route(empty)
     check("a Facts holding nothing routes without touching the world",
