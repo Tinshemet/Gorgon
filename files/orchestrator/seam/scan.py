@@ -470,6 +470,33 @@ def quoted_clauses(request: str) -> tuple:
     return tuple(out)
 
 
+def attribute_words(board: Optional[Board] = None) -> Dict[str, str]:
+    """Every word the manifest uses to name a PROPERTY, pointing at the real attribute.
+
+    ⇒⇒ **THE MANIFEST ALREADY KNEW AND NOTHING ASKED IT.** `vm.aliases` declares
+      `ram -> memory_mb`, `cores -> cpu_cores`, `tag -> label`, `on -> network` — and
+      `_index` indexes declared NOUNS only, so no reader ever said *this word names a property,
+      not a thing*. `stop every vm with over 6gb of ram` therefore declared A MACHINE CALLED
+      `ram` and asked whether to create it.
+
+    ⇒ **READ, NEVER LISTED** (rule W5), so a manifest that gains an alias gains it here.
+    ⇒ ⚠ **AND A KIND IS NEVER AN ATTRIBUTE, however property-ish it reads.** `network` is a
+      declared kind AND a declared attribute of `vm`; the kind wins, because a row typed as a
+      network is a thing the lab keeps and dropping it would delete rung 3.
+    """
+    from planner.ir import config as _config
+    board = board or Board()
+    nouns = set(_index(board))
+    out: Dict[str, str] = {}
+    for kind in board.kinds:
+        spec = _config.KINDS.get(kind) or {}
+        for a in (spec.get("attrs") or ()):
+            out[str(a).lower()] = str(a)
+        for alias, real in (spec.get("aliases") or {}).items():
+            out[str(alias).lower()] = str(real)
+    return {w: a for w, a in out.items() if w not in nouns}
+
+
 # ⇒⇒ THE MAGNITUDE COMPARATORS — a closed class of English, and NOT the ones above.
 #   `COMPARATORS` declares the COUNT comparators (`at most`, `exactly`) and they answer *how
 #   many things*. These answer *how big a value*, which is a different question over a

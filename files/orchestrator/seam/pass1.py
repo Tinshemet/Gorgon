@@ -952,6 +952,72 @@ def _lab_holds(word: str, world, board: Optional[Board] = None) -> bool:
     return bool(lab_has(word, world, board=board or Board()))
 
 
+def names_an_attribute(word: str, board: Optional[Board] = None) -> Optional[str]:
+    """Does this word name a PROPERTY rather than a thing — asked of every supplier, in order.
+
+    ⇒⇒ **THE OPERATOR, 2026-08-16:** *"it shouldnt be just archive, also encyclopedia and the
+      rest of our 'information suppliers' like active library etc."*
+
+    ⇒ **SO THIS IS THE SETTLE LADDER AGAIN, FOR ATTRIBUTES INSTEAD OF KINDS**, and the order is
+      the one `pipeline` already states for kinds — *compute what can be computed, ask only
+      what cannot*:
+
+          1 THE MANIFEST   `scan.attribute_words` — every declared attribute and alias.
+                           `ram -> memory_mb`, `cores -> cpu_cores`, `tag -> label`
+          2 THE ARCHIVE    what a person TAUGHT and SIGNED. `vram is memory` reaches
+                           `memory_mb` through the class walk, and an unsigned entry
+                           settles nothing
+          3 THE LAB        NOT consulted here, and that is deliberate: the lab says what
+                           EXISTS, and a member is handled by the caller, which drops a row
+                           only when the world does NOT hold it. The world outranks both
+                           suppliers above and it does so at the call site
+          4 THE MODEL      never. This is a lookup, and a word nobody declared is not an
+                           attribute by anybody's authority
+
+    ⇒ ⚠ **AND THE ORDER IS THE PRECEDENCE.** The manifest is checked first because it is the
+      thing the lab is actually made of; the archive can only reach words the manifest never
+      named. A taught entry may not redefine `label`.
+    """
+    from .scan import attribute_words
+    word = str(word).strip().lower()
+    declared = attribute_words(board)
+    if word in declared:
+        return declared[word]
+    try:
+        from .archive import ARCHIVE
+        return ARCHIVE.attribute_of(word)
+    except Exception:
+        return None
+
+
+def consume_attribute_words(rows: List[S.Declared], board: Optional[Board] = None,
+                            world=None) -> List[S.Declared]:
+    """A word that names a PROPERTY is not a thing. Its row is not a declaration.
+
+    ⇒⇒ **MEASURED 2026-08-16:** *"stop every vm with over 6gb of ram"* produced
+      `('ram', 'vm', {'name': 'ram'})` and asked the operator whether to CREATE it — while
+      `vm.aliases` declares `ram -> memory_mb` in as many words. **The fact was present and
+      unused**, which is the shape this project has filed most.
+
+    ⇒ **THE SAME TWO GUARDS AS EVERY OTHER `consume_`, AND THEY ARE WHAT MAKE IT SAFE:**
+      KINDLESS ROWS ONLY — a row the nouns or the lab already settled is a reading somebody
+      made — and **THE LAB STILL WINS**, so a machine really called `ram` is a machine. With
+      no world it removes nothing, because absence of a lab is not evidence.
+
+    ⇒ Beside `consume_self_address`, `consume_meta_control` and `consume_reciprocal`: four
+      rules, one shape — *this span is not an object*, each for a different reason.
+    """
+    out: List[S.Declared] = []
+    for row in rows:
+        span = str(row.span or row.name).strip().lower()
+        if (row.object_type == S.UNKNOWN_KIND
+                and names_an_attribute(span, board)
+                and not _lab_holds(str(row.name), world, board)):
+            continue
+        out.append(row)
+    return out
+
+
 def consume_reciprocal(rows: List[S.Declared], board: Optional[Board] = None
                        ) -> List[S.Declared]:
     """A reciprocal clause is a PREDICATE, not an object. It must not be declared as a thing.

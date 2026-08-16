@@ -284,6 +284,11 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     # ⇒ AND A RECIPROCAL CLAUSE IS A PREDICATE, NOT A THING. Rung 13 declared `all ping each
     #   other` as an object; the goal reads it directly, so the row must not also exist.
     rows = pass1.consume_reciprocal(rows, board)
+    # ⇒ AND A WORD THAT NAMES A PROPERTY IS NOT A THING. `stop every vm with over 6gb of RAM`
+    #   declared a machine called `ram` and asked whether to create it, while `vm.aliases` says
+    #   `ram -> memory_mb`. Asked of every supplier in one order — the manifest, then the
+    #   archive — with the lab outranking both, exactly as the kind ladder above does.
+    rows = pass1.consume_attribute_words(rows, board, world)
     # ⇒ AND A SPAN THAT NAMES THE AGENT IS BEING SPOKEN TO, NOT DECLARED. Before the affordance
     #   rule, which would otherwise type it as whatever kind the request's verbs afford — that
     #   is how *"good morning doorman"* became a machine and gate 2 asked whether to create it.
@@ -722,6 +727,15 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #     `mind` stopped being declared and immediately became a word nobody accounted for.
     #     **Measured on rung 1 between the two edits.** So both read `pass1.BUILDS`, and there
     #     is one table rather than two conditions that have to be remembered together.
+    # ⇒⇒ **AND A WORD THAT NAMES AN ATTRIBUTE IS ACCOUNTED FOR BY THE MANIFEST.** The twin of
+    #   the exemption below, and it appeared the moment `consume_attribute_words` landed:
+    #   `ram` stopped being declared as a machine and instantly became *"you did not account
+    #   for 'ram'"*. **The same rule on two paths again** — one drops the row, the other
+    #   forgives the word — and this is the third time in one session that pair had to be
+    #   fixed together.
+    from .pass1 import names_an_attribute as _names_attr
+    spent |= {w for w in {x.strip(" '\".,") for x in request.lower().split()}
+              if w and _names_attr(w, board)}
     from . import speech_act as _speech
     from .pass1 import BUILDS as _BUILDS
     for clause, act in _speech.read(request, board, world):

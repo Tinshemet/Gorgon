@@ -90,6 +90,14 @@ class Entry(NamedTuple):
     # ⇒ THE KIND THIS WORD RESOLVES TO, when the lab has one. `jumpbox -> vm` is the whole
     #   point of an entry for the seam: it is what turns an unknown noun into a settled row.
     kind: Optional[str] = None
+    # ⇒⇒ **AND THE WORD MAY NAME A PROPERTY RATHER THAN A THING.** The operator, 2026-08-16:
+    #   *"the ram and cores — its because the AI needs to correlate ram with an encyclopedia
+    #   entry as well as it being an attribute."* The manifest aliases the property words it
+    #   happens to know; `vram`, `nics` and `disk size` it does not, and until this field the
+    #   archive could only teach *"X is a KIND"* — so a word naming a property was unteachable.
+    #   ⇒ SYMMETRIC WITH `kind` ON PURPOSE, including the class walk: `vram is memory` plus
+    #     `memory` being the attribute reaches the manifest through two ordinary sentences.
+    attribute: Optional[str] = None
     # ⇒ **THE NEGATIVE ENTRY.** False means *this lab keeps no such thing* — a real answer, and
     #   the one that stops the same question being asked forever.
     holds: bool = True
@@ -158,6 +166,31 @@ class Archive:
         for e in reversed(self._rows):
             if e.word == word and e.routes:
                 return e
+        return None
+
+    def attribute_of(self, word: str, _seen=None) -> Optional[str]:
+        """The manifest ATTRIBUTE this word resolves to — through its classes, like `kind_of`.
+
+        ⇒ **RATIFIED-AND-TOLD ONLY**, through `known`, which is the archive's whole safety
+          property: a proposal DESCRIBES and never PERMITS. An unsigned *"vram is memory"*
+          settles nothing.
+        ⇒ ⚠ CYCLE-SAFE BY CONSTRUCTION, for the reason `kind_of` states: two true-sounding
+          sentences must not hang the seam.
+        """
+        word = str(word).strip().lower()
+        seen = _seen or set()
+        if word in seen:
+            return None
+        seen.add(word)
+        entry = self.known(word)
+        if entry is None:
+            return None
+        if entry.attribute:
+            return entry.attribute
+        for other in entry.classes:
+            got = self.attribute_of(other, seen)
+            if got:
+                return got
         return None
 
     def kind_of(self, word: str, _seen=None) -> Optional[str]:

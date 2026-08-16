@@ -230,6 +230,76 @@ def test_a_magnitude_comparison_is_read_and_named():
           magnitudes_in("stop every vm that is running", board) == ())
 
 
+def test_an_attribute_word_is_not_a_thing():
+    """⇒⇒ **`ram` WAS DECLARED AS A MACHINE, AND THE MANIFEST ALREADY KNEW BETTER.**
+    *"stop every vm with over 6gb of ram"* produced `('ram', 'vm', {'name': 'ram'})` and asked
+    whether to create it — while `vm.aliases` declares `ram -> memory_mb` in as many words.
+
+    ⇒ `scan._index` indexes declared NOUNS only, so nothing ever said *this word names a
+      PROPERTY, not a thing*. The fact was present and unused, which is the shape this project
+      has filed most.
+
+    ⇒ **THE SAME TWO GUARDS AS EVERY OTHER `consume_`:** kindless rows only, and THE LAB STILL
+      WINS — a machine really called `ram` is a machine.
+    """
+    from orchestrator.seam.scan import attribute_words
+    from orchestrator.seam import schema as S
+    board = Board()
+    words = attribute_words(board)
+    for w in ("ram", "memory", "cores", "cpu", "tag", "os", "label", "status"):
+        check(f"{w!r} is known to name an attribute", w in words)
+    # ⇒ THE CONTROL: a KIND is not an attribute, however property-ish it sounds.
+    for w in ("vm", "network", "snapshot", "machine"):
+        check(f"{w!r} is a kind, not an attribute", w not in words)
+
+    row = S.Declared(name="ram", object_type=S.UNKNOWN_KIND, where={},
+                     existence=S.EXISTING, settled="", span="ram")
+    kept = pass1.consume_attribute_words([row], board, None)
+    check(f"a kindless attribute row is dropped — {[r.name for r in kept]}", not kept)
+    # ⇒ AND A SETTLED ROW IS NEVER TOUCHED — this drops only rows nobody could settle.
+    settled = S.Declared(name="ram", object_type="vm", where={},
+                         existence=S.NEW, settled="", span="a vm named ram")
+    check("a settled row survives",
+          len(pass1.consume_attribute_words([settled], board, None)) == 1)
+
+    # ⇒⇒ **AND THE LAB OUTRANKS EVERY OTHER SUPPLIER.** A machine really called `ram` is a
+    #   machine — the same guard `consume_self_address` and `consume_meta_control` keep, and
+    #   the reason any of these rules is allowed to run at all.
+    class LabWithRam:
+        def names(self): return ["ram"]
+        def select(self, *a, **k): return [{"name": "ram"}]
+    check("a machine really called `ram` survives",
+          len(pass1.consume_attribute_words([row], board, LabWithRam())) == 1)
+
+
+def test_the_archive_can_teach_an_attribute():
+    """⇒⇒ **THE OPERATOR, 2026-08-16:** *"the ram and cores — its because the AI needs to
+    correlate ram with an encyclopedia entry as well as it being an attribute."*
+
+    The manifest aliases the words it happens to know. `vram`, `nics`, `disk size` it does not,
+    and until now the archive could only teach *"X is a KIND"* — so a word naming a PROPERTY
+    was unteachable. An entry may now resolve to an attribute, walking `classes` exactly as
+    `kind_of` does.
+
+    ⇒ **AND IT ROUTES ONLY WHEN SIGNED**, which is the archive's whole safety property: a
+      proposal DESCRIBES and never PERMITS.
+    """
+    from orchestrator.seam.archive import Archive, Entry, RATIFIED, TOLD
+    a = Archive(None)
+    a._rows.append(Entry(word="vram", attribute="memory_mb", status=RATIFIED, source=TOLD))
+    check("a ratified entry resolves to an attribute", a.attribute_of("vram") == "memory_mb")
+    # ⇒ THROUGH ITS CLASSES, the same walk `kind_of` makes — `vram is memory`, `memory` is the
+    #   attribute — so a chain of ordinary sentences reaches the manifest.
+    b = Archive(None)
+    b._rows.append(Entry(word="vram", classes=("memory",), status=RATIFIED, source=TOLD))
+    b._rows.append(Entry(word="memory", attribute="memory_mb", status=RATIFIED, source=TOLD))
+    check("it resolves through a class", b.attribute_of("vram") == "memory_mb")
+    # ⇒ AND UNSIGNED IS SILENT.
+    c = Archive(None)
+    c._rows.append(Entry(word="vram", attribute="memory_mb"))
+    check("an unratified entry resolves nothing", c.attribute_of("vram") is None)
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "structure")
