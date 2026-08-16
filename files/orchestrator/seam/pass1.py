@@ -321,14 +321,67 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
             #   beta. The fold tested the row's NAME, which is the whole span, so a bare pronoun
             #   sitting inside it was never seen.
             if first.kind is None and rows:
+                # ⇒⇒ ⚠ **AND THE SEARCH STAYS ON THE SPAN — WIDENING IT TO THE CLAUSE WAS
+                #   TRIED ON 2026-08-16 AND RUNG 6 KILLED IT.** The contextual kind below reads
+                #   the CLAUSE and that is safe, because it only supplies a KIND and every
+                #   candidate has the same one. This branch chooses an ANTECEDENT, and the
+                #   antecedent is guessed as `rows[-1]`. Rung 6 says
+                #
+                #       …put the red ones together on their OWN network,
+                #       and put the blue ones on a DIFFERENT network
+                #
+                #   where `their` refers to the RED group and `rows[-1]` is the BLUE one — so
+                #   the widened search folded one group's network onto the other's row. A
+                #   pronoun in the clause does not mean a pronoun about the LAST THING SAID.
+                #   Binding to the wrong row is worse than not binding: *"give it 4 cores"* now
+                #   reads correctly as its own row and simply is not attached, which is honest.
                 pronoun = next((w for w in str(first.span).lower().split()
                                 if S._is_bare_pronoun(w.strip(".,'\""), request)), None)
                 if pronoun:
                     at = len(rows) - 1          # the most recent declaration it could be about
                     kept = rows[at]
-                    rows[at] = S.declare_from(kept.name, kept.object_type, kept.where,
-                                              kept.existence, board,
-                                              references=list(kept.references) + [first.span],
+                    # ⇒⇒ **AND THE FOLD KEPT THE WORDS AND DROPPED THE MEANING.** The clause
+                    #   went into `references` as a STRING and was never read, so *"create a vm
+                    #   named alpha and make it running"* declared `{name: alpha}` and lost the
+                    #   `running` entirely — the operator asked for a state and the reading
+                    #   carried no trace of it. `label it prod` lost the label the same way,
+                    #   and was recorded TWICE while doing so.
+                    #
+                    #   It could not have read them: the clause has no noun, so `first.kind` is
+                    #   None and `conditions_from` refuses without a kind. **But the kind is
+                    #   known — it is the kind of the row the pronoun refers to.** Re-reading
+                    #   with `kind_hint` is the same move as the contextual kind below, with a
+                    #   better source: the actual antecedent rather than the request's only
+                    #   kind.
+                    #
+                    #   ⇒ ⚠ **SETDEFAULT, NEVER OVERWRITE.** *"create a vm named alpha and
+                    #     rename it beta"* would otherwise silently replace the key the
+                    #     operator stated in the SAME sentence. A clause that CONTRADICTS its
+                    #     antecedent is a conflict, and a conflict is gate 2's to ask about —
+                    #     not this function's to resolve by taking whichever came last.
+                    #
+                    #   ⇒ ⚠⚠ **AND ONLY WHERE THE ANTECEDENT IS UNAMBIGUOUS — ONE ROW.** `at`
+                    #     is a GUESS ("the most recent declaration it could be about"), and it
+                    #     was harmless while the fold only recorded an inert reference STRING.
+                    #     Carrying CONDITIONS makes the guess consequential, and rung 6 shows
+                    #     what that costs: *"…put the red ones together on their own network,
+                    #     and put the blue ones on a different network"* folded a leftover
+                    #     clause about the RED group onto the BLUE row and gave it a network.
+                    #     With exactly one row declared there is nothing to guess between; with
+                    #     more, the reference is real but its target is not settled here, so
+                    #     the words are still recorded and the meaning is left for pass 2.
+                    again = (scan(anchor, request, board, at=first.start, kind_hint=kept.kind)
+                             if len(rows) == 1 else None)
+                    said = conditions_from(again.modifiers, again.kind, board,
+                                           span=again.span) if again else {}
+                    merged = dict(kept.where or {})
+                    for attr, value in said.items():
+                        merged.setdefault(attr, value)
+                    refs = list(kept.references)
+                    if first.span not in refs:          # the same clause, reached twice
+                        refs.append(first.span)
+                    rows[at] = S.declare_from(kept.name, kept.object_type, merged,
+                                              kept.existence, board, references=refs,
                                               count=kept.count, comparator=kept.comparator,
                                               span=kept.span, identity=kept.identity)
                     continue

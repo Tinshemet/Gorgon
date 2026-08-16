@@ -669,6 +669,68 @@ def test_a_clause_takes_its_kind_from_the_clause_that_named_it():
           scan("network", "create a vm and a network", board, kind_hint="vm").kind == "network")
 
 
+def test_a_folded_reference_carries_what_its_clause_SAYS():
+    """⇒⇒ **THE FOLD KEPT THE WORDS AND DROPPED THE MEANING.**
+
+    A kindless clause holding a pro-form already folded into the row it refers to — but only as
+    a STRING in `references`. So *"create a vm named alpha and make it running"* declared
+    `{name: alpha}` and lost the `running` completely: the operator asked for a state and the
+    reading carried no trace of it. `label it prod` lost the label the same way, and recorded
+    the clause TWICE while doing it.
+
+    It could not have read them — the clause has no noun, so `conditions_from` refuses without
+    a kind. **But the kind is known: it is the kind of the row the pronoun refers to.**
+
+    ⇒ **SETDEFAULT, NEVER OVERWRITE.** *"…and rename it beta"* would otherwise silently replace
+      a key the operator stated in the same sentence. A contradiction is a conflict, and a
+      conflict is gate 2's to ask about.
+
+    ⇒ ⚠⚠ **AND ONLY WITH ONE ROW DECLARED, BECAUSE THE ANTECEDENT IS A GUESS.** The fold takes
+      `rows[-1]` — "the most recent declaration it could be about" — which was harmless while
+      it recorded an inert string. Carrying CONDITIONS makes the guess consequential, and rung
+      6 priced it: *"put the red ones together on their own network, and put the blue ones on a
+      DIFFERENT network"* folded a leftover clause about the RED group onto the BLUE row and
+      gave it a network. Two attempts to name the offending word failed the same way — first
+      `network = own`, then `network = together` once `own` was excluded — because the word
+      after the cue is an ADVERB, an open class. The fix is not a better word list, it is to
+      stop guessing.
+
+    ⇒ **AND TWO CLOSED CLASSES THAT WERE NEVER CONSULTED, FOUND ON THE WAY.** A pro-form REFERS
+      and a distinctness marker CONTRASTS; neither ever names a value. `label it prod` read
+      `{label: it}` and `on their own network` read `{network: own}` — both live before any of
+      this, both now declined from the manifest's own declarations.
+    """
+    from orchestrator.seam import pass1 as P
+    from orchestrator.seam.scan import conditions_from
+    board = Board()
+
+    def rows(text):
+        return [(r.object_type, r.where) for r in P.run_scanned(text, board=board)]
+
+    check("a state named by a following clause reaches the row",
+          rows("create a vm named alpha and make it running")
+          == [("vm", {"name": "alpha", "status": "running"})])
+    check("and a label",
+          rows("create a vm named alpha and label it prod")
+          == [("vm", {"name": "alpha", "label": "prod"})])
+    check("a pro-form is never a value",
+          conditions_from("label it prod", "vm", board) == {"label": "prod"})
+    check("a distinctness marker is never a value",
+          conditions_from("on their own network", "vm", board) == {})
+
+    # ⇒ THE CONTROLS.
+    check("a contradiction never overwrites what the operator stated",
+          rows("create a vm named alpha and rename it beta") == [("vm", {"name": "alpha"})])
+    check("with more than one row the antecedent is not guessed at",
+          ("vm_set", {"label": "blue"}) in rows(
+              "create 3 vms labelled 'red' and 2 vms labelled 'blue', put the red ones "
+              "together on their own network, and put the blue ones on a different network"))
+    check("rung 2 is unmoved",
+          rows("create a vm named beta and then launch it") == [("vm", {"name": "beta"})])
+    check("a declared value beside a cue still reads",
+          conditions_from("on a network called lab", "vm", board) == {"network": "lab"})
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "structure")

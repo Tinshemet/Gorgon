@@ -797,6 +797,21 @@ def conditions_from(modifiers: str, kind: Optional[str],
         """The whole quoted run a picked value opens, or the pick unchanged."""
         return next((q for q in runs if q.split()[0] == pick), pick)
 
+    # ⇒⇒ **A PRO-FORM REFERS; IT NEVER NAMES A VALUE.** *"create a vm named alpha and label
+    #   it prod"* came back `{label: it}` — the reading took the PRONOUN as the label and
+    #   dropped `prod`, so the machine would carry a tag spelled `it`. `ANAPHORA` and
+    #   `PRONOUNS` are declared closed classes and this function had never consulted either;
+    #   it is the same rule as *a noun is never a value*, one word class over.
+    #   Imported in the function because `speech_act` imports this module at top level.
+    # ⇒ **AND A DISTINCTNESS MARKER IS NOT A VALUE EITHER — IT CONTRASTS.** Rung 6's *"put
+    #   the red ones together on THEIR OWN network"* produced `network = own`, so a machine
+    #   group was constrained to a network named `own`. `DISTINCT` is a closed class that
+    #   `pass1` has owned since rung 6 was fixed the first time, and it says precisely that
+    #   these words point AWAY from a thing rather than naming one.
+    from .pass1 import DISTINCT as _DISTINCT
+    from .speech_act import ANAPHORA as _ANAPHORA, PRONOUNS as _PRONOUNS
+    _refers = set(_ANAPHORA) | set(_PRONOUNS) | {w for w in _DISTINCT if " " not in w}
+
     from planner.gates import claims as _claims
     key_attr = _claims.key_of(kind, board.kinds)
     nouns_here = {}
@@ -821,7 +836,8 @@ def conditions_from(modifiers: str, kind: Optional[str],
         if nearest is not None and nearest != kind:
             continue
         nxt = next((w for w in words[i + 1:]
-                    if w not in LINKING and w not in NAMING_CUES and w not in literal), None)
+                    if w not in LINKING and w not in NAMING_CUES and w not in literal
+                    and w not in _refers), None)
         if nxt:
             out[key_attr] = _whole(nxt)
             break
@@ -865,10 +881,12 @@ def conditions_from(modifiers: str, kind: Optional[str],
                 #   what one of its own attributes equals.
                 after = next((w for w in words[i + 1:]
                               if w not in LINKING and w not in attrs
-                              and w not in nouns_here and w not in literal), None)
+                              and w not in nouns_here and w not in literal
+                              and w not in _refers), None)
                 before = next((w for w in reversed(words[:i])
                                if w not in LINKING and w not in attrs
-                               and w not in nouns_here and w not in literal), None)
+                               and w not in nouns_here and w not in literal
+                               and w not in _refers), None)
                 pick = after if (after and after not in values) else (
                     before if (before and before not in values) else None)
                 if pick:
