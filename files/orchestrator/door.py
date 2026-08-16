@@ -252,10 +252,17 @@ def _words(low: str) -> Tuple[str, ...]:
       indistinguishable from *"clone golden into three new machines"*, one call against three.
       **The warning was quoted in this docstring while the regex under it was the bug.**
 
-    ⇒ So a token that OPENS on a letter absorbs its digits (`n3`, `vm1`, `6gb` -> `6` + `gb`,
-      which is the comparative Part 2 owns), and only a standalone run of digits is a number.
+    ⇒ So a token that OPENS on a letter absorbs its digits (`n3`, `vm1`), and only a standalone
+      run of digits is a number.
+
+    ⇒⇒ ⚠ **AND A NUMBER GLUED TO A UNIT IS A MEASUREMENT OR A TIME, NOT A COUNT** — the same
+      defect one step further out, found when the operator asked whether a routine was being
+      recognised. *"stop every vm at 9pm"* split into `9` + `pm`, so the door read `numeral=9`
+      and routed it PROGRAM with the reason **"a repetition"**. Right destination, wrong reason,
+      and the giveaway was the reason rather than the answer. `6gb` was the same noise on the
+      comparative rows. **A digit run followed immediately by letters is one token.**
     """
-    return tuple(re.findall(r"[a-z][a-z0-9_']*|[0-9]+", low))
+    return tuple(re.findall(r"[a-z][a-z0-9_']*|[0-9]+[a-z]+|[0-9]+", low))
 
 
 def _verbs(words: Sequence[str], board: Board,
