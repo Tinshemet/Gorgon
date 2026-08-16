@@ -81,7 +81,7 @@ class Finding(NamedTuple):
 #   `role-unsettled` used to be here and is not grammar — it is completeness, and it moved to
 #   gate 1 where the leftover rule already lives.
 OWNS = frozenset({"mood-achieve", "unexpressed-exclusion", "count-ignored",
-                  "unasked-step", "light-verb-object"})
+                  "unasked-step", "light-verb-object", "unexpressed-choice"})
 
 
 def mood_of(request: str) -> str:
@@ -395,6 +395,29 @@ def findings(request: str, rows: List[S.Declared], operations: List[Operation], 
         out.append(Finding("mood-achieve", request[:40],
                            "this asks for a state to HOLD, and the plan only performs "
                            "actions — nothing here checks it afterwards or corrects it",
+                           "operator"))
+
+    # ⇒⇒ 1b · A DISJUNCTION IS A CHOICE, AND THE PROGRAM MADE IT WITHOUT ASKING.
+    #
+    #   *"stop alpha or beta"* came back `[stop_vm(beta), stop_vm(beta)]` — alpha dropped,
+    #   beta doubled. It REFUSED, and only because the lab held neither machine; against a lab
+    #   that holds them, **that serves**. Graded on the operations rather than the verdict,
+    #   2026-08-16.
+    #
+    #   ⇒ **THE CLAUSE MUST NOT BE SPLIT.** Splitting a disjunction produces two orders, which
+    #     is the acting-on-both this finding exists to stop. It is ONE clause carrying two
+    #     candidates and no way to pick, and only the operator can pick.
+    #   ⇒ **`or` IS ALREADY IN `CONJUNCTIONS`**, so no vocabulary is added — and `nor` with it,
+    #     because a negated disjunction is the same choice with the sign flipped.
+    #   ⇒ ⚠ AND IT ASKS ONLY WHEN SOMETHING WAS BUILT. A disjunction in a request that produced
+    #     no operations is already being asked about by somebody; adding a second question for
+    #     it is the misdirection the residue accounting was fixed for on rung 6.
+    from .speech_act import words_of as _words_of
+    _said = _words_of(request)
+    if operations and ("or" in _said or "nor" in _said):
+        out.append(Finding("unexpressed-choice", request[:40],
+                           "the request offers a CHOICE — 'or' — and the plan does not make "
+                           "one. Which did you mean, or did you mean both?",
                            "operator"))
 
     # 2 · AN EXCLUSION THE PROGRAM DOES NOT MAKE.

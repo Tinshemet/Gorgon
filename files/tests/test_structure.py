@@ -131,6 +131,39 @@ def test_a_negation_selects_the_complement():
     check(f"the observed arm still negates — {got}", got.get("alive") is False)
 
 
+def test_a_disjunction_is_a_choice_nobody_made():
+    """⇒⇒ **`or` READ AS `and` ACTS ON BOTH, AND THE VERDICT HID IT.** *"stop alpha or beta"*
+    came back REFUSE — but only because the lab held neither machine. The OPERATIONS are what
+    show the reading:
+
+        stop alpha or beta    ops=[stop_vm(beta), stop_vm(beta)]
+
+    alpha dropped, beta doubled. **Against a lab that holds them, that serves.**
+
+    ⇒ **A DISJUNCTION IS A CHOICE AND ONLY THE OPERATOR CAN MAKE IT.** The clause must NOT be
+      split — splitting produces two orders, which is the acting-on-both this exists to stop.
+      It is one clause carrying two candidates and no way to pick.
+
+    ⇒ **`or` IS ALREADY IN `CONJUNCTIONS`**, so this adds no vocabulary — it adds a finding,
+      which is `unexpressed-exclusion`'s own shape one word over: the sentence says something
+      the program does not express.
+    """
+    from orchestrator.seam import linguistics as L
+    from orchestrator.seam.effects import Operation
+    board = Board()
+    ops = [Operation("stop_vm", "beta", None), Operation("stop_vm", "beta", None)]
+    got = L.findings("stop alpha or beta", [], ops, [], board=board)
+    kinds = [f.rule for f in got]
+    check(f"a disjunction is raised — {kinds}", "unexpressed-choice" in kinds)
+
+    # ⇒ THE CONTROLS. `or` inside a QUOTED value is not a choice, and a request with no `or`
+    #   must stay silent — a finding that fires on everything is a finding nobody reads.
+    quiet = L.findings("stop the vms", [], [Operation("stop_vm", "vms", None)], [], board=board)
+    check("no disjunction, no finding",
+          "unexpressed-choice" not in [f.rule for f in quiet])
+    check("the rule belongs to linguistics", "unexpressed-choice" in L.OWNS)
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "structure")
