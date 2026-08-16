@@ -182,6 +182,19 @@ class Keyed(NamedTuple):
 #   no row. Declared, so the probe reports SKIPPED and says which one is missing.
 FIXTURE_PROCEDURES = ("nightly_snapshot",)
 
+# ⇒⇒ THE LAB THESE ROWS WERE WRITTEN AGAINST — declared, because without it a member name is
+#   indistinguishable from a word nobody owns. `db` and `grubnash` are the same shape to a door
+#   with no world, and that is not a defect in the door.
+#
+# ⇒ **THE RULE FOR WHAT GOES IN, WRITTEN BEFORE THE NAMES WERE PICKED**, so the fixture cannot
+#   be tuned to make a row pass: a name belongs here when a row treats it as ALREADY EXISTING,
+#   and never when a row brings it into being or when a row's premise is that nobody knows what
+#   it is.
+#   ⇒ **SO `n1` IS DELIBERATELY ABSENT** — rung 9's whole point is that it is kindless, and a
+#     fixture holding it would delete the ladder's one standing ASK. `dmz` is absent because
+#     `set up a network called dmz` creates it.
+FIXTURE_MEMBERS = ("alpha", "db", "web", "golden", "n3", "vm2", "lab", "core")
+
 
 # ── THE FOURTEEN RUNGS, KEYED — the corpus that already exists ───────────────────────
 #
@@ -462,6 +475,16 @@ def check() -> List[str]:
         if k.goes == PROCEDURE and not k.needs:
             faults.append(f"control {k.text!r}: keyed PROCEDURE and names no procedure, so it "
                           f"would pass against an empty library")
+
+    # ⇒ A FIXTURE THAT NAMES SOMETHING NO ROW USES IS A LAB BUILT TO SUIT THE RULE. Asserted,
+    #   so the world cannot quietly grow a member that makes a future row pass.
+    every = " ".join(k.text for k in CONTROLS).lower() + " " + \
+            " ".join(r.goal for r in RUNGS).lower()
+    for m in FIXTURE_MEMBERS:
+        if m not in every:
+            faults.append(f"fixture member {m!r} is named by no row — a lab built to suit")
+    if "n1" in FIXTURE_MEMBERS:
+        faults.append("`n1` is in the fixture: rung 9's premise is that it is KINDLESS")
 
     rung_ns = {r.n for r in RUNGS}
     for n in RUNG_DESTINATION:

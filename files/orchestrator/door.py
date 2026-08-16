@@ -116,6 +116,7 @@ GORGON_NOUNS: Dict[str, str] = {
     "word":         "the archive",              # orchestrator.seam.archive
     "words":        "the archive",
     "verbose":      "the display",
+    "loop":         "the harness",              # the tool loop and its limit
     "system":       "the host",
 }
 
@@ -160,6 +161,7 @@ class Facts(NamedTuple):
     members: Tuple[str, ...]            # things the WORLD holds, named by name
     acting: Tuple[str, ...]             # verbs naming an operation that CHANGES the world
     asking: Tuple[str, ...]             # verbs naming an operation that only READS
+    lab_predicate: bool                 # a word the LAB'S OWN ENGLISH uses for doing something
     # ── the shape ────────────────────────────────────────────────────────────────────
     universal: bool                     # every · all · each · any · both
     numeral: Optional[int]              # the largest declared count, or None
@@ -213,6 +215,7 @@ def facts(request: str, board: Optional[Board] = None, world=None) -> Facts:
         members=_members(words, world),
         acting=acting,
         asking=asking,
+        lab_predicate=_lab_predicate(words, board, speech_act),
         universal=universal,
         numeral=numeral,
         comparator=_comparator(low, scan),
@@ -224,7 +227,7 @@ def facts(request: str, board: Optional[Board] = None, world=None) -> Facts:
         governs=_governs(request, board, world),
         shortcut=_shortcut(low),
         gorgon=tuple(w for w in dict.fromkeys(words) if w in GORGON_NOUNS),
-        procedure=_procedure(low),
+        procedure=_procedure(low, world),
         unknown=_unknown(request, board, world, scan),
     )
 
@@ -279,6 +282,31 @@ def _verbs(words: Sequence[str], board: Board,
         elif verdict is False:
             asking.append(w)
     return tuple(acting), tuple(asking)
+
+
+def _lab_predicate(words: Sequence[str], board: Board, speech_act) -> bool:
+    """Does the request use a word the LAB'S OWN ENGLISH uses for doing something?
+
+    ⇒⇒ **BECAUSE THE MANIFEST'S SPELLING IS NOT THE OPERATOR'S**, and `acting`/`asking` only
+      know the manifest's. Rung 12 — *"take a snapshot of every running vm"* — names no
+      manifest verb at all: `take` is how a person says `snapshot_create`, and `snapshot` is a
+      NOUN. Without this the rung looks like a request that names a thing and no doing, which
+      is the shape the ladder declines on.
+
+    ⇒ **`speech_act._lab_predicate_in` IS THE OWNER AND IS CALLED, NOT COPIED.** It already
+      subtracts the manifest's nouns from `scan._operation_words` and already matches inflected
+      forms by stem — *"would you mind STOPPING the web server"* is a keyed control that a bare
+      membership test breaks.
+
+    ⇒ ⚠ **AND THIS IS THE DEPENDENCY FILED AS D5.** `_operation_words` carries hand-added
+      English — `make`, `put`, `take`, `ping`, `spin`, `boot` — which is Gorgon's English, not
+      the manifest's, and would be the first thing to break against a second manifest (D6).
+      Reused deliberately so one fix repairs both readers.
+    """
+    try:
+        return bool(speech_act._lab_predicate_in(words, board))
+    except Exception:
+        return False
 
 
 def _counts(words: Sequence[str]) -> Tuple[Optional[int], bool]:
@@ -354,6 +382,160 @@ def _members(words: Sequence[str], world) -> Tuple[str, ...]:
     return tuple(w for w in dict.fromkeys(words) if w in held)
 
 
+# ── THE LADDER ───────────────────────────────────────────────────────────────────────
+#
+# ⇒⇒ **ORDERED BY WHO VERIFIED THE ARTIFACT, WHICH IS [[gorgon-vague-request-ladder]]'s OWN
+#   ORDER AND NOT A NEW ONE.** N1's entry on the open list is explicit: *build it as the ladder
+#   or the two designs will disagree at the door.*
+#
+#       SELF · GOVERNANCE · CHAT     off the ladder — not the lab, so no lab regime is right
+#       TOOL                         one call, verified by whoever wrote it
+#       PROCEDURE                    a stored program, verified by having been written and used
+#       PROGRAM                      assembled now, therefore UNVERIFIED — ends in confirmation
+#       ASK                          the operator settles it
+#
+# ⇒ **AND THE RUNG ORDER IS DERIVED FROM THE COST ASYMMETRY, NOT FROM TIDINESS.** Each of the
+#   key's four CRITICAL cells fixes one position:
+#
+#       GOVERNANCE -> any lab   is critical, so governance is asked BEFORE any lab rung. A rule
+#                               naming `delete` and `vm` is still a rule
+#       any lab -> CHAT         is critical, so CHAT is never a fall-through. It is reached only
+#                               when nothing lab, nothing Gorgon and nothing governing is named
+#       TOOL <-> PROGRAM        is critical in BOTH directions, so neither is a default: each
+#                               needs positive evidence, and where neither is established the
+#                               rung declines to ASK
+SELF, GOVERNANCE, CHAT = "self", "governance", "chat"
+TOOL, PROCEDURE, PROGRAM, ASK = "tool", "procedure", "program", "ask"
+
+# ⇒ WHICH TIER OWNS EACH OF GORGON'S OWN OBJECTS. Keyed by the OWNER `GORGON_NOUNS` declares,
+#   never by the noun, so a new synonym inherits its tier and cannot land in the wrong one.
+#   ⇒ **ANYTHING NOT NAMED HERE IS SELF** — and `test_door` asserts every owner is classified,
+#     so a new surface is a decision somebody records rather than a silent default.
+GOVERNANCE_OWNERS = frozenset({"the contract", "autonomy", "the library",
+                               "the rule of law", "the archive"})
+
+
+class Decision(NamedTuple):
+    """Where the request goes, and WHICH RUNG SAID SO. The reason is not decoration.
+
+    ⇒ A destination with no rung name is unmeasurable: the probe reports misses BY DIRECTION,
+      and a direction is only actionable when the rung that produced it is named.
+    """
+    goes: str
+    rung: str
+    facts: Facts
+
+
+def route(f: Facts) -> Decision:
+    """The ladder, over facts already computed. NO LOOKUPS HAPPEN HERE — that is the point.
+
+    ⇒⇒ **THE RULE AND THE READING ARE SEPARATE SO A MISS CAN NAME ITS OWN HALF.** Everything
+      this reads is a field of `Facts`; nothing here touches the manifest, the world or the
+      registries. A wrong destination is therefore either a wrong fact or a wrong rung, and the
+      probe can say which.
+    """
+    say = lambda goes, rung: Decision(goes, rung, f)
+
+    # ── 1 · GOVERNANCE, BEFORE ANY LAB RUNG ──────────────────────────────────────────
+    # A rule quantified over time names `delete` and `vm` and is still legislation; enacting
+    # it is the critical cell. `governs` is `governing.rules_from`, which owns that reading.
+    if f.governs:
+        return say(GOVERNANCE, "it legislates")
+    # ⇒ TEACHING, AND ONLY WHEN THE WHOLE REQUEST IS ONE. An ASSERTIVE clause beside a question
+    #   — *"alpha is running, isn't it?"* — is confirmation-seeking, not a lexicon entry, so the
+    #   sentence-level verdict has to agree before this fires.
+    if "assertive" in f.acts and f.says == "neither":
+        return say(GOVERNANCE, "it teaches")
+    if _tier(f) == GOVERNANCE:
+        return say(GOVERNANCE, "it names an artifact the operator owns")
+
+    # ── 2 · GORGON'S OWN STATE ───────────────────────────────────────────────────────
+    # ⇒ THE OBJECT TEST, AND NOTHING ELSE. A lab VERB is not evidence of a lab request —
+    #   `show system info` and `change the operator password` both name operations the manifest
+    #   has. What decides it is that neither names a kind or a member.
+    if _tier(f) == SELF and not f.kinds and not f.members:
+        return say(SELF, "it names gorgon's own state")
+
+    # ⇒⇒ AND A REQUEST THAT NAMES BOTH IS NOT ROUTED, IT IS ASKED ABOUT. *"clear the session and
+    #   then list the vms"* is two destinations in one string against a door whose contract is
+    #   one. **Dropping half a request silently is the worst answer available**, and splitting
+    #   the clauses to route each is a different contract than this one.
+    if _tier(f) and (f.kinds or f.members):
+        return say(ASK, "it names gorgon's own state AND the lab")
+
+    # ── 3 · A STORED PROCEDURE, NAMED ────────────────────────────────────────────────
+    # ⇒ Rung 2 of the ladder, and only its NAMED half — a procedure that would COVER the goal
+    #   is matched structurally by `Store.covering`, which needs a goal, which needs the model.
+    if f.procedure:
+        return say(PROCEDURE, "it names a stored procedure")
+
+    # ── 4 · IS THIS THE LAB AT ALL? ──────────────────────────────────────────────────
+    # ⇒ AN OBJECT AND A DOING. Both are required, and each missing one has its own answer,
+    #   because they are different questions to ask a person.
+    #   ⇒ A BARE UNIVERSAL IS AN OBJECT. *"just stop everything"* names no kind and no member
+    #     and its object is the whole population — `universal` with no kind is the pronoun.
+    thing = bool(f.kinds or f.members or (f.universal and not f.kinds))
+    doing = bool(f.acting or f.asking or f.lab_predicate)
+    # ⇒ AND A QUESTION OVER A KIND CARRIES ITS OWN OPERATION. *"what profiles are there"* names
+    #   no verb; the kind's own `list` is what answers it, and the manifest declares one for
+    #   every kind that has members to enumerate.
+    if f.says == "question" and f.kinds:
+        doing = True
+
+    if not thing:
+        # ⇒⇒ **AN ORDER THAT NAMES NOTHING WE OWN IS NOT SMALL TALK.** Somebody is telling us
+        #   to do something and we cannot tell what — *"sort out n1"*, *"make it faster"* — and
+        #   sending that to the model is the `lab -> CHAT` cell, the one with no gate behind
+        #   it. **The speech act is the discriminator and it costs no new lookup**: a question
+        #   or an expressive naming nothing is a person talking to us, and the model is the
+        #   right answer for exactly that.
+        if f.says == "order":
+            return say(ASK, "an order, and nothing we own is named in it")
+        # ⇒ THE ONLY PLACE THE MODEL IS RIGHT, and it is reached positively rather than by
+        #   falling through.
+        return say(CHAT, "it names nothing we own")
+    if not doing:
+        return say(ASK, "it names a thing and no doing")
+
+    # ── 5 · TOOL OR PROGRAM — STRUCTURE DECIDES ──────────────────────────────────────
+    # ⇒ `regime_probe`'s own three-way judgement, moved from the node to the door: one call
+    #   whose output or effect is the answer, against a set · an ordering · a filter · a count
+    #   · a postcondition. The engine already scores 10/10 making this choice at a node.
+    if f.postcondition:
+        return say(PROGRAM, "a postcondition is not a call")
+    if f.ordered:
+        return say(PROGRAM, "more than one clause, so an ordering")
+    if f.filtered:
+        return say(PROGRAM, "a filter over a set")
+    if f.counted or f.comparator:
+        return say(PROGRAM, "a count is a computation")
+    if f.numeral and f.numeral > 1:
+        return say(PROGRAM, "a repetition")
+    if f.universal:
+        # ⇒⇒ **AND THIS IS THE ONE PLACE A UNIVERSAL DOES NOT MAKE A PROGRAM.** *"list all
+        #   vms"* — the operator's own example — is a universal over a kind, and `list_vms`
+        #   takes the whole population natively. An ENUMERATOR ABSORBS THE UNIVERSAL; a setter
+        #   takes one key at a time, so `stop all the vms` must enumerate and then act, which
+        #   is a program. The manifest is what states the difference.
+        if f.asking and not f.acting:
+            return say(TOOL, "an enumerator absorbs the universal")
+        return say(PROGRAM, "an act over a set")
+    return say(TOOL, "one call, and its output or effect is the answer")
+
+
+def _tier(f: Facts) -> str:
+    """SELF or GOVERNANCE for the Gorgon objects this request names, or "" for none.
+
+    ⇒ GOVERNANCE WINS A TIE, because the two costs are not symmetric: a contract op mistaken
+      for a setting wastes a turn, and a setting mistaken for a contract op asks for a
+      signature nobody meant to give.
+    """
+    owners = {GORGON_NOUNS[g] for g in f.gorgon if g in GORGON_NOUNS}
+    if owners & GOVERNANCE_OWNERS:
+        return GOVERNANCE
+    return SELF if owners else ""
+
+
 def _agent_name() -> str:
     """The agent's own name — `pass1.agent_name`, which resolves it from the selection.
 
@@ -417,7 +599,7 @@ def _shortcut(low: str) -> str:
     return ""
 
 
-def _procedure(low: str) -> str:
+def _procedure(low: str, world) -> str:
     """A stored procedure the request NAMES. Not one that would cover it.
 
     ⇒ ⚠ **RUNG 2 OF THE LADDER SPLITS IN TWO, AND ONLY ONE HALF IS A DOOR FACT.** *Does a
@@ -426,15 +608,36 @@ def _procedure(low: str) -> str:
       half already exists one layer down, on the writer's own hot path, and cannot move up
       here. What the door can see is the operator naming the procedure, spelled as stored or
       with underscores relaxed.
+
+    ⇒⇒ ⚠ **A SUBSTRING MATCH HERE ROUTED ELEVEN ROWS TO THE WRONG REGIME, AND THE LIBRARY ON
+      THIS MACHINE IS WHY IT WAS CAUGHT.** One stored procedure is called `lab`, and `"lab" in
+      request` is true of *"put web on lab"*, *"label all the ubuntu vms"* and *"clean up the
+      lab"* alike — so every one of them claimed a verified artifact covered it. That is the
+      PROGRAM -> PROCEDURE direction, and it is a false avoid dressed as a library hit.
+      **The name is matched at WORD BOUNDARIES now**, which is what a name is.
+
+    ⇒⇒ **AND THE WORLD OUTRANKS THE STORE**, which is not a new rule — `settle_from_archive`
+      keeps exactly this one, and for the same reason: a remembered name may never beat a live
+      one. A procedure called `lab` in a lab that HAS a network called `lab` loses, every time.
     """
     try:
         from planner.procedures import LIBRARY
         stored = LIBRARY.names()
     except Exception:
         return ""
+    held = set()
+    if world is not None:
+        try:
+            held = {str(n).lower() for n in (world.names() or ())}
+        except Exception:
+            held = set()
     for name in stored:
-        if name.lower() in low or name.lower().replace("_", " ") in low:
-            return name
+        low_name = name.lower()
+        if low_name in held:
+            continue
+        for form in (low_name, low_name.replace("_", " ")):
+            if re.search(rf"\b{re.escape(form)}\b", low):
+                return name
     return ""
 
 
