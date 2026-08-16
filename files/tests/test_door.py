@@ -170,6 +170,37 @@ def test_the_door_costs_no_model_call():
         OC._call_ollama = original
 
 
+def test_the_door_surface_acts_on_nothing():
+    """⇒⇒ **`plan --door <request>` IS A WINDOW, NOT A SWITCH**, and the operator's gate is why:
+    *"dont wire the new harness just yet, we have to complete the open items list first."*
+
+    ⇒ It returns before any dispatch, so the default path is byte-identical BY CONSTRUCTION —
+      there is no branch below the flag that can see it. Asserted by pointing it at the most
+      destructive request in the key and checking the executor was never reached: `manager` is
+      replaced with something that raises, exactly as the model is in the test above.
+    """
+    from orchestrator.ai.chat.shortcuts.plan import Plan
+    import orchestrator.ai.chat.shortcuts.context as ctx
+
+    original = getattr(ctx, "execute_tool", None)
+
+    def _refuse(*a, **k):
+        raise AssertionError("the door surface reached the executor")
+
+    ctx.execute_tool = _refuse
+    try:
+        for request in ("delete the vm called n3",
+                        "make sure there are exactly two machines",
+                        "stop all the vms"):
+            Plan().run(f"plan --door {request}", [], 0, False)
+        check("the door surface runs nothing, on the destructive rows too", True)
+    except AssertionError as e:
+        check(f"the door surface runs nothing — {e}", False)
+    finally:
+        if original is not None:
+            ctx.execute_tool = original
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "door")

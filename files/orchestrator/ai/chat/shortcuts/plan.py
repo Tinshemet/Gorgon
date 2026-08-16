@@ -283,16 +283,79 @@ class Plan(Shortcut):
         #   operator who typed a destructive request should be told plainly that nothing ran.
         console.print("[dim]    nothing was run — `--seam` reads and shows[/dim]")
 
+    def _read_with_door(self, request: str) -> None:
+        """Run the REGIME LADDER over one request and print the destination and its rung.
+
+        ⇒⇒ **THE FACTS AND THE DESTINATION ARE PRINTED SEPARATELY, WHICH IS THE WHOLE REASON
+          THE DOOR IS SPLIT IN TWO.** This file's own argument for printing every stage —
+          *"a wrong answer says WHICH half was wrong"* — is exactly what `facts()` and
+          `route()` were separated to give: a wrong destination is a wrong LOOKUP or a wrong
+          RUNG, and the two are on different lines here.
+
+        ⇒ **IT COSTS NO MODEL CALL**, which is the constraint the door is built on, so this is
+          the one door in this file that is free to type at. `--seam` below it costs two model
+          calls' worth of questions in pass 1 and one in pass 2.
+
+        ⇒ AND IT ACTS ON NOTHING. Same rule as `--seam`: it returns before any dispatch, so
+          there is no branch below it that can see the flag.
+        """
+        from orchestrator.door import facts as _facts, route as _route
+
+        world = self._seam_world()
+        f = _facts(request, world=world)
+        got = _route(f)
+
+        console.print(f"\n[bold]the door[/bold]"
+                      f"{'' if world else '  ·  [warn]no lab — a bare name cannot be a member[/warn]'}")
+        console.print(f"    [bold]-> {got.goes.upper()}[/bold]   [dim]{got.rung}[/dim]")
+        # ⇒ THE FACTS IT DECIDED FROM, and only the ones that carry something. A record of
+        #   twenty empty fields is a wall; what was FOUND is the reading.
+        # ⇒ ⚠ `mood` AND `shape` HAVE NON-EMPTY DEFAULTS, so they are shown only where they
+        #   carry news: `do` is every sentence that is not an ACHIEVE, and `answer_shape`
+        #   returns `count` for anything it is asked about, question or not.
+        shown = [(name, val) for name, val in (
+            ("said", f.says),
+            ("mood", f.mood if f.postcondition else ""),
+            ("shape", f.shape if f.says == "question" else ""),
+            ("kinds", f.kinds), ("members", f.members),
+            ("acting", f.acting), ("asking", f.asking),
+            ("predicate", f.lab_predicate or ""), ("universal", f.universal or ""),
+            ("numeral", f.numeral), ("comparator", f.comparator), ("counted", f.counted or ""),
+            ("existential", f.existential or ""),
+            ("filtered", f.filtered or ""), ("ordered", f.ordered or ""),
+            ("postcondition", f.postcondition or ""), ("addressed", f.addressed or ""),
+            ("governs", f.governs), ("shortcut", f.shortcut), ("gorgon", f.gorgon),
+            ("procedure", f.procedure), ("unknown", f.unknown),
+        ) if val not in (None, "", (), False)]
+        for name, val in shown:
+            console.print(f"      [dim]{name:14}[/dim] {val if not isinstance(val, tuple) else ', '.join(map(str, val))}")
+        for clause, act in zip(f.clauses, f.acts):
+            console.print(f"      [dim]{str(act or 'unread'):14}[/dim] {clause.strip()}")
+        console.print("[dim]    nothing was run — `--door` reads and shows[/dim]")
+
     def run(self, ui: str, messages: List[dict], runtime_drift_count: int,
             verbose: bool) -> None:
         request = ui.strip()[len(_PREFIX):].strip()
-        dry = seam = False
+        dry = seam = door = False
         for flag in ("--dry", "-n"):
             if request.lower().startswith(flag + " "):
                 dry, request = True, request[len(flag):].strip()
         for flag in ("--seam",):
             if request.lower().startswith(flag + " "):
                 seam, request = True, request[len(flag):].strip()
+        for flag in ("--door",):
+            if request.lower().startswith(flag + " "):
+                door, request = True, request[len(flag):].strip()
+
+        # ⇒⇒ **THE REGIME LADDER, OPT-IN, AND IT RETURNS BEFORE ANYTHING ELSE HAPPENS.** N1
+        #   decides WHICH REGIME a request wants, and until the open list is finished nothing
+        #   routes on that decision — the operator's own gate: *"dont wire the new harness just
+        #   yet, we have to complete the open items list first."*
+        #   ⇒ So this is a WINDOW, not a switch. It prints what the door would decide and what
+        #     it decided from, and the default path stays byte-identical by construction.
+        if door:
+            self._read_with_door(request)
+            return
 
         # ⇒⇒ **THE TWO-PASS SEAM, OPT-IN, AND IT RETURNS BEFORE ANYTHING ELSE HAPPENS.**
         #
