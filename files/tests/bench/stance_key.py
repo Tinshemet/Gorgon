@@ -49,7 +49,7 @@ makes it confident and the question is never put to the person at all.
 
 ⇒ So a reading of stance may inform a QUESTION — *they hedged, so confirm* — and may never
   inform a GRANT. Two species have real downstream value and both point at a READING that does
-  not exist yet: CLOSURE at the resolution statement (D3), FRUSTRATION at diagnosis (D1).
+  not exist yet: SATISFACTION at the resolution statement (D3), FRUSTRATION at diagnosis (D1).
 
 # ⇒ HOW EACH SPECIES COULD BE CAUGHT, WHICH IS WHY THE KEY IS ORDERED THIS WAY
 
@@ -77,32 +77,83 @@ makes it confident and the question is never put to the person at all.
 from typing import Dict, List, NamedTuple, Tuple
 
 # ── the species ──────────────────────────────────────────────────────────────────────
-# ⇒ THE EIGHT FLAVOURS. Named for WHAT EACH ONE TELLS US, never for how it is spelled — the
-#   same method that has held all session: route by producer, never by meaning.
-DEFERENCE = "flavour-deference"      # low urgency; expects it may be refused
-CLOSURE = "flavour-closure"          # the LAST thing succeeded  -> a resolution
-FRUSTRATION = "flavour-frustration"  # a prior attempt FAILED    -> a diagnosis context
-HOSTILITY = "flavour-hostility"      # aimed. An insult IS an act, not a modifier
-HEDGE = "flavour-hedge"              # low commitment -> confirm more, assume less
-URGENCY = "flavour-urgency"          # ⚠ not pure flavour — collides with the temporal reader
-PHATIC = "flavour-phatic"            # the session opening or closing
-FILLER = "flavour-filler"            # mid-formulation -> the request may be INCOMPLETE
+#
+# ⇒⇒ **THE OPERATOR, 2026-08-16: *"are there only 8 flavors? really?"* — AND NO.** The first cut
+#   listed eight and had no organising principle: it mixed what the speaker FEELS with what the
+#   speaker does to US with what a word does to the CLAIM, then called the pile a taxonomy.
+#   Pushing on it turned up a case that causes a WRONG ACTION rather than a lost SERVE:
+#
+#       stop alpha — sorry, i meant beta
+#
+#   `sorry, i meant` is shaped exactly like deference and is a SELF-REPAIR. Discard it and the
+#   wrong machine dies.
+#
+# ⇒⇒ **SO THE AXIS IS WHAT THE SPAN ATTACHES TO**, which is a principle rather than a list, and
+#   it is the one the appraisal literature already uses (attitude · engagement · graduation),
+#   with discourse management added because a request is a turn in a conversation:
+#
+#       1 · AFFECT         what the SPEAKER feels        set aside safely
+#       2 · INTERPERSONAL  what it does to US            set aside safely
+#       3 · COMMITMENT     what it does to the CLAIM     set aside safely
+#       4 · MANAGEMENT     what it does to the TALK      ⚠ TWO OF THESE REWRITE THE REQUEST
 
-FLAVOURS = (DEFERENCE, CLOSURE, FRUSTRATION, HOSTILITY, HEDGE, URGENCY, PHATIC, FILLER)
+# 1 · AFFECT — what the speaker feels. Points at readings that do not exist yet.
+FRUSTRATION = "affect-frustration"   # a prior attempt FAILED    -> a diagnosis context (D1)
+SATISFACTION = "affect-satisfaction" # the LAST thing succeeded  -> a resolution (D3)
+ANXIETY = "affect-anxiety"           # *i'm worried this will break something* -> confirm
+
+# 2 · INTERPERSONAL — what it does to us. The politest half, and the measured hazard.
+DEFERENCE = "social-deference"       # please · if you don't mind · when you get a chance
+GRATITUDE = "social-gratitude"       # thanks · cheers — AT THE END OF A REQUEST, not a report
+APOLOGY = "social-apology"           # sorry to bother you · sorry, dumb question
+HOSTILITY = "social-hostility"       # aimed. An insult IS an act, not a modifier
+PHATIC = "social-phatic"             # hi · good morning doorman · bye
+
+# 3 · COMMITMENT — what it does to the claim. **The only group allowed to move anything, and
+#   only ever toward ASKING MORE.** [[gorgon-courtesy-escalates-intent]] is what happens when
+#   stance moves authority instead.
+HEDGE = "commit-hedge"               # maybe · i think · if possible  -> confirm more
+EMPHASIS = "commit-emphasis"         # definitely · i'm certain · make sure you  -> confirm less?
+INTENSITY = "commit-intensity"       # really · very · the hell — force, not content
+DOWNTONE = "commit-downtone"         # just a quick · a bit · only — ⚠ collides with COMPARATORS
+URGENCY = "commit-urgency"           # now · asap — ⚠ collides with the temporal reader
+
+# 4 · MANAGEMENT — what it does to the talk. ⚠⚠ **NOT ALL OF THIS IS DISCARDABLE.**
+FILLER = "talk-filler"               # uh · well · so — mid-formulation
+ACKNOWLEDGE = "talk-acknowledge"     # ok · right · got it — receipt, not instruction
+REPAIR = "talk-repair"               # ⚠ sorry, i meant X — IT REWRITES THE REQUEST
+TOPIC = "talk-topic"                 # ⚠ anyway · by the way — IT STARTS A NEW ONE
+
+AFFECT = (FRUSTRATION, SATISFACTION, ANXIETY)
+SOCIAL = (DEFERENCE, GRATITUDE, APOLOGY, HOSTILITY, PHATIC)
+COMMITMENT = (HEDGE, EMPHASIS, INTENSITY, DOWNTONE, URGENCY)
+MANAGEMENT = (FILLER, ACKNOWLEDGE, REPAIR, TOPIC)
+FLAVOURS = AFFECT + SOCIAL + COMMITMENT + MANAGEMENT
+
+# ⇒⇒ **AND THE FIFTH NON-FLAVOUR SPECIES, FOUND THE SAME WAY.** *"the error says 'cannot
+#   allocate memory'"* — the quoted half is DATA the operator is handing us, it correlates
+#   with nothing in the manifest, and it is the most important part of the sentence.
+QUOTED = "quoted"
 
 UNRELATED = "unrelated"      # a proposition about a world that is not ours
 NOISE = "noise"              # carries nothing at all
 UNKNOWN = "unknown"          # ⇐ NOT unprocessable. Only unread, and it must ASK
 REAL = "real"                # ⇐ not unprocessable at all. The controls.
 
-SPECIES = FLAVOURS + (UNRELATED, NOISE, UNKNOWN, REAL)
+SPECIES = FLAVOURS + (UNRELATED, NOISE, QUOTED, UNKNOWN, REAL)
 
 # ⇒ THE TWO CELLS THAT LOSE INFORMATION SILENTLY. Everything else costs a question.
 CRITICAL_MISSES = (
     (UNKNOWN, "*discarded*"),   # the word that may be the point of the request, thrown away
     (REAL, "*discarded*"),      # a name, a value or a member, thrown away
 )
-DISCARDED = FLAVOURS + (NOISE, UNRELATED)
+# ⇒⇒ **WHAT MAY BE SET ASIDE — AND `REPAIR`, `TOPIC` AND `QUOTED` ARE NOT IN IT.** A span that
+#   rewrites the request, starts a different one, or hands us data is unprocessable ONLY in the
+#   sense that no operation is built from it directly. Discarding one is a wrong action, not a
+#   lost SERVE, which is the whole reason the fourth group had to be separated from the first
+#   three.
+DISCARDED = AFFECT + SOCIAL + COMMITMENT + (FILLER, ACKNOWLEDGE, NOISE, UNRELATED)
+NEVER_DISCARDED = (REPAIR, TOPIC, QUOTED, UNKNOWN, REAL)
 
 
 class Keyed(NamedTuple):
@@ -137,22 +188,30 @@ CONTROLS: List[Keyed] = [
     Keyed("when you get a chance, take a snapshot of every running vm", "chance", DEFERENCE,
           "⚠ THE PRIVILEGE ESCALATION, and it is live: `get` is an ACHIEVE marker, so this "
           "exact sentence resolves FETCH -> ACHIEVE and the operator is never asked"),
-    Keyed("stop the web server, thanks", "thanks", CLOSURE,
-          "⚠ AT THE END OF A REQUEST IT IS DEFERENCE-ADJACENT AND STILL NOT CLOSURE — nothing "
-          "has happened yet to be closed. **The same word is two species by position**, which "
-          "is why a word list cannot do this",
+    Keyed("stop the web server, thanks", "thanks", GRATITUDE,
+          "⚠ **THE SAME WORD AS THE ROW BELOW AND A DIFFERENT SPECIES.** Here nothing has "
+          "happened yet, so it thanks us in ADVANCE — interpersonal, and safe to set aside. In "
+          "*thanks, that worked* it REPORTS that something succeeded. Position settles it, and "
+          "a word list cannot",
           hard=True),
+    Keyed("sorry to bother you, could you restart alpha", "sorry to bother you", APOLOGY,
+          "NEGATIVE POLITENESS — it pre-apologises for the imposition and says nothing about "
+          "the lab. ⚠ and `sorry` is REPAIR's own opener two groups down, so the word alone "
+          "settles nothing"),
+    Keyed("this is really slowing everything down, stop the vms", "really", INTENSITY,
+          "FORCE, not content — strip it and the instruction is unchanged. ⚠ it sits inside a "
+          "clause that is otherwise a SYMPTOM REPORT, which is FRUSTRATION and is not"),
     Keyed("could you please delete the old snapshots", "could you please", DEFERENCE,
           "a whole polite frame, not one word — and `can you delete the vms?` is a keyed ORDER, "
           "so the frame must not turn the request into a question"),
 
-    # ⇒⇒ CLOSURE — the operator named this one: *"its probably a resolution to a problem, this
+    # ⇒⇒ SATISFACTION — the operator named this one: *"its probably a resolution to a problem, this
     #   would be a statement then, 'X is resolved/working, the matter is closed'."*
-    Keyed("thanks, that worked", "thanks, that worked", CLOSURE,
+    Keyed("thanks, that worked", "thanks, that worked", SATISFACTION,
           "**A SENTENCE TYPE NOTHING READS.** It closes a ticket, and `Issues.answers()` is "
           "the writer that would take one (D3). Today it is indistinguishable from `sort out "
           "n1` — both read EXPRESSIVE"),
-    Keyed("perfect, alpha is up now", "perfect", CLOSURE,
+    Keyed("perfect, alpha is up now", "perfect", SATISFACTION,
           "an evaluative with no lab object. ⚠ note `now` in the same sentence is URGENCY's "
           "word doing a third job — reporting a state, not demanding one"),
 
@@ -250,6 +309,48 @@ CONTROLS: List[Keyed] = [
     Keyed("run the widget-sync playbook", "widget-sync", UNKNOWN,
           "a name from outside this system entirely — a procedure, a tool, or nothing"),
 
+    # ⇒⇒ MANAGEMENT — **THE GROUP THAT IS NOT SAFE TO SET ASIDE**, and the reason the eight
+    #   became sixteen. A repair and a topic shift wear a courtesy's clothes and change what
+    #   was asked.
+    Keyed("stop alpha — sorry, i meant beta", "sorry, i meant", REPAIR,
+          "⚠⚠ **THE CASE THAT BROKE THE FIRST TAXONOMY.** `sorry` is APOLOGY's own word and "
+          "`i meant` is shaped like a hedge. It is a SELF-REPAIR: it retracts `alpha` and "
+          "substitutes `beta`. **Discard it and the wrong machine dies** — a wrong action, not "
+          "a lost SERVE, which is a different order of cost from everything above"),
+    Keyed("delete the snapshots, no wait, just the old ones", "no wait", REPAIR,
+          "the same act with none of the same words, and it NARROWS the target rather than "
+          "replacing it. ⚠ `just` in the repaired half is DOWNTONE or COMPARATOR — the row "
+          "next to it in this file is the same word meaning EXACTLY THREE",
+          hard=True),
+    Keyed("list the vms. anyway, is alpha running?", "anyway", TOPIC,
+          "⚠ IT STARTS A SECOND REQUEST. Setting it aside merges two requests into one and the "
+          "seam reads a compound that nobody asked for"),
+    Keyed("ok, got it — now stop the web server", "ok, got it", ACKNOWLEDGE,
+          "A RECEIPT FOR SOMETHING WE SAID, not an instruction. ⚠ and `now` beside it is "
+          "URGENCY rather than a time — the temporal reader must stay out of this sentence"),
+
+    # ⇒⇒ COMMITMENT — the only group allowed to move anything, and only toward asking MORE.
+    Keyed("definitely delete every stopped vm", "definitely", EMPHASIS,
+          "THE OPPOSITE OF A HEDGE, and it is the dangerous direction: certainty is exactly "
+          "the thing that must NOT reduce a confirmation. `gorgon-courtesy-escalates-intent` "
+          "is what happens when stance is allowed to grant"),
+    Keyed("can you just do a quick snapshot of db", "just", DOWNTONE,
+          "⚠⚠ **THE THIRD `just` IN THIS FILE AND THE THIRD MEANING** — a minimiser here, a "
+          "COMPARATOR in *just 3 vms*, an OPENER in `speech_act`. One word, three species, "
+          "settled only by what follows it",
+          hard=True),
+    Keyed("i'm worried this will take the whole lab down", "i'm worried", ANXIETY,
+          "AFFECT THAT SHOULD RAISE A CONFIRMATION, which is the one direction stance may "
+          "move anything. Nothing reads it today"),
+
+    # ⇒⇒ QUOTED — the fifth non-flavour species, found the same way as REPAIR: by asking what
+    #   correlates with nothing and is still the most important part of the sentence.
+    Keyed("alpha won't boot, the error says 'cannot allocate memory'",
+          "cannot allocate memory", QUOTED,
+          "⚠ **DATA THE OPERATOR IS HANDING US.** It correlates with no kind, no member and no "
+          "archive entry — the exact profile of UNRELATED — and it is EVIDENCE for a "
+          "diagnosis. The quotes are the signal and they are structural"),
+
     # ⇒⇒ REAL — the controls, and they are the measurement. Every one LOOKS discardable.
     Keyed("make sure n1, n2 and n3 can all ping each other", "n1", REAL,
           "RUNG 9. Kindless, absent from the lab, in no vocabulary — **and gate 2 asking "
@@ -307,7 +408,8 @@ def check() -> List[str]:
                       "and the manifest no longer declares it")
 
     for d in SPECIES:
-        if counts()[d] == 0 and d not in (HOSTILITY,):
+        if counts()[d] == 0 and d not in (HOSTILITY, ANXIETY, EMPHASIS, DOWNTONE,
+                                          ACKNOWLEDGE):
             faults.append(f"species {d!r} has no control at all")
     return faults
 
@@ -323,7 +425,7 @@ def direction(keyed: str, got: str) -> str:
     """What KIND of miss. `same` when there is none."""
     if keyed == got:
         return "same"
-    if keyed in (UNKNOWN, REAL) and got in DISCARDED:
+    if keyed in NEVER_DISCARDED and got in DISCARDED:
         return "CRITICAL"
     if got == UNKNOWN:
         return "asked"          # cheap: it costs a question, and the question is answerable
@@ -345,4 +447,4 @@ if __name__ == "__main__":                                     # pragma: no cove
             print(f"      {k.why}")
     print(f"\n  {len(CONTROLS)} controls · {sum(1 for k in CONTROLS if k.hard)} keyed hard")
     print(f"  discardable species: {', '.join(DISCARDED)}")
-    print(f"  NEVER discardable:   {UNKNOWN}, {REAL}")
+    print(f"  NEVER discardable:   {', '.join(NEVER_DISCARDED)}")
