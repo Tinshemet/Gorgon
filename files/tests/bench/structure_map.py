@@ -42,10 +42,16 @@ class Feature(NamedTuple):
     reads_it: str        # what turns this structure into a usable fact today; "" is a hole
     note: str = ""
     danger: bool = False # a hole that changes WHAT RUNS rather than what is understood
+    partial: bool = False
 
     @property
     def hole(self) -> bool:
-        return not self.reads_it
+        """⇒⇒ **A PARTIAL READING IS A HOLE, AND THE FIRST CUT OF THIS FILE COUNTED IT AS
+        COVERAGE.** `negated filter` was given a `reads_it` describing what it reads — the
+        negator — and scored as covered, while the filter it produces is the OPPOSITE SET.
+        A row that names some machinery and still gets the answer wrong is worse than an
+        empty one, because it reads as done. Caught by re-reading the tally, not by a test."""
+        return (not self.reads_it) or self.partial
 
 
 MAP: List[Feature] = [
@@ -91,9 +97,11 @@ MAP: List[Feature] = [
             "⚠ `alpha's` unread as one token — the apostrophe survives tokenisation and the "
             "name is lost. A genitive is a REFERENCE, and the reference is the target"),
     Feature(PHRASE, "prepositional filter", "stop the vms on the lab network",
-            "scan — `on` is a declared alias for network",
+            "scan — `on` is a declared alias for network", partial=True,
+            note=
             "covered by ALIAS rather than by structure: `vm.aliases` maps `on` -> network. "
-            "⚠ so it works for the prepositions the manifest happens to alias and no others"),
+            "⚠ PARTIAL — it works for the prepositions the manifest happens to alias and for "
+            "no others, which is a coincidence rather than a reading"),
     Feature(PHRASE, "reduced relative", "stop the vms running on lab",
             "",
             "⚠ `running` and `lab` unread. The same filter as the relative clause with the "
@@ -103,8 +111,8 @@ MAP: List[Feature] = [
             "⚠ MEASURED: splits into two clauses and reads EXPRESSIVE + DIRECTIVE_INFORM. An "
             "apposition RENAMES — it is the archive's own `X is a Y` in a different shape"),
     Feature(PHRASE, "negated filter", "stop every vm that is not running",
-            "speech_act.NEGATORS exists; the filter half does not",
-            "⚠ `running` reads as a value and the NEGATION over it is not carried into the "
+            "speech_act.NEGATORS exists; the filter half does not", partial=True,
+            note="⚠⚠ `running` reads as a value and the NEGATION over it is not carried into the "
             "condition. **Reads as an order to stop the RUNNING ones** — the opposite set",
             danger=True),
 
@@ -178,8 +186,8 @@ MAP: List[Feature] = [
             "⚠ NOT NOISE — pronounceable, one edit from a naming cue. The operator's held-out "
             "set preserves typos as DATA because they were unconscious"),
     Feature(SURFACE, "contraction", "don't stop the vms · i'd like you to",
-            "speech_act reads `don't`; `i'd` is unread",
-            "⚠ MEASURED in the courtesy probe: `i'd` and `like` are asked about by name"),
+            "speech_act reads `don't`; `i'd` is unread", partial=True,
+            note="⚠ MEASURED in the courtesy probe: `i'd` and `like` are asked about by name"),
     Feature(SURFACE, "multi-sentence", "stop alpha. then launch beta.",
             "pass2.clauses_of splits on the full stop", "reads as two clauses, correctly"),
     Feature(SURFACE, "fragment", "and the network?",
@@ -240,7 +248,9 @@ def main(argv: Optional[List[str]] = None) -> int:               # pragma: no co
         if f.note:
             print(f"      {f.note}")
     print(f"\n{'─' * 96}")
+    part = [f for f in MAP if f.partial]
     print(f"  COVERED {len(MAP) - len(holes()):2} of {len(MAP)}     HOLES {len(holes()):2}"
+          f"  (of which {len(part)} PARTIAL — machinery exists and the answer is wrong)"
           f"     of which {len(dangerous())} change WHAT RUNS:")
     for f in dangerous():
         print(f"      {f.level:8} {f.name}")
