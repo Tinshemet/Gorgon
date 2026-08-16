@@ -113,7 +113,12 @@ COPULA = frozenset({"is", "are", "was", "were", "am", "be", "been", "'s", "'re"}
 # ⇒ THE ADDRESSEE. One pronoun, and the entire difference between an order and a question once
 #   a sentence has inverted.
 ADDRESSEE = frozenset({"you", "u", "ya"})
-FIRST_PERSON = frozenset({"i", "we"})
+# ⇒ ⚠ **AND THE CONTRACTED FORMS, WHICH ARE THE SAME PRONOUN.** `i'd like you to …` is the
+#   keyed declarative directive and `i'd` is not `i`, so the branch that reads it never fired —
+#   found 2026-08-16 when rung 8's own courtesy arm came back UNREAD. A pronoun plus a clitic
+#   is a closed class twice over: two pronouns, four clitics, and English adds neither.
+FIRST_PERSON = frozenset({"i", "we", "i'd", "i've", "i'll", "i'm",
+                          "we'd", "we've", "we'll", "we're"})
 
 # ⇒⇒ **THE CONVERSATION'S OWN PARTICIPANTS — and this is the generalisation the addressee test
 #   should always have been.** A request to ACT is aimed at somebody in the room; a question is
@@ -473,8 +478,17 @@ def act_of(clause: str, board: Optional[Board] = None, world=None) -> Optional[s
     #       the verb is NOT a copula          *"every vm IS running"* states a fact about today;
     #                                         *"every new vm GETS the label"* states a standing
     #                                         rule. Dynamic verb versus predication.
+    #   ⇒⇒ ⚠ **AND THE RULE SAID *SUBJECT POSITION* WHILE THE TEST SAID *ANYWHERE*, WHICH IS
+    #     A DIFFERENT RULE.** Measured 2026-08-16 through the ISO probe: *"i'd like you to put
+    #     EVERY vm on a network called core, except db"* — rung 8's own courtesy arm — came
+    #     back a DECLARATION, so a polite request read as LEGISLATION. And since the per-chunk
+    #     producer rule of the same day drops a declaration's rows, **half of rung 8 vanished
+    #     because somebody was polite.**
+    #   ⇒ **THE UNIVERSAL MUST STAND BEFORE THE VERB, which is what subject position MEANS.**
+    #     `every new vm GETS the label` binds a class; `put EVERY vm on core` is an object, and
+    #     the verb in front of it is the giveaway.
     if (_is_function_word(head) and not _main_clause_copula(words)
-            and any(w in _universals() for w in words)):
+            and _universal_before_the_verb(words, board)):
         return DECLARATION
 
     # ⇒ 3b · THE EMBEDDED QUESTION UNDER A FIRST-PERSON MATRIX. *"i want to know WHICH vms are
@@ -730,6 +744,31 @@ def _is_function_word(word: str) -> bool:
 SUBORDINATING = frozenset({"if", "unless", "while", "because", "although", "though",
                            "whether", "since", "until", "after", "before", "once",
                            "whenever"}) | RELATIVIZERS
+
+
+def _universal_before_the_verb(words: Sequence[str], board: Optional[Board] = None) -> bool:
+    """Is a universal in SUBJECT position — that is, before the clause's verb?
+
+    ⇒ The universal-subject rule reads a standing rule off *"from now on every new vm GETS the
+      label"*: a class, bound across future instances. Its test asked only whether a universal
+      appeared ANYWHERE, so *"put EVERY vm on core"* — where it is the OBJECT — matched too.
+    ⇒ **THE VERB IS THE BOUNDARY AND BOTH LOOKUPS ALREADY EXIST**: `changes_the_world` for the
+      manifest's own verbs, `_lab_predicate_in` for the lab's English. A universal after either
+      is being acted upon, not legislating.
+    """
+    for w in words:
+        if w in _universals():
+            return True
+        # ⇒ ⚠ **A FUNCTION WORD IS NEVER THE VERB, AND THE GUARD IS NOT COSMETIC.**
+        #   `_lab_predicate_in` returns True for `from` — a creator declares a `from` ROLE, so
+        #   the preposition is inside `scan._operation_words` — and without this the boundary
+        #   landed on the first word of *"FROM now on every new vm gets the label"*, killing
+        #   the control the rule exists for. D5's leak, met head on.
+        if _is_function_word(w):
+            continue
+        if changes_the_world(w, board) is not None or _lab_predicate_in([w], board):
+            return False
+    return False
 
 
 def _main_clause_copula(words: Sequence[str]) -> bool:
