@@ -101,6 +101,26 @@ def _index(board: Board) -> Dict[str, str]:
     return out
 
 
+def _cue_hit(word: str, cue: str) -> bool:
+    """Does `word` name the declared attribute `cue`?  ONE test, used in TWO places.
+
+    MATCH IN BOTH DIRECTIONS. "labelled" stems to "labell", which no cue starts with; "named"
+    stems to "nam", which is shorter than any cue. One-way prefixing missed both, and those are
+    the two commonest descriptors in the corpus.
+
+    ⇒ PREFIX MATCHING ONLY WHERE THE CUE IS LONG ENOUGH TO MEAN SOMETHING. The manifest aliases
+      `on` to `network`, and a 3-char prefix let `ones` match it — *"the ones that do not
+      answer"* came back as `network = not`. A two-letter cue must match exactly.
+    ⇒ **AND IT LIVES HERE BECAUSE `scan` NEEDS THE SAME QUESTION.** Deciding whether `4` in
+      *"a 4 core vm"* is a count or a value is the same lookup as reading the value off `core`,
+      and the copy that answered only one of them is why the count won.
+    """
+    stem = _stem(word)
+    return word == cue or stem == cue or (
+        len(cue) >= 4 and len(stem) >= 3
+        and (cue.startswith(stem) or stem.startswith(cue)))
+
+
 def _tokens(text: str):
     """Words AND punctuation, with positions. Punctuation must survive — a span that crosses
     a comma is the bug that made 'create 5 vms, put them all in a network' one phrase.
@@ -114,9 +134,15 @@ def _tokens(text: str):
 
       The ASCII hyphen is deliberately NOT here. `[\\w']+` matches first, so adding `-` would
       split `well-known` into two spans; an em- or en-dash never appears inside a word.
+
+    ⇒ ⚠ **AND A CLOCK TIME IS ONE TOKEN, MATCHED BEFORE ANYTHING ELSE.** `[\\w']+` cannot cross
+      a colon, so *"arrive by 24:30"* tokenised to `24` and `30` — two bare numerals, the first
+      of which the enumerator loop then read as a COUNT. 127 `leaveat`/`arriveby` values were
+      lost this way on MultiWOZ, and *"snapshot every vm at 21:30"* loses its hour the same
+      way. The alternation must come first or `[\\w']+` claims the `24` and leaves `:30`.
     """
     return [(m.group(0).lower(), m.start(), m.end())
-            for m in re.finditer(r"[\w']+|[,;.]|[—–]", text)]
+            for m in re.finditer(r"\d{1,2}:\d{2}|[\w']+|[,;.]|[—–]", text)]
 
 
 def anchors_in(request: str, board: Optional[Board] = None) -> List[str]:
@@ -333,10 +359,12 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
 
     # ── LEFT: descriptors, then the enumerator, then the comparator in front of it
     left, count, comparator, matched = first, None, None, ""
+    count_at: Optional[int] = None
     while left > 0 and toks[left - 1][0] not in BOUNDARIES:
         word = toks[left - 1][0]
         if word in ENUMERATORS or word.isdigit():
             count = int(word) if word.isdigit() else ENUMERATORS[word]
+            count_at = left - 1
             left -= 1
             comparator, matched, left = _comparator_before(toks, left)
             break
@@ -349,7 +377,10 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
     while right < len(toks) and toks[right][0] not in BOUNDARIES:
         right += 1
 
-    span_words = [t[0] for t in toks[left:right] if t[0] not in BOUNDARIES]
+    # POSITIONS KEPT. Which digit was spent as the enumerator is a fact about a POSITION, and
+    # a bare list of words cannot express it — see the modifiers filter below.
+    span_at = [i for i in range(left, right) if toks[i][0] not in BOUNDARIES]
+    span_words = [toks[i][0] for i in span_at]
     # ⇒ THE KIND IS LOOKED FOR AT OR BEFORE THE ANCHOR, NEVER AFTER IT. A noun precedes its
     #   modifiers — "a VM named alpha" — so reaching rightward finds the wrong sentence's noun:
     #   anchored on `golden`, "clone golden into 3 new vms" was answering `vm`. A bare name has
@@ -357,11 +388,28 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
     head = [t[0] for t in toks[left:last] if t[0] not in BOUNDARIES]
     kind = _kind_of(head, nouns)
 
+    # ⇒⇒ **A NUMERAL IN FRONT OF A DECLARED ATTRIBUTE IS THAT ATTRIBUTE'S VALUE, NOT A COUNT.**
+    #   *"a 4 star hotel"* is ONE hotel rated four, and *"a 4 core vm"* is ONE machine with
+    #   four cores — but the enumerator loop walks left and takes the first digit it meets, so
+    #   both came back `count=4` with the digit deleted from the modifiers. The attribute was
+    #   then read off the wrong neighbour: `stars = please`.
+    #
+    #   ⇒ **THE MANIFEST DECIDES, NOT A WORD LIST.** `star` is a declared alias of `stars` and
+    #     `core` of `cpu_cores`, so the demotion is a lookup. `4 vms` keeps its count because
+    #     `vms` is a NOUN, not an attribute — the same test that separates the two readings.
+    if count_at is not None and kind:
+        _spec = _config_kinds().get(kind) or {}
+        _cues = set(_spec.get("attrs") or ()) | set((_spec.get("aliases") or {}).keys())
+        _next = toks[count_at + 1][0] if count_at + 1 < len(toks) else ""
+        if _next and _next not in nouns and any(_cue_hit(_next, c) for c in _cues):
+            count, count_at = None, None
+
     # ⇒ A NUMERAL BEFORE A NOUN COUNTS; AFTER ONE IT NAMES. "3 vms" is three machines and
     #   "network 1" is one network called `network 1`. Without this the `1` was dropped, so
     #   `network 1` and `network 2` produced the SAME span and the fold merged two distinct
     #   networks into one — a confidently wrong program, not a visible error.
     identity = None
+    spent_at: set = set() if count_at is None else {count_at}
     if kind:
         noun_at = next((i for i in range(left, right)
                         if toks[i][0] in nouns and nouns[toks[i][0]] == kind), None)
@@ -373,6 +421,7 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
                 tail += 1
             if tail > noun_at + 1:
                 identity = request[toks[noun_at][1]:toks[tail - 1][2]]
+                spent_at.update(range(noun_at + 1, tail))   # `network 1` — the 1 is the name
             elif count is None and comparator is None:
                 # ⇒ A BARE NOUN-WORD MAY BE A NAME. `box` is a declared noun for `vm` AND a
                 #   plausible machine name, and nothing in the request settles which — only the
@@ -386,9 +435,15 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
     comparator_words = set(matched.split())
     # a word that names ANY kind is never a modifier — otherwise a bare anchor whose own kind
     # is unknown picks up the next clause's noun and stops reporting itself bare.
-    modifiers = [w for w in span_words
-                 if w not in ENUMERATORS and not w.isdigit()
-                 and w not in comparator_words and w not in nouns]
+    # ⇒⇒ **ONLY THE DIGIT THAT WAS ACTUALLY SPENT IS DROPPED.** This read `not w.isdigit()` and
+    #   so deleted EVERY numeral in the span, spent or not — *"leaving at 24:30"* came out of
+    #   the scanner as `leaving from the at`, count `None`, the hour simply gone. A count is
+    #   taken at most ONCE, from ONE position; every other numeral is a value somebody typed
+    #   and is the reader's whole job. `spent_at` also holds the digits folded into an
+    #   `identity`, so `network 1` still does not offer a stray `1` as a condition.
+    modifiers = [toks[i][0] for i in span_at
+                 if i not in spent_at and toks[i][0] not in ENUMERATORS
+                 and toks[i][0] not in comparator_words and toks[i][0] not in nouns]
     lo = toks[left][1] if right > left else at
     hi = toks[right - 1][2] if right > left else at + len(anchor)
     return Scanned(anchor=anchor, span=request[lo:hi], start=lo, end=hi,
@@ -679,25 +734,22 @@ def conditions_from(modifiers: str, kind: Optional[str],
                 value = next(v for v in allowed if v != str(value).lower())
             out[attr] = value
             continue
-        stem = _stem(word)                                   # 2 · an attribute takes a value
-        for cue, real in attrs.items():
-            # MATCH IN BOTH DIRECTIONS. "labelled" stems to "labell", which no cue starts
-            # with; "named" stems to "nam", which is shorter than any cue. One-way prefixing
-            # missed both, and those are the two commonest descriptors in the corpus.
-            # ⇒ PREFIX MATCHING ONLY WHERE THE CUE IS LONG ENOUGH TO MEAN SOMETHING. The
-            #   manifest aliases `on` to `network`, and a 3-char prefix let `ones` match it —
-            #   *"the ones that do not answer"* came back as `network = not`. A two-letter cue
-            #   must match exactly.
-            if word == cue or stem == cue or (
-                    len(cue) >= 4 and len(stem) >= 3
-                    and (cue.startswith(stem) or stem.startswith(cue))):
+        for cue, real in attrs.items():                      # 2 · an attribute takes a value
+            if _cue_hit(word, cue):                          #     (the test is `_cue_hit`)
                 # LOOK BOTH WAYS. English puts the value either side of the attribute word —
                 # *"labelled 'red'"* but *"the 'prod' label"* — and taking only the next word
                 # lost every request phrased the second way.
+                # ⇒ **AND A NOUN IS NEVER A VALUE — IT IS THE HEAD.** *"a 4 core vm"* reaches
+                #   here with `after = vm`, and `vm` was taken as the value of `cpu_cores`
+                #   while the real value `4` sat one word to the LEFT and was passed over.
+                #   The noun of the phrase is the thing being described; it cannot also be
+                #   what one of its own attributes equals.
                 after = next((w for w in words[i + 1:]
-                              if w not in LINKING and w not in attrs), None)
+                              if w not in LINKING and w not in attrs
+                              and w not in nouns_here), None)
                 before = next((w for w in reversed(words[:i])
-                               if w not in LINKING and w not in attrs), None)
+                               if w not in LINKING and w not in attrs
+                               and w not in nouns_here), None)
                 pick = after if (after and after not in values) else (
                     before if (before and before not in values) else None)
                 if pick:

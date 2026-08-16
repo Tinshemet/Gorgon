@@ -142,13 +142,116 @@ def read_with(text: str):
             if not got:
                 continue
             where = SC.conditions_from(got.modifiers, got.kind, board, span=got.span)
-            out.append((anchor, got.kind, got.count, where))
+            out.append((anchor, got.kind, got.count, where, got.span))
         return out
+
+
+def gold_turns(where: str):
+    """Every USER turn that INTRODUCES a slot value, with the values it introduced.
+
+    ⇒ ⚠ **THE STATE IS CUMULATIVE AND MUST BE DIFFED.** MultiWOZ carries the whole dialogue
+      state on every turn, so turn 9 still lists the departure named in turn 1. Scoring against
+      the raw state asks a reader to extract from one sentence everything said in nine, which
+      is not a reading task at all — it credits nothing and punishes everything. The DELTA is
+      what this turn said.
+    """
+    import glob
+    import json
+    import os
+
+    rows = []
+    files = ([where] if os.path.isfile(where)
+             else sorted(glob.glob(os.path.join(where, "dialogues_*.json"))))
+    for path in files:
+        for dialogue in json.load(open(path)):
+            seen = {}
+            for turn in dialogue.get("turns") or []:
+                state = {}
+                for frame in turn.get("frames") or []:
+                    for slot, vals in ((frame.get("state") or {})
+                                       .get("slot_values") or {}).items():
+                        if vals:
+                            state[slot] = str(vals[0]).lower()
+                if turn.get("speaker") != "USER":
+                    continue
+                new = {k: v for k, v in state.items() if seen.get(k) != v}
+                seen.update(state)
+                if new:
+                    rows.append((turn.get("utterance") or "", new))
+    return rows
+
+
+def score(rows) -> dict:
+    """Us against MultiWOZ's gold slots — recall, precision, and WHERE THE MISSES LIVE.
+
+    ⇒ **THE THREE-WAY SPLIT IS THE POINT, NOT THE PERCENTAGE.** A miss is one of three
+      different bugs and they are fixed in different files: no anchor was found at all
+      (`anchors_in`), the value sat inside a span we DID scan but was not converted
+      (`conditions_from`), or the value fell outside the span we drew (`scan`). One number
+      over all three says only that something is wrong.
+    """
+    hit = miss_noanchor = miss_inspan = miss_outspan = miss_absent = 0
+    spurious = emitted = 0
+    by_slot: Dict[str, int] = {}
+    for text, gold in rows:
+        got = read_with(text)
+        # ⇒ **THE SPANS WE ACTUALLY DREW, NOT THE SENTENCE.** A first cut tested `value in
+        #   text` here and so reported ZERO out-of-span misses — every value present anywhere
+        #   counted as in-span, which made the one bucket that measures `scan`'s BOUNDARIES
+        #   permanently empty. A classifier that cannot report a category is not measuring it.
+        spans = [str(g[4] or "").lower() for g in got]
+        ours = set()
+        for _anchor, kind, _count, where, _span in got:
+            for attr, val in (where or {}).items():
+                ours.add((str(kind), str(attr), str(val).lower()))
+        emitted += len(ours)
+        low = text.lower()
+        for slot, value in gold.items():
+            domain, _, attr = slot.partition("-")
+            attr = attr.replace(" ", "")
+            if (domain, attr, value) in ours:
+                hit += 1
+                continue
+            by_slot[attr] = by_slot.get(attr, 0) + 1
+            if value not in low:
+                miss_absent += 1
+            elif not spans:
+                miss_noanchor += 1
+            elif any(value in s for s in spans):
+                miss_inspan += 1
+            else:
+                miss_outspan += 1
+    n = sum(len(g) for _t, g in rows) or 1
+    spurious = max(0, emitted - hit)
+    return {"turns": len(rows), "gold": n, "hit": hit, "emitted": emitted,
+            "recall": 100.0 * hit / n,
+            "precision": 100.0 * hit / (emitted or 1),
+            "no_anchor": miss_noanchor, "in_span": miss_inspan,
+            "out_span": miss_outspan, "absent": miss_absent,
+            "spurious": spurious, "by_slot": by_slot}
 
 
 def main(argv=None) -> int:                                       # pragma: no cover
     import sys
     argv = list(sys.argv[1:] if argv is None else argv)
+    if "--score" in argv:
+        at = argv.index("--score")
+        where = argv[at + 1] if at + 1 < len(argv) else "."
+        rows = gold_turns(where)
+        got = score(rows)
+        print(f"\n  {got['turns']} user turns that introduce a slot · "
+              f"{got['gold']} gold slot-values")
+        print(f"    RECALL      {got['hit']:5} / {got['gold']}   {got['recall']:.0f}%")
+        print(f"    PRECISION   {got['hit']:5} / {got['emitted']}   {got['precision']:.0f}%")
+        print("\n  WHERE THE MISSES LIVE")
+        for label, key in (("no anchor found", "no_anchor"), ("in a scanned span", "in_span"),
+                           ("outside the span", "out_span"),
+                           ("not literally present", "absent")):
+            print(f"    {got[key]:5}  {label}")
+        print("\n  MISSES BY SLOT")
+        for slot, count in sorted(got["by_slot"].items(), key=lambda kv: -kv[1])[:12]:
+            print(f"    {count:5}  {slot}")
+        return 0
     samples = [
         "I need train reservations from norwich to cambridge",
         "I'd like to leave on Monday and arrive by 18:00.",
@@ -164,7 +267,7 @@ def main(argv=None) -> int:                                       # pragma: no c
         got = read_with(t)
         if not got:
             print("       — nothing read")
-        for anchor, kind, count, where in got:
+        for anchor, kind, count, where, _span in got:
             print(f"       {anchor:14} kind={str(kind):11} count={str(count):5} {where or '{}'}")
     return 0
 

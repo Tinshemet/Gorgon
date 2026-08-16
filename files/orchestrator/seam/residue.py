@@ -118,6 +118,14 @@ def _consumed_by_a_field(row: S.Declared, board: Board) -> set:
     if row.comparator:                                                  # -> comparator
         for phrase in COMPARATORS:
             out |= set(phrase.split())
+    # ⇒⇒ **A NUMERAL SPENT ON `count` IS CONSUMED BY A FIELD LIKE ANY OTHER.** This list never
+    #   said so because `scan` used to delete EVERY digit from the modifiers, so a spent count
+    #   could not reach here to be judged. It deletes only the digit it actually spent now —
+    #   *"leaving at 24:30"* has to keep its hour — and the moment it did, the `2` of *"at
+    #   least 2 vms"* arrived as unread residue and the row started shouting about a word it
+    #   had read perfectly. **The field that consumed it must own it, and `count` is a field.**
+    if row.count is not None:                                           # -> count
+        out.add(str(row.count).lower())
     return out
 
 

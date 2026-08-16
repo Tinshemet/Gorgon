@@ -415,6 +415,51 @@ def test_self_correction_is_a_fragment_not_a_marker():
     check("a marker outranks a cut-off", got and got.marker == "i meant")
 
 
+def test_a_numeral_is_a_value_unless_it_was_spent_as_a_count():
+    """⇒⇒ **THREE WAYS THE READER THREW A VALUE AWAY, ALL FOUND BY A FOREIGN CORPUS.**
+
+    MultiWOZ was written for hotels and trains and knows nothing about this project, and it
+    caught three defects that bite the lab exactly as hard:
+
+      1 `_tokens` could not cross a colon, so *"arrive by 24:30"* became `24` and `30` — and
+        the enumerator loop then read the `24` as a COUNT. 127 clock times lost there, and
+        *"snapshot every vm at 21:30"* loses its hour the same way.
+      2 `scan` deleted EVERY digit from the modifiers, spent or not. A count is taken at most
+        once from one position; every other numeral is a value somebody typed.
+      3 `conditions_from` would take the phrase's own NOUN as one of its attributes' values —
+        *"a 4 core vm"* came back `cpu_cores = vm`, with the real `4` one word to the left.
+
+    ⇒ **AND THE COUNT MUST STAY A COUNT WHERE IT IS ONE.** `create 3 vms` is three machines;
+      the demotion fires only where the digit is followed by a DECLARED ATTRIBUTE, which is a
+      manifest lookup and not a word list.
+    """
+    from orchestrator.seam.scan import _tokens, conditions_from, scan
+    board = Board()
+
+    check("a clock time is ONE token",
+          [w for w, _s, _e in _tokens("leaving at 24:30")] == ["leaving", "at", "24:30"])
+    check("a numeral before a declared attribute is that attribute's value",
+          conditions_from("4 core vm", "vm", board) == {"cpu_cores": "4"})
+    got = scan("vm", "a 4 core vm", board)
+    check("and it is NOT the count", got.count is None and "4" in got.modifiers)
+
+    # ⇒ THE CONTROLS. A numeral before a NOUN is still an enumerator; a numeral after one is
+    #   still part of the identity; and none of it may reach the operator as unread residue.
+    check("a numeral before a noun is still a count", scan("vms", "create 3 vms", board).count == 3)
+    check("and it is spent, so it is not a modifier", scan("vms", "create 3 vms", board).modifiers == "")
+    named = scan("network", "stop network 1", board)
+    check("a numeral after a noun is still the identity",
+          named.identity == "network 1" and "1" not in named.modifiers)
+    check("an unspent numeral survives into the modifiers",
+          "24:30" in scan("vm", "snapshot the vm at 24:30", board).modifiers)
+
+    from orchestrator.seam import pass1 as P, residue as R
+    rows = P.run_scanned("make sure at least 2 vms carry the 'edge' label", board=board)
+    check("a numeral spent on `count` is never unread residue",
+          all("2" not in R.unread(r, "make sure at least 2 vms carry the 'edge' label",
+                                  board=board) for r in rows))
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "structure")
