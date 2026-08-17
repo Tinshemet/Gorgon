@@ -328,8 +328,11 @@ SEEDS: List[Seed] = [
 
     # ══ diagnosis — earned 2026-08-18; D1, the thesis. Evidence spans, no imperative ═
     Seed("diag-0001", "diagnosis", "vm2 is not working, it boots to a blue screen",
-         ["vm2"], [], {}, evidence=["it boots to a blue screen"],
-         source="real-failure"),
+         ["vm2"], [], {}, evidence=["is not working", "it boots to a blue screen"],
+         source="real-failure",
+         note="the operator's catch: ANY predicate asserting malfunction is testimony — the "
+              "general complaint AND the specific symptom, the same rule diag-0003 already "
+              "followed with `won't start`"),
     Seed("diag-0002", "diagnosis", "the web vm keeps dropping off the network",
          ["the web vm"], [], {}, evidence=["keeps dropping off the network"]),
     Seed("diag-0003", "diagnosis",
@@ -340,7 +343,9 @@ SEEDS: List[Seed] = [
               "the inner text, the same rule the quoted-value fix wrote on 08-16"),
     Seed("diag-0004", "diagnosis",
          "something is wrong with the dmz network, pings time out",
-         ["the dmz network"], [], {}, evidence=["pings time out"]),
+         ["the dmz network"], [], {},
+         evidence=["something is wrong", "pings time out"],
+         note="same rule as diag-0001: the generic complaint is testimony too"),
 
     # ══ cross-cutting — earned 2026-08-18: the vocab-list boundaries ═════════════════
     Seed("cc-0001", "cross-cutting", "when you get a chance, stop the test vms",
