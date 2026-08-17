@@ -370,8 +370,12 @@ SEEDS: List[Seed] = [
          note="`make` alone is a leak word; `make sure` is the whole verb"),
     Seed("cc-0003", "cross-cutting",
          "go over the event log and tell me if the db vm restarted",
-         ["the event log", "the db vm"], ["go over", "tell"], {0: [0], 1: [1]},
-         note="`go` in a phrasal verb; `restarted` is a question's content, not an action"),
+         ["the event log", "the db vm"], ["go over", "tell", "if the db vm restarted"],
+         {0: [0], 2: [1]}, queries=[2],
+         note="the operator's reject, applied: the whether-clause is an EXPLICIT QUERY act "
+              "— tell's content is the query (the act->act link is ledger item 5 family), "
+              "the query attaches to the db vm, and the asked EVENT (`restarted`) sits "
+              "inside the query span exactly as `running` sits inside `is alpha running`"),
     Seed("cc-0004", "cross-cutting",
          "put the notes from the meeting in the shared folder",
          ["the notes from the meeting", "the shared folder"], ["put"],
