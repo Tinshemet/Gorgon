@@ -153,8 +153,11 @@ SEEDS: List[Seed] = [
          ["alpha"], ["is alpha running"], {0: [0]}, queries=[0],
          note="a bare status query — the third sentence type, finally in the set"),
     Seed("cs-0007", "clean-single", "which vms are stopped?",
-         [], ["which vms are stopped"], {}, queries=[0],
-         note="a wh-query; the answer set is the ASK, so there is no object span"),
+         ["which vms"], ["which vms are stopped"], {0: [0]}, queries=[0],
+         note="the operator's catch: the query PRODUCES A SET, and the first gold (no object "
+              "span) billed the seam's correct set-reading as a hallucination. The wh-NP is "
+              "the span — `which` stays in like `every` does — and the asked property "
+              "(`stopped`) stays unmarked, exactly parallel to cs-0006's `running`"),
 
     # ══ coordination — shared and distributed attachment ═════════════════════════════
     Seed("coord-0001", "coordination", "restart the web vm and the db vm",
