@@ -251,8 +251,10 @@ SEEDS: List[Seed] = [
          ["the web vm"], [], {}, evidence=["keeps dropping off the network"]),
     Seed("diag-0003", "diagnosis",
          "alpha won't start and the log says 'cannot allocate memory'",
-         ["alpha"], [], {}, evidence=["won't start", "'cannot allocate memory'"],
-         source="real-failure"),
+         ["alpha"], [], {}, evidence=["won't start", "cannot allocate memory"],
+         source="real-failure",
+         note="the QUOTES are the operator's boundary marks, not evidence — the gold span is "
+              "the inner text, the same rule the quoted-value fix wrote on 08-16"),
     Seed("diag-0004", "diagnosis",
          "something is wrong with the dmz network, pings time out",
          ["the dmz network"], [], {}, evidence=["pings time out"]),

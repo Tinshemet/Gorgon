@@ -218,12 +218,92 @@ def freeze(cases: List[dict], cases_path: str, name: str) -> int:
     return 0
 
 
+# ── practice: five throwaway cases, three with PLANTED faults, and an answer key ─────
+def _practice_cases() -> List[dict]:
+    """Schema-valid, semantically judged — two right, three planted wrong. NOT the eval."""
+    def case(cid, sentence, spans, actions, attachments):
+        return {"id": cid, "stratum": "clean-single", "noise": "clean", "pair_id": None,
+                "source": "seed", "sentence": sentence,
+                "gold": {"spans": spans, "actions": actions, "attachments": attachments}}
+    return [
+        case("practice-1", "create a vm named practice",
+             [{"text": "a vm named practice", "start": 7, "end": 26, "type": "object"}],
+             [{"text": "create", "start": 0, "end": 6}], [{"action": 0, "objects": [0]}]),
+        case("practice-2", "stop the web vm",
+             [{"text": "web vm", "start": 9, "end": 15, "type": "object"}],
+             [{"text": "stop", "start": 0, "end": 4}], [{"action": 0, "objects": [0]}]),
+        case("practice-3", "stop alpha and snapshot it",
+             [{"text": "alpha", "start": 5, "end": 10, "type": "object"}],
+             [{"text": "stop", "start": 0, "end": 4}], [{"action": 0, "objects": [0]}]),
+        case("practice-4", "if beta is down, restart it",
+             [{"text": "beta", "start": 3, "end": 7, "type": "object"}],
+             [{"text": "down", "start": 11, "end": 15},
+              {"text": "restart", "start": 17, "end": 24}],
+             [{"action": 1, "objects": [0]}]),
+        case("practice-5", "label the web vm and stop the db vm",
+             [{"text": "the web vm", "start": 6, "end": 16, "type": "object"},
+              {"text": "the db vm", "start": 26, "end": 35, "type": "object"}],
+             [{"text": "label", "start": 0, "end": 5}, {"text": "stop", "start": 21, "end": 25}],
+             [{"action": 0, "objects": [1]}, {"action": 1, "objects": [0]}]),
+    ]
+
+
+PRACTICE_KEY = {
+    "practice-1": ("a", "correct — one action, one object, boundaries right"),
+    "practice-2": ("r", "PLANTED: boundary — the span drops `the`; the object is "
+                        "`the web vm`, not `web vm`"),
+    "practice-3": ("r", "PLANTED: missing — `snapshot` is a second action, attached to "
+                        "alpha through `it`, and the gold does not have it"),
+    "practice-4": ("r", "PLANTED: hallucinated action — `down` is a CONDITION, a state "
+                        "the world is in, not something you are told to do"),
+    "practice-5": ("r", "PLANTED: attachments crossed — label points at the db vm and "
+                        "stop at the web vm, the reverse of the sentence"),
+}
+
+
+def practice() -> int:
+    """The review loop on throwaway cases, then the answer key against your verdicts."""
+    import tempfile
+    cases = _practice_cases()
+    bad = validate(cases)
+    if bad:
+        print("\n".join(f"  ✗ {b}" for b in bad))
+        return 1
+    print(f"{BOLD}  PRACTICE — five cases, some carry a planted fault. Judge each one:{OFF}")
+    print(f"  {DIM}accept what a competent reader would extract; reject anything missing, "
+          f"extra,\n  or mis-bracketed. Your verdicts here touch nothing.{OFF}")
+    with tempfile.TemporaryDirectory() as tmp:
+        scratch = os.path.join(tmp, "practice.jsonl")
+        with open(scratch, "w", encoding="utf-8") as fh:
+            for c in cases:
+                fh.write(json.dumps(c) + "\n")
+        review(cases, scratch)
+        verdicts = load_verdicts(scratch)
+    print(f"\n{BOLD}  THE ANSWER KEY{OFF}")
+    right = 0
+    for cid, (want, why) in PRACTICE_KEY.items():
+        got = verdicts.get(cid, {}).get("verdict", "(not judged)")
+        want_word = "accept" if want == "a" else "reject"
+        ok = got == ("accepted" if want == "a" else "rejected")
+        right += 1 if ok else 0
+        mark = "✓" if ok else "✗"
+        print(f"  {mark} {cid}: should {want_word} — {why}")
+        if not ok:
+            print(f"      you said: {got}")
+    print(f"\n  {right}/{len(PRACTICE_KEY)}. "
+          + ("Ready — run the real file the same way." if right == len(PRACTICE_KEY) else
+             "Re-run --practice if you want another pass; the real set can wait."))
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:                # pragma: no cover
     argv = list(sys.argv[1:] if argv is None else argv)
+    if "--practice" in argv:
+        return practice()
     path = next((a for a in argv if not a.startswith("--")), None)
     if not path:
         print("usage: python3 -m tests.bench.read_eval.review <cases.jsonl> "
-              "[--status | --freeze <name>]")
+              "[--status | --freeze <name>] | --practice")
         return 2
     if not os.path.isabs(path):
         here = os.path.dirname(os.path.abspath(__file__))

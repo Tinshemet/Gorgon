@@ -148,7 +148,20 @@ def read_case(sentence: str, board=None) -> dict:
     for i, row in enumerate(rows):
         where = _find(sentence, row.span or row.name)
         predicted_spans.append({"row": i, "span": row.span, "kind": row.object_type,
+                                "type": "object",
                                 "where": dict(row.where or {}),
+                                "start": where[0] if where else None,
+                                "end": where[1] if where else None})
+    # ⇒⇒ **THE SEAM'S EVIDENCE READING WAS NEVER COLLECTED — found on the first shakedown.**
+    #   `quoted_clauses` has read *"the log says 'cannot allocate memory'"* since 08-16, and
+    #   this function surfaced only pass 1's ROWS — so a gold evidence span could never be
+    #   detected and diagnosis was undercounted for a reading the seam actually makes.
+    #   The runner asks everything the seam reads, or the score lies in both directions.
+    from orchestrator.seam.scan import quoted_clauses
+    for q in quoted_clauses(sentence):
+        where = _find(sentence, q)
+        predicted_spans.append({"row": None, "span": q, "kind": "evidence",
+                                "type": "evidence", "where": {},
                                 "start": where[0] if where else None,
                                 "end": where[1] if where else None})
     operations = []
@@ -178,7 +191,7 @@ def score_case(case: dict, reading: dict) -> dict:
     for g in gold_spans:
         best, best_ov = None, 0.0
         for j, p in enumerate(predicted):
-            if j in taken:
+            if j in taken or p["type"] != g["type"]:      # an object never satisfies evidence
                 continue
             ov = _token_overlap(sentence, (g["start"], g["end"]), (p["start"], p["end"]))
             if ov > best_ov:
