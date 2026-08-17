@@ -24,8 +24,10 @@ plausible, validated for FORM, and worth nothing as ground truth until reviewed 
   · A BARE PRONOUN IS NOT A SPAN. *"create a vm named alpha and launch it"* — the reading is
     that launch applies to alpha's vm, so the ATTACHMENT points both actions at the one span.
     Extracting `it` as an object would be marking the pointer instead of the thing.
-  · AN EXCEPTION LIVES INSIDE ITS SPAN. *"every vm except the db vm"* is ONE object — the
-    boundary metric is exactly the test of whether a reader keeps the carve-out attached.
+  · AN EXCEPTION IS ITS OWN OBJECT, ROLE `excluded` — RULED BY THE OPERATOR 08-18, replacing
+    the earlier one-span convention. *"every vm except the db vm"* is TWO spans: the set
+    (patient) and the carve-out (excluded), and the excluded one scores a hit only when the
+    reading does NOT act on it — which bills the deadliest misreading directly.
   · A CONDITION IS NOT AN ACTION. *"IF alpha IS STOPPED, launch it"* has one action. A reader
     emitting `stop` there hallucinated an operation out of a description of the world.
   · AN ADJUNCT'S VERB IS NOT AN ACTION. *"stop the vms TO FREE UP MEMORY"* has one action —
@@ -145,8 +147,9 @@ SEEDS: List[Seed] = [
          note="fronted argument — the object arrives before the thing it is done to"),
     Seed("ba-0004", "buried-args",
          "the web vm, after you have checked the others, restart it",
-         ["the web vm"], ["restart"], {0: [0]},
-         note="topicalised object + interposed clause; `it` points back, no span"),
+         ["the web vm", "the others"], ["checked", "restart"], {0: [1], 1: [0]},
+         note="the operator's reject: the checked-clause was MISSING. `the others` is a "
+              "restricted pro-form and heads its own set, like `the ones that…`"),
 
     # ══ anaphora — within one sentence ═══════════════════════════════════════════════
     Seed("ana-0001", "anaphora", "create a vm named alpha and launch it",
@@ -166,13 +169,17 @@ SEEDS: List[Seed] = [
 
     # ══ negation — the exception lives inside the span ═══════════════════════════════
     Seed("neg-0001", "negation", "stop every vm except the db vm",
-         ["every vm except the db vm"], ["stop"], {0: [0]}),
+         ["every vm", "the db vm"], ["stop"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "excluded"}]},
+         note="the operator's ruling: the exception is its OWN object — scored inverted, "
+              "a hit only when nothing acts on it"),
     Seed("neg-0002", "negation", "don't stop the web vm, stop the db vm",
          ["the db vm"], [("stop", 2)], {0: [0]}, source="real-failure",
          note="the FIRST stop is negated — extracting it as an action is the failure"),
     Seed("neg-0003", "negation",
          "launch everything but the vms carrying the test label",
-         ["everything but the vms carrying the test label"], ["launch"], {0: [0]}),
+         ["everything", "the vms carrying the test label"], ["launch"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "excluded"}]}),
     Seed("neg-0004", "negation", "stop every vm that is not running",
          ["every vm that is not running"], ["stop"], {0: [0]}, source="real-failure",
          note="measured 08-16: read as {status: running} — the OPPOSITE set"),

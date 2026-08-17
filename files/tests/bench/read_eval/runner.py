@@ -225,9 +225,11 @@ def score_case(case: dict, reading: dict) -> dict:
     from .schema import members_of
     attached_rows: Dict[int, set] = {}
     for att in case["gold"]["attachments"]:
+        # ⇒ an `excluded` member is an ANTI-object: it does not license absorption, so an
+        #   operation acting on the carved-out thing is hallucinated, exactly as it should be
         attached_rows[att["action"]] = {
-            span_match[ix] for ix, _role in members_of(att)
-            if span_match[ix] is not None}
+            span_match[ix] for ix, role in members_of(att)
+            if span_match[ix] is not None and role != "excluded"}
     absorbed: Dict[int, List[int]] = {}
     hallucinated_actions = 0
     for k, op in enumerate(reading["operations"]):
@@ -270,6 +272,11 @@ def score_case(case: dict, reading: dict) -> dict:
                 on_rows.add(op["on_row"])
             if op["value_row"] is not None:
                 value_rows.add(op["value_row"])
+        # ⇒ the carve-out is judged against the WHOLE reading, not the absorbed ops — the
+        #   violating op is precisely the one absorption refused, and first time through it
+        #   was billed only as a hallucination while the attachment column said 2/2
+        acted_on = {op["on_row"] for op in reading["operations"]} | \
+                   {op["value_row"] for op in reading["operations"]}
         for ix, role in members_of(att):
             if span_match[ix] is None:
                 continue                        # pass 1 missed the span — not pass 2's bill
@@ -279,6 +286,9 @@ def score_case(case: dict, reading: dict) -> dict:
                 hit = row in (on_rows | value_rows)
             elif role == "patient":
                 hit = row in on_rows
+            elif role == "excluded":
+                # INVERTED: honoured only if nothing in the ENTIRE reading acts on it
+                hit = row not in acted_on
             else:                               # destination · source · value
                 hit = row in value_rows
             att_hit += 1 if hit else 0

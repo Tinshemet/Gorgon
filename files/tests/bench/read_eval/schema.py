@@ -90,7 +90,13 @@ SPAN_TYPES = ("object", "evidence")
 #   ⇒ A PLAIN INT MEMBER REMAINS LEGAL — single-argument attachments carry no direction, so
 #     45 of 53 cases keep their bytes and the operator's verdicts on them stay FRESH.
 #   ⇒ MIXED FORMS IN ONE ATTACHMENT ARE A FAULT: half-tagged direction is untestable.
-ROLES = ("patient", "destination", "source", "value")
+#   ⇒ **`excluded` — THE OPERATOR'S RULING, mid-review 08-18:** *"the exception should be
+#     its own object: 'every vm' - 'db vm'."* An exception is not part of the set's name, it
+#     is a SECOND thing with a relation — which is the seam's own model (`Declared.excludes`
+#     travels with the set). And it bills the deadliest misreading DIRECTLY: an excluded
+#     member scores a hit only when the reading does NOT act on it. One span could not say
+#     that; a reader stopping db along with everything else still overlapped the big span.
+ROLES = ("patient", "destination", "source", "value", "excluded")
 
 CASE_KEYS = {"id", "stratum", "noise", "pair_id", "source", "sentence", "gold"}
 GOLD_KEYS = {"spans", "actions", "attachments"}
