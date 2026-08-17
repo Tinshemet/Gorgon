@@ -21,7 +21,7 @@ boundaries and attachment only; condition extraction is tested nowhere in this e
 ⇒ v2: an optional `conditions` object on a span. Roughly doubles authoring + review cost —
   priced, not free, which is why it is not a quiet field now.
 
-## 4 · ACTION TRIGGERS — after/before/when/if AS DECOMPOSITION (operator, during review, 2026-08-18)
+## 4 · ACTION TRIGGERS — ✅ TAKEN as v1.2, same day
 
 *"after/before are triggers for decomp technically."* Right: these words do not MODIFY a
 sentence, they SPLIT it — *what to do* + *what starts it* — which is the seam's own model
@@ -35,11 +35,11 @@ SCORE THE SAME — and the discarded qualifier is a measured live defect (*"stop
 ⇒ Same family as item 2 (both are qualifiers the gold cannot carry): conditions qualify the
   SPAN side, triggers qualify the ACTION side. Take them in one schema bump.
 
-## 3 · ARGUMENT ROLES (operator, during review, 2026-08-18)
+## 3 · ARGUMENT ROLES — ✅ TAKEN as v1.1, same day
 
 *"put on the lab network every vm carrying the prod label"* — the vm is the THEME, the
 network the DESTINATION, and the attachment says only that both belong to `put`.
-⇒ ⚠ **A ROLE SWAP IS INVISIBLE TO v1.** A reading that puts the network onto the vms scores
+⇒ ⚠ (historical — billed since v1.1) **A ROLE SWAP WAS INVISIBLE TO v1.0.** A reading that puts the network onto the vms scores
   identically to the correct one. That failure class is real (rung 3's
   `add_vm_to_network(web, lab)` vs `(lab, web)`) and unbilled until v2.
 ⇒ v2: roles on attachment members — `{"action": 0, "objects": [{"span": 1, "role": "theme"},

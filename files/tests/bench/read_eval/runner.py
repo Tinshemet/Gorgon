@@ -201,8 +201,22 @@ def read_case(sentence: str, board=None) -> dict:
             at = _locate(sentence, clause)
             if at:
                 predicted_queries.append({"clause": clause, "start": at[0], "end": at[1]})
+    # ⇒ v1.3b — the seam's RULE reading: `speech_act.act_of` calls a rule about future
+    #   behaviour a DECLARATION. Same per-clause collection as queries and triggers.
+    from orchestrator.seam import speech_act as SA
+    predicted_rules = []
+    for clause in P2.clauses_of(sentence):
+        try:
+            act = SA.act_of(clause, board)
+        except Exception:
+            act = None
+        if act == SA.DECLARATION:
+            at = _locate(sentence, clause)
+            if at:
+                predicted_rules.append({"clause": clause, "start": at[0], "end": at[1]})
     return {"rows": predicted_spans, "operations": operations,
-            "triggers": predicted_triggers, "queries": predicted_queries}
+            "triggers": predicted_triggers, "queries": predicted_queries,
+            "rules": predicted_rules}
 
 
 # ── scoring one case against its gold ────────────────────────────────────────────────
@@ -264,6 +278,8 @@ def score_case(case: dict, reading: dict) -> dict:
     for k, op in enumerate(reading["operations"]):
         home = None
         for gi, g in enumerate(gold_actions):
+            if g.get("kind") == "rule":
+                continue        # a rule is never executed — no op may ride in under it
             if op["clause_start"] is None:
                 continue
             if not (op["clause_start"] <= g["start"] and g["end"] <= op["clause_end"]):
@@ -287,6 +303,14 @@ def score_case(case: dict, reading: dict) -> dict:
                                   (pq["start"], pq["end"])) >= OVERLAP:
                     action_hits[gi] = True
                     break
+        # a RULE is detected only by the DECLARATION channel — an op "detecting" it would
+        # mean the prohibition was being EXECUTED, which is the failure, not the reading
+        if g.get("kind") == "rule":
+            for pr in reading.get("rules", ()):
+                if _token_overlap(sentence, (g["start"], g["end"]),
+                                  (pr["start"], pr["end"])) >= OVERLAP:
+                    action_hits[gi] = True
+                    break
 
     # attachment: per (action, object) pair, ONLY over detected spans — pass 2 never pays
     # for pass 1's miss. Hit when any absorbed op of that action targets the matched row.
@@ -304,6 +328,8 @@ def score_case(case: dict, reading: dict) -> dict:
         gi = att["action"]
         if not (0 <= gi < len(action_hits)) or not action_hits[gi]:
             continue
+        if gold_actions[gi].get("kind") == "rule":
+            continue        # rule attachment: NOT MEASURED — the channel gives the clause only
         on_rows, value_rows = set(), set()
         for k in absorbed.get(gi, []):
             op = reading["operations"][k]
@@ -418,7 +444,9 @@ def run(cases: List[dict], limit: Optional[int] = None) -> dict:
                        "action_boundary": "NOT MEASURED — the seam emits operators, "
                                           "not verb spans",
                        "trigger_attachment": "NOT MEASURED — the seam does not yet bind a "
-                                             "condition to a specific act (E5)"},
+                                             "condition to a specific act (E5)",
+                       "rule_attachment": "NOT MEASURED — the DECLARATION channel names the "
+                                          "clause, not its arguments"},
             "aggregate": aggregate(scored),
             "degradation": degradation(scored),
             "cases": details}

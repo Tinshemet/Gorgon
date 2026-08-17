@@ -118,7 +118,7 @@ def show(case: dict, verdicts: Dict[str, dict], by_id: Dict[str, dict]) -> None:
     spans = case["gold"]["spans"]
     for at in case["gold"]["attachments"]:
         act = case["gold"]["actions"][at["action"]]
-        tag = " (QUERY)" if act.get("kind") == "query" else ""
+        tag = {"query": " (QUERY)", "rule": " (RULE)"}.get(act.get("kind") or "", "")
         objs = " + ".join(
             f"{spans[ix]['text']!r}" + (f" ({role})" if role else "")
             for ix, role in members_of(at))

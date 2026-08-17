@@ -105,7 +105,12 @@ ROLES = ("patient", "destination", "source", "value", "excluded")
 #   same as ignoring it. An action entry may carry `kind: "query"`: its span is the
 #   INTERROGATIVE CLAUSE (grammar still decides — there is no imperative verb to bracket,
 #   so the clause itself is the act), attached to what it asks about.
-ACTION_KINDS = ("instruct", "query")
+#   And v1.3b, closing the taxonomy: `kind: "rule"` — the statement that LEGISLATES.
+#   *"never delete the db vm"* is a PROHIBITION, not an instruction to delete; reading it as
+#   an order is a catastrophic flip, and the seam's own reading (a rule quantifies over TIME,
+#   `speech_act.DECLARATION`) existed with nothing to bill it. A rule act is never executed:
+#   an operation emitted from a rule clause is a hallucination BY DEFINITION.
+ACTION_KINDS = ("instruct", "query", "rule")
 
 # ── v1.2: ACTION TRIGGERS (V2-LEDGER item 4, taken mid-review 08-18 at the operator's
 #   instruction — the second time the flattening fought the reviewer in one pass). An action

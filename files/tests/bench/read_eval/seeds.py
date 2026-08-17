@@ -88,6 +88,7 @@ class Seed(NamedTuple):
     attach: Dict[int, List[int]]              # action index -> span indices
     evidence: List[Text] = []
     queries: List[int] = []                   # indices into `actions` that are QUERY acts
+    rules: List[int] = []                     # indices into `actions` that are RULE acts
     triggers: Dict[int, Text] = {}            # action index -> the clause that STARTS it
     source: str = "seed"                      # "real-failure" where a documented defect said it
     note: str = ""
@@ -123,6 +124,8 @@ def build(seed: Seed) -> dict:
             act["trigger"] = {"text": seed.sentence[ts:te], "start": ts, "end": te}
         if i in seed.queries:
             act["kind"] = "query"
+        if i in seed.rules:
+            act["kind"] = "rule"
         actions.append(act)
     # v1.1 — a member may be a plain index or {"span": i, "role": "..."}; passed through,
     # the schema validates the role vocabulary and the one-patient rule
@@ -306,6 +309,19 @@ SEEDS: List[Seed] = [
     Seed("adj-0004", "adjunct-clauses", "stop more vms than you started",
          ["more vms than you started"], ["stop"], {0: [0]},
          note="COMPARISON — the standard stays inside the span"),
+
+    Seed("cc-0006", "cross-cutting", "never delete the db vm",
+         ["the db vm"], ["never delete"], {0: [0]}, rules=[0],
+         note="a PROHIBITION — the frequency adverb makes it a rule; an op emitted from "
+              "this clause is a hallucination by definition"),
+    Seed("cc-0007", "cross-cutting", "treat prod as read-only",
+         ["prod", "read-only"], ["treat"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}]}, rules=[0],
+         note="the door-key control — a standing rule, not an act to run now"),
+    Seed("cc-0008", "cross-cutting", "every vm must carry a label",
+         ["every vm", "a label"], ["must carry"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}]}, rules=[0],
+         note="deontic legislation — universal subject + must; a rule about future state"),
 
     # ══ diagnosis — earned 2026-08-18; D1, the thesis. Evidence spans, no imperative ═
     Seed("diag-0001", "diagnosis", "vm2 is not working, it boots to a blue screen",
