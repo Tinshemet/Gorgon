@@ -114,10 +114,13 @@ def show(case: dict, verdicts: Dict[str, dict], by_id: Dict[str, dict]) -> None:
         print(f"    {DIM}twin (accepted): {by_id[pid]['sentence']}{OFF}")
         print(f"    {DIM}gold is inherited — the question is only: is the noise "
               f"faithful?{OFF}")
+    from .schema import members_of
     spans = case["gold"]["spans"]
     for at in case["gold"]["attachments"]:
         verb = case["gold"]["actions"][at["action"]]["text"]
-        objs = " + ".join(f"{spans[o]['text']!r}" for o in at["objects"])
+        objs = " + ".join(
+            f"{spans[ix]['text']!r}" + (f" ({role})" if role else "")
+            for ix, role in members_of(at))
         print(f"      {verb!r} -> {objs}")
     acts_attached = {at["action"] for at in case["gold"]["attachments"]}
     for i, a in enumerate(case["gold"]["actions"]):

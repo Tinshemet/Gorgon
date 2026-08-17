@@ -93,6 +93,8 @@ def build(seed: Seed) -> dict:
     for spec in seed.actions:
         start, end = _at(seed.sentence, spec, seed.id)
         actions.append({"text": seed.sentence[start:end], "start": start, "end": end})
+    # v1.1 — a member may be a plain index or {"span": i, "role": "..."}; passed through,
+    # the schema validates the role vocabulary and the one-patient rule
     attachments = [{"action": a, "objects": list(objs)}
                    for a, objs in sorted(seed.attach.items())]
     return {"id": seed.id, "stratum": seed.stratum, "noise": CLEAN, "pair_id": None,
@@ -138,7 +140,8 @@ SEEDS: List[Seed] = [
          ["the snapshots older than a week on the backup store"], ["delete"], {0: [0]}),
     Seed("ba-0003", "buried-args",
          "put on the lab network every vm carrying the prod label",
-         ["the lab network", "every vm carrying the prod label"], ["put"], {0: [0, 1]},
+         ["the lab network", "every vm carrying the prod label"], ["put"],
+         {0: [{"span": 1, "role": "patient"}, {"span": 0, "role": "destination"}]},
          note="fronted argument — the object arrives before the thing it is done to"),
     Seed("ba-0004", "buried-args",
          "the web vm, after you have checked the others, restart it",
@@ -153,11 +156,13 @@ SEEDS: List[Seed] = [
          ["every vm", "the ones that are still running"], ["stop", "snapshot"],
          {0: [0], 1: [1]}),
     Seed("ana-0003", "anaphora", "create two vms and put them on the dmz network",
-         ["two vms", "the dmz network"], ["create", "put"], {0: [0], 1: [0, 1]}),
+         ["two vms", "the dmz network"], ["create", "put"],
+         {0: [0], 1: [{"span": 0, "role": "patient"}, {"span": 1, "role": "destination"}]}),
     Seed("ana-0004", "anaphora",
          "clone the golden image into three vms and label them test",
          ["the golden image", "three vms", "test"], ["clone", "label"],
-         {0: [0, 1], 1: [1, 2]}),
+         {0: [{"span": 0, "role": "source"}, {"span": 1, "role": "patient"}],
+          1: [{"span": 1, "role": "patient"}, {"span": 2, "role": "value"}]}),
 
     # ══ negation — the exception lives inside the span ═══════════════════════════════
     Seed("neg-0001", "negation", "stop every vm except the db vm",
@@ -193,7 +198,8 @@ SEEDS: List[Seed] = [
     Seed("mc-0003", "multi-clause",
          "create a vm named web, put it on the dmz, and snapshot it",
          ["a vm named web", "the dmz"], ["create", "put", "snapshot"],
-         {0: [0], 1: [0, 1], 2: [0]}),
+         {0: [0], 1: [{"span": 0, "role": "patient"}, {"span": 1, "role": "destination"}],
+          2: [0]}),
     Seed("mc-0004", "multi-clause",
          "check the db vm's disk. if it is full, delete the oldest snapshot.",
          ["the db vm's disk", "the oldest snapshot"], ["check", "delete"],
@@ -209,12 +215,15 @@ SEEDS: List[Seed] = [
          ["the web vm"], [("snapshot", 2)], {0: [0]},
          note="the whole first clause is overridden, verb included"),
     Seed("sc-0004", "self-correction", "label the vms test, er, staging",
-         ["the vms", "staging"], ["label"], {0: [0, 1]},
+         ["the vms", "staging"], ["label"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}]},
          note="the VALUE is corrected — `test` must not be extracted"),
 
     # ══ qualifiers — earned 2026-08-18: a value with a modifier the phrase must carry ═
     Seed("qual-0001", "qualifiers", "give alpha 4 cores and 8gb",
-         ["alpha", "4 cores", "8gb"], ["give"], {0: [0, 1, 2]}, source="real-failure",
+         ["alpha", "4 cores", "8gb"], ["give"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"},
+              {"span": 2, "role": "value"}]}, source="real-failure",
          note="measured: the whole sentence read as None — `give` is a light verb"),
     Seed("qual-0002", "qualifiers", "stop the biggest vm",
          ["the biggest vm"], ["stop"], {0: [0]}, source="real-failure"),
@@ -272,7 +281,8 @@ SEEDS: List[Seed] = [
          note="`go` in a phrasal verb; `restarted` is a question's content, not an action"),
     Seed("cc-0004", "cross-cutting",
          "put the notes from the meeting in the shared folder",
-         ["the notes from the meeting", "the shared folder"], ["put"], {0: [0, 1]},
+         ["the notes from the meeting", "the shared folder"], ["put"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "destination"}]},
          note="`from` inside a noun phrase — the leak word is not a role marker here"),
     Seed("cc-0005", "cross-cutting", "spin down the render vms after the job finishes",
          ["the render vms"], ["spin down"], {0: [0]},

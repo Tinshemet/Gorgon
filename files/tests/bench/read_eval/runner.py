@@ -222,10 +222,12 @@ def score_case(case: dict, reading: dict) -> dict:
     #   An op is absorbed by gold action g when its clause CONTAINS g's verb AND every row it
     #   targets is one of g's attached objects (through the span match). Detection = at least
     #   one absorbed op; anything absorbed by nothing is hallucinated.
+    from .schema import members_of
     attached_rows: Dict[int, set] = {}
     for att in case["gold"]["attachments"]:
         attached_rows[att["action"]] = {
-            span_match[obj] for obj in att["objects"] if span_match[obj] is not None}
+            span_match[ix] for ix, _role in members_of(att)
+            if span_match[ix] is not None}
     absorbed: Dict[int, List[int]] = {}
     hallucinated_actions = 0
     for k, op in enumerate(reading["operations"]):
@@ -247,21 +249,39 @@ def score_case(case: dict, reading: dict) -> dict:
 
     # attachment: per (action, object) pair, ONLY over detected spans — pass 2 never pays
     # for pass 1's miss. Hit when any absorbed op of that action targets the matched row.
+    #
+    # ⇒⇒ **v1.1 — A ROLE-TAGGED MEMBER IS SCORED BY ITS SLOT, NOT BY MEMBERSHIP.** The
+    #   operator, mid-review: *"we can only get the recall side, not the precision"* — a
+    #   reading that put the NETWORK onto the VMS scored identically to the right one,
+    #   because membership cannot see direction. `Operation` was role-bearing all along
+    #   (`on` = the thing acted on, `value` = the second name); gold just could not say
+    #   which was which. Now: a `patient` must sit in some absorbed op's `on` slot, and a
+    #   destination/source/value in a `value` slot. A swap is a scored attachment miss,
+    #   billed to pass 2 — the assembly pass — where it belongs.
     att_total = att_hit = 0
     for att in case["gold"]["attachments"]:
         gi = att["action"]
         if not (0 <= gi < len(action_hits)) or not action_hits[gi]:
             continue
-        op_rows = set()
+        on_rows, value_rows = set(), set()
         for k in absorbed.get(gi, []):
             op = reading["operations"][k]
-            op_rows |= {op["on_row"], op["value_row"]} - {None}
-        for obj in att["objects"]:
-            if span_match[obj] is None:
+            if op["on_row"] is not None:
+                on_rows.add(op["on_row"])
+            if op["value_row"] is not None:
+                value_rows.add(op["value_row"])
+        for ix, role in members_of(att):
+            if span_match[ix] is None:
                 continue                        # pass 1 missed the span — not pass 2's bill
             att_total += 1
-            if span_match[obj] in op_rows:
-                att_hit += 1
+            row = span_match[ix]
+            if role is None:
+                hit = row in (on_rows | value_rows)
+            elif role == "patient":
+                hit = row in on_rows
+            else:                               # destination · source · value
+                hit = row in value_rows
+            att_hit += 1 if hit else 0
 
     return {"gold_spans": len(gold_spans), "detected": detection,
             "boundary_exact": boundary_exact, "boundary_f1": round(f1_total, 3),

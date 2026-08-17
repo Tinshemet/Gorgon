@@ -56,7 +56,7 @@ cases are OBJECT spans by the spec's explicit rule: a pasted path is an argument
 
 Unknown top-level or gold keys are FAULTS, not extensions — a typo'd field name must fail
 loudly, never ride along unread (the suite-not-asserting defect, applied to data). And
-`--selfcheck` proves the validator CAN fail: fourteen deliberately broken records, each
+`--selfcheck` proves the validator CAN fail: a battery of deliberately broken records, each
 asserting its own specific fault fires. A validator nobody has seen fail is the exact mistake
 `seam_determinism` exists to stop making twice.
 
@@ -80,8 +80,35 @@ CLEAN = "clean"
 SOURCES = ("seed", "seed-expansion", "real-failure")
 SPAN_TYPES = ("object", "evidence")
 
+# ── v1.1: ARGUMENT ROLES, because a role swap was invisible (operator, mid-review 08-18:
+#   *"we can only get the recall side, not the precision"*). An attachment's members may be
+#   role-tagged — {"span": 1, "role": "patient"} — and a reading that puts the network onto
+#   the vms is then a SCORED miss instead of a perfect score. V2-LEDGER item 3, taken early
+#   because it blinded the eval on exactly the confidently-wrong class it exists to bill.
+#     patient      the thing acted upon — exactly ONE per tagged attachment
+#     destination  where it goes · source  where it comes from · value  what it is set to
+#   ⇒ A PLAIN INT MEMBER REMAINS LEGAL — single-argument attachments carry no direction, so
+#     45 of 53 cases keep their bytes and the operator's verdicts on them stay FRESH.
+#   ⇒ MIXED FORMS IN ONE ATTACHMENT ARE A FAULT: half-tagged direction is untestable.
+ROLES = ("patient", "destination", "source", "value")
+
 CASE_KEYS = {"id", "stratum", "noise", "pair_id", "source", "sentence", "gold"}
 GOLD_KEYS = {"spans", "actions", "attachments"}
+
+
+def members_of(attachment: dict):
+    """Every attachment member as (span_index, role_or_None) — THE one parser of both forms.
+
+    Written here so runner, review and seeds read an attachment identically — the
+    same-rule-on-two-paths defect ([[gorgon-detector-not-producer-again]] era) pre-empted.
+    """
+    out = []
+    for member in attachment.get("objects", ()):
+        if isinstance(member, dict):
+            out.append((member.get("span"), member.get("role")))
+        else:
+            out.append((member, None))
+    return out
 
 
 def _offsets(where: str, item: dict, sentence: str, typed: bool) -> List[str]:
@@ -172,11 +199,30 @@ def validate_case(case: dict) -> List[str]:
         else:
             seen_actions.add(act)
         objs = att["objects"]
-        if not isinstance(objs, list) or any(
-                not isinstance(o, int) or not (0 <= o < len(spans)) for o in objs):
+        if not isinstance(objs, list):
+            faults.append(f"{where}: objects is not a list")
+            continue
+        members = members_of(att)
+        indices = [m[0] for m in members]
+        if any(not isinstance(ix, int) or not (0 <= ix < len(spans)) for ix in indices):
             faults.append(f"{where}: objects {objs!r} reference spans that do not exist")
-        elif len(set(objs)) != len(objs):
+            continue
+        if len(set(indices)) != len(indices):
             faults.append(f"{where}: objects repeat an index")
+        # v1.1 roles: all-or-none per attachment, roles from the closed set, ONE patient
+        tagged = [role for _ix, role in members if role is not None]
+        if tagged:
+            if len(tagged) != len(members):
+                faults.append(f"{where}: mixed tagged and untagged members — "
+                              f"half-tagged direction is untestable")
+            for role in tagged:
+                if role not in ROLES:
+                    faults.append(f"{where}: role {role!r} is not one of {ROLES}")
+            if sum(1 for r in tagged if r == "patient") != 1:
+                faults.append(f"{where}: a tagged attachment needs exactly one patient")
+        for member in objs:
+            if isinstance(member, dict) and set(member) != {"span", "role"}:
+                faults.append(f"{where}: a tagged member is exactly {{span, role}}")
     return faults
 
 
@@ -248,7 +294,10 @@ def selfcheck() -> List[str]:
     if validate([_good()]):
         problems.append(f"the known-good case FAILED: {validate([_good()])}")
 
+    planted = [0]
+
     def broken(mutate, expect: str):
+        planted[0] += 1
         case = _good()
         mutate(case)
         got = validate([case])
@@ -272,24 +321,36 @@ def selfcheck() -> List[str]:
         {"text": "web vm and", "start": 12, "end": 22, "type": "object"}), "overlap")
     broken(lambda c: c.__setitem__("pair_id", "coord-0001"),
            "a clean case never points")
+    # v1.1 roles — the validator must refuse each way a tag can lie
+    broken(lambda c: c["gold"]["attachments"][0].__setitem__(
+        "objects", [{"span": 0, "role": "vibes"}]), "not one of")
+    broken(lambda c: c["gold"]["attachments"][0].__setitem__(
+        "objects", [{"span": 0, "role": "patient"}, 1]), "mixed tagged and untagged")
+    broken(lambda c: c["gold"]["attachments"][0].__setitem__(
+        "objects", [{"span": 0, "role": "patient"}, {"span": 1, "role": "patient"}]),
+        "exactly one patient")
+    broken(lambda c: c["gold"]["attachments"][0].__setitem__(
+        "objects", [{"span": 0, "role": "destination"}]), "exactly one patient")
 
     noised = _good()
     noised.update(id="coord-0001n", noise="typos", pair_id="ghost-0000")
+    planted[0] += 1
     got = validate([_good(), noised])
     if not any("names no case" in f for f in got):
         problems.append(f"expected the dangling pair fault, got {got or 'NOTHING'}")
-    return problems
+    return problems if problems else ["PLANTED=%d" % planted[0]]
 
 
 def main(argv: Optional[List[str]] = None) -> int:                # pragma: no cover
     import sys
     argv = list(sys.argv[1:] if argv is None else argv)
     if "--selfcheck" in argv:
-        bad = selfcheck()
-        if bad:
-            print("\n".join(f"  ✗ {b}" for b in bad))
+        got = selfcheck()
+        if got and not got[0].startswith("PLANTED="):
+            print("\n".join(f"  ✗ {b}" for b in got))
             return 1
-        print("  the validator catches all fourteen planted faults, and passes the good case")
+        n = got[0].split("=")[1] if got else "?"
+        print(f"  the validator catches all {n} planted faults, and passes the good case")
         return 0
     path = next((a for a in argv if not a.startswith("--")), None)
     if not path:

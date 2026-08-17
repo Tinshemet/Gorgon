@@ -1,0 +1,62 @@
+{
+ "ba-0001": {
+  "hash": "cb5d1bc0ceccf20f",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "ba-0002": {
+  "hash": "9950102fca5dacf0",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "coord-0001": {
+  "hash": "44ae6ec16200182e",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "coord-0002": {
+  "hash": "0669e14f1c16b337",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "coord-0003": {
+  "hash": "93fdfc5696d06196",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "coord-0004": {
+  "hash": "3c6c5aab39ce80db",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "coord-0005": {
+  "hash": "ebc01d6a1dad6b7a",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "cs-0001": {
+  "hash": "c562bb3a52ce3bd0",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "cs-0002": {
+  "hash": "c8f75930a305819b",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "cs-0003": {
+  "hash": "d8c85af0e0c5b8fa",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "cs-0004": {
+  "hash": "5b30535349bf1fdd",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "cs-0005": {
+  "hash": "9368207c33773188",
+  "note": "",
+  "verdict": "accepted"
+ }
+}
