@@ -12,8 +12,10 @@ failure inventories the project already keeps — `issue_map.ISSUES` (every know
 and family) and `structure_map.MAP` (39 ways a sentence is built, run live) — and sorts every
 READ-relevant row into the spec's own vocabulary:
 
-    STRATA   clean-single · coordination · buried-args · anaphora · negation · conditionals ·
-             multi-clause · self-correction
+    STRATA   the spec's eight — clean-single · coordination · buried-args · anaphora ·
+             negation · conditionals · multi-clause · self-correction — PLUS THE FOUR THIS
+             REPORT'S FIRST RUN EARNED (ruled 2026-08-18): qualifiers · adjunct-clauses ·
+             diagnosis · cross-cutting. `read_eval.schema` owns the list.
     NOISE    terse · typos · no-punct · voice · embedded-junk · code-switch
 
 # ⇒ THE MAPPING IS DECLARED, NEVER INFERRED
@@ -56,10 +58,12 @@ from typing import Dict, List, NamedTuple, Optional, Tuple
 from .issue_map import ISSUES, READ
 from .structure_map import MAP
 
-# ── the spec's vocabulary, closed ────────────────────────────────────────────────────
-STRATA = ("clean-single", "coordination", "buried-args", "anaphora", "negation",
-          "conditionals", "multi-clause", "self-correction")
-NOISE = ("terse", "typos", "no-punct", "voice", "embedded-junk", "code-switch")
+# ── the vocabulary — OWNED BY `read_eval.schema`, the eval's contract. This file only
+#   consumes it, so a stratum earned or retired changes exactly one place.
+#   ⇒ THE RULING, 2026-08-18, off this report's own decision queue: *"qualifiers and
+#     adjunct-clauses earn strata, diagnosis too, as well as cross-cutting causes."* The four
+#     clusters below the spec's eight are therefore STRATA now, not residue.
+from .read_eval.schema import NOISE, STRATA
 OUT = "OUT-OF-SCOPE"          # cross-turn / dialogue — excluded by the spec itself
 RESIDUE = "NO-SPEC-BUCKET"    # read-relevant, no spec stratum — the decision queue
 
@@ -76,23 +80,23 @@ STRUCTURE_BUCKET: Dict[str, str] = {
     "relative clause": "buried-args",         # the argument sits behind a subordinate clause
     "exception": "negation",                  # the spec names "everything except" as negation
     "reciprocal": "anaphora",                 # pronoun-headed set inside one clause
-    "magnitude comparative": RESIDUE,         # the QUALIFIER family — no spec stratum
-    "superlative": RESIDUE,
-    "units": RESIDUE,
-    "possessive": RESIDUE,
+    "magnitude comparative": "qualifiers",
+    "superlative": "qualifiers",
+    "units": "qualifiers",
+    "possessive": "qualifiers",
     "prepositional filter": "buried-args",    # attachment: does `on lab` bind the vms or the verb?
     "reduced relative": "buried-args",
-    "apposition": RESIDUE,
+    "apposition": RESIDUE,               # still in the queue
     "negated filter": "negation",
     "coordination": "coordination",
     "temporal subordination": "conditionals",  # `whenever` is the conditional's temporal arm
-    "clock adjunct": RESIDUE,
+    "clock adjunct": "qualifiers",
     "conditional": "conditionals",
-    "purpose": RESIDUE,                       # purpose/cause/concession: candidate ADJUNCT stratum
-    "cause": RESIDUE,
-    "concession": RESIDUE,
+    "purpose": "adjunct-clauses",
+    "cause": "adjunct-clauses",
+    "concession": "adjunct-clauses",
     "alternative": "coordination",            # `or` is coordination with a choice — see the seed
-    "comparison across clauses": RESIDUE,
+    "comparison across clauses": "adjunct-clauses",
     "anaphora, same turn": "anaphora",
     "anaphora, cross turn": OUT,              # gold undeterminable from the sentence — spec §3.1
     "ellipsis, cross turn": OUT,
@@ -117,14 +121,14 @@ ISSUE_BUCKET: Dict[str, str] = {
     "turn management": OUT,
     "partner correction": OUT,
     "conditionality": "conditionals",
-    "partiality": RESIDUE,
-    "certainty": RESIDUE,
-    "magnitude": RESIDUE,
-    "superlative": RESIDUE,
-    "units": RESIDUE,
-    "manner constraint": RESIDUE,
-    "one-off clock time": RESIDUE,
-    "diagnosis": RESIDUE,                     # ⚠ D1, THE THESIS — flagged loudest in the queue
+    "partiality": "qualifiers",
+    "certainty": "qualifiers",
+    "magnitude": "qualifiers",
+    "superlative": "qualifiers",
+    "units": "qualifiers",
+    "manner constraint": "qualifiers",
+    "one-off clock time": "qualifiers",
+    "diagnosis": "diagnosis",                 # ⚠ D1, THE THESIS — a stratum of its own now
     "resolution": RESIDUE,
     "evidence": "embedded-junk",
     "commissive": RESIDUE,
@@ -135,43 +139,27 @@ ISSUE_BUCKET: Dict[str, str] = {
     "negation -> the opposite set": "negation",
     "`if` -> teaching": "conditionals",
     "universal anywhere -> legislation": "clean-single",
-    "an attribute -> a machine": RESIDUE,
+    "an attribute -> a machine": "cross-cutting",
     "a bare `sorry` -> a repair": "self-correction",
     "`or` read as `and`": "coordination",
-    "_operation_words leak": RESIDUE,         # cross-cutting: action DETECTION, hits every stratum
-    "ACHIEVE_MARKERS": RESIDUE,
+    "_operation_words leak": "cross-cutting",
+    "ACHIEVE_MARKERS": "cross-cutting",
     "intent markers grant authority": RESIDUE,  # -> spec §4 register variation (overly polite)
     "flavour needs a teacher": RESIDUE,
-    "drop the row / forgive the word": RESIDUE,
-    "one propose(), written twice": RESIDUE,
+    "drop the row / forgive the word": "cross-cutting",
+    "one propose(), written twice": "cross-cutting",
 }
 
 
-# ── the residue, PRE-CLUSTERED for the decision. Each cluster is one choice: earn a stratum,
-#   fold into an existing one, or defer — decided ONCE per cluster instead of 29 times per row.
+# ── what remains in the queue after the 2026-08-18 ruling — NOT ruled on, still open:
 RESIDUE_CLUSTER: Dict[str, str] = {
-    # QUALIFIERS — a value with a modifier the phrase must carry. One candidate stratum.
-    "units": "qualifiers", "superlative": "qualifiers", "magnitude": "qualifiers",
-    "magnitude comparative": "qualifiers", "partiality": "qualifiers",
-    "certainty": "qualifiers", "manner constraint": "qualifiers",
-    "one-off clock time": "qualifiers", "clock adjunct": "qualifiers",
-    "possessive": "qualifiers",
-    # ADJUNCT CLAUSES — a second clause that modifies, never orders. One candidate stratum.
-    "purpose": "adjunct-clauses", "cause": "adjunct-clauses",
-    "concession": "adjunct-clauses", "comparison across clauses": "adjunct-clauses",
-    # SENTENCE TYPES — not imperatives at all. ⚠ diagnosis is D1, the thesis of the product.
-    "diagnosis": "sentence-types", "resolution": "sentence-types",
-    "commissive": "sentence-types", "suggestion": "sentence-types",
-    # REGISTER — the spec already has a home for these: §4 register variation, not a stratum.
+    # SENTENCE TYPES minus diagnosis — the operator promoted diagnosis alone
+    "resolution": "sentence-types", "commissive": "sentence-types",
+    "suggestion": "sentence-types",
+    # REGISTER — the spec already has a home: §4 register variation, not a stratum
     "intent markers grant authority": "register (spec §4)",
     "flavour needs a teacher": "register (spec §4)",
     "contraction": "register (spec §4)",
-    # CROSS-CUTTING CAUSES — code defects that surface in EVERY stratum; the per-stratum
-    # breakdown will show them as a floor under everything, which is how they are found.
-    "_operation_words leak": "cross-cutting", "ACHIEVE_MARKERS": "cross-cutting",
-    "one propose(), written twice": "cross-cutting",
-    "drop the row / forgive the word": "cross-cutting",
-    "an attribute -> a machine": "cross-cutting",
     # SMALL
     "apposition": "small",
 }
