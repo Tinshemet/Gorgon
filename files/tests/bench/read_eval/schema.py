@@ -96,7 +96,7 @@ SPAN_TYPES = ("object", "evidence")
 #     travels with the set). And it bills the deadliest misreading DIRECTLY: an excluded
 #     member scores a hit only when the reading does NOT act on it. One span could not say
 #     that; a reader stopping db along with everything else still overlapped the big span.
-ROLES = ("patient", "destination", "source", "value", "excluded")
+ROLES = ("patient", "destination", "source", "value", "excluded", "evidence")
 
 # ── v1.3: QUERY ACTS (operator, mid-review 08-18: mc-0002's second clause is "a dropped
 #   clause, that is a query"). A question is a THIRD of the sentence taxonomy — order ·
@@ -110,7 +110,13 @@ ROLES = ("patient", "destination", "source", "value", "excluded")
 #   an order is a catastrophic flip, and the seam's own reading (a rule quantifies over TIME,
 #   `speech_act.DECLARATION`) existed with nothing to bill it. A rule act is never executed:
 #   an operation emitted from a rule clause is a hallucination BY DEFINITION.
-ACTION_KINDS = ("instruct", "query", "rule")
+#   And v1.4 — the operator on diag-0001: *"it should be at least 'diagnosis' -> vm2 +
+#   'it boots to a blue screen' (testimony)"*. A diagnosis must PRODUCE: `kind: "report"` —
+#   the act is the asserting clause (the clause-is-the-act rule, same as query), and its
+#   attachment BINDS the patient to the testimony (ledger item 7, taken): exactly one
+#   `patient`, the rest role `evidence`. Ops never absorb under a report — acting on a
+#   symptom description is the delete_vm-from-"is not working" defect, billed.
+ACTION_KINDS = ("instruct", "query", "rule", "report")
 
 # ── v1.2: ACTION TRIGGERS (V2-LEDGER item 4, taken mid-review 08-18 at the operator's
 #   instruction — the second time the flattening fought the reviewer in one pass). An action

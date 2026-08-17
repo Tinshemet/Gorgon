@@ -89,6 +89,7 @@ class Seed(NamedTuple):
     evidence: List[Text] = []
     queries: List[int] = []                   # indices into `actions` that are QUERY acts
     rules: List[int] = []                     # indices into `actions` that are RULE acts
+    reports: List[int] = []                   # indices into `actions` that are REPORT acts
     triggers: Dict[int, Text] = {}            # action index -> the clause that STARTS it
     source: str = "seed"                      # "real-failure" where a documented defect said it
     note: str = ""
@@ -126,6 +127,8 @@ def build(seed: Seed) -> dict:
             act["kind"] = "query"
         if i in seed.rules:
             act["kind"] = "rule"
+        if i in seed.reports:
+            act["kind"] = "report"
         actions.append(act)
     # v1.1 — a member may be a plain index or {"span": i, "role": "..."}; passed through,
     # the schema validates the role vocabulary and the one-patient rule
@@ -330,23 +333,32 @@ SEEDS: List[Seed] = [
 
     # ══ diagnosis — earned 2026-08-18; D1, the thesis. Evidence spans, no imperative ═
     Seed("diag-0001", "diagnosis", "vm2 is not working, it boots to a blue screen",
-         ["vm2"], [], {}, evidence=["is not working", "it boots to a blue screen"],
-         source="real-failure",
-         note="the operator's catch: ANY predicate asserting malfunction is testimony — the "
-              "general complaint AND the specific symptom, the same rule diag-0003 already "
-              "followed with `won't start`"),
+         ["vm2"], ["vm2 is not working"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "evidence"},
+              {"span": 2, "role": "evidence"}]},
+         evidence=["is not working", "it boots to a blue screen"],
+         reports=[0], source="real-failure",
+         note="the operator's ruling, twice: every malfunction predicate is testimony, AND "
+              "the diagnosis must PRODUCE — the report act binds patient to testimony"),
     Seed("diag-0002", "diagnosis", "the web vm keeps dropping off the network",
-         ["the web vm"], [], {}, evidence=["keeps dropping off the network"]),
+         ["the web vm"], ["the web vm keeps dropping off the network"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "evidence"}]},
+         evidence=["keeps dropping off the network"], reports=[0]),
     Seed("diag-0003", "diagnosis",
          "alpha won't start and the log says 'cannot allocate memory'",
-         ["alpha"], [], {}, evidence=["won't start", "cannot allocate memory"],
-         source="real-failure",
+         ["alpha"], ["alpha won't start"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "evidence"},
+              {"span": 2, "role": "evidence"}]},
+         evidence=["won't start", "cannot allocate memory"],
+         reports=[0], source="real-failure",
          note="the QUOTES are the operator's boundary marks, not evidence — the gold span is "
               "the inner text, the same rule the quoted-value fix wrote on 08-16"),
     Seed("diag-0004", "diagnosis",
          "something is wrong with the dmz network, pings time out",
-         ["the dmz network"], [], {},
-         evidence=["something is wrong", "pings time out"],
+         ["the dmz network"], ["something is wrong with the dmz network"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "evidence"},
+              {"span": 2, "role": "evidence"}]},
+         evidence=["something is wrong", "pings time out"], reports=[0],
          note="same rule as diag-0001: the generic complaint is testimony too"),
 
     # ══ cross-cutting — earned 2026-08-18: the vocab-list boundaries ═════════════════

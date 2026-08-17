@@ -214,9 +214,22 @@ def read_case(sentence: str, board=None) -> dict:
             at = _locate(sentence, clause)
             if at:
                 predicted_rules.append({"clause": clause, "start": at[0], "end": at[1]})
+    # ⇒ v1.4 — the seam's STATEMENT reading: an ISO Inform act names a report clause.
+    #   D1 is unbuilt, so most diagnosis sentences will MISS here — that is the thesis,
+    #   measured at last, not a harness gap.
+    predicted_reports = []
+    for clause in P2.clauses_of(sentence):
+        try:
+            acts = ISO.annotate(clause)
+        except Exception:
+            acts = []
+        if any("inform" in str(getattr(a, "function", "")).lower() for a in acts):
+            at = _locate(sentence, clause)
+            if at:
+                predicted_reports.append({"clause": clause, "start": at[0], "end": at[1]})
     return {"rows": predicted_spans, "operations": operations,
             "triggers": predicted_triggers, "queries": predicted_queries,
-            "rules": predicted_rules}
+            "rules": predicted_rules, "reports": predicted_reports}
 
 
 # ── scoring one case against its gold ────────────────────────────────────────────────
@@ -278,8 +291,9 @@ def score_case(case: dict, reading: dict) -> dict:
     for k, op in enumerate(reading["operations"]):
         home = None
         for gi, g in enumerate(gold_actions):
-            if g.get("kind") == "rule":
-                continue        # a rule is never executed — no op may ride in under it
+            if g.get("kind") in ("rule", "report"):
+                continue        # never executed — an op acting on a law or a symptom
+                                # description is the defect, not the reading
             if op["clause_start"] is None:
                 continue
             if not (op["clause_start"] <= g["start"] and g["end"] <= op["clause_end"]):
@@ -305,6 +319,12 @@ def score_case(case: dict, reading: dict) -> dict:
                     break
         # a RULE is detected only by the DECLARATION channel — an op "detecting" it would
         # mean the prohibition was being EXECUTED, which is the failure, not the reading
+        if g.get("kind") == "report" and not action_hits[gi]:
+            for pp in reading.get("reports", ()):
+                if _token_overlap(sentence, (g["start"], g["end"]),
+                                  (pp["start"], pp["end"])) >= OVERLAP:
+                    action_hits[gi] = True
+                    break
         if g.get("kind") == "rule":
             for pr in reading.get("rules", ()):
                 if _token_overlap(sentence, (g["start"], g["end"]),
@@ -328,8 +348,9 @@ def score_case(case: dict, reading: dict) -> dict:
         gi = att["action"]
         if not (0 <= gi < len(action_hits)) or not action_hits[gi]:
             continue
-        if gold_actions[gi].get("kind") == "rule":
-            continue        # rule attachment: NOT MEASURED — the channel gives the clause only
+        if gold_actions[gi].get("kind") in ("rule", "report"):
+            continue        # rule/report attachment: NOT MEASURED — the channel names the
+                            # clause; the patient<->testimony BINDING waits for D1
         on_rows, value_rows = set(), set()
         for k in absorbed.get(gi, []):
             op = reading["operations"][k]
