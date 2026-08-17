@@ -87,3 +87,16 @@ relation, plus D1's eventual needs (the diagnosis flow starts from evidence BOUN
 ⇒ v2: evidence spans join attachments with role "evidence" under a no-action entry, or a
   `about` field on an evidence span naming the object index. Decide when D1 is built —
   the diagnosis machinery's own shape should pick the encoding, not the eval's guess.
+
+## 8 · TYPED IDENTIFIERS — ip / path / mac (operator, post-freeze, 2026-08-18) — COVERAGE, not schema
+
+*"reading comprehension for ip address/path — non-standard text which requires encyclopedia
+to understand."* The v1 schema can already SAY these (an identifier is an object span, often
+role `value`); the frozen 59 just contain none. Two distinct future homes:
+  · CLEAN cases — "add 192.168.1.5 to the allowlist": the identifier is a TYPED VALUE, not
+    noise. Scored slot for the attribute-classes reader (ip/mac/serial — designed, unbuilt)
+    + the Encyclopedia as its teacher. ~4 seeds, reviewed alone, re-frozen as v1.1 — the
+    explicit-commit path. Deferred by the operator: "add them later since its a step up."
+  · NOISE twins — pasted log lines / paths mid-command (`embedded-junk`), with the expansion
+    phase as planned. The spec filed identifiers under noise; the operator's question exposed
+    that only the PASTED form is noise — the typed-value form is clean capability.
