@@ -164,6 +164,21 @@ def read_case(sentence: str, board=None) -> dict:
                                 "type": "evidence", "where": {},
                                 "start": where[0] if where else None,
                                 "end": where[1] if where else None})
+    # ⇒ v1.2 — the seam's CONDITION reading, collected the same way evidence was: a clause
+    #   `iso.is_condition` flags becomes a predicted trigger at its located offsets. A clock
+    #   phrase ("at 21:30") has NO offset-bearing reader today, so it can never be predicted —
+    #   and that is the point, not a gap: the discarded qualifier now shows as a trigger MISS.
+    from orchestrator.seam import iso as ISO
+    predicted_triggers = []
+    for clause in P2.clauses_of(sentence):
+        try:
+            conditional = ISO.is_condition(clause, board)
+        except Exception:
+            conditional = False
+        if conditional:
+            at = _locate(sentence, clause)
+            if at:
+                predicted_triggers.append({"clause": clause, "start": at[0], "end": at[1]})
     operations = []
     for clause, op in steps:
         at = _locate(sentence, clause)
@@ -173,7 +188,8 @@ def read_case(sentence: str, board=None) -> dict:
                            "operator": op.operator, "on": op.on, "value": op.value,
                            "on_row": by_handle.get(op.on),
                            "value_row": by_handle.get(op.value)})
-    return {"rows": predicted_spans, "operations": operations}
+    return {"rows": predicted_spans, "operations": operations,
+            "triggers": predicted_triggers}
 
 
 # ── scoring one case against its gold ────────────────────────────────────────────────
@@ -293,10 +309,23 @@ def score_case(case: dict, reading: dict) -> dict:
                 hit = row in value_rows
             att_hit += 1 if hit else 0
 
+    trigger_total = trigger_hit = 0
+    for g in gold_actions:
+        trig = g.get("trigger")
+        if not trig:
+            continue
+        trigger_total += 1
+        for pt in reading.get("triggers", ()):
+            if _token_overlap(sentence, (trig["start"], trig["end"]),
+                              (pt["start"], pt["end"])) >= OVERLAP:
+                trigger_hit += 1
+                break
+
     return {"gold_spans": len(gold_spans), "detected": detection,
             "boundary_exact": boundary_exact, "boundary_f1": round(f1_total, 3),
             "gold_actions": len(gold_actions), "actions_detected": sum(action_hits),
             "attach_total": att_total, "attach_hit": att_hit,
+            "trigger_total": trigger_total, "trigger_hit": trigger_hit,
             "hallucinated_spans": hallucinated_spans,
             "hallucinated_actions": hallucinated_actions,
             "pass1_misses": len(gold_spans) - detection,
@@ -307,8 +336,8 @@ def score_case(case: dict, reading: dict) -> dict:
 def _cell() -> Dict[str, float]:
     return {k: 0 for k in ("cases", "gold_spans", "detected", "boundary_exact",
                            "boundary_f1", "gold_actions", "actions_detected",
-                           "attach_total", "attach_hit", "hallucinated_spans",
-                           "hallucinated_actions")}
+                           "attach_total", "attach_hit", "trigger_total", "trigger_hit",
+                           "hallucinated_spans", "hallucinated_actions")}
 
 
 def aggregate(scored: List[Tuple[dict, dict]]) -> dict:
@@ -355,14 +384,18 @@ def run(cases: List[dict], limit: Optional[int] = None) -> dict:
         s = score_case(case, reading)
         scored.append((case, s))
         details.append({"id": case["id"], "reading": reading, "score": s})
-        print(f"  [{n}/{len(picked)}] {case['id']:20} "
+        trg = (f" · trigger {s['trigger_hit']}/{s['trigger_total']}"
+               if s.get("trigger_total") else "")
+        print(f"  [{n}/{len(picked)}] {case['id']:20}{trg} "
               f"spans {s['detected']}/{s['gold_spans']} · "
               f"actions {s['actions_detected']}/{s['gold_actions']} · "
               f"attach {s['attach_hit']}/{s['attach_total']} · "
               f"halluc {s['hallucinated_spans']}+{s['hallucinated_actions']}")
     return {"config": {"overlap_threshold": OVERLAP, "temp": 0,
                        "action_boundary": "NOT MEASURED — the seam emits operators, "
-                                          "not verb spans"},
+                                          "not verb spans",
+                       "trigger_attachment": "NOT MEASURED — the seam does not yet bind a "
+                                             "condition to a specific act (E5)"},
             "aggregate": aggregate(scored),
             "degradation": degradation(scored),
             "cases": details}
@@ -386,7 +419,8 @@ def write_results(report: dict) -> str:
 def _table(report: dict) -> str:
     lines = ["", f"  PER-STRATUM (detection threshold {OVERLAP:.0%} token overlap; action "
                  f"boundaries NOT measured)", ""]
-    header = f"    {'stratum':18} {'cases':>5} {'detect':>7} {'exact':>6} {'attach':>7} {'halluc':>7}"
+    header = (f"    {'stratum':18} {'cases':>5} {'detect':>7} {'exact':>6} {'attach':>7} "
+              f"{'trigger':>8} {'halluc':>7}")
     lines.append(header)
     agg = report["aggregate"]
     for name in list(STRATA) + [CLEAN] + list(NOISE):
@@ -397,8 +431,10 @@ def _table(report: dict) -> str:
         det = f"{c['detected']}/{c['gold_spans']}" if c["gold_spans"] else "—"
         exact = f"{c['boundary_exact']}/{c['detected']}" if c["detected"] else "—"
         att = f"{c['attach_hit']}/{c['attach_total']}" if c["attach_total"] else "—"
+        trg = f"{c['trigger_hit']}/{c['trigger_total']}" if c["trigger_total"] else "—"
         hal = c["hallucinated_spans"] + c["hallucinated_actions"]
-        lines.append(f"    {name:18} {c['cases']:>5} {det:>7} {exact:>6} {att:>7} {hal:>7}")
+        lines.append(f"    {name:18} {c['cases']:>5} {det:>7} {exact:>6} {att:>7} "
+                     f"{trg:>8} {hal:>7}")
     if report["degradation"]:
         lines.append("\n  PAIRED DEGRADATION (clean minus noised, span detection)")
         for d in report["degradation"]:

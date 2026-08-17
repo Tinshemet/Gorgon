@@ -98,6 +98,14 @@ SPAN_TYPES = ("object", "evidence")
 #     that; a reader stopping db along with everything else still overlapped the big span.
 ROLES = ("patient", "destination", "source", "value", "excluded")
 
+# ── v1.2: ACTION TRIGGERS (V2-LEDGER item 4, taken mid-review 08-18 at the operator's
+#   instruction — the second time the flattening fought the reviewer in one pass). An action
+#   may carry `trigger`: the offsets of the clause that STARTS it — "if alpha is stopped",
+#   "when the backup finishes", "after the job finishes", "at 21:30". What to do and what
+#   starts it are the seam's own split (`temporal.read`, `iso.is_condition`); without this
+#   field a reader that captures the condition and one that discards it scored the same,
+#   while the discarded qualifier is a live defect ("stop every vm at 9pm" runs NOW).
+
 CASE_KEYS = {"id", "stratum", "noise", "pair_id", "source", "sentence", "gold"}
 GOLD_KEYS = {"spans", "actions", "attachments"}
 
@@ -179,7 +187,18 @@ def validate_case(case: dict) -> List[str]:
     for i, span in enumerate(spans):
         faults += _offsets(f"{cid}: spans[{i}]", span, sentence, typed=True)
     for i, act in enumerate(actions):
-        faults += _offsets(f"{cid}: actions[{i}]", act, sentence, typed=False)
+        known = {"text", "start", "end", "trigger"}
+        for extra in set(act) - known:
+            faults.append(f"{cid}: actions[{i}]: unknown key {extra!r}")
+        slim = {k: v for k, v in act.items() if k != "trigger"}
+        faults += _offsets(f"{cid}: actions[{i}]", slim, sentence, typed=False)
+        if "trigger" in act:
+            trig = act["trigger"]
+            if not isinstance(trig, dict):
+                faults.append(f"{cid}: actions[{i}]: trigger is not an object")
+            else:
+                faults += _offsets(f"{cid}: actions[{i}].trigger", trig, sentence,
+                                   typed=False)
 
     # same-type spans must not overlap — two golds claiming one character is an authoring slip
     placed = [(s["start"], s["end"], s.get("type"), i) for s in spans
@@ -337,6 +356,11 @@ def selfcheck() -> List[str]:
         "exactly one patient")
     broken(lambda c: c["gold"]["attachments"][0].__setitem__(
         "objects", [{"span": 0, "role": "destination"}]), "exactly one patient")
+    # v1.2 triggers — lying offsets and stowaway keys must both refuse
+    broken(lambda c: c["gold"]["actions"][0].__setitem__(
+        "trigger", {"text": "nope", "start": 0, "end": 4}), "gold says")
+    broken(lambda c: c["gold"]["actions"][0].__setitem__(
+        "trigger", {"text": "restart", "start": 0, "end": 7, "why": "x"}), "unknown key")
 
     noised = _good()
     noised.update(id="coord-0001n", noise="typos", pair_id="ghost-0000")

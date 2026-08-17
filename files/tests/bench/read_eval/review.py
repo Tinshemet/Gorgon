@@ -126,6 +126,9 @@ def show(case: dict, verdicts: Dict[str, dict], by_id: Dict[str, dict]) -> None:
     for i, a in enumerate(case["gold"]["actions"]):
         if i not in acts_attached:
             print(f"      {a['text']!r} -> (nothing)")
+    for a in case["gold"]["actions"]:
+        if a.get("trigger"):
+            print(f"      {a['text']!r} STARTS WHEN: {a['trigger']['text']!r}")
     v = verdicts.get(case["id"])
     if v and state_of(case, verdicts) == "STALE":
         print(f"    {YELLOW}⚠ STALE — judged {v['verdict']!r} but the gold has changed "

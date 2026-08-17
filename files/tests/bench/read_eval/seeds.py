@@ -70,6 +70,7 @@ class Seed(NamedTuple):
     actions: List[Text]
     attach: Dict[int, List[int]]              # action index -> span indices
     evidence: List[Text] = []
+    triggers: Dict[int, Text] = {}            # action index -> the clause that STARTS it
     source: str = "seed"                      # "real-failure" where a documented defect said it
     note: str = ""
 
@@ -96,9 +97,13 @@ def build(seed: Seed) -> dict:
         spans.append({"text": seed.sentence[start:end], "start": start, "end": end,
                       "type": "evidence"})
     actions = []
-    for spec in seed.actions:
+    for i, spec in enumerate(seed.actions):
         start, end = _at(seed.sentence, spec, seed.id)
-        actions.append({"text": seed.sentence[start:end], "start": start, "end": end})
+        act = {"text": seed.sentence[start:end], "start": start, "end": end}
+        if i in seed.triggers:
+            ts, te = _at(seed.sentence, seed.triggers[i], seed.id)
+            act["trigger"] = {"text": seed.sentence[ts:te], "start": ts, "end": te}
+        actions.append(act)
     # v1.1 — a member may be a plain index or {"span": i, "role": "..."}; passed through,
     # the schema validates the role vocabulary and the one-patient rule
     attachments = [{"action": a, "objects": list(objs)}
@@ -190,17 +195,20 @@ SEEDS: List[Seed] = [
 
     # ══ conditionals — a condition is not an action ══════════════════════════════════
     Seed("cond-0001", "conditionals", "if alpha is stopped, launch it",
-         ["alpha"], ["launch"], {0: [0]}, source="real-failure",
+         ["alpha"], ["launch"], {0: [0]}, triggers={0: "if alpha is stopped"},
+         source="real-failure",
          note="`stopped` is a state test; emitting stop_vm here is hallucination"),
     Seed("cond-0002", "conditionals", "when the backup finishes, snapshot the db vm",
          ["the backup", "the db vm"], ["snapshot"], {0: [1]},
+         triggers={0: "when the backup finishes"},
          note="`the backup` is a named thing in a WORLD clause — a span, attached to "
               "nothing; `finishes` is the world's verb, not an instruction"),
     Seed("cond-0003", "conditionals", "launch beta only if the lab network is up",
          ["beta", "the lab network"], ["launch"], {0: [0]},
+         triggers={0: "only if the lab network is up"},
          note="the network is extracted and attached to NOTHING — it is a condition's noun"),
     Seed("cond-0004", "conditionals", "if the web vm is down, restart it",
-         ["the web vm"], ["restart"], {0: [0]}),
+         ["the web vm"], ["restart"], {0: [0]}, triggers={0: "if the web vm is down"}),
 
     # ══ multi-clause — several requests in one string ════════════════════════════════
     Seed("mc-0001", "multi-clause", "stop alpha. then launch beta.",
@@ -216,7 +224,7 @@ SEEDS: List[Seed] = [
     Seed("mc-0004", "multi-clause",
          "check the db vm's disk. if it is full, delete the oldest snapshot.",
          ["the db vm's disk", "the oldest snapshot"], ["check", "delete"],
-         {0: [0], 1: [1]}),
+         {0: [0], 1: [1]}, triggers={1: "if it is full"}),
 
     # ══ self-correction — the SPEC's override rule; both targets is a hard failure ═══
     Seed("sc-0001", "self-correction", "restart the web vm, no wait, the db one",
@@ -246,8 +254,8 @@ SEEDS: List[Seed] = [
          ["the vms"], ["stop"], {0: [0]},
          note="the manner phrase binds the ACT — extracting it as an object is a failure"),
     Seed("qual-0005", "qualifiers", "snapshot every vm at 21:30",
-         ["every vm"], ["snapshot"], {0: [0]},
-         note="the clock is a qualifier of the act; it is not an object"),
+         ["every vm"], ["snapshot"], {0: [0]}, triggers={0: "at 21:30"},
+         note="the clock is a qualifier of the act — carried as its TRIGGER"),
     Seed("qual-0006", "qualifiers", "delete alpha's snapshots",
          ["alpha's snapshots"], ["delete"], {0: [0]},
          note="possession — the owner stays inside the span"),
@@ -299,6 +307,7 @@ SEEDS: List[Seed] = [
          note="`from` inside a noun phrase — the leak word is not a role marker here"),
     Seed("cc-0005", "cross-cutting", "spin down the render vms after the job finishes",
          ["the render vms", "the job"], ["spin down"], {0: [0]},
+         triggers={0: "after the job finishes"},
          note="phrasal `spin down`; `the job` is a named thing in the adjunct — a span, "
               "unattached; `finishes` is the world's verb"),
 ]
