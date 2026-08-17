@@ -71,3 +71,15 @@ unfolds. The remaining action-side qualifier after triggers were taken: WHETHER/
 serialises and one that blasts all vms at once score the same — and the constraint binds
 THIS request only, never a rule ([[issue_map]] manner constraint, OPEN).
 ⇒ v2: a `manner` field on an action — the phrase's offsets, nothing more. Take with 2+5.
+
+## 7 · THE EVIDENCE→OBJECT LINK (operator, during review, 2026-08-18 — diag-0001)
+
+A diagnosis case marks the patient and the testimony and never says WHICH testimony is about
+WHICH patient. Trivial at one object + one evidence; a two-patient report — "vm2
+blue-screens and the dmz drops pings" — has two links, and crossed links score the same as
+correct ones. Declared an omission in the schema docstring since v1.0; a ledger item now
+because the operator felt the gold "produce nothing" — the missing production is this
+relation, plus D1's eventual needs (the diagnosis flow starts from evidence BOUND to a thing).
+⇒ v2: evidence spans join attachments with role "evidence" under a no-action entry, or a
+  `about` field on an evidence span naming the object index. Decide when D1 is built —
+  the diagnosis machinery's own shape should pick the encoding, not the eval's guess.
