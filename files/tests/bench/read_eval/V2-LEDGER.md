@@ -21,7 +21,9 @@ boundaries and attachment only; condition extraction is tested nowhere in this e
 ⇒ v2: an optional `conditions` object on a span. Roughly doubles authoring + review cost —
   priced, not free, which is why it is not a quiet field now.
 ⇒ **THE SHARPEST MOTIVATOR (operator, 08-18, on cs-0007):** *"which vms are stopped?"* — the
-  wh-query's ANSWER IS the set the condition defines ('stopped vms'). v1 marks `[which vms]`
+  wh-query's ANSWER IS the set the condition defines — 'vms which stopped', the operator's
+  own correction: the NOUN is the base set and the PREDICATE the filter ({kind: vm} +
+  {status: stopped}), not a pre-labeled kind. v1 marks `[which vms]`
   and the filter vanishes, so a reader that captures `{status: stopped}` and one that reads a
   bare noun score the same — on a sentence whose entire point is the filter. The polar twin
   (cs-0006) flattens safely; the wh form is where item 2 bites hardest.
