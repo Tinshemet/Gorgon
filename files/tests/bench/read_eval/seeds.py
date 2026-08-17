@@ -244,9 +244,11 @@ SEEDS: List[Seed] = [
          ["the web vm"], ["restart"], {0: [0]}, triggers={0: "if the web vm is down"}),
 
     Seed("cond-0005", "conditionals", "if the backup failed, tell me which vms it skipped",
-         ["the backup"], ["tell"], {}, triggers={0: "if the backup failed"},
-         note="conditional QUERY-by-imperative: `tell` is instruct, the wh-clause is its "
-              "content (whether-family, not marked separately), `the backup` a world span"),
+         ["the backup", "which vms"], ["tell"], {0: [1]},
+         triggers={0: "if the backup failed"},
+         note="the operator's reject, applied: `tell` is a hidden query and must PRODUCE — "
+              "the wh-NP names the requested set and is attached (same rule as cs-0007); "
+              "`it skipped` is the set's filter, ledger item 2; `the backup` a world span"),
 
     # ══ multi-clause — several requests in one string ════════════════════════════════
     Seed("mc-0001", "multi-clause", "stop alpha. then launch beta.",
