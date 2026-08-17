@@ -27,6 +27,10 @@ boundaries and attachment only; condition extraction is tested nowhere in this e
   and the filter vanishes, so a reader that captures `{status: stopped}` and one that reads a
   bare noun score the same — on a sentence whose entire point is the filter. The polar twin
   (cs-0006) flattens safely; the wh form is where item 2 bites hardest.
+⇒ **AND THE ENSURE-VERB'S TARGET STATE IS THE SAME FAMILY (operator, 08-18, cc-0002):**
+  *"make sure the lab network EXISTS"* — a hidden-achieve clause whose target predicate is
+  unmarked, exactly as the wh-filter is. v2 form: `[the lab network] + {exists: true}`. The
+  ACHIEVE/ENSURE label itself stays route territory; the STATE is readable structure.
 
 ## 4 · ACTION TRIGGERS — ✅ TAKEN as v1.2, same day
 
