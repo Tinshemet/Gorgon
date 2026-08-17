@@ -20,6 +20,11 @@ nothing about `{age: > 1 week}` or `{store: backup}` — the inside-the-bracket 
 boundaries and attachment only; condition extraction is tested nowhere in this eval.
 ⇒ v2: an optional `conditions` object on a span. Roughly doubles authoring + review cost —
   priced, not free, which is why it is not a quiet field now.
+⇒ **THE SHARPEST MOTIVATOR (operator, 08-18, on cs-0007):** *"which vms are stopped?"* — the
+  wh-query's ANSWER IS the set the condition defines ('stopped vms'). v1 marks `[which vms]`
+  and the filter vanishes, so a reader that captures `{status: stopped}` and one that reads a
+  bare noun score the same — on a sentence whose entire point is the filter. The polar twin
+  (cs-0006) flattens safely; the wh form is where item 2 bites hardest.
 
 ## 4 · ACTION TRIGGERS — ✅ TAKEN as v1.2, same day
 
