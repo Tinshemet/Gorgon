@@ -45,6 +45,23 @@ plausible, validated for FORM, and worth nothing as ground truth until reviewed 
   · VALUES ARE OBJECT SPANS. *"give alpha 4 cores and 8gb"* — `4 cores` and `8gb` are
     arguments of give, exactly as the spec treats a pasted path: an argument, not junk.
 
+# ⇒ THE EDGE RULINGS, from the 08-18 full audit — all already true of the gold below:
+#
+#   · SEQUENCE IS NOT TRIGGER. A trigger is a WORLD condition/time that starts an act
+#     ("after the job finishes"). Ordering between two INSTRUCTED acts — "then", "after you
+#     have checked" — is SEQUENCE, and v1.2 does not mark it (V2-LEDGER item 5). ba-0004 and
+#     mc-0001 therefore carry no trigger, deliberately.
+#   · A COURTESY FORMULA MARKS NOTHING, even when clause-shaped. cc-0001's "when you get a
+#     chance" is grammatically a when-clause and carries NO trigger, no action, no span —
+#     treating politeness as content is the measured 7/7 escalation defect, and the eval must
+#     not reward it from the other direction.
+#   · A BARE / INDEFINITE MASS NOUN IN A WORLD-CLAUSE IS NOT A SPAN. "free up MEMORY" names
+#     no identifiable thing; "THE lab network" / "THE job" / "alpha" do. Definiteness decides,
+#     which is still the grammar deciding.
+#   · INSIDE AN EVIDENCE SPAN, NOTHING IS SEPARATELY MARKED. diag-0002's symptom mentions
+#     "the network"; the evidence is opaque testimony, and decomposing testimony is the same
+#     mistake as reading inside the operator's quotes.
+
 # ⇒ ⚠ ONE GOLD THE SCHEMA CANNOT SAY, LEFT OUT RATHER THAN FORCED
 
 *"stop alpha or beta"* — the reading is a CHOICE, one of the two. `attachments` can say BOTH

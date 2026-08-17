@@ -45,3 +45,12 @@ network the DESTINATION, and the attachment says only that both belong to `put`.
 ⇒ v2: roles on attachment members — `{"action": 0, "objects": [{"span": 1, "role": "theme"},
   {"span": 0, "role": "destination"}]}` — with a closed role vocabulary read from the
   manifest's own argument declarations, never a hand list.
+
+## 5 · SEQUENCE BETWEEN INSTRUCTED ACTS (audit, 2026-08-18)
+
+*"stop alpha. THEN launch beta."* · *"restart it AFTER YOU HAVE CHECKED the others"* — an
+ordering between two acts the operator commanded. Not a trigger (no world condition starts
+anything; YOU finish one act and begin the next), and v1.2 deliberately does not mark it — a
+reader that reorders the acts scores the same as one that keeps the order.
+⇒ v2: an `after` field on an action naming another ACTION index — order as a relation between
+  acts, exactly how the writer's plans already carry it. Cheap; take with items 2+3.
