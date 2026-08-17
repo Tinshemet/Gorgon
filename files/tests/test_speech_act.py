@@ -463,9 +463,12 @@ def test_where_it_is_wired():
          os.path.join(root, "engines")],
         capture_output=True, text=True).stdout
     callers = {os.path.basename(p) for p in out.split() if not p.endswith("speech_act.py")}
-    check(f"the reader's importers are exactly the eight named here — {sorted(callers)}",
-          callers == {"gate4.py", "pass1.py", "pipeline.py", "plan.py", "archive.py",
-                      "governing.py", "door.py", "iso.py"})
+    # pass2 joined 2026-08-18: it consults `act_of` to REFUSE asking for operations on a
+    # clause that legislates — the baseline billed delete_vm emitted from "never delete
+    # the db vm", and the subtractive guard needs the reader's verdict to withhold the ask.
+    check(f"the reader's importers are exactly the nine named here — {sorted(callers)}",
+          callers == {"gate4.py", "pass1.py", "pass2.py", "pipeline.py", "plan.py",
+                      "archive.py", "governing.py", "door.py", "iso.py"})
 
 
 def main(argv=None) -> int:

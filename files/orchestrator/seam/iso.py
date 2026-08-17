@@ -280,9 +280,58 @@ def is_condition(segment: str, board: Optional[Board] = None) -> bool:
     if not head:
         return False
     first = head[0]
+    # ⇒ FRONTED `when` IS A CONDITION WHEN IT IS AN ADJUNCT — *"when the backup finishes,
+    #   snapshot the db vm"*. `events_in` already owns the adjunct-vs-interrogative test
+    #   (subject after `when`, no inversion) and was being called WITHOUT the speech_act
+    #   module it needs, so it took the conservative reading and the baseline scored the
+    #   fronted `when` 0/1. Measured 2026-08-18, certified gold.
     return (first in {"if", "unless"} or first in T.EVENTS
             or first in T.ALWAYS_STANDING
+            or (first == "when" and T.events_in(low, SA))
             or any(low.startswith(p) for p in T.ALWAYS_STANDING_PHRASES))
+
+
+# the whether-`if` guard: `tell me IF the db vm restarted` asks, it does not condition.
+# The word BEFORE the `if` separates them, and the askers are a small closed set.
+_WHETHER_HOSTS = frozenset({"me", "us", "know", "check", "see", "ask", "wonder", "whether"})
+# focus adverbs that may sit in FRONT of a subordinator without unseating it: `ONLY if`
+_FOCUS = frozenset({"only", "even", "just"})
+
+
+def condition_tail(segment: str, board: Optional[Board] = None) -> Optional[str]:
+    """The condition clause EMBEDDED in a segment — *"launch beta ONLY IF the lab network is
+    up"*, *"spin down the render vms AFTER the job finishes"* — or None.
+
+    ⇒⇒ **`is_condition` IS HEAD-ONLY BY DESIGN AND THAT DESIGN HAS A BLIND SIDE.** The
+      positional test exists so a relative clause never reads as a condition — and it means a
+      TRAILING subordinate clause can never be found, because the segment's head is the verb.
+      The certified baseline priced it: triggers 4/8, and every miss but the clock was this
+      shape (mid-clause `only if`, trailing `after`). This walk finds the subordinator PAST
+      the head and returns the tail from there.
+
+    ⇒ **THE MID-CLAUSE SET IS THE CONDITION HEADS ONLY** — {if, unless} ∪ EVENTS ∪ adjunct
+      `when` — never the whole of SUBORDINATING: `that`/`which`/`who` open relative clauses,
+      and flagging those would re-import the exact defect the head-only test was built
+      against.
+    ⇒ **AND `if` AFTER AN ASKER IS WHETHER, NOT CONDITION** — *"tell me if the db vm
+      restarted"* is an indirect question (the operator's cc-0003 ruling). The word before
+      the `if` decides, from a closed set of askers.
+    """
+    from . import speech_act as SA, temporal as T
+    words = SA.words_of(str(segment).lower())
+    for at in range(1, len(words)):
+        word = words[at]
+        heads = {"if", "unless"} | set(T.EVENTS)
+        if word not in heads and word != "when":
+            continue
+        if word == "if" and words[at - 1] in _WHETHER_HOSTS:
+            continue
+        start = at - 1 if at >= 1 and words[at - 1] in _FOCUS else at
+        tail = " ".join(words[start:])
+        if word == "when" and not T.events_in(tail, SA):
+            continue
+        return tail
+    return None
 
 
 def annotate(request: str, board: Optional[Board] = None, world=None) -> List[Annotation]:

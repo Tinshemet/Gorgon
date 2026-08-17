@@ -430,10 +430,21 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
     last = next((i for i, t in enumerate(toks) if t[1] >= at + len(anchor)), len(toks))
 
     # ── LEFT: descriptors, then the enumerator, then the comparator in front of it
+    #
+    # ⇒⇒ **THE WALK STOPS AT AN OPERATION VERB — the verb is the ACT, never part of the
+    #   THING.** Measured on the certified baseline (2026-08-18): boundary-exact sat at 27%
+    #   while detection was 84%, uniform across every stratum, and the cause was single —
+    #   *"stop the web vm"* span'd as `stop the web vm`, because nothing but a BOUNDARY or an
+    #   ENUMERATOR ever ended the walk. An enumerator sentence (*"create A vm"*) was exact by
+    #   luck; a determiner sentence (*"stop THE web vm"*) walked straight through `the` into
+    #   the verb. The manifest's own operation words are the stop — READ, never listed.
     left, count, comparator, matched = first, None, None, ""
     count_at: Optional[int] = None
+    verbs = _operation_words(board)
     while left > 0 and toks[left - 1][0] not in BOUNDARIES:
         word = toks[left - 1][0]
+        if word in verbs and word not in nouns:
+            break                             # `snapshot` the noun still walks; the verb stops
         if word in ENUMERATORS or word.isdigit():
             count = int(word) if word.isdigit() else ENUMERATORS[word]
             count_at = left - 1

@@ -179,6 +179,16 @@ def read_case(sentence: str, board=None) -> dict:
             at = _locate(sentence, clause)
             if at:
                 predicted_triggers.append({"clause": clause, "start": at[0], "end": at[1]})
+            continue
+        # ⇒ the EMBEDDED condition — `only if …`, trailing `after …` — found past the head
+        try:
+            tail = ISO.condition_tail(clause, board)
+        except Exception:
+            tail = None
+        if tail:
+            at = _locate(sentence, tail)
+            if at:
+                predicted_triggers.append({"clause": tail, "start": at[0], "end": at[1]})
     operations = []
     for clause, op in steps:
         at = _locate(sentence, clause)

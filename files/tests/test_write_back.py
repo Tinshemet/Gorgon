@@ -95,7 +95,9 @@ def test_an_answer_never_overrides_a_lookup():
     #   test first did) silently matches nothing. The two halves have different contracts on
     #   purpose — one resolves WHICH question an answer is for, the other applies it.
     settled, clashes = pass1.settle_with_answers(
-        rows, {"launch db": ("kind-not-settled", "db is a network")}, board)
+        # ⇒ the row is named `db` since the 2026-08-18 span fix — the verb is the ACT and no
+        #   longer part of the row's name. The old key "launch db" matched nothing, silently.
+        rows, {"db": ("kind-not-settled", "db is a network")}, board)
     after = [(r.name, r.object_type) for r in settled]
     check(f"the lab's answer stands ({before} -> {after})", before == after)
     check(f"and the disagreement is reported, not swallowed ({clashes})",

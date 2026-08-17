@@ -821,6 +821,22 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
     operators = operators_offered(board)
     out = []
     for clause in clauses_of(request):
+        # ⇒⇒ **A CLAUSE THAT CONDITIONS OR LEGISLATES IS NEVER ASKED FOR OPERATIONS.** The
+        #   certified baseline (2026-08-18) billed the cost of asking: *"if alpha is
+        #   stopped"* was answered with stop_vm AND launch_vm, and *"never delete the db
+        #   vm"* — READ correctly as a rule — still produced delete_vm. Asking the model
+        #   what to DO about a clause whose whole meaning is a condition on another act, or
+        #   a law about future behaviour, INVITES the invented step; per the measured rule
+        #   that only subtractive moves work, the clause is withheld rather than its output
+        #   caught. Conditions: 10 hallucinated acts on the baseline · rules: 6.
+        from . import iso as _iso, speech_act as _sa
+        try:
+            if _iso.is_condition(clause, board):
+                continue
+            if _sa.act_of(clause, board) == _sa.DECLARATION:
+                continue
+        except Exception:
+            pass
         payload = (f"{_payload(request, table, operators, rejected, needed)}\n\n"
                    f"the part to answer for: {clause}")
         try:
