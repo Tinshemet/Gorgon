@@ -34,6 +34,10 @@ plausible, validated for FORM, and worth nothing as ground truth until reviewed 
     extracting `free up` as a second step is the exact failure this stratum exists to catch.
   · A NAMED THING IN A CONDITION/ADJUNCT IS STILL A SPAN, unattached. *"launch beta only if
     THE LAB NETWORK is up"* — the network is extracted, attached to nothing.
+  · A SUBORDINATE CLAUSE WHOSE SUBJECT IS *YOU* AND WHOSE VERB IS AN ACT IS AN INSTRUCTION —
+    generalised from the operator's ba-0004 reject (08-18). *"after YOU HAVE CHECKED the
+    others"* marks `checked` as an action on `the others`; *"after THE JOB FINISHES"* does
+    not mark `finishes`, because the world is doing it, not you. The subject decides.
   · SELF-CORRECTION OVERRIDES — the SPEC'S rule, adopted for gold. *"restart the web vm, no
     wait, the db one"* extracts ONLY `the db one`; both targets is a hard failure. ⚠ The
     seam's ROUTE behaviour (report and ask, never substitute) is unchanged by this: gold
@@ -189,7 +193,9 @@ SEEDS: List[Seed] = [
          ["alpha"], ["launch"], {0: [0]}, source="real-failure",
          note="`stopped` is a state test; emitting stop_vm here is hallucination"),
     Seed("cond-0002", "conditionals", "when the backup finishes, snapshot the db vm",
-         ["the db vm"], ["snapshot"], {0: [0]}),
+         ["the backup", "the db vm"], ["snapshot"], {0: [1]},
+         note="`the backup` is a named thing in a WORLD clause — a span, attached to "
+              "nothing; `finishes` is the world's verb, not an instruction"),
     Seed("cond-0003", "conditionals", "launch beta only if the lab network is up",
          ["beta", "the lab network"], ["launch"], {0: [0]},
          note="the network is extracted and attached to NOTHING — it is a condition's noun"),
@@ -292,8 +298,9 @@ SEEDS: List[Seed] = [
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "destination"}]},
          note="`from` inside a noun phrase — the leak word is not a role marker here"),
     Seed("cc-0005", "cross-cutting", "spin down the render vms after the job finishes",
-         ["the render vms"], ["spin down"], {0: [0]},
-         note="phrasal `spin down`; `finishes` belongs to the temporal adjunct"),
+         ["the render vms", "the job"], ["spin down"], {0: [0]},
+         note="phrasal `spin down`; `the job` is a named thing in the adjunct — a span, "
+              "unattached; `finishes` is the world's verb"),
 ]
 
 
