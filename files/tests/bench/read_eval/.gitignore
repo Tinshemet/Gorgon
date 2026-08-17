@@ -1,0 +1,3 @@
+# run artifacts land here with versioned names. A FROZEN RELEASE result is committed
+# DELIBERATELY (git add -f); smoke and scratch runs are not.
+results/
