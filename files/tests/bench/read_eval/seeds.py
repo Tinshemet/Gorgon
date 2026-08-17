@@ -51,7 +51,11 @@ plausible, validated for FORM, and worth nothing as ground truth until reviewed 
 #     ("after the job finishes"). Ordering between two INSTRUCTED acts — "then", "after you
 #     have checked" — is SEQUENCE, and v1.2 does not mark it (V2-LEDGER item 5). ba-0004 and
 #     mc-0001 therefore carry no trigger, deliberately.
-#   · A COURTESY FORMULA MARKS NOTHING, even when clause-shaped. cc-0001's "when you get a
+#   · `TELL ME` BEFORE AN INTERROGATIVE COMPLEMENT IS THE QUESTION'S WRAPPER, NOT AN ACT —
+    the operator's cc-0003 rejects, both of them. "tell me if X" asks what "did X?" asks;
+    the complement is the explicit QUERY act and the wrapper marks nothing. (`show me the
+    logs` is different: `show` acts on a THING and stays an action.)
+  · A COURTESY FORMULA MARKS NOTHING, even when clause-shaped. cc-0001's "when you get a
 #     chance" is grammatically a when-clause and carries NO trigger, no action, no span —
 #     treating politeness as content is the measured 7/7 escalation defect, and the eval must
 #     not reward it from the other direction.
@@ -247,12 +251,11 @@ SEEDS: List[Seed] = [
          ["the web vm"], ["restart"], {0: [0]}, triggers={0: "if the web vm is down"}),
 
     Seed("cond-0005", "conditionals", "if the backup failed, tell me which vms it skipped",
-         ["the backup", "which vms"], ["tell", "which vms it skipped"],
-         {1: [1]}, queries=[1], triggers={0: "if the backup failed"},
-         note="brought in line with the operator's cc-0003 ruling: an indirect question is "
-              "an EXPLICIT QUERY act — the wh-complement is the query, attached to its "
-              "wh-NP; tell's content IS the query (act->act is ledger item 5); the filter "
-              "`it skipped` is ledger item 2; `the backup` a world span"),
+         ["the backup", "which vms"], ["which vms it skipped"],
+         {0: [1]}, queries=[0], triggers={0: "if the backup failed"},
+         note="same rule as cc-0003: `tell me` is the question's wrapper, dropped; the query "
+              "act carries the TRIGGER (answer when the backup fails), attaches to its "
+              "wh-NP; the filter `it skipped` is ledger item 2"),
 
     # ══ multi-clause — several requests in one string ════════════════════════════════
     Seed("mc-0001", "multi-clause", "stop alpha. then launch beta.",
@@ -371,12 +374,11 @@ SEEDS: List[Seed] = [
          note="`make` alone is a leak word; `make sure` is the whole verb"),
     Seed("cc-0003", "cross-cutting",
          "go over the event log and tell me if the db vm restarted",
-         ["the event log", "the db vm"], ["go over", "tell", "if the db vm restarted"],
-         {0: [0], 2: [1]}, queries=[2],
-         note="the operator's reject, applied: the whether-clause is an EXPLICIT QUERY act "
-              "— tell's content is the query (the act->act link is ledger item 5 family), "
-              "the query attaches to the db vm, and the asked EVENT (`restarted`) sits "
-              "inside the query span exactly as `running` sits inside `is alpha running`"),
+         ["the event log", "the db vm"], ["go over", "if the db vm restarted"],
+         {0: [0], 1: [1]}, queries=[1],
+         note="the operator's second reject fixed the dangler: `tell me` is the QUESTION'S "
+              "WRAPPER, not an act — 'tell me if X' asks what 'did X?' asks. The query act "
+              "IS the production; nothing attaches to nothing"),
     Seed("cc-0004", "cross-cutting",
          "put the notes from the meeting in the shared folder",
          ["the notes from the meeting", "the shared folder"], ["put"],
