@@ -117,11 +117,12 @@ def show(case: dict, verdicts: Dict[str, dict], by_id: Dict[str, dict]) -> None:
     from .schema import members_of
     spans = case["gold"]["spans"]
     for at in case["gold"]["attachments"]:
-        verb = case["gold"]["actions"][at["action"]]["text"]
+        act = case["gold"]["actions"][at["action"]]
+        tag = " (QUERY)" if act.get("kind") == "query" else ""
         objs = " + ".join(
             f"{spans[ix]['text']!r}" + (f" ({role})" if role else "")
             for ix, role in members_of(at))
-        print(f"      {verb!r} -> {objs}")
+        print(f"      {act['text']!r}{tag} -> {objs}")
     acts_attached = {at["action"] for at in case["gold"]["attachments"]}
     for i, a in enumerate(case["gold"]["actions"]):
         if i not in acts_attached:

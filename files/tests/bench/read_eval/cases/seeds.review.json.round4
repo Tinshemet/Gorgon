@@ -1,0 +1,137 @@
+{
+ "ana-0001": {
+  "hash": "8b6bcad0427d12b5",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "ana-0002": {
+  "hash": "4fe57c45dee8d263",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "ana-0003": {
+  "hash": "3571ea93a88d4ac2",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "ana-0004": {
+  "hash": "508f51c099d61d11",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "ba-0001": {
+  "hash": "cb5d1bc0ceccf20f",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "ba-0002": {
+  "hash": "9950102fca5dacf0",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "ba-0003": {
+  "hash": "1c4a03d01139e800",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "ba-0004": {
+  "hash": "2e6729080f4cab7e",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "cond-0001": {
+  "hash": "1a1981861e6c12d2",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "cond-0002": {
+  "hash": "0e10990c588914f3",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "cond-0003": {
+  "hash": "a30572476f347786",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "cond-0004": {
+  "hash": "9aa3132d45448c8f",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "coord-0001": {
+  "hash": "44ae6ec16200182e",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "coord-0002": {
+  "hash": "0669e14f1c16b337",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "coord-0003": {
+  "hash": "93fdfc5696d06196",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "coord-0004": {
+  "hash": "3c6c5aab39ce80db",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "coord-0005": {
+  "hash": "ebc01d6a1dad6b7a",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "cs-0001": {
+  "hash": "c562bb3a52ce3bd0",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "cs-0002": {
+  "hash": "c8f75930a305819b",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "cs-0003": {
+  "hash": "d8c85af0e0c5b8fa",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "cs-0004": {
+  "hash": "5b30535349bf1fdd",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "cs-0005": {
+  "hash": "9368207c33773188",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "mc-0001": {
+  "hash": "b0fd3b93edc55b7e",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "neg-0001": {
+  "hash": "6fe3d23d1214ebac",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "neg-0002": {
+  "hash": "53d8601556631ce0",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "neg-0003": {
+  "hash": "44fabf8067c4eceb",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "neg-0004": {
+  "hash": "15e86bed1c9aacd2",
+  "note": "",
+  "verdict": "accepted"
+ }
+}

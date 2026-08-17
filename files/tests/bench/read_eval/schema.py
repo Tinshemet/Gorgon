@@ -98,6 +98,15 @@ SPAN_TYPES = ("object", "evidence")
 #     that; a reader stopping db along with everything else still overlapped the big span.
 ROLES = ("patient", "destination", "source", "value", "excluded")
 
+# ── v1.3: QUERY ACTS (operator, mid-review 08-18: mc-0002's second clause is "a dropped
+#   clause, that is a query"). A question is a THIRD of the sentence taxonomy — order ·
+#   question · statement — and v1.2 could only mark imperative verbs, so *"is alpha
+#   running?"* flattened to a stray unattached span and reading the question scored the
+#   same as ignoring it. An action entry may carry `kind: "query"`: its span is the
+#   INTERROGATIVE CLAUSE (grammar still decides — there is no imperative verb to bracket,
+#   so the clause itself is the act), attached to what it asks about.
+ACTION_KINDS = ("instruct", "query")
+
 # ── v1.2: ACTION TRIGGERS (V2-LEDGER item 4, taken mid-review 08-18 at the operator's
 #   instruction — the second time the flattening fought the reviewer in one pass). An action
 #   may carry `trigger`: the offsets of the clause that STARTS it — "if alpha is stopped",
@@ -187,10 +196,13 @@ def validate_case(case: dict) -> List[str]:
     for i, span in enumerate(spans):
         faults += _offsets(f"{cid}: spans[{i}]", span, sentence, typed=True)
     for i, act in enumerate(actions):
-        known = {"text", "start", "end", "trigger"}
+        known = {"text", "start", "end", "trigger", "kind"}
         for extra in set(act) - known:
             faults.append(f"{cid}: actions[{i}]: unknown key {extra!r}")
-        slim = {k: v for k, v in act.items() if k != "trigger"}
+        if "kind" in act and act["kind"] not in ACTION_KINDS:
+            faults.append(f"{cid}: actions[{i}]: kind {act['kind']!r} is not one of "
+                          f"{ACTION_KINDS}")
+        slim = {k: v for k, v in act.items() if k not in ("trigger", "kind")}
         faults += _offsets(f"{cid}: actions[{i}]", slim, sentence, typed=False)
         if "trigger" in act:
             trig = act["trigger"]
@@ -361,6 +373,7 @@ def selfcheck() -> List[str]:
         "trigger", {"text": "nope", "start": 0, "end": 4}), "gold says")
     broken(lambda c: c["gold"]["actions"][0].__setitem__(
         "trigger", {"text": "restart", "start": 0, "end": 7, "why": "x"}), "unknown key")
+    broken(lambda c: c["gold"]["actions"][0].__setitem__("kind", "musing"), "not one of")
 
     noised = _good()
     noised.update(id="coord-0001n", noise="typos", pair_id="ghost-0000")

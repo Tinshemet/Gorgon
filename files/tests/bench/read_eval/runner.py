@@ -188,8 +188,21 @@ def read_case(sentence: str, board=None) -> dict:
                            "operator": op.operator, "on": op.on, "value": op.value,
                            "on_row": by_handle.get(op.on),
                            "value_row": by_handle.get(op.value)})
+    # ⇒ v1.3 — the seam's QUESTION reading, per clause, the same collection pattern as
+    #   triggers and evidence: `iso.annotate` names a Question act; the clause becomes a
+    #   predicted query at its located offsets.
+    predicted_queries = []
+    for clause in P2.clauses_of(sentence):
+        try:
+            acts = ISO.annotate(clause)
+        except Exception:
+            acts = []
+        if any("question" in str(getattr(a, "function", "")).lower() for a in acts):
+            at = _locate(sentence, clause)
+            if at:
+                predicted_queries.append({"clause": clause, "start": at[0], "end": at[1]})
     return {"rows": predicted_spans, "operations": operations,
-            "triggers": predicted_triggers}
+            "triggers": predicted_triggers, "queries": predicted_queries}
 
 
 # ── scoring one case against its gold ────────────────────────────────────────────────
@@ -264,6 +277,16 @@ def score_case(case: dict, reading: dict) -> dict:
         else:
             absorbed.setdefault(home, []).append(k)
     action_hits = [gi in absorbed for gi in range(len(gold_actions))]
+    # ⇒ v1.3 — a QUERY act is detected by the seam's Question reading OR by an absorbed op
+    #   (probe_alive answering "is alpha running" is a legitimate reading of the question;
+    #   either channel counts, and the op channel also carries the attachment)
+    for gi, g in enumerate(gold_actions):
+        if g.get("kind") == "query" and not action_hits[gi]:
+            for pq in reading.get("queries", ()):
+                if _token_overlap(sentence, (g["start"], g["end"]),
+                                  (pq["start"], pq["end"])) >= OVERLAP:
+                    action_hits[gi] = True
+                    break
 
     # attachment: per (action, object) pair, ONLY over detected spans — pass 2 never pays
     # for pass 1's miss. Hit when any absorbed op of that action targets the matched row.

@@ -87,6 +87,7 @@ class Seed(NamedTuple):
     actions: List[Text]
     attach: Dict[int, List[int]]              # action index -> span indices
     evidence: List[Text] = []
+    queries: List[int] = []                   # indices into `actions` that are QUERY acts
     triggers: Dict[int, Text] = {}            # action index -> the clause that STARTS it
     source: str = "seed"                      # "real-failure" where a documented defect said it
     note: str = ""
@@ -120,6 +121,8 @@ def build(seed: Seed) -> dict:
         if i in seed.triggers:
             ts, te = _at(seed.sentence, seed.triggers[i], seed.id)
             act["trigger"] = {"text": seed.sentence[ts:te], "start": ts, "end": te}
+        if i in seed.queries:
+            act["kind"] = "query"
         actions.append(act)
     # v1.1 — a member may be a plain index or {"span": i, "role": "..."}; passed through,
     # the schema validates the role vocabulary and the one-patient rule
@@ -142,6 +145,13 @@ SEEDS: List[Seed] = [
          ["every stopped vm"], ["launch"], {0: [0]}),
     Seed("cs-0005", "clean-single", "list the networks",
          ["the networks"], ["list"], {0: [0]}),
+
+    Seed("cs-0006", "clean-single", "is alpha running?",
+         ["alpha"], ["is alpha running"], {0: [0]}, queries=[0],
+         note="a bare status query — the third sentence type, finally in the set"),
+    Seed("cs-0007", "clean-single", "which vms are stopped?",
+         [], ["which vms are stopped"], {}, queries=[0],
+         note="a wh-query; the answer set is the ASK, so there is no object span"),
 
     # ══ coordination — shared and distributed attachment ═════════════════════════════
     Seed("coord-0001", "coordination", "restart the web vm and the db vm",
@@ -227,12 +237,19 @@ SEEDS: List[Seed] = [
     Seed("cond-0004", "conditionals", "if the web vm is down, restart it",
          ["the web vm"], ["restart"], {0: [0]}, triggers={0: "if the web vm is down"}),
 
+    Seed("cond-0005", "conditionals", "if the backup failed, tell me which vms it skipped",
+         ["the backup"], ["tell"], {}, triggers={0: "if the backup failed"},
+         note="conditional QUERY-by-imperative: `tell` is instruct, the wh-clause is its "
+              "content (whether-family, not marked separately), `the backup` a world span"),
+
     # ══ multi-clause — several requests in one string ════════════════════════════════
     Seed("mc-0001", "multi-clause", "stop alpha. then launch beta.",
          ["alpha", "beta"], ["stop", "launch"], {0: [0], 1: [1]}),
     Seed("mc-0002", "multi-clause", "list the vms. anyway, is alpha running?",
-         ["the vms", "alpha"], ["list"], {0: [0]}, source="real-failure",
-         note="topic shift — the question is a SECOND request; its noun is still extracted"),
+         ["the vms", "alpha"], ["list", "is alpha running"], {0: [0], 1: [1]},
+         queries=[1], source="real-failure",
+         note="topic shift — the question is a SECOND request, marked as a QUERY act whose "
+              "span is the interrogative clause"),
     Seed("mc-0003", "multi-clause",
          "create a vm named web, put it on the dmz, and snapshot it",
          ["a vm named web", "the dmz"], ["create", "put", "snapshot"],
