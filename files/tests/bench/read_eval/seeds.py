@@ -247,11 +247,12 @@ SEEDS: List[Seed] = [
          ["the web vm"], ["restart"], {0: [0]}, triggers={0: "if the web vm is down"}),
 
     Seed("cond-0005", "conditionals", "if the backup failed, tell me which vms it skipped",
-         ["the backup", "which vms"], ["tell"], {0: [1]},
-         triggers={0: "if the backup failed"},
-         note="the operator's reject, applied: `tell` is a hidden query and must PRODUCE — "
-              "the wh-NP names the requested set and is attached (same rule as cs-0007); "
-              "`it skipped` is the set's filter, ledger item 2; `the backup` a world span"),
+         ["the backup", "which vms"], ["tell", "which vms it skipped"],
+         {1: [1]}, queries=[1], triggers={0: "if the backup failed"},
+         note="brought in line with the operator's cc-0003 ruling: an indirect question is "
+              "an EXPLICIT QUERY act — the wh-complement is the query, attached to its "
+              "wh-NP; tell's content IS the query (act->act is ledger item 5); the filter "
+              "`it skipped` is ledger item 2; `the backup` a world span"),
 
     # ══ multi-clause — several requests in one string ════════════════════════════════
     Seed("mc-0001", "multi-clause", "stop alpha. then launch beta.",
