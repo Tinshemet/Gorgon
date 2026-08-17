@@ -61,3 +61,13 @@ anything; YOU finish one act and begin the next), and v1.2 deliberately does not
 reader that reorders the acts scores the same as one that keeps the order.
 ⇒ v2: an `after` field on an action naming another ACTION index — order as a relation between
   acts, exactly how the writer's plans already carry it. Cheap; take with items 2+3.
+
+## 6 · MANNER ON AN ACTION (operator, during review, 2026-08-18 — qual-0004)
+
+*"stop the vms ONE AT A TIME"* — not a trigger (nothing gates when the act starts) and not
+item-5 sequence between acts: it is ordering WITHIN one collective act — HOW the execution
+unfolds. The remaining action-side qualifier after triggers were taken: WHETHER/WHEN is item
+4 (built), what ORDER is item 5, HOW is this. v1 leaves it unmarked, so a reader that
+serialises and one that blasts all vms at once score the same — and the constraint binds
+THIS request only, never a rule ([[issue_map]] manner constraint, OPEN).
+⇒ v2: a `manner` field on an action — the phrase's offsets, nothing more. Take with 2+5.
