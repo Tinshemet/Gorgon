@@ -60,7 +60,11 @@ ENUMERATORS: Dict[str, object] = {
 # `of` ENDS A PHRASE AND OPENS ANOTHER. "a snapshot OF every running vm" is two things, and
 # without this the snapshot's span swallowed the machines, which then folded away as a
 # collision — rung 12 declared one object where the request names two.
-BOUNDARIES = {",", ";", ".", "and", "then", "but", "—", "–", "of"}
+# ⇒ `except` joined 2026-08-18: *"stop every vm EXCEPT the db vm"* fused into ONE row with
+#   no comma to cut it — the certified set's neg-0001, whose gold is two spans (patient +
+#   excluded). Rung 8's carve-out had always arrived comma-separated, so the boundary was
+#   never missed until a bare `except` appeared.
+BOUNDARIES = {",", ";", ".", "and", "then", "but", "except", "—", "–", "of"}
 
 
 class Scanned(NamedTuple):
@@ -474,6 +478,10 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
             break                             # the fronted auxiliary is the question's skin
         if word in verbs and word not in nouns:
             break                             # `snapshot` the noun still walks; the verb stops
+        if word in {"if", "unless", "because", "though", "although", "whenever", "when"}:
+            break                             # an anchor INSIDE a tail stays inside it —
+                                              # `if ALPHA is stopped` fused the whole clause
+                                              # and is WHY conditionals-exact sat at 0/7
         # ⇒ **AN IMPERATIVE OPENS ON ITS VERB, AND THE MANIFEST DOES NOT KNOW EVERY VERB.**
         #   `restart` / `clone` / `list` have no manifest operation, so the verb-stop above
         #   never fired and the row fused (`restart the web vm` — the certified eval's
@@ -483,7 +491,14 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
         #   keeps `the` (it IS a determiner, not followed-by one).
         if (left - 1 == clause_first and word not in nouns
                 and word not in ENUMERATORS and word not in _WH
-                and left < len(toks) and toks[left][0] in _DETS):
+                and left < len(toks)
+                and toks[left][0] in _DETS):
+            break
+        # a word followed by an OBJECT PRONOUN is a verb even when the manifest also knows
+        # it as a noun — `snapshot IT` cannot be a noun phrase, by grammar
+        if (left - 1 == clause_first and left < len(toks)
+                and toks[left][0] in {"it", "them", "me", "us"}
+                and word not in ENUMERATORS and word not in _WH):
             break
         if word in ENUMERATORS or word.isdigit():
             count = int(word) if word.isdigit() else ENUMERATORS[word]
@@ -526,6 +541,23 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
                 _tail = None
             if _tail:
                 pred_first = _tail.split()[0]
+                # an anchor INSIDE the tail gets the condition-clause treatment below —
+                # `only if THE LAB NETWORK is up`: the copula opens the tested state
+                _tw0 = _tail.split()[0]
+                _tail_tok = next((_j for _j in range(clause_first, clause_end)
+                                  if toks[_j][0] == _tw0), None)
+                if _tail_tok is not None and first > _tail_tok:
+                    _cond_anchor = True
+        if pred_first is None:
+            # the ADJUNCT heads stop the span the same way — *"stop the test vms EVEN
+            #   THOUGH alpha is busy"* kept the concession inside the row. Span-only:
+            #   these are reasons, never triggers, and nothing here flags them as one.
+            for _i in range(clause_first + 1, clause_end):
+                if toks[_i][0] in {"because", "though", "although", "unless"}:
+                    pred_first = (toks[_i - 1][0]
+                                  if _i > clause_first and toks[_i - 1][0] == "even"
+                                  else toks[_i][0])
+                    break
         if pred_first is None:
             # ⇒ the DEONTIC split, same mechanic: *"every vm MUST CARRY a label"* fused into
             #   one row. A deontic modal with a subject before it and no relativizer opens
@@ -538,10 +570,24 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
                         for _j in range(clause_first, _i)):
                     pred_first = toks[_i][0]
                     break
+    _cond_anchor = locals().get("_cond_anchor", False)
+    _cond_clause = (toks and toks[clause_first][0] in {"if", "unless", "when", "whenever"}
+                    ) or _cond_anchor
     right = last
     while right < len(toks) and toks[right][0] not in BOUNDARIES:
         if question and (toks[right][0] in _AUX or toks[right][0] in asked_values):
             break                             # `are stopped` / `running` — the ASKED property
+        if _cond_clause and toks[right][0] in {"is", "are", "was", "were"}:
+            break                             # a condition TESTS a state — `alpha | is
+                                              # stopped`, `the web vm | is down`: the copula
+                                              # opens the tested predicate, never the thing
+        if (_cond_clause and right + 1 < len(toks)
+                and (right + 1 >= len(toks) or toks[right + 1][0] in BOUNDARIES)
+                and not any(toks[_k][0] in {"is", "are", "was", "were"}
+                            for _k in range(first, right + 1))):
+            # a copula-less condition ends on its EVENT VERB — `when the backup FINISHES`:
+            # the clause-final verb is the trigger's, by the events_in shape
+            break
         if pred_first and toks[right][0] == pred_first and right >= last:
             break                             # the symptom belongs to the testimony reading
         right += 1

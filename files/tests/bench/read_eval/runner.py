@@ -259,9 +259,23 @@ def read_case(sentence: str, board=None) -> dict:
             at = _locate(sentence, hit.clause)
             if at:
                 predicted_reports.append({"clause": hit.clause, "start": at[0], "end": at[1]})
+    # ⇒ the INSTRUCT channel — pass 2 WITHHOLDS asks from forbidden clauses and the model
+    #   sometimes answers nothing, but an imperative-shaped clause is still a READ action:
+    #   the same grammar mark scan and pass2 use. Attachment stays ops-only — a channel
+    #   names the clause, not its arguments.
+    predicted_instructs = []
+    _dets = {"a", "an", "the", "every", "each", "all", "any", "both", "no",
+             "it", "them", "me", "us"}
+    for clause in P2.clauses_of(sentence):
+        _cw = str(clause).lower().split()
+        if len(_cw) >= 2 and _cw[1] in _dets:
+            at = _locate(sentence, clause)
+            if at:
+                predicted_instructs.append({"clause": clause, "start": at[0], "end": at[1]})
     return {"rows": predicted_spans, "operations": operations,
             "triggers": predicted_triggers, "queries": predicted_queries,
-            "rules": predicted_rules, "reports": predicted_reports}
+            "rules": predicted_rules, "reports": predicted_reports,
+            "instructs": predicted_instructs}
 
 
 # ── scoring one case against its gold ────────────────────────────────────────────────
@@ -347,6 +361,13 @@ def score_case(case: dict, reading: dict) -> dict:
             for pq in reading.get("queries", ()):
                 if _token_overlap(sentence, (g["start"], g["end"]),
                                   (pq["start"], pq["end"])) >= OVERLAP:
+                    action_hits[gi] = True
+                    break
+        # an INSTRUCT action undetected by ops may still be detected by the channel —
+        # the clause containing the gold verb is imperative-shaped and was READ as one
+        if g.get("kind") in (None, "instruct") and not action_hits[gi]:
+            for pi in reading.get("instructs", ()):
+                if pi["start"] <= g["start"] and g["end"] <= pi["end"]:
                     action_hits[gi] = True
                     break
         # a RULE is detected only by the DECLARATION channel — an op "detecting" it would

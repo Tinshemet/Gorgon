@@ -848,11 +848,20 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
             # ⇒ and a VERBLESS FRAGMENT has nothing to do — the clause splitter cuts
             #   "launch everything BUT the vms carrying the test label" at `but`, and the
             #   carve-out NP alone drew probe_exists and delete_vm on the very set the
-            #   request spares. No operation word, no ask.
-            from .. import seam as _seam  # noqa: F401  (package anchor for the import below)
+            #   request spares.
+            # ⇒⇒ ⚠ **THE TEST IS IMPERATIVE SHAPE, NOT MANIFEST VOCABULARY — the first cut
+            #   demanded an _operation_words hit and silently skipped every clause whose
+            #   verb the manifest does not know: `restart it`, `snapshot the db vm`. Act
+            #   recall fell to 79% and the attach column bled, measured on the certified
+            #   set.** A clause is askable when it carries a manifest operation word OR
+            #   opens on an imperative (initial word followed by a determiner or object
+            #   pronoun — the same grammar mark scan uses).
             from .scan import _operation_words
-            _clause_words = set(str(clause).lower().split())
-            if not (_clause_words & _operation_words(board)):
+            _cw = str(clause).lower().split()
+            _dets = {"a", "an", "the", "every", "each", "all", "any", "both", "no",
+                     "it", "them", "me", "us"}
+            _imperative = len(_cw) >= 2 and _cw[1] in _dets
+            if not (set(_cw) & _operation_words(board)) and not _imperative:
                 continue
         except Exception:
             pass

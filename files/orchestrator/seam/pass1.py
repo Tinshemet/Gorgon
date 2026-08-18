@@ -343,6 +343,36 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
     #   and a stopped verb's particle (`go OVER`, `spin DOWN`, `make SURE`) — are consumed
     #   too. Every one of these consume rules exists because the certified eval showed the
     #   released word coming straight back through this fixpoint as a THING.
+    # ⇒⇒ **AND A CONDITION CLAUSE'S WORDS BELONG TO THE TRIGGER, ALL BUT ITS SUBJECT.**
+    #   Every stop added today re-released words the fixpoint re-offered as THINGS — `if`,
+    #   `is stopped`, `finishes` each came back as a row. One structural rule replaces the
+    #   per-word chase: in a clause the condition reader owns, release the HEAD words and
+    #   the tested predicate (copula onward, or the trailing event verb); KEEP the subject
+    #   chunk between them — `if ALPHA is stopped` keeps alpha, `after THE JOB finishes`
+    #   keeps the job, which is also the certified set's missing world-span.
+    from . import iso as _iso
+    from . import testimony as _TT
+    _heads = {"only", "even", "if", "unless", "when", "whenever", "after", "once",
+              "until", "before"}
+    _cops = {"is", "are", "was", "were"}
+    for _cl in _TT._clauses(request):
+        try:
+            _tail = (_cl if _iso.is_condition(_cl, board)
+                     else _iso.condition_tail(_cl, board))
+        except Exception:
+            _tail = None
+        if not _tail:
+            continue
+        _tw = _tail.lower().split()
+        _i = 0
+        while _i < len(_tw) and _tw[_i] in _heads:
+            _testimonial.add(_tw[_i])
+            _i += 1
+        _cop = next((_j for _j in range(_i, len(_tw)) if _tw[_j] in _cops), None)
+        if _cop is not None:
+            _testimonial.update(_tw[_cop:])
+        elif len(_tw) > _i + 1:
+            _testimonial.add(_tw[-1])         # the trailing event verb — `finishes`
     from .scan import _operation_words, _tokens as _sctoks, BOUNDARIES as _B, ENUMERATORS as _EN
     from .speech_act import WH_WORDS as _WHW
     _released = set()
@@ -356,7 +386,8 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
         _clause_initial = _i == 0 or _rtoks[_i - 1][0] in _B
         if (_clause_initial and _w not in _nouns_idx and _w not in _EN
                 and _w not in _WHW and _i + 1 < len(_rtoks)
-                and (_rtoks[_i + 1][0] in _dets or _rtoks[_i + 1][0] in _parts)):
+                and (_rtoks[_i + 1][0] in _dets or _rtoks[_i + 1][0] in _parts
+                     or _rtoks[_i + 1][0] in {"it", "them", "me", "us"})):
             _released.add(_w)
         if _w in _parts and _i > 0 and (_rtoks[_i - 1][0] in _ops
                                         or _rtoks[_i - 1][0] in _released):
