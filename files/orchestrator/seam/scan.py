@@ -441,8 +441,31 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
     left, count, comparator, matched = first, None, None, ""
     count_at: Optional[int] = None
     verbs = _operation_words(board)
+    # ⇒⇒ **A QUESTION'S SKIN IS NOT PART OF THE THING — the certified eval's last two
+    #   clean-single misses (2026-08-18).** *"IS alpha RUNNING"* span'd as the whole clause:
+    #   the fronting auxiliary walked in from the left and the asked predicate from the
+    #   right, so the row said `is alpha running` where the thing is `alpha`. Inversion and
+    #   wh-fronting are GRAMMAR (the scatter the answer re-gathers — the operator's
+    #   "quirk of how we read" finding), and both marks are closed classes:
+    #     · the clause OPENS on an auxiliary or a wh-word  ->  it is a question
+    #     · the clause-initial AUXILIARY is excluded from the span (the wh-word STAYS —
+    #       `which vms` keeps its determiner exactly as `every vm` does)
+    #     · the right walk stops at an auxiliary or at a bare DECLARED VALUE — `running` is
+    #       the asked property, not a descriptor of the machine
+    from .speech_act import AUXILIARIES as _AUX, WH_WORDS as _WH
+    clause_first = first
+    while clause_first > 0 and toks[clause_first - 1][0] not in BOUNDARIES:
+        clause_first -= 1
+    question = bool(toks) and clause_first < len(toks) and         toks[clause_first][0] in (_AUX | _WH)
+    asked_values = set()
+    if question:
+        for _kind, _spec in (board.kinds or {}).items():
+            for _vals in ((_spec or {}).get("attr_values") or {}).values():
+                asked_values |= {str(v).lower() for v in _vals}
     while left > 0 and toks[left - 1][0] not in BOUNDARIES:
         word = toks[left - 1][0]
+        if question and left - 1 == clause_first and word in _AUX:
+            break                             # the fronted auxiliary is the question's skin
         if word in verbs and word not in nouns:
             break                             # `snapshot` the noun still walks; the verb stops
         if word in ENUMERATORS or word.isdigit():
@@ -458,6 +481,8 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
     # ── RIGHT: modifiers and restrictors, to the end of the clause
     right = last
     while right < len(toks) and toks[right][0] not in BOUNDARIES:
+        if question and (toks[right][0] in _AUX or toks[right][0] in asked_values):
+            break                             # `are stopped` / `running` — the ASKED property
         right += 1
 
     # POSITIONS KEPT. Which digit was spent as the enumerator is a fact about a POSITION, and

@@ -731,6 +731,69 @@ def test_a_folded_reference_carries_what_its_clause_SAYS():
           conditions_from("on a network called lab", "vm", board) == {"network": "lab"})
 
 
+def test_the_repair_is_applied_before_anything_is_scanned():
+    """⇒⇒ **`self_repair` WAS BUILT 08-16 AND NEVER WIRED INTO PASS 1** — the dominant defect
+    class by its own name, priced by the certified baseline at 15 hallucinations across four
+    sentences: *"restart the web vm, no wait, the db one"* extracted BOTH targets and
+    declared `no wait` a THING.
+
+    ⇒ SUBTRACTIVE: the overridden text is never scanned. A retraction scans only what
+      FOLLOWS the marker; a correction drops the withdrawn clause's LAST declaration and
+      scans the replacement. The ghost row is never produced, so nothing has to catch it.
+    ⇒ THE MODEL IS MOCKED OUT — this test runs the deterministic half only, so it neither
+      needs nor loads ollama. The full-seam numbers come from the eval, not from here.
+    """
+    import engines.channel as CH
+    was = CH.constrained
+    CH.constrained = lambda *a, **k: None
+    try:
+        from orchestrator.seam import pass1 as P
+        board = Board()
+
+        def names(text):
+            return [r.name for r in P.run_scanned(text, board=board)]
+
+        check("a correction keeps ONLY the corrected target",
+              names("restart the web vm, no wait, the db one") == ["the db one"])
+        check("and the marker never becomes a row",
+              "no wait" not in names("restart the web vm, no wait, the db one"))
+        check("the lexical marker form works too",
+              names("stop alpha — sorry, i meant beta") == ["beta"])
+        check("a mid-request retraction keeps only what follows",
+              names("snapshot the db vm, scratch that, snapshot the web vm")
+              == ["snapshot the web vm"])
+        check("a bare retraction reads as nothing",
+              names("actually, never mind") == [])
+        # ⇒ THE CONTROLS — no marker, no mending
+        check("an ordinary request is untouched",
+              names("create a vm named alpha") == ["a vm named alpha"])
+        check("two clauses that repeat a verb are a REQUEST, not a repair",
+              names("stop alpha, stop beta") == ["alpha", "beta"])
+    finally:
+        CH.constrained = was
+
+
+def test_a_questions_skin_is_not_part_of_the_thing():
+    """⇒⇒ **THE CERTIFIED EVAL'S LAST TWO CLEAN-SINGLE MISSES (08-18).** `is alpha running`
+    span'd as the whole clause — the fronting auxiliary walked in from the left, the asked
+    predicate from the right. Inversion and wh-fronting are grammar (the scatter the answer
+    re-gathers), and both marks are closed classes: AUXILIARIES and WH_WORDS.
+    """
+    from orchestrator.seam.scan import scan
+    board = Board()
+    check("the fronted auxiliary is excluded",
+          scan("alpha", "is alpha running?", board).span == "alpha")
+    check("the wh-word STAYS — it is the NP's determiner",
+          scan("vms", "which vms are stopped?", board).span == "which vms")
+    check("descriptors inside the NP survive",
+          scan("vm", "is the red vm running", board).span == "the red vm")
+    # ⇒ THE CONTROLS — statements are untouched
+    check("a relative clause keeps its predicate",
+          scan("vm", "every vm that is running", board).span == "every vm that is running")
+    check("a pre-nominal participle stays inside",
+          scan("vm", "launch every stopped vm", board).span == "every stopped vm")
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "structure")

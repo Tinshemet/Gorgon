@@ -248,6 +248,42 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
 
     board = board or Board()
 
+    # ⇒⇒ **THE REPAIR IS APPLIED BEFORE ANYTHING IS SCANNED — `self_repair` was BUILT 08-16
+    #   AND NEVER WIRED HERE**, the dominant defect class by its own name. The certified
+    #   baseline priced the gap at 15 hallucinations across four sentences: *"restart the web
+    #   vm, no wait, the db one"* extracted BOTH targets and declared `no wait` as a THING.
+    #
+    #   ⇒ **SUBTRACTIVE, per the measured rule: the overridden text is never scanned at all.**
+    #     A retraction scans only what FOLLOWS the marker; a correction scans the before-text
+    #     and drops its LAST declaration — the correction overrides the nearest constituent —
+    #     then scans the replacement. No detector catches the ghost row afterwards, because
+    #     the ghost row is never produced.
+    #   ⇒ **AND THE ROUTE STILL ASKS.** The 08-16 ruling stands — a correction is reported,
+    #     never silently substituted; `self_repair.read` is consulted by the route exactly as
+    #     before. This is the READ settling on the corrected target (the eval spec's override
+    #     rule), which is a different job from deciding whether to act without confirming.
+    if trace is None or ("mended" not in [k for k, _v in (trace or [])]):
+        from . import self_repair as SR
+        mend = SR.read(request)
+        if mend and mend.kind == SR.RETRACTED:
+            at = str(request).lower().find(mend.marker)
+            tail = str(request)[at + len(mend.marker):].strip(" ,.—–") if at >= 0 else ""
+            if trace is not None:
+                trace.append(("mended", f"retracted -> {tail!r}"))
+            if not tail:
+                return []
+            return run_scanned(tail, board=board, model=model, temp=temp,
+                               timeout=timeout, trace=[("mended", "done")])
+        if mend and mend.kind == SR.REPAIRED and mend.offered:
+            kept = run_scanned(mend.withdrawn, board=board, model=model, temp=temp,
+                               timeout=timeout, trace=[("mended", "done")])[:-1]
+            fixed = run_scanned(mend.offered, board=board, model=model, temp=temp,
+                                timeout=timeout, trace=[("mended", "done")])
+            if trace is not None:
+                trace.append(("mended", f"repaired: dropped last of {mend.withdrawn!r}, "
+                                        f"read {mend.offered!r}"))
+            return kept + fixed
+
     def ask(question: str, built: dict):
         try:
             got = constrained(question, request, built,
