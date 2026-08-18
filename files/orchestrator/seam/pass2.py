@@ -861,7 +861,21 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
             _dets = {"a", "an", "the", "every", "each", "all", "any", "both", "no",
                      "it", "them", "me", "us"}
             _imperative = len(_cw) >= 2 and _cw[1] in _dets
-            if not (set(_cw) & _operation_words(board)) and not _imperative:
+            # ⇒ THE OP WORD MUST SIT IN VERB POSITION — clause-initial. `the vms carrying
+            #   the test LABEL` contains `label` the NOUN, and the anywhere-∩ test asked a
+            #   bare NP what to do; probe_exists and delete_vm came back on the very set
+            #   the request spares. First word or imperative shape, nothing else.
+            if not (_cw and _cw[0] in _operation_words(board)) and not _imperative:
+                continue
+            # ⇒ A WITHDRAWN OR MARKER CLAUSE IS NEVER ASKED — pass 1's mend cut the rows,
+            #   and this loop went on asking the retracted clause what to DO (sc-0003:
+            #   create_snapshot AND delete_vm from "snapshot the db vm, scratch that").
+            from . import self_repair as _SRR
+            _mend = _SRR.read(request)
+            _cl_low = str(clause).lower()
+            if _mend and (_mend.marker in _cl_low
+                          or (_mend.kind == _SRR.RETRACTED and _mend.withdrawn
+                              and _cl_low.strip() in _mend.withdrawn.lower())):
                 continue
         except Exception:
             pass
@@ -872,8 +886,19 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
                               model=model, temp=temp, timeout=timeout) or {}
         except Exception:
             continue
+        # ⇒ A QUERY CLAUSE MAY OBSERVE AND NEVER MUTATE — *"tell me if the db vm
+        #   restarted"* drew add_label AND stop_vm. Interrogative or wrapper-headed, the
+        #   answer is information; probes absorb into the query act, mutations are refused
+        #   at birth. (Precision over housekeeping, the operator's doctrine: the probe is
+        #   padding at worst, the stop_vm is a wrong CHOICE.)
+        from .speech_act import AUXILIARIES as _AUXX, WH_WORDS as _WHX, WRAPPERS as _WRAP
+        _q_clause = (_cw and (_cw[0] in _AUXX or _cw[0] in _WHX)) or any(
+            str(clause).lower().startswith(w) or f" {w} " in f" {str(clause).lower()} "
+            for w in _WRAP)
         for step in got.get("operations") or []:
             if isinstance(step, dict) and step.get("operator") and step.get("on"):
+                if _q_clause and not str(step["operator"]).startswith("probe_"):
+                    continue
                 out.append((clause, Operation(step["operator"], step["on"], step.get("value"))))
     # ⇒ THE PER-CLAUSE LEAK'S SIGNATURE IS THE DUPLICATE — the model answers the whole
     #   request from each clause, so the same (operator, on, value) arrives twice (9 of
@@ -881,11 +906,40 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
     #   occurrence keeps its clause, the copies are dropped. Subtractive.
     seen_ops = set()
     deduped = []
+    handles = {s_.handle: s_ for s_ in table}
+    # a setter that REFS another kind demands a second name — read from the manifest once
+    _needs_value = set()
+    for _kspec in (board.kinds or {}).values():
+        for _sname, _sspec in ((_kspec or {}).get("setters") or {}).items():
+            if isinstance(_sspec, dict) and _sspec.get("refs"):
+                _needs_value.add(_sname)
     for clause, op in out:
         key = (op.operator, op.on, op.value)
         if key in seen_ops:
             continue
         seen_ops.add(key)
+        mutating = not str(op.operator).startswith("probe_")
+        if mutating:
+            # ⇒ MANIFEST-INCOMPLETE: an op whose setter refs another kind, emitted with no
+            #   second name (add_vm_to_network value=None from "snapshot every vm") — a
+            #   step that could never run, refused at birth
+            if op.operator in _needs_value and not op.value:
+                continue
+            # ⇒ THE CROSS-CLAUSE LEAK, mutating arm only: the target must be VISIBLE from
+            #   the asking clause — its handle word or its row's span text. `put web on
+            #   lab` keeps `web` (the handle is in the clause); `stop_vm on test_vms` from
+            #   "launch everything" has neither and is the leak itself.
+            _cl = str(clause).lower()
+            def _visible(handle):
+                if not handle:
+                    return True
+                sym = handles.get(handle)
+                span = str(sym.row.span).lower() if sym else ""
+                return (any(w in _cl.split() for w in str(handle).lower().split("_"))
+                        or (span and (span in _cl or _cl in span
+                                      or any(w in _cl.split() for w in span.split()))))
+            if not _visible(op.on):
+                continue
         deduped.append((clause, op))
     return deduped
 

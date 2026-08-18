@@ -284,7 +284,14 @@ def _operation_words(board: Board) -> set:
     out |= {"make", "put", "give", "take", "launch", "start", "stop", "ping", "clone", "check",
             "ensure", "confirm", "get", "run", "carry", "carries", "goes", "go", "answer",
             "answers", "respond", "responds", "reach", "connect", "wire", "spin", "boot"}
-    return out - {"network", "snapshot", "template", "profile", "file", "vm"}
+    # ⇒ D5's root, closed 2026-08-18: `re.findall` shreds `add_vm_to_network` into
+    #   segments and every segment became a "verb" — `to`, `as`, `of` let *"it boots TO a
+    #   blue screen"* pass a does-this-clause-command-anything test, and 13 wrong-choice
+    #   acts traced back through this set. Function words are a closed class; the noun
+    #   segments and their plurals were already half-subtracted.
+    return out - {"network", "snapshot", "template", "profile", "file", "vm",
+                  "networks", "snapshots", "templates", "profiles", "files", "vms",
+                  "to", "of", "as", "on", "in", "from", "with", "at", "by", "for", "the"}
 
 
 # ── THE DETERMINER DECIDES EXISTENCE, WHERE IT DECIDES AT ALL ─────────────────────────
