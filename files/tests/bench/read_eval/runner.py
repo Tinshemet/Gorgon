@@ -164,6 +164,16 @@ def read_case(sentence: str, board=None) -> dict:
                                 "type": "evidence", "where": {},
                                 "start": where[0] if where else None,
                                 "end": where[1] if where else None})
+    # ⇒ and the STRUCTURAL testimony predicates (D1's front door, 08-18) — the seam reads
+    #   "is not working" now, and a reading the runner does not collect scores as a miss
+    #   in both directions
+    from orchestrator.seam import testimony as _TT
+    for t in _TT.read(sentence):
+        where = _locate(sentence, t.predicate)
+        predicted_spans.append({"row": None, "span": t.predicate, "kind": "evidence",
+                                "type": "evidence", "where": {},
+                                "start": where[0] if where else None,
+                                "end": where[1] if where else None})
     # ⇒ v1.2 — the seam's CONDITION reading, collected the same way evidence was: a clause
     #   `iso.is_condition` flags becomes a predicted trigger at its located offsets. A clock
     #   phrase ("at 21:30") has NO offset-bearing reader today, so it can never be predicted —
@@ -237,6 +247,18 @@ def read_case(sentence: str, board=None) -> dict:
             at = _locate(sentence, clause)
             if at:
                 predicted_reports.append({"clause": clause, "start": at[0], "end": at[1]})
+            continue
+        # ⇒ the STRUCTURAL testimony reading (D1's front door) — the runner asks everything
+        #   the seam reads, and the seam now reads unquoted symptom clauses by their shape
+        from orchestrator.seam import testimony as TT
+        try:
+            hit = TT._of_clause(clause)
+        except Exception:
+            hit = None
+        if hit:
+            at = _locate(sentence, hit.clause)
+            if at:
+                predicted_reports.append({"clause": hit.clause, "start": at[0], "end": at[1]})
     return {"rows": predicted_spans, "operations": operations,
             "triggers": predicted_triggers, "queries": predicted_queries,
             "rules": predicted_rules, "reports": predicted_reports}

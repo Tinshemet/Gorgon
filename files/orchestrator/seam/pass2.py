@@ -835,6 +835,11 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
                 continue
             if _sa.act_of(clause, board) == _sa.DECLARATION:
                 continue
+            # a SYMPTOM is described, never executed — the baseline billed delete_vm
+            # emitted from "is not working" (16 hallucinated acts on the diagnosis stratum)
+            from . import testimony as _T
+            if _T.is_testimony(clause, board):
+                continue
         except Exception:
             pass
         payload = (f"{_payload(request, table, operators, rejected, needed)}\n\n"

@@ -334,10 +334,16 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
             first -= 1
         return toks[first][0] in (_AUX | _WH)
 
+    # ⇒ and a TESTIMONY predicate's words are consumed the same way — the symptom belongs
+    #   to the report reading, and offering `working` back as a candidate THING is the same
+    #   ghost the asked-property rule stops (both found by the certified eval, same day)
+    from . import testimony as _T
+    _testimonial = {w for t in _T.read(request) for w in t.predicate.split()}
+
     for _round in range(4):
         claimed = [(g.start, g.end) for g in (scan(a, request, board) for a in anchors) if g]
         fresh = [w for w in uncovered(request, claimed, board)
-                 if w not in anchors and not _asked(w)]
+                 if w not in anchors and not _asked(w) and w not in _testimonial]
         if not fresh:
             break
         anchors += fresh

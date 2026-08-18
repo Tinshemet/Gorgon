@@ -479,10 +479,25 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
         comparator, matched, left = _comparator_before(toks, left)
 
     # ── RIGHT: modifiers and restrictors, to the end of the clause
+    # ⇒ AND IN A TESTIMONY CLAUSE THE WALK STOPS AT THE MALFUNCTION AUX — *"vm2 is not
+    #   working"* fused into ONE row on the certified baseline; the patient is the thing,
+    #   the symptom is `testimony`'s to read (D1's front door, 08-18).
+    pred_first = None
+    if not question and toks:
+        from . import testimony as _T
+        clause_end = last
+        while clause_end < len(toks) and toks[clause_end][0] not in BOUNDARIES:
+            clause_end += 1
+        _hit = _T._of_clause(
+            request[toks[clause_first][1]:toks[clause_end - 1][2]])
+        if _hit:
+            pred_first = _hit.predicate.split()[0]
     right = last
     while right < len(toks) and toks[right][0] not in BOUNDARIES:
         if question and (toks[right][0] in _AUX or toks[right][0] in asked_values):
             break                             # `are stopped` / `running` — the ASKED property
+        if pred_first and toks[right][0] == pred_first and right >= last:
+            break                             # the symptom belongs to the testimony reading
         right += 1
 
     # POSITIONS KEPT. Which digit was spent as the enumerator is a fact about a POSITION, and
