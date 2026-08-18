@@ -462,12 +462,29 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
         for _kind, _spec in (board.kinds or {}).items():
             for _vals in ((_spec or {}).get("attr_values") or {}).values():
                 asked_values |= {str(v).lower() for v in _vals}
+    # the phrasal PARTICLES a stopped verb strands on the span's edge — `go OVER the event
+    # log`, `spin DOWN the render vms` — a closed class, plus `sure`: the ensure-idiom's
+    # second half (`make SURE the lab network exists`), exactly one word, documented here.
+    _PARTICLES = {"up", "down", "off", "out", "over", "away", "back", "sure"}
+    # DETERMINERS for the imperative rule below — closed, and `that` is deliberately absent
+    _DETS = {"a", "an", "the", "every", "each", "all", "any", "both", "no"}
     while left > 0 and toks[left - 1][0] not in BOUNDARIES:
         word = toks[left - 1][0]
         if question and left - 1 == clause_first and word in _AUX:
             break                             # the fronted auxiliary is the question's skin
         if word in verbs and word not in nouns:
             break                             # `snapshot` the noun still walks; the verb stops
+        # ⇒ **AN IMPERATIVE OPENS ON ITS VERB, AND THE MANIFEST DOES NOT KNOW EVERY VERB.**
+        #   `restart` / `clone` / `list` have no manifest operation, so the verb-stop above
+        #   never fired and the row fused (`restart the web vm` — the certified eval's
+        #   coordination cell). The GRAMMAR mark: the clause-initial word, when what follows
+        #   it is a DETERMINER, is the verb of an imperative — `restart THE…`, `clone THE…`.
+        #   `alpha won't…` keeps alpha (aux follows, not a determiner); `the web vm, …`
+        #   keeps `the` (it IS a determiner, not followed-by one).
+        if (left - 1 == clause_first and word not in nouns
+                and word not in ENUMERATORS and word not in _WH
+                and left < len(toks) and toks[left][0] in _DETS):
+            break
         if word in ENUMERATORS or word.isdigit():
             count = int(word) if word.isdigit() else ENUMERATORS[word]
             count_at = left - 1
@@ -477,6 +494,11 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
         left -= 1
     if count is None:                       # a comparator can sit alone: "no more than two"
         comparator, matched, left = _comparator_before(toks, left)
+    # the stranded particle: the walk broke at `go`/`spin`/`make`, leaving `over`/`down`/
+    # `sure` on the edge — the particle belongs to the VERB, never to the thing
+    while (left < first and toks[left][0] in _PARTICLES
+           and left > 0 and toks[left - 1][0] in verbs):
+        left += 1
 
     # ── RIGHT: modifiers and restrictors, to the end of the clause
     # ⇒ AND IN A TESTIMONY CLAUSE THE WALK STOPS AT THE MALFUNCTION AUX — *"vm2 is not
@@ -492,6 +514,30 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
             request[toks[clause_first][1]:toks[clause_end - 1][2]])
         if _hit:
             pred_first = _hit.predicate.split()[0]
+        if pred_first is None:
+            # ⇒ and the EMBEDDED CONDITION is not part of the thing either — *"spin down the
+            #   render vms AFTER THE JOB FINISHES"* kept the trigger inside the row while
+            #   `condition_tail` was reading it. One reading, one owner.
+            from . import iso as _iso
+            try:
+                _tail = _iso.condition_tail(
+                    request[toks[clause_first][1]:toks[clause_end - 1][2]], board)
+            except Exception:
+                _tail = None
+            if _tail:
+                pred_first = _tail.split()[0]
+        if pred_first is None:
+            # ⇒ the DEONTIC split, same mechanic: *"every vm MUST CARRY a label"* fused into
+            #   one row. A deontic modal with a subject before it and no relativizer opens
+            #   the RULE'S predicate — the governed thing is the row, the obligation is the
+            #   rule reading's. `speech_act.DEONTIC` is the declared class.
+            from .speech_act import DEONTIC as _DEONTIC
+            for _i in range(clause_first + 1, clause_end):
+                if toks[_i][0] in _DEONTIC and not any(
+                        toks[_j][0] in {"that", "which", "who"}
+                        for _j in range(clause_first, _i)):
+                    pred_first = toks[_i][0]
+                    break
     right = last
     while right < len(toks) and toks[right][0] not in BOUNDARIES:
         if question and (toks[right][0] in _AUX or toks[right][0] in asked_values):

@@ -840,6 +840,20 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
             from . import testimony as _T
             if _T.is_testimony(clause, board):
                 continue
+            # ⇒ a NEGATED IMPERATIVE forbids — asking what to DO about "don't stop the web
+            #   vm" invited probe_exists and add_label (the certified eval, negation cell)
+            _head = str(clause).lower().split()[:2]
+            if _head[:1] in (["don't"], ["never"]) or _head == ["do", "not"]:
+                continue
+            # ⇒ and a VERBLESS FRAGMENT has nothing to do — the clause splitter cuts
+            #   "launch everything BUT the vms carrying the test label" at `but`, and the
+            #   carve-out NP alone drew probe_exists and delete_vm on the very set the
+            #   request spares. No operation word, no ask.
+            from .. import seam as _seam  # noqa: F401  (package anchor for the import below)
+            from .scan import _operation_words
+            _clause_words = set(str(clause).lower().split())
+            if not (_clause_words & _operation_words(board)):
+                continue
         except Exception:
             pass
         payload = (f"{_payload(request, table, operators, rejected, needed)}\n\n"

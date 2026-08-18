@@ -339,11 +339,34 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
     #   ghost the asked-property rule stops (both found by the certified eval, same day)
     from . import testimony as _T
     _testimonial = {w for t in _T.read(request) for w in t.predicate.split()}
+    # ⇒ and the words the SPAN WALK releases — the imperative's own verb (`restart THE…`)
+    #   and a stopped verb's particle (`go OVER`, `spin DOWN`, `make SURE`) — are consumed
+    #   too. Every one of these consume rules exists because the certified eval showed the
+    #   released word coming straight back through this fixpoint as a THING.
+    from .scan import _operation_words, _tokens as _sctoks, BOUNDARIES as _B, ENUMERATORS as _EN
+    from .speech_act import WH_WORDS as _WHW
+    _released = set()
+    _ops = _operation_words(board)
+    _dets = {"a", "an", "the", "every", "each", "all", "any", "both", "no"}
+    _parts = {"up", "down", "off", "out", "over", "away", "back", "sure"}
+    _rtoks = _sctoks(request)
+    _nouns_idx = {w for w in
+                  __import__("orchestrator.seam.scan", fromlist=["x"])._index(board)}
+    for _i, (_w, _s0, _e0) in enumerate(_rtoks):
+        _clause_initial = _i == 0 or _rtoks[_i - 1][0] in _B
+        if (_clause_initial and _w not in _nouns_idx and _w not in _EN
+                and _w not in _WHW and _i + 1 < len(_rtoks)
+                and (_rtoks[_i + 1][0] in _dets or _rtoks[_i + 1][0] in _parts)):
+            _released.add(_w)
+        if _w in _parts and _i > 0 and (_rtoks[_i - 1][0] in _ops
+                                        or _rtoks[_i - 1][0] in _released):
+            _released.add(_w)
 
     for _round in range(4):
         claimed = [(g.start, g.end) for g in (scan(a, request, board) for a in anchors) if g]
         fresh = [w for w in uncovered(request, claimed, board)
-                 if w not in anchors and not _asked(w) and w not in _testimonial]
+                 if w not in anchors and not _asked(w) and w not in _testimonial
+                 and w not in _released]
         if not fresh:
             break
         anchors += fresh
