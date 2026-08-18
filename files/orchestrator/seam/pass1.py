@@ -298,6 +298,12 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
     from .scan import clause_around, uncovered, scan
     said = ask(S.NAMES_Q, S.names_schema()) or []
     anchors = anchors_in(request, board) + [a for a in said if a.lower() in request.lower()]
+    # ⇒⇒ **THE CONSUMPTION GATE GUARDS EVERY ANCHOR SOURCE, OR IT GUARDS NOTHING.** The
+    #   asked/testimonial/released filters sat on the `uncovered` fixpoint only — and the
+    #   MODEL's volunteered anchors walked straight past them: `failed`, `anyway`, `you
+    #   get`, `me if`, `never delete` all came back as THINGS on the certified set, every
+    #   one a word some reading had already consumed. The gate is hoisted above the merge
+    #   so the model's answers pass through the same door as everything else.
     # ⇒ AND ANYTHING STILL UNCLAIMED IS A CANDIDATE OBJECT — TO A FIXPOINT.
     #
     #   `n1`, `golden`, `db` are not declared nouns, so nothing above reaches them, and rung 9
@@ -373,6 +379,16 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
             _testimonial.update(_tw[_cop:])
         elif len(_tw) > _i + 1:
             _testimonial.add(_tw[-1])         # the trailing event verb — `finishes`
+    # the consumed CONSTRUCTS the model kept re-offering — every one already RULED on:
+    # courtesy marks nothing (cc-0001) · `tell me` is the wrapper (cc-0003) · a negated
+    # imperative's head forbids (neg-0002) · a discourse pivot is not a thing (mc-0002) ·
+    # a filled pause is not a thing (sc-0004)
+    low_req = str(request).lower()
+    for _phrase in ("when you get a chance", "if you get a chance", "tell me if",
+                    "tell me which", "tell me", "don't", "do not", "never",
+                    "anyway", "er", "um", "no wait", "scratch that", "i meant"):
+        if _phrase in low_req:
+            _testimonial.update(_phrase.split())
     from .scan import _operation_words, _tokens as _sctoks, BOUNDARIES as _B, ENUMERATORS as _EN
     from .speech_act import WH_WORDS as _WHW
     _released = set()
@@ -384,14 +400,24 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
                   __import__("orchestrator.seam.scan", fromlist=["x"])._index(board)}
     for _i, (_w, _s0, _e0) in enumerate(_rtoks):
         _clause_initial = _i == 0 or _rtoks[_i - 1][0] in _B
+        from .scan import attribute_words as _attrw
+        _cues = set(_attrw(board))
         if (_clause_initial and _w not in _nouns_idx and _w not in _EN
-                and _w not in _WHW and _i + 1 < len(_rtoks)
+                and _w not in _WHW and _w not in _cues and _i + 1 < len(_rtoks)
                 and (_rtoks[_i + 1][0] in _dets or _rtoks[_i + 1][0] in _parts
                      or _rtoks[_i + 1][0] in {"it", "them", "me", "us"})):
             _released.add(_w)
         if _w in _parts and _i > 0 and (_rtoks[_i - 1][0] in _ops
                                         or _rtoks[_i - 1][0] in _released):
             _released.add(_w)
+
+    # the gate, applied to the ALREADY-MERGED list (manifest + model) before any scan:
+    def _consumed(word: str) -> bool:
+        w = str(word).lower().strip()
+        return (w in _testimonial or w in _released or _asked(w)
+                or all(part in _testimonial or part in _released
+                       for part in w.split()) and bool(w.split()))
+    anchors = [a for a in anchors if not _consumed(a)]
 
     for _round in range(4):
         claimed = [(g.start, g.end) for g in (scan(a, request, board) for a in anchors) if g]
@@ -403,6 +429,7 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
         anchors += fresh
     if trace is not None:
         trace.append(("rounds", _round + 1))
+    # (the containment fold happens on the built rows, below at the fold site)
     present = kinds_named(request, board)
     if trace is not None:
         trace.append(("anchors", list(anchors)))
@@ -492,8 +519,16 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
                     #     the words are still recorded and the meaning is left for pass 2.
                     again = (scan(anchor, request, board, at=first.start, kind_hint=kept.kind)
                              if len(rows) == 1 else None)
-                    said = conditions_from(again.modifiers, again.kind, board,
-                                           span=again.span) if again else {}
+                    # ⇒ READ THE CLAUSE, NOT THE ROW'S SPAN — the verb-stop (08-18) rightly
+                    #   excludes `label` from the SPAN, but `label` is also the CUE this
+                    #   read needs: `label it prod` folded to {} deterministically and the
+                    #   LIVE model had been papering over it with a whole-clause anchor.
+                    #   The clause still holds the cue; the span never will again.
+                    said = {}
+                    if again:
+                        _cl = clause_around(request, first.span)
+                        said = conditions_from(_cl, again.kind or kept.kind, board,
+                                               span=_cl)
                     merged = dict(kept.where or {})
                     for attr, value in said.items():
                         merged.setdefault(attr, value)
@@ -557,6 +592,32 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
             #   overlapping row made the `core` anchor collide with the `every vm` row rather than
             #   with the `a network called core` row it belongs to — and rung 8 declared that
             #   network TWICE, once per anchor.
+            # ⇒ CONTAINMENT IS COLLISION TOO — `a week on the backup store` arrived as its
+            #   own row INSIDE `the snapshots older than a week on the backup store`, and
+            #   the equality fold could not see it. A span strictly inside another
+            #   declaration's span is a mention of it, unless marked distinct (rung 6's
+            #   rule holds: `_marks_distinct` spans never fold).
+            # ⇒ AND ONLY WITHIN A KIND. `a network called lab` sits inside `3 vms on a
+            #   network called lab` and is NOT a mention of the machines — it is rung 3's
+            #   network, a second thing of a second kind. A contained span folds only when
+            #   its kind agrees (or is still unsettled on both sides).
+            _inside = next((i for i, r in enumerate(rows)
+                            if str(first.span).strip() and str(r.span).strip()
+                            and str(first.span).strip() in str(r.span).strip()
+                            and str(first.span).strip() != str(r.span).strip()
+                            and ((first.kind == r.kind and first.kind is not None)
+                                 or (first.kind is None and r.kind is not None))
+                            and not _marks_distinct(first.span)), None)
+            if _inside is not None:
+                kept = rows[_inside]
+                rows[_inside] = S.declare_from(kept.name, kept.object_type, kept.where,
+                                               kept.existence, board,
+                                               references=list(kept.references)
+                                               + [first.span],
+                                               count=kept.count,
+                                               comparator=kept.comparator,
+                                               span=kept.span, identity=kept.identity)
+                continue
             clash = next((i for i, r in enumerate(rows)
                           if str(r.span).strip() == str(first.span).strip()), None)
             if clash is None:

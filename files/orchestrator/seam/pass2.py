@@ -875,7 +875,19 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
         for step in got.get("operations") or []:
             if isinstance(step, dict) and step.get("operator") and step.get("on"):
                 out.append((clause, Operation(step["operator"], step["on"], step.get("value"))))
-    return out
+    # ⇒ THE PER-CLAUSE LEAK'S SIGNATURE IS THE DUPLICATE — the model answers the whole
+    #   request from each clause, so the same (operator, on, value) arrives twice (9 of
+    #   them on the certified set). A repeated step is never information; the first
+    #   occurrence keeps its clause, the copies are dropped. Subtractive.
+    seen_ops = set()
+    deduped = []
+    for clause, op in out:
+        key = (op.operator, op.on, op.value)
+        if key in seen_ops:
+            continue
+        seen_ops.add(key)
+        deduped.append((clause, op))
+    return deduped
 
 
 def operations_for(request: str, rows: List[S.Declared], board: Optional[Board] = None,

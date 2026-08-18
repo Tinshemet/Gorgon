@@ -495,10 +495,18 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
                 and toks[left][0] in _DETS):
             break
         # a word followed by an OBJECT PRONOUN is a verb even when the manifest also knows
-        # it as a noun — `snapshot IT` cannot be a noun phrase, by grammar
+        # it as a noun — `snapshot IT` cannot be a noun phrase, by grammar.
+        # ⇒ UNLESS the word is an ATTRIBUTE CUE: `LABEL it prod` needs `label` in the
+        #   modifiers or conditions_from cannot read the value — the certified set lost
+        #   {label: prod} to this exact release (the fixture that priced it: ana-0001's
+        #   sibling). The cue's reading outranks the release.
         if (left - 1 == clause_first and left < len(toks)
                 and toks[left][0] in {"it", "them", "me", "us"}
-                and word not in ENUMERATORS and word not in _WH):
+                and word not in ENUMERATORS and word not in _WH
+                and not any(_cue_hit(word, c)
+                            for spec in (board.kinds or {}).values()
+                            for c in list((spec or {}).get("attrs") or [])
+                            + list(((spec or {}).get("aliases") or {}).keys()))):
             break
         if word in ENUMERATORS or word.isdigit():
             count = int(word) if word.isdigit() else ENUMERATORS[word]

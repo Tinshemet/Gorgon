@@ -700,6 +700,13 @@ def test_a_folded_reference_carries_what_its_clause_SAYS():
       `{label: it}` and `on their own network` read `{network: own}` — both live before any of
       this, both now declined from the manifest's own declarations.
     """
+    # ⇒ THE CHANNEL IS MOCKED — this test asserted a fold that rides a MODEL anchor and so
+    #   flickered with the KV cache (one flake in the 15:20 suite, green standalone twice).
+    #   A suite test that consults the live model is a nondeterministic suite; the
+    #   deterministic half is what this fixture pins.
+    import engines.channel as CH
+    _was = CH.constrained
+    CH.constrained = lambda *a, **k: None
     from orchestrator.seam import pass1 as P
     from orchestrator.seam.scan import conditions_from
     board = Board()
@@ -729,6 +736,7 @@ def test_a_folded_reference_carries_what_its_clause_SAYS():
           rows("create a vm named beta and then launch it") == [("vm", {"name": "beta"})])
     check("a declared value beside a cue still reads",
           conditions_from("on a network called lab", "vm", board) == {"network": "lab"})
+    CH.constrained = _was
 
 
 def test_the_repair_is_applied_before_anything_is_scanned():
