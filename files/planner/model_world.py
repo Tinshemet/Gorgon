@@ -210,10 +210,15 @@ def seams(world: World):
         spec = (world.kinds or {}).get(kind) or {}
         key = spec.get("key")
         rows = world.state.get(kind) or {}
+        # ⇒ G0, closed 2026-08-18: `not` may carry ONE carve or a LIST of them —
+        #   `Declared.excludes` is a tuple, and the single-dict read silently dropped
+        #   every exclusion after the first ON THE PATH THAT PROVES A PROGRAM LEGAL.
+        #   A member is out when ANY carve matches it.
         carve = sel.get("not") or {}
+        carves = carve if isinstance(carve, (list, tuple)) else ([carve] if carve else [])
         return sorted(n for n, row in rows.items()
                       if _match(row, n, key, sel)
-                      and not (carve and _match(row, n, key, carve)))
+                      and not any(_match(row, n, key, c) for c in carves if c))
 
     def _shared_value(kind, members):
         """A value of the CONNECTIVE attribute that every member holds, or None.

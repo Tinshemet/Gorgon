@@ -971,6 +971,7 @@ def conditions_from(modifiers: str, kind: Optional[str],
             nouns_here[str(noun).lower()] = kind_name
             nouns_here[str(noun).lower() + "s"] = kind_name
 
+    named_by_cue: set = set()
     for i, word in enumerate(words):                      # 0 · a naming cue names the KEY
         if word not in NAMING_CUES or not key_attr:
             continue
@@ -991,8 +992,16 @@ def conditions_from(modifiers: str, kind: Optional[str],
                     and w not in _refers), None)
         if nxt:
             out[key_attr] = _whole(nxt)
+            named_by_cue.add(key_attr)
             break
 
+    # ⇒⇒ **RULE 2 MUST NOT CLOBBER RULE 0's KEY — re-armed 2026-08-18.** `named` stems to
+    #   `nam`, a vm's key is `name`, so `_cue_hit` fires on the very cue rule 0 just spent,
+    #   and the descriptor arm overwrote the naming arm's answer with a single word. The
+    #   guard was first written during the rejected unquoted-name extension and was LOST in
+    #   that revert — `git checkout` took the guard down with the change it guarded. Latent
+    #   ever since (both arms currently emit the same word) and priced at twenty minutes of
+    #   "the fix isn't firing" the first time it bit. The arm that OWNS a slot keeps it.
     for i, word in enumerate(words):
         if word in values:                                   # 1 · a value names its attribute
             attr, value = values[word]
@@ -1021,6 +1030,8 @@ def conditions_from(modifiers: str, kind: Optional[str],
         if word in literal:                   # inside the operator's quotes — a literal, not a cue
             continue
         for cue, real in attrs.items():                      # 2 · an attribute takes a value
+            if real in named_by_cue:      # the naming arm owns this slot — never trimmed back
+                continue
             if _cue_hit(word, cue):                          #     (the test is `_cue_hit`)
                 # LOOK BOTH WAYS. English puts the value either side of the attribute word —
                 # *"labelled 'red'"* but *"the 'prod' label"* — and taking only the next word

@@ -325,6 +325,16 @@ def score_case(case: dict, reading: dict) -> dict:
     #   targets is one of g's attached objects (through the span match). Detection = at least
     #   one absorbed op; anything absorbed by nothing is hallucinated.
     from .schema import members_of
+    # ⇒⇒ **PRECISION IS NOT HOUSEKEEPING — the operator's doctrine, 08-18:** *"it could
+    #   have 100% precision but 10% housekeeping or the opposite... if they leach off of
+    #   each other preserve precision."* An unasked-for op splits by what it would DO:
+    #     MUTATING  (create/stop/label/delete…)  a wrong CHOICE — bills PRECISION
+    #     OBSERVING (probe_*)                    inert padding — bills HOUSEKEEPING
+    #   The line is the manifest's own: probes are generated per observed fact and change
+    #   nothing; everything else executes intent. Two numbers, never summed.
+    def _observes(operator: str) -> bool:
+        return str(operator).startswith("probe_")
+
     attached_rows: Dict[int, set] = {}
     for att in case["gold"]["attachments"]:
         # ⇒ an `excluded` member is an ANTI-object: it does not license absorption, so an
@@ -333,7 +343,7 @@ def score_case(case: dict, reading: dict) -> dict:
             span_match[ix] for ix, role in members_of(att)
             if span_match[ix] is not None and role != "excluded"}
     absorbed: Dict[int, List[int]] = {}
-    hallucinated_actions = 0
+    hallucinated_actions = housekeeping_actions = 0
     for k, op in enumerate(reading["operations"]):
         home = None
         for gi, g in enumerate(gold_actions):
@@ -349,7 +359,10 @@ def score_case(case: dict, reading: dict) -> dict:
                 home = gi
                 break
         if home is None:
-            hallucinated_actions += 1
+            if _observes(op["operator"]):
+                housekeeping_actions += 1
+            else:
+                hallucinated_actions += 1
         else:
             absorbed.setdefault(home, []).append(k)
     action_hits = [gi in absorbed for gi in range(len(gold_actions))]
@@ -451,6 +464,7 @@ def score_case(case: dict, reading: dict) -> dict:
             "trigger_total": trigger_total, "trigger_hit": trigger_hit,
             "hallucinated_spans": hallucinated_spans,
             "hallucinated_actions": hallucinated_actions,
+            "housekeeping_actions": housekeeping_actions,
             "pass1_misses": len(gold_spans) - detection,
             "pass2_misses": att_total - att_hit}
 
@@ -460,7 +474,8 @@ def _cell() -> Dict[str, float]:
     return {k: 0 for k in ("cases", "gold_spans", "detected", "boundary_exact",
                            "boundary_f1", "gold_actions", "actions_detected",
                            "attach_total", "attach_hit", "trigger_total", "trigger_hit",
-                           "hallucinated_spans", "hallucinated_actions")}
+                           "hallucinated_spans", "hallucinated_actions",
+                           "housekeeping_actions")}
 
 
 def aggregate(scored: List[Tuple[dict, dict]]) -> dict:
@@ -545,7 +560,7 @@ def _table(report: dict) -> str:
     lines = ["", f"  PER-STRATUM (detection threshold {OVERLAP:.0%} token overlap; action "
                  f"boundaries NOT measured)", ""]
     header = (f"    {'stratum':18} {'cases':>5} {'detect':>7} {'exact':>6} {'attach':>7} "
-              f"{'trigger':>8} {'halluc':>7}")
+              f"{'trigger':>8} {'halluc':>7} {'hkeep':>6}")
     lines.append(header)
     agg = report["aggregate"]
     for name in list(STRATA) + [CLEAN] + list(NOISE):
@@ -558,8 +573,9 @@ def _table(report: dict) -> str:
         att = f"{c['attach_hit']}/{c['attach_total']}" if c["attach_total"] else "—"
         trg = f"{c['trigger_hit']}/{c['trigger_total']}" if c["trigger_total"] else "—"
         hal = c["hallucinated_spans"] + c["hallucinated_actions"]
+        hk = c.get("housekeeping_actions", 0)
         lines.append(f"    {name:18} {c['cases']:>5} {det:>7} {exact:>6} {att:>7} "
-                     f"{trg:>8} {hal:>7}")
+                     f"{trg:>8} {hal:>7} {hk:>6}")
     if report["degradation"]:
         lines.append("\n  PAIRED DEGRADATION (clean minus noised, span detection)")
         for d in report["degradation"]:

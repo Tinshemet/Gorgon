@@ -448,9 +448,14 @@ def _select(sel) -> str:
     # EXCEPT is its OWN clause, not another WHERE term — `WHERE EXCEPT name = 'db'` is
     # not English and not SQL. It follows WHERE when both are present, so the sentence
     # reads in the order the operator said it: this set, minus these.
+    # ⇒ G0's render half, closed 2026-08-18: a LIST of carves printed NOTHING — the
+    #   EXCEPT clause vanished from the very text a human verifies. Each carve renders
+    #   as its own EXCEPT, in the order the program holds them.
     carve = sel.get("not")
-    if isinstance(carve, dict) and carve:
-        out += f" {_w('except')} " + " AND ".join(f"{k} = '{v}'" for k, v in carve.items())
+    carves = carve if isinstance(carve, (list, tuple)) else ([carve] if carve else [])
+    for c in carves:
+        if isinstance(c, dict) and c:
+            out += f" {_w('except')} " + " AND ".join(f"{k} = '{v}'" for k, v in c.items())
     return out
 
 
