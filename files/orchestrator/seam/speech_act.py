@@ -159,6 +159,11 @@ EXISTENTIAL = frozenset({"there"})
 #   purpose; `if` shares the job and also means the conditional, so it is deliberately absent.
 WHETHER = frozenset({"whether"})
 
+# ⇒ THE QUESTION'S WRAPPER — `tell me if X` asks what `did X?` asks; the wrapper marks
+#   nothing (the operator's cc-0003 rulings, both of them, 08-18). `show me` is NOT here:
+#   `show` acts on a THING and stays an action. Closed, two entries, each one ruled.
+WRAPPERS = ("tell me", "let me know")
+
 # ⇒⇒ THE RECIPIENT. *"show ME the vms"* — and **nothing in this lab can be handed to a person
 #   except information.** A vm cannot be given to the operator; a list of vms can. That is what
 #   makes a first-person indirect object an interrogative signal in this domain, where in

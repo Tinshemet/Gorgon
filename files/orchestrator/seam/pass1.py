@@ -379,16 +379,30 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
             _testimonial.update(_tw[_cop:])
         elif len(_tw) > _i + 1:
             _testimonial.add(_tw[-1])         # the trailing event verb — `finishes`
-    # the consumed CONSTRUCTS the model kept re-offering — every one already RULED on:
-    # courtesy marks nothing (cc-0001) · `tell me` is the wrapper (cc-0003) · a negated
-    # imperative's head forbids (neg-0002) · a discourse pivot is not a thing (mc-0002) ·
-    # a filled pause is not a thing (sc-0004)
+    # ⇒⇒ **THE CONSUMED CONSTRUCTS, DERIVED — NEVER RETYPED.** The first cut hand-typed
+    #   this list and it was BOTH housekeeping defects at once (the operator's catch,
+    #   08-18): hand-written English, AND a second copy of classes that already exist —
+    #   `no wait` is `self_repair.CORRECTIONS`, `er` is `iso.FILLED_PAUSE`. Two copies
+    #   drift; one declaration cannot. Everything below is read from its owning class:
+    #     repair markers      self_repair.CORRECTIONS + RETRACTIONS  (ruled: sc-0001..3)
+    #     filled pauses       iso.FILLED_PAUSE                       (ruled: sc-0004)
+    #     discourse pivots    iso.BACKCHANNEL ∪ {"anyway"}           (ruled: mc-0002)
+    #     negated-imperative heads — closed grammar, declared here    (ruled: neg-0002)
+    #     the question wrapper WRAPPERS                               (ruled: cc-0003)
+    #   ⇒ ⚠ THE COURTESY PHRASES have NO declared home yet — they await the archive
+    #     ([[gorgon-courtesy-escalates-intent]]: a word list decided authority once).
+    #     Two literals remain, marked as the debt they are.
+    from . import iso as _iso2, self_repair as _SR
+    from .speech_act import WRAPPERS
     low_req = str(request).lower()
-    for _phrase in ("when you get a chance", "if you get a chance", "tell me if",
-                    "tell me which", "tell me", "don't", "do not", "never",
-                    "anyway", "er", "um", "no wait", "scratch that", "i meant"):
+    _constructs = (list(_SR.CORRECTIONS) + list(_SR.RETRACTIONS)
+                   + list(_iso2.FILLED_PAUSE) + ["anyway"]
+                   + list(WRAPPERS)
+                   + ["don't", "do not", "never"]
+                   + ["when you get a chance", "if you get a chance"])   # ⚠ archive debt
+    for _phrase in _constructs:
         if _phrase in low_req:
-            _testimonial.update(_phrase.split())
+            _testimonial.update(str(_phrase).split())
     from .scan import _operation_words, _tokens as _sctoks, BOUNDARIES as _B, ENUMERATORS as _EN
     from .speech_act import WH_WORDS as _WHW
     _released = set()
