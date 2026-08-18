@@ -311,9 +311,33 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
     #   TRY TO CLAIM IT. Run it to a fixpoint and the ambiguity is gone — whatever is still
     #   unclaimed has been offered the chance and failed it, so it is a lost clause and gate 1
     #   may bounce it without guessing.
+    # ⇒ **THE ASKED PROPERTY IS CONSUMED BY THE QUESTION, NEVER OFFERED BACK AS A THING.**
+    #   The question-skin span fix (08-18) releases the predicate from the row — *"is alpha
+    #   RUNNING"* now spans `alpha` — and the freed word promptly returned through this
+    #   fixpoint as a candidate anchor: a row called `running`, plus an operation on it. A
+    #   declared attr VALUE inside a clause that OPENS on an auxiliary or a wh-word is what
+    #   the question ASKS, and the question act owns it. Same family as every consume rule:
+    #   drop the word AND nothing downstream may re-offer it.
+    def _asked(word: str) -> bool:
+        from .speech_act import AUXILIARIES as _AUX, WH_WORDS as _WH
+        from .scan import _tokens, BOUNDARIES
+        values = {str(v).lower() for spec in (board.kinds or {}).values()
+                  for vals in ((spec or {}).get("attr_values") or {}).values() for v in vals}
+        if word not in values:
+            return False
+        toks = _tokens(request)
+        at = next((i for i, t in enumerate(toks) if t[0] == word), None)
+        if at is None:
+            return False
+        first = at
+        while first > 0 and toks[first - 1][0] not in BOUNDARIES:
+            first -= 1
+        return toks[first][0] in (_AUX | _WH)
+
     for _round in range(4):
         claimed = [(g.start, g.end) for g in (scan(a, request, board) for a in anchors) if g]
-        fresh = [w for w in uncovered(request, claimed, board) if w not in anchors]
+        fresh = [w for w in uncovered(request, claimed, board)
+                 if w not in anchors and not _asked(w)]
         if not fresh:
             break
         anchors += fresh
