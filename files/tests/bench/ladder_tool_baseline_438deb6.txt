@@ -1,0 +1,77 @@
+════ PASS seed=101 ════
+   [PASS] run 1/1 · blocked/human-confirm · 5 vms ['vm1', 'vm2', 'vm3', 'vm4', 'vm5'] | nets ['fleet-net', 'net1'] | 51 calls
+
+── rung 14 (destruction) — the one act that cannot be undone, and the one that must not overreach
+   goal: make sure there are exactly two machines left
+   [FAIL] run 1/1 · blocked/human-confirm · 6 vms ['alpha', 'beta', 'delta', 'dev', 'epsilon', 'gamma'] | nets [] | 31 calls
+
+── summary
+   rung 1 single            1/1   cost 2 (min 1, best 2)
+   rung 2 sequential        1/1   cost 2 (min 2, best 2)
+   rung 3 dependency-chain  1/1   cost 6 (min 3, best 7)
+   rung 4 collective-loop   0/1   cost 42 (min 16, best 21)  REGRESSED
+   rung 5 filtered-collective 1/1
+   rung 6 partition         0/1   cost 42 (min 17, best 30)  REGRESSED
+   rung 7 convergence       0/1
+   rung 8 exception         1/1
+   rung 9 diagnosis         0/1
+   rung 10 derived-set       0/1
+   rung 11 result-dependent  0/1
+   rung 12 second-kind       0/1
+   rung 13 idempotent-reentry 1/1
+   rung 14 destruction       0/1
+
+   COST REGRESSION on rung(s) 4, 6 — the world is still correct, the route to it got more expensive.
+   Investigate before treating the ladder score as unchanged; do NOT special-case a rung to bring the number back down.
+════ PASS seed=202 ════
+   [PASS] run 1/1 · blocked/human-confirm · 5 vms ['vm1', 'vm2', 'vm3', 'vm4', 'vm5'] | nets ['fleet-net', 'net1'] | 51 calls
+
+── rung 14 (destruction) — the one act that cannot be undone, and the one that must not overreach
+   goal: make sure there are exactly two machines left
+   [FAIL] run 1/1 · blocked/human-confirm · 6 vms ['alpha', 'beta', 'delta', 'dev', 'epsilon', 'gamma'] | nets [] | 31 calls
+
+── summary
+   rung 1 single            1/1   cost 2 (min 1, best 2)
+   rung 2 sequential        1/1   cost 2 (min 2, best 2)
+   rung 3 dependency-chain  1/1   cost 6 (min 3, best 7)
+   rung 4 collective-loop   0/1   cost 42 (min 16, best 21)  REGRESSED
+   rung 5 filtered-collective 1/1
+   rung 6 partition         0/1   cost 42 (min 17, best 30)  REGRESSED
+   rung 7 convergence       1/1
+   rung 8 exception         0/1
+   rung 9 diagnosis         0/1
+   rung 10 derived-set       0/1
+   rung 11 result-dependent  0/1
+   rung 12 second-kind       0/1
+   rung 13 idempotent-reentry 1/1
+   rung 14 destruction       0/1
+
+   COST REGRESSION on rung(s) 4, 6 — the world is still correct, the route to it got more expensive.
+   Investigate before treating the ladder score as unchanged; do NOT special-case a rung to bring the number back down.
+════ PASS seed=303 ════
+   [PASS] run 1/1 · blocked/human-confirm · 5 vms ['vm1', 'vm2', 'vm3', 'vm4', 'vm5'] | nets ['fleet-net', 'net1'] | 51 calls
+
+── rung 14 (destruction) — the one act that cannot be undone, and the one that must not overreach
+   goal: make sure there are exactly two machines left
+   [FAIL] run 1/1 · blocked/human-confirm · 6 vms ['alpha', 'beta', 'delta', 'dev', 'epsilon', 'gamma'] | nets [] | 31 calls
+
+── summary
+   rung 1 single            1/1   cost 2 (min 1, best 2)
+   rung 2 sequential        1/1   cost 2 (min 2, best 2)
+   rung 3 dependency-chain  1/1   cost 6 (min 3, best 7)
+   rung 4 collective-loop   0/1   cost 42 (min 16, best 21)  REGRESSED
+   rung 5 filtered-collective 1/1
+   rung 6 partition         0/1   cost 42 (min 17, best 30)  REGRESSED
+   rung 7 convergence       1/1
+   rung 8 exception         0/1
+   rung 9 diagnosis         0/1
+   rung 10 derived-set       0/1
+   rung 11 result-dependent  0/1
+   rung 12 second-kind       0/1
+   rung 13 idempotent-reentry 1/1
+   rung 14 destruction       0/1
+
+   COST REGRESSION on rung(s) 4, 6 — the world is still correct, the route to it got more expensive.
+   Investigate before treating the ladder score as unchanged; do NOT special-case a rung to bring the number back down.
+
+[exited with code 0]
