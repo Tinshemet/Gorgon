@@ -289,9 +289,15 @@ def _operation_words(board: Board) -> set:
     #   blue screen"* pass a does-this-clause-command-anything test, and 13 wrong-choice
     #   acts traced back through this set. Function words are a closed class; the noun
     #   segments and their plurals were already half-subtracted.
-    return out - {"network", "snapshot", "template", "profile", "file", "vm",
-                  "networks", "snapshots", "templates", "profiles", "files", "vms",
-                  "to", "of", "as", "on", "in", "from", "with", "at", "by", "for", "the"}
+    return out - NON_VERB_SEGMENTS
+
+
+# the noun and function-word segments an operation NAME sheds before any of its segments
+# may count as a verb — shared with pass 2's licence map, one copy (D5's root)
+NON_VERB_SEGMENTS = frozenset({
+    "network", "snapshot", "template", "profile", "file", "vm",
+    "networks", "snapshots", "templates", "profiles", "files", "vms",
+    "to", "of", "as", "on", "in", "from", "with", "at", "by", "for", "the"})
 
 
 # ── THE DETERMINER DECIDES EXISTENCE, WHERE IT DECIDES AT ALL ─────────────────────────

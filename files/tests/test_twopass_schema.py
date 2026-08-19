@@ -1545,5 +1545,56 @@ def main(argv=None) -> int:
     return _suite.run(sys.modules[__name__], "two-pass schema")
 
 
+
+def test_the_clause_verb_licenses_the_mutation():
+    """THE delete_vm INVENTION, priced by the v2 degradation run (2026-08-19).
+
+    `"stop most of vms"` came back `stop_vm` AND `delete_vm`, and every mutating-arm
+    filter passed it — each one interrogates the TARGET (`on` in handles, value said,
+    visible from the clause); none asks which operation the clause SAID. The rule:
+
+    ⇒⇒ **A CLAUSE WHOSE VERB NAMES A MANIFEST OPERATION HAS SAID WHICH OPERATION IT
+      WANTS** — a mutating answer outside that verb's own operations is invention,
+      refused at birth. A verb that names NO operation (`restart`, `start`, `put`)
+      licenses free translation — that is the model's whole job on those clauses.
+      Probes are exempt: the observe arm is housekeeping, never a wrong choice.
+    """
+    print("\n[split] the clause verb licenses the mutation")
+    from orchestrator.seam import pass1 as P1, pass2 as P2
+    board = Board()
+
+    # 1 · a `stop` clause answered with a delete: the invention itself, refused
+    rows = P1.run_scanned("stop most of vms", board=board)
+    channel, was = _canned([("stop_vm", "vm", None), ("delete_vm", "vm", None)])
+    try:
+        got = [op.operator for _, op in
+               P2.operations_by_clause("stop most of vms", rows, board=board)]
+        check("the said operation survives", "stop_vm" in got)
+        check("the invented delete is refused at birth", "delete_vm" not in got)
+    finally:
+        channel.constrained = was
+
+    # 2 · probes are exempt — the observe arm stays housekeeping, not a refusal
+    channel, was = _canned([("stop_vm", "vm", None), ("probe_exists", "vm", None)])
+    try:
+        got = [op.operator for _, op in
+               P2.operations_by_clause("stop most of vms", rows, board=board)]
+        check("a probe beside a licensed verb is not refused", "probe_exists" in got)
+    finally:
+        channel.constrained = was
+
+    # 3 · an unlicensed verb translates freely — restart IS stop+launch, and the gate
+    #     must not undo the imperative-shape fix that bought act recall back
+    rows2 = P1.run_scanned("restart the web vm", board=board)
+    channel, was = _canned([("stop_vm", "vm", None), ("launch_vm", "vm", None)])
+    try:
+        got = [op.operator for _, op in
+               P2.operations_by_clause("restart the web vm", rows2, board=board)]
+        check("an unknown verb keeps its translation (stop half)", "stop_vm" in got)
+        check("an unknown verb keeps its translation (launch half)", "launch_vm" in got)
+    finally:
+        channel.constrained = was
+
+
 if __name__ == "__main__":
     sys.exit(main())

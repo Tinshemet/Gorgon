@@ -907,6 +907,21 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
     seen_ops = set()
     deduped = []
     handles = {s_.handle: s_ for s_ in table}
+    # ⇒⇒ THE VERB LICENSES THE MUTATION (the delete_vm invention, priced by the v2
+    #   degradation run 2026-08-19: "stop most of vms" came back stop_vm AND delete_vm,
+    #   and every filter below passed it — each interrogates the TARGET, none asks which
+    #   operation the clause SAID). A clause whose verb-position word is a segment of an
+    #   offered operation has said which operation it wants; a mutating answer outside
+    #   that word's own operations is invention. A verb that names NO operation
+    #   (`restart`, `start`, `put`) licenses free translation — that is the model's whole
+    #   job on those clauses. Probes exempt: the observe arm is housekeeping, never a
+    #   wrong choice.
+    from .scan import NON_VERB_SEGMENTS as _NVS
+    _licence: Dict[str, set] = {}
+    for _opname in operators:
+        for _seg in re.findall(r"[a-z]+", str(_opname).lower()):
+            if _seg not in _NVS:
+                _licence.setdefault(_seg, set()).add(_opname)
     # a setter that REFS another kind demands a second name — read from the manifest once
     _needs_value = set()
     for _kspec in (board.kinds or {}).values():
@@ -924,6 +939,11 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
             #   not a misreading to score, it is DECODE CORRUPTION that could never run:
             #   `stop_vm on vm` against a table holding only {vms_but_db_vm, db}.
             if op.on not in handles:
+                continue
+            # the verb licence itself — restriction only when the verb NAMES an operation
+            _vwords = re.findall(r"[a-z]+", str(clause).lower())
+            _lic = _licence.get(_vwords[0]) if _vwords else None
+            if _lic is not None and op.operator not in _lic:
                 continue
             # ⇒ MANIFEST-INCOMPLETE: an op whose setter refs another kind, emitted with no
             #   second name (add_vm_to_network value=None from "snapshot every vm") — a
