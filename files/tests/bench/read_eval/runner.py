@@ -270,11 +270,10 @@ def read_case(sentence: str, board=None) -> dict:
     #   the same grammar mark scan and pass2 use. Attachment stays ops-only — a channel
     #   names the clause, not its arguments.
     predicted_instructs = []
-    _dets = {"a", "an", "the", "every", "each", "all", "any", "both", "no",
-             "it", "them", "me", "us"}
+    from orchestrator.seam.scan import opens_imperative as _opens
     for clause in P2.clauses_of(sentence):
         _cw = str(clause).lower().split()
-        if len(_cw) >= 2 and _cw[1] in _dets:
+        if _opens(_cw, board):
             at = _locate(sentence, clause)
             if at:
                 predicted_instructs.append({"clause": clause, "start": at[0], "end": at[1]})

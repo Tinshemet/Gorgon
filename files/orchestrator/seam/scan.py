@@ -94,6 +94,43 @@ class Scanned(NamedTuple):
         return self.start < other.end and other.start < self.end
 
 
+# the phrasal PARTICLES a verb strands on its edge — closed class, ONE copy (the span
+# walk and the imperative shape both read it)
+PARTICLES = frozenset({"up", "down", "off", "out", "over", "away", "back", "sure"})
+
+# every word that can OPEN an object NP — the determiner set plus its own grammar
+# family: quantifiers, universals, pro-forms. Closed classes, not vocabulary. The
+# certified terse cell died on the family members: `most of vms` · `everything` · `ones`
+OBJECT_OPENERS = frozenset({
+    "a", "an", "the", "every", "each", "all", "any", "both", "no",
+    "it", "them", "me", "us",
+    "most", "some", "several", "few", "many", "half", "everything", "one", "ones"})
+_SHAPE_NEG = frozenset({"don't", "do", "not", "never"})
+
+
+def opens_imperative(words: List[str], board: Optional[Board] = None) -> bool:
+    """Does this clause open on a verb-position word taking an object NP?
+
+    ⇒⇒ WITH OR WITHOUT ITS ARTICLE — terse noise drops articles, and the old test
+      (`words[1] in dets`) billed 4 of the 7 terse act losses on the certified v2 run:
+      `restart db vm` read as nothing. The article-less arm demands a MANIFEST NOUN
+      heading the object (read from the board, never hand-listed), so a bare NP, a
+      rule, testimony and a question all still refuse the shape.
+    """
+    if len(words) < 2:
+        return False
+    from .speech_act import AUXILIARIES, WH_WORDS
+    w0 = words[0]
+    if (w0 in GRAMMAR or w0 in OBJECT_OPENERS or w0 in _SHAPE_NEG
+            or w0 in AUXILIARIES or w0 in WH_WORDS):
+        return False
+    if words[1] in OBJECT_OPENERS:
+        return True
+    nouns = _index(board or Board())
+    at = 2 if words[1] in PARTICLES else 1
+    return any(w in nouns for w in words[at:at + 3])
+
+
 def _index(board: Board) -> Dict[str, str]:
     """Every declared noun and its plural, pointing at its kind. READ, never hand-listed."""
     out: Dict[str, str] = {}
@@ -482,7 +519,7 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
     # the phrasal PARTICLES a stopped verb strands on the span's edge — `go OVER the event
     # log`, `spin DOWN the render vms` — a closed class, plus `sure`: the ensure-idiom's
     # second half (`make SURE the lab network exists`), exactly one word, documented here.
-    _PARTICLES = {"up", "down", "off", "out", "over", "away", "back", "sure"}
+    _PARTICLES = PARTICLES
     # DETERMINERS for the imperative rule below — closed, and `that` is deliberately absent
     _DETS = {"a", "an", "the", "every", "each", "all", "any", "both", "no"}
     while left > 0 and toks[left - 1][0] not in BOUNDARIES:

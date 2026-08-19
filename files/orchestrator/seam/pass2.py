@@ -969,11 +969,9 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
             #   set.** A clause is askable when it carries a manifest operation word OR
             #   opens on an imperative (initial word followed by a determiner or object
             #   pronoun — the same grammar mark scan uses).
-            from .scan import _operation_words
+            from .scan import _operation_words, opens_imperative
             _cw = str(clause).lower().split()
-            _dets = {"a", "an", "the", "every", "each", "all", "any", "both", "no",
-                     "it", "them", "me", "us"}
-            _imperative = len(_cw) >= 2 and _cw[1] in _dets
+            _imperative = opens_imperative(_cw, board)
             # ⇒ THE OP WORD MUST SIT IN VERB POSITION — clause-initial. `the vms carrying
             #   the test LABEL` contains `label` the NOUN, and the anywhere-∩ test asked a
             #   bare NP what to do; probe_exists and delete_vm came back on the very set
