@@ -30,6 +30,10 @@ def test_an_articleless_object_headed_by_a_manifest_noun():
     assert _t("snapshot db vm")
     assert _t("restart web vm and db vm")
     assert _t("restart web vm")
+    # the rejoined-clause artifact (found on the N2 run): `.split()` leaves the comma
+    # on the noun — `vm,` must still be the manifest noun
+    assert _t("restart web vm, db vm")
+    assert _t("restart web vm, no wait, db one")
 
 
 def test_a_quantifier_object():

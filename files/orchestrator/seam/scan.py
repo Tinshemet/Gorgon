@@ -117,6 +117,7 @@ def opens_imperative(words: List[str], board: Optional[Board] = None) -> bool:
       heading the object (read from the board, never hand-listed), so a bare NP, a
       rule, testimony and a question all still refuse the shape.
     """
+    words = [str(w).strip(".,;:—–\"") for w in words]
     if len(words) < 2:
         return False
     from .speech_act import AUXILIARIES, WH_WORDS
