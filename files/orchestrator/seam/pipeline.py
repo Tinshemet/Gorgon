@@ -441,20 +441,10 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #   COMPLETED program: a step that only exists because the manifest requires it is still a
     #   step, and hiding it from the gates would be exempting it from the rules.
     #   ⇒ NO MODEL CALL. The determiner said NEW and the manifest says how a network is made.
-    operations = pass2.derive_creators(operations, pass2.symbol_table(rows, board), board)
-    # ⇒ AND THE ORDER IS ARITHMETIC TOO. An establisher that runs after its dependent has not
-    #   run at all; which step precedes which is a fact about the table, not a judgement.
-    # ⇒ A CREATION THE MODEL SPLIT IN TWO IS REJOINED FIRST — the clone's product became its
-    #   own step because the sentence wraps back on itself. Before the other assembly steps,
-    #   so they see one operation rather than two halves.
-    operations = pass2.merge_split_creation(
-        operations, pass2.symbol_table(rows, board), request, board)
-    operations = pass2.normalise_creator_args(operations, pass2.symbol_table(rows, board), board)
-    # ⇒ AND A ROW MADE TWICE KEEPS THE MAKER THE REQUEST NAMES. The model was told three ways
-    #   and would not drop the spare, and a caught error it will not act on is ours to fix.
-    operations = pass2.drop_redundant_creators(
-        operations, pass2.symbol_table(rows, board), request, board)
-    operations = pass2.order_by_dependency(operations, pass2.symbol_table(rows, board), board)
+    # ⇒ ONE prepare(), ONE ORDER — I5. The five assembly steps ran here derive-first while
+    #   the comment above the rejoin said rejoin-first, and the retry below ran them in yet
+    #   the comment's order. pass2.prepare is now the only spelling of the sequence.
+    operations = pass2.prepare(operations, pass2.symbol_table(rows, board), request, board)
     rows, table, ling, illegal, dups = evaluate(operations)
 
     # ⇒⇒ **REPAIR BEFORE ASKING — compute the fix where the manifest determines it.**
@@ -541,12 +531,7 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
         #   which is how rung 8 came back with `create_network(dmz)` sitting AFTER the step
         #   that needs it. Two paths to the same gates must be prepared the same way.
         _tbl = pass2.symbol_table(rows, board)
-        again = pass2.merge_split_creation(again, _tbl, request, board)
-        again = pass2.order_by_dependency(
-            pass2.drop_redundant_creators(
-                pass2.normalise_creator_args(
-                    pass2.derive_creators(again, _tbl, board), _tbl, board),
-                _tbl, request, board), _tbl, board)
+        again = pass2.prepare(again, _tbl, request, board)
         fresh_rows, fresh_table, fresh_ling, fresh, fresh_dups = evaluate(again)
         # ⇒⇒ **THE RETRY'S ANSWER IS REPAIRED TOO, AND IT WAS NOT UNTIL THE REVIEW OF 08-13.**
         #

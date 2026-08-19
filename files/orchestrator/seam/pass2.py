@@ -984,6 +984,33 @@ def operations_for(request: str, rows: List[S.Declared], board: Optional[Board] 
     return out
 
 
+def prepare(operations, table, request: str, board: Optional[Board] = None):
+    """THE five-step preparation, once — I5, closed 2026-08-19.
+
+    ⇒⇒ **THE FIRST PASS AND THE RETRY RAN THESE FIVE IN DIFFERENT ORDERS.** Site one ran
+      derive->merge while its own comment said the rejoin comes FIRST ("so the other
+      assembly steps see one operation rather than two halves"); the retry ran
+      merge->derive. Five of 08-11's twelve defects were a rule placed on one path and not
+      the other — this was a rule placed in a different ORDER on each path, the same family
+      one notch subtler. The comment's order is the canonical one:
+
+          merge_split_creation      the split halves become one creation
+          derive_creators           the manifest adds what NEW rows require
+          normalise_creator_args    arguments in the maker's own shape
+          drop_redundant_creators   a row made twice keeps the maker the request names
+          order_by_dependency       an establisher after its dependent has not run at all
+
+    ⇒ The harvest-merge site stays ORDER-ONLY by design: both inputs were prepared here,
+      and only the SET property (dependency order) needs recomputing over their union.
+    """
+    board = board or Board()
+    operations = merge_split_creation(operations, table, request, board)
+    operations = derive_creators(operations, table, board)
+    operations = normalise_creator_args(operations, table, board)
+    operations = drop_redundant_creators(operations, table, request, board)
+    return order_by_dependency(operations, table, board)
+
+
 # ── the expected operations, WRITTEN DOWN BEFORE THE FIRST RUN (rule V5) ───────────────
 #
 # Keyed by HANDLE, so they say what the program must do without depending on how pass 1
