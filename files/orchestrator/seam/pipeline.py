@@ -331,6 +331,36 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
         settled, clashes = pass1.settle_with_answers(rows, said, board, world)
         answer_conflicts = clashes
         if settled != rows:
+            # ⇒⇒ **AN ANSWER GIVEN ONCE IS NEVER ASKED TWICE — the Encyclopedia's second
+            #   writer, B2's other half.** B1 was "a place to keep answers and there were no
+            #   answers to keep"; there are now, and each one that actually SETTLED a row is
+            #   filed as a PENDING entry — it DESCRIBES, it does not yet permit, and nothing
+            #   routes on it until a person ratifies ([[gorgon-encyclopedia]]'s whole safety
+            #   property). Only the CHANGED rows file: an answer settle ignored is evidence
+            #   of nothing.
+            changed = {r.name for r, old_r in zip(settled, rows)
+                       if r.object_type != old_r.object_type or r.where != old_r.where}
+            try:
+                from . import archive as _archive
+                for about, (rule, text) in said.items():
+                    # ⇒ ONLY A TAXONOMY ANSWER TEACHES. A world-present run asks the
+                    #   EXISTENCE question about an affordance-typed row ("should it be
+                    #   created?"), and filing `grubnash: yes` would be junk wearing an
+                    #   entry's clothes. What the Encyclopedia keeps is what a word IS —
+                    #   the rule whose TAKES is `kind`.
+                    if asking.TAKES.get(rule) != "kind":
+                        continue
+                    if any(str(about).strip().lower() == str(n).strip().lower()
+                           or str(about) in str(n) for n in changed):
+                        word = str(about).strip()
+                        for art in ("the ", "a ", "an "):
+                            if word.lower().startswith(art):
+                                word = word[len(art):]
+                        _archive.ARCHIVE.propose(word, description=str(text),
+                                                 said=str(text), source=_archive.TOLD)
+                        _archive.ARCHIVE.save()
+            except Exception:
+                pass                        # teaching is best-effort; the settle already held
             rows = settled
             early = gates12.report(rows, request, board, world)
             questions = asking.asks_of(early["findings"])
@@ -838,6 +868,10 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
                    asks, bounces, illegal, suggested, ling, list(goals),
                    REFUSE, list(repaired), list(dropped),
                    surface.notices(suggested, dropped, answer_conflicts),
+                   # ⇒ the KEYED questions ride the REFUSE return too — a refused run is
+                   #   exactly where the answer round-trip matters, and dropping them here
+                   #   meant the door could collect answers only for runs that needed none
+                   list(questions),
                    produces=produces(operations, goals), teaches=teaches,
                    answered=answered, governs=governs)
 

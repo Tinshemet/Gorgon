@@ -248,6 +248,28 @@ class Plan(Shortcut):
         console.print(f"    [bold]-> {_speech.verdict(request, Board(), world)}[/bold]")
 
         got = _seam_run(request, board=Board(), world=world)
+        # ⇒⇒ **THE ROUND TRIP (B2): a question deserves a place to answer it.** run() has
+        #   accepted and applied answers since 08-13 — and no door ever collected one, so
+        #   the same question could be asked every session forever. One round: each keyed
+        #   question is put to the operator (enter skips — an absent answer changes
+        #   nothing), the seam runs once more with what they said, and an answer that
+        #   settles a row is ALSO filed to the Encyclopedia as PENDING by the pipeline
+        #   itself, so it is never asked twice.
+        keyed = [q for q in (getattr(got, "questions", ()) or ()) if q.about]
+        if keyed:
+            replies = {}
+            for q in keyed:
+                console.print(f"\n[warn]{q.says}[/warn]")
+                try:
+                    said_back = console.input("[bold cyan]answer (enter to skip):"
+                                              "[/bold cyan] ")
+                except (EOFError, KeyboardInterrupt):
+                    said_back = ""
+                if said_back.strip():
+                    replies[q.key] = said_back.strip()
+            if replies:
+                got = _seam_run(request, board=Board(), world=world, answers=replies)
+                console.print("    [dim]re-read with your answers applied[/dim]")
         console.print(f"\n    declared   {', '.join(got.handles) or '—'}")
         console.print(f"    steps      "
                       f"{[(o.operator, o.on, o.value) for o in got.operations] or '—'}")

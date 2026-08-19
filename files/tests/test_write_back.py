@@ -143,3 +143,59 @@ if __name__ == "__main__":
         if name.startswith("test_") and callable(fn):
             fn()
     print(f"\n{_FAIL} failed")
+
+
+def test_the_round_trip_teaches_the_archive():
+    """⇒⇒ **B2's OTHER HALF: AN ANSWER GIVEN ONCE IS NEVER ASKED TWICE.** run() has applied
+    answers since 08-13 — and nothing FILED them, so B1 stayed "a place to keep answers"
+    with no answers to keep. An answer that SETTLES a row is proposed to the Encyclopedia
+    as PENDING: it describes, it does not permit, and nothing routes until a person
+    ratifies. An answer that settles nothing files nothing — evidence of nothing.
+    """
+    import os
+    import tempfile
+    import engines.channel as CH
+    was = CH.constrained
+    CH.constrained = lambda *a, **k: None
+    from orchestrator.seam import pipeline as PL, archive as A
+    # ⇒ THE TEST OWNS ITS STORE. The process-wide ARCHIVE is shared by every test in the
+    #   suite, and trusting it made this test ORDER-SENSITIVE — green standalone, red in
+    #   the full run. A singleton a test reads is a fixture a test must replace.
+    _was_store = A.ARCHIVE
+    _tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+    A.ARCHIVE = A.Archive(_tmp.name)
+    try:
+        board = Board()
+
+        # ⇒ THE HONEST TEACH SHAPE, found by walking the ladder: `launch` affords exactly
+        #   ONE kind, so affordance settles the word and the kind-question never survives —
+        #   BY DESIGN. `delete` affords MANY, affordance stays its hand, and only a person
+        #   can say what a grubnash is. That is precisely the Encyclopedia's turf, and the
+        #   only shape whose answer deserves filing.
+        first = PL.run("delete the grubnash", board=board, world=None)
+        keyed = [q for q in first.questions if q.about]
+        check("the run carries KEYED questions, not only prose",
+              any("grubnash" in str(q.about) for q in keyed))
+
+        again = PL.run("delete the grubnash", board=board, world=None,
+                       answers={"grubnash": "a vm"})
+        check("the answer settles the row",
+              any(r.object_type == "vm" for r in again.declarations))
+        store_after = A.ARCHIVE._rows
+        check("and the answer is FILED as PENDING — never asked twice",
+              any(e.word == "grubnash" and e.status == A.PENDING
+                  for e in store_after))
+        check("the entry DESCRIBES, holding the operator's words",
+              any(e.word == "grubnash" and "a vm" in str(e.said)
+                  for e in store_after))
+
+        # ⇒ THE CONTROL: an answer to a question nobody asked files nothing
+        PL.run("launch db", board=board, world=None,
+               answers={"unrelated-word": "a network"})
+        check("an unasked answer teaches nothing",
+              not any(e.word == "unrelated-word"
+                      for e in A.ARCHIVE._rows))
+    finally:
+        CH.constrained = was
+        A.ARCHIVE = _was_store
+        os.unlink(_tmp.name)

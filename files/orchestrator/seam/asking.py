@@ -125,5 +125,15 @@ def answered(asks: List[Ask], answers: Optional[Dict[str, str]]) -> Dict[str, tu
         if hit is None:
             hit = next((lowered[w] for w in words if w in lowered), None)
         if hit is not None:
+            # ⇒ **TWO QUESTIONS ABOUT ONE WORD: THE ACTIONABLE RULE WINS THE KEY.** `kind-
+            #   not-settled` and `unverifiable` both ask about `the grubnash`, and dict
+            #   order let whichever finding came LAST shadow the other — so whether an
+            #   answer APPLIED depended on finding order (found 08-19, a run settled what
+            #   an identical trace did not). A rule that TAKES something outranks one that
+            #   takes nothing; between two that take, the first stands.
+            if about in out and TAKES.get(out[about][0]) and not TAKES.get(a.rule):
+                continue
+            if about in out and TAKES.get(out[about][0]) and TAKES.get(a.rule):
+                continue
             out[about] = (a.rule, hit)
     return out
