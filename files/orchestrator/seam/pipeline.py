@@ -263,6 +263,14 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     """The whole chain. Two model calls' worth of questions in pass 1, one in pass 2."""
     board = board or Board()
 
+    # ⇒⇒ THE FRONT DOOR (operator ruling 2026-08-19: junk out ASAP, ONE layer down) —
+    #   filled pauses dropped, a typo'd word inside a closed-set phrase read as the
+    #   phrase word. The whole chain below reads the VIEW; every fix is a notice, so
+    #   recognition is visible and never silent.
+    from . import front_door as _fd
+    _door = _fd.read(request)
+    request = _door.text
+
     rows = pass1.run_scanned(request, board=board, model=model, timeout=timeout)
     rows = pass1.settle_with_world(rows, world, board)
     # ⇒⇒ THE LADDER, AND THE ORDER IS THE POINT: the manifest's `nouns` settled what it could
@@ -867,7 +875,7 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
         return Run(request, rows, table, operations, conditions,
                    asks, bounces, illegal, suggested, ling, list(goals),
                    REFUSE, list(repaired), list(dropped),
-                   surface.notices(suggested, dropped, answer_conflicts),
+                   list(_door.notices) + surface.notices(suggested, dropped, answer_conflicts),
                    # ⇒ the KEYED questions ride the REFUSE return too — a refused run is
                    #   exactly where the answer round-trip matters, and dropping them here
                    #   meant the door could collect answers only for runs that needed none
@@ -878,7 +886,7 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     return Run(request, rows, table, operations, conditions,
                asks, bounces, illegal, suggested, ling, list(goals),
                _verdict(operations, illegal, asks, bounces, goals), list(repaired),
-               list(dropped), surface.notices(suggested, dropped, answer_conflicts),
+               list(dropped), list(_door.notices) + surface.notices(suggested, dropped, answer_conflicts),
                list(questions), produces(operations, goals), teaches, answered,
                governs)
 

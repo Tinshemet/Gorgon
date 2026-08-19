@@ -393,13 +393,13 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
     #     ([[gorgon-courtesy-escalates-intent]]: a word list decided authority once).
     #     Two literals remain, marked as the debt they are.
     from . import iso as _iso2, self_repair as _SR
-    from .speech_act import WRAPPERS
+    from .speech_act import WRAPPERS, COURTESY
     low_req = str(request).lower()
     _constructs = (list(_SR.CORRECTIONS) + list(_SR.RETRACTIONS)
                    + list(_iso2.FILLED_PAUSE) + ["anyway"]
                    + list(WRAPPERS)
                    + ["don't", "do not", "never"]
-                   + ["when you get a chance", "if you get a chance"])   # ⚠ archive debt
+                   + list(COURTESY))
     for _phrase in _constructs:
         if _phrase in low_req:
             _testimonial.update(str(_phrase).split())

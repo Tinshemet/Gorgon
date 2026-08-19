@@ -164,6 +164,12 @@ WHETHER = frozenset({"whether"})
 #   `show` acts on a THING and stays an action. Closed, two entries, each one ruled.
 WRAPPERS = ("tell me", "let me know")
 
+# ⇒ COURTESY — an adjunct that defers, marks nothing, grants nothing
+#   ([[gorgon-courtesy-escalates-intent]] is what happens when a reader treats it as
+#   content). Promoted from pass 1's inline literals 2026-08-19 so the front door and
+#   the consumption list read ONE copy.
+COURTESY = ("when you get a chance", "if you get a chance")
+
 # ⇒⇒ THE RECIPIENT. *"show ME the vms"* — and **nothing in this lab can be handed to a person
 #   except information.** A vm cannot be given to the operator; a list of vms can. That is what
 #   makes a first-person indirect object an interrogative signal in this domain, where in

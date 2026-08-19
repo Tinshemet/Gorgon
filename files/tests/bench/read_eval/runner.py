@@ -139,6 +139,12 @@ def read_case(sentence: str, board=None) -> dict:
     from orchestrator.seam import pass1 as P1, pass2 as P2
 
     board = board or Board()
+    # ⇒⇒ THE FRONT DOOR (operator ruling 2026-08-19: junk out ASAP, ONE layer down) —
+    #   the whole seam reads the VIEW; every offset below maps back to the ORIGINAL
+    #   bytes before it is reported, so gold offsets still hold.
+    from orchestrator.seam import front_door as FD
+    view = FD.read(sentence)
+    sentence = view.text
     rows = P1.run_scanned(sentence, board=board)
     table = P2.symbol_table(rows, board)
     steps = P2.operations_by_clause(sentence, rows, board=board)
@@ -272,6 +278,14 @@ def read_case(sentence: str, board=None) -> dict:
             at = _locate(sentence, clause)
             if at:
                 predicted_instructs.append({"clause": clause, "start": at[0], "end": at[1]})
+    # every offset above is VIEW-space; the report speaks in ORIGINAL bytes
+    _b = view.back
+    for group in (predicted_spans, predicted_triggers, predicted_queries,
+                  predicted_rules, predicted_reports, predicted_instructs, operations):
+        for d in group:
+            for a, z in (("start", "end"), ("clause_start", "clause_end")):
+                if d.get(a) is not None and d.get(z) is not None:
+                    d[a], d[z] = _b[d[a]], _b[d[z]]
     return {"rows": predicted_spans, "operations": operations,
             "triggers": predicted_triggers, "queries": predicted_queries,
             "rules": predicted_rules, "reports": predicted_reports,
