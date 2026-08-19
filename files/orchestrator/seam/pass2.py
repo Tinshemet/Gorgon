@@ -255,6 +255,114 @@ CLAUSE_MARKS = (",", ";", ".", "—", "–")
 CLAUSE_WORDS = (" and then ", " then ", " and ", " but ")
 
 
+_CUT_DETS = frozenset({"a", "an", "the", "every", "each", "all", "any", "both", "no",
+                       "it", "them", "me", "us"})
+_CUT_NEG = frozenset({"don't", "not", "never", "do", "no"})
+
+
+def _comma_free_cuts(piece: str) -> List[str]:
+    """Cut where the missing comma would have — the CLAUSE MERGE, priced 2026-08-19.
+
+    Without punctuation *"if alpha is stopped launch it"* stays ONE clause: is_condition
+    withholds the whole thing from pass 2, the imperative channel fails (it opens on
+    `if`), and the second span's attachment goes with it — no-punct owned 7 lost spans,
+    4 lost acts, 10 lost attachments on the certified v2 run, plus both voice residuals.
+
+    Every cut is grammar from a closed class that already exists, never meaning:
+      1 a leading COURTESY literal ends where the literal ends
+      2 a mid-clause WRAPPER literal (`tell me …`) starts its own clause
+      3 `anyway` releases what stands behind it
+      4 a mid-clause condition head ({if, unless} ∪ EVENTS, whether-`if` guarded) opens
+        a subordinate — cut in front of it
+      5 a piece-initial condition head's subordinate ends after its PREDICATE, at the
+        first determiner-shaped imperative (`… is stopped ▸ launch it`); before the
+        predicate has been seen, nothing cuts — a long subject cannot fake it
+      6 a second imperative (a base-form operation word taking a determiner object)
+        is its own clause (`don't stop the web vm ▸ stop the db vm`)
+    Quotes are opaque. A piece none of this touches returns whole — fail closed.
+    Deliberately NOT here: bare-name lists without commas (scan's NP reading) and value
+    respeaks without commas (self_repair's) — named out of scope, not forgotten.
+    """
+    import re as _re
+    text = piece
+    low = text.lower()
+    if not low.strip():
+        return [piece]
+    from .front_door import _quoted
+    opaque = _quoted(low)
+    toks = [(m.group(0), m.start(), m.end()) for m in _re.finditer(r"[a-z']+", low)
+            if not any(qs <= m.start() and m.end() <= qe for qs, qe in opaque)]
+    if len(toks) < 3:
+        return [piece]
+    words = [t[0] for t in toks]
+
+    def _split(at: int) -> List[str]:
+        left, right = text[:at].strip(" ,"), text[at:].strip(" ,")
+        if not left or not right:
+            return [piece]
+        return _comma_free_cuts(left) + _comma_free_cuts(right)
+
+    from .speech_act import COURTESY, WRAPPERS, AUXILIARIES
+    from . import iso as _iso, temporal as _T
+    from .scan import GRAMMAR, NON_VERB_SEGMENTS
+
+    # 1 · a leading courtesy literal ends where the literal ends
+    for phrase in COURTESY:
+        if low.strip().startswith(phrase) and len(low.strip()) > len(phrase):
+            return _split(low.find(phrase) + len(phrase))
+    # ⇒ A QUESTION SKIN IS NEVER CUT — the wh/aux frame governs the whole clause
+    #   (`how many machines carry the 'fleet' label` is ONE ask, and `carry the` is no
+    #   imperative inside it; `when did you stop it` INVERTS and asks). Fronted `when`
+    #   stays cuttable only as the ADJUNCT — `is_condition` already owns that test.
+    from .speech_act import WH_WORDS as _WH
+    if words[0] in AUXILIARIES or (words[0] in _WH and not _iso.is_condition(text)):
+        return [piece]
+    # 2 · a mid-clause wrapper starts its own clause
+    for phrase in WRAPPERS:
+        at = low.find(f" {phrase}")
+        if at > 0 and not any(qs <= at < qe for qs, qe in opaque):
+            return _split(at + 1)
+    # 3 · `anyway` releases what stands behind it
+    for i, (w, s, e) in enumerate(toks):
+        if w == "anyway":
+            if i > 0:
+                return _split(s)
+            if len(toks) > 1:
+                return _split(e)
+    # 4 · a mid-clause condition head opens a subordinate
+    heads = {"if", "unless"} | set(_T.EVENTS)
+    for i in range(1, len(toks)):
+        w, s, _e = toks[i]
+        if w in heads and not (w == "if" and words[i - 1] in _iso._WHETHER_HOSTS):
+            cut = toks[i - 1][1] if words[i - 1] in _iso._FOCUS else s
+            if cut > 0:
+                return _split(cut)
+    # 5 · a piece-initial condition head: the subordinate ends after its predicate
+    # 6 · a second imperative is its own clause  (one walk serves both)
+    conditioned = words[0] in ({"if", "unless", "when", "whenever"} | set(_T.EVENTS))
+    from .scan import _operation_words
+    base_ops = {w for w in _operation_words(None)
+                if not w.endswith("s") and w not in GRAMMAR}
+    predicate_seen = False
+    for i in range(1, len(toks) - 1):
+        w, s, _e = toks[i]
+        prev, nxt = words[i - 1], words[i + 1]
+        if w in AUXILIARIES or (w.endswith("s") and w not in GRAMMAR
+                                and w not in NON_VERB_SEGMENTS):
+            predicate_seen = True
+            continue
+        if (nxt in _CUT_DETS and w not in GRAMMAR and w not in _CUT_DETS
+                and w not in _CUT_NEG and not w.endswith(("ing", "s"))
+                and prev not in AUXILIARIES and prev not in _CUT_DETS
+                and prev not in _CUT_NEG and prev != "to"
+                and ((conditioned and predicate_seen)
+                     # a subordinate's own content can never open an imperative
+                     # before its predicate — `when you GET a chance` stays whole
+                     or (not conditioned and w in base_ops))):
+            return _split(s)
+    return [piece]
+
+
 def clauses_of(request: str) -> List[str]:
     """Cut the request where it joins itself — to ASK about, never to build from.
 
@@ -287,7 +395,8 @@ def clauses_of(request: str) -> List[str]:
         pieces = [part]
         for word in CLAUSE_WORDS:
             pieces = [bit for piece in pieces for bit in piece.split(word)]
-        out.extend(pieces)
+        for piece in pieces:
+            out.extend(_comma_free_cuts(piece))
 
     # ⇒ REJOIN A MEMBER LIST. A piece with no verb the manifest knows, sitting between two
     #   others, is an item in a list rather than something to do — `n2` is not a clause.
@@ -315,8 +424,12 @@ def clauses_of(request: str) -> List[str]:
         def _predicates(text):
             return any(w.strip(".,'\"—–").lower() in _COPULA for w in text.split())
         holds_a_predicate = (_predicates(kept[-1]) if kept else False) or _predicates(piece)
+        # ⇒ AND AN IMPERATIVE SHAPE IS A CLAUSE, NOT A MEMBER — `restart it` names no
+        #   manifest verb, but a word taking a determiner object is a command by the same
+        #   grammar the instruct channel uses; gluing it back undoes the merge cut.
+        imperative_shape = len(words) >= 2 and words[1] in _CUT_DETS
         if (kept and content and not has_verb and not holds_a_predicate
-                and len(content) <= 2):
+                and not imperative_shape and len(content) <= 2):
             kept[-1] = f"{kept[-1].rstrip()}, {piece.strip()}"
             continue
         if piece.strip():
