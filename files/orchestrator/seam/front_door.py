@@ -27,7 +27,10 @@ every reader forever. This module is the one pass instead: it runs BEFORE anythi
     · an OPERATION VERB — `restrt` measured as recoverable: imperative shape still
       routes it and translation is the model's job
     · anything in QUOTES — evidence is opaque testimony
-    · single-word phrases — no context, no licence; fuzzy needs the phrase around it
+    · a lone unknown word whose SLOT does not vote — single-word recognition (N2, the
+      operator's ruling) fixes sure hits and runs the SIM CHECK on the rest: candidates
+      from our closed sets only, each tried in place, the surrounding grammar decides;
+      ties and no-fits change nothing ('did you eveyr stop it' stays as typed)
 
 Residual risk, accepted and documented: a real word one edit from a marker word in marker
 position (`no want` ~ `no wait`) would be read as the marker. The notice is the guard —
@@ -44,7 +47,7 @@ class View(NamedTuple):
     original: str
 
 
-def read(request: str) -> View:
+def read(request: str, board=None) -> View:
     """One pass, at the entrance. Clean text returns the identity view."""
     text = str(request)
     low = text.lower()
@@ -98,10 +101,83 @@ def read(request: str) -> View:
             edits.append((s, e, pw))
             notices.append(f"read '{w}' as '{pw}' ({' '.join(pwords)})")
 
+    # 3 · single-word typo recognition — N2, the operator's ruling: sure hits fixed,
+    #     ambiguity settled by the SIM CHECK (each candidate tried in place; the slot
+    #     votes), ties or no fit left alone. Candidates come ONLY from our own closed
+    #     sets — never the whole language, so a name can never be a candidate.
+    taken2 = [(s_, e_) for s_, e_, _ in edits]
+    for w, s_, e_ in toks:
+        if len(w) < 4 or "'" in w:
+            continue
+        if any(not (e_ <= ts or te <= s_) for ts, te in taken2):
+            continue
+        got = _recognise(w, toks, s_, board)
+        if got:
+            taken2.append((s_, e_))
+            edits.append((s_, e_, got))
+            notices.append(f"read '{w}' as '{got}'")
+
     if not edits:
         return View(text, list(range(len(text) + 1)), [], text)
     new, back = _apply(text, edits)
     return View(new, back, notices, text)
+
+
+def _vocab(board):
+    """The candidate sets and the known-word guard — closed sets ONLY, read not listed."""
+    from .scan import OBJECT_OPENERS, GRAMMAR, _index, _operation_words, PARTICLES
+    from . import self_repair as _sr, iso as _iso
+    from .speech_act import WRAPPERS, COURTESY, AUXILIARIES, WH_WORDS
+    nouns = set(_index(board) if board is not None else _index(_board()))
+    ops = {w for w in _operation_words(None) if not w.endswith("s")}
+    marker_words = {w for p in (tuple(_sr.CORRECTIONS) + tuple(_sr.RETRACTIONS)
+                                + WRAPPERS + COURTESY) for w in p.split()}
+    known = (set(OBJECT_OPENERS) | set(GRAMMAR) | nouns | ops | marker_words
+             | set(AUXILIARIES) | set(WH_WORDS) | set(PARTICLES)
+             | set(_iso.FILLED_PAUSE) | {"vms", "vm's"})
+    return OBJECT_OPENERS, nouns, ops, known
+
+
+def _board():
+    from planner.formula.legal import Board
+    return Board()
+
+
+def _recognise(w, toks, at, board):
+    """The sim check. Each closed-set candidate is tried in its slot; the grammar votes.
+
+    opener  -> the next word is a noun (`eveyr vm` -> every; `did you eveyr stop` -> no)
+    pronoun -> the previous word is an operation verb (`put thrm` -> them)
+    verb    -> clause-initial position (`then launhc beta` -> launch)
+    noun    -> an opener stands within the two words before it (`the dmz netwrk`)
+    Exactly one fitting candidate wins; ties and no-fits change nothing.
+    """
+    from .scan import OBJECT_OPENERS
+    openers, nouns, ops, known = _vocab(board)
+    if w in known:
+        return None
+    words = [t[0] for t in toks]
+    i = next(j for j, t in enumerate(toks) if t[1] == at)
+    prev = words[i - 1] if i > 0 else None
+    nxt = words[i + 1] if i + 1 < len(words) else None
+    _PRONOUNS = {"it", "them", "me", "us", "one", "ones", "everything"}
+    fits = set()
+    for cand in openers | nouns | ops:
+        if not _damerau1(w, cand) or len(cand) < 4 and cand not in _PRONOUNS:
+            continue
+        if cand in _PRONOUNS:
+            if prev in ops:
+                fits.add(cand)
+        elif cand in openers:
+            if nxt in nouns:
+                fits.add(cand)
+        elif cand in nouns:
+            if prev in openers or (i >= 2 and words[i - 2] in openers):
+                fits.add(cand)
+        elif cand in ops:
+            if i == 0 or prev in {"then", "and", "but"}:
+                fits.add(cand)
+    return fits.pop() if len(fits) == 1 else None
 
 
 def _tokens(low: str):
