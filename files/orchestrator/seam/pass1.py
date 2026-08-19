@@ -739,7 +739,11 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
                                        references=[a.anchor for a in seen[1:]],
                                        count=first.count, comparator=first.comparator,
                                        span=first.span))
-    return rows
+    # ⇒ THE EXCLUSIONS ATTACH HERE, ON THE ONE PATH EVERY CONSUMER WALKS — the pipeline
+    #   was the only caller of attach_exclusions, so the eval's readings (and any future
+    #   consumer) carried sets with their carve-outs SILENTLY MISSING. Idempotent: the
+    #   duplicate-carve check makes the pipeline's own later call harmless.
+    return attach_exclusions(rows, board, request=request)
 
 
 
@@ -1339,8 +1343,8 @@ def consume_reciprocal(rows: List[S.Declared], board: Optional[Board] = None
     return out
 
 
-def attach_exclusions(rows: List[S.Declared], board: Optional[Board] = None
-                      ) -> List[S.Declared]:
+def attach_exclusions(rows: List[S.Declared], board: Optional[Board] = None,
+                      request: str = "") -> List[S.Declared]:
     """An `except X` clause becomes a CONDITION ON THE SET, not a row standing on its own.
 
     ⇒⇒ **RUNG 8's REAL DEFECT, AND THE ASK WAS THE ONLY THING STANDING IN FRONT OF IT.**
@@ -1361,16 +1365,49 @@ def attach_exclusions(rows: List[S.Declared], board: Optional[Board] = None
     """
     board = board or Board()
     out = list(rows)
+    low_req = str(request).lower()
     for i, row in enumerate(out):
         span = str(row.span or row.name).strip().lower()
-        if not any(span.startswith(w) for w in EXCLUDERS):
+        # ⇒⇒ **TWO SURFACES, ONE RULE — the second was LOST on 08-18 and the cost was the
+        #   deadly class.** The comma form keeps the word in the clause (`except db` — the
+        #   span STARTS with it); the bare form was made a BOUNDARY for exact spans, which
+        #   STRIPS the word from the span — and this test then never fired, `excludes`
+        #   stayed empty, and pass 2's table offered the spared machine as an ordinary
+        #   target ("db — the thing"). The model stopped it because the reader put it on
+        #   the menu. The second surface: the row's span PRECEDED by an excluder in the
+        #   request. `but` joins the preceded-by set only — `stop alpha but launch beta`
+        #   cannot attach because the host search below demands a preceding SET.
+        preceded = False
+        if low_req and span:
+            at = low_req.find(span)
+            if at > 0:
+                before = low_req[:at].rstrip(" ,").rsplit(None, 2)
+                tail1 = before[-1] if before else ""
+                tail2 = " ".join(before[-2:]) if len(before) >= 2 else ""
+                preceded = (tail1 in EXCLUDERS or tail2 in ("apart from",)
+                            or tail1 == "but")
+        if not any(span.startswith(w) for w in EXCLUDERS) and not preceded:
             continue
         # THE SET IT COMES OUT OF IS THE NEAREST PRECEDING ONE OF ITS OWN KIND. An exclusion is
         # written directly after what it narrows, which is why proximity is the rule and not a
         # guess — `except` binds to the phrase it follows.
-        for j in range(i - 1, -1, -1):
+        # ⇒ PRECEDING BY TEXT POSITION, NOT LIST POSITION — the anchor walk appends rows in
+        #   discovery order, and `launch everything but the vms…` discovered the carve-out
+        #   FIRST (its noun is manifest, `everything` is not), so the backward list walk
+        #   found no host at all. The request's own order is the rule's order.
+        _pos = low_req.find(span) if low_req else -1
+        _hosts = sorted((j for j in range(len(out)) if j != i
+                         and low_req and out[j].span
+                         and 0 <= low_req.find(str(out[j].span).lower()) < _pos),
+                        key=lambda j: -low_req.find(str(out[j].span).lower()))
+        for j in (_hosts if _pos >= 0 else range(i - 1, -1, -1)):
             host = out[j]
-            if not host.is_set or (row.kind not in (host.kind, S.UNKNOWN_KIND)):
+            # a UNIVERSAL pronoun heads a set even when nothing typed it — `launch
+            # EVERYTHING but…` narrows a whole; the words are a closed class
+            _universal = str(host.span or host.name).strip().lower() in {
+                "everything", "everyone", "anything", "all"}
+            if (not host.is_set and not _universal) or (
+                    row.kind not in (host.kind, S.UNKNOWN_KIND) and not _universal):
                 continue
             # ⇒⇒ THE EXCLUDED ROW'S OWN CONDITIONS **ARE** THE FILTER. `except db` settles to
             #   `vm {name: db}`, so the carve-out is `{name: db}` with nothing constructed;
@@ -1379,9 +1416,17 @@ def attach_exclusions(rows: List[S.Declared], board: Optional[Board] = None
             #   exclusion is by predicate, and the predicate is already sitting on the row.
             carve = dict(row.where or {})
             if not carve:
-                key = _key_of(row.kind, board)
-                named = row.identity or row.name
-                carve = {key: str(named)} if key and named else {}
+                # ⇒ A KINDLESS EXCLUDED ROW BORROWS THE HOST'S KEY — `_key_of('?')` is None,
+                #   so before the lab settles the row (which is ALWAYS, on run_scanned's own
+                #   path) the carve never built and the whole attacher was a no-op. The host
+                #   is the set being narrowed; its key is the vocabulary the carve speaks.
+                key = _key_of(row.kind, board) or _key_of(
+                    str(host.kind).replace("_set", ""), board)
+                named = str(row.identity or row.name)
+                for lead in EXCLUDERS + ("but",) + ("the", "a", "an"):
+                    if named.lower().startswith(lead + " "):
+                        named = named[len(lead) + 1:]
+                carve = {key: named} if key and named else {}
             if carve and carve not in [dict(f) for f in host.excludes]:
                 out[j] = host._replace(excludes=tuple(host.excludes) + (carve,))
             break

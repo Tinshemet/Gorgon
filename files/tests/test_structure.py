@@ -802,6 +802,54 @@ def test_a_questions_skin_is_not_part_of_the_thing():
           scan("vm", "launch every stopped vm", board).span == "every stopped vm")
 
 
+def test_the_carve_out_reaches_every_consumer():
+    """⇒⇒ **THE READER PUT THE SPARED MACHINE ON THE MENU.** The `except` boundary (08-18)
+    bought exact spans and lost the SET semantics: `every vm` carried `excludes=()` and
+    pass 2's symbol table offered `db — "the thing"` as an ordinary target. The model
+    stopped it because the reading disarmed the carve-out — the deadly class with the
+    reader as the cause.
+
+    Three defects, one attacher, all pinned here:
+      · the span-starts-with test never fired once the boundary STRIPPED the word — the
+        second surface (span PRECEDED by an excluder) is the same rule's other face
+      · a kindless excluded row built NO carve (`_key_of('?')` is None) — it borrows the
+        HOST's key now, which is the vocabulary the carve speaks
+      · the host search walked LIST order while `launch everything but…` discovers the
+        carve-out first — text position is the rule's order, and a UNIVERSAL pronoun
+        heads a set even when nothing typed it
+    ⇒ AND THE ATTACH RUNS ON run_scanned's OWN PATH — the pipeline was the only caller,
+      so every other consumer (the eval included) read sets with carve-outs missing.
+    """
+    import engines.channel as CH
+    was = CH.constrained
+    CH.constrained = lambda *a, **k: None
+    try:
+        from orchestrator.seam import pass1 as P
+        board = Board()
+
+        def excl(text):
+            return {r.name: r.excludes for r in P.run_scanned(text, board=board)
+                    if r.excludes}
+
+        got = excl("stop every vm except the db vm")
+        check("the bare `except` carves the set",
+              got.get("every vm") == ({"name": "db vm"},))
+        got = excl("launch everything but the vms carrying the test label")
+        check("`everything but` carves by PREDICATE",
+              got.get("everything") == ({"label": "test"},))
+        got = excl("put every vm on a network called core, except db, and put db on "
+                   "a network called dmz instead")
+        check("the comma form still carves, and cleanly",
+              any(v == ({"name": "db"},) for v in got.values()))
+        # ⇒ THE CONTROLS
+        check("a contrastive `but` between two acts attaches nothing",
+              excl("stop alpha but launch beta") == {})
+        check("an ordinary create attaches nothing",
+              excl("create a vm named alpha") == {})
+    finally:
+        CH.constrained = was
+
+
 def main(argv=None) -> int:
     from tests import _suite
     return _suite.run(sys.modules[__name__], "structure")
