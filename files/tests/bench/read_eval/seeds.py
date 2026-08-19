@@ -180,8 +180,12 @@ SEEDS: List[Seed] = [
          {0: [0, 1], 1: [0, 1]},
          note="`both` refers — the attachment carries it, no span for the pro-form"),
     Seed("coord-0005", "coordination",
-         "label the red vms and launch the blue ones",
-         ["the red vms", "the blue ones"], ["label", "launch"], {0: [0], 1: [1]}),
+         "label the red vms 'ready' and launch the blue ones",
+         ["the red vms", "ready", "the blue ones"], ["label", "launch"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}], 1: [2]},
+         note="disambiguated at the v2 freeze, the operator's ruling: the model guessed a "
+              "label value 'right' given no context, and that does not give it a pass — "
+              "'it's a test issue'. The sentence now names the value"),
 
     # ══ buried-args — the argument far from its verb ═════════════════════════════════
     Seed("ba-0001", "buried-args", "stop the vms on the lab network",
@@ -197,8 +201,12 @@ SEEDS: List[Seed] = [
     Seed("ba-0004", "buried-args",
          "the web vm, after you have checked the others, restart it",
          ["the web vm", "the others"], ["checked", "restart"], {0: [1], 1: [0]},
-         note="the operator's reject: the checked-clause was MISSING. `the others` is a "
-              "restricted pro-form and heads its own set, like `the ones that…`"),
+         triggers={1: "after you have checked the others"},
+         note="TWO operator rulings meet here: the you-subject clause is an instructed act "
+              "(08-18), AND it TRIGGERS the restart (08-19, superseding ledger item 5 for "
+              "after-clauses — 'restart should happen AFTER the AI is done checking'). "
+              "Consistent with you-is-the-agent: the trigger fires on the agent's own "
+              "completed act, a future ledger event. Bare `then` remains unmarked sequence"),
 
     # ══ anaphora — within one sentence ═══════════════════════════════════════════════
     Seed("ana-0001", "anaphora", "create a vm named alpha and launch it",

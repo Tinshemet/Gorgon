@@ -57,7 +57,7 @@ network the DESTINATION, and the attachment says only that both belong to `put`.
   {"span": 0, "role": "destination"}]}` — with a closed role vocabulary read from the
   manifest's own argument declarations, never a hand list.
 
-## 5 · SEQUENCE BETWEEN INSTRUCTED ACTS (audit, 2026-08-18)
+## 5 · SEQUENCE BETWEEN INSTRUCTED ACTS — ⚠ PARTIALLY SUPERSEDED 08-19: an `after`-clause IS a trigger (the operator, on ba-0004-nt: "restart should happen AFTER the AI is done checking"); consistent with you-is-the-agent — the trigger fires on the agent's own completed act, a future ledger event. Bare `then` remains unmarked sequence, and the act->act `after` field stays the v2 idea for THAT
 
 *"stop alpha. THEN launch beta."* · *"restart it AFTER YOU HAVE CHECKED the others"* — an
 ordering between two acts the operator commanded. Not a trigger (no world condition starts
