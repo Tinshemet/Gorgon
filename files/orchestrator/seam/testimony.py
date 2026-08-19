@@ -45,6 +45,11 @@ NEG_MODALS = frozenset({"won't", "wont", "can't", "cant", "cannot", "couldn't",
 NEG_DO = frozenset({"doesn't", "don't", "didn't"})
 COPULAS = frozenset({"is", "are", "was", "were", "isn't", "aren't", "wasn't", "weren't"})
 ITERATIVES = frozenset({"keeps", "keep", "kept"})
+
+# R2 (operator-ordered 2026-08-19): the indefinite pronoun + copula IS the malfunction
+# marker — "SOMETHING IS WRONG with the dmz network". Closed pronouns, closed copulas;
+# the complement word is free because the FRAME carries the meaning.
+INDEFINITES = frozenset({"something", "anything", "nothing"})
 _RELATIVIZERS = frozenset({"that", "which", "who", "whom", "whose", "where", "when"})
 
 
@@ -65,6 +70,11 @@ def _words(text: str) -> List[str]:
 
 def _of_clause(clause: str) -> Optional[Testimony]:
     words = _words(clause)
+    # R2 — the indefinite frame: predicate is the head, the with-phrase is the patient's
+    if len(words) >= 3 and words[0] in INDEFINITES and words[1] in COPULAS:
+        stop = words.index("with") if "with" in words else len(words)
+        return Testimony(" ".join(words[stop + 1:]), " ".join(words[:stop]),
+                         clause.strip())
     for at, word in enumerate(words):
         if at == 0:
             continue                      # no subject before it -> imperative, not testimony
@@ -90,13 +100,45 @@ def _of_clause(clause: str) -> Optional[Testimony]:
 
 
 def read(request: str, board: Optional[Board] = None) -> List[Testimony]:
-    """Every testimony clause in the request. Deterministic, zero model calls."""
+    """Every testimony clause in the request. Deterministic, zero model calls.
+
+    ⇒ R1 — ELABORATION SPREAD (operator-ordered 2026-08-19): once a request carries a
+      malfunction statement, the following PLAIN DECLARATIVE clause is the symptom's
+      elaboration — *"vm2 is not working, IT BOOTS TO A BLUE SCREEN"* · *"…, PINGS TIME
+      OUT"*. Position and shape decide (not an imperative, not a question, not a
+      condition); the certified diagnosis cell held its three misses exactly here.
+    """
     out = []
+    spread = False
     for clause in _clauses(request):
         got = _of_clause(clause)
         if got:
             out.append(got)
+            spread = True
+            continue
+        if spread and _elaborates(clause, board):
+            out.append(Testimony("", clause.strip(), clause.strip()))
     return out
+
+
+def _elaborates(clause: str, board=None) -> bool:
+    """A plain declarative riding a malfunction statement — testimony by position."""
+    words = _words(clause)
+    if len(words) < 2:
+        return False
+    from .scan import opens_imperative
+    from .speech_act import AUXILIARIES, WH_WORDS
+    if opens_imperative(words, board):
+        return False
+    if words[0] in AUXILIARIES or words[0] in WH_WORDS:
+        return False
+    try:
+        from . import iso as _iso
+        if _iso.is_condition(clause, board):
+            return False
+    except Exception:
+        pass
+    return True
 
 
 def is_testimony(clause: str, board: Optional[Board] = None) -> bool:

@@ -949,9 +949,12 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
             if _sa.act_of(clause, board) == _sa.DECLARATION:
                 continue
             # a SYMPTOM is described, never executed — the baseline billed delete_vm
-            # emitted from "is not working" (16 hallucinated acts on the diagnosis stratum)
+            # emitted from "is not working" (16 hallucinated acts on the diagnosis stratum).
+            # Read over the WHOLE request, not the lone clause: R1's elaboration ("it
+            # boots to a blue screen") is testimony only by what stands BEFORE it.
             from . import testimony as _T
-            if _T.is_testimony(clause, board):
+            _testi = {t.clause.strip().lower() for t in _T.read(request, board)}
+            if _T.is_testimony(clause, board) or str(clause).strip().lower() in _testi:
                 continue
             # ⇒ a NEGATED IMPERATIVE forbids — asking what to DO about "don't stop the web
             #   vm" invited probe_exists and add_label (the certified eval, negation cell)
