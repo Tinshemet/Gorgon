@@ -261,7 +261,54 @@ _CUT_NEG = frozenset({"don't", "not", "never", "do", "no"})
 
 
 def _comma_free_cuts(piece: str) -> List[str]:
-    """Cut where the missing comma would have — the CLAUSE MERGE, priced 2026-08-19.
+    """The recursion over `_first_cut` — see there for the rules."""
+    at = _first_cut(piece)
+    if at is None:
+        return [piece]
+    left, right = piece[:at].strip(" ,"), piece[at:].strip(" ,")
+    if not left or not right:
+        return [piece]
+    return _comma_free_cuts(left) + _comma_free_cuts(right)
+
+
+def merge_cut_points(request: str) -> List[int]:
+    """Absolute offsets where a clause break belongs but no punctuation exists.
+
+    ⇒ N3 (operator-approved): the front door RESTORES the missing comma at these
+      offsets, so pass 1's span walk — and every other reader — sees the boundary the
+      splitter already knows about. One copy of the rules (`_first_cut`); this walk
+      only maps them to request offsets.
+    """
+    import re as _re
+    pts: List[int] = []
+    seps = sorted([_re.escape(m) for m in CLAUSE_MARKS]
+                  + [_re.escape(w) for w in CLAUSE_WORDS], key=len, reverse=True)
+    at = 0
+    segments = []
+    for m in _re.finditer("|".join(seps), request):
+        segments.append((at, m.start()))
+        at = m.end()
+    segments.append((at, len(request)))
+
+    def rec(s_: int, e_: int) -> None:
+        piece = request[s_:e_]
+        cut = _first_cut(piece)
+        if cut is None:
+            return
+        left, right = piece[:cut].strip(" ,"), piece[cut:].strip(" ,")
+        if not left or not right:
+            return
+        pts.append(s_ + cut)
+        rec(s_, s_ + cut)
+        rec(s_ + cut, e_)
+
+    for s_, e_ in segments:
+        rec(s_, e_)
+    return sorted(pts)
+
+
+def _first_cut(piece: str):
+    """Where the missing comma would have been — the CLAUSE MERGE, priced 2026-08-19.
 
     Without punctuation *"if alpha is stopped launch it"* stays ONE clause: is_condition
     withholds the whole thing from pass 2, the imperative channel fails (it opens on
@@ -287,20 +334,14 @@ def _comma_free_cuts(piece: str) -> List[str]:
     text = piece
     low = text.lower()
     if not low.strip():
-        return [piece]
+        return None
     from .front_door import _quoted
     opaque = _quoted(low)
     toks = [(m.group(0), m.start(), m.end()) for m in _re.finditer(r"[a-z']+", low)
             if not any(qs <= m.start() and m.end() <= qe for qs, qe in opaque)]
     if len(toks) < 3:
-        return [piece]
+        return None
     words = [t[0] for t in toks]
-
-    def _split(at: int) -> List[str]:
-        left, right = text[:at].strip(" ,"), text[at:].strip(" ,")
-        if not left or not right:
-            return [piece]
-        return _comma_free_cuts(left) + _comma_free_cuts(right)
 
     from .speech_act import COURTESY, WRAPPERS, AUXILIARIES
     from . import iso as _iso, temporal as _T
@@ -309,26 +350,26 @@ def _comma_free_cuts(piece: str) -> List[str]:
     # 1 · a leading courtesy literal ends where the literal ends
     for phrase in COURTESY:
         if low.strip().startswith(phrase) and len(low.strip()) > len(phrase):
-            return _split(low.find(phrase) + len(phrase))
+            return low.find(phrase) + len(phrase)
     # ⇒ A QUESTION SKIN IS NEVER CUT — the wh/aux frame governs the whole clause
     #   (`how many machines carry the 'fleet' label` is ONE ask, and `carry the` is no
     #   imperative inside it; `when did you stop it` INVERTS and asks). Fronted `when`
     #   stays cuttable only as the ADJUNCT — `is_condition` already owns that test.
     from .speech_act import WH_WORDS as _WH
     if words[0] in AUXILIARIES or (words[0] in _WH and not _iso.is_condition(text)):
-        return [piece]
+        return None
     # 2 · a mid-clause wrapper starts its own clause
     for phrase in WRAPPERS:
         at = low.find(f" {phrase}")
         if at > 0 and not any(qs <= at < qe for qs, qe in opaque):
-            return _split(at + 1)
+            return at + 1
     # 3 · `anyway` releases what stands behind it
     for i, (w, s, e) in enumerate(toks):
         if w == "anyway":
             if i > 0:
-                return _split(s)
+                return s
             if len(toks) > 1:
-                return _split(e)
+                return e
     # 4 · a mid-clause condition head opens a subordinate
     heads = {"if", "unless"} | set(_T.EVENTS)
     for i in range(1, len(toks)):
@@ -336,7 +377,7 @@ def _comma_free_cuts(piece: str) -> List[str]:
         if w in heads and not (w == "if" and words[i - 1] in _iso._WHETHER_HOSTS):
             cut = toks[i - 1][1] if words[i - 1] in _iso._FOCUS else s
             if cut > 0:
-                return _split(cut)
+                return cut
     # 5 · a piece-initial condition head: the subordinate ends after its predicate
     # 6 · a second imperative is its own clause  (one walk serves both)
     conditioned = words[0] in ({"if", "unless", "when", "whenever"} | set(_T.EVENTS))
@@ -359,8 +400,8 @@ def _comma_free_cuts(piece: str) -> List[str]:
                      # a subordinate's own content can never open an imperative
                      # before its predicate — `when you GET a chance` stays whole
                      or (not conditioned and w in base_ops))):
-            return _split(s)
-    return [piece]
+            return s
+    return None
 
 
 def clauses_of(request: str) -> List[str]:

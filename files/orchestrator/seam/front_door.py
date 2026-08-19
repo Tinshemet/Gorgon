@@ -117,9 +117,33 @@ def read(request: str, board=None) -> View:
             edits.append((s_, e_, got))
             notices.append(f"read '{w}' as '{got}'")
 
-    if not edits:
-        return View(text, list(range(len(text) + 1)), [], text)
-    new, back = _apply(text, edits)
+    if edits:
+        mid, back1 = _apply(text, edits)
+    else:
+        mid, back1 = text, list(range(len(text) + 1))
+
+    # 4 · N3 (operator-approved) — RESTORE THE MISSING CLAUSE BREAK. The clause-merge
+    #     rules already know where the comma belonged (`pass2.merge_cut_points` — one
+    #     copy); the view puts it back so pass 1's span walk, iso, self_repair and both
+    #     act channels all see the boundary. Sim-check principle: the rules only fire
+    #     where a closed class votes — no vote, no comma. Computed on the STAGE-1 text
+    #     so a dropped pause or fixed typo cannot hide a cut.
+    from .pass2 import merge_cut_points
+    cuts = merge_cut_points(mid)
+    if not cuts:
+        return View(mid, back1, notices, text)
+    edits2 = []
+    for at in cuts:
+        if 0 < at <= len(mid) and mid[at - 1] == " ":
+            edits2.append((at - 1, at, ", "))
+        elif at < len(mid) and mid[at] == " ":
+            edits2.append((at, at + 1, ", "))
+        else:
+            edits2.append((at, at, ", "))
+        word = mid[at:].split()[0] if mid[at:].split() else ""
+        notices.append(f"read a clause break before '{word}'")
+    new, back2 = _apply(mid, edits2)
+    back = [back1[b] for b in back2]
     return View(new, back, notices, text)
 
 

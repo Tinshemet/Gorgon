@@ -100,3 +100,12 @@ role `value`); the frozen 59 just contain none. Two distinct future homes:
   · NOISE twins — pasted log lines / paths mid-command (`embedded-junk`), with the expansion
     phase as planned. The spec filed identifiers under noise; the operator's question exposed
     that only the PASTED form is noise — the typed-value form is clean capability.
+
+## 9 · FUSED WORDS — a missing SPACE is a typo class of its own (operator, 2026-08-19)
+*"does the typo also cover two words or more as one string? like hellothere? ... i do
+wonder if we should cover it."* Not covered today: recognition is per-token, so `nowait`
+never meets the two-word marker `no wait`. The cover is the same family — an unknown
+token that SPLITS into two known closed-set words, accepted only where the construct
+votes, same notice, same [[gorgon-typo-risk-ladder]] — but NO CERTIFIED CASE prices it.
+⇒ v2.1: add **fused** as a fifth noise class (~10 twins, operator-certified), then build
+against the measured cell. Never before.

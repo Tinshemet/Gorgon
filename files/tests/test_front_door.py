@@ -68,3 +68,37 @@ def test_a_real_word_pair_below_the_length_floor_is_left_alone():
 def test_mid_sentence_pause_with_commas():
     v = FD.read("stop it, um, right away")
     assert v.text == "stop it, right away"
+
+
+# ── N3: the missing clause break is restored (operator-approved, sim-check principle:
+#      only where the closed-class grammar votes; no vote, no comma) ─────────────────
+
+def test_the_missing_comma_is_restored():
+    assert FD.read("if alpha is stopped launch it").text == \
+        "if alpha is stopped, launch it"
+    assert FD.read("when the backup finishes snapshot the db vm").text == \
+        "when the backup finishes, snapshot the db vm"
+
+
+def test_two_breaks_restore_two_commas():
+    v = FD.read("the web vm after you have checked the others restart it")
+    assert v.text == "the web vm, after you have checked the others, restart it"
+
+
+def test_comma_restore_composes_with_the_pause_drop():
+    v = FD.read("uh if alpha is stopped launch it")
+    assert v.text == "if alpha is stopped, launch it"
+    # and offsets still land on the ORIGINAL bytes
+    s = v.text.index("launch it")
+    assert v.original[v.back[s]:].startswith("launch it")
+
+
+def test_no_vote_no_comma():
+    assert FD.read("stop alpha beta and gamma").text == "stop alpha beta and gamma"
+    assert FD.read("how many machines carry the 'fleet' label").text == \
+        "how many machines carry the 'fleet' label"
+
+
+def test_comma_text_is_the_identity_still():
+    req = "if alpha is stopped, launch it"
+    assert FD.read(req).text == req
