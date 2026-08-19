@@ -24,6 +24,11 @@
   "note": "",
   "verdict": "accepted"
  },
+ "ana-0002": {
+  "hash": "4fe57c45dee8d263",
+  "note": "",
+  "verdict": "accepted"
+ },
  "ana-0003": {
   "hash": "3571ea93a88d4ac2",
   "note": "",
@@ -56,6 +61,26 @@
  },
  "cc-0001": {
   "hash": "2c943f33c144d586",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "cc-0002": {
+  "hash": "770ee6b43d9a2e0a",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "cc-0003": {
+  "hash": "6759ad6a1e42e1b2",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "cc-0004": {
+  "hash": "4debb2ef4a6fd5aa",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "cc-0005": {
+  "hash": "8132fee83a2edf32",
   "note": "",
   "verdict": "accepted"
  },
@@ -95,9 +120,9 @@
   "verdict": "accepted"
  },
  "cond-0005": {
-  "hash": "50af25b43c0dc34b",
-  "note": "tell here is a hidden query response, which should produce an answer 'vms which it skipped' is the set",
-  "verdict": "rejected"
+  "hash": "48d0fc2f88f92e4f",
+  "note": "",
+  "verdict": "accepted"
  },
  "coord-0001": {
   "hash": "44ae6ec16200182e",
@@ -155,14 +180,29 @@
   "verdict": "accepted"
  },
  "cs-0007": {
-  "hash": "50dd1d3ad525527c",
-  "note": "Query needs to preduce a result, here it would be 'stopped vms' set",
-  "verdict": "rejected"
+  "hash": "46191f9c2654f486",
+  "note": "",
+  "verdict": "accepted"
  },
  "diag-0001": {
-  "hash": "93a6bdc43f861304",
-  "note": "no produce, the operator should be 'diagnosis' and the patient should be 'vm2' with 'it boots to a blue screen' as a testimony",
-  "verdict": "rejected"
+  "hash": "c8c812c2ee70d947",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "diag-0002": {
+  "hash": "d99e99536596e646",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "diag-0003": {
+  "hash": "3d82e9a7efecc60c",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "diag-0004": {
+  "hash": "9f2cf8358a88b4af",
+  "note": "",
+  "verdict": "accepted"
  },
  "mc-0001": {
   "hash": "b0fd3b93edc55b7e",
