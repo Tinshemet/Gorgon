@@ -920,11 +920,24 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
         seen_ops.add(key)
         mutating = not str(op.operator).startswith("probe_")
         if mutating:
+            # ⇒ THE HANDLES ARE THE ENUM (rule D1) — an op whose `on` names no handle is
+            #   not a misreading to score, it is DECODE CORRUPTION that could never run:
+            #   `stop_vm on vm` against a table holding only {vms_but_db_vm, db}.
+            if op.on not in handles:
+                continue
             # ⇒ MANIFEST-INCOMPLETE: an op whose setter refs another kind, emitted with no
             #   second name (add_vm_to_network value=None from "snapshot every vm") — a
             #   step that could never run, refused at birth
             if op.operator in _needs_value and not op.value:
                 continue
+            # ⇒ THE JUNK MAGNET (4 of 6 wrong choices were add_label): the one free-text
+            #   value in a closed enum attracts pattern-completion — `=restarted`, `=db`,
+            #   `="known at plan time"`. A value must be SAID: a table handle, or words
+            #   present in the asking clause. Nothing else was requested by anybody.
+            if op.value and op.value not in handles:
+                _vw = set(str(op.value).lower().split())
+                if not (_vw and _vw <= set(str(clause).lower().split())):
+                    continue
             # ⇒ THE CROSS-CLAUSE LEAK, mutating arm only: the target must be VISIBLE from
             #   the asking clause — its handle word or its row's span text. `put web on
             #   lab` keeps `web` (the handle is in the clause); `stop_vm on test_vms` from

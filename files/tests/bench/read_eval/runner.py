@@ -344,8 +344,15 @@ def score_case(case: dict, reading: dict) -> dict:
             if span_match[ix] is not None and role != "excluded"}
     absorbed: Dict[int, List[int]] = {}
     hallucinated_actions = housekeeping_actions = 0
+    span_texts = {i: str(s_.get("text", "")).lower()
+                  for i, s_ in enumerate(case["gold"]["spans"])}
     for k, op in enumerate(reading["operations"]):
-        home = None
+        # ⇒ BEST-FIT, NOT FIRST-FIT (mc-0003): a clause holding two verbs — `create a vm
+        #   named web, put it on the dmz` — absorbed add_vm_to_network under CREATE and
+        #   left `put` undetected. Every fitting candidate is scored; the op's own second
+        #   argument votes — its value text matching a member of an action's attachment
+        #   (`dmz` ∈ `the dmz`) is the strongest signal of whose step this is.
+        home, best = None, -1
         for gi, g in enumerate(gold_actions):
             if g.get("kind") in ("rule", "report"):
                 continue        # never executed — an op acting on a law or a symptom
@@ -355,9 +362,19 @@ def score_case(case: dict, reading: dict) -> dict:
             if not (op["clause_start"] <= g["start"] and g["end"] <= op["clause_end"]):
                 continue
             targets = {op["on_row"], op["value_row"]} - {None}
-            if targets and targets <= attached_rows.get(gi, set()):
-                home = gi
-                break
+            if not (targets and targets <= attached_rows.get(gi, set())):
+                continue
+            score = 0
+            val = str(op.get("value") or "").lower()
+            if val:
+                from .schema import members_of as _mo
+                att = next((a for a in case["gold"]["attachments"]
+                            if a["action"] == gi), None)
+                if att and any(val in span_texts.get(ix, "")
+                               for ix, _r in _mo(att)):
+                    score += 2
+            if score > best:
+                home, best = gi, score
         if home is None:
             if _observes(op["operator"]):
                 housekeeping_actions += 1
