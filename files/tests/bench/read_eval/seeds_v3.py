@@ -162,4 +162,114 @@ SEEDS_V3: List[Seed] = [
     Seed("sa-0002", "self-address", "good morning, stop the lab vms",
          ["the lab vms"], ["stop"], {0: [0]},
          note="a greeting marks nothing — flavour is one kind, not the genus"),
+
+    # ══ ordinals — selection by ORDER, a closed class nothing reads ══════════════════
+    Seed("or-0001", "ordinals", "stop the first vm",
+         ["the first vm"], ["stop"], {0: [0]},
+         note="RULING NEEDED: is the ordinal part of the span (drafted) or a selector "
+              "read like a count? ('the first' has no kind word — affordance types it)"),
+    Seed("or-0002", "ordinals", "delete the last snapshot",
+         ["the last snapshot"], ["delete"], {0: [0]}),
+    Seed("or-0003", "ordinals", "restart the second one",
+         ["the second one"], ["restart"], {0: [0]}),
+
+    # ══ fallback — act-anaphora: `that` names the ACT, failure-contingent order ══════
+    Seed("fb-0001", "fallback", "stop alpha, and if that fails, kill it",
+         ["alpha"], ["stop", "kill"], {0: [0], 1: [0]},
+         triggers={1: "if that fails"},
+         note="`that` refers to the STOP — an act, not a thing; the kill is TRIGGERED "
+              "by its failure. No span for the act-anaphor (the bare-pronoun rule, one "
+              "level up)"),
+    Seed("fb-0002", "fallback", "launch the db vm, and if that doesn't work, restart the host",
+         ["the db vm", "the host"], ["launch", "restart"], {0: [0], 1: [1]},
+         triggers={1: "if that doesn't work"}),
+
+    # ══ pairwise — coordination with DIFFERENT values per conjunct ═══════════════════
+    Seed("pw-0001", "pairwise", "label web 'ready' and db 'hold'",
+         ["web", "ready", "db", "hold"], ["label", "label"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}],
+          1: [{"span": 2, "role": "patient"}, {"span": 3, "role": "value"}]},
+         note="the one-patient rule DECIDED the draft: one verb, TWO acts (both share "
+              "the verb's offsets) — each conjunct pairs its own patient and value. "
+              "The validator itself refused the flat one-act reading; RULING: bless "
+              "this shape or extend the schema with grouped members"),
+    Seed("pw-0002", "pairwise", "put web on lab and db on dmz",
+         ["web", "lab", "db", "dmz"], ["put", "put"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "destination"}],
+          1: [{"span": 2, "role": "patient"}, {"span": 3, "role": "destination"}]},
+         note="same shape as pw-0001, destination flavour"),
+
+    # ══ negated-query — negation composed with the interrogative ═════════════════════
+    Seed("nq-0001", "negated-query", "which vms are not running?",
+         ["which vms"], ["which vms are not running"], {0: [0]}, queries=[0],
+         note="cs-0007's convention + negation: the asked property (negated) stays "
+              "unmarked; the wh-NP is the span"),
+    Seed("nq-0002", "negated-query", "is alpha not responding?",
+         ["alpha"], ["is alpha not responding"], {0: [0]}, queries=[0]),
+
+    # ══ schedules — recurrence as a standing trigger (temporal.RECURRENCE, offsetless
+    #    today exactly as the clock was) ═══════════════════════════════════════════════
+    Seed("sch-0001", "schedules", "snapshot the db vm every night",
+         ["the db vm"], ["snapshot"], {0: [0]},
+         triggers={0: "every night"},
+         note="the recurrence is the trigger — clock_tail's sibling, RECURRENCE arm; "
+              "today it has no offset reader, so this seed holds the slot open exactly "
+              "as qual-0005 held the clock's"),
+    Seed("sch-0002", "schedules", "check the lab network every 2 hours",
+         ["the lab network"], ["check"], {0: [0]},
+         triggers={0: "every 2 hours"}),
+
+    # ══ superlatives — an ORDERING over an attribute (attr classes license it) ═══════
+    Seed("sup-0001", "superlatives", "stop the biggest vm",
+         ["the biggest vm"], ["stop"], {0: [0]},
+         note="structure_map ⚠⚠: a superlative needs an ordering — the attribute "
+              "class's TYPE (count/quantity = orderable) is what licenses (max, "
+              "memory_mb). Span whole, like every filtered NP"),
+    Seed("sup-0002", "superlatives", "delete the oldest snapshot of alpha",
+         ["the oldest snapshot of alpha"], ["delete"], {0: [0]}),
+
+    # ══ naming-lists — one act MINTING several names ═════════════════════════════════
+    Seed("nl-0001", "naming-lists", "create three vms named a, b and c",
+         ["three vms named a, b and c"], ["create"], {0: [0]},
+         note="RULING NEEDED: one span carrying three mints (drafted), or three "
+              "objects? The count says three; the names distribute. Reading names, "
+              "writing mints — a `must` ASSIGNS and may mint"),
+    Seed("nl-0002", "naming-lists", "create two networks called front and back",
+         ["two networks called front and back"], ["create"], {0: [0]}),
+
+    # ══ quoted-values — a value with SPACES stays one value ══════════════════════════
+    Seed("qv-0001", "quoted-values", "label the web vm 'do not touch'",
+         ["the web vm", "do not touch"], ["label"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}]},
+         note="the quoted value contains a NEGATION and an op word — the quotes are "
+              "structural: nothing inside them is read as language (evidence-opacity's "
+              "little sibling, write side)"),
+    Seed("qv-0002", "quoted-values", "call the new network 'staging east'",
+         ["the new network", "staging east"], ["call"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}]}),
+
+    # ══ audit — a question about OUR OWN behaviour, never sent at the lab ════════════
+    Seed("au-0001", "audit", "what did you just run?",
+         [], ["what did you just run"], {}, queries=[0],
+         note="coverage_map ⚠⚠: events.log is the arbiter and no sentence reaches it. "
+              "NO object spans — the question is about the agent's ledger, not a lab "
+              "thing; any lab op emitted from it scores hallucinated. Pairs with "
+              "self-address: 'you' is the agent"),
+    Seed("au-0002", "audit", "what changed in the lab today?",
+         [], ["what changed in the lab today"], {}, queries=[0],
+         note="same family, the lab-shaped skin — still an events.log question"),
+
+    # ══ capability — CAN-you generic vs CAN-you polite order ═════════════════════════
+    Seed("cap-0001", "capability", "can you create networks?",
+         [], ["can you create networks"], {}, queries=[0],
+         note="BARE PLURAL, no determiner = a question about ABILITY — no object, no "
+              "create op (one emitted scores hallucinated). The twin below is the "
+              "adversary"),
+    Seed("cap-0002", "capability", "can you create a network for the test vms?",
+         ["a network", "the test vms"], ["create"], {0: [0]},
+         note="SINGULAR INDEFINITE = the polite order (0/14 was the measured model "
+              "score on these — the closed reading is the whole point). The test vms "
+              "name the beneficiary — RULING NEEDED: span kept as plain object "
+              "(drafted) or a beneficiary role?"),
 ]
+

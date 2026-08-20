@@ -77,7 +77,9 @@ EARNED_STRATA = ("qualifiers", "adjunct-clauses", "diagnosis", "cross-cutting")
 #   structure_map's open holes; v3 is the LAST release and closes the READ saga)
 V3_STRATA = ("identifiers", "units", "possessive", "alternatives",
              "reduced-relative", "apposition", "cause", "concession",
-             "magnitude", "manner", "learned-words", "self-address")
+             "magnitude", "manner", "learned-words", "self-address",
+             "ordinals", "fallback", "pairwise", "negated-query", "schedules",
+             "superlatives", "naming-lists", "quoted-values", "audit", "capability")
 STRATA = SPEC_STRATA + EARNED_STRATA + V3_STRATA
 
 NOISE = ("terse", "typos", "no-punct", "voice", "fused", "embedded-junk", "code-switch")

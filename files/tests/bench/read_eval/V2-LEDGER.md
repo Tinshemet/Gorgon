@@ -125,11 +125,16 @@ planned as THE LAST release — grow toward **~300 sentences with a few dozen pa
 a comfortable future corpus. v3 closes the READ saga.
 
 ## 11 · v3 SCOPE, SETTLED 08-20 NIGHT — what closes READ
-34 seed drafts in `seeds_v3.py`, 12 strata (identifiers · units · possessive ·
-alternatives · reduced-relative · apposition · cause · concession · magnitude · manner ·
-learned-words · self-address), every one from a MEASURED structure_map/coverage_map hole
-or the operator's learned-patterns order. All build+validate. The operator certifies,
-then noise twins, then freeze.
+**55 seed drafts** in `seeds_v3.py`, **22 strata** — the operator's second sweep
+("what other families might we encounter?") added ten: ordinals · fallback (act-anaphora,
+'if that fails') · pairwise (different value per conjunct — the one-patient rule itself
+forced the two-acts draft) · negated-query · schedules (recurrence triggers, the clock's
+sibling slot) · superlatives (attr-class TYPE licenses the ordering) · naming-lists ·
+quoted-values ('do not touch' — quotes are structural) · audit (events.log questions,
+NO lab spans) · capability (can-you generic vs polite order — the measured 0/14 family).
+DEFERRED with reasons: preference (route's), comparative-reference (value-copy), undo
+(cross-turn). All 55 build+validate. The operator certifies, then noise twins, then
+freeze — ~55 clean + twins + the 148 ≈ the ~300 target.
 ⇒ TWO SCHEMA RULINGS BEFORE THE FREEZE:
   1. MANNER — read but unsayable in gold. Proposal: `manner: {action: text}`, scored
      like triggers.
