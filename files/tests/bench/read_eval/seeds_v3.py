@@ -271,5 +271,17 @@ SEEDS_V3: List[Seed] = [
               "score on these — the closed reading is the whole point). The test vms "
               "name the beneficiary — RULING NEEDED: span kept as plain object "
               "(drafted) or a beneficiary role?"),
+
+    # ══ preference — a SOFT standing constraint; reads as a RULE act ═════════════════
+    Seed("pr-0001", "preference", "prefer the lab network for the new vms",
+         ["the lab network", "the new vms"],
+         ["prefer the lab network for the new vms"], {0: [0, 1]}, rules=[0],
+         note="a preference LEGISLATES softly — the clause is the act (the rules "
+              "convention); weighting it against a hard rule is route's, never read's"),
+    Seed("pr-0002", "preference", "i'd rather use the smaller profile",
+         ["the smaller profile"], ["i'd rather use the smaller profile"],
+         {0: [0]}, rules=[0],
+         note="coverage_map's preference hole — 'i'd rather' is a closed preference "
+              "marker; the superlative inside the span rides the superlatives stratum"),
 ]
 

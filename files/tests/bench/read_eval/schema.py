@@ -79,7 +79,7 @@ V3_STRATA = ("identifiers", "units", "possessive", "alternatives",
              "reduced-relative", "apposition", "cause", "concession",
              "magnitude", "manner", "learned-words", "self-address",
              "ordinals", "fallback", "pairwise", "negated-query", "schedules",
-             "superlatives", "naming-lists", "quoted-values", "audit", "capability")
+             "superlatives", "naming-lists", "quoted-values", "audit", "capability", "preference")
 STRATA = SPEC_STRATA + EARNED_STRATA + V3_STRATA
 
 NOISE = ("terse", "typos", "no-punct", "voice", "fused", "embedded-junk", "code-switch")
