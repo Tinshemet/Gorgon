@@ -1079,7 +1079,7 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
                         if (str(_sym.row.span).lower().strip() in _cl0
                                 and _sym.row.kind
                                 and f"create_{_sym.row.kind}" in operators):
-                            out.append((clause, Operation(
+                            out.append((str(request), Operation(
                                 f"create_{_sym.row.kind}", _sym.handle, None)))
                 _prev_head = _cw[0] if _cw else _prev_head
                 continue
@@ -1101,7 +1101,15 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
                         and _mend.withdrawn and _mend.withdrawn.lower() in _cl_low):
                     _clean = _cl_low.replace(_mend.withdrawn.lower(), " ")
                     _clean = _clean.replace(_mend.marker, " ")
-                    clause = " ".join(w for w in _clean.replace(",", " ").split())
+                    _clean = " ".join(_clean.replace(",", " ").split())
+                    # the withdrawn part carries THE VERB ('restart the web vm' ->
+                    # 'the db one'): the corrected order keeps it, or the ask has
+                    # nothing to do
+                    _wf = _mend.withdrawn.lower().split()[0]
+                    if _wf not in _CUT_DETS and _clean.split()[:1] and \
+                            _clean.split()[0] in _CUT_DETS:
+                        _clean = f"{_wf} {_clean}"
+                    clause = _clean
                     _cw = str(clause).lower().split()
                 else:
                     continue
@@ -1306,6 +1314,32 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
         if not (vis[0].row.excludes or ()) and any(sv and sv in _mine1 for sv in _spared):
             continue
         deduped.append((clause, Operation(cand[0], vis[0].handle, None)))
+    # ⇒ T — A TRANSFER CLAUSE DERIVES ITS SETTER (ana-0003, mc-0003: `put them on the
+    #   dmz network` answered with nothing — `put` is no op-name segment, so Q cannot
+    #   see it). The manifest's one setter-with-refs names both kinds; the ref row is
+    #   named in the clause; the owner is named or reached through the pronoun when
+    #   exactly one owner-kind row exists. Compute, never ask.
+    if len(_setter_types) == 1:
+        _sname, (_okind, _rkind) = next(iter(_setter_types.items()))
+        for clause in _asked_imperatives:
+            _cw1 = re.findall(r"[a-z']+", str(clause).lower())
+            if not _cw1 or _cw1[0] not in {"put", "add", "move", "place", "attach"}:
+                continue
+            if any(o.operator == _sname for c2, o in deduped if c2 == clause):
+                continue
+            _cc = _content(clause)
+            _ref = next((s_ for s_ in table
+                         if str(s_.row.kind or "").startswith(_rkind)
+                         and _content(s_.row.span) & _cc), None)
+            _own = next((s_ for s_ in table
+                         if str(s_.row.kind or "").startswith(_okind)
+                         and _content(s_.row.span) & _cc), None)
+            if _own is None and {"it", "them"} & set(_cw1):
+                _owners = [s_ for s_ in table
+                           if str(s_.row.kind or "").startswith(_okind)]
+                _own = _owners[0] if len(_owners) == 1 else None
+            if _ref is not None and _own is not None and _sname in operators:
+                deduped.append((clause, Operation(_sname, _own.handle, _ref.handle)))
     return deduped
 
 

@@ -219,7 +219,7 @@ def verb_position_words(request: str, board: Optional[Board] = None) -> set:
                 if words[j] in nouns and nouns[words[j]] != nouns[w]:
                     clash = True
                     break
-                if j == i + 2 and words[j] in {"one", "ones"}:
+                if j == i + 2 and words[j] in {"one", "ones", "it", "them"}:
                     clash = True
                     break
                 j += 1
@@ -630,7 +630,7 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
                 if _w2 in nouns and nouns.get(_w2) != nouns.get(word):
                     _kindclash = True
                     break
-                if _j == left + 1 and _w2 in {"one", "ones"}:
+                if _j == left + 1 and _w2 in {"one", "ones", "it", "them"}:
                     _kindclash = True
                     break
                 _j += 1
