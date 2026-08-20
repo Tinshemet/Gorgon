@@ -111,7 +111,9 @@ def _split_pass(text: str, board=None):
                 fits.append(i)
         if len(fits) == 1:
             i = fits[0]
-            edits.append((s_, e_, f"{text[s_:s_ + i]} {text[s_ + i:e_]}"))
+            # a pure INSERTION — nothing replaced, so every original byte keeps a
+            # 1:1 mapped position and span edges stay byte-exact through the split
+            edits.append((s_ + i, s_ + i, " "))
             notices.append(f"read '{w}' as '{w[:i]} {w[i:]}'")
     return edits, notices
 
@@ -316,7 +318,9 @@ def _apply(text: str, edits: List[Tuple[int, int, str]]):
         out.append(text[at:s])
         back.extend(range(at, s))
         out.append(rep)
-        back.extend([s] * len(rep))
+        # char-granular: the k-th repair byte maps to the k-th original byte while one
+        # exists (same-length typo fixes stay byte-exact); the tail pins to the last
+        back.extend(s + min(k, max(e - s - 1, 0)) for k in range(len(rep)))
         at = e
     out.append(text[at:])
     back.extend(range(at, len(text)))
