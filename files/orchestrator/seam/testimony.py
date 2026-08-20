@@ -113,8 +113,20 @@ def predicate_end(clause: str) -> Optional[int]:
             for m in _re.finditer(r"[\w:']+", str(clause))]
     words = [t[0] for t in toks]
     if len(words) >= 3 and words[0] in INDEFINITES and words[1] in COPULAS:
-        stop = words.index("with") if "with" in words else len(words)
-        return toks[stop - 1][2] if stop >= 3 else None
+        if "with" not in words:
+            return None                       # frame with no patient PP — nothing to release
+        # ⇒ the with-PP is the PATIENT'S and stays with its testimony — the clause ends
+        #   after the PP's manifest-noun head ("…with the dmz NETWORK ▸ pings time out").
+        #   Cutting before `with` orphaned the PP and billed the clean row (measured
+        #   85a3ff4: diag-0004 detect 3->2). No manifest noun -> no vote -> no cut.
+        from .scan import _index
+        from planner.formula.legal import Board
+        nouns = _index(Board())
+        w_at = words.index("with")
+        for j in range(w_at + 1, len(words)):
+            if words[j] in nouns:
+                return toks[j][2]
+        return None
     for at, word in enumerate(words):
         if at == 0:
             continue
@@ -122,12 +134,15 @@ def predicate_end(clause: str) -> Optional[int]:
             return None
         negated_copula = (word in COPULAS and at + 1 < len(words)
                           and words[at + 1] in ("not", "never"))
-        if word in NEG_MODALS or word in NEG_DO or word in ITERATIVES or negated_copula:
+        # ⇒ ITERATIVES have NO computable end — "keeps dropping OFF THE NETWORK" carries
+        #   its phrasal tail inside the predicate (measured 85a3ff4: diag-0002 detect
+        #   2->1, halluc 0->3 when this arm cut). Negated modal/do and negated copula
+        #   end on their verb head; nothing else votes.
+        if word in NEG_MODALS or word in NEG_DO or negated_copula:
             head_at = at + (2 if negated_copula else 1)
             if head_at >= len(words):
                 return None
-            if not (word in NEG_MODALS or word in NEG_DO) \
-                    and not words[head_at].endswith("ing"):
+            if negated_copula and not words[head_at].endswith("ing"):
                 return None
             return toks[head_at][2]
     return None

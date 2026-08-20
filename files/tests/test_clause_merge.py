@@ -114,7 +114,12 @@ def test_testimony_releases_its_elaboration():
 
 def test_the_indefinite_frame_releases_its_tail():
     assert clauses_of("something is wrong with the dmz network pings time out") == \
-        ["something is wrong", "with the dmz network pings time out"]
+        ["something is wrong with the dmz network", "pings time out"]
+
+
+def test_an_iterative_is_never_cut():
+    assert clauses_of("the web vm keeps dropping off the network") == \
+        ["the web vm keeps dropping off the network"]
 
 
 def test_a_short_tail_is_not_an_elaboration():

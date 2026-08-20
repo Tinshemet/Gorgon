@@ -84,9 +84,16 @@ def test_predicate_end_negated_copula():
     assert c[:T.predicate_end(c)] == "vm2 is not working"
 
 
-def test_predicate_end_indefinite_frame():
+def test_predicate_end_indefinite_frame_keeps_its_patient():
+    # the with-PP is the patient's and stays with its testimony (measured: cutting
+    # before `with` billed the clean row)
     c = "something is wrong with the dmz network pings time out"
-    assert c[:T.predicate_end(c)] == "something is wrong"
+    assert c[:T.predicate_end(c)] == "something is wrong with the dmz network"
+
+
+def test_predicate_end_iteratives_never_cut():
+    # "keeps dropping OFF THE NETWORK" — the phrasal tail is inside the predicate
+    assert T.predicate_end("the web vm keeps dropping off the network") is None
 
 
 def test_predicate_end_none_without_testimony():
