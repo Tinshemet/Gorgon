@@ -75,7 +75,7 @@ SPEC_STRATA = ("clean-single", "coordination", "buried-args", "anaphora", "negat
 EARNED_STRATA = ("qualifiers", "adjunct-clauses", "diagnosis", "cross-cutting")
 STRATA = SPEC_STRATA + EARNED_STRATA
 
-NOISE = ("terse", "typos", "no-punct", "voice", "embedded-junk", "code-switch")
+NOISE = ("terse", "typos", "no-punct", "voice", "fused", "embedded-junk", "code-switch")
 CLEAN = "clean"
 SOURCES = ("seed", "seed-expansion", "real-failure")
 SPAN_TYPES = ("object", "evidence")

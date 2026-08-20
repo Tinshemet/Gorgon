@@ -44,7 +44,7 @@ from .schema import CLEAN, load, validate
 
 CASES_DIR = os.path.join(os.path.dirname(__file__), "cases")
 V1 = os.path.join(CASES_DIR, "v1.jsonl")
-COUNTS = {"terse": 30, "typos": 30, "no-punct": 19, "voice": 10}
+COUNTS = {"terse": 30, "typos": 30, "no-punct": 19, "voice": 10, "fused": 10}
 
 _ARTICLES = {"a", "an", "the"}
 _COURTESY = ("please ", "kindly ")
@@ -110,6 +110,27 @@ def _noise_edits(noise: str, sentence: str, rng: random.Random):
             gap = (m.end() < len(sentence) and sentence[m.end()] == " "
                    and m.start() > 0 and sentence[m.start() - 1] == " ")
             edits.append((m.start(), m.end(), ""))
+    elif noise == "fused":
+        # ⇒ a missing SPACE is a typo class of its own — ledger #9, the operator
+        #   (08-19): "does the typo also cover two words or more as one string?".
+        #   Fuse one or two adjacent word pairs; never across punctuation. The gold
+        #   inherits through the offset map exactly like every other class.
+        toks = _tokens(sentence)
+        pairs = []
+        for i in range(len(toks) - 1):
+            w1, s0, e0 = toks[i]
+            w2, s1, e1 = toks[i + 1]
+            if sentence[e0:s1] == " " and w1.isalpha() and w2.isalpha():
+                pairs.append((i, e0, s1))
+        rng.shuffle(pairs)
+        seen: set = set()
+        for i, e0, s1 in pairs:
+            if i in seen or i + 1 in seen:
+                continue
+            seen |= {i, i + 1}
+            edits.append((e0, s1, ""))
+            if len(edits) == 2:
+                break
     elif noise == "voice":
         for m in re.finditer(r"[,.?!;—–':]", sentence):
             edits.append((m.start(), m.end(), ""))
@@ -207,6 +228,41 @@ def build(trial: int = 1) -> Tuple[List[dict], List[str]]:
     return clean + twins, dropped
 
 
+def build_v21(trial: int = 1):
+    """v2.1 = the frozen v2 (148, certified) + the FUSED twins of its clean cases."""
+    v2_path = os.path.join(CASES_DIR, "v2.jsonl")
+    cases = [json.loads(l) for l in open(v2_path, encoding="utf-8")]
+    clean = [c for c in cases if c["noise"] == CLEAN]
+    by_stratum: dict = {}
+    for c in clean:
+        by_stratum.setdefault(c["stratum"], []).append(c)
+    order = []
+    pools = {st: sorted(by_stratum[st], key=lambda c: c["id"]) for st in sorted(by_stratum)}
+    while any(pools.values()):
+        for st in sorted(pools):
+            if pools[st]:
+                order.append(pools[st].pop(0))
+    twins, dropped, made = [], [], 0
+    for case in order:
+        if made >= COUNTS["fused"]:
+            break
+        got = None
+        for t in range(trial, trial + 3):
+            got = twin(case, "fused", t)
+            if got is not None:
+                break
+        if got is None:
+            dropped.append(f"{case['id']}:fused — no trial produced a valid twin")
+            continue
+        faults = validate(cases + twins + [got])
+        if faults:
+            dropped.append(f"{got['id']} — {faults[0]}")
+            continue
+        twins.append(got)
+        made += 1
+    return cases + twins, dropped
+
+
 def main(argv: Optional[List[str]] = None) -> int:                # pragma: no cover
     import sys
     argv = list(sys.argv[1:] if argv is None else argv)
@@ -226,6 +282,23 @@ def main(argv: Optional[List[str]] = None) -> int:                # pragma: no c
         for t in twins:
             if t["noise"] == kind:
                 print(f"    {t['pair_id']:14} {t['sentence']!r}")
+        return 0
+    if "--emit-v21" in argv:
+        cases21, dropped21 = build_v21(trial)
+        for d in dropped21:
+            print(f"    dropped: {d}")
+        path = os.path.join(CASES_DIR, "v21-draft.jsonl")
+        with open(path, "w", encoding="utf-8") as fh:
+            for c in cases21:
+                fh.write(json.dumps(c) + "\n")
+        import shutil
+        shutil.copyfile(os.path.join(CASES_DIR, "v2.review.json"),
+                        os.path.join(CASES_DIR, "v21-draft.review.json"))
+        fused = [c for c in cases21 if c["noise"] == "fused"]
+        print(f"  {len(cases21)} cases -> {path}")
+        print(f"  148 verdicts pre-seeded — the operator reviews ONLY the {len(fused)} fused twins:")
+        for t in fused:
+            print(f"    {t['pair_id']:14} {t['sentence']!r}")
         return 0
     if "--emit" in argv:
         path = os.path.join(CASES_DIR, "v2-draft.jsonl")
