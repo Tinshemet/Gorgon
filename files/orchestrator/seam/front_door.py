@@ -50,6 +50,75 @@ class View(NamedTuple):
 def read(request: str, board=None) -> View:
     """One pass, at the entrance. Clean text returns the identity view."""
     text = str(request)
+    # 0 · FUSED WORDS FIRST — ledger #9, built against its measurement (9d59f14-*:
+    #     4 spans, 3 acts, +3 halluc in 10 pairs, all where the fusion hides a CLOSED
+    #     word). A split changes tokenization, so it runs before every other pass and
+    #     the offset maps COMPOSE.
+    edits0, notes0 = _split_pass(text, board)
+    if edits0:
+        text0, back0 = _apply(text, edits0)
+        inner = _read_stages(text0, board)
+        back = [back0[b] for b in inner.back]
+        return View(inner.text, back, notes0 + inner.notices, text)
+    return _read_stages(text, board)
+
+
+def _split_pass(text: str, board=None):
+    """An UNKNOWN token that splits into two known words is read apart — where the
+    grammar votes (the operator's sim-check principle). Exactly one fitting split wins;
+    ambiguity or no vote changes nothing (`cancel` never becomes `can cel`)."""
+    low = text.lower()
+    opaque = _quoted(low)
+    toks = [(w, s, e) for w, s, e in _tokens(low)
+            if not any(qs <= s and e <= qe for qs, qe in opaque)]
+    words = [t[0] for t in toks]
+    openers, nouns, ops, known = _vocab(board)
+    from .scan import BOUNDARIES, PARTICLES as _parts
+    known = known | {b for b in BOUNDARIES if b.isalpha()} | {
+        "not", "no", "these", "those", "this", "that", "there", "their", "they",
+        "than", "have", "has", "had"}
+    heads = {"if", "unless", "when", "whenever", "after", "once"}
+    edits, notices = [], []
+    for idx, (w, s_, e_) in enumerate(toks):
+        if len(w) < 4 or "'" in w or w in known:
+            continue
+        prev = words[idx - 1] if idx > 0 else None
+        nxt = words[idx + 1] if idx + 1 < len(words) else None
+        seg_initial = (idx == 0 or prev in {"then", "and", "but"}
+                       or text[:s_].rstrip()[-1:] in ".;!?")
+        fits = []
+        for i in range(1, len(w)):
+            a, b = w[:i], w[i:]
+            if len(b) < 2:
+                continue
+            if len(a) == 1:
+                fit = a == "a" and b in known          # `achance` — the one 1-char word
+            elif a in known and b in known:
+                # `isnot` · `onthe` · `vmand` — but never particle+particle:
+                # `backup` is a word, not `back` fused to `up` (found by the suite)
+                fit = not (a in _parts and b in _parts)
+            elif a in ops and seg_initial:
+                fit = True                             # `stopalpha.` · `then launchbeta`
+            elif a in openers and (b in nouns or nxt in nouns):
+                fit = True                             # `thedb vm`
+            elif b in nouns and (prev in openers or a in openers):
+                fit = True                             # `the testvms`
+            elif a in heads and seg_initial:
+                fit = True                             # `ifalpha is stopped`
+            else:
+                fit = False
+            if fit:
+                fits.append(i)
+        if len(fits) == 1:
+            i = fits[0]
+            edits.append((s_, e_, f"{text[s_:s_ + i]} {text[s_ + i:e_]}"))
+            notices.append(f"read '{w}' as '{w[:i]} {w[i:]}'")
+    return edits, notices
+
+
+def _read_stages(request: str, board=None) -> View:
+    """Stages 1-3 (pauses · phrase and word typos · comma restore) over one text."""
+    text = str(request)
     low = text.lower()
     opaque = _quoted(low)
     toks = [(w, s, e) for w, s, e in _tokens(low)
