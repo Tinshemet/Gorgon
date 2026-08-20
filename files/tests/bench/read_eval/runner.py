@@ -148,6 +148,23 @@ def read_case(sentence: str, board=None) -> dict:
     rows = P1.run_scanned(sentence, board=board)
     table = P2.symbol_table(rows, board)
     steps = P2.operations_by_clause(sentence, rows, board=board)
+    # ⇒ C — THE RUNNER READS WHAT PRODUCTION READS: prepare() (I5's one spelling —
+    #   derive creators, merge, normalise, order) ran in the pipeline but never here,
+    #   so a derived creator (coord-0002's `a vm named web`) could not score. Derived
+    #   ops take the clause AROUND their row's span.
+    _orig = {}
+    for _cl, _op in steps:
+        _orig[(_op.operator, _op.on, _op.value)] = _cl
+    _prepared = P2.prepare([op for _, op in steps], table, sentence, board)
+    from orchestrator.seam.scan import clause_around as _ca
+    _by_handle_row = {s_.handle: s_.row for s_ in table}
+    steps = []
+    for _op in _prepared:
+        _cl = _orig.get((_op.operator, _op.on, _op.value))
+        if _cl is None:
+            _row = _by_handle_row.get(_op.on)
+            _cl = _ca(sentence, str(_row.span)) if _row is not None else sentence
+        steps.append((_cl, _op))
 
     by_handle = {s.handle: i for i, s in enumerate(table)}
     predicted_spans = []
@@ -301,7 +318,7 @@ def read_case(sentence: str, board=None) -> dict:
 
 
 # ── scoring one case against its gold ────────────────────────────────────────────────
-def score_case(case: dict, reading: dict) -> dict:
+def score_case(case: dict, reading: dict, misses: Optional[list] = None) -> dict:
     sentence = case["sentence"]
     gold_spans = case["gold"]["spans"]
     gold_actions = case["gold"]["actions"]
@@ -483,6 +500,11 @@ def score_case(case: dict, reading: dict) -> dict:
             else:                               # destination · source · value
                 hit = row in value_rows
             att_hit += 1 if hit else 0
+            if not hit and misses is not None:
+                misses.append({"case": case["id"], "role": role or "member",
+                               "span": case["gold"]["spans"][ix].get("text"),
+                               "action": sentence[gold_actions[gi]["start"]:gold_actions[gi]["end"]],
+                               "absorbed": len(absorbed.get(gi, []))})
 
     trigger_total = trigger_hit = 0
     for g in gold_actions:

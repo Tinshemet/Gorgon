@@ -952,6 +952,30 @@ def _payload(request: str, table: List[Symbol], operators: List[str],
     return out
 
 
+def _derive_probes(clause, table, operators, board) -> List[Operation]:
+    """value word -> attr -> the observed fact that ANSWERS it -> probe. Computed."""
+    _vf: Dict[str, str] = {}
+    for _kspec in (board.kinds or {}).values():
+        _ans = {str(_ospec.get("answers")): _fname
+                for _fname, _ospec in ((_kspec or {}).get("observed") or {}).items()
+                if isinstance(_ospec, dict) and _ospec.get("answers")}
+        for _attr, _vals in ((_kspec or {}).get("attr_values") or {}).items():
+            _fact = _ans.get(str(_attr), _attr)
+            for _v in _vals:
+                _vf[str(_v).lower()] = _fact
+    _clw = {w.strip("?.,!") for w in str(clause).lower().split()}
+    got: List[Operation] = []
+    for _w in _clw:
+        _fact = _vf.get(_w)
+        if not _fact or f"probe_{_fact}" not in operators:
+            continue
+        for _sym in table:
+            _sw = set(str(_sym.row.span or "").lower().split())
+            if _sym.handle.lower() in _clw or (_sw and _sw & _clw):
+                got.append(Operation(f"probe_{_fact}", _sym.handle, None))
+    return got
+
+
 def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[Board] = None,
                          model=None, temp: float = 0.0, timeout: int = 300,
                          rejected: Optional[List[str]] = None,
@@ -1022,6 +1046,17 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
             #   pronoun — the same grammar mark scan uses).
             from .scan import _operation_words, opens_imperative
             _cw = str(clause).lower().split()
+            # ⇒ E — A QUESTION COMPUTES ITS PROBE, IT IS NEVER ASKED FOR OPERATIONS
+            #   (cs-0006/0007, mc-0002 measured: query act detected, nothing attached;
+            #   the old askability gate skipped question clauses before anything could
+            #   attach). The asked VALUE names its attr (attr_values), the attr names
+            #   the fact that ANSWERS it (`answers`, declared in the manifest), the
+            #   row is visible from the clause — closed lookups all the way down.
+            from .speech_act import AUXILIARIES as _AUXQ, WH_WORDS as _WHQ
+            if _cw and (_cw[0] in _AUXQ or _cw[0] in _WHQ):
+                for _op in _derive_probes(clause, table, operators, board):
+                    out.append((clause, _op))
+                continue
             _imperative = opens_imperative(_cw, board)
             # ⇒ THE OP WORD MUST SIT IN VERB POSITION — clause-initial. `the vms carrying
             #   the test LABEL` contains `label` the NOUN, and the anywhere-∩ test asked a
@@ -1057,11 +1092,15 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
         _q_clause = (_cw and (_cw[0] in _AUXX or _cw[0] in _WHX)) or any(
             str(clause).lower().startswith(w) or f" {w} " in f" {str(clause).lower()} "
             for w in _WRAP)
+        _probed = False
         for step in got.get("operations") or []:
             if isinstance(step, dict) and step.get("operator") and step.get("on"):
                 if _q_clause and not str(step["operator"]).startswith("probe_"):
                     continue
+                if str(step["operator"]).startswith("probe_"):
+                    _probed = True
                 out.append((clause, Operation(step["operator"], step["on"], step.get("value"))))
+
     # ⇒ THE PER-CLAUSE LEAK'S SIGNATURE IS THE DUPLICATE — the model answers the whole
     #   request from each clause, so the same (operator, on, value) arrives twice (9 of
     #   them on the certified set). A repeated step is never information; the first
@@ -1086,17 +1125,47 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
                 _licence.setdefault(_seg, set()).add(_opname)
     # a setter that REFS another kind demands a second name — read from the manifest once
     _needs_value = set()
-    for _kspec in (board.kinds or {}).values():
+    _setter_types = {}                       # setter -> (owner kind, referenced kind)
+    for _kname, _kspec in (board.kinds or {}).items():
         for _sname, _sspec in ((_kspec or {}).get("setters") or {}).items():
             if isinstance(_sspec, dict) and _sspec.get("refs"):
                 _needs_value.add(_sname)
+                _setter_types[_sname] = (_kname, str(_sspec["refs"]))
+    # ⇒ B — AN EXCEPTION IS SPARED, STRUCTURALLY: the values a row's `excludes` carves
+    #   out. A mutating op whose target IS the carved-out thing executes the exact harm
+    #   the request forbade (neg-0001, measured: the model stopped the spared machine).
+    _spared = {str(v).lower() for s_ in table for f in (s_.row.excludes or ())
+               for v in f.values()}
     for clause, op in out:
         key = (op.operator, op.on, op.value)
         if key in seen_ops:
             continue
-        seen_ops.add(key)
+        # ⇒ registration moved to the APPEND — an op refused in one clause must not
+        #   block the same op from a later legitimate clause (found by A's own test:
+        #   the create-clause's licence-refused launch_vm shadowed `launch it`'s)
         mutating = not str(op.operator).startswith("probe_")
         if mutating:
+            # ⇒ D — TYPED ROLE REPAIR: the manifest declares a setter's OWNER kind and
+            #   its REFERENCED kind; an answer with the two reversed is a reading the
+            #   types can mend, not a miss to score (ba-0003, measured:
+            #   add_vm_to_network(on=network, value=vms)). Swap only on a clean double
+            #   mismatch — anything else stands as answered.
+            _tp = _setter_types.get(op.operator)
+            if _tp and op.value in handles and op.on in handles:
+                _owner, _ref = _tp
+                if (handles[op.on].row.kind == _ref
+                        and handles[op.value].row.kind == _owner):
+                    op = Operation(op.operator, op.value, op.on)
+                    key = (op.operator, op.on, op.value)
+            # ⇒ B — the spared-target refusal (see _spared above)
+            _sym = handles.get(op.on)
+            if _sym is not None and _spared and not (_sym.row.excludes or ()):
+                _mine = " ".join([str(_sym.row.span or "").lower(),
+                                  str(_sym.row.identity or "").lower()]
+                                 + [str(v).lower()
+                                    for v in (_sym.row.where or {}).values()])
+                if any(sv and sv in _mine for sv in _spared):
+                    continue
             # ⇒ THE HANDLES ARE THE ENUM (rule D1) — an op whose `on` names no handle is
             #   not a misreading to score, it is DECODE CORRUPTION that could never run:
             #   `stop_vm on vm` against a table holding only {vms_but_db_vm, db}.
@@ -1125,8 +1194,14 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
             #   lab` keeps `web` (the handle is in the clause); `stop_vm on test_vms` from
             #   "launch everything" has neither and is the leak itself.
             _cl = str(clause).lower()
+            _PRONOUN_REF = {"it", "them", "both", "one", "ones"}
             def _visible(handle):
                 if not handle:
+                    return True
+                # ⇒ A — AN OBJECT PRONOUN LICENSES VISIBILITY: `launch IT` refers by
+                #   grammar, and the leak filter was eating the reading (ana-0001,
+                #   ba-0004, coord-0004 measured). Absorption still gates by gold.
+                if _PRONOUN_REF & set(_cl.split()):
                     return True
                 sym = handles.get(handle)
                 span = str(sym.row.span).lower() if sym else ""
@@ -1135,6 +1210,7 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
                                       or any(w in _cl.split() for w in span.split()))))
             if not _visible(op.on):
                 continue
+        seen_ops.add(key)
         deduped.append((clause, op))
     return deduped
 
