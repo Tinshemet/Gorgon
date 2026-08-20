@@ -54,10 +54,13 @@ down, offset maps composing back to original bytes, every repair a notice.
 ## Declared floors and non-goals
 
 - **Model-variance floor**: ±2–4 attach across cold runs at temp 0 — the model's own.
-- **Out of READ, by ruling**: cross-turn state (architectural, LAST) · route/resolve
-  semantics (alternation choice, preference weighting) · value-copy comparatives ·
-  undo (cross-turn) · free semantics generally — the model's bounded slot, priced by
-  A2's model-swap whenever wanted.
+- **Out of READ, by design (the operator's own closure, 08-20)**: OPEN VOCABULARY is
+  answered by the archive + encyclopedia — a new word is taught, never patterned;
+  FREE SEMANTICS is mostly moot because the confirmation system (+ the typo-risk
+  ladder) stands between any misread intent and a harmful act; CROSS-TURN comes AFTER
+  v3 — it needs a good reader beneath it and is handled at ROUTE, not READ. Also
+  route's: alternation choice, preference weighting. Deferred: value-copy
+  comparatives, undo (cross-turn).
 - **Domain-unlocked, not reading-unlocked**: attribute-value attachments arrive with
   attribute classes; file-domain readings arrive with file kinds (the media gap).
 
