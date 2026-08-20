@@ -414,7 +414,10 @@
     "cpu_cores",
     "memory_mb",
     "description",
-    "cloned_from"
+    "cloned_from",
+    "ip",
+    "mac",
+    "serial"
    ],
    "aliases": {
     "tag": "label",
@@ -426,7 +429,9 @@
     "cpu": "cpu_cores",
     "cores": "cpu_cores",
     "memory": "memory_mb",
-    "ram": "memory_mb"
+    "ram": "memory_mb",
+    "ip": "ip",
+    "address": "ip"
    },
    "attr_values": {
     "status": [
@@ -686,6 +691,59 @@
      "member_arg": "name",
      "doc": "show the command line it is launched with"
     }
+   },
+   "attr_classes": {
+    "ip": {
+     "type": "ipv4",
+     "owner": "vm",
+     "source": "declared",
+     "shape": "\\d{1,3}(\\.\\d{1,3}){3}",
+     "doc": "MOCK for v3 (2026-08-20): a typed identifier the stores teach; a class with no reader turns an unknown-noun ASK into a capability BOUNCE"
+    },
+    "mac": {
+     "type": "mac48",
+     "owner": "vm",
+     "source": "declared",
+     "shape": "([0-9a-f]{2}:){5}[0-9a-f]{2}"
+    },
+    "serial": {
+     "type": "token",
+     "owner": "vm",
+     "source": "declared",
+     "shape": "[0-9a-z]{4}-[0-9a-z]{4}"
+    },
+    "cpu_cores": {
+     "type": "count",
+     "unit": "cores",
+     "owner": "vm",
+     "source": "declared"
+    },
+    "memory_mb": {
+     "type": "quantity",
+     "unit": "mb",
+     "owner": "vm",
+     "source": "declared",
+     "units": {
+      "gb": 1024,
+      "gigs": 1024,
+      "mb": 1,
+      "g": 1024
+     }
+    }
+   },
+   "translates": {
+    "restart": [
+     "stop_vm",
+     "launch_vm"
+    ],
+    "reboot": [
+     "stop_vm",
+     "launch_vm"
+    ],
+    "recreate": [
+     "delete_vm",
+     "create_vm"
+    ]
    }
   },
   "network": {

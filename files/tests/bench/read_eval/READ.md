@@ -47,7 +47,11 @@ down, offset maps composing back to original bytes, every repair a notice.
                                        triggers 4/8 · hallucinations 78
     v2.1 close (2026-08-20):           detect 97% · exact 95% · attach 97% ·
                                        triggers 100% · hallucinations 4
-    stability (n=3, same code):        «fill: wobble band per column»
+    stability (n=3, same code, 08-20): BYTE-IDENTICAL across all three runs, every
+                                       cell, every stratum — the wobble band is ZERO.
+                                       The historical ±2-4 attach flicker died when
+                                       the attach mechanisms went deterministic.
+                                       (clean settles at 76/79 attach across n=3.)
     v3 baseline:                       «fill at freeze»
     v3 close:                          «fill»
 
