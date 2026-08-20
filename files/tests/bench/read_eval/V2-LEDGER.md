@@ -123,3 +123,20 @@ lab has LEARNED informs the read, never grants authority.
 ⇒ SCOPED BY THE OPERATOR 08-20: v3 comes AFTER the current table is finished, and it is
 planned as THE LAST release — grow toward **~300 sentences with a few dozen patterns**,
 a comfortable future corpus. v3 closes the READ saga.
+
+## 11 · v3 SCOPE, SETTLED 08-20 NIGHT — what closes READ
+34 seed drafts in `seeds_v3.py`, 12 strata (identifiers · units · possessive ·
+alternatives · reduced-relative · apposition · cause · concession · magnitude · manner ·
+learned-words · self-address), every one from a MEASURED structure_map/coverage_map hole
+or the operator's learned-patterns order. All build+validate. The operator certifies,
+then noise twins, then freeze.
+⇒ TWO SCHEMA RULINGS BEFORE THE FREEZE:
+  1. MANNER — read but unsayable in gold. Proposal: `manner: {action: text}`, scored
+     like triggers.
+  2. STORE — learned-words cases carry mock store state. Proposal: `store: [entries]`
+     per case; the runner seeds a THROWAWAY archive before read_case; certifying the
+     case IS ratifying the mock.
+⇒ THREE SCOPE DECISIONS (operator): embedded-junk + code-switch noise — build as v3
+twins or declare out of scope in the freeze note · noise twins over the new seeds
+(mechanical) · the READ closing document at the freeze.
+⇒ EXPLICITLY NOT v3 (standing rulings): cross-turn (LAST) · A2 model swap · N1 wiring.

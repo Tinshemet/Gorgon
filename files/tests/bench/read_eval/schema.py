@@ -73,7 +73,12 @@ from typing import Dict, List, Optional
 SPEC_STRATA = ("clean-single", "coordination", "buried-args", "anaphora", "negation",
                "conditionals", "multi-clause", "self-correction")
 EARNED_STRATA = ("qualifiers", "adjunct-clauses", "diagnosis", "cross-cutting")
-STRATA = SPEC_STRATA + EARNED_STRATA
+# ⇒ v3 — THE CLOSING STRATA (operator-scoped 08-20: learned patterns + the
+#   structure_map's open holes; v3 is the LAST release and closes the READ saga)
+V3_STRATA = ("identifiers", "units", "possessive", "alternatives",
+             "reduced-relative", "apposition", "cause", "concession",
+             "magnitude", "manner", "learned-words", "self-address")
+STRATA = SPEC_STRATA + EARNED_STRATA + V3_STRATA
 
 NOISE = ("terse", "typos", "no-punct", "voice", "fused", "embedded-junk", "code-switch")
 CLEAN = "clean"
