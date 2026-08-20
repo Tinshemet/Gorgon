@@ -39,3 +39,17 @@ def test_the_freed_verb_is_owned_by_its_reading():
                                B) == {"snapshot"}
     # a noun occurrence anywhere keeps the word a thing
     assert verb_position_words("create a snapshot of every running vm", B) == set()
+
+
+# ── E5: the partitive — quantifier + of + NP is ONE thing ────────────────────────────
+
+def test_the_partitive_keeps_its_quantifier():
+    assert scan("vms", "stop most of the vms", B).span == "most of the vms"
+    assert scan("vms", "stop most of vms", B).span == "most of vms"
+
+
+def test_of_still_cuts_between_two_things():
+    # "a snapshot OF every running vm" is two things — the boundary survives
+    assert scan("snapshot", "create a snapshot of every running vm", B).span == "a snapshot"
+    got = scan("vm", "create a snapshot of every running vm", B)
+    assert not got.span.startswith("a snapshot")

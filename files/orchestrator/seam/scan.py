@@ -565,7 +565,15 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
     _PARTICLES = PARTICLES
     # DETERMINERS for the imperative rule below — closed, and `that` is deliberately absent
     _DETS = {"a", "an", "the", "every", "each", "all", "any", "both", "no"}
-    while left > 0 and toks[left - 1][0] not in BOUNDARIES:
+    # ⇒ E5, THE PARTITIVE: a QUANTIFIER + `of` + NP is ONE thing — `most of the vms`
+    #   lost its quantifier to the of-boundary (certified exact, qual-0003). Closed
+    #   quantifiers only; `a snapshot OF every vm` still cuts — `snapshot` is no
+    #   quantifier and the two-things reading stands.
+    _QUANT = {"most", "some", "all", "none", "half", "few", "many", "each",
+              "both", "any", "one"}
+    while left > 0 and (toks[left - 1][0] not in BOUNDARIES
+                        or (toks[left - 1][0] == "of" and left >= 2
+                            and toks[left - 2][0] in _QUANT)):
         word = toks[left - 1][0]
         if question and left - 1 == clause_first and word in _AUX:
             break                             # the fronted auxiliary is the question's skin
