@@ -215,7 +215,10 @@ def verb_position_words(request: str, board: Optional[Board] = None) -> set:
                 ok = False
                 break
             clash, j = False, i + 1
-            while j < len(words) and words[j] not in BOUNDARIES:
+            if words[i + 1] in {"it", "them"}:
+                clash = True                  # a DIRECT pronoun object IS the whole
+                                              # object — `snapshot IT` frees the verb
+            while not clash and j < len(words) and words[j] not in BOUNDARIES:
                 if words[j] in nouns and nouns[words[j]] != nouns[w]:
                     clash = True
                     break

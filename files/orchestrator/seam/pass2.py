@@ -1329,7 +1329,8 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
                 continue
             _cc = _content(clause)
             _ref = next((s_ for s_ in table
-                         if str(s_.row.kind or "").startswith(_rkind)
+                         if (str(s_.row.kind or "").startswith(_rkind)
+                             or s_.row.kind in (None, "?"))
                          and _content(s_.row.span) & _cc), None)
             _own = next((s_ for s_ in table
                          if str(s_.row.kind or "").startswith(_okind)
