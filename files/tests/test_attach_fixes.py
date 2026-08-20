@@ -70,3 +70,91 @@ def test_a_question_computes_its_probe():
         assert any(o.startswith("probe_") and h == "alpha" for o, h in got)
     finally:
         channel.constrained = was
+
+
+# ── round 3: the last deterministic attach mechanisms (0a72cf4 misses) ───────────────
+
+def test_a_leaked_probe_is_dropped_and_the_derived_one_survives():
+    # G — the observe arm's cross-clause leak shadowed the rightful copy (mc-0002)
+    req = "list the vms. anyway, is alpha running?"
+    rows = P1.run_scanned(req, board=B)
+    channel, was = _canned([("probe_alive", "alpha", None)])
+    try:
+        got = P2.operations_by_clause(req, rows, board=B)
+        probe = [(c, o) for c, o in got if o.operator == "probe_alive" and o.on == "alpha"]
+        assert probe and "running" in probe[0][0]      # attributed to the QUESTION clause
+    finally:
+        channel.constrained = was
+
+
+def test_a_coordinated_creator_is_derived():
+    # J — "create a network called lab AND A VM NAMED WEB": the verb governs both
+    req = "create a network called lab and a vm named web"
+    rows = P1.run_scanned(req, board=B)
+    channel, was = _canned([("create_network", "lab", None)])
+    try:
+        got = [(o.operator, o.on) for _, o in P2.operations_by_clause(req, rows, board=B)]
+        assert ("create_vm", "web") in got
+    finally:
+        channel.constrained = was
+
+
+def test_the_mended_clause_is_asked():
+    # K — the marker clause was skipped wholesale; the REPAIRED text is askable
+    req = "restart the web vm, no wait, the db one"
+    rows = P1.run_scanned(req, board=B)
+    table = P2.symbol_table(rows, B)
+    h = table[0].handle
+    channel, was = _canned([("stop_vm", h, None), ("launch_vm", h, None)])
+    try:
+        got = [o.operator for _, o in P2.operations_by_clause(req, rows, board=B)]
+        assert "stop_vm" in got and "launch_vm" in got
+    finally:
+        channel.constrained = was
+
+
+def test_a_licensed_verb_with_no_op_derives_its_own():
+    # Q — "launch the blue ones" answered with nothing: verb licence + the one
+    #     visible row produce the op
+    req = "label the red vms 'ready' and launch the blue ones"
+    rows = P1.run_scanned(req, board=B)
+    channel, was = _canned([("add_label", "red_vms", "ready")])
+    try:
+        got = [(o.operator, o.on) for _, o in P2.operations_by_clause(req, rows, board=B)]
+        assert any(op == "launch_vm" for op, _ in got)
+    finally:
+        channel.constrained = was
+
+
+def test_the_clone_from_role_is_repaired():
+    # R — clone_vm(template): the manifest's `from` role says the SOURCE sits in the
+    #     value; the created thing takes `on`
+    req = "clone the golden image into three vms and label them test"
+    rows = P1.run_scanned(req, board=B)
+    table = P2.symbol_table(rows, B)
+    tmpl = next((x.handle for x in table if x.row.kind == "template"), None)
+    vms = next((x.handle for x in table if str(x.row.kind or "").startswith("vm")), None)
+    assert tmpl and vms
+    channel, was = _canned([("clone_vm", tmpl, None)])
+    try:
+        got = [(o.operator, o.on, o.value) for _, o in
+               P2.operations_by_clause(req, rows, board=B) if o.operator == "clone_vm"]
+        assert got == [("clone_vm", vms, tmpl)]
+    finally:
+        channel.constrained = was
+
+
+def test_a_probe_on_the_spared_thing_is_refused_too():
+    rows = P1.run_scanned("stop every vm except the db vm", board=B)
+    table = P2.symbol_table(rows, B)
+    spared = next((x.handle for x in table if "db" in str(x.row.span)
+                   and not x.row.excludes), None)
+    kept = next((x.handle for x in table if x.row.excludes), None)
+    channel, was = _canned([("stop_vm", kept, None), ("probe_exists", spared, None)])
+    try:
+        got = [(o.operator, o.on) for _, o in P2.operations_by_clause(
+            "stop every vm except the db vm", rows, board=B)]
+        assert ("probe_exists", spared) not in got
+        assert ("stop_vm", kept) in got
+    finally:
+        channel.constrained = was

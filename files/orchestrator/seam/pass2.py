@@ -1005,6 +1005,12 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
         return []
     operators = operators_offered(board)
     out = []
+    _prev_head = None
+    _asked_imperatives = []
+    from .scan import GRAMMAR as _GRM
+    def _content(text):
+        return {w for w in re.findall(r"[a-z']+", str(text).lower())
+                if w not in _GRM and w not in _CUT_DETS}
     for clause in clauses_of(request):
         # ⇒⇒ **A CLAUSE THAT CONDITIONS OR LEGISLATES IS NEVER ASKED FOR OPERATIONS.** The
         #   certified baseline (2026-08-18) billed the cost of asking: *"if alpha is
@@ -1063,7 +1069,21 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
             #   bare NP what to do; probe_exists and delete_vm came back on the very set
             #   the request spares. First word or imperative shape, nothing else.
             if not (_cw and _cw[0] in _operation_words(board)) and not _imperative:
+                # ⇒ J — A COORDINATED CREATOR: "create a network called lab AND A VM
+                #   NAMED WEB" — the verb governs both conjuncts; the bare indefinite
+                #   NP after a create-clause derives its own creator (indefinite =
+                #   nothing could already exist, the presupposition rule holds)
+                if _cw and _cw[0] in {"a", "an"} and _prev_head in {"create", "make"}:
+                    _cl0 = str(clause).lower()
+                    for _sym in table:
+                        if (str(_sym.row.span).lower().strip() in _cl0
+                                and _sym.row.kind
+                                and f"create_{_sym.row.kind}" in operators):
+                            out.append((clause, Operation(
+                                f"create_{_sym.row.kind}", _sym.handle, None)))
+                _prev_head = _cw[0] if _cw else _prev_head
                 continue
+            _prev_head = _cw[0] if _cw else _prev_head
             # ⇒ A WITHDRAWN OR MARKER CLAUSE IS NEVER ASKED — pass 1's mend cut the rows,
             #   and this loop went on asking the retracted clause what to DO (sc-0003:
             #   create_snapshot AND delete_vm from "snapshot the db vm, scratch that").
@@ -1073,9 +1093,21 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
             if _mend and (_mend.marker in _cl_low
                           or (_mend.kind == _SRR.RETRACTED and _mend.withdrawn
                               and _cl_low.strip() in _mend.withdrawn.lower())):
-                continue
+                # ⇒ K — THE MENDED CLAUSE IS ASKED (sc-0001: skipping the marker
+                #   clause wholesale left the surviving order with no operations).
+                #   The withdrawn part and the marker come OUT; what remains is the
+                #   corrected order, asked exactly as if said cleanly.
+                if (_mend.kind == _SRR.REPAIRED
+                        and _mend.withdrawn and _mend.withdrawn.lower() in _cl_low):
+                    _clean = _cl_low.replace(_mend.withdrawn.lower(), " ")
+                    _clean = _clean.replace(_mend.marker, " ")
+                    clause = " ".join(w for w in _clean.replace(",", " ").split())
+                    _cw = str(clause).lower().split()
+                else:
+                    continue
         except Exception:
             pass
+        _asked_imperatives.append(clause)
         payload = (f"{_payload(request, table, operators, rejected, needed)}\n\n"
                    f"the part to answer for: {clause}")
         try:
@@ -1136,6 +1168,11 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
     #   the request forbade (neg-0001, measured: the model stopped the spared machine).
     _spared = {str(v).lower() for s_ in table for f in (s_.row.excludes or ())
                for v in f.values()}
+    _creator_from = {}                       # creator tool -> the kind it CREATES
+    for _kname, _kspec in (board.kinds or {}).items():
+        for _cname, _cspec in ((_kspec or {}).get("creators") or {}).items():
+            if isinstance(_cspec, dict) and _cspec.get("from"):
+                _creator_from[str(_cspec.get("tool") or _cname)] = _kname
     for clause, op in out:
         key = (op.operator, op.on, op.value)
         if key in seen_ops:
@@ -1143,13 +1180,61 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
         # ⇒ registration moved to the APPEND — an op refused in one clause must not
         #   block the same op from a later legitimate clause (found by A's own test:
         #   the create-clause's licence-refused launch_vm shadowed `launch it`'s)
+        _cl = str(clause).lower()
+        _clc = _content(_cl)
+        _PRONOUN_REF = {"it", "them", "both", "one", "ones"}
+        _named_here = [s_ for s_ in table if _content(s_.row.span) & _clc
+                       or s_.handle.lower() in _cl.split()]
+        def _visible(handle):
+            if not handle:
+                return True
+            sym = handles.get(handle)
+            if sym is None:
+                return True
+            span = str(sym.row.span).lower()
+            if _content(span) & _clc or _content(handle.replace("_", " ")) & _clc:
+                return True
+            if span and (span in _cl or _cl in span):
+                return True
+            # ⇒ A, TIGHTENED (H): the pronoun licence is a LAST RESORT — when the
+            #   clause NAMES a row, the pronoun cannot rescue a different one
+            #   (coord-0005 measured: `launch the blue ones` let the RED row through)
+            return bool(_PRONOUN_REF & set(_cl.split())) and not _named_here
         mutating = not str(op.operator).startswith("probe_")
+        # ⇒ G — the OBSERVE arm has its own cross-clause leak: a probe answered for a
+        #   different clause shadows the rightful copy through the dedupe (mc-0002:
+        #   probe_alive(alpha) under "list the vms")
+        if not mutating and not _visible(op.on):
+            continue
+        # ⇒ B extends to the OBSERVE arm: the excluded contract is that NOTHING in the
+        #   reading acts on the spared thing — a probe on it bills the carve-out just
+        #   the same (neg-0001 measured: probe_exists on the spared db vm)
+        if not mutating and _spared:
+            _sym0 = handles.get(op.on)
+            if _sym0 is not None and not (_sym0.row.excludes or ()):
+                _mine0 = " ".join([str(_sym0.row.span or "").lower(),
+                                   str(_sym0.row.identity or "").lower()])
+                if any(sv and sv in _mine0 for sv in _spared):
+                    continue
         if mutating:
             # ⇒ D — TYPED ROLE REPAIR: the manifest declares a setter's OWNER kind and
             #   its REFERENCED kind; an answer with the two reversed is a reading the
             #   types can mend, not a miss to score (ba-0003, measured:
             #   add_vm_to_network(on=network, value=vms)). Swap only on a clean double
             #   mismatch — anything else stands as answered.
+            # ⇒ R — CREATOR FROM-ROLE REPAIR: the manifest declares which creators
+            #   take a SOURCE (`clone.from`); an op whose `on` is the source has its
+            #   roles reversed — the CREATED thing takes `on`, the source the value
+            #   (ana-0004 measured: clone_vm(template) with the three vms unplaced)
+            _made = _creator_from.get(op.operator)
+            if _made and op.value is None:
+                _src = handles.get(op.on)
+                if _src is not None and not str(_src.row.kind or "").startswith(_made):
+                    _new = next((s_ for s_ in _named_here
+                                 if str(s_.row.kind or "").startswith(_made)), None)
+                    if _new is not None:
+                        op = Operation(op.operator, _new.handle, op.on)
+                        key = (op.operator, op.on, op.value)
             _tp = _setter_types.get(op.operator)
             if _tp and op.value in handles and op.on in handles:
                 _owner, _ref = _tp
@@ -1193,25 +1278,34 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
             #   the asking clause — its handle word or its row's span text. `put web on
             #   lab` keeps `web` (the handle is in the clause); `stop_vm on test_vms` from
             #   "launch everything" has neither and is the leak itself.
-            _cl = str(clause).lower()
-            _PRONOUN_REF = {"it", "them", "both", "one", "ones"}
-            def _visible(handle):
-                if not handle:
-                    return True
-                # ⇒ A — AN OBJECT PRONOUN LICENSES VISIBILITY: `launch IT` refers by
-                #   grammar, and the leak filter was eating the reading (ana-0001,
-                #   ba-0004, coord-0004 measured). Absorption still gates by gold.
-                if _PRONOUN_REF & set(_cl.split()):
-                    return True
-                sym = handles.get(handle)
-                span = str(sym.row.span).lower() if sym else ""
-                return (any(w in _cl.split() for w in str(handle).lower().split("_"))
-                        or (span and (span in _cl or _cl in span
-                                      or any(w in _cl.split() for w in span.split()))))
             if not _visible(op.on):
                 continue
         seen_ops.add(key)
         deduped.append((clause, op))
+    # ⇒ Q — AN IMPERATIVE WITH A LICENSED VERB AND NO SURVIVING OP DERIVES ITS OWN:
+    #   the verb names the operation family, the clause names exactly one row, the
+    #   row's kind picks the member (`launch the blue ones` -> launch_vm on the blue
+    #   row; `delete the oldest snapshot` -> delete_snapshot). The spared gate holds.
+    for clause in _asked_imperatives:
+        _cw0 = re.findall(r"[a-z']+", str(clause).lower())
+        fam = _licence.get(_cw0[0]) if _cw0 else None
+        if not fam:
+            continue
+        if any(o.operator in fam for c2, o in deduped if c2 == clause):
+            continue
+        _clc0 = _content(clause)
+        vis = [s_ for s_ in table if _content(s_.row.span) & _clc0]
+        if len(vis) != 1:
+            continue
+        _kw = str(vis[0].row.kind or "").replace("_set", "")
+        cand = [o for o in fam if _kw and _kw in o] or (list(fam) if len(fam) == 1 else [])
+        if len(cand) != 1:
+            continue
+        _mine1 = " ".join([str(vis[0].row.span or "").lower(),
+                           str(vis[0].row.identity or "").lower()])
+        if not (vis[0].row.excludes or ()) and any(sv and sv in _mine1 for sv in _spared):
+            continue
+        deduped.append((clause, Operation(cand[0], vis[0].handle, None)))
     return deduped
 
 

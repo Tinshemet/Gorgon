@@ -200,7 +200,9 @@ def verb_position_words(request: str, board: Optional[Board] = None) -> set:
     toks = _tokens(low)
     words = [t[0] for t in toks]
     nouns = _index(board or Board())
-    dets = {"a", "an", "the", "every", "each", "all", "any", "both", "no"}
+    dets = {"a", "an", "the", "every", "each", "all", "any", "both", "no",
+            "it", "them"}                     # a pronoun OBJECT is the same grammar
+                                              # mark: `snapshot IT` frees the verb
     out = set()
     for w in set(words):
         if w not in nouns:
