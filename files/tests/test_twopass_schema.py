@@ -467,8 +467,10 @@ def test_the_code_reads_the_phrase_the_model_only_points_at():
           not scan("lab", r3, board).collides(scan("web", r3, board)))
     # ⇒ THE TRAP: in "then put web on lab" BOTH references scan to the same clause, so they
     #   collide while being different objects. Compare FIRST occurrences only.
-    check("references to different things share a clause and would falsely collide",
-          scan_all("web", r3, board)[1].collides(scan_all("lab", r3, board)[1]))
+    # ⇒ superseded 08-20: the transfer-frame stops give REFERENCES precise spans, so
+    #   the trap this documented (same-clause references falsely colliding) dissolved
+    check("same-clause references no longer collide — the spans are precise",
+          not scan_all("web", r3, board)[1].collides(scan_all("lab", r3, board)[1]))
 
 
 def test_a_possessive_is_not_a_plural():
@@ -674,8 +676,12 @@ def test_the_slot_decides_whether_a_word_is_junk_not_its_meaning():
         #   word beside an attribute into a VALUE, so it is not unread at all — it is a
         #   confidently wrong filter that both gates pass.
         promoted = P.run_scanned("put every vm on a wibblesome network", board=board)
-        check("junk beside an attribute word becomes a condition VALUE",
-              any(r.where.get("network") == "wibblesome" for r in promoted))
+        # ⇒ superseded 08-20: the transfer frame reads the network as its OWN row
+        #   (the certified ana-0003 convention) — the junk-magnet promotion is gone;
+        #   `wibblesome` sits in the network row's descriptor slot and asks honestly
+        check("the junk-magnet promotion is gone — the network is its own row",
+              not any(r.where.get("network") == "wibblesome" for r in promoted)
+              and any(r.kind == "network" for r in promoted))
         check("and the value is checked against the slot, so it still asks",
               [r.verdict for r in R.report(promoted, "put every vm on a wibblesome network",
                                            board)] == [R.ASK])
@@ -705,11 +711,13 @@ def test_a_span_residue_bounces_but_junk_asks():
     try:
         bound = "create 3 vms labelled 'edge' and put the edge ones on a network"
         rows = P.run_scanned(bound, board=board)
-        check("a value quoted earlier in the request BOUNCES",
-              [r.verdict for r in R.report(rows, bound, board)] == [R.BOUNCE])
+        # ⇒ superseded 08-20: the pro-form fold RESOLVES the reference by content —
+        #   `the edge ones` IS the labelled set, read, never residue at all
+        check("a pro-form naming a bound value RESOLVES silently",
+              [r.verdict for r in R.report(rows, bound, board)] == [])
+        check("and the fold records the reference on its host",
+              any("the edge ones" in (r.references or ()) for r in rows))
         report = G.report(rows, bound, board)
-        check("so it reaches the model, not the operator",
-              any(f.kind == "unread-value" for f in report["bounces"]))
         check("and it is not put to the operator at all",
               not any("edge" in a and "name, a label" in a for a in report["asks"]))
 

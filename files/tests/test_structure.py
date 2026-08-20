@@ -450,8 +450,12 @@ def test_a_numeral_is_a_value_unless_it_was_spent_as_a_count():
     named = scan("network", "stop network 1", board)
     check("a numeral after a noun is still the identity",
           named.identity == "network 1" and "1" not in named.modifiers)
-    check("an unspent numeral survives into the modifiers",
-          "24:30" in scan("vm", "snapshot the vm at 24:30", board).modifiers)
+    # ⇒ superseded 08-20: the CLOCK READER owns the phrase now — it is read as a
+    #   trigger with offsets, never residue in the modifiers (certified qual-0005)
+    from orchestrator.seam.temporal import clock_tail
+    check("the clock phrase belongs to the trigger reader, not the modifiers",
+          clock_tail("snapshot the vm at 24:30") == "at 24:30"
+          and scan("vm", "snapshot the vm at 24:30", board).span == "the vm")
 
     from orchestrator.seam import pass1 as P, residue as R
     rows = P.run_scanned("make sure at least 2 vms carry the 'edge' label", board=board)

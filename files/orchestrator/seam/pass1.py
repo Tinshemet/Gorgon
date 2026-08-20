@@ -600,8 +600,15 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
             #     here.
             if first.kind is None and len(present) == 1 and _has_pronoun(
                     clause_around(request, first.span)):
-                again = scan(anchor, request, board, at=first.start, kind_hint=present[0])
-                first = again or first._replace(kind=present[0])
+                _hint = (_transfer_kind(clause_around(request, first.span),
+                                        first.span, board) or present[0])
+                again = scan(anchor, request, board, at=first.start, kind_hint=_hint)
+                first = again or first._replace(kind=_hint)
+                # the row's own word becomes its key, exactly as the affordance settle
+                # does — a typed row with an unread bare word is an ASK nobody needs
+                if (first is not None and not first.identity
+                        and str(first.span).strip().lower() == str(anchor).lower()):
+                    first = first._replace(identity=str(anchor))
 
             # ⇒ A KINDLESS THING IS STILL A THING. Dropping it lost every bare proper name —
             #   db, core, dmz, n1, n2, n3, golden — and rung 9, which contains no declared noun at
@@ -744,12 +751,43 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
             rows.append(S.declare_from(first.span, object_type, where, existence, board,
                                        references=[a.anchor for a in seen[1:]],
                                        count=first.count, comparator=first.comparator,
-                                       span=first.span))
+                                       span=first.span, identity=first.identity))
     # ⇒ THE EXCLUSIONS ATTACH HERE, ON THE ONE PATH EVERY CONSUMER WALKS — the pipeline
     #   was the only caller of attach_exclusions, so the eval's readings (and any future
     #   consumer) carried sets with their carve-outs SILENTLY MISSING. Idempotent: the
     #   duplicate-carve check makes the pipeline's own later call harmless.
+    rows = resolve_proforms(rows)
     return attach_exclusions(rows, board, request=request)
+
+
+def resolve_proforms(rows: List[S.Declared]) -> List[S.Declared]:
+    """A pro-form reference whose modifier NAMES an earlier row's value folds into it.
+
+    ⇒ `the EDGE ones` after `3 vms labelled 'edge'` is the same set — the precise-span
+      walk (E1-E4, 08-20) ended the wide-span collisions that used to catch these by
+      luck, so the reference resolves by CONTENT now: every modifier word must equal
+      one of the host row's values. No match keeps the row — `the BLUE ones` is its
+      own certified span, and a wrong fold destroys an object.
+    """
+    out: List[S.Declared] = []
+    for row in rows:
+        w = str(row.span or "").lower().split()
+        while w and w[-1] in ("together", "too"):     # a trailing adverb is the verb's
+            w = w[:-1]                                 # (`the red ones TOGETHER`)
+        if (row.object_type == S.UNKNOWN_KIND and 2 <= len(w) <= 4
+                and w[-1] in ("one", "ones") and w[0] in ("the", "those", "these")):
+            mods = [x.strip("'\"") for x in w[1:-1]]
+            host = next((r for r in out if mods and all(
+                any(m == str(v).lower().strip("'\"")
+                    for v in (r.where or {}).values())
+                for m in mods)), None)
+            if host is not None:
+                at = out.index(host)
+                out[at] = host._replace(references=list(host.references or [])
+                                        + [str(row.span)])
+                continue
+        out.append(row)
+    return out
 
 
 
@@ -879,6 +917,29 @@ def _affording_kinds(board: Board) -> dict:
     return out
 
 
+def _transfer_kind(clause: str, span: str, board: Board) -> Optional[str]:
+    """The kind the TRANSFER FRAME gives this span, or None (rule D8, manifest-typed):
+    in `put X on Y` the thing BEFORE the preposition is the setter's OWNER kind, the
+    thing after its REFERENCED kind — `put ORION on it` types orion a vm, whatever
+    the bag-of-verbs vote says."""
+    frames = []
+    for kname, kspec in (board.kinds or {}).items():
+        for _sname, sspec in ((kspec or {}).get("setters") or {}).items():
+            if isinstance(sspec, dict) and sspec.get("refs"):
+                frames.append((kname, str(sspec["refs"])))
+    low = str(clause).lower()
+    words = low.split()
+    if len(frames) != 1 or not words or words[0] not in {
+            "put", "add", "move", "place", "attach"}:
+        return None
+    for prep in (" on ", " in ", " into ", " to "):
+        pat = low.find(prep)
+        sat = low.find(str(span).lower().strip())
+        if pat >= 0 and sat >= 0:
+            return frames[0][0] if sat < pat else frames[0][1]
+    return None
+
+
 def settle_by_affordance(rows: List[S.Declared], request: str,
                          board: Optional[Board] = None) -> List[S.Declared]:
     """A thing asked to do something only one kind can do IS that kind.
@@ -931,6 +992,9 @@ def settle_by_affordance(rows: List[S.Declared], request: str,
         holder = next((c for c in _clauses if span and span in c.lower()), None)
         if holder is None:
             return None
+        _framed = _transfer_kind(holder, span, board)
+        if _framed:
+            return _framed
         here = {w.strip(".,'\"—–?!").lower() for w in holder.split()}
         found = {next(iter(afford[w])) for w in here
                  if afford.get(w) and len(afford[w]) == 1}

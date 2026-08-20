@@ -53,3 +53,63 @@ def test_of_still_cuts_between_two_things():
     assert scan("snapshot", "create a snapshot of every running vm", B).span == "a snapshot"
     got = scan("vm", "create a snapshot of every running vm", B)
     assert not got.span.startswith("a snapshot")
+
+
+# ── E2/E3/E4: the remaining edge families (certified misses, 2026-08-20) ─────────────
+
+def test_a_following_predicate_stays_out():
+    assert scan("network", "if the lab network exists, stop it", B).span == "the lab network"
+    assert scan("vm", "tell me if the db vm restarted", B).span == "the db vm"
+    assert scan("job", "spin down the render vms after the job finishes", B).span == "the job"
+    assert scan("alpha", "stop the test vms even though alpha is busy", B).span == "alpha"
+
+
+def test_a_transfer_verbs_final_pp_is_the_verbs_argument():
+    assert scan("notes", "put the notes from the meeting in the shared folder", B).span \
+        == "the notes from the meeting"
+    assert scan("image", "clone the golden image into three vms", B).span == "the golden image"
+    # a plain act's PP restricts the noun and STAYS
+    assert scan("vm", "stop the vms on the lab network", B).span == "the vms on the lab network"
+
+
+def test_a_value_after_the_object_belongs_to_the_verb():
+    assert scan("vm", "label the red vms 'ready'", B).span == "the red vms"
+    assert scan("vm", "label the vms test", B).span == "the vms"
+
+
+def test_a_purpose_infinitive_stays_out():
+    assert scan("vm", "stop the vms to free up memory", B).span == "the vms"
+
+
+def test_a_manner_literal_stays_out():
+    assert scan("vm", "restart the vms one at a time", B).span == "the vms"
+
+
+def test_a_clock_adjunct_stays_out():
+    assert scan("vm", "snapshot every vm at 21:30", B).span == "every vm"
+
+
+def test_a_leading_object_pronoun_stays_out():
+    assert scan("network", "create two vms and put them on the dmz network", B).span \
+        == "the dmz network"
+    assert scan("vms", "tell me which vms it skipped", B).span == "which vms"
+
+
+def test_an_aux_participle_boundary_stops_the_walk():
+    got = scan("others", "the web vm, after you have checked the others, restart it", B)
+    assert got.span == "the others"
+
+
+def test_a_new_np_after_the_head_stops_the_walk():
+    got = scan("network", "put on the lab network every vm carrying the prod label", B)
+    assert got.span == "the lab network"
+
+
+def test_the_testimony_frame_stays_out_of_the_patient():
+    got = scan("network", "something is wrong with the dmz network", B)
+    assert got.span == "the dmz network"
+
+
+def test_a_restrictive_with_still_holds():
+    got = scan("vm", "stop every vm with over 6gb of ram", B)
+    assert got.span.startswith("every vm")

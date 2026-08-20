@@ -571,15 +571,39 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
     #   quantifier and the two-things reading stands.
     _QUANT = {"most", "some", "all", "none", "half", "few", "many", "each",
               "both", "any", "one"}
+    _TRANSFER = {"put", "add", "move", "place", "clone", "give", "attach"}
     while left > 0 and (toks[left - 1][0] not in BOUNDARIES
                         or (toks[left - 1][0] == "of" and left >= 2
                             and toks[left - 2][0] in _QUANT)):
         word = toks[left - 1][0]
         if question and left - 1 == clause_first and word in _AUX:
             break                             # the fronted auxiliary is the question's skin
+        # ⇒ E4 — universal left edges (certified exact misses, 08-20): an object
+        #   PRONOUN is its own NP (`them ON THE DMZ NETWORK` · `me WHICH VMS`); a
+        #   participle after an auxiliary is the PREDICATE (`you have checked | THE
+        #   OTHERS`); a testimony frame's `with` hands over the patient (`something is
+        #   wrong with | THE DMZ NETWORK` — a restrictive `with` sits after a noun and
+        #   is untouched); a TRANSFER verb's preposition heads the verb's own argument
+        #   (`put ... on | THE LAB NETWORK`).
+        if word in {"me", "us"}:
+            break                             # a RECIPIENT pronoun is its own NP
+                                              # (`me | which vms`); `it`/`them` stay —
+                                              # the predication over them feeds the fold
+                                              # (`make IT RUNNING` reaches alpha's row),
+                                              # and the transfer-preposition stop below
+                                              # already owns `them ON the dmz network`
+        if word.endswith("ed") and left >= 2 and toks[left - 2][0] in _AUX:
+            break
+        if (word == "with" and left >= 2 and toks[left - 2][0] not in nouns
+                and toks[left - 2][0] not in _DETS):
+            break
+        if (word in {"on", "in", "into", "to", "at"}
+                and toks[clause_first][0] in _TRANSFER):
+            break
         if word in verbs and word not in nouns:
             break                             # `snapshot` the noun still walks; the verb stops
-        if word in {"if", "unless", "because", "though", "although", "whenever", "when"}:
+        if word in {"if", "unless", "because", "though", "although", "whenever", "when",
+                    "after", "once", "before"}:
             break                             # an anchor INSIDE a tail stays inside it —
                                               # `if ALPHA is stopped` fused the whole clause
                                               # and is WHY conditionals-exact sat at 0/7
@@ -701,9 +725,61 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
     _cond_clause = (toks and toks[clause_first][0] in {"if", "unless", "when", "whenever"}
                     ) or _cond_anchor
     right = last
+    _rel_seen = False
+    _VALUE_VERBS = {"label", "tag", "call", "name", "give"}
+    from .temporal import CLOCK as _CLOCK
     while right < len(toks) and toks[right][0] not in BOUNDARIES:
-        if question and (toks[right][0] in _AUX or toks[right][0] in asked_values):
+        _rw = toks[right][0]
+        if _rw in {"that", "which", "who"}:
+            _rel_seen = True                  # a relative clause is INSIDE the span —
+                                              # `the ones THAT are still running` holds
+        if question and (_rw in _AUX or _rw in asked_values):
             break                             # `are stopped` / `running` — the ASKED property
+        # ⇒ E2/E3 — universal right edges (certified exact misses, 08-20), all skipped
+        #   inside a relative clause:
+        if not _rel_seen:
+            if _rw in {"is", "are", "was", "were"}:
+                break                         # a following predicate is not the thing
+            if (_rw.endswith(("s", "ed")) and _rw not in nouns and _rw not in _DETS
+                    and _rw not in asked_values
+                    and (right + 1 >= len(toks) or toks[right + 1][0] in BOUNDARIES)):
+                break                         # clause-final event verb: `exists` ·
+                                              # `finishes` · `restarted`
+            if (_rw in {"it", "them", "me", "us"}
+                    and right + 1 < len(toks)
+                    and toks[right + 1][0].endswith(("ed", "s"))
+                    and toks[right + 1][0] not in nouns):
+                break                         # a pronoun WITH A FINITE VERB after it
+                                              # opens a new clause (`which vms | it
+                                              # skipped`); `label it prod` holds — no
+                                              # verb follows, the predication is ours
+            if _rw in _DETS and right > 0 and toks[right - 1][0] in nouns:
+                break                         # a determiner DIRECTLY after a noun opens
+                                              # a NEW thing (`the lab network | every
+                                              # vm`); after a preposition it is the
+                                              # noun's own PP (`the notes from THE
+                                              # meeting` holds)
+            if (_rw == "to" and right + 1 < len(toks)
+                    and toks[right + 1][0] not in _DETS
+                    and toks[right + 1][0] not in nouns):
+                break                         # purpose infinitive: `to free up memory`
+            if (_rw in {"on", "in", "into", "to", "at"}
+                    and toks[clause_first][0] in _TRANSFER):
+                break                         # the transfer verb's own argument PP
+            if (toks[clause_first][0] in _VALUE_VERBS
+                    and (_rw.startswith("'") or _rw.isdigit()
+                         or (_rw not in nouns and _rw not in _DETS
+                             and _rw not in {"on", "in", "with", "and", "of"}
+                             and right + 1 >= len(toks)))):
+                break                         # the VALUE belongs to the verb: `'ready'`
+                                              # · `test` · `4 cores`
+            if _rw == "at" and right + 1 < len(toks) and (
+                    _CLOCK.match(toks[right + 1][0])
+                    or toks[right + 1][0] in {"noon", "midnight"}):
+                break                         # the clock adjunct is the trigger's
+            if " ".join(t[0] for t in toks[right:right + 4]) in {"one at a time",
+                                                                 "all at once"}:
+                break                         # manner is HOW, never part of the thing
         if _cond_clause and toks[right][0] in {"is", "are", "was", "were"}:
             break                             # a condition TESTS a state — `alpha | is
                                               # stopped`, `the web vm | is down`: the copula
