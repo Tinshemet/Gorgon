@@ -75,3 +75,19 @@ def test_a_question_after_testimony_does_not_elaborate():
 
 def test_no_testimony_means_no_spread():
     assert T.read("stop the web vm, launch the db vm") == []
+
+
+# ── predicate_end: the structural end, for the cut rules ─────────────────────────────
+
+def test_predicate_end_negated_copula():
+    c = "vm2 is not working it boots to a blue screen"
+    assert c[:T.predicate_end(c)] == "vm2 is not working"
+
+
+def test_predicate_end_indefinite_frame():
+    c = "something is wrong with the dmz network pings time out"
+    assert c[:T.predicate_end(c)] == "something is wrong"
+
+
+def test_predicate_end_none_without_testimony():
+    assert T.predicate_end("stop the web vm") is None

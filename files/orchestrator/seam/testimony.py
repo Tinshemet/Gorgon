@@ -99,6 +99,40 @@ def _of_clause(clause: str) -> Optional[Testimony]:
     return None
 
 
+def predicate_end(clause: str) -> Optional[int]:
+    """The CHAR offset right after a testimony predicate's structural end, or None.
+
+    ⇒ For the CUT RULES (pass2 rule 7, the D1-exposed no-comma cell): a testimony
+      predicate has a computable end for the closed shapes — negated copula + gerund
+      (`is not working` ▸), negated modal/do + verb (`won't start` ▸), the indefinite
+      frame's head (`something is wrong` ▸ before its with-phrase). What follows can
+      then be released as the elaboration. None when no shape matches — no vote.
+    """
+    import re as _re
+    toks = [(m.group(0).lower(), m.start(), m.end())
+            for m in _re.finditer(r"[\w:']+", str(clause))]
+    words = [t[0] for t in toks]
+    if len(words) >= 3 and words[0] in INDEFINITES and words[1] in COPULAS:
+        stop = words.index("with") if "with" in words else len(words)
+        return toks[stop - 1][2] if stop >= 3 else None
+    for at, word in enumerate(words):
+        if at == 0:
+            continue
+        if any(w in _RELATIVIZERS for w in words[:at]):
+            return None
+        negated_copula = (word in COPULAS and at + 1 < len(words)
+                          and words[at + 1] in ("not", "never"))
+        if word in NEG_MODALS or word in NEG_DO or word in ITERATIVES or negated_copula:
+            head_at = at + (2 if negated_copula else 1)
+            if head_at >= len(words):
+                return None
+            if not (word in NEG_MODALS or word in NEG_DO) \
+                    and not words[head_at].endswith("ing"):
+                return None
+            return toks[head_at][2]
+    return None
+
+
 def read(request: str, board: Optional[Board] = None) -> List[Testimony]:
     """Every testimony clause in the request. Deterministic, zero model calls.
 

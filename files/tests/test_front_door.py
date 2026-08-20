@@ -102,3 +102,8 @@ def test_no_vote_no_comma():
 def test_comma_text_is_the_identity_still():
     req = "if alpha is stopped, launch it"
     assert FD.read(req).text == req
+
+
+def test_the_testimony_comma_is_restored():
+    v = FD.read("vm2 is not working it boots to a blue screen")
+    assert v.text == "vm2 is not working, it boots to a blue screen"

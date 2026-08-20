@@ -103,3 +103,21 @@ def test_whether_if_is_not_a_condition_cut():
 def test_the_member_list_rejoin_still_holds():
     got = clauses_of("make sure n1, n2 and n3 can all ping each other")
     assert not any(p.startswith(("ping", "all", "can")) for p in got)
+
+
+# ── rule 7: the testimony predicate releases its elaboration (D1-exposed cell, 08-20) ─
+
+def test_testimony_releases_its_elaboration():
+    assert clauses_of("vm2 is not working it boots to a blue screen") == \
+        ["vm2 is not working", "it boots to a blue screen"]
+
+
+def test_the_indefinite_frame_releases_its_tail():
+    assert clauses_of("something is wrong with the dmz network pings time out") == \
+        ["something is wrong", "with the dmz network pings time out"]
+
+
+def test_a_short_tail_is_not_an_elaboration():
+    # fewer than three words after the predicate — no vote, no cut
+    assert clauses_of("the web vm won't start right now") == \
+        ["the web vm won't start right now"]

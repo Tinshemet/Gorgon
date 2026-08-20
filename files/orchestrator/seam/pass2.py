@@ -401,6 +401,13 @@ def _first_cut(piece: str):
                      # before its predicate — `when you GET a chance` stays whole
                      or (not conditioned and w in base_ops))):
             return s
+    # 7 · a TESTIMONY predicate releases its elaboration (the D1-exposed cell, 08-20):
+    #     "vm2 is not working ▸ it boots to a blue screen". predicate_end is the closed
+    #     structural end; >=3 words must remain — no vote, no cut.
+    from . import testimony as _tst
+    pe = _tst.predicate_end(text)
+    if pe and pe < len(text) and len(text[pe:].split()) >= 3:
+        return pe
     return None
 
 
