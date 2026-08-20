@@ -205,6 +205,15 @@ def read_case(sentence: str, board=None) -> dict:
             at = _locate(sentence, tail)
             if at:
                 predicted_triggers.append({"clause": tail, "start": at[0], "end": at[1]})
+            continue
+        # ⇒ the CLOCK adjunct — offset-bearing at last (qual-0005's slot, held open
+        #   from the eval's first day until the reader existed)
+        from orchestrator.seam import temporal as TMP
+        clock = TMP.clock_tail(clause)
+        if clock:
+            at = _locate(sentence, clock)
+            if at:
+                predicted_triggers.append({"clause": clock, "start": at[0], "end": at[1]})
     operations = []
     for clause, op in steps:
         at = _locate(sentence, clause)

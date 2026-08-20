@@ -160,6 +160,21 @@ def clock_in(text: str) -> str:
     return ""
 
 
+def clock_tail(clause: str) -> Optional[str]:
+    """The clock ADJUNCT with its own words, locatable — or None.
+
+    ⇒ `clock_in` classifies but carries no offsets, so *"at 21:30"* scored as a missed
+      trigger from the day the eval was born (qual-0005 — the slot was held open by
+      design). Closed shapes only: `at` + CLOCK | N am/pm | noon | midnight. `at the
+      door` names a PLACE and is refused by the same closed test.
+    """
+    import re as _re
+    low = str(clause).lower()
+    m = _re.search(r"\bat ((?:[0-2]?\d[:.][0-5]\d(?:\s?[ap]m)?)"
+                   r"|(?:[0-2]?\d\s?[ap]m)|noon|midnight)\b", low)
+    return m.group(0) if m else None
+
+
 def events_in(text: str, speech_act=None) -> bool:
     """Does something HAPPENING start this? The world-called half.
 

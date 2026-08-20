@@ -109,3 +109,17 @@ token that SPLITS into two known closed-set words, accepted only where the const
 votes, same notice, same [[gorgon-typo-risk-ladder]] — but NO CERTIFIED CASE prices it.
 ⇒ v2.1: add **fused** as a fifth noise class (~10 twins, operator-certified), then build
 against the measured cell. Never before.
+
+## 10 · v3 — LEARNED PATTERNS: the stores teach the reader (operator, 2026-08-20)
+*"add a case for v3, encyclopedia/archive/package, IE learned patterns — maybe we add a
+moc for ip addresses and mac addresses and see if it can pick them up."* The v3 axis is
+KNOWLEDGE-SOURCED reading: seeds where requests name typed identifiers ("stop the vm at
+10.0.0.5" · "which vm has mac aa:bb:cc:dd:ee:ff"), against a MOCK attribute-class
+declaration (ip/mac as [[gorgon-attribute-classes]]: TYPE, UNIT, OWNER, SOURCE — a class
+with no reader turns an unknown-noun ASK into a capability BOUNCE). Measures whether a
+taught pattern is PICKED UP by the reader without corpus. Joins identifiers v1.1
+(ledger #8) and the typo-risk ladder's store-sourced candidates — same axis: what the
+lab has LEARNED informs the read, never grants authority.
+⇒ SCOPED BY THE OPERATOR 08-20: v3 comes AFTER the current table is finished, and it is
+planned as THE LAST release — grow toward **~300 sentences with a few dozen patterns**,
+a comfortable future corpus. v3 closes the READ saga.
