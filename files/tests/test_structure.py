@@ -768,8 +768,10 @@ def test_the_repair_is_applied_before_anything_is_scanned():
         check("the lexical marker form works too",
               names("stop alpha — sorry, i meant beta") == ["beta"])
         check("a mid-request retraction keeps only what follows",
+              # the row is `the web vm` since the E1 edge rule (08-20): a kind word
+              # in verb position is the VERB — certified gold's own span for sc-0003
               names("snapshot the db vm, scratch that, snapshot the web vm")
-              == ["snapshot the web vm"])
+              == ["the web vm"])
         check("a bare retraction reads as nothing",
               names("actually, never mind") == [])
         # ⇒ THE CONTROLS — no marker, no mending

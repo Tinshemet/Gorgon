@@ -425,6 +425,12 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
                                         or _rtoks[_i - 1][0] in _released):
             _released.add(_w)
 
+    # ⇒ E1's own release — a kind word standing in VERB position everywhere it occurs
+    #   is the OPERATION, and the gate must own it or the model's anchor re-declares
+    #   the verb as a thing (the ghost rule, again)
+    from .scan import verb_position_words as _vpw
+    _released |= _vpw(request, board)
+
     # the gate, applied to the ALREADY-MERGED list (manifest + model) before any scan:
     def _consumed(word: str) -> bool:
         w = str(word).lower().strip()

@@ -187,6 +187,48 @@ def _tokens(text: str):
             for m in re.finditer(r"\d{1,2}:\d{2}|[\w']+|[,;.]|[—–]", text)]
 
 
+def verb_position_words(request: str, board: Optional[Board] = None) -> set:
+    """Kind words whose EVERY occurrence sits in verb position — E1's grammar mark
+    (clause-initial, a determiner next, a DIFFERENT kind or a pro-form in the object).
+
+    ⇒ FOR THE ANCHOR GATE, by the ghost rule: E1 frees `snapshot` from the vm-row's
+      span, so the reading that freed it must OWN it — otherwise the model's anchor
+      re-declares the verb as a thing (`snapshot the web vm` came back as TWO rows the
+      hour E1 landed). Every-occurrence, so *"create a SNAPSHOT of..."* keeps its noun.
+    """
+    low = str(request).lower()
+    toks = _tokens(low)
+    words = [t[0] for t in toks]
+    nouns = _index(board or Board())
+    dets = {"a", "an", "the", "every", "each", "all", "any", "both", "no"}
+    out = set()
+    for w in set(words):
+        if w not in nouns:
+            continue
+        occs = [i for i, x in enumerate(words) if x == w]
+        ok = bool(occs)
+        for i in occs:
+            initial = i == 0 or words[i - 1] in BOUNDARIES
+            if not (initial and i + 1 < len(words) and words[i + 1] in dets):
+                ok = False
+                break
+            clash, j = False, i + 1
+            while j < len(words) and words[j] not in BOUNDARIES:
+                if words[j] in nouns and nouns[words[j]] != nouns[w]:
+                    clash = True
+                    break
+                if j == i + 2 and words[j] in {"one", "ones"}:
+                    clash = True
+                    break
+                j += 1
+            if not clash:
+                ok = False
+                break
+        if ok:
+            out.add(w)
+    return out
+
+
 def anchors_in(request: str, board: Optional[Board] = None) -> List[str]:
     """EVERY DECLARED NOUN THE REQUEST USES — anchors found without asking anyone.
 
@@ -540,7 +582,25 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
         #   it is a DETERMINER, is the verb of an imperative — `restart THE…`, `clone THE…`.
         #   `alpha won't…` keeps alpha (aux follows, not a determiner); `the web vm, …`
         #   keeps `the` (it IS a determiner, not followed-by one).
-        if (left - 1 == clause_first and word not in nouns
+        # ⇒ AND A KIND WORD IN VERB POSITION IS THE VERB when what follows cannot join
+        #   it in one noun phrase — `snapshot the db VM` carries two different kinds,
+        #   and one NP cannot; `snapshot the ONES` opens a referential pro-form. Five
+        #   of the certified exact misses, one grammar mark. `vms the operator built`
+        #   has no second kind after its determiner and stays a noun.
+        _kindclash = False
+        if word in nouns and left - 1 == clause_first and left < len(toks) \
+                and toks[left][0] in _DETS:
+            _j = left
+            while _j < len(toks) and toks[_j][0] not in BOUNDARIES:
+                _w2 = toks[_j][0]
+                if _w2 in nouns and nouns.get(_w2) != nouns.get(word):
+                    _kindclash = True
+                    break
+                if _j == left + 1 and _w2 in {"one", "ones"}:
+                    _kindclash = True
+                    break
+                _j += 1
+        if (left - 1 == clause_first and (word not in nouns or _kindclash)
                 and word not in ENUMERATORS and word not in _WH
                 and left < len(toks)
                 and toks[left][0] in _DETS):
