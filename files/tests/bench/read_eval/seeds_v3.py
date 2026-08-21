@@ -12,9 +12,10 @@ its own object · a query produces · every malfunction predicate is testimony).
    ratifies the mock decoys included. Every RULING NEEDED note below was replaced by
    the ruling it received. Hand-authored embedded-junk/code-switch twins close the file.
 """
-from typing import Dict, List
+from typing import Dict, List, Optional
 
-from .seeds import Seed, Text  # the same shapes; v1/v2 seeds stay untouched
+from .seeds import Seed, Text, build  # the same shapes; v1/v2 seeds stay untouched
+from .schema import validate
 
 SEEDS_V3: List[Seed] = [
     # ══ identifiers — typed values the stores taught (ip/mac/serial mocks) ═══════════
@@ -369,4 +370,34 @@ SEEDS_V3: List[Seed] = [
               "grow (RULED): gold says the UNKNOWN bounce — no acts, no attachments; "
               "the object NP still detects. The bounce IS the correct answer"),
 ]
+
+
+def emit() -> List[dict]:
+    """Build every v3 seed and refuse to hand over anything the schema rejects."""
+    cases = [build(s) for s in SEEDS_V3]
+    faults = validate(cases)
+    if faults:
+        raise SystemExit("\n".join(f"  ✗ {f}" for f in faults))
+    return cases
+
+
+def main(argv: Optional[List[str]] = None) -> int:                # pragma: no cover
+    import json
+    import os
+    import sys
+    argv = list(sys.argv[1:] if argv is None else argv)
+    cases = emit()
+    if "--emit" in argv:
+        path = os.path.join(os.path.dirname(__file__), "cases", "v3-draft.jsonl")
+        with open(path, "w", encoding="utf-8") as fh:
+            for case in cases:
+                fh.write(json.dumps(case, ensure_ascii=False) + "\n")
+        print(f"  {len(cases)} case(s) -> {path}")
+    else:
+        print(f"  {len(cases)} case(s), 0 faults (--emit writes cases/v3-draft.jsonl)")
+    return 0
+
+
+if __name__ == "__main__":                                        # pragma: no cover
+    raise SystemExit(main())
 
