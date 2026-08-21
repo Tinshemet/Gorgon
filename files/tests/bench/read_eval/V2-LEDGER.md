@@ -220,8 +220,8 @@ twins or declare out of scope in the freeze note · noise twins over the new see
   · co-0001 ✅ *"sure — it helps us later to test resolvment and routing"* —
     concession stays TESTIMONY ON A BYSTANDER (malfunction predicate = testimony);
     NEVER an excluded-role: "even though" pre-empts an objection, it removes no one.
-    "Except" is a different construction — a couple of except-family drafts join the
-    build sweep for certification to keep or drop. Noted for later: concession cases
+    "Except" is a different construction — and the sweep found v2 ALREADY covers it
+    (the `excluded` role, ruled 08-18; two cases carry it): no new drafts needed. Noted for later: concession cases
     are resolve/route test material — known bystander state exercises the seam
     between legality and what the world satisfies. A concession never grants;
     whether it pre-answers a confirmation tier is a gates question for another day.

@@ -95,6 +95,10 @@ class Seed(NamedTuple):
     rules: List[int] = []                     # indices into `actions` that are RULE acts
     reports: List[int] = []                   # indices into `actions` that are REPORT acts
     triggers: Dict[int, Text] = {}            # action index -> the clause that STARTS it
+    manner: Dict[int, Text] = {}              # v2.0: action index -> HOW its execution runs
+    store: List[dict] = []                    # v2.0: the per-case mock certification ratifies
+    noise: str = ""                           # "" = clean; hand-authored twins name their class
+    pair_id: str = ""                         # "" = none; a hand twin names its clean case
     source: str = "seed"                      # "real-failure" where a documented defect said it
     note: str = ""
 
@@ -127,6 +131,9 @@ def build(seed: Seed) -> dict:
         if i in seed.triggers:
             ts, te = _at(seed.sentence, seed.triggers[i], seed.id)
             act["trigger"] = {"text": seed.sentence[ts:te], "start": ts, "end": te}
+        if i in seed.manner:
+            ms, me = _at(seed.sentence, seed.manner[i], seed.id)
+            act["manner"] = {"text": seed.sentence[ms:me], "start": ms, "end": me}
         if i in seed.queries:
             act["kind"] = "query"
         if i in seed.rules:
@@ -138,9 +145,13 @@ def build(seed: Seed) -> dict:
     # the schema validates the role vocabulary and the one-patient rule
     attachments = [{"action": a, "objects": list(objs)}
                    for a, objs in sorted(seed.attach.items())]
-    return {"id": seed.id, "stratum": seed.stratum, "noise": CLEAN, "pair_id": None,
+    case = {"id": seed.id, "stratum": seed.stratum,
+            "noise": seed.noise or CLEAN, "pair_id": seed.pair_id or None,
             "source": seed.source, "sentence": seed.sentence,
             "gold": {"spans": spans, "actions": actions, "attachments": attachments}}
+    if seed.store:
+        case["store"] = [dict(entry) for entry in seed.store]
+    return case
 
 
 SEEDS: List[Seed] = [

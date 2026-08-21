@@ -103,7 +103,15 @@ SPAN_TYPES = ("object", "evidence")
 #     travels with the set). And it bills the deadliest misreading DIRECTLY: an excluded
 #     member scores a hit only when the reading does NOT act on it. One span could not say
 #     that; a reader stopping db along with everything else still overlapped the big span.
-ROLES = ("patient", "destination", "source", "value", "excluded", "evidence")
+#   ⇒ **v2.0 roles — RULED 08-21 (V2-LEDGER #11 per-seed rulings):**
+#     `reference` — an apposition CO-NAMES the patient ("alpha, the jumpbox"): scanned
+#     and expressed, bound to the same referent, never a second thing. The reader is
+#     scored on the equivalence the apposition-as-teaching harvest depends on.
+#     `beneficiary` — for-whom ("a network for the test vms"): a silently dropped
+#     purpose qualifier (the linguistic sweep's measured gap) becomes a visible miss.
+#     A beneficiary expresses for-whom; it never infers extra acts.
+ROLES = ("patient", "destination", "source", "value", "excluded", "evidence",
+         "reference", "beneficiary")
 
 # ── v1.3: QUERY ACTS (operator, mid-review 08-18: mc-0002's second clause is "a dropped
 #   clause, that is a query"). A question is a THIRD of the sentence taxonomy — order ·
@@ -133,7 +141,24 @@ ACTION_KINDS = ("instruct", "query", "rule", "report")
 #   field a reader that captures the condition and one that discards it scored the same,
 #   while the discarded qualifier is a live defect ("stop every vm at 9pm" runs NOW).
 
+# ── v2.0: ACTION MANNER (V2-LEDGER #11 schema ruling 1, RULED 08-21 — *"a way to
+#   control how the procedure acts … not a meta control but more about how the pipeline
+#   is handled — so it should be expressed"*). An action may carry `manner`: the offsets
+#   of the clause that says HOW its execution runs — "one at a time", "all at once".
+#   The act's second CONTROL channel beside `trigger` (when-control · how-control); on a
+#   plural patient the constraint lands on the DERIVED LOOP at lowering. Never
+#   meta-control: confirmation/verification/authority stay the gates' territory.
+#
+# ── v2.0: THE PER-CASE STORE (V2-LEDGER #11 schema ruling 2, RULED 08-21). A case may
+#   carry `store`: a POPULATED mock the runner seeds into a THROWAWAY archive before
+#   read_case — several entries across kinds PLUS red herrings (four decoy classes:
+#   near-miss same kind · sounds similar · name overlap, different meaning · unrelated
+#   filler). Selection under distraction is the measurement — correctness · relevancy ·
+#   inference. Certifying the case RATIFIES the mock, decoys included. Entries are flat
+#   primitive facts; their deeper shape belongs to the stores, not this schema.
+
 CASE_KEYS = {"id", "stratum", "noise", "pair_id", "source", "sentence", "gold"}
+OPTIONAL_KEYS = {"store"}
 GOLD_KEYS = {"spans", "actions", "attachments"}
 
 
@@ -179,12 +204,27 @@ def validate_case(case: dict) -> List[str]:
     faults: List[str] = []
     cid = case.get("id") or "<no id>"
 
-    for extra in set(case) - CASE_KEYS:
+    for extra in set(case) - CASE_KEYS - OPTIONAL_KEYS:
         faults.append(f"{cid}: unknown key {extra!r} — the schema does not ride along")
     for missing in CASE_KEYS - set(case):
         faults.append(f"{cid}: missing {missing!r}")
     if faults:
         return faults
+
+    # v2.0 store: flat primitive facts, non-empty — certification ratifies the mock
+    if "store" in case:
+        store = case["store"]
+        if not isinstance(store, list) or not store:
+            faults.append(f"{cid}: store must be a non-empty list")
+        else:
+            for i, entry in enumerate(store):
+                if not isinstance(entry, dict) or not entry:
+                    faults.append(f"{cid}: store[{i}] must be a non-empty object")
+                    continue
+                for k, v in entry.items():
+                    if not isinstance(k, str) or not isinstance(v, (str, int, bool)):
+                        faults.append(f"{cid}: store[{i}].{k}: entries are flat "
+                                      f"str/int/bool facts")
 
     if not isinstance(case["id"], str) or not case["id"].strip():
         faults.append(f"{cid}: id must be a non-empty string")
@@ -214,21 +254,22 @@ def validate_case(case: dict) -> List[str]:
     for i, span in enumerate(spans):
         faults += _offsets(f"{cid}: spans[{i}]", span, sentence, typed=True)
     for i, act in enumerate(actions):
-        known = {"text", "start", "end", "trigger", "kind"}
+        known = {"text", "start", "end", "trigger", "kind", "manner"}
         for extra in set(act) - known:
             faults.append(f"{cid}: actions[{i}]: unknown key {extra!r}")
         if "kind" in act and act["kind"] not in ACTION_KINDS:
             faults.append(f"{cid}: actions[{i}]: kind {act['kind']!r} is not one of "
                           f"{ACTION_KINDS}")
-        slim = {k: v for k, v in act.items() if k not in ("trigger", "kind")}
+        slim = {k: v for k, v in act.items() if k not in ("trigger", "kind", "manner")}
         faults += _offsets(f"{cid}: actions[{i}]", slim, sentence, typed=False)
-        if "trigger" in act:
-            trig = act["trigger"]
-            if not isinstance(trig, dict):
-                faults.append(f"{cid}: actions[{i}]: trigger is not an object")
-            else:
-                faults += _offsets(f"{cid}: actions[{i}].trigger", trig, sentence,
-                                   typed=False)
+        for channel in ("trigger", "manner"):
+            if channel in act:
+                clause = act[channel]
+                if not isinstance(clause, dict):
+                    faults.append(f"{cid}: actions[{i}]: {channel} is not an object")
+                else:
+                    faults += _offsets(f"{cid}: actions[{i}].{channel}", clause,
+                                       sentence, typed=False)
 
     # same-type spans must not overlap — two golds claiming one character is an authoring slip
     placed = [(s["start"], s["end"], s.get("type"), i) for s in spans
@@ -392,6 +433,21 @@ def selfcheck() -> List[str]:
     broken(lambda c: c["gold"]["actions"][0].__setitem__(
         "trigger", {"text": "restart", "start": 0, "end": 7, "why": "x"}), "unknown key")
     broken(lambda c: c["gold"]["actions"][0].__setitem__("kind", "musing"), "not one of")
+    # v2.0 manner + store — each new door must also refuse
+    broken(lambda c: c["gold"]["actions"][0].__setitem__(
+        "manner", {"text": "nope", "start": 0, "end": 4}), "gold says")
+    broken(lambda c: c["gold"]["actions"][0].__setitem__(
+        "manner", {"text": "restart", "start": 0, "end": 7, "why": "x"}), "unknown key")
+    broken(lambda c: c.__setitem__("store", []), "non-empty list")
+    broken(lambda c: c.__setitem__("store", [{}]), "non-empty object")
+    broken(lambda c: c.__setitem__("store", [{"word": ["nested"]}]), "flat")
+
+    enriched = _good()
+    enriched["store"] = [{"word": "grubnash", "kind": "vm", "ratified": True}]
+    enriched["gold"]["actions"][0]["manner"] = {"text": "the web vm",
+                                                "start": 8, "end": 18}
+    if validate([enriched]):
+        problems.append(f"the store+manner case FAILED: {validate([enriched])}")
 
     noised = _good()
     noised.update(id="coord-0001n", noise="typos", pair_id="ghost-0000")

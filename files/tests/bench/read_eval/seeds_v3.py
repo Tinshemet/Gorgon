@@ -1,19 +1,16 @@
 """seeds_v3.py — THE CLOSING STRATA (drafted 2026-08-20 night, operator certifies before use).
 
 v3 = the LAST release (operator-scoped): learned patterns + the structure_map's open
-holes, growing the corpus toward ~300. Twelve new strata. Every gold below follows the
-certified conventions (grammar decides · a span is verbatim bytes · the exception is its
-own object · a query produces · every malfunction predicate is testimony); where a
-convention does not yet COVER the shape, the note names the RULING NEEDED and the draft
-takes the conservative reading.
+holes, growing the corpus toward ~300. Twenty-three new strata. Every gold below follows
+the certified conventions (grammar decides · a span is verbatim bytes · the exception is
+its own object · a query produces · every malfunction predicate is testimony).
 
-⇒⇒ TWO SCHEMA QUESTIONS RIDE WITH THIS FILE (the operator rules before the freeze):
-   1. MANNER — "one at a time" is read (right-stopped) but the gold cannot SAY it.
-      Proposal: `manner: Dict[int, Text]` on Seed/case, scored like triggers.
-   2. STORE — learned-words cases need per-case mock store state (an encyclopedia/
-      archive entry the reader may consult). Proposal: `store: List[dict]` on the case;
-      the runner seeds a THROWAWAY Archive before read_case. Nothing routes until a
-      person signs it — these mocks are ratified BY the operator certifying the case.
+⇒⇒ THE 08-21 MORNING RULINGS LANDED HERE (V2-LEDGER #11 carries every decision in the
+   operator's words). The two schema questions were TAKEN: `manner` is the act's second
+   control channel (offsets, scored like triggers) and `store` carries a POPULATED
+   per-case mock — four decoy classes, selection under distraction, certification
+   ratifies the mock decoys included. Every RULING NEEDED note below was replaced by
+   the ruling it received. Hand-authored embedded-junk/code-switch twins close the file.
 """
 from typing import Dict, List
 
@@ -26,9 +23,13 @@ SEEDS_V3: List[Seed] = [
          note="an identifier in a restrictive PP is part of the NP, exactly as "
               "'the vms on the lab network' is (ba-0001's convention)"),
     Seed("id-0002", "identifiers", "which vm has mac aa:bb:cc:dd:ee:ff?",
-         ["which vm"], ["which vm has mac aa:bb:cc:dd:ee:ff"], {0: [0]}, queries=[0],
-         note="RULING NEEDED: cs-0007 leaves the asked property unmarked; here the mac "
-              "is a FILTER VALUE, not the produced set — same treatment drafted"),
+         ["which vm", "aa:bb:cc:dd:ee:ff"], ["which vm has mac aa:bb:cc:dd:ee:ff"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}]},
+         queries=[0],
+         note="RULED 08-21: 'mark it as a query — since we have the value but not the "
+              "key' — a REVERSE LOOKUP: the given value is the query's input argument "
+              "(value role), the wh-NP is the asked side. cs-0007 refined: an asked "
+              "PREDICATE stays unmarked; a given VALUE is expressed"),
     Seed("id-0003", "identifiers", "give the web vm the ip 10.0.0.7",
          ["the web vm", "10.0.0.7"], ["give"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}]},
@@ -48,9 +49,13 @@ SEEDS_V3: List[Seed] = [
          note="the unit names the attribute (gb -> memory_mb through the class); the "
               "value span is the quantity+unit token, bare — coord-0005's convention"),
     Seed("un-0002", "units", "create a vm with 4 cores and 8gb of ram",
-         ["a vm with 4 cores and 8gb of ram"], ["create"], {0: [0]},
-         note="RULING NEEDED: a creation SPEC — descriptor-with keeps the values inside "
-              "the NP (ba-0001 family), or do spec values get value-role spans?"),
+         ["a vm", "4 cores", "8gb of ram"], ["create"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"},
+              {"span": 2, "role": "value"}]},
+         note="RULED 08-21: 'each value should be scored indpendently' — spec values "
+              "CARVED OUT: patient is the minted kind, every literal value its own "
+              "value-role span. (The line vs naming specs: literal values carve; a "
+              "generative naming spec stays whole — see nl-0001)"),
     Seed("un-0003", "units", "set the cpu of the web vm to 4 cores",
          ["the web vm", "4 cores"], ["set"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}]},
@@ -75,12 +80,16 @@ SEEDS_V3: List[Seed] = [
     # ══ alternatives — or-coordination: the read records BOTH, choosing is route's ═══
     Seed("al-0001", "alternatives", "stop alpha or beta",
          ["alpha", "beta"], ["stop"], {0: [0, 1]},
-         note="RULING NEEDED: an alternative means ONE of them — the read records both "
-              "members; whether gold needs an `alternation` flag (schema) or the "
-              "attachment suffices is the operator's call. Drafted as plain members"),
+         triggers={0: "or"},
+         note="RULED 08-21: 'score both — the or is scored like a trigger since "
+              "boolean operators are triggers; the decision is at RESOLVE, not ROUTE'. "
+              "No alternation flag: both members score, the operator rides the trigger "
+              "channel, the world satisfies one member at resolve"),
     Seed("al-0002", "alternatives", "launch the web vm or the db vm, whichever is stopped",
          ["the web vm", "the db vm"], ["launch"], {0: [0, 1]},
-         note="the whichever-clause CONDITIONS the choice — reads as the selector"),
+         triggers={0: "whichever is stopped"},
+         note="the whichever-clause IS the condition — the trigger channel carries it "
+              "(the al-0001 ruling unifies the family); choosing is RESOLVE's"),
 
     # ══ reduced-relative — the relativizer elided, the filter remains ════════════════
     Seed("rr-0001", "reduced-relative", "stop the vms running on lab",
@@ -94,14 +103,19 @@ SEEDS_V3: List[Seed] = [
 
     # ══ apposition — a rename in flight, the archive's own X-is-Y ════════════════════
     Seed("ap-0001", "apposition", "alpha, the jumpbox, is down",
-         ["alpha"], ["is down"], {0: [0]}, reports=[0],
-         evidence=["is down"],
-         note="RULING NEEDED: the apposition 'the jumpbox' RENAMES alpha — the "
-              "archive's `X is a Y` in another skin. Draft keeps it OUT of gold spans "
-              "(a rename is a teaching, not a second thing); is that the ruling?"),
+         ["alpha", "the jumpbox"], ["is down"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "reference"},
+              {"span": 2, "role": "evidence"}]},
+         reports=[0], evidence=["is down"],
+         note="RULED 08-21: 'the renames are scanned as well but are treated as "
+              "refernces' — the apposition IS expressed, bound to the SAME referent "
+              "with a reference role. One patient; the reader is scored on the "
+              "equivalence the apposition-as-teaching harvest depends on"),
     Seed("ap-0002", "apposition", "stop the jumpbox, alpha",
-         ["the jumpbox"], ["stop"], {0: [0]},
-         note="imperative apposition — same question mirrored: `alpha` renames"),
+         ["the jumpbox", "alpha"], ["stop"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "reference"}]},
+         note="imperative apposition, same ruling mirrored — `alpha` co-names the "
+              "patient as a reference"),
 
     # ══ cause — a symptom wearing a subordinate clause (D1's kin) ════════════════════
     Seed("ca-0001", "cause", "stop the vms because they are stuck",
@@ -114,8 +128,10 @@ SEEDS_V3: List[Seed] = [
     # ══ concession — an exception the operator already thought about ═════════════════
     Seed("co-0001", "concession", "stop the test vms even though alpha is busy",
          ["the test vms", "alpha"], ["stop"], {0: [0]}, evidence=["is busy"],
-         note="RULING NEEDED: the concession names a STATE of a bystander — drafted as "
-              "testimony evidence on alpha; is a concession ever an excluded-role?"),
+         note="RULED 08-21: testimony on a bystander, NEVER an excluded-role — 'even "
+              "though' pre-empts an objection, it removes no one ('except' is v2's "
+              "excluded role, already covered). Resolve/route test material later; "
+              "a concession never grants"),
     Seed("co-0002", "concession", "launch the fleet even though the lab network is slow",
          ["the fleet", "the lab network"], ["launch"], {0: [0]},
          evidence=["is slow"]),
@@ -132,26 +148,40 @@ SEEDS_V3: List[Seed] = [
     # ══ manner — HOW binds this request only, and dropping it changes what runs ══════
     Seed("mn-0001", "manner", "restart the vms one at a time",
          ["the vms"], ["restart"], {0: [0]},
-         note="SCHEMA QUESTION 1: the manner is read (right-stopped off the span) but "
-              "gold cannot SAY it — proposal: manner={0: 'one at a time'}, scored like "
-              "triggers. Drafted without until the operator rules"),
+         manner={0: "one at a time"},
+         note="RULED 08-21 (schema ruling 1): manner is EXPRESSED — the act's second "
+              "control channel, how-execution-is-handled; the derived loop inherits "
+              "it at lowering as serial pacing"),
     Seed("mn-0002", "manner", "stop the lab vms all at once",
-         ["the lab vms"], ["stop"], {0: [0]}),
+         ["the lab vms"], ["stop"], {0: [0]},
+         manner={0: "all at once"}),
 
     # ══ learned-words — the stores teach, the reader picks it up (SCHEMA QUESTION 2) ═
     Seed("lw-0001", "learned-words", "stop the grubnash",
          ["the grubnash"], ["stop"], {0: [0]},
-         note="STORE: [{word: grubnash, kind: vm, ratified: true}] — with the entry the "
-              "kindless row TYPES; without it the same sentence asks. The pair of "
-              "readings is the measurement"),
+         store=[{"word": "grubnash", "kind": "vm", "ratified": True},
+                {"word": "grubnash", "kind": "network", "ratified": False},
+                {"word": "grubnest", "kind": "vm", "ratified": True},
+                {"word": "tomato", "kind": "fruit", "ratified": True}],
+         note="RULED 08-21 (schema ruling 2): a POPULATED store — the target plus "
+              "three decoy classes (name overlap unratified · near-miss/sounds-similar "
+              "· unrelated filler). Selection under distraction is the measurement; "
+              "certifying this case ratifies the mock, decoys included"),
     Seed("lw-0002", "learned-words", "spin up a fresh grubnash next to alpha",
          ["a fresh grubnash", "alpha"], ["spin up"], {0: [0, 1]},
-         note="STORE as lw-0001 — the taught word in a creation frame"),
+         store=[{"word": "grubnash", "kind": "vm", "ratified": True},
+                {"word": "grubnash", "kind": "network", "ratified": False},
+                {"word": "grubnest", "kind": "vm", "ratified": True},
+                {"word": "tomato", "kind": "fruit", "ratified": True}],
+         note="the taught word in a creation frame, same populated mock as lw-0001"),
     Seed("lw-0003", "learned-words", "when you have a sec, stop the db vm",
          ["the db vm"], ["stop"], {0: [0]},
-         note="STORE: [{phrase: 'when you have a sec', is: courtesy}] — a TAUGHT "
-              "courtesy literal; retires the archive-debt pattern (two hand literals "
-              "today). Courtesy marks nothing, exactly as certified"),
+         store=[{"phrase": "when you have a sec", "is": "courtesy", "ratified": True},
+                {"phrase": "in a sec", "is": "duration", "ratified": True},
+                {"word": "tomato", "kind": "fruit", "ratified": True}],
+         note="a TAUGHT courtesy literal (retires the archive-debt pattern), with a "
+              "sounds-similar decoy of a DIFFERENT meaning beside it. Courtesy marks "
+              "nothing, exactly as certified"),
 
     # ══ self-address — 'you' is the agent; it must never become a thing ══════════════
     Seed("sa-0001", "self-address", "can you check the web vm?",
@@ -166,8 +196,9 @@ SEEDS_V3: List[Seed] = [
     # ══ ordinals — selection by ORDER, a closed class nothing reads ══════════════════
     Seed("or-0001", "ordinals", "stop the first vm",
          ["the first vm"], ["stop"], {0: [0]},
-         note="RULING NEEDED: is the ordinal part of the span (drafted) or a selector "
-              "read like a count? ('the first' has no kind word — affordance types it)"),
+         note="RULED 08-21: 'we keep it — again resolve issue'. The ordinal stays "
+              "INSIDE the span: one selector NP, verbatim; the attr-class TYPE "
+              "licenses the ordering axis and the world orders and picks at RESOLVE"),
     Seed("or-0002", "ordinals", "delete the last snapshot",
          ["the last snapshot"], ["delete"], {0: [0]}),
     Seed("or-0003", "ordinals", "restart the second one",
@@ -189,15 +220,27 @@ SEEDS_V3: List[Seed] = [
          ["web", "ready", "db", "hold"], ["label", "label"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}],
           1: [{"span": 2, "role": "patient"}, {"span": 3, "role": "value"}]},
-         note="the one-patient rule DECIDED the draft: one verb, TWO acts (both share "
-              "the verb's offsets) — each conjunct pairs its own patient and value. "
-              "The validator itself refused the flat one-act reading; RULING: bless "
-              "this shape or extend the schema with grouped members"),
+         note="RULED 08-21: the two-acts shape is BLESSED — one verb, one act per "
+              "conjunct pair, all sharing the verb's offsets; the elided verb is "
+              "real, just unspoken. The one-patient rule stands untouched"),
     Seed("pw-0002", "pairwise", "put web on lab and db on dmz",
          ["web", "lab", "db", "dmz"], ["put", "put"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "destination"}],
           1: [{"span": 2, "role": "patient"}, {"span": 3, "role": "destination"}]},
          note="same shape as pw-0001, destination flavour"),
+    Seed("pw-0003", "pairwise", "label alpha 'up', beta 'down' and gamma 'hold'",
+         ["alpha", "up", "beta", "down", "gamma", "hold"],
+         ["label", "label", "label"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}],
+          1: [{"span": 2, "role": "patient"}, {"span": 3, "role": "value"}],
+          2: [{"span": 4, "role": "patient"}, {"span": 5, "role": "value"}]},
+         note="coverage per the ruling ('cover not just one case but a few') — the "
+              "three-conjunct chain: one verb, three acts"),
+    Seed("pw-0004", "pairwise", "give web 4 cores and db 8gb",
+         ["web", "4 cores", "db", "8gb"], ["give", "give"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}],
+          1: [{"span": 2, "role": "patient"}, {"span": 3, "role": "value"}]},
+         note="coverage — unit-value flavour: pairwise composed with the units stratum"),
 
     # ══ negated-query — negation composed with the interrogative ═════════════════════
     Seed("nq-0001", "negated-query", "which vms are not running?",
@@ -231,11 +274,25 @@ SEEDS_V3: List[Seed] = [
     # ══ naming-lists — one act MINTING several names ═════════════════════════════════
     Seed("nl-0001", "naming-lists", "create three vms named a, b and c",
          ["three vms named a, b and c"], ["create"], {0: [0]},
-         note="RULING NEEDED: one span carrying three mints (drafted), or three "
-              "objects? The count says three; the names distribute. Reading names, "
-              "writing mints — a `must` ASSIGNS and may mint"),
+         note="RULED 08-21: ONE span carrying the mints — naming specs are often "
+              "GENERATORS (ranges, themes), not lists; the names may not exist as "
+              "bytes at all. Literal values carve (un-0002); a naming spec is one "
+              "generative unit — mints happen where the generator runs"),
     Seed("nl-0002", "naming-lists", "create two networks called front and back",
          ["two networks called front and back"], ["create"], {0: [0]}),
+    Seed("nl-0003", "naming-lists", "create 5 vms named 1-5",
+         ["5 vms named 1-5"], ["create"], {0: [0]},
+         note="the operator's own sentence — a RANGE generator: no five name spans "
+              "exist; the spec stays whole and the generator runs downstream"),
+    Seed("nl-0004", "naming-lists",
+         "create 3 vms named after musicians and a network called the stadium "
+         "and add those vms to it",
+         ["3 vms named after musicians", "a network called the stadium", "those vms"],
+         ["create", "add"], {0: [0, 1], 1: [2]},
+         note="the operator's own sentence — a THEME generator plus a compound: one "
+              "create distributing two mints (plain members, no direction claimed), "
+              "then an add whose 'those vms' is within-sentence anaphora; 'it' is the "
+              "bare pronoun, no span (the bare-pronoun rule)"),
 
     # ══ quoted-values — a value with SPACES stays one value ══════════════════════════
     Seed("qv-0001", "quoted-values", "label the web vm 'do not touch'",
@@ -266,11 +323,12 @@ SEEDS_V3: List[Seed] = [
               "create op (one emitted scores hallucinated). The twin below is the "
               "adversary"),
     Seed("cap-0002", "capability", "can you create a network for the test vms?",
-         ["a network", "the test vms"], ["create"], {0: [0]},
-         note="SINGULAR INDEFINITE = the polite order (0/14 was the measured model "
-              "score on these — the closed reading is the whole point). The test vms "
-              "name the beneficiary — RULING NEEDED: span kept as plain object "
-              "(drafted) or a beneficiary role?"),
+         ["a network", "the test vms"], ["create"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "beneficiary"}]},
+         note="SINGULAR INDEFINITE = the polite order (0/14 measured). RULED 08-21: "
+              "the beneficiary role is TAKEN — a dropped purpose qualifier becomes a "
+              "visible miss — and a polite order is a REFUSABLE order: the read "
+              "produces it faithfully, ROUTE decides its fate"),
 
     # ══ preference — a SOFT standing constraint; reads as a RULE act ═════════════════
     Seed("pr-0001", "preference", "prefer the lab network for the new vms",
@@ -283,5 +341,32 @@ SEEDS_V3: List[Seed] = [
          {0: [0]}, rules=[0],
          note="coverage_map's preference hole — 'i'd rather' is a closed preference "
               "marker; the superlative inside the span rides the superlatives stratum"),
+
+    # ══ hand-authored noise twins — embedded-junk + code-switch (RULED 08-21: build) ══
+    # Mechanical noisers cannot invent junk placement or another language, so these
+    # twins are authored by hand and certified like any case. The slot decides junk;
+    # the closed classes do not grow.
+    Seed("po-0001-ej", "possessive", "delete adsfk alpha's snapshots",
+         ["alpha's snapshots"], ["delete"], {0: [0]},
+         noise="embedded-junk", pair_id="po-0001",
+         note="keyboard mash in a CLOSED position — junk between verb and NP joins no "
+              "span (the slot decides); the same bytes in a naming slot would be a "
+              "legal mint"),
+    Seed("ca-0002-ej", "cause", "restart alpha adsfk because it won't answer",
+         ["alpha"], ["restart"], {0: [0]}, evidence=["it won't answer"],
+         noise="embedded-junk", pair_id="ca-0002",
+         note="junk between patient and cause-clause — outside every span; the "
+              "evidence still binds"),
+    Seed("sa-0002-cs", "self-address", "בוקר טוב, stop the lab vms",
+         ["the lab vms"], ["stop"], {0: [0]},
+         noise="code-switch", pair_id="sa-0002",
+         note="a greeting in another language marks nothing — same gold as the clean "
+              "twin; flavour is one kind, not the genus"),
+    Seed("id-0001-cs", "identifiers", "תעצור את the vm at 10.0.0.5",
+         ["the vm at 10.0.0.5"], [], {},
+         noise="code-switch", pair_id="id-0001",
+         note="the VERB is foreign — no producer fires, and the closed classes do not "
+              "grow (RULED): gold says the UNKNOWN bounce — no acts, no attachments; "
+              "the object NP still detects. The bounce IS the correct answer"),
 ]
 
