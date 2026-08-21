@@ -138,10 +138,114 @@ freeze — ~55 clean + twins + the 148 ≈ the ~300 target.
 ⇒ TWO SCHEMA RULINGS BEFORE THE FREEZE:
   1. MANNER — read but unsayable in gold. Proposal: `manner: {action: text}`, scored
      like triggers.
+     ✅ RULED 08-21 (operator): *"a way to control how the procedure acts … not a meta
+     control but more about how the pipeline is handled — so it should be expressed."*
+     TAKEN — manner joins the gold as the act's second CONTROL channel beside triggers
+     (trigger = when-control, manner = how-execution-is-handled: pacing, ordering,
+     concurrency). NOT meta-control: confirmation/verification/authority stay the
+     gates' territory. Per-act `manner: {action: text}`, verbatim span, scored like
+     triggers. On a plural patient the constraint lands on the DERIVED LOOP at
+     lowering — gold records it on the act; the loop inherits it as execution policy.
+     It never decorates the noun, never grants.
   2. STORE — learned-words cases carry mock store state. Proposal: `store: [entries]`
      per case; the runner seeds a THROWAWAY archive before read_case; certifying the
      case IS ratifying the mock.
+     ✅ RULED 08-21 (operator): *"yes for the test, we give not just ip/mac/etc — we
+     create a few entries for a bunch of stuff, as well as redherrings, and see how
+     the ai choose."* TAKEN, and STRENGTHENED: each mock is a POPULATED store —
+     several entries across kinds PLUS red herrings. The eval measures SELECTION
+     under distraction, not pickup of the only entry present. Certification ratifies
+     the whole mock, decoys included.
+     ⇒ EXTENDED SAME DAY (operator): FOUR decoy classes — (1) near-miss same kind ·
+     (2) unrelated but SOUNDS similar · (3) name overlap, different meaning ·
+     (4) completely unrelated filler (*"like a tomato"*). And THREE measured
+     capacities: **correctness** (precision — exactly the right entry) ·
+     **relevancy** (the pick bears on the ask) · **inference** (their composition —
+     *"sometimes you need to infere what is actually being asked of you"*: the
+     educated guess when the ask under-determines). The axes are independent — a
+     correct call can be irrelevant, a relevant call incorrect. Build-time proposal:
+     score misses BY THE CLASS of decoy that captured the model, so each failure
+     names its axis; an inference sub-stratum carries deliberately under-specified
+     asks. BOUNDARY (standing): inference resolves the READ and may feed a question;
+     an inferred read deciding a write still climbs the confirmation ladder —
+     inference never grants.
+  3. PAIRWISE SHAPE (added to the docket by the validator itself) — ✅ RULED 08-21
+     (operator): *"sounds good — again make it cover not just one case but a few."*
+     The two-acts draft is BLESSED: one verb, one act per conjunct pair, all acts
+     sharing the verb's offsets — the elided verb is real, just unspoken; the
+     one-patient rule stands untouched. COVERAGE WIDENED: the stratum grows beyond
+     pw-0001/0002 to a few — three-conjunct chains, mixed flavours (value ·
+     destination · unit), same shape covered, not sampled once.
 ⇒ THREE SCOPE DECISIONS (operator): embedded-junk + code-switch noise — build as v3
 twins or declare out of scope in the freeze note · noise twins over the new seeds
 (mechanical) · the READ closing document at the freeze.
+  · decision 1 ✅ RULED 08-21 (operator): *"yes add it"* — BOTH classes BUILD as v3
+    noise twins. Drafted interpretations (certification ratifies): EMBEDDED JUNK —
+    the slot decides (junk in a closed slot is excluded by the reader; the same
+    bytes in a naming slot are a legal mint, twin gold carries them); CODE-SWITCH —
+    the closed classes do NOT grow: a politeness token in another language reads
+    clean; a foreign VERB never fires a producer, so the twin's gold says UNKNOWN
+    bounce — the bounce IS the correct answer, and UNKNOWN is never filtered.
+  · decisions 2+3 ✅ CONFIRMED 08-21: six-class noise twins generate mechanically
+    over all v3 seeds · READ.md numbers land at the freeze.
+⇒ PER-SEED RULINGS, 08-21 MORNING (operator; seeds updated at the build sweep):
+  · id-0002 ✅ *"mark it as a query — since we have the value but not the key"* — a
+    REVERSE LOOKUP: the sentence GIVES the value (the mac bytes) and ASKS for the
+    key, the owning vm. The given value is the query act's real input argument and
+    is expressed as a gold span with a value role; the wh-NP is the asked side.
+    cs-0007 REFINED, not broken — the line is property vs value: an asked PREDICATE
+    ("running") stays unmarked; a given VALUE (bytes selecting through a learned
+    attribute class) is marked. Query-side store selection becomes scorable — and
+    value→owner through an attr_class is exactly what the classes exist for.
+  · un-0002 ✅ *"each value should be scored indpendently"* — creation SPEC values
+    are CARVED OUT: patient shrinks to the minted kind ("a vm"), and every spec
+    value ("4 cores" · "8gb of ram") is its own value-role span, scored on its own.
+    Creation-side units measurable value-by-value, symmetric with set-acts.
+    Build note: validator must accept multiple value roles on one act — if it
+    refuses, that is a sanctioned schema tweak in the sweep.
+  · al-0001 ✅ *"score both — the 'or' is scored like a trigger since boolean
+    operators are triggers; the decision is at RESOLVE, not ROUTE — not a legal
+    issue that needs routing, a resolvement issue."* NO alternation flag — the
+    question dissolves: both members stay scored spans, and the boolean operator
+    itself is expressed in the TRIGGER channel like any condition (al-0002's
+    "whichever is stopped" already IS one — the family unifies). Architecturally:
+    routing sees a fully legal act; WHICH member is acted on resolves where
+    selectors meet the world — the world satisfies one member.
+  · ap-0001/0002 ✅ *"the renames are scanned as well but are treated as refernces"*
+    — the apposition IS expressed: its own gold span, attached to the SAME referent
+    with a REFERENCE role. One patient stands; the reference co-names it, never
+    counts as a second thing. The reader is scored on binding the equivalence —
+    the read the apposition-as-teaching harvest depends on. Build note: `reference`
+    joins the attachment roles in the sweep.
+  · co-0001 ✅ *"sure — it helps us later to test resolvment and routing"* —
+    concession stays TESTIMONY ON A BYSTANDER (malfunction predicate = testimony);
+    NEVER an excluded-role: "even though" pre-empts an objection, it removes no one.
+    "Except" is a different construction — a couple of except-family drafts join the
+    build sweep for certification to keep or drop. Noted for later: concession cases
+    are resolve/route test material — known bystander state exercises the seam
+    between legality and what the world satisfies. A concession never grants;
+    whether it pre-answers a confirmation tier is a gates question for another day.
+  · or-0001 ✅ *"we keep it — again resolve issue"* — the ordinal STAYS INSIDE the
+    span: "the first vm" is one selector NP, verbatim. The ordinal's work is
+    RESOLVE's: the attr-class TYPE licenses the ordering axis, the world orders and
+    picks. The read hands the selector over whole — same shape as al-0001.
+  · nl-0001 ✅ *"yes keep this, because i use it myself: 'create 5 vms named 1-5' or
+    'create 3 vms named after musicians and a network called the stadium and add
+    those vms to it'"* — ONE SPAN carrying the mints, because naming specs are often
+    GENERATORS (ranges, themes), not lists: the names may not exist as bytes in the
+    sentence at all. The line vs un-0002: literal VALUES present in the sentence
+    carve and score; a NAMING SPEC is one generative unit — mints happen where the
+    generator runs. COVERAGE: the operator's own two sentences join the build sweep
+    as drafts — range-naming, theme-naming, and the compound create+create+add with
+    within-sentence anaphora ("those vms … to it").
+  · cap-0002 ✅ *"i think we add it and treat a polite order as a refusable order
+    IE, we read it, and let ROUTE handle it"* — the BENEFICIARY role is TAKEN:
+    "the test vms" attaches to the create act as beneficiary, so a silently
+    dropped purpose qualifier (the linguistic sweep's measured gap) becomes a
+    visible miss. And the polite order's status is settled at its proper stage:
+    the READ produces the order faithfully — "can you create a network…" IS a
+    create — and ROUTE decides its fate like any order (a REFUSABLE order, not a
+    softened one). Completes the morning's stage assignments: alternation →
+    RESOLVE · ordinal → RESOLVE · polite form → ROUTE. A beneficiary expresses
+    for-whom; it never infers extra acts.
 ⇒ EXPLICITLY NOT v3 (standing rulings): cross-turn (LAST) · A2 model swap · N1 wiring.
