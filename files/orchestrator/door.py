@@ -113,7 +113,7 @@ GORGON_NOUNS: Dict[str, str] = {
     "rule":         "the rule of law",          # proposals · referendum · amendment
     "rules":        "the rule of law",
     "policy":       "the rule of law",
-    "word":         "the archive",              # orchestrator.seam.archive
+    "word":         "the archive",              # orchestrator.languages.english.seam.archive
     "words":        "the archive",
     "verbose":      "the display",
     "loop":         "the harness",              # the tool loop and its limit
@@ -198,8 +198,8 @@ def facts(request: str, board: Optional[Board] = None, world=None) -> Facts:
     like `alpha` and `db` cannot be recognised, so they land in `unknown` — which is honest,
     and is what `plan --seam` already prints as *"no lab — every bare name stays kindless"*.
     """
-    from .seam import scan, speech_act, temporal as _temporal
-    from .seam.linguistics import mood_of
+    from .languages.english.seam import scan, speech_act, temporal as _temporal
+    from .languages.english.seam.linguistics import mood_of
 
     board = board or Board()
     low = request.lower()
@@ -285,7 +285,7 @@ def _verbs(words: Sequence[str], board: Board,
       cannot be computed honestly is worse as an empty field than as an absent one
       ([[gorgon-built-and-never-called]]).
     """
-    from .seam.scan import _index
+    from .languages.english.seam.scan import _index
     nouns = set(_index(board))
     acting, asking = [], []
     for w in dict.fromkeys(words):
@@ -356,7 +356,7 @@ def _counts(words: Sequence[str]) -> Tuple[Optional[int], bool]:
     `every`/`all`/`each`/`any` map to the string `all`, which is exactly the distinction the
     ladder needs between *five machines* and *every machine*.
     """
-    from .seam.scan import ENUMERATORS
+    from .languages.english.seam.scan import ENUMERATORS
     numbers, universal = [], False
     for w in words:
         got = ENUMERATORS.get(w)
@@ -702,7 +702,7 @@ def _agent_name() -> str:
       *"sort out n1"* — both are a handful of words nothing owns. It is the same lookup, asked
       one stage earlier.
     """
-    from .seam.pass1 import agent_name
+    from .languages.english.seam.pass1 import agent_name
     try:
         return agent_name()
     except Exception:
@@ -721,7 +721,7 @@ def _governs(request: str, board: Board, world) -> Tuple[str, ...]:
       vocabulary. The door asks the owner rather than learning the frame twice.
     """
     try:
-        from .seam.governing import rules_from
+        from .languages.english.seam.governing import rules_from
         return tuple(str(r.get("text", "")) for r in rules_from(request, board, world))
     except Exception:
         return ()
@@ -819,7 +819,7 @@ def _unknown(request: str, board: Board, world, scan) -> Tuple[str, ...]:
             pass
     # ⇒ AND A CLOCK TIME IS A SHAPE RATHER THAN A WORD, so it cannot be in the set above and
     #   still has a reader. `9pm` quoted back as a word nobody knows is a wrong question.
-    from .seam.temporal import CLOCK
+    from .languages.english.seam.temporal import CLOCK
     return tuple(w for w in left
                  if w not in known and not CLOCK.match(w) and not _taught(w))
 
@@ -870,7 +870,7 @@ def _declared(board: Board) -> set:
     ⚠ `many` and `much` are the only words added by hand, and they are `COUNTING`'s own — the
       pair that turns a wh-word into a request for a number, declared at the top of this file.
     """
-    from .seam import scan as SC, speech_act as SA
+    from .languages.english.seam import scan as SC, speech_act as SA
     from planner.ir import config as _config
 
     out = set(SA.WH_WORDS | SA.AUXILIARIES | SA.COPULA | SA.ADDRESSEE | SA.FIRST_PERSON
@@ -886,7 +886,7 @@ def _declared(board: Board) -> set:
     #   `unknown` is what the ASK rungs quote back to the operator, so a stale entry there
     #   becomes a wrong question. A vocabulary that gains a reader has to leave this set on
     #   the same day.
-    from .seam import temporal as _t
+    from .languages.english.seam import temporal as _t
     out |= (_t.UNITS | _t.COARSE | _t.FREQUENCY | _t.DEICTIC | _t.WEEKDAYS | _t.MONTHS
             | _t.RECURRING | _t.EVENTS | _t.ALWAYS_STANDING)
     out |= {w for phrase in (_t.EVENT_PHRASES + _t.STANDING) for w in phrase.split()}
@@ -913,7 +913,7 @@ def _taught(word: str) -> bool:
       lexicon: a word grants nothing until a person signs it.
     """
     try:
-        from .seam.archive import ARCHIVE
+        from .languages.english.seam.archive import ARCHIVE
         return ARCHIVE.known(word) is not None
     except Exception:
         return False

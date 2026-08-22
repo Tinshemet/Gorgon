@@ -20,7 +20,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.seam import archive as A
+from orchestrator.languages.english.seam import archive as A
 
 _PASS = _FAIL = 0
 
@@ -163,7 +163,7 @@ def test_the_ratification_door_exists_and_is_reachable():
         check(f"it matches {said!r}", w.matches(said))
     check("and does not swallow unrelated input", not w.matches("wordsmith the request"))
 
-    from orchestrator.seam import archive as _A
+    from orchestrator.languages.english.seam import archive as _A
     check("the process-wide archive exists, beside books.LEDGER",
           isinstance(_A.ARCHIVE, _A.Archive))
 
@@ -176,7 +176,7 @@ def test_a_ratified_entry_settles_a_row_the_world_could_not():
     **capability bought by adding a FACT, with no prompt change and no re-fit.** That is the
     operator's *"without more corpus"* in one test.
     """
-    from orchestrator.seam import pass1, schema as S
+    from orchestrator.languages.english.seam import pass1, schema as S
     from planner.formula.legal import Board
 
     board = Board()
@@ -251,7 +251,7 @@ def test_a_question_about_a_word_is_answered_from_the_archive():
     ⇒ THE DISCRIMINATOR IS THE MANIFEST, as everywhere else: *"what is on the LAB NETWORK"*
       names a kind and stays a select.
     """
-    from orchestrator.seam import speech_act as SA
+    from orchestrator.languages.english.seam import speech_act as SA
     from planner.formula.legal import Board
     board = Board()
 
@@ -420,7 +420,7 @@ def test_a_declaration_governs_and_is_only_proposed():
       rule constrains every future act and the contract already has a formal amendment path.
       `proposals.py`'s own note: *"The AI can propose but never enact."*
     """
-    from orchestrator.seam import governing as G, speech_act as SA
+    from orchestrator.languages.english.seam import governing as G, speech_act as SA
     from planner.formula.legal import Board
     board = Board()
 

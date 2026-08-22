@@ -41,13 +41,9 @@ from typing import List, Optional
 from planner.formula.legal import Board
 from .effects import Operation
 
-# ⇒ THE COMPLETE SET OF ENGLISH RECIPROCAL PRONOUNS. Two of them, and there is no third —
-#   closed the way `INDEFINITE`/`DEFINITE` are closed, which is what separates this from a
-#   curated content-word list like `ACHIEVE_MARKERS`.
-RECIPROCAL = ("each other", "one another")
+from ..codex import RECIPROCAL
 
-DESTRUCTIVE_WORDS = ("delete", "remove", "destroy", "tear down", "get rid",
-                     "wipe", "drop", "kill off", "clear out")
+from ..codex import DESTRUCTIVE_WORDS
 
 
 def _destroyers(board: Board):

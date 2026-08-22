@@ -1,6 +1,6 @@
 """WHAT AN OPERATION MAKES TRUE — computed from the manifest, never read out of English.
 
-    PYTHONPATH=. python3 -m orchestrator.seam.effects
+    PYTHONPATH=. python3 -m orchestrator.languages.english.seam.effects
 
 # THE QUESTION THIS ANSWERS
 

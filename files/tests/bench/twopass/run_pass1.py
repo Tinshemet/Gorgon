@@ -11,7 +11,7 @@ from collections import Counter
 from typing import List
 
 from planner.formula.legal import Board
-from orchestrator.seam.pass1 import EXPECTED, grade, run_pass1, run_scanned
+from orchestrator.languages.english.seam.pass1 import EXPECTED, grade, run_pass1, run_scanned
 from tests.bench import mutate as _mutate
 
 

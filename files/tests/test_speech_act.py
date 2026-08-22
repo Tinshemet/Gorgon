@@ -1,6 +1,6 @@
 """test_speech_act.py — the interrogative reader, pinned against a key written before it.
 
-`orchestrator/seam/speech_act.py` reads WHAT KIND OF THING was said — an order, a question, a
+`orchestrator/languages/english/seam/speech_act.py` reads WHAT KIND OF THING was said — an order, a question, a
 piece of teaching — from closed classes plus one manifest lookup. Its bar is not *"does it
 catch questions"*; it is **does it never read a question as an instruction**, because that is
 the one direction that cannot be taken back.
@@ -24,7 +24,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.seam import speech_act as SA
+from orchestrator.languages.english.seam import speech_act as SA
 from planner.formula.legal import Board
 from tests.bench import sentence_key as KEY
 from tests.bench.twopass import mood_probe
@@ -258,8 +258,8 @@ def test_an_instruction_not_to_act_holds_the_program():
     ⇒ AND THE DISCRIMINATOR IS THE OBJECT, NOT A WORD LIST: `stop the vms` takes a kind the
       manifest knows; `don't start any changes` takes `changes`, which is not a kind.
     """
-    from orchestrator.seam import gate4
-    from orchestrator.seam.effects import Operation
+    from orchestrator.languages.english.seam import gate4
+    from orchestrator.languages.english.seam.effects import Operation
     board = Board()
     acts = [Operation("create_vm", "alpha", None)]
 
@@ -295,8 +295,8 @@ def test_a_statement_does_not_build_anything():
     ⇒ THE THIRD OF ONE FAMILY, each guarding a different sentence type and all three asking
       rather than refusing: answer_not_act · told_not_to_act · statement_not_act.
     """
-    from orchestrator.seam import gate4
-    from orchestrator.seam.effects import Operation
+    from orchestrator.languages.english.seam import gate4
+    from orchestrator.languages.english.seam.effects import Operation
     board = Board()
     acts = [Operation("create_vm", "jumpbox", None)]
 
@@ -340,8 +340,8 @@ def test_the_manifest_says_which_tools_only_read():
                  "run_guest_command", "stop_vm", "delete_vm"):
         check(f"{tool} still acts", tool in acting and tool not in asking)
 
-    from orchestrator.seam.pipeline import produces
-    from orchestrator.seam.effects import Operation
+    from orchestrator.languages.english.seam.pipeline import produces
+    from orchestrator.languages.english.seam.effects import Operation
     check("a program that only reads is not an act",
           produces([Operation("vm_status", "vms", None)], []) != "act")
     check("and one that stops machines still is",

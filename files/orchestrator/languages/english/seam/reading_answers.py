@@ -42,20 +42,13 @@ from typing import List, Optional, Tuple
 
 from planner.formula.legal import Board
 
-# ⇒ CLOSED FUNCTION-WORD CLASSES, and that is why they may be written down at all. Negation and
-#   comparison are grammar: finite, stable, and the same for every speaker. A list of NOUNS that
-#   might mean `vm` would be the other kind of list, the kind that rots.
-NEGATION = {"not", "isn't", "isnt", "no", "nope", "nah", "never", "neither",
-            "nor", "n't", "don't", "dont"}
-SIMILE = {"like", "similar", "resembles", "sort", "kind"}   # "like a vm", "sort of like a vm"
+from ..codex import NEGATION
+from ..codex import SIMILE
 
 AMBIGUOUS, NONE_NAMED, NEGATED, LIKENED = "ambiguous", "none", "negated", "likened"
 UNCLEAR = "unclear"
 
-# ⇒ AFFIRMATION IS A CLOSED CLASS TOO, and that is the whole licence for writing it down. These
-#   are the particles English uses to agree; a list of VERBS meaning "go ahead" would be the
-#   other kind of list, and would rot.
-AFFIRMATION = {"yes", "yeah", "yep", "yup", "sure", "ok", "okay", "aye", "please", "do", "y"}
+from ..codex import AFFIRMATION
 
 
 def yes_no(said: str) -> Optional[bool]:

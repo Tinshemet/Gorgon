@@ -11,7 +11,7 @@ Two certified no-punct failures are DELIBERATELY out of scope here: coord-0003-n
 bare-name member list without commas — scan's NP reading, not a clause cut) and
 sc-0004-nt (a value respeak without commas — self_repair's).
 """
-from orchestrator.seam.pass2 import clauses_of
+from orchestrator.languages.english.seam.pass2 import clauses_of
 
 
 # ── the certified failures this fix must heal ────────────────────────────────────────

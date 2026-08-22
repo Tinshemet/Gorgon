@@ -73,7 +73,7 @@ corpus one of us wrote, which is the standing ceiling on every figure here.
 """
 from typing import Dict, List, NamedTuple, Optional, Tuple
 
-from orchestrator.seam import iso
+from orchestrator.languages.english.seam import iso
 from tests.bench.mutate import apply
 from tests.bench.rungs import RUNGS
 

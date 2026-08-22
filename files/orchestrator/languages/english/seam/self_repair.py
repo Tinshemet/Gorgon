@@ -52,15 +52,9 @@ self-interruption. That half needs no vocabulary at all.
 import re
 from typing import NamedTuple, Optional
 
-# ⇒ WHAT WITHDRAWS THE WHOLE REQUEST. Complete instructions in themselves.
-RETRACTIONS = ("never mind", "nevermind", "forget it", "forget that", "cancel that",
-               "disregard that", "disregard it", "ignore that", "scratch that",
-               "belay that", "as you were")
+from ..codex import RETRACTIONS
 
-# ⇒ WHAT REPLACES PART OF IT. `i mean` is the core; the rest are the frames it appears in.
-#   ⇒ ⚠ `sorry` IS ABSENT ON PURPOSE — see the module note.
-CORRECTIONS = ("i mean", "i meant", "no wait", "wait no", "rather", "correction",
-               "make that", "or rather", "not that")
+from ..codex import CORRECTIONS
 
 # ⇒ THE NON-LEXICAL INITIATOR. A dash or an ellipsis is a CUT-OFF — the speaker interrupting
 #   themselves — and it is structure rather than vocabulary. It only counts BESIDE a marker;
@@ -69,18 +63,7 @@ _CUTOFF = re.compile(r"[—–]|\.\.\.|--")
 
 REPAIRED, RETRACTED = "repaired", "retracted"
 
-# ⇒⇒ **A WORD THAT CANNOT END AN UTTERANCE.** A speaker who breaks off mid-constituent has
-#   abandoned the phrase — `just at the`, `there's`, `i'll`, `and it's got a`. Determiners,
-#   prepositions, auxiliaries and conjunctions all DEMAND a complement, so ending on one is
-#   structure telling you the turn was cut short. No vocabulary of repair words is involved.
-DANGLING = frozenset({
-    "the", "a", "an", "this", "that", "these", "those", "my", "your", "its", "their",
-    "at", "on", "in", "to", "of", "with", "from", "by", "for", "into", "onto", "over",
-    "and", "or", "but", "so", "just", "very", "quite",
-    "is", "are", "was", "were", "be", "been", "being", "am",
-    "have", "has", "had", "will", "would", "can", "could", "shall", "should", "do", "does",
-    "i'll", "i've", "i'm", "there's", "we're", "we'll", "you're", "it's", "that's",
-})
+from ..codex import DANGLING
 
 
 class Mend(NamedTuple):

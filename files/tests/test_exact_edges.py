@@ -7,7 +7,7 @@ The guard: `vms the operator built` has no second kind and stays a noun.
 """
 from planner.formula.legal import Board
 
-from orchestrator.seam.scan import scan
+from orchestrator.languages.english.seam.scan import scan
 
 B = Board()
 
@@ -34,7 +34,7 @@ def test_a_reduced_relative_is_not_an_imperative():
 
 def test_the_freed_verb_is_owned_by_its_reading():
     # the ghost rule: E1 frees `snapshot` from the span, so the gate must consume it
-    from orchestrator.seam.scan import verb_position_words
+    from orchestrator.languages.english.seam.scan import verb_position_words
     assert verb_position_words("snapshot the db vm, scratch that, snapshot the web vm",
                                B) == {"snapshot"}
     # a noun occurrence anywhere keeps the word a thing

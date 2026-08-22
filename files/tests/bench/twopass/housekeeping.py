@@ -3,7 +3,7 @@
     PYTHONPATH=. python3 -m tests.bench.twopass.housekeeping          # the sealed test
     PYTHONPATH=. python3 -m tests.bench.twopass.housekeeping --model qwen2.5:14b --compare
 
-⇒ THE TIERS AND THE SORTING MOVED TO `orchestrator/seam/housekeeping.py` on 2026-08-13 — the pipeline
+⇒ THE TIERS AND THE SORTING MOVED TO `orchestrator/languages/english/seam/housekeeping.py` on 2026-08-13 — the pipeline
   calls `sort_out` on every run, so it is production. What stayed here is what GRADES it: a
   sealed table of steps the model really proposed, and the comparison that asks the operator's
   question — *does a better model propose better housekeeping?*
@@ -15,8 +15,8 @@ import argparse
 from typing import Dict, List, Tuple
 
 from planner.formula.legal import Board
-from orchestrator.seam.effects import Operation
-from orchestrator.seam.housekeeping import (BENIGN, CANCEROUS, GOOD, RISKY, Verdict,  # noqa: F401
+from orchestrator.languages.english.seam.effects import Operation
+from orchestrator.languages.english.seam.housekeeping import (BENIGN, CANCEROUS, GOOD, RISKY, Verdict,  # noqa: F401
                                        classify, sort_out)
 
 # ── THE SEALED TEST · every step below was really produced, on the rung named ──────────
@@ -52,7 +52,7 @@ def main() -> None:
     ap.add_argument("--model", default=None, help="the second model, for --compare")
     args = ap.parse_args()
 
-    from orchestrator.seam import pass1, pass2
+    from orchestrator.languages.english.seam import pass1, pass2
     board = Board()
 
     if not args.compare:
@@ -74,7 +74,7 @@ def main() -> None:
 
     # ⇒ THE OPERATOR'S THEORY: a better model proposes MORE and BETTER housekeeping.
     from tests.bench.twopass.metrics import Lab
-    from orchestrator.seam import pipeline
+    from orchestrator.languages.english.seam import pipeline
     world = Lab()
     print("=" * 96)
     print(f"DOES A BETTER MODEL PROPOSE BETTER HOUSEKEEPING?   second model: {args.model}")

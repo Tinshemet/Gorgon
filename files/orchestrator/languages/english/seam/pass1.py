@@ -1,8 +1,8 @@
 """ITEM 3 — RUN PASS ONE AGAINST THE MODEL. The first real number for the new design.
 
-    PYTHONPATH=. python3 -m orchestrator.seam.pass1            # all 14 rungs
-    PYTHONPATH=. python3 -m orchestrator.seam.pass1 --only 11
-    PYTHONPATH=. python3 -m orchestrator.seam.pass1 --runs 3
+    PYTHONPATH=. python3 -m orchestrator.languages.english.seam.pass1            # all 14 rungs
+    PYTHONPATH=. python3 -m orchestrator.languages.english.seam.pass1 --only 11
+    PYTHONPATH=. python3 -m orchestrator.languages.english.seam.pass1 --runs 3
 
 Item 2 built the schema and the suite owns it. This is the first time those four questions
 meet a model.
@@ -411,7 +411,7 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
     _parts = {"up", "down", "off", "out", "over", "away", "back", "sure"}
     _rtoks = _sctoks(request)
     _nouns_idx = {w for w in
-                  __import__("orchestrator.seam.scan", fromlist=["x"])._index(board)}
+                  __import__("orchestrator.languages.english.seam.scan", fromlist=["x"])._index(board)}
     for _i, (_w, _s0, _e0) in enumerate(_rtoks):
         _clause_initial = _i == 0 or _rtoks[_i - 1][0] in _B
         from .scan import attribute_words as _attrw
@@ -791,11 +791,7 @@ def resolve_proforms(rows: List[S.Declared]) -> List[S.Declared]:
 
 
 
-# ⇒ THE DISTINCTNESS MARKERS — a CLOSED class of English, the same standing as `COMPARATORS`
-#   and `ENUMERATORS`. Each one says *not the one just mentioned*, which is the only thing
-#   that separates a second object from a second mention of the first.
-DISTINCT = ("different", "another", "separate", "second", "other", "own", "its own",
-            "their own", "a new", "fresh")
+from ..codex import DISTINCT
 
 
 def _marks_distinct(span: str) -> bool:
@@ -889,7 +885,7 @@ def settle_with_world(rows: List[S.Declared], world, board: Optional[Board] = No
     return out
 
 
-EXCLUDERS = ("except", "excluding", "besides", "apart from", "other than", "but not")
+from ..codex import EXCLUDERS
 
 
 def _affording_kinds(board: Board) -> dict:
@@ -1725,7 +1721,7 @@ def settle_by_routing(rows: List[S.Declared], board: Optional[Board] = None,
     return out
 
 
-PLURAL_PRONOUNS = {"ones", "them", "they", "those", "these", "all", "both", "rest", "others"}
+from ..codex import PLURAL_PRONOUNS
 
 
 def _is_group(scanned) -> bool:

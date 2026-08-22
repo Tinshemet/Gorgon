@@ -47,10 +47,10 @@ functions are partly sourced and partly reconstructed, and every reconstructed o
 from typing import Dict, List, NamedTuple, Optional
 
 # ⇒⇒ **THE VOCABULARY IS PRODUCTION'S, READ AND NEVER RESTATED.** It began here and moved to
-#   `orchestrator/seam/iso.py` the moment an EMITTER existed: two copies of a standard's names
+#   `orchestrator/languages/english/seam/iso.py` the moment an EMITTER existed: two copies of a standard's names
 #   is exactly the drift this file was written to prevent, and a bench that declares the same
 #   strings as the thing it describes has stopped describing it.
-from orchestrator.seam.iso import (  # noqa: E402
+from orchestrator.languages.english.seam.iso import (  # noqa: E402
     ALLO_FB, AUTO_FB, DIMENSIONS, DISCOURSE, OWN_COMM, PARTNER_COMM, PLACED, QUALIFIERS,
     SOCIAL, TASK, TIME, TURN,
 )
@@ -196,7 +196,7 @@ def by_dimension() -> Dict[str, List[Cell]]:
 
 def check() -> List[str]:
     """Every type of OURS is placed, and every cell names a real dimension."""
-    from orchestrator.seam import speech_act as SA
+    from orchestrator.languages.english.seam import speech_act as SA
     faults: List[str] = []
     for c in MAP:
         if c.dimension not in DIMENSIONS:
@@ -217,7 +217,7 @@ def check() -> List[str]:
     #   REPRESENTATION rather than a FACT stops watching when the representation moves.
     #   ⇒ It now asks the emitter, which is the fact: three qualifiers are read and `sentiment`
     #     is declined, and if that ever changes silently this fails.
-    from orchestrator.seam import iso as _iso
+    from orchestrator.languages.english.seam import iso as _iso
     reads = {q for q in QUALIFIERS
              if any(q in _iso.qualifiers_of(s) for s in
                     ("maybe stop them", "if alpha is stopped", "stop most of the vms"))}
@@ -257,7 +257,7 @@ if __name__ == "__main__":                                       # pragma: no co
     print(f"\n{'─' * 96}\n  OUR TYPES, PLACED")
     for t, where in sorted(OURS.items()):
         print(f"    {t:18} -> {where}")
-    from orchestrator.seam import iso as _iso
+    from orchestrator.languages.english.seam import iso as _iso
     print(f"\n  THE QUALIFIER AXIS — orthogonal to every function above:")
     probes = {"certainty": "maybe stop them", "conditionality": "if alpha is stopped",
               "partiality": "stop most of the vms", "sentiment": "ugh, stop them"}

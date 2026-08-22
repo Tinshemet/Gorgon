@@ -41,7 +41,7 @@ before changing**, one **label it so it can be found**.
 from typing import Dict, List, NamedTuple, Optional, Tuple
 
 from planner.formula.legal import Board
-from orchestrator.seam.effects import Operation, effect_of
+from orchestrator.languages.english.seam.effects import Operation, effect_of
 
 BENIGN, GOOD, RISKY, CANCEROUS = "benign", "good", "risky", "cancerous"
 

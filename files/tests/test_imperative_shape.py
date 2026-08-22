@@ -13,7 +13,7 @@ never hand-listed.
 """
 from planner.formula.legal import Board
 
-from orchestrator.seam.scan import opens_imperative
+from orchestrator.languages.english.seam.scan import opens_imperative
 
 
 B = Board()

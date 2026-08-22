@@ -304,8 +304,8 @@ def main():
           out.get("failed") == "forbidden")
 
     print("\nCALLER 4 — THE FRONT SEAM: rung 14 finally has something to fail")
-    from orchestrator.seam import gate4, schema as SC
-    from orchestrator.seam.effects import Operation
+    from orchestrator.languages.english.seam import gate4, schema as SC
+    from orchestrator.languages.english.seam.effects import Operation
     from planner.formula.legal import Board
 
     g["contract"]["rules"] = [

@@ -11,8 +11,8 @@ import argparse
 from typing import Dict
 
 from planner.formula.legal import Board
-from orchestrator.seam import pass1
-from orchestrator.seam.pipeline import ASK, BOUNCE, REFUSE, SERVE, run
+from orchestrator.languages.english.seam import pass1
+from orchestrator.languages.english.seam.pipeline import ASK, BOUNCE, REFUSE, SERVE, run
 from tests.bench.twopass.metrics import Lab
 
 

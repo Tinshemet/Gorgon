@@ -319,32 +319,9 @@ class Archive:
 #   routes on a value rather than re-reading the sentence.
 TEACH, FORGET, CONTRADICTS = "teach", "forget", "contradicts"
 
-# ⇒⇒ **THE ARCHIVE'S OWN OPERATIONS, DECLARED THE WAY THE MANIFEST DECLARES A KIND'S — and
-#   the operator drew this line: *"forgetting is specific for `words`, forget plus its
-#   synonyms."***
-#
-#   I had removed `forget` as an English list and that was the wrong correction. The test this
-#   project uses is *is it a fact about ENGLISH, or a fact about THE WORLD* — and **which verb
-#   names an operation of MY store is the second kind.** `vm.nouns` says this lab calls a
-#   machine a `box`; nothing about English says so, and nobody would expect the model to know
-#   it. This is that declaration for a store the manifest does not cover.
-#
-#   ⇒ **WHAT MADE THE FIRST VERSION WRONG WAS PLACEMENT, NOT EXISTENCE.** It sat inline in
-#     `effect_of` as a bare set, next to `delete`/`remove` which the MANIFEST already owns —
-#     so it was both a second source for a derivable fact and an undeclared vocabulary for a
-#     non-derivable one. Split: the manifest's deleters are READ, and the archive's own verbs
-#     are DECLARED here, once, where the operation is defined.
-#
-#   ⇒ ⚠ **AND IT IS SCOPED TO THIS STORE.** These verbs mean *withdraw an ENTRY*; they say
-#     nothing about the lab, where removal is `delete_vm` and friends. A word here can never
-#     authorise anything — `effect_of` only ever reaches `retract`, which un-signs a fact.
-#   ⇒ ⚠ **`erase` WAS HERE AND THE OPERATOR TOOK IT OUT: *"erase is a deleting verb not a
-#     forgetting one."*** Right, and the distinction is the whole design — these three name an
-#     operation on THIS STORE and nothing else. A verb that means *destroy a thing in the lab*
-#     borrowed for *withdraw a word* would make the two removals indistinguishable, which is
-#     exactly the confusion `AMBIGUOUS_REMOVAL` below exists to refuse to guess at.
+from ..codex import FORGET_VERBS
 OPERATION_VERBS: Dict[str, Tuple[str, ...]] = {
-    FORGET: ("forget", "unlearn", "discard"),
+    FORGET: FORGET_VERBS,
 }
 
 # ⇒⇒ **AND WHERE THE TWO REMOVALS MEET, THE OBJECT DECIDES — AND WHEN IT CANNOT, WE ASK.**

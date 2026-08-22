@@ -1,7 +1,7 @@
 """THE WHOLE CHAIN, IN ONE PLACE — request in, declarations · operations · a verdict out.
 
-    PYTHONPATH=. python3 -m orchestrator.seam.pipeline
-    PYTHONPATH=. python3 -m orchestrator.seam.pipeline --only 11
+    PYTHONPATH=. python3 -m orchestrator.languages.english.seam.pipeline
+    PYTHONPATH=. python3 -m orchestrator.languages.english.seam.pipeline --only 11
 
 # ⇒⇒ WHY THIS FILE IS THE ITEM AND NOT A CONVENIENCE
 

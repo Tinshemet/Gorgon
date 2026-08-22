@@ -456,37 +456,9 @@ def render(rows: List[Declared]) -> str:
     return "\n".join(out)
 
 
-# A BARE PRONOUN REFERS; A RESTRICTED ONE DOES NOT. Closed set, so this is arithmetic.
-#
-# The operator, 2026-08-08: *"or not even by name, through context — 'create X then put it in
-# Y' is actually 2 X references, one is X as create and then 'it' is also a reference to X."*
-#
-# The model already shows this. Rung 2 came back as `vm` / `beta` / `it`, with `it` declared
-# as an object of its own.
-#
-# ⇒ **BUT ONLY A BARE PRONOUN FOLDS.** *"the ones that do not answer"* is NOT a reference to
-#   *"every vm"* — it is a different set, restricted. Folding on the word `ones` alone would
-#   silently merge a subset into its superset, which is rung 11's whole distinction destroyed.
-#   So the match must be the WHOLE name, with nothing else in it.
-# ⇒⇒ MEASURED REGRESSION, 2026-08-08, AND IT WAS TWO OF THESE MECHANISMS COMPOUNDING.
-#
-# `one`, `ones`, `that`, `those` and `these` USED TO BE IN THIS SET. They are the HEADS OF
-# RESTRICTED DESCRIPTIONS, not pro-forms: *"the ones that do not answer"*. The naming question
-# chunks that phrase down to the bare token `ones` — and the fold then merged `ones` into
-# `vm`, correctly by its own rule, destroying rung 11's subset.
-#
-#     pre-fold   ping · vm · ones          <- three rows, `ones` badly representing the subset
-#     folded     ping · vm                 <- the subset GONE, refs=['ones'] on `vm`
-#
-# The guard checked the whole name for a restriction, but the chunker had ALREADY stripped it.
-# So: only unambiguous pro-forms are listed, AND the request is consulted for a restrictor.
-PRONOUNS = frozenset({
-    "it", "its", "them", "they", "their", "theirs", "both",
-    "all of them", "each of them", "every one of them",
-})
+from ..codex import REFERRING_PRONOUNS as PRONOUNS
 
-# a word that turns a noun phrase into a RESTRICTED description — "the ones THAT do not answer"
-RESTRICTORS = ("that", "which", "who", "whose", "with", "without", "not")
+from ..codex import RESTRICTORS
 
 
 def _is_bare_pronoun(name: str, request: str = "") -> bool:
@@ -574,10 +546,8 @@ def merge(rows: List[Declared], board: Optional[Board] = None,
     return out
 
 
-# ── A TRUNCATED NAME IS REPAIRED FROM THE REQUEST, NOT RE-ASKED ────────────────────────
-DETERMINERS = ("the", "a", "an", "every", "all", "each", "both", "any", "some", "no",
-               "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")
-BOUNDARIES = (",", ";", " and ", " then ", " but ", "—", " - ")
+from ..codex import DETERMINERS
+from ..codex import BOUNDARY_SEPARATORS as BOUNDARIES
 
 
 def expand(name: str, request: str) -> str:

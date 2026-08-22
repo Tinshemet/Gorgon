@@ -38,19 +38,14 @@ from typing import List, NamedTuple, Optional
 
 from planner.formula.legal import Board
 
-# the negated forms, closed: modals whose complement is a bare verb by grammar, and the
-# copula/do forms whose complement must then be tested for verbality
-NEG_MODALS = frozenset({"won't", "wont", "can't", "cant", "cannot", "couldn't",
-                        "wouldn't", "shan't"})
-NEG_DO = frozenset({"doesn't", "don't", "didn't"})
-COPULAS = frozenset({"is", "are", "was", "were", "isn't", "aren't", "wasn't", "weren't"})
-ITERATIVES = frozenset({"keeps", "keep", "kept"})
+from ..codex import NEG_MODALS
+from ..codex import NEG_DO
+from ..codex import TESTIMONY_COPULAS as COPULAS
+from ..codex import ITERATIVES
 
-# R2 (operator-ordered 2026-08-19): the indefinite pronoun + copula IS the malfunction
-# marker — "SOMETHING IS WRONG with the dmz network". Closed pronouns, closed copulas;
-# the complement word is free because the FRAME carries the meaning.
-INDEFINITES = frozenset({"something", "anything", "nothing"})
-_RELATIVIZERS = frozenset({"that", "which", "who", "whom", "whose", "where", "when"})
+from ..codex import INDEFINITES
+# (identical to speech_act's RELATIVIZERS — one class, one home)
+from ..codex import RELATIVIZERS as _RELATIVIZERS
 
 
 class Testimony(NamedTuple):

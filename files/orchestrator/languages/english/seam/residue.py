@@ -52,21 +52,12 @@ import re
 from typing import Dict, List, NamedTuple, Optional, Tuple
 
 from planner.formula.legal import Board
-from orchestrator.seam import pass1, schema as S
-from orchestrator.seam.scan import (COMPARATORS, GRAMMAR, LINKING, NAMING_CUES, _operation_words, _stem, scan)
+from orchestrator.languages.english.seam import pass1, schema as S
+from orchestrator.languages.english.seam.scan import (COMPARATORS, GRAMMAR, LINKING, NAMING_CUES, _operation_words, _stem, scan)
 
 BOUNCE, ASK, RELATIONAL, REJECT = "BOUNCE", "ASK", "RELATIONAL", "REJECT"
 
-# ⇒ A CLOSED CLASS OF ENGLISH, AND IT IS THE WEAKEST THING IN THIS FILE — SAID OUT LOUD.
-#   `except`, `instead`, `together` carry a set operation, so they are neither descriptors nor
-#   junk; they belong to pass 2, and rung 8's `except` is already a known-open gate 3 question.
-#   This is the same KIND of list as `COMPARATORS` and `ENUMERATORS` — closed English, not lab
-#   vocabulary — but unlike those two it has no manifest behind it. When pass 2 declares its
-#   set operations, THIS LIST IS DELETED AND READ FROM THERE (rule W5).
-RELATIONAL_WORDS = frozenset({
-    "except", "excluding", "besides", "instead", "rather",
-    "together", "apart", "separately", "own", "different", "same",
-})
+from ..codex import RELATIONAL_WORDS
 
 
 class Residue(NamedTuple):

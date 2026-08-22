@@ -1428,8 +1428,8 @@ def test_gate_4_asks_when_the_request_wanted_an_answer_and_the_program_would_act
       guard that fires on the corpus has taught the operator to ignore it.
     """
     from planner.formula.legal import Board
-    from orchestrator.seam import gate4, pass1 as P, pass2 as P2, schema as S
-    from orchestrator.seam.effects import Operation
+    from orchestrator.languages.english.seam import gate4, pass1 as P, pass2 as P2, schema as S
+    from orchestrator.languages.english.seam.effects import Operation
     from tests.bench.twopass.metrics import Lab
 
     board, lab = Board(), Lab()
@@ -1506,7 +1506,7 @@ def test_gate_4_asks_when_the_request_wanted_an_answer_and_the_program_would_act
     # 5 · IT IS WIRED, AND ITS NAME IS DECLARED — both halves of the defect class this
     #     codebase keeps recording.
     check("the rule is in gate 4's OWNS", "answer-not-act" in gate4.OWNS)
-    src = open(os.path.join(os.path.dirname(__file__), "..", "orchestrator", "seam",
+    src = open(os.path.join(os.path.dirname(__file__), "..", "orchestrator", "languages", "english", "seam",
                             "pipeline.py")).read()
     check("and the pipeline calls it", "gate4.answer_not_act(" in src)
 
@@ -1524,7 +1524,7 @@ def test_being_spoken_to_is_not_being_asked_to_build_something():
       the LAB WINS. A machine really called `doorman` is a machine.
     """
     from planner.formula.legal import Board
-    from orchestrator.seam import pass1 as P, schema as S
+    from orchestrator.languages.english.seam import pass1 as P, schema as S
     from tests.bench.twopass.metrics import Lab
 
     class LabWithOne(Lab):
@@ -1577,7 +1577,7 @@ def test_an_affordance_verb_settles_its_own_clause_and_not_the_sentence():
       affording verb settles nothing, whatever it happens to contain.
     """
     from planner.formula.legal import Board
-    from orchestrator.seam import pass1 as P
+    from orchestrator.languages.english.seam import pass1 as P
 
     board = Board()
     # 1 · THE CONTROL — the rung this rule exists for. One clause, one affording verb, and

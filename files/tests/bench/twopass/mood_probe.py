@@ -30,7 +30,7 @@ import argparse
 from collections import Counter
 from typing import Dict, List, Tuple
 
-from orchestrator.seam import speech_act as SA
+from orchestrator.languages.english.seam import speech_act as SA
 from planner.formula.legal import Board
 from tests.bench import sentence_key as KEY
 from tests.bench.mutate import apply as mutate

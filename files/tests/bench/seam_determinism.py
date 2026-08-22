@@ -44,7 +44,7 @@ from typing import List, Optional
 def fingerprint(goals: Optional[List[str]] = None) -> List[str]:
     """Every model-free reading of every rung, as lines. Stable, or the probe is broken."""
     from planner.formula.legal import Board
-    from orchestrator.seam.scan import (anchors_in, conditions_from, existence_from_determiner,
+    from orchestrator.languages.english.seam.scan import (anchors_in, conditions_from, existence_from_determiner,
                                         kinds_named, magnitudes_in, quoted_clauses, scan_all,
                                         uncovered, clause_around)
 

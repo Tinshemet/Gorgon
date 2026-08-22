@@ -52,7 +52,7 @@ def test_every_owned_verdict_is_emitted_somewhere():
     src = _blob(("orchestrator",))
     for module in ("linguistics", "gate3", "gate4", "repair"):
         try:
-            m = importlib.import_module(f"orchestrator.seam.{module}")
+            m = importlib.import_module(f"orchestrator.languages.english.seam.{module}")
         except ImportError:
             continue
         owned = getattr(m, "OWNS", None)

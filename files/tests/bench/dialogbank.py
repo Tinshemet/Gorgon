@@ -120,7 +120,7 @@ def score(rows: List[Gold]) -> Dict[str, object]:
       did not know what the utterance was ABOUT; a wrong function means we knew and mislabelled
       it. One number over both would hide which.
     """
-    from orchestrator.seam import iso
+    from orchestrator.languages.english.seam import iso
 
     dim_hit = fn_hit = 0
     confusion: Dict[Tuple[str, str], int] = collections.Counter()

@@ -14,7 +14,7 @@ both. Built as two items they would have been two stores.
 import pathlib
 import tempfile
 
-from orchestrator.seam import asking, issues
+from orchestrator.languages.english.seam import asking, issues
 
 _FAIL = 0
 
@@ -99,7 +99,7 @@ def test_the_ledger_files_the_WORD_not_the_phrase():
     """
     print("\n[issues] every phrasing of the same word files under one key")
     from planner.formula.legal import Board
-    from orchestrator.seam.issues import word_of
+    from orchestrator.languages.english.seam.issues import word_of
     b = Board()
     for phrase in ("a jumpbox named bastion", "every jumpbox", "launch every jumpbox"):
         check(f"{phrase!r} -> jumpbox", word_of(phrase, b) == "jumpbox")

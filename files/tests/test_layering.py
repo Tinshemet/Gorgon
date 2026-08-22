@@ -119,7 +119,7 @@ _ALLOWED_LAZY = {
     # ⇒ IT IS THE LAST PRODUCTION -> tests/ EDGE IN THE FRONT SEAM and it is a KNOWN DEBT, not a
     #   design: the corpus belongs in the bench with the runners that read it, and the reason it
     #   is still here is 44 call sites, not an argument. Filed on the open list.
-    ("orchestrator", "orchestrator/seam/pass1.py", "tests.test_ghost_writer"),
+    ("orchestrator", "orchestrator/languages/english/seam/pass1.py", "tests.test_ghost_writer"),
 }
 
 _PACKAGES = ("planner", "packages", "engines", "orchestrator")

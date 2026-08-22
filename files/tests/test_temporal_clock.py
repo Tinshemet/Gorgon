@@ -4,7 +4,7 @@
 scored "at 21:30" as a missed trigger — deliberately, keeping the hole visible. This is
 the offset-bearing reader: the phrase itself, locatable, closed shapes only.
 """
-from orchestrator.seam import temporal as T
+from orchestrator.languages.english.seam import temporal as T
 
 
 def test_the_measured_case():

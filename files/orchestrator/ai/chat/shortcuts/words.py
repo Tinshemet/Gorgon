@@ -40,7 +40,7 @@ class Words(Shortcut):
 
     def run(self, ui: str, messages: List[dict], runtime_drift_count: int,
             verbose: bool) -> None:
-        from orchestrator.seam.archive import ARCHIVE
+        from orchestrator.languages.english.seam.archive import ARCHIVE
 
         rest = ui.strip()[len("words"):].strip()
 

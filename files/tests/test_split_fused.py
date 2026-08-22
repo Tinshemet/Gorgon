@@ -13,7 +13,7 @@ but only where the grammar votes, the operator's sim-check principle:
 Exactly one fitting split wins, with a notice; ambiguity or no vote changes NOTHING —
 `cancel` never becomes `can cel`, `notice` never `not ice`.
 """
-from orchestrator.seam import front_door as FD
+from orchestrator.languages.english.seam import front_door as FD
 
 
 # ── the measured damage this must heal ───────────────────────────────────────────────

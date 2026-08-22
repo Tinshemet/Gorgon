@@ -54,65 +54,36 @@ from typing import Optional, Sequence, Tuple
 
 # ── the clock ────────────────────────────────────────────────────────────────────────
 
-# ⇒ THE UNITS THE STORE CAN HOLD, spelled in English. `procedures._SECONDS` is the authority
-#   for which four exist; a fifth here would be a schedule nobody could file.
-UNITS = frozenset({"second", "seconds", "minute", "minutes", "hour", "hours",
-                   "day", "days"})
+from ..codex import UNITS
 
-# ⇒ AND THE UNITS THE OPERATOR USES THAT THE STORE DOES NOT NAME. A night is a day and a week
-#   is seven of them — both are expressible as a span, so both are admitted; a MONTH is not
-#   (they differ in length), and it is deliberately absent rather than rounded.
-COARSE = frozenset({"night", "nights", "week", "weeks"})
+from ..codex import COARSE
 
-# ⇒ THE FREQUENCY ADVERBS — a unit and a recurrence folded into one word. Closed, and derived:
-#   each one is a unit above with `-ly` on it, which is why the set cannot drift from `UNITS`.
-FREQUENCY = frozenset({"hourly", "daily", "nightly", "weekly"})
+from ..codex import FREQUENCY_ADVERBS as FREQUENCY
 
-# ⇒ THE DEICTICS — time named relative to now. English has these and has never added one.
-#   ⇒ ⚠ `now` AND `currently` ARE NOT HERE, AND THAT IS THE WHOLE POINT OF THE CLASS. They fix
-#     the time as THIS MOMENT, which is the one time that is not a schedule — *"launch every vm
-#     that is CURRENTLY stopped"* is rung 5 and runs now, correctly.
-DEICTIC = frozenset({"tomorrow", "tonight", "yesterday", "overnight"})
+from ..codex import DEICTIC
 
-# ⇒ THE CALENDAR. Seven and twelve, and neither list grows.
-WEEKDAYS = frozenset({"monday", "tuesday", "wednesday", "thursday",
-                      "friday", "saturday", "sunday"})
-MONTHS = frozenset({"january", "february", "march", "april", "may", "june", "july",
-                    "august", "september", "october", "november", "december"})
+from ..codex import WEEKDAYS
+from ..codex import MONTHS
 
 # ⇒ A CLOCK TIME IS A SHAPE, NOT A WORD — `9pm`, `09:30`, `9:30am`. Read structurally, so no
 #   vocabulary is spent on it and every spelling is covered.
 CLOCK = re.compile(r"^(?:[0-2]?\d[:.][0-5]\d(?:am|pm)?|[0-2]?\d(?:am|pm))$")
 
-# ⇒ WHAT MAKES A TIME A RECURRENCE RATHER THAN AN INSTANT. `every` is `scan.UNIVERSAL`'s own
-#   word doing a second job — over OCCASIONS instead of over members — and `each` behaves the
-#   same way. The distinction is not in the word; it is in what follows it.
-RECURRING = frozenset({"every", "each"})
+from ..codex import RECURRING
 
 # ── the world ────────────────────────────────────────────────────────────────────────
 
-# ⇒⇒ THE EVENT SUBORDINATORS — the words that say *something happening starts this*. Closed,
-#   and this is the half the operator called the meta-declaration: *"the rule is 'delete vm'
-#   triggered by 'stop vm/being done with it'."*
-#
-#   ⇒ ⚠ **`when` IS ABSENT FROM THE SET AND HANDLED SEPARATELY, BECAUSE IT IS TWO WORDS.**
-#     *"WHEN did you stop it"* asks about the past and *"WHEN you get a chance"* is an adjunct
-#     — a distinction that already cost this project a defect on 2026-08-16, in the other
-#     direction. Inversion is what separates them, and `events_in` asks for a subject.
-EVENTS = frozenset({"after", "whenever", "once"})
-EVENT_PHRASES = ("every time", "each time", "as soon as", "any time")
+from ..codex import EVENTS
+from ..codex import EVENT_PHRASES
 
 # ⇒⇒ **AND SOME OF THEM ARE STANDING BY THEMSELVES AND SOME ARE NOT**, which is the difference
 #   between a trigger and a one-off ordering nothing can hold. `whenever` and `every time` mean
 #   EVERY occasion in the word; `after` and `once` do not — *"delete the vm after it stops"* is
 #   about that machine, this once.
 ALWAYS_STANDING = frozenset({"whenever"})
-ALWAYS_STANDING_PHRASES = ("every time", "each time", "any time")
+from ..codex import ALWAYS_STANDING_PHRASES
 
-# ⇒ THE STANDING FRAME. A trigger is a RULE plus an event; this is the phrase that makes a
-#   sentence standing when no modal or frequency adverb does it. The operator's own example
-#   opens with it.
-STANDING = ("from now on", "from here on", "going forward", "in future", "in the future")
+from ..codex import STANDING
 
 RECURRENCE, INSTANT, EVENT = "recurrence", "instant", "event"
 

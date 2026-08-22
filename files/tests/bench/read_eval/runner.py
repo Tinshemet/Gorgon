@@ -136,13 +136,13 @@ def _f1(sentence: str, gold: Tuple[int, int], got: Tuple[int, int]) -> float:
 def read_case(sentence: str, board=None) -> dict:
     """The seam's whole reading of one sentence, with everything the scorer needs kept."""
     from planner.formula.legal import Board
-    from orchestrator.seam import pass1 as P1, pass2 as P2
+    from orchestrator.languages.english.seam import pass1 as P1, pass2 as P2
 
     board = board or Board()
     # ⇒⇒ THE FRONT DOOR (operator ruling 2026-08-19: junk out ASAP, ONE layer down) —
     #   the whole seam reads the VIEW; every offset below maps back to the ORIGINAL
     #   bytes before it is reported, so gold offsets still hold.
-    from orchestrator.seam import front_door as FD
+    from orchestrator.languages.english.seam import front_door as FD
     view = FD.read(sentence)
     sentence = view.text
     rows = P1.run_scanned(sentence, board=board)
@@ -156,7 +156,7 @@ def read_case(sentence: str, board=None) -> dict:
     for _cl, _op in steps:
         _orig[(_op.operator, _op.on, _op.value)] = _cl
     _prepared = P2.prepare([op for _, op in steps], table, sentence, board)
-    from orchestrator.seam.scan import clause_around as _ca
+    from orchestrator.languages.english.seam.scan import clause_around as _ca
     _by_handle_row = {s_.handle: s_.row for s_ in table}
     steps = []
     for _op in _prepared:
@@ -180,7 +180,7 @@ def read_case(sentence: str, board=None) -> dict:
     #   this function surfaced only pass 1's ROWS — so a gold evidence span could never be
     #   detected and diagnosis was undercounted for a reading the seam actually makes.
     #   The runner asks everything the seam reads, or the score lies in both directions.
-    from orchestrator.seam.scan import quoted_clauses
+    from orchestrator.languages.english.seam.scan import quoted_clauses
     for q in quoted_clauses(sentence):
         where = _find(sentence, q)
         predicted_spans.append({"row": None, "span": q, "kind": "evidence",
@@ -190,7 +190,7 @@ def read_case(sentence: str, board=None) -> dict:
     # ⇒ and the STRUCTURAL testimony predicates (D1's front door, 08-18) — the seam reads
     #   "is not working" now, and a reading the runner does not collect scores as a miss
     #   in both directions
-    from orchestrator.seam import testimony as _TT
+    from orchestrator.languages.english.seam import testimony as _TT
     for t in _TT.read(sentence):
         where = _locate(sentence, t.predicate)
         predicted_spans.append({"row": None, "span": t.predicate, "kind": "evidence",
@@ -201,7 +201,7 @@ def read_case(sentence: str, board=None) -> dict:
     #   `iso.is_condition` flags becomes a predicted trigger at its located offsets. A clock
     #   phrase ("at 21:30") has NO offset-bearing reader today, so it can never be predicted —
     #   and that is the point, not a gap: the discarded qualifier now shows as a trigger MISS.
-    from orchestrator.seam import iso as ISO
+    from orchestrator.languages.english.seam import iso as ISO
     predicted_triggers = []
     for clause in P2.clauses_of(sentence):
         try:
@@ -225,7 +225,7 @@ def read_case(sentence: str, board=None) -> dict:
             continue
         # ⇒ the CLOCK adjunct — offset-bearing at last (qual-0005's slot, held open
         #   from the eval's first day until the reader existed)
-        from orchestrator.seam import temporal as TMP
+        from orchestrator.languages.english.seam import temporal as TMP
         clock = TMP.clock_tail(clause)
         if clock:
             at = _locate(sentence, clock)
@@ -255,7 +255,7 @@ def read_case(sentence: str, board=None) -> dict:
                 predicted_queries.append({"clause": clause, "start": at[0], "end": at[1]})
     # ⇒ v1.3b — the seam's RULE reading: `speech_act.act_of` calls a rule about future
     #   behaviour a DECLARATION. Same per-clause collection as queries and triggers.
-    from orchestrator.seam import speech_act as SA
+    from orchestrator.languages.english.seam import speech_act as SA
     predicted_rules = []
     for clause in P2.clauses_of(sentence):
         try:
@@ -282,7 +282,7 @@ def read_case(sentence: str, board=None) -> dict:
             continue
         # ⇒ the STRUCTURAL testimony reading (D1's front door) — the runner asks everything
         #   the seam reads, and the seam now reads unquoted symptom clauses by their shape
-        from orchestrator.seam import testimony as TT
+        from orchestrator.languages.english.seam import testimony as TT
         try:
             hit = TT._of_clause(clause)
         except Exception:
@@ -296,7 +296,7 @@ def read_case(sentence: str, board=None) -> dict:
     #   the same grammar mark scan and pass2 use. Attachment stays ops-only — a channel
     #   names the clause, not its arguments.
     predicted_instructs = []
-    from orchestrator.seam.scan import opens_imperative as _opens
+    from orchestrator.languages.english.seam.scan import opens_imperative as _opens
     for clause in P2.clauses_of(sentence):
         _cw = str(clause).lower().split()
         if _opens(_cw, board):

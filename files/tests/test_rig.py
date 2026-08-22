@@ -139,7 +139,7 @@ def test_production_does_not_import_the_test_tree():
                #   import is GUARDED — a checkout without the test tree gets an empty expectation
                #   table, never an ImportError — and it is listed here rather than merely guarded
                #   because a silent reach into the test tree is what this check exists to find.
-               "orchestrator/seam/pass1.py -> tests.test_ghost_writer"}
+               "orchestrator/languages/english/seam/pass1.py -> tests.test_ghost_writer"}
     stray = sorted(set(offenders) - allowed)
     check(f"nothing shipped imports tests/ except the staged-lowering seam ({stray or 'none'})",
           not stray)

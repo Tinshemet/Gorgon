@@ -129,17 +129,17 @@ ALL: List[Case] = (CLEAN + JUNK_DESCRIPTOR + JUNK_OPEN + JUNK_KINDLESS
 
 
 # ⇒ THE GRADER LIVES HERE, NOT BESIDE THE CHECK IT GRADES. It sat in `residue.py` until
-#   2026-08-13, when that module moved to `orchestrator/seam/` — and it was the ONE thing in the file
+#   2026-08-13, when that module moved to `orchestrator/languages/english/seam/` — and it was the ONE thing in the file
 #   that reached up into `engines.channel` (to silence the model) and printed a scoreboard.
 #   A production module carrying its own bench harness is how the test tree gets shipped; the
 #   docstring already said the expectations live here, so the reading of them does too.
 def score_heldout(cases, board=None, world=None) -> Dict[str, object]:
-    """Grade the SEALED set against `orchestrator.seam.residue`."""
+    """Grade the SEALED set against `orchestrator.languages.english.seam.residue`."""
     import engines.channel as channel
 
     from planner.formula.legal import Board
-    from orchestrator.seam import pass1
-    from orchestrator.seam.residue import report
+    from orchestrator.languages.english.seam import pass1
+    from orchestrator.languages.english.seam.residue import report
 
     was, channel.constrained = channel.constrained, lambda *a, **k: {}
     board = board or Board()
@@ -185,7 +185,7 @@ def main() -> None:
     print(f"{len(ALL)} held-out cases, sealed "
           f"({sum(1 for c in ALL if not c.expect)} of them SILENT)")
     try:
-        from orchestrator.seam import residue                      # noqa: F401
+        from orchestrator.languages.english.seam import residue                      # noqa: F401
     except ImportError:
         print("the check does not exist yet — which is the point of sealing this first")
         return

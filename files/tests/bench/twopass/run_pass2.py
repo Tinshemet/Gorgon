@@ -10,8 +10,8 @@ import argparse
 from collections import Counter
 
 from planner.formula.legal import Board
-from orchestrator.seam import pass1
-from orchestrator.seam.pass2 import WANT, grade, operations_for, symbol_table
+from orchestrator.languages.english.seam import pass1
+from orchestrator.languages.english.seam.pass2 import WANT, grade, operations_for, symbol_table
 from tests.bench.twopass.metrics import Lab
 
 

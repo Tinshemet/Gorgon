@@ -42,29 +42,11 @@ from typing import Dict, List, NamedTuple, Optional
 
 from planner.formula.legal import Board
 
-# ⇒ THE COMPARATOR IS PART OF THE ENUMERATOR REGION, and it is the `(eq, 3)` the program needs.
-#   Longest first, so "no more than" wins over "no".
-COMPARATORS: Dict[str, str] = {
-    "no more than": "max", "at most": "max", "not more than": "max", "up to": "max",
-    "no fewer than": "min", "at least": "min",
-    "exactly": "eq", "precisely": "eq", "just": "eq",
-}
+from ..codex import COMPARATORS
 
-ENUMERATORS: Dict[str, object] = {
-    "a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
-    "seven": 7, "eight": 8, "nine": 9, "ten": 10, "both": 2, "no": 0,
-    "every": "all", "all": "all", "each": "all", "any": "all",
-}
+from ..codex import ENUMERATORS
 
-# a clause ends here, and a span may never cross one
-# `of` ENDS A PHRASE AND OPENS ANOTHER. "a snapshot OF every running vm" is two things, and
-# without this the snapshot's span swallowed the machines, which then folded away as a
-# collision — rung 12 declared one object where the request names two.
-# ⇒ `except` joined 2026-08-18: *"stop every vm EXCEPT the db vm"* fused into ONE row with
-#   no comma to cut it — the certified set's neg-0001, whose gold is two spans (patient +
-#   excluded). Rung 8's carve-out had always arrived comma-separated, so the boundary was
-#   never missed until a bare `except` appeared.
-BOUNDARIES = {",", ";", ".", "and", "then", "but", "except", "—", "–", "of"}
+from ..codex import BOUNDARY_WORDS as BOUNDARIES
 
 
 class Scanned(NamedTuple):
@@ -94,18 +76,10 @@ class Scanned(NamedTuple):
         return self.start < other.end and other.start < self.end
 
 
-# the phrasal PARTICLES a verb strands on its edge — closed class, ONE copy (the span
-# walk and the imperative shape both read it)
-PARTICLES = frozenset({"up", "down", "off", "out", "over", "away", "back", "sure"})
+from ..codex import PARTICLES
 
-# every word that can OPEN an object NP — the determiner set plus its own grammar
-# family: quantifiers, universals, pro-forms. Closed classes, not vocabulary. The
-# certified terse cell died on the family members: `most of vms` · `everything` · `ones`
-OBJECT_OPENERS = frozenset({
-    "a", "an", "the", "every", "each", "all", "any", "both", "no",
-    "it", "them", "me", "us",
-    "most", "some", "several", "few", "many", "half", "everything", "one", "ones"})
-_SHAPE_NEG = frozenset({"don't", "do", "not", "never"})
+from ..codex import OBJECT_OPENERS
+from ..codex import SHAPE_NEGATION as _SHAPE_NEG
 
 
 def opens_imperative(words: List[str], board: Optional[Board] = None) -> bool:
@@ -346,11 +320,7 @@ def uncovered(request: str, spans, board: Optional[Board] = None) -> List[str]:
     return out
 
 
-GRAMMAR = {"a", "an", "the", "of", "on", "in", "to", "for", "and", "then", "but", "with",
-           "that", "which", "is", "are", "be", "it", "its", "them", "they", "their", "there",
-           "should", "must", "can", "each", "other", "into", "from", "at", "by", "so", "do",
-           "does", "not", "was", "were", "this", "those", "these", "up", "out", "all", "own",
-           "same", "different", "already", "currently", "still", "also", "sure", "left"}
+from ..codex import GRAMMAR
 
 
 def _operation_words(board: Board) -> set:
@@ -377,63 +347,15 @@ def _operation_words(board: Board) -> set:
     return out - NON_VERB_SEGMENTS
 
 
-# the noun and function-word segments an operation NAME sheds before any of its segments
-# may count as a verb — shared with pass 2's licence map, one copy (D5's root)
-NON_VERB_SEGMENTS = frozenset({
-    "network", "snapshot", "template", "profile", "file", "vm",
-    "networks", "snapshots", "templates", "profiles", "files", "vms",
-    "to", "of", "as", "on", "in", "from", "with", "at", "by", "for", "the"})
+from ..codex import NON_VERB_SEGMENTS
 
 
-# ── THE DETERMINER DECIDES EXISTENCE, WHERE IT DECIDES AT ALL ─────────────────────────
-#
-# ⇒⇒ WHY THIS IS NOT THE WORD LIST THE OPERATOR RULED OUT. The 2026-08-11 critique:
-#   *"SSOT of nouns and verbs worked in the tool regime because each tool only has finite slots
-#   and words related to it, while in the program regime one noun is still legal due to how the
-#   sentence is structured."* Right — and it applies to CONTENT words, which are open class and
-#   cannot be enumerated. **DETERMINERS ARE A CLOSED FUNCTION-WORD CLASS**: about thirty words,
-#   fixed for centuries, and independent of the manifest. A new kind or an unlisted verb does
-#   not change them, which is exactly what `ACHIEVE_MARKERS` cannot say for itself.
-#
-# ⇒ WHAT IT FIXES: rung 6's verdict was a COIN. `existence` is asked of the model at 85% with
-#   every error toward NEW, and two complementary checks — `unverifiable` (gate 2, EXISTING) and
-#   `uncreated-declaration` (gate 1, NEW) — fire on opposite faces of it. Measured n=3: BOUNCE,
-#   BOUNCE, ASK on BYTE-IDENTICAL operations. The coin decided only WHO GOT TOLD.
-#
-# ⇒ *"put the blue ones on A DIFFERENT network"* — an indefinite with no prior referent IS a new
-#   one. Nothing needs asking.
-INDEFINITE = {"a", "an", "another", "some"}
-DEFINITE = {"the", "this", "that", "these", "those", "its", "their", "his", "her", "our", "your"}
-UNIVERSAL = {"every", "all", "each", "any", "both"}
+from ..codex import INDEFINITE
+from ..codex import DEFINITE
+from ..codex import UNIVERSAL
 
-# ⇒⇒ **AND THE QUANTIFIER BETWEEN ONE AND ALL, WHICH NOTHING HAS EVER READ.** ISO 24617-2
-#   carries PARTIALITY as one of its four qualifiers on a dialogue act, and we had UNIVERSAL
-#   and the cardinals with a hole between them: *"stop MOST of the vms"* read as *stop the
-#   vms*, which is every machine instead of a majority nobody has identified.
-#   ⇒ **IT SITS HERE BECAUSE `scan` OWNS DETERMINERS**, beside the class it is the complement
-#     of — a second quantifier table somewhere else is how the two would drift.
-#   ⇒ ⚠ AND IT NAMES AN AMOUNT NOBODY CAN COMPUTE. Unlike `every` or `3`, a partial quantifier
-#     does not say WHICH members, so the honest reading is a QUALIFIER on the act and a
-#     question to the operator — never a set the writer picks.
-PARTIAL = {"most", "some", "several", "few", "half", "many", "part", "majority", "couple"}
-# CONTRASTIVE determiners — they introduce a referent the sentence has not mentioned.
-#
-# ⇒⇒ **TRIMMED FROM EIGHT WORDS TO TWO, 2026-08-11, AND THE SIX WERE MY OWN SSOT VIOLATION.**
-#   Measured by emptying the set and re-reading every corpus span: exactly TWO entries change
-#   any answer — `own` BLOCKS a wrong reading (*their own network* would otherwise read
-#   `existing`, because `their` is definite) and `new` SUPPLIES a right one (*3 new vms*).
-#   `different`, `separate`, `second`, `spare`, `fresh`, `extra` changed nothing: rung 6's
-#   *"a different network"* is settled by the indefinite article alone.
-#
-#   ⇒ I justified this file's determiner sets as a CLOSED FUNCTION-WORD CLASS, which is true of
-#     INDEFINITE / DEFINITE / UNIVERSAL and **false of these** — contrastive adjectives are open
-#     class, so `provisioned`, `standalone`, `dedicated` are missing and always would be. That is
-#     the unfinishable word list the operator ruled out, shipped hours later at small enough
-#     scale to look harmless.
-#   ⇒ AND IT REMOVES A DRIFT HAZARD: `different` and `same` also live in `GRAMMAR` and in
-#     `residue.RELATIONAL_WORDS`. Three copies of one idea, and R2's correctness rested on
-#     this one. Dropping them here leaves each word with a single owner.
-NOVEL = {"new", "own"}
+from ..codex import PARTIAL
+from ..codex import NOVEL
 
 
 def existence_from_determiner(span: str) -> Optional[str]:
@@ -913,10 +835,7 @@ def _kind_of(words: List[str], nouns: Dict[str, str]) -> Optional[str]:
     return next((nouns[w] for w in words if w in nouns), None)
 
 
-# ── MODIFIERS INTO CONDITIONS, where the manifest can settle it ────────────────────────
-LINKING = {"called", "named", "labelled", "labeled", "tagged", "marked", "is", "are", "be",
-           "the", "a", "an", "with", "on", "in", "to", "of", "that", "do", "does", "and",
-           "currently", "already", "its", "their"}
+from ..codex import LINKING
 
 
 def _stem(word: str) -> str:
@@ -926,14 +845,7 @@ def _stem(word: str) -> str:
     return word
 
 
-# A NAMING CUE POINTS AT THE KIND'S KEY, whatever that key happens to be called.
-#
-# "a vm NAMED alpha" worked only by luck — `named` stems to `nam`, which prefixes the attribute
-# `name`, and a vm's key IS `name`. A network's key is `net_name`, and `called` stems to
-# nothing that prefixes it, so "a network CALLED lab" produced no condition at all. The cue
-# should point at the KEY the manifest declares, not at an attribute that happens to be spelt
-# similarly.
-NAMING_CUES = {"called", "named", "titled", "known"}
+from ..codex import NAMING_CUES
 
 
 def _config_kinds():
@@ -1010,16 +922,7 @@ def attribute_words(board: Optional[Board] = None) -> Dict[str, str]:
     return {w: a for w, a in out.items() if w not in nouns}
 
 
-# ⇒⇒ THE MAGNITUDE COMPARATORS — a closed class of English, and NOT the ones above.
-#   `COMPARATORS` declares the COUNT comparators (`at most`, `exactly`) and they answer *how
-#   many things*. These answer *how big a value*, which is a different question over a
-#   different slot, and nothing has ever declared them.
-#   ⇒ Longest first, so `more than` wins over `more`.
-MAGNITUDE: Dict[str, str] = {
-    "no more than": "le", "no less than": "ge", "greater than": "gt", "more than": "gt",
-    "less than": "lt", "fewer than": "lt", "at or above": "ge", "at or below": "le",
-    "over": "gt", "above": "gt", "under": "lt", "below": "lt", "beyond": "gt",
-}
+from ..codex import MAGNITUDE
 
 # ⇒ A QUANTITY WITH A UNIT GLUED TO IT — `6gb`, `500mb`, `2x`. One token to a person and two to
 #   a naive tokenizer, which is how `9pm` came to be read as the number 9 at the door.
@@ -1069,7 +972,7 @@ def magnitudes_in(request: str, board: Optional[Board] = None) -> tuple:
     return tuple(out)
 
 
-NEGATORS = frozenset({"not", "n't", "never", "no"})
+from ..codex import NEGATOR_TOKENS as NEGATORS
 
 
 def _negates(words: List[str], at: int, values: Dict[str, tuple]) -> bool:

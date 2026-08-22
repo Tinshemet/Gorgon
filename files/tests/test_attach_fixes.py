@@ -10,7 +10,7 @@ D · TYPED ROLE REPAIR — the manifest declares a setter's owner and referenced
 """
 from planner.formula.legal import Board
 
-from orchestrator.seam import pass1 as P1, pass2 as P2
+from orchestrator.languages.english.seam import pass1 as P1, pass2 as P2
 from tests.test_twopass_schema import _canned
 
 B = Board()

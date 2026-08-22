@@ -11,7 +11,7 @@ shapes the operator ordered built on 08-19 ("for the diagnosis, add that ability
      marker: *"SOMETHING IS WRONG with the dmz network"*. The predicate is the head;
      the with-phrase stays the patient's.
 """
-from orchestrator.seam import testimony as T
+from orchestrator.languages.english.seam import testimony as T
 
 
 # ── anchors: the 08-18 rules still hold ──────────────────────────────────────────────

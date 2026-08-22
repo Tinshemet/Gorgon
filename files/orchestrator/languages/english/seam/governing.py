@@ -47,25 +47,7 @@ from planner.formula.legal import Board
 #   needs no typed effect, and `proposals.validate` is what enforces that distinction.
 DOCUMENTARY = "rule"
 
-# ⇒⇒ **THIS STORE'S OWN VERBS, DECLARED AT THE OPERATION — the same move the archive makes for
-#   `forget`, and the operator's call both times.**
-#
-#   *"treat prod as read-only"* carries no closed-class marker at all: no deontic modal, no
-#   frequency adverb, no universal. It is legislation and nothing in its grammar says so. The
-#   only honest way to read it is the way `vm.nouns` works — **declare that in THIS system,
-#   `treat X as Y` names an act of governing.** That is a fact about the system, which the
-#   admission test accepts; *"treat is a synonym for regard"* would be a fact about English,
-#   which it refuses.
-#
-#   ⇒ **THE `as` COMPLEMENT IS REQUIRED, AND IT IS WHAT KEEPS THIS TIGHT.** `treat X AS Y`
-#     assigns a category; *"treat it carefully"* assigns nothing and is not a rule. Without
-#     that test the verb alone would claim any sentence it opened.
-#
-#   ⇒ ⚠ **AND IT CANNOT COLLIDE WITH A LAB ORDER**, which is the risk a verb list always
-#     carries. `mark alpha as a template` is the same *X as Y* shape and is an ORDER — because
-#     `mark` IS a manifest verb (`mark_as_template`) and these three are not. The manifest is
-#     checked first, so a declared verb can never shadow one the lab owns.
-CONTRACT_VERBS: Tuple[str, ...] = ("treat", "regard", "consider")
+from ..codex import CONTRACT_VERBS
 
 
 def rules_from(request: str, board: Optional[Board] = None, world=None) -> List[dict]:

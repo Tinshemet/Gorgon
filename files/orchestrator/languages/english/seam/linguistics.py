@@ -43,26 +43,11 @@ from planner.formula.legal import Board
 from . import schema as S
 from .effects import Operation
 
-# ⇒ A CLOSED CLASS OF ENGLISH, the same status `COMPARATORS` and `ENUMERATORS` hold. A light
-#   verb contributes almost no meaning, so the NOUN beside it carries the predicate.
-#
-#   ⇒ **AND IT IS A POSITIVE ASSERTION ONLY — ABSENCE FROM THE MANIFEST DOES NOT MEAN LIGHT.**
-#     The tempting move is to delete this list and derive it: a contentful verb is one the
-#     manifest declares, so anything else is light. That is wrong in the exact place it matters.
-#     *"find me a snapshot"* — `find` is not a declared operation, so absence would call it
-#     light and read the snapshot as an ACTION, when it is plainly an object being selected.
-#     Absence means *"either light, or an operation this lab does not have"*, and those two
-#     need opposite treatment.
-LIGHT_VERBS = frozenset({"take", "takes", "give", "gives", "make", "makes", "do", "does",
-                         "get", "gets", "have", "has", "carry", "carries",
-                         "perform", "performs", "conduct", "conducts"})
+from ..codex import LIGHT_VERBS
 
 CONTENTFUL, LIGHT, UNKNOWN_VERB = "contentful", "light", "unknown"
 
-# ⇒ THE MOOD MARKERS. A request in the ACHIEVE mood states a state that must HOLD; pass 2 only
-#   knows how to DO. Every rung filed as a "reasoning error" — 7, 9, 14 — is one of these.
-ACHIEVE_MARKERS = ("make sure", "makes sure", "ensure", "ensures", "there should be",
-                   "should be", "must be", "make certain", "verify that", "confirm that")
+from ..codex import ACHIEVE_MARKERS
 
 DO, ACHIEVE = "do", "achieve"
 

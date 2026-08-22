@@ -248,7 +248,7 @@ def dangerous() -> List[Feature]:
 def read_now(f: Feature):
     """What the FREE readers make of this example today. No model call."""
     from planner.formula.legal import Board
-    from orchestrator.seam import scan as SC, speech_act as SA
+    from orchestrator.languages.english.seam import scan as SC, speech_act as SA
     b = Board()
     try:
         acts = [a for _, a in SA.read(f.example, b)]

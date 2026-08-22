@@ -132,7 +132,7 @@ def read_with(text: str):
     """
     from planner.formula.legal import Board
     from planner.ir import config as _config
-    from orchestrator.seam import scan as SC
+    from orchestrator.languages.english.seam import scan as SC
 
     with _config.use_kinds(KINDS):
         board = Board()

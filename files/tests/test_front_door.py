@@ -10,7 +10,7 @@ offsets and names are never rewritten.
 """
 import pytest
 
-from orchestrator.seam import front_door as FD
+from orchestrator.languages.english.seam import front_door as FD
 
 
 def test_a_typoed_marker_is_recognized_in_its_phrase():

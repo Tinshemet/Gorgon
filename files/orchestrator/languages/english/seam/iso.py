@@ -81,54 +81,17 @@ PLACED: Dict[str, tuple] = {
     "declaration":      (TASK, "Inform"),
 }
 
-# ⇒ THE EPISTEMIC ADVERBS. A closed class, and the same licence `FREQUENCY` claims for
-#   `never`/`always`: English has these and gains none.
-#   ⇒ ⚠ THE MODALS ARE DELIBERATELY ABSENT. `may` and `might` are epistemic AND deontic, and
-#     `DEONTIC` already spends them on permission — a word claimed twice is how a reading
-#     starts disagreeing with itself.
-HEDGES = frozenset({"maybe", "perhaps", "probably", "possibly", "presumably", "apparently",
-                    "likely", "seemingly"})
-EMPHATIC = frozenset({"definitely", "certainly", "surely", "obviously", "clearly",
-                      "undoubtedly", "absolutely"})
+from ..codex import HEDGES
+from ..codex import EMPHATIC
 
 
-# ⇒⇒ **FEEDBACK — TWO WHOLE DIMENSIONS WE EMITTED NOTHING FOR, AND THEY ARE A QUARTER OF REAL
-#   DIALOGUE.** Measured against DialogBank's gold Map Task annotations, 2026-08-16: 165
-#   autoFeedback and 50 alloFeedback segments out of 779, and we answered GREETING to every one.
-#
-#   ⇒ **THE STRUCTURAL KEY IS POSITION, AND IT REUSES A CLASS ALREADY DECLARED.** A discourse
-#     particle that IS the whole utterance is feedback; the same particle in front of a clause
-#     is an opener. `speech_act.OPENERS` already holds `ok`, `okay`, `yeah`, `well` and calls
-#     them *"leading particles that carry no proposition"* — standing alone they carry one
-#     proposition exactly: **I am still with you.**
-#
-#   ⇒ **AND THE GOLD SAYS THE CLASS IS SMALL.** Seven forms cover ~150 of the 165: `right` (75),
-#     `okay` (33), `mmhmm` (13), `uh-huh` (13), `right okay` (10), `yeah`, `oh`. A closed class
-#     in the strong sense — English adds a backchannel about once a generation.
-BACKCHANNEL = frozenset({"right", "mmhmm", "mmhm", "mhm", "mm", "uh-huh", "uhhuh", "uhuh",
-                         "aye", "sure", "gotcha", "indeed", "quite", "i see", "got it"})
+from ..codex import BACKCHANNEL
 
-# ⇒ AND THE NEGATIVE HALF — *I did NOT follow that.* Far rarer in the gold (7 of 165) and the
-#   one that matters most, because it is the operator saying the reading went wrong.
-TROUBLE = frozenset({"sorry", "pardon", "what", "huh", "again", "eh"})
+from ..codex import TROUBLE
 
-# ⇒⇒ ⚠ **AND A BARE `sorry` IS AN APOLOGY, NOT A REQUEST TO REPEAT** — measured, and it cost
-#   every Social Obligations segment in the corpus. All four gold SOM segments in the Map Task
-#   set are the single word `sorry`, and sweeping it into TROUBLE took us from 4 of 4 to 0.
-#   ⇒ **THE MARK SPLITS IT, WHICH IS THE RULE ALREADY USED ONE CLASS UP.** `right` reports and
-#     `right?` asks; `sorry` apologises and `sorry?` asks. I built that discrimination for the
-#     backchannels and failed to apply it to the word beside them.
-APOLOGY = frozenset({"sorry", "apologies", "oops", "my bad"})
+from ..codex import APOLOGY
 
-# ⇒⇒ **THE FILLED PAUSES — HESITATION, AND IT IS NOT A BACKCHANNEL.** `er` · `um` · `uh` ·
-#   `ehm` are 27 of the 29 Time Management segments in the gold, all of them `stalling`: the
-#   speaker holding the floor while they think. A closed class, and one English has had
-#   unchanged for as long as anybody has written it down.
-#   ⇒ ⚠ **AND THEY ARE THE SAME TOKENS THE GOLD ALSO MARKS `turnKeep`**, because a filled pause
-#     does two jobs at once — that is ISO's multidimensionality, not an ambiguity. We emit the
-#     TIME reading only: it is the one we can establish from the word alone. Claiming the turn
-#     reading too would score better and mean less, because we cannot see whose turn it was.
-FILLED_PAUSE = frozenset({"er", "erm", "ehm", "um", "uhm", "uh", "eh", "hmm", "hm"})
+from ..codex import FILLED_PAUSE
 
 
 def feedback_of(segment: str) -> Optional[tuple]:
@@ -291,11 +254,8 @@ def is_condition(segment: str, board: Optional[Board] = None) -> bool:
             or any(low.startswith(p) for p in T.ALWAYS_STANDING_PHRASES))
 
 
-# the whether-`if` guard: `tell me IF the db vm restarted` asks, it does not condition.
-# The word BEFORE the `if` separates them, and the askers are a small closed set.
-_WHETHER_HOSTS = frozenset({"me", "us", "know", "check", "see", "ask", "wonder", "whether"})
-# focus adverbs that may sit in FRONT of a subordinator without unseating it: `ONLY if`
-_FOCUS = frozenset({"only", "even", "just"})
+from ..codex import WHETHER_HOSTS as _WHETHER_HOSTS
+from ..codex import FOCUS_PARTICLES as _FOCUS
 
 
 def condition_tail(segment: str, board: Optional[Board] = None) -> Optional[str]:

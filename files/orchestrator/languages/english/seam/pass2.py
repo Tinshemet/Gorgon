@@ -1,7 +1,7 @@
 """PASS TWO — WHAT HAS TO BE DONE. One question, three closed fields, over pass 1's own rows.
 
-    PYTHONPATH=. python3 -m orchestrator.seam.pass2 --runs 3
-    PYTHONPATH=. python3 -m orchestrator.seam.pass2 --only 11 --handles span
+    PYTHONPATH=. python3 -m orchestrator.languages.english.seam.pass2 --runs 3
+    PYTHONPATH=. python3 -m orchestrator.languages.english.seam.pass2 --only 11 --handles span
 
 # WHAT IS ALREADY PROVEN, AND WHAT IS NOT
 
@@ -252,12 +252,11 @@ CLAUSE_ASK = ("Say what has to be DONE for the marked part of the request, as a 
 
 # a clause ends at these; `of` is a PHRASE boundary and is deliberately not one of them
 CLAUSE_MARKS = (",", ";", ".", "—", "–")
-CLAUSE_WORDS = (" and then ", " then ", " and ", " but ")
+from ..codex import CLAUSE_WORDS
 
 
-_CUT_DETS = frozenset({"a", "an", "the", "every", "each", "all", "any", "both", "no",
-                       "it", "them", "me", "us"})
-_CUT_NEG = frozenset({"don't", "not", "never", "do", "no"})
+from ..codex import CUT_DETERMINERS as _CUT_DETS
+from ..codex import CUT_NEGATION as _CUT_NEG
 
 
 def _comma_free_cuts(piece: str) -> List[str]:

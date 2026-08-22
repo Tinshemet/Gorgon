@@ -15,7 +15,7 @@ were no answers to keep.
 import engines.channel as channel
 
 from planner.formula.legal import Board
-from orchestrator.seam import asking, pass1, pass2, pipeline as PL
+from orchestrator.languages.english.seam import asking, pass1, pass2, pipeline as PL
 from tests.bench.twopass.metrics import Lab
 
 _FAIL = 0
@@ -157,7 +157,7 @@ def test_the_round_trip_teaches_the_archive():
     import engines.channel as CH
     was = CH.constrained
     CH.constrained = lambda *a, **k: None
-    from orchestrator.seam import pipeline as PL, archive as A
+    from orchestrator.languages.english.seam import pipeline as PL, archive as A
     # ⇒ THE TEST OWNS ITS STORE. The process-wide ARCHIVE is shared by every test in the
     #   suite, and trusting it made this test ORDER-SENSITIVE — green standalone, red in
     #   the full run. A singleton a test reads is a fixture a test must replace.

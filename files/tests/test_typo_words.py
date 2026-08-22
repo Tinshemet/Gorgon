@@ -14,7 +14,7 @@ in front. One fitting candidate -> fixed, with a notice. Ties or no fit -> untou
 `ever` is protected without being known: in "did you eveyr stop it" the candidate
 `every` fails its slot, so nothing fires.
 """
-from orchestrator.seam import front_door as FD
+from orchestrator.languages.english.seam import front_door as FD
 
 
 def test_a_pronoun_sure_hit():

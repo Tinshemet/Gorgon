@@ -92,59 +92,16 @@ META_CONTROL = "meta-control"
 EXPRESSIVE = "expressive"
 COMMISSIVE = "commissive"
 
-# ── the closed classes ───────────────────────────────────────────────────────────────
-#
-# ⇒⇒ NINE WH-WORDS. ENGLISH HAS NO MORE AND GAINS NONE — which is the whole licence for
-#   writing them down, and the same one `INDEFINITE` and `AFFIRMATION` already claim.
-WH_WORDS = frozenset({"who", "whom", "whose", "what", "which",
-                      "when", "where", "why", "how"})
+from ..codex import WH_WORDS
 
-# ⇒ THE AUXILIARIES THAT INVERT to make a yes-no question. Closed, and closed in the strong
-#   sense: a new English verb never becomes one.
-AUXILIARIES = frozenset({"do", "does", "did", "can", "could", "will", "would",
-                         "shall", "should", "may", "might", "must",
-                         "is", "are", "was", "were", "am", "be", "been",
-                         "have", "has", "had"})
+from ..codex import AUXILIARIES
 
-# ⇒ THE COPULA — a PREDICATION about something, which is what separates *"n1 is the jumpbox"*
-#   (teaching) from *"good morning doorman"* (nothing).
-COPULA = frozenset({"is", "are", "was", "were", "am", "be", "been", "'s", "'re"})
+from ..codex import COPULA
 
-# ⇒ THE ADDRESSEE. One pronoun, and the entire difference between an order and a question once
-#   a sentence has inverted.
-ADDRESSEE = frozenset({"you", "u", "ya"})
-# ⇒ ⚠ **AND THE CONTRACTED FORMS, WHICH ARE THE SAME PRONOUN.** `i'd like you to …` is the
-#   keyed declarative directive and `i'd` is not `i`, so the branch that reads it never fired —
-#   found 2026-08-16 when rung 8's own courtesy arm came back UNREAD. A pronoun plus a clitic
-#   is a closed class twice over: two pronouns, four clitics, and English adds neither.
-FIRST_PERSON = frozenset({"i", "we", "i'd", "i've", "i'll", "i'm",
-                          "we'd", "we've", "we'll", "we're"})
+from ..codex import ADDRESSEE
+from ..codex import FIRST_PERSON
 
-# ⇒⇒ **THE CONVERSATION'S OWN PARTICIPANTS — and this is the generalisation the addressee test
-#   should always have been.** A request to ACT is aimed at somebody in the room; a question is
-#   aimed at the lab. `can YOU stop the vms` and `can WE stop the vms` are the same request
-#   with a different pronoun, and only the first was read as one:
-#
-#       can you stop the vms      the addressee        -> an ORDER
-#       can we stop the vms       speaker AND hearer   -> an ORDER, and it read as a QUESTION
-#       let's stop the vms        the same, hortative  -> an ORDER
-#       is alpha running          a LAB THING          -> a QUESTION
-#
-#   ⇒ **FOUR SENTENCES WERE ONE DEFECT.** `do it again`, `let's …`, `let me …` and `can we …`
-#     were recorded as four unrelated curiosities until the operator asked what was still open;
-#     every one is the subject test knowing only `you`. Personal pronouns are a closed class,
-#     and *who is in the conversation* is the honest boundary.
-#   ⇒ ⚠ **AND IT IS THE PLURAL, NOT THE FIRST PERSON.** The first cut took every participant
-#     and read *"SHOULD I delete db or keep it?"* as an order — a deliberative question, the
-#     speaker weighing their own act. **The speaker ALONE is deliberating; the speaker WITH US
-#     is proposing**, and grammatical number is exactly that line:
-#
-#         can WE stop the vms       joint action     -> an ORDER
-#         should I delete db        deliberation     -> a QUESTION
-#
-#     `i`/`me` are therefore deliberately absent. `let me …` still reads as an order, from the
-#     hortative branch, because `let` asks us to permit rather than asking us what to think.
-PARTICIPANTS = ADDRESSEE | frozenset({"we", "us"})
+from ..codex import PARTICIPANTS
 
 # ⇒ THE HORTATIVE. `let us / let me` proposes an act by the participants — an imperative whose
 #   subject is the room. One verb, and it is the only English word that does this job.
@@ -159,117 +116,29 @@ EXISTENTIAL = frozenset({"there"})
 #   purpose; `if` shares the job and also means the conditional, so it is deliberately absent.
 WHETHER = frozenset({"whether"})
 
-# ⇒ THE QUESTION'S WRAPPER — `tell me if X` asks what `did X?` asks; the wrapper marks
-#   nothing (the operator's cc-0003 rulings, both of them, 08-18). `show me` is NOT here:
-#   `show` acts on a THING and stays an action. Closed, two entries, each one ruled.
-WRAPPERS = ("tell me", "let me know")
+from ..codex import WRAPPERS
 
-# ⇒ COURTESY — an adjunct that defers, marks nothing, grants nothing
-#   ([[gorgon-courtesy-escalates-intent]] is what happens when a reader treats it as
-#   content). Promoted from pass 1's inline literals 2026-08-19 so the front door and
-#   the consumption list read ONE copy.
-COURTESY = ("when you get a chance", "if you get a chance")
+from ..codex import COURTESY
 
-# ⇒⇒ THE RECIPIENT. *"show ME the vms"* — and **nothing in this lab can be handed to a person
-#   except information.** A vm cannot be given to the operator; a list of vms can. That is what
-#   makes a first-person indirect object an interrogative signal in this domain, where in
-#   general English it is not.
-#   ⇒ ⚠ AND IT COSTS ONE READING, KEYED AS SUCH: *"make me a vm"* is a BENEFACTIVE — build it
-#     FOR me — and this rule cannot tell that from a recipient. It fails toward asking.
-RECIPIENT = frozenset({"me", "us"})
+from ..codex import RECIPIENT
 
-# ⇒ THE DEONTIC MODALS — obligation and permission. Every one is already a member of
-#   `AUXILIARIES`; naming them again here is not a second list but a SUBSET of one, because
-#   what separates *"must keep a snapshot"* from *"is keeping a snapshot"* is which auxiliary
-#   it is. Closed, and closed in the strong sense: English gains no new modal.
-DEONTIC = frozenset({"must", "should", "shall", "may", "ought"})
+from ..codex import DEONTIC
 
-# ⇒ AND THE FREQUENCY ADVERBS. **A rule quantifies over TIME** — that is what makes *"never
-#   delete a vm"* a standing rule and *"don't delete the vms"* an instruction about now. Two
-#   words, closed, and the distinction they draw is the whole of the declaration reading.
-FREQUENCY = frozenset({"never", "always"})
+from ..codex import ALWAYS_NEVER as FREQUENCY
 
-# ⇒ LEADING PARTICLES that carry no proposition. Stripped before the clause is read, because
-#   `please stop every vm` is `stop every vm` and nothing else.
-OPENERS = frozenset({"please", "kindly", "just", "now", "then", "also",
-                     "and", "but", "so", "ok", "okay", "well", "yeah"})
+from ..codex import OPENERS
 
-# ⇒ ANAPHORA — a pronoun REFERS to what an earlier clause named, and a clause is read on its
-#   own. Without this `ping every vm and stop THE ONES that do not answer` reads its second
-#   clause as naming nothing, i.e. as talk about the conversation rather than an instruction.
-#   Pronouns and demonstratives are closed classes; this is the same licence as everything else
-#   in this file.
-#   ⇒ ⚠ **`that` AND `this` ARE NOT IN IT, AND THAT IS A MEASURED EXCLUSION.** They are
-#     demonstratives that just as often stand in SUBJECT position — *"thanks, THAT worked"* —
-#     and counting them as a named object read a pleasantry as an order to act. A false serve
-#     produced by a pronoun list that was one entry too generous.
-ANAPHORA = frozenset({"it", "them", "they", "those", "these", "one", "ones"})
+from ..codex import ANAPHORA
 
-# ⇒ THE RELATIVIZERS. They open a SUBORDINATE clause, so a copula behind one is not the
-#   sentence's own predication — *"launch every vm THAT IS currently stopped"* is an order, and
-#   without this test the copula rule below would call it a piece of teaching.
-RELATIVIZERS = frozenset({"that", "which", "who", "whom", "whose", "where", "when"})
+from ..codex import RELATIVIZERS
 
-# ⇒⇒ THE FUNCTION WORDS, WHICH ARE THE WHOLE TEST FOR *"IS THIS AN IMPERATIVE"*.
-#
-#   An English imperative has NO SUBJECT — it opens on its verb. So the test is not *"is this
-#   word a verb"*, which would need an open-class lexicon nobody can finish; it is **is this
-#   word a function word**, and the complement is what an imperative can start with. Every set
-#   below is closed, and the determiners are imported rather than re-listed.
-#
-#   ⇒ **AND THE ALTERNATIVE WAS TRIED AND REJECTED IN THE SAME HOUR.** `scan._operation_words`
-#     looks like the verb list this wants — it holds `put`, `ping`, `take`, `make` — and it
-#     also holds `from`, `to`, `as`, `label`, `vms`. Reading `FROM now on every new vm gets the
-#     'fleet' label` as an imperative would turn a standing RULE into an order to act now: a
-#     false serve, produced by a list that was never meant to answer this question.
-PREPOSITIONS = frozenset({"of", "on", "in", "at", "to", "from", "with", "without", "by",
-                          "for", "into", "onto", "over", "under", "about", "after",
-                          "before", "between", "through", "per", "as", "than", "since",
-                          "until", "upon", "off", "out", "up", "down", "along", "across"})
-CONJUNCTIONS = frozenset({"and", "or", "but", "if", "unless", "while", "because",
-                          "although", "though", "except", "nor", "yet", "whether"})
-PRONOUNS = frozenset({"i", "we", "you", "he", "she", "it", "they", "them", "him", "her",
-                      "us", "me", "my", "our", "your", "his", "its", "their", "there",
-                      "this", "that", "these", "those", "one", "ones", "something",
-                      "anything", "nothing", "everything", "someone", "anyone"})
+from ..codex import PREPOSITIONS
+from ..codex import CONJUNCTIONS
+from ..codex import PRONOUNS
 
-# ⇒ THE NEGATORS an imperative can carry. `don't` expands to these two before anything reads
-#   position, so a negative imperative is not mistaken for an inversion.
-NEGATORS = frozenset({"not", "never", "no"})
+from ..codex import NEGATORS
 
-# ⇒ AUXILIARY CONTRACTIONS, expanded so POSITION can be read. `don't start` is `do not start`
-#   — an imperative — and without expansion its first token is neither an auxiliary nor a verb.
-#   Contractions of function words are as closed as the function words themselves.
-# ⇒⇒ **THE APOSTROPHE-LESS FORM IS THE ONE PEOPLE ACTUALLY TYPE, AND HALF OF THEM WERE
-#   MISSING.** `dont` and `cant` were here; `isnt`, `doesnt`, `arent` were not — so *"kaya isnt
-#   a vm"* kept `isnt` as one unknown token, the clause looked like a verb-initial imperative,
-#   and a DENIAL read as **directive-act**. A false serve produced by a table that was
-#   inconsistent rather than wrong.
-#   ⇒ Contractions of function words are as closed as the function words themselves, so the
-#     completion is a lookup and not a vocabulary.
-CONTRACTIONS = {
-    "don't": ("do", "not"), "dont": ("do", "not"),
-    "doesn't": ("does", "not"), "doesnt": ("does", "not"),
-    "didn't": ("did", "not"), "didnt": ("did", "not"),
-    "can't": ("can", "not"), "cant": ("can", "not"),
-    "won't": ("will", "not"), "wont": ("will", "not"),
-    "wouldn't": ("would", "not"), "wouldnt": ("would", "not"),
-    "shouldn't": ("should", "not"), "shouldnt": ("should", "not"),
-    "couldn't": ("could", "not"), "couldnt": ("could", "not"),
-    "isn't": ("is", "not"), "isnt": ("is", "not"),
-    "aren't": ("are", "not"), "arent": ("are", "not"),
-    "wasn't": ("was", "not"), "wasnt": ("was", "not"),
-    "weren't": ("were", "not"), "werent": ("were", "not"),
-    "haven't": ("have", "not"), "havent": ("have", "not"),
-    "hasn't": ("has", "not"), "hasnt": ("has", "not"),
-    "hadn't": ("had", "not"), "hadnt": ("had", "not"),
-    "what's": ("what", "is"), "who's": ("who", "is"), "where's": ("where", "is"),
-    "how's": ("how", "is"), "that's": ("that", "is"), "it's": ("it", "is"),
-    "i'd": ("i", "would"), "i'll": ("i", "will"), "i'm": ("i", "am"), "i've": ("i", "have"),
-    "we'd": ("we", "would"), "we'll": ("we", "will"), "we've": ("we", "have"),
-    "you'd": ("you", "would"), "you'll": ("you", "will"), "you've": ("you", "have"),
-    "let's": ("let", "us"),
-}
+from ..codex import CONTRACTIONS
 
 
 def words_of(clause: str) -> List[str]:
@@ -627,15 +496,7 @@ def act_of(clause: str, board: Optional[Board] = None, world=None) -> Optional[s
 # ── WHAT SHAPE OF ANSWER THE QUESTION ASKED FOR ──────────────────────────────────────
 COUNT, MEMBERS, MEANING = "count", "members", "meaning"
 
-# ⇒ THE WH-WORD NAMES THE ANSWER, and this is the second job the closed class does. `which`
-#   asks for the members; `how many` asks for a number. Same nine words, read for a different
-#   question — no new vocabulary, and no way for the two readings to drift apart.
-#   ⇒ ⚠ **`where` IS NOT ONE OF THEM, AND THAT IS A CORRECTION.** It was listed here and
-#     *"where is alpha"* routed to a select or a meaning lookup — neither of which is a
-#     LOCATION. It joins `when` and `why` in the honest branch below: three wh-words whose
-#     answers are a place, a time and a reason, and this system can produce none of the three.
-#     Saying so is better than answering a different question confidently.
-_MEMBER_WORDS = frozenset({"which", "what", "who", "whom", "whose"})
+from ..codex import MEMBER_WORDS as _MEMBER_WORDS
 
 
 def answer_shape(clause: str, board: Optional[Board] = None, world=None) -> Optional[str]:
@@ -684,9 +545,7 @@ def answer_shape(clause: str, board: Optional[Board] = None, world=None) -> Opti
     return COUNT                           # polar: has this select any members, yes or no
 
 
-# ⇒ THE PERSONAL PRONOUNS THAT CAN BE A CLAUSE'S SUBJECT. Closed, and the whole of the
-#   subordinate-wh test below.
-SUBJECT_PRONOUNS = frozenset({"i", "you", "we", "he", "she", "it", "they"})
+from ..codex import SUBJECT_PRONOUNS
 
 
 def _subordinate_wh(words: Sequence[str], clause: str) -> bool:
@@ -762,17 +621,7 @@ def _is_function_word(word: str) -> bool:
             or word in UNIVERSAL or word in NOVEL or word.isdigit())
 
 
-# ⇒⇒ **THE SUBORDINATING CONJUNCTIONS — A SUBSET OF A CLASS THIS FILE ALREADY DECLARES**, and
-#   not a new list. `CONJUNCTIONS` holds both kinds; these are the ones that open a clause
-#   BENEATH another, and the coordinating members — `and`, `or`, `but`, `nor`, `yet` — are
-#   deliberately absent, because a clause joined by one of those IS a main clause.
-#   ⇒ The same move `DEONTIC` makes on `AUXILIARIES`: a subset, named where it is used.
-#   ⇒ `since`, `until`, `after` and `before` are in `PREPOSITIONS` and do this job too when a
-#     SUBJECT follows them; they are included here for the copula test only, where a bare
-#     preposition reading cannot arise.
-SUBORDINATING = frozenset({"if", "unless", "while", "because", "although", "though",
-                           "whether", "since", "until", "after", "before", "once",
-                           "whenever"}) | RELATIVIZERS
+from ..codex import SUBORDINATING
 
 
 def _universal_before_the_verb(words: Sequence[str], board: Optional[Board] = None) -> bool:

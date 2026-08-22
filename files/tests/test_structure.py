@@ -22,7 +22,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator.seam import pass1, speech_act as SA
+from orchestrator.languages.english.seam import pass1, speech_act as SA
 from planner.formula.legal import Board
 
 _PASS = _FAIL = 0
@@ -110,7 +110,7 @@ def test_a_negation_selects_the_complement():
       holds one value. Saying nothing leaves gate 2 to ask; saying `stopped` when there are
       four states would be confidently wrong.
     """
-    from orchestrator.seam.scan import conditions_from
+    from orchestrator.languages.english.seam.scan import conditions_from
     board = Board()
     got = conditions_from("that is not running", "vm", board)
     check(f"`not running` is the complement — {got}", got.get("status") == "stopped")
@@ -148,8 +148,8 @@ def test_a_disjunction_is_a_choice_nobody_made():
       which is `unexpressed-exclusion`'s own shape one word over: the sentence says something
       the program does not express.
     """
-    from orchestrator.seam import linguistics as L
-    from orchestrator.seam.effects import Operation
+    from orchestrator.languages.english.seam import linguistics as L
+    from orchestrator.languages.english.seam.effects import Operation
     board = Board()
     ops = [Operation("stop_vm", "beta", None), Operation("stop_vm", "beta", None)]
     got = L.findings("stop alpha or beta", [], ops, [], board=board)
@@ -177,7 +177,7 @@ def test_a_quoted_clause_is_evidence_not_a_value():
       two or more is a quotation. No vocabulary, and it matches the corpus exactly — every
       quoted span in the fourteen rungs is a single word.
     """
-    from orchestrator.seam.scan import quoted_clauses
+    from orchestrator.languages.english.seam.scan import quoted_clauses
     check("a multi-word quote is evidence",
           quoted_clauses("the error says 'cannot allocate memory'")
           == ("cannot allocate memory",))
@@ -212,7 +212,7 @@ def test_a_magnitude_comparison_is_read_and_named():
     ⇒ The comparator class is new and closed; the ATTRIBUTE is the manifest's own, through
       `aliases`. A comparison whose attribute is undeclared is not raised at all.
     """
-    from orchestrator.seam.scan import magnitudes_in
+    from orchestrator.languages.english.seam.scan import magnitudes_in
     board = Board()
     check("`over 6gb of ram` resolves to memory_mb",
           magnitudes_in("stop every vm with over 6gb of ram", board)
@@ -242,8 +242,8 @@ def test_an_attribute_word_is_not_a_thing():
     ⇒ **THE SAME TWO GUARDS AS EVERY OTHER `consume_`:** kindless rows only, and THE LAB STILL
       WINS — a machine really called `ram` is a machine.
     """
-    from orchestrator.seam.scan import attribute_words
-    from orchestrator.seam import schema as S
+    from orchestrator.languages.english.seam.scan import attribute_words
+    from orchestrator.languages.english.seam import schema as S
     board = Board()
     words = attribute_words(board)
     for w in ("ram", "memory", "cores", "cpu", "tag", "os", "label", "status"):
@@ -284,7 +284,7 @@ def test_the_archive_can_teach_an_attribute():
     ⇒ **AND IT ROUTES ONLY WHEN SIGNED**, which is the archive's whole safety property: a
       proposal DESCRIBES and never PERMITS.
     """
-    from orchestrator.seam.archive import Archive, Entry, RATIFIED, TOLD
+    from orchestrator.languages.english.seam.archive import Archive, Entry, RATIFIED, TOLD
     a = Archive(None)
     a._rows.append(Entry(word="vram", attribute="memory_mb", status=RATIFIED, source=TOLD))
     check("a ratified entry resolves to an attribute", a.attribute_of("vram") == "memory_mb")
@@ -310,7 +310,7 @@ def test_the_iso_annotation():
       *"if alpha is stopped, launch it"* is ONE Instruct held conditionally. The first cut
       emitted TWO, because `speech_act` reads the condition clause as directive-act.
     """
-    from orchestrator.seam import iso
+    from orchestrator.languages.english.seam import iso
     got = iso.annotate("if alpha is stopped, launch it")
     check(f"a conditional is ONE act — {[str(a) for a in got]}", len(got) == 1)
     check("held conditionally", got[0].qualifiers.get("conditionality") == "conditional")
@@ -349,7 +349,7 @@ def test_the_operator_taking_something_back():
     ⇒ And the grid's third cell was already built: **every gate-2 ASK is an other-initiated
       repair initiation.** Naming it that way is what showed the rest.
     """
-    from orchestrator.seam import iso, self_repair as SR
+    from orchestrator.languages.english.seam import iso, self_repair as SR
 
     got = SR.read("stop alpha — sorry, i meant beta")
     check(f"a correction is read — {got!r}", got and got.kind == SR.REPAIRED)
@@ -397,7 +397,7 @@ def test_self_correction_is_a_fragment_not_a_marker():
       precision against the gold. A detector wrong three times in four is worse than the zero
       it replaces.
     """
-    from orchestrator.seam import self_repair as SR
+    from orchestrator.languages.english.seam import self_repair as SR
 
     for text, kept in (("go— go south from the mine", "go south from the mine"),
                        ("stop the— stop the vms on lab", "stop the vms on lab"),
@@ -433,7 +433,7 @@ def test_a_numeral_is_a_value_unless_it_was_spent_as_a_count():
       the demotion fires only where the digit is followed by a DECLARED ATTRIBUTE, which is a
       manifest lookup and not a word list.
     """
-    from orchestrator.seam.scan import _tokens, conditions_from, scan
+    from orchestrator.languages.english.seam.scan import _tokens, conditions_from, scan
     board = Board()
 
     check("a clock time is ONE token",
@@ -452,12 +452,12 @@ def test_a_numeral_is_a_value_unless_it_was_spent_as_a_count():
           named.identity == "network 1" and "1" not in named.modifiers)
     # ⇒ superseded 08-20: the CLOCK READER owns the phrase now — it is read as a
     #   trigger with offsets, never residue in the modifiers (certified qual-0005)
-    from orchestrator.seam.temporal import clock_tail
+    from orchestrator.languages.english.seam.temporal import clock_tail
     check("the clock phrase belongs to the trigger reader, not the modifiers",
           clock_tail("snapshot the vm at 24:30") == "at 24:30"
           and scan("vm", "snapshot the vm at 24:30", board).span == "the vm")
 
-    from orchestrator.seam import pass1 as P, residue as R
+    from orchestrator.languages.english.seam import pass1 as P, residue as R
     rows = P.run_scanned("make sure at least 2 vms carry the 'edge' label", board=board)
     check("a numeral spent on `count` is never unread residue",
           all("2" not in R.unread(r, "make sure at least 2 vms carry the 'edge' label",
@@ -485,7 +485,7 @@ def test_a_declared_noun_may_be_more_than_one_word():
       anchor's own tokens out of the modifiers and deleted the very word the naming cue points
       at — `scan("alpha", "create a vm named alpha")` came back `named`. Five checks caught it.
     """
-    from orchestrator.seam.scan import anchors_in, scan
+    from orchestrator.languages.english.seam.scan import anchors_in, scan
     board = Board()
 
     check("a two-word declared noun is found at all",
@@ -534,7 +534,7 @@ def test_a_quoted_run_is_one_value_and_its_words_are_not_cues():
       a quote no cue governs. A quote a cue DOES govern is that cue's value at any length,
       because the slot decides, never the length and never the meaning.
     """
-    from orchestrator.seam.scan import conditions_from, quoted_clauses
+    from orchestrator.languages.english.seam.scan import conditions_from, quoted_clauses
     board = Board()
 
     check("a quoted name is taken whole",
@@ -597,7 +597,7 @@ def test_an_unquoted_multi_word_name_is_a_KNOWN_LIMIT_and_the_naive_fix_is_forbi
       because both arms currently produce the same single word — anything that widens rule 0
       must fix this first.
     """
-    from orchestrator.seam import pass1 as P
+    from orchestrator.languages.english.seam import pass1 as P
     board = Board()
 
     def where(text):
@@ -640,8 +640,8 @@ def test_a_clause_takes_its_kind_from_the_clause_that_named_it():
     ⇒ **A STATED NOUN ALWAYS WINS.** The hint only fills a hole, or a caller could rename a
       thing the operator named.
     """
-    from orchestrator.seam import pass1 as P
-    from orchestrator.seam.scan import clause_around, scan
+    from orchestrator.languages.english.seam import pass1 as P
+    from orchestrator.languages.english.seam.scan import clause_around, scan
     board = Board()
 
     def rows(text):
@@ -711,8 +711,8 @@ def test_a_folded_reference_carries_what_its_clause_SAYS():
     import engines.channel as CH
     _was = CH.constrained
     CH.constrained = lambda *a, **k: None
-    from orchestrator.seam import pass1 as P
-    from orchestrator.seam.scan import conditions_from
+    from orchestrator.languages.english.seam import pass1 as P
+    from orchestrator.languages.english.seam.scan import conditions_from
     board = Board()
 
     def rows(text):
@@ -759,7 +759,7 @@ def test_the_repair_is_applied_before_anything_is_scanned():
     was = CH.constrained
     CH.constrained = lambda *a, **k: None
     try:
-        from orchestrator.seam import pass1 as P
+        from orchestrator.languages.english.seam import pass1 as P
         board = Board()
 
         def names(text):
@@ -793,7 +793,7 @@ def test_a_questions_skin_is_not_part_of_the_thing():
     predicate from the right. Inversion and wh-fronting are grammar (the scatter the answer
     re-gathers), and both marks are closed classes: AUXILIARIES and WH_WORDS.
     """
-    from orchestrator.seam.scan import scan
+    from orchestrator.languages.english.seam.scan import scan
     board = Board()
     check("the fronted auxiliary is excluded",
           scan("alpha", "is alpha running?", board).span == "alpha")
@@ -830,7 +830,7 @@ def test_the_carve_out_reaches_every_consumer():
     was = CH.constrained
     CH.constrained = lambda *a, **k: None
     try:
-        from orchestrator.seam import pass1 as P
+        from orchestrator.languages.english.seam import pass1 as P
         board = Board()
 
         def excl(text):

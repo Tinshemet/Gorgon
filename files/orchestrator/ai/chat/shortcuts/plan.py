@@ -235,8 +235,8 @@ class Plan(Shortcut):
           reading, the declarations, the steps and the verdict are four separate lines.
         """
         from planner.formula.legal import Board
-        from orchestrator.seam import speech_act as _speech
-        from orchestrator.seam.pipeline import run as _seam_run
+        from orchestrator.languages.english.seam import speech_act as _speech
+        from orchestrator.languages.english.seam.pipeline import run as _seam_run
 
         world = self._seam_world()
         console.print(f"\n[bold]the two-pass seam[/bold]"
@@ -367,7 +367,7 @@ class Plan(Shortcut):
           all lookups. And it READS AND SHOWS — nothing routes on an annotation, and nothing
           will until the open list is done, which is the operator's standing gate.
         """
-        from orchestrator.seam.iso import QUALIFIERS, annotate
+        from orchestrator.languages.english.seam.iso import QUALIFIERS, annotate
 
         world = self._seam_world()
         console.print(f"\n[bold]ISO 24617-2[/bold]"

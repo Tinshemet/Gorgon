@@ -24,7 +24,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from planner.formula.legal import Board
-from orchestrator.seam import schema as S
+from orchestrator.languages.english.seam import schema as S
 
 _PASS = _FAIL = 0
 
@@ -332,7 +332,7 @@ def test_no_question_quotes_a_request_it_will_be_asked_about():
 def test_gate_1_asks_about_what_the_request_never_said():
     print("\n[gate 1] every NAME and every VALUE must trace to the request; the attribute "
           "came from a closed enum and could not have been invented")
-    from orchestrator.seam import gates12 as G
+    from orchestrator.languages.english.seam import gates12 as G
     board = Board()
     r = "ping every vm and stop the ones that do not answer"
 
@@ -353,7 +353,7 @@ def test_gate_1_asks_about_what_the_request_never_said():
     #   a QUESTION for the operator. A residual is not that — the operator already said those
     #   words — so it is an INSTRUCTION to the model to read again. Asserting every finding
     #   ends in a question mark conflated the two.
-    from orchestrator.seam import gates12 as _G
+    from orchestrator.languages.english.seam import gates12 as _G
     asks = [f for f in found if f not in _G.bounces(found)]
     check("what the operator must settle is phrased as a question",
           asks and all("?" in f.says or "did you" in f.says for f in asks))
@@ -363,7 +363,7 @@ def test_gate_1_asks_about_what_the_request_never_said():
 
 def test_gate_2_asks_what_the_world_cannot_hold():
     print("\n[gate 2] legality against the manifest — no lab required")
-    from orchestrator.seam import gates12 as G
+    from orchestrator.languages.english.seam import gates12 as G
     board = Board()
 
     check("a legal declaration passes",
@@ -389,7 +389,7 @@ def test_gate_2_asks_what_the_world_cannot_hold():
 
 def test_neither_gate_repairs_anything():
     print("\n[gates] they ask; they never decide for the operator")
-    from orchestrator.seam import gates12 as G
+    from orchestrator.languages.english.seam import gates12 as G
     board = Board()
     rows = [S.declare_from("quarantine", "vm_set", {"status": "powered on"}, S.NEW, board)]
     before = [(r.name, dict(r.where), r.existence) for r in rows]
@@ -409,7 +409,7 @@ def test_neither_gate_repairs_anything():
 def test_the_code_reads_the_phrase_the_model_only_points_at():
     print("\n[scan] the model points at an anchor; the enumerator, comparator, kind and "
           "modifiers are READ off the request")
-    from orchestrator.seam.scan import scan
+    from orchestrator.languages.english.seam.scan import scan
     board = Board()
 
     got = scan("alpha", "create a vm named alpha", board)
@@ -452,7 +452,7 @@ def test_the_code_reads_the_phrase_the_model_only_points_at():
 
     # ⇒ EVERY OCCURRENCE, AND THE FIRST ONE DECLARES. `scan` alone saw only the first, so a
     #   reference was invisible — the operator's ordering rule applied to spans.
-    from orchestrator.seam.scan import scan_all
+    from orchestrator.languages.english.seam.scan import scan_all
     both = scan_all("web", "create a network called lab and a vm named web, "
                            "then put web on lab", board)
     check(f"a name mentioned twice is scanned twice (got {len(both)})", len(both) == 2)
@@ -475,7 +475,7 @@ def test_the_code_reads_the_phrase_the_model_only_points_at():
 
 def test_a_possessive_is_not_a_plural():
     print("\n[set-ness] 'ones' is a set; \"one's\" is one that is — the apostrophe decides")
-    from orchestrator.seam.pass1 import _is_group, _plural, _possessive
+    from orchestrator.languages.english.seam.pass1 import _is_group, _plural, _possessive
 
     class Span:
         def __init__(self, span, count=None):
@@ -496,7 +496,7 @@ def test_a_possessive_is_not_a_plural():
 def test_gate_1_bounces_a_residual_back_to_the_model():
     print("\n[bounce] an object may stand alone; a descriptor may not. What no declaration "
           "claims is a clause nobody read — and it goes back to the AI, not to the operator")
-    from orchestrator.seam import gates12 as G
+    from orchestrator.languages.english.seam import gates12 as G
     board = Board()
 
     def rows(*specs):
@@ -534,7 +534,7 @@ def test_gate_1_bounces_a_residual_back_to_the_model():
 
 def test_a_numeral_before_a_noun_counts_and_after_one_names():
     print("\n[identity] '3 vms' is three machines; 'network 1' is one network called that")
-    from orchestrator.seam.scan import scan, scan_all
+    from orchestrator.languages.english.seam.scan import scan, scan_all
     board = Board()
 
     named = scan("network", "get me box and put it in network 1", board)
@@ -580,7 +580,7 @@ def _no_model():
 def test_a_meaningless_word_is_not_laundered_into_an_object():
     print("\n[junk] the taxonomy had two slots — a thing nobody named, a clause nobody read — "
           "and a meaningless word is a THIRD. It was being forced into the first")
-    from orchestrator.seam import gates12 as G, pass1 as P
+    from orchestrator.languages.english.seam import gates12 as G, pass1 as P
     board = Board()
     channel, was = _no_model()
     try:
@@ -637,7 +637,7 @@ def test_a_meaningless_word_is_not_laundered_into_an_object():
 
 def test_the_contextual_kind_demands_the_evidence_it_was_written_for():
     print("\n[junk] `_has_pronoun` is not `_is_bare_pronoun`, and the difference is rung 11")
-    from orchestrator.seam import pass1 as P
+    from orchestrator.languages.english.seam import pass1 as P
 
     check("a restricted pro-form still REFERS", P._has_pronoun("the ones that do not answer"))
     check("even though it is not a BARE pronoun",
@@ -655,7 +655,7 @@ def test_the_contextual_kind_demands_the_evidence_it_was_written_for():
 def test_the_slot_decides_whether_a_word_is_junk_not_its_meaning():
     print("\n[residue] the operator: 'a grubnash isn't a descriptor that correlates to "
           "anything, at best, a name or label' — so the SLOT decides, never the meaning")
-    from orchestrator.seam import pass1 as P, residue as R
+    from orchestrator.languages.english.seam import pass1 as P, residue as R
     board = Board()
     channel, was = _no_model()
     try:
@@ -705,7 +705,7 @@ def test_the_slot_decides_whether_a_word_is_junk_not_its_meaning():
 def test_a_span_residue_bounces_but_junk_asks():
     print("\n[residue] two audiences, and the request decides which: a word the request BINDS "
           "is the model's miss; a word nothing can hold is the operator's call")
-    from orchestrator.seam import gates12 as G, pass1 as P, residue as R
+    from orchestrator.languages.english.seam import gates12 as G, pass1 as P, residue as R
     board = Board()
     channel, was = _no_model()
     try:
@@ -736,7 +736,7 @@ def test_a_span_residue_bounces_but_junk_asks():
 def test_every_declared_boundary_can_actually_be_emitted():
     print("\n[boundary] a rule that CANNOT FIRE is worse than a missing one — it reads as "
           "handled. `—` was a declared clause boundary the tokenizer could never produce")
-    from orchestrator.seam import scan as SC
+    from orchestrator.languages.english.seam import scan as SC
     board = Board()
 
     # ⇒ THE MECHANISM, NOT JUST THE OUTCOME. Every punctuation boundary must be reachable by
@@ -768,8 +768,8 @@ def test_every_declared_boundary_can_actually_be_emitted():
 def test_the_world_settles_a_kindless_row_and_that_is_what_closes_rung_8():
     print("\n[settle] gate 2 asks what 'db' is and must not answer itself. The LAB answers, "
           "and both the kind and the key value come back from the one query")
-    from orchestrator.seam import gates12 as G, pass1 as P
-    from orchestrator.seam.effects import Operation, conditions_after, flatten
+    from orchestrator.languages.english.seam import gates12 as G, pass1 as P
+    from orchestrator.languages.english.seam.effects import Operation, conditions_after, flatten
     from tests.bench.twopass.metrics import Lab
     board = Board()
     channel, was = _no_model()
@@ -830,7 +830,7 @@ class _WideLab:
 def test_settling_is_general_across_kinds_and_key_names():
     print("\n[settle] the operator: 'make it a general fix not a rung specific'. Four kinds, "
           "three different key names, and none of them in the corpus")
-    from orchestrator.seam import pass1 as P
+    from orchestrator.languages.english.seam import pass1 as P
     board = Board()
     channel, was = _no_model()
     try:
@@ -860,7 +860,7 @@ def test_settling_is_general_across_kinds_and_key_names():
 def test_pass_2_addresses_a_declaration_by_a_derived_handle():
     print("\n[pass2] the model was measured pointing at `fleet` and `unresponsive`. Pass 1 "
           "names a row by its SPAN, and a 34-character enum member is not what was measured")
-    from orchestrator.seam import pass1 as P, pass2 as P2
+    from orchestrator.languages.english.seam import pass1 as P, pass2 as P2
     from tests.bench.twopass.metrics import Lab
     board = Board()
     channel, was = _no_model()
@@ -892,7 +892,7 @@ def test_pass_2_addresses_a_declaration_by_a_derived_handle():
 def test_the_operator_enum_order_is_pinned_because_it_moved_the_answer():
     print("\n[pass2] moving ONE entry of this enum doubled exact matches and removed every "
           "spurious step — so the order is a hidden parameter and is pinned by value")
-    from orchestrator.seam import pass2 as P2
+    from orchestrator.languages.english.seam import pass2 as P2
     ops = P2.operators_offered(Board())
 
     # ⇒ MEASURED, n=3, four orderings with an isolation cell: `add_label` at index 0 or 1
@@ -923,8 +923,8 @@ class _NamedLab:
 def test_gate_3_computes_the_refusal_the_model_will_not_give():
     print("\n[gate3] three attempts to ASK for a refusal have measured 0, 4/8 and 2/8 — the "
           "third, removing `minItems: 1`, was byte-identical at 0/3. So it is DERIVED instead")
-    from orchestrator.seam import gate3 as G3, gates12 as G, pass1 as P, pass2 as P2
-    from orchestrator.seam.effects import Operation
+    from orchestrator.languages.english.seam import gate3 as G3, gates12 as G, pass1 as P, pass2 as P2
+    from orchestrator.languages.english.seam.effects import Operation
     from tests.bench.twopass.metrics import Lab
     board = Board()
     channel, was = _no_model()
@@ -1043,7 +1043,7 @@ def _canned(steps):
 def test_the_whole_chain_runs_and_every_stage_is_reached():
     print("\n[chain] six pieces were built over two days and every one ran in a bench of its "
           "own — `operations_for` had exactly ONE caller, its own main()")
-    from orchestrator.seam import pipeline as PL
+    from orchestrator.languages.english.seam import pipeline as PL
     from tests.bench.twopass.metrics import Lab
     board = Board()
     channel, was = _canned([("probe_alive", "vms", None), ("stop_vm", "not_alive_vms", None)])
@@ -1068,7 +1068,7 @@ def test_the_whole_chain_runs_and_every_stage_is_reached():
 def test_a_refusal_is_only_a_refusal_when_nobody_could_answer_it():
     print("\n[chain] rung 9 has every operation illegal under BOTH conditions, for two "
           "different reasons — and only one of them is a refusal")
-    from orchestrator.seam import pipeline as PL
+    from orchestrator.languages.english.seam import pipeline as PL
     from tests.bench.twopass.metrics import Lab
     board = Board()
     mesh = [("add_label", "n1", "n2"), ("add_label", "n2", "n1"),
@@ -1146,7 +1146,7 @@ def test_labelling_a_machine_with_a_machine_is_illegal():
     asserting the current BOUNCE would pin a defect as correct — which is exactly the false
     green the suite spent a day removing.
     """
-    from orchestrator.seam import pipeline as PL
+    from orchestrator.languages.english.seam import pipeline as PL
     board = Board()
     channel, was = _canned([("add_label", "n1", "n2")])
     try:
@@ -1178,7 +1178,7 @@ def test_a_step_no_clause_warrants_never_runs():
     — only a bench probe touched `.suggested`, and a bench probe is not a guarantee.
     """
     print("\n[split] an unwarranted step is demoted, and a destructive one never is")
-    from orchestrator.seam import pipeline as PL
+    from orchestrator.languages.english.seam import pipeline as PL
     from tests.bench.twopass.metrics import Lab
     board = Board()
 
@@ -1223,7 +1223,7 @@ def test_a_step_no_clause_warrants_never_runs():
 def test_a_destructive_operation_over_a_whole_set_asks_first():
     print("\n[chain] rung 14 SERVED `delete_vm` over every machine in the lab, and every "
           "check passed — nothing about it is ILLEGAL, which is exactly the problem")
-    from orchestrator.seam import pipeline as PL
+    from orchestrator.languages.english.seam import pipeline as PL
     from tests.bench.twopass.metrics import Lab
     board = Board()
     channel, was = _canned([("delete_vm", "vms", None), ("probe_exists", "vms", None)])
@@ -1295,7 +1295,7 @@ def _canned_sequence(*answers):
 def test_the_retry_hands_the_model_its_own_miss():
     print("\n[retry] a BOUNCE means the model's own miss, so the model gets another go — "
           "given the rejected steps as EVIDENCE, never as instruction about how to behave")
-    from orchestrator.seam import pipeline as PL
+    from orchestrator.languages.english.seam import pipeline as PL
     from tests.bench.twopass.metrics import Lab
     board = Board()
 
@@ -1348,7 +1348,7 @@ def test_the_retry_hands_the_model_its_own_miss():
 def test_a_first_time_success_never_sees_the_retry():
     print("\n[retry] the base question is byte-identical on the first attempt, so the retry "
           "cannot regress what already worked — by construction, not by measurement")
-    from orchestrator.seam import pipeline as PL
+    from orchestrator.languages.english.seam import pipeline as PL
     from tests.bench.twopass.metrics import Lab
     board = Board()
     ok = [("probe_alive", "vms", None), ("stop_vm", "not_alive_vms", None)]
@@ -1365,7 +1365,7 @@ def test_a_first_time_success_never_sees_the_retry():
 def test_a_value_phrase_is_not_an_object():
     print("\n[objects] \"give them all the 'fleet' label\" was declared as a THING, so pass 2 "
           "got a handle called `fleet` and `add_label(vms, fleet)` reads as label-with-a-machine")
-    from orchestrator.seam import pass1 as P, pass2 as P2
+    from orchestrator.languages.english.seam import pass1 as P, pass2 as P2
     board = Board()
     channel, was = _no_model()
     try:
@@ -1393,7 +1393,7 @@ def test_a_value_phrase_is_not_an_object():
 def test_an_operation_can_account_for_a_word_too():
     print("\n[objects] gate 1's leftover rule predates pass 2 — it asks which words no "
           "DECLARATION claimed, and 'fleet' is claimed by add_label")
-    from orchestrator.seam import pipeline as PL
+    from orchestrator.languages.english.seam import pipeline as PL
     from tests.bench.twopass.metrics import Lab
     board = Board()
     r4 = P4 = ("create 5 vms, put them all in a network, give them all the 'fleet' label, "
@@ -1414,7 +1414,7 @@ def test_an_operation_can_account_for_a_word_too():
 def test_nothing_is_destroyed_unless_the_request_asks():
     print("\n[safety] rung 8 produced delete_network(dmz) then create_network(dmz) — "
           "destroying a network nobody mentioned — and it SERVED, because `dmz` is named")
-    from orchestrator.seam import pipeline as PL
+    from orchestrator.languages.english.seam import pipeline as PL
     from tests.bench.twopass.metrics import Lab
     board = Board()
 
@@ -1444,7 +1444,7 @@ def test_nothing_is_destroyed_unless_the_request_asks():
 def test_a_later_mention_marked_distinct_is_a_second_thing():
     print("\n[distinct] rung 6 asks for the red ones on their OWN network and the blue ones "
           "on a DIFFERENT one — and one network was declared, so both groups went onto it")
-    from orchestrator.seam import pass1 as P, pass2 as P2
+    from orchestrator.languages.english.seam import pass1 as P, pass2 as P2
     from tests.bench.twopass.metrics import Lab
     board = Board()
     channel, was = _no_model()
@@ -1495,7 +1495,7 @@ def test_every_finding_reaches_an_audience():
     """
     print("\n[audience] a finding computed where nobody can act on it is a comment, and that "
           "happened twice today before anything said so")
-    from orchestrator.seam import gate3 as G3, pipeline as P
+    from orchestrator.languages.english.seam import gate3 as G3, pipeline as P
 
     # every gate 3 rule must be answerable by the operator, or land in the retry's rejection
     # list; `_split` sends everything that is neither ANSWERABLE nor WANTS_A_STEP to `drop`,
@@ -1509,7 +1509,7 @@ def test_every_finding_reaches_an_audience():
     # and the one rule that asks for a step to be ADDED must travel in the `needed` section,
     # not the rejection list — remove-vocabulary cannot request an addition (measured on rung 8)
     src = (pathlib.Path(__file__).parent.parent
-           / "orchestrator" / "seam" / "pipeline.py").read_text()
+           / "orchestrator" / "languages" / "english" / "seam" / "pipeline.py").read_text()
     check("a rule that wants a step ADDED is routed to `needed`, not to the rejections",
           "WANTS_A_STEP" in src and "needed=needed" in src)
 
@@ -1517,8 +1517,8 @@ def test_every_finding_reaches_an_audience():
 def test_each_gate_owns_its_own_checks():
     print("\n[gates] a check in the wrong gate is a check nobody audits — three were, and one "
           "of them is why a fix for rung 6 landed in gate 3 instead of gate 2")
-    from orchestrator.seam import gate3 as G3, gate4 as G4, gates12 as G
-    from orchestrator.seam import linguistics as L
+    from orchestrator.languages.english.seam import gate3 as G3, gate4 as G4, gates12 as G
+    from orchestrator.languages.english.seam import linguistics as L
 
     owners = {"gate 1": G.GATE1_OWNS, "gate 2": G.GATE2_OWNS, "gate 3": G3.OWNS,
               "gate 4": G4.OWNS, "linguistics": L.OWNS}
@@ -1568,7 +1568,7 @@ def test_the_clause_verb_licenses_the_mutation():
       Probes are exempt: the observe arm is housekeeping, never a wrong choice.
     """
     print("\n[split] the clause verb licenses the mutation")
-    from orchestrator.seam import pass1 as P1, pass2 as P2
+    from orchestrator.languages.english.seam import pass1 as P1, pass2 as P2
     board = Board()
 
     # 1 · a `stop` clause answered with a delete: the invention itself, refused

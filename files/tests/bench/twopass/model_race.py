@@ -14,8 +14,8 @@ import json
 from typing import Dict, List, Tuple
 
 from planner.formula.legal import Board
-from orchestrator.seam.effects import Operation
-from orchestrator.seam.housekeeping import BENIGN, CANCEROUS, GOOD, RISKY, classify
+from orchestrator.languages.english.seam.effects import Operation
+from orchestrator.languages.english.seam.housekeeping import BENIGN, CANCEROUS, GOOD, RISKY, classify
 from tests.bench.twopass.token_probe import call, payload_for
 
 # the steps the request actually asks for, as (operator, target)
@@ -43,7 +43,7 @@ def main() -> None:
     board = Board()
     models = [m.strip() for m in args.models.split(",") if m.strip()]
 
-    from orchestrator.seam import pass1, pass2
+    from orchestrator.languages.english.seam import pass1, pass2
     import engines.channel as channel
 
     scores: Dict[str, Dict] = {}

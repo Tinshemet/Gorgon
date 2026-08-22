@@ -60,8 +60,8 @@ import argparse
 from typing import Dict, List, NamedTuple, Optional, Tuple
 
 from planner.formula.legal import Board
-from orchestrator.seam import pass1
-from orchestrator.seam.pipeline import run
+from orchestrator.languages.english.seam import pass1
+from orchestrator.languages.english.seam.pipeline import run
 from tests.bench.mutate import filler
 from tests.bench.twopass.metrics import Lab
 
