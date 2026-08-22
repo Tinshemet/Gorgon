@@ -1,0 +1,327 @@
+{
+ "al-0001": {
+  "hash": "e4ca075a7df69ad4",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "al-0002": {
+  "hash": "b3cde2d195373c70",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "ap-0001": {
+  "hash": "01ba15e0cbf24189",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "ap-0002": {
+  "hash": "144864610656d41f",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "au-0001": {
+  "hash": "8fe2a79e0a5ed006",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "au-0002": {
+  "hash": "80275a4753420c07",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "ca-0001": {
+  "hash": "8b7ce22a5618b873",
+  "note": "you do need to carry the evidence to stop because its a future reference",
+  "verdict": "rejected"
+ },
+ "ca-0002": {
+  "hash": "9ee7198328a8bbc2",
+  "note": "you need to carry the evidence because its an important reference, regardless if its used as part of the operator",
+  "verdict": "rejected"
+ },
+ "ca-0002-ej": {
+  "hash": "c7d94d01323c1989",
+  "note": "you need to carry the evidence because its important for the future",
+  "verdict": "rejected"
+ },
+ "cap-0001": {
+  "hash": "af774884f722f946",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "cap-0002": {
+  "hash": "b2fcbb544079d6f7",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "co-0001": {
+  "hash": "b963a6f595dcd513",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "co-0002": {
+  "hash": "3d1bbbc1da6a5245",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "fb-0001": {
+  "hash": "447d263453e88ea6",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "fb-0002": {
+  "hash": "93370d60fd2a8e92",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "id-0001": {
+  "hash": "6f8153320204ab09",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "id-0001-cs": {
+  "hash": "53e8864259309702",
+  "note": "needs to be an open discution about multi language support",
+  "verdict": "rejected"
+ },
+ "id-0002": {
+  "hash": "61dbf681bcf45b1b",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "id-0003": {
+  "hash": "b11de1442059deb8",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "id-0004": {
+  "hash": "0a8a59b6da3d25bb",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "id-0005": {
+  "hash": "f051372bf1f6004c",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "lw-0001": {
+  "hash": "62bc8c9971925292",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "lw-0002": {
+  "hash": "b138d660e561b190",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "lw-0003": {
+  "hash": "292fd2d7ae9c452c",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "mg-0001": {
+  "hash": "54cfb74e1af8a316",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "mg-0002": {
+  "hash": "f425d984b1165412",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "mg-0003": {
+  "hash": "0b1ead953b794686",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "mn-0001": {
+  "hash": "c15221d4d09ca970",
+  "note": "you should carry the span of 'one at a time' because its action control",
+  "verdict": "rejected"
+ },
+ "mn-0002": {
+  "hash": "5d7b4fb0e3410e51",
+  "note": "you should carry the span of 'all at once' as its action control",
+  "verdict": "rejected"
+ },
+ "nl-0001": {
+  "hash": "c5d9760a00b0283b",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "nl-0002": {
+  "hash": "55d4584a0d91e4d9",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "nl-0003": {
+  "hash": "efa8c372eeabb166",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "nl-0004": {
+  "hash": "0fc14a976bac88c3",
+  "note": "that 'add' does not have a patient and a destination, its supposed to be a 'put on network' request",
+  "verdict": "rejected"
+ },
+ "nq-0001": {
+  "hash": "43f87fd45d0abe06",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "nq-0002": {
+  "hash": "1414bd4ff8cd14d0",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "or-0001": {
+  "hash": "a5954f06f387c1fb",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "or-0002": {
+  "hash": "88871f6dc46c6728",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "or-0003": {
+  "hash": "6059be5591c1c7bd",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "po-0001": {
+  "hash": "5d8aac6dd6636c04",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "po-0001-ej": {
+  "hash": "21c51c8bda0182fd",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "po-0002": {
+  "hash": "5c3748415b5c7995",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "po-0003": {
+  "hash": "6c87ee27412774a8",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "po-0004": {
+  "hash": "9cc91fdba8896c39",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "pr-0001": {
+  "hash": "94cf641781b12b05",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "pr-0002": {
+  "hash": "c96cb1631f97e331",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "pw-0001": {
+  "hash": "b368cf28c83c83b2",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "pw-0002": {
+  "hash": "1dca07f6f1f27e6e",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "pw-0003": {
+  "hash": "d16ced01153ef337",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "pw-0004": {
+  "hash": "27995e1194a66b49",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "qv-0001": {
+  "hash": "993d35008c2a8e95",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "qv-0002": {
+  "hash": "f9a3a7748ec8b079",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "rr-0001": {
+  "hash": "8d6dcda5d838ee18",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "rr-0002": {
+  "hash": "ac1fa78736e66a64",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "rr-0003": {
+  "hash": "586ac5b61e6fed48",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "sa-0001": {
+  "hash": "3efe04b0a2bf46a9",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "sa-0002": {
+  "hash": "f31e101b60531e9f",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "sa-0002-cs": {
+  "hash": "321db646fa560d15",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "sch-0001": {
+  "hash": "000672b4a70f65c6",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "sch-0002": {
+  "hash": "b03f8ffa9afafe36",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "sup-0001": {
+  "hash": "9b836db180221a78",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "sup-0002": {
+  "hash": "0b35ca7f252d40ce",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "un-0001": {
+  "hash": "ac2b9cc62d95245d",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "un-0002": {
+  "hash": "525e28404bb09ec4",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "un-0003": {
+  "hash": "555dedd7a16d6d86",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "un-0004": {
+  "hash": "6ad1de18d95af297",
+  "note": "",
+  "verdict": "accepted"
+ }
+}

@@ -68,6 +68,18 @@ down, offset maps composing back to original bytes, every repair a notice.
 - **Domain-unlocked, not reading-unlocked**: attribute-value attachments arrive with
   attribute classes; file-domain readings arrive with file kinds (the media gap).
 
+## Declared gaps in the frozen sets
+
+- **FLAVOUR IS UNMARKED IN v1/v2/v2.1 (declared 2026-08-22, not repaired).** The mood
+  channel (schema v2.4) arrived after those releases were sealed, so three certified clean
+  cases carry a flavour token with no `mood` on it: `sc-0002` ("stop alpha — sorry, i meant
+  beta", deference), `sc-0004` ("label the vms test, er, staging", filler) and `cc-0001`
+  ("when you get a chance, stop the test vms", deference). Measured against the codex's own
+  closed classes, not by eye. **They were NOT retro-fitted, because a seal means a seal** —
+  amending them would re-open certified gold and is a release decision, not a fix. A reader
+  scored against v1/v2/v2.1 is therefore never billed for a mood it did miss, and never
+  credited for one it read. v3 is the first set where mood is scored.
+
 ## What v3 added
 
 «fill at freeze: 22 strata, the store-fixture mechanism, the schema rulings (manner,

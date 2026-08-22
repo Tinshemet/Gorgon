@@ -22,6 +22,8 @@ hashes, still valid), and the operator reviews only the twins.
     no-punct  lowercase, terminal punctuation gone, run-on
     voice     transcription-ish: lowercase, apostrophes and colons collapsed, small numbers
               spelled out, a leading filler
+    list-form v3.1 — "stop: alpha, beta, gamma": one act, its members as a colon list
+    shouting  v3.1 — ALL CAPS and three bangs; offsets untouched, casing is the noise
     (embedded-junk and code-switch are DEFERRED with the identifier work — ledger item 8)
 
 # ⇒ THE OFFSET MAP IS THE WHOLE TRICK. Every edit records old->new index; spans, actions and
@@ -160,15 +162,55 @@ def twin(case: dict, noise: str, trial: int = 1) -> Optional[dict]:
     rng = random.Random(int(hashlib.sha256(f"{case['id']}:{noise}:{trial}".encode())
                             .hexdigest()[:8], 16))
     sentence = case["sentence"]
-    new_sentence, mapping = _edit(sentence, _noise_edits(noise, sentence, rng))
+    if noise == "list-form":
+        # ⇒ v3.1 SURFACE class (structure_map: BULLET LIST) — "stop: alpha, beta, gamma".
+        #   Needs the GOLD, not just the text: one act, two or more objects after it. The
+        #   space after the act becomes ": " (the act's end offset stays before the colon)
+        #   and every " and " between members becomes ", ". Any other shape: no twin.
+        acts, spans = case["gold"]["actions"], case["gold"]["spans"]
+        if len(acts) != 1 or any("trigger" in a or "manner" in a for a in acts):
+            return None
+        a_end = acts[0]["end"]
+        members = sorted((sp for sp in spans if sp["start"] > a_end and sp["type"] == "object"),
+                         key=lambda sp: sp["start"])
+        tagged = any(isinstance(o, dict) for at in case["gold"]["attachments"]
+                     for o in at["objects"])
+        if len(members) < 2 or tagged or a_end >= len(sentence) or sentence[a_end] != " ":
+            return None
+        # members must be COORDINATED — nothing but ", " / " and " / ", and " between them;
+        # "give the web vm the ip 10.0.0.7" has two spans and is not a list
+        joins = [sentence[p["end"]:q["start"]] for p, q in zip(members, members[1:])]
+        if any(j not in (", ", " and ", ", and ") for j in joins) or members[0]["start"] != a_end + 1:
+            return None
+        edits = [(a_end, a_end + 1, ": ")]
+        for p, q in zip(members, members[1:]):
+            if sentence[p["end"]:q["start"]] != ", ":
+                edits.append((p["end"], q["start"], ", "))
+    else:
+        edits = _noise_edits(noise, sentence, rng)
+    new_sentence, mapping = _edit(sentence, edits)
     if noise in ("no-punct", "voice"):
         new_sentence = new_sentence.lower()
     if noise == "voice":
         new_sentence = "uh " + new_sentence
         mapping = [m + 3 for m in mapping]
+    if noise == "shouting":
+        # ⇒ v3.1 SURFACE class — ALL CAPS plus bangs. Per-character upper so no length
+        #   changes (ß -> SS would break the map); the bangs go after every offset.
+        new_sentence = "".join(c.upper() if len(c.upper()) == 1 else c
+                               for c in new_sentence) + "!!!"
     if new_sentence.strip() == sentence.strip():
         return None                            # the noise changed nothing — no twin
     gold = {"spans": [], "actions": [], "attachments": case["gold"]["attachments"]}
+    if "hint" in case["gold"]:          # v2.3: kind + gloss, no offsets — inherited verbatim
+        gold["hint"] = dict(case["gold"]["hint"])
+    if "mood" in case["gold"]:          # v2.4: a mood is a SPAN — it converts like any other
+        gold["mood"] = []
+        for m in case["gold"]["mood"]:
+            conv = _convert(m, mapping, new_sentence)
+            if conv is None:
+                return None
+            gold["mood"].append(conv)
     for s in case["gold"]["spans"]:
         got = _convert(s, mapping, new_sentence)
         if got is None:
@@ -178,16 +220,21 @@ def twin(case: dict, noise: str, trial: int = 1) -> Optional[dict]:
         got = _convert(a, mapping, new_sentence)
         if got is None:
             return None
-        if "trigger" in a:
-            trig = _convert(a["trigger"], mapping, new_sentence)
-            if trig is None:
-                return None
-            got["trigger"] = trig
+        for channel in ("trigger", "manner"):      # v2.0: manner rides like trigger
+            if channel in a:
+                conv = _convert(a[channel], mapping, new_sentence)
+                if conv is None:
+                    return None
+                got[channel] = conv
         gold["actions"].append(got)
     suffix = f"-{noise[0]}{noise[-1]}" + (f".t{trial}" if trial > 1 else "")
-    return {"id": f"{case['id']}{suffix}", "stratum": case["stratum"],
-            "noise": noise, "pair_id": case["id"], "source": "seed-expansion",
-            "sentence": new_sentence, "gold": gold}
+    out = {"id": f"{case['id']}{suffix}", "stratum": case["stratum"],
+           "noise": noise, "pair_id": case["id"], "source": "seed-expansion",
+           "sentence": new_sentence, "gold": gold}
+    for carried in ("store", "outcome"):         # v2.0 / v2.2: inherited verbatim
+        if carried in case:
+            out[carried] = case[carried]
+    return out
 
 
 def build(trial: int = 1) -> Tuple[List[dict], List[str]]:

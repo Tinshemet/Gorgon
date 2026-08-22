@@ -79,10 +79,18 @@ V3_STRATA = ("identifiers", "units", "possessive", "alternatives",
              "reduced-relative", "apposition", "cause", "concession",
              "magnitude", "manner", "learned-words", "self-address",
              "ordinals", "fallback", "pairwise", "negated-query", "schedules",
-             "superlatives", "naming-lists", "quoted-values", "audit", "capability", "preference")
+             "superlatives", "naming-lists", "quoted-values", "audit", "capability", "preference",
+             # v3.1 (operator, 08-22: "i want to cover everything") — the corpus holes the
+             # structure_map and coverage_map named and no stratum held
+             "null-turn", "indirect-orders", "tense-person", "deferred-time",
+             "conditional-branches", "partitives",
+             # v2.3 — the class the operator named: "only understandable by the fact of the
+             # previous turns" (08-22). READ is blind; RESOLVE supplies the state.
+             "turn-dependent")
 STRATA = SPEC_STRATA + EARNED_STRATA + V3_STRATA
 
-NOISE = ("terse", "typos", "no-punct", "voice", "fused", "embedded-junk", "code-switch")
+NOISE = ("terse", "typos", "no-punct", "voice", "fused", "embedded-junk", "code-switch",
+         "list-form", "shouting")        # v3.1: the structure_map's two SURFACE classes
 CLEAN = "clean"
 SOURCES = ("seed", "seed-expansion", "real-failure")
 SPAN_TYPES = ("object", "evidence")
@@ -158,8 +166,84 @@ ACTION_KINDS = ("instruct", "query", "rule", "report")
 #   primitive facts; their deeper shape belongs to the stores, not this schema.
 
 CASE_KEYS = {"id", "stratum", "noise", "pair_id", "source", "sentence", "gold"}
-OPTIONAL_KEYS = {"store"}
+OPTIONAL_KEYS = {"store", "outcome", "context"}
+
+# ── v2.2: THE OUTCOME — an empty reading is a STATEMENT, not an omission (operator, 08-22) ─
+#
+#   Until now every gold had at least a span or an act, so "the reader must produce NOTHING"
+#   was never certified — and that is the reading the courtesy hazard, the polite-order
+#   family, the commitment ("i'll do it myself") and the foreign verb all depend on. A case
+#   with NO actions must now SAY why:
+#       none    the turn is not a program — flavour, acknowledgement, unrelated, noise, a
+#               commitment by the operator, a prohibition (the spared object has no span)
+#       reject  a licensing slot holds something no closed class can express — the foreign
+#               verb (id-0001-cs: "automatic REJECT, since the verb is inexpressible")
+#   Spans are free in both: the object NP still detects (the ruling on id-0001-cs).
+#       testimony  the turn carries a FACT and no program — "a subset of evidence which are
+#               user input" (operator 08-22): "thanks, that worked" is the system's act
+#               resolved, "i'll stop alpha myself" is the user resolving it. Both are facts
+#               the issue ledger files (D3's Issues.answers()). Evidence may be UNATTACHED
+#               here and only here — declared, not omitted.
+#       context-needed  the turn is only readable against the previous one. *"an unrelated
+#               'check' is processed as if it is important, ALL are … READ is blind here"* —
+#               nothing is dropped for being vague; ROUTE decides whether a reference exists.
+OUTCOMES = ("none", "reject", "testimony", "context-needed")
 GOLD_KEYS = {"spans", "actions", "attachments"}
+OPTIONAL_GOLD_KEYS = {"hint", "mood"}
+
+# ── v2.3: THE TWO HINTS — how READ, ROUTE and RESOLVE talk (operator, 2026-08-22) ────────
+#
+#   *"READ is fed by RESOLVE … RESOLVE dictates that the next answer is a 'yes or no'
+#   question meaning a READ 'yes' is legal AND EXTRACTABLE. READ -> ROUTE -> RESOLVE is a
+#   feedback loop that interact with eachother through WHAT MESSAGES ARE LEGAL AT WHAT
+#   STATE."* Two channels, opposite directions, and the corpus declares both:
+#
+#     INBOUND   `context` — the case-level state RESOLVE supplies (waited-response · mood ·
+#               current heading). Data, exactly like `store` is data for the world; the
+#               certification ratifies it. This is NOT cross-turn resolution (still out of
+#               scope, LAST): nothing is resolved across turns, one fact is SUPPLIED.
+#     OUTBOUND  `gold.hint` — what READ WRITES for ROUTE, so that "we can investigate if it
+#               made the right call and ROUTE gets more context". PLACEMENT, ruled by the
+#               operator: *"AFTER chunking, BEFORE it makes a decision about what it is
+#               looking at"* — the clause split has run, nothing has been typed yet. The
+#               hint records what a piece COULD be before the reading commits to what it IS,
+#               which is what makes a wrong commitment auditable instead of invisible. The
+#               same lesson gate 1 paid for in the other direction: WHERE a check runs
+#               decides what it can still see (3 catches vs 32).
+#
+#   A hint is {kind, says}: `kind` is closed and SCORED, `says` is the gloss — shown at
+#   certification, ratified by the accept, never string-matched (a free-text match would be
+#   a judgement call wearing a number).
+#   ⚠ THE KIND VOCABULARY IS DRAFTED, NOT RULED — the operator closes it.
+HINT_KINDS = ("possible-reference",     # may point at a previous turn's act or answer
+              "answer-shaped",          # reads as a response to a question (polarity/choice)
+              "unreadable-alone",       # nothing in the turn survives without the context
+              # v2.5 — the two REFUSALS, because a reject that says nothing is a silence and
+              #   the whole point is that the operator is told WHY:
+              "unsupported-language",   # the sentence mixes languages — Gorgon reads English
+              "inexpressible")          # a licensing slot holds what no closed class expresses
+# ⇒ `mood` was briefly a hint kind and GRADUATED the same night — see MOOD_KINDS below. One
+#   fact, one home: a free-text gloss and a closed channel for the same thing is the
+#   twin-owner defect this project keeps refusing.
+
+# ── v2.4: MOOD IS A CHANNEL OF ITS OWN (operator, 2026-08-22) ────────────────────────────
+#
+#   *"mood should be its own channel i think because it is important to ALSO PROVIDE IT AS
+#   EVIDENCE."* Two claims, and the second is the checkable one:
+#     1  A CHANNEL, not a hint — the flavour taxonomy already names eight species and each
+#        says something operational: deference -> low urgency, the request may be refused ·
+#        closure -> the LAST thing succeeded, a resolution · frustration -> a prior attempt
+#        FAILED, a diagnosis context (D1) · hostility -> aimed; an insult IS an act ·
+#        hedge -> low commitment, confirm more · urgency -> NOT pure flavour, it collides
+#        with the temporal reader · phatic -> the session is opening or closing ·
+#        filler -> the request may be INCOMPLETE, a reason to wait rather than read.
+#     2  ALSO EVIDENCE — a mood span is a fact about the speaker, and downstream files it.
+#        So: EVERY MOOD SPAN MUST ALSO BE AN EVIDENCE SPAN, at the same offsets. Enforced.
+#   A mood is {kind, text, start, end} — a span with a species, like a trigger is a span on
+#   an act. `gold.mood` is a LIST: a turn may carry two ("ugh, please…" is frustration AND
+#   deference), and the reading must not have to choose.
+MOOD_KINDS = ("deference", "closure", "frustration", "hostility",
+              "hedge", "urgency", "phatic", "filler")
 
 
 def members_of(attachment: dict):
@@ -211,6 +295,21 @@ def validate_case(case: dict) -> List[str]:
     if faults:
         return faults
 
+    # v2.2 outcome: declared from the closed set; checked against the actions below
+    if "outcome" in case and case["outcome"] not in OUTCOMES:
+        faults.append(f"{cid}: outcome {case['outcome']!r} is not one of {OUTCOMES}")
+
+    # v2.3 context: the INBOUND hint — a flat, non-empty declaration of the prior state
+    if "context" in case:
+        ctx = case["context"]
+        if not isinstance(ctx, dict) or not ctx:
+            faults.append(f"{cid}: context must be a non-empty object")
+        else:
+            for key, value in ctx.items():
+                if not isinstance(value, (str, int, float, bool)) or value is None:
+                    faults.append(f"{cid}: context[{key!r}] must be flat — the state is "
+                                  f"declared, never nested")
+
     # v2.0 store: flat primitive facts, non-empty — certification ratifies the mock
     if "store" in case:
         store = case["store"]
@@ -242,7 +341,7 @@ def validate_case(case: dict) -> List[str]:
     gold = case["gold"]
     if not isinstance(gold, dict):
         return faults + [f"{cid}: gold is not an object"]
-    for extra in set(gold) - GOLD_KEYS:
+    for extra in set(gold) - GOLD_KEYS - OPTIONAL_GOLD_KEYS:
         faults.append(f"{cid}: gold has unknown key {extra!r}")
     for missing in GOLD_KEYS - set(gold):
         faults.append(f"{cid}: gold is missing {missing!r}")
@@ -319,6 +418,89 @@ def validate_case(case: dict) -> List[str]:
         for member in objs:
             if isinstance(member, dict) and set(member) != {"span", "role"}:
                 faults.append(f"{where}: a tagged member is exactly {{span, role}}")
+
+    # v2.4 mood: a span with a species, and it must ALSO be evidence (the operator's rule)
+    if "mood" in gold:
+        moods = gold["mood"]
+        if not isinstance(moods, list) or not moods:
+            faults.append(f"{cid}: mood must be a non-empty list — absent means none")
+        else:
+            evidence_at = {(sp.get("start"), sp.get("end")) for sp in gold.get("spans") or []
+                           if sp.get("type") == "evidence"}
+            for i, m in enumerate(moods):
+                where = f"{cid}: mood[{i}]"
+                if not isinstance(m, dict):
+                    faults.append(f"{where}: not an object")
+                    continue
+                for extra in set(m) - {"kind", "text", "start", "end"}:
+                    faults.append(f"{where}: unknown key {extra!r}")
+                if m.get("kind") not in MOOD_KINDS:
+                    faults.append(f"{where}: kind {m.get('kind')!r} is not one of {MOOD_KINDS}")
+                slim = {k: v for k, v in m.items() if k != "kind"}
+                faults += _offsets(where, slim, case["sentence"], typed=False)
+                if (m.get("start"), m.get("end")) not in evidence_at:
+                    faults.append(f"{where}: mood is not carried as evidence — the operator's "
+                                  f"rule (08-22) is that a mood span is ALSO an evidence span "
+                                  f"at the same offsets, so downstream can file it")
+
+    # v2.3 hint: closed kind, free gloss — the OUTBOUND half of the loop
+    if "hint" in gold:
+        hint = gold["hint"]
+        if not isinstance(hint, dict) or set(hint) != {"kind", "says"}:
+            faults.append(f"{cid}: hint is exactly {{kind, says}}")
+        else:
+            if hint["kind"] not in HINT_KINDS:
+                faults.append(f"{cid}: hint kind {hint['kind']!r} is not one of {HINT_KINDS}")
+            if not isinstance(hint["says"], str) or not hint["says"].strip():
+                faults.append(f"{cid}: hint says nothing — the gloss is what a human ratifies")
+    # A context-needed turn MUST hint; that is the whole point of the outcome — READ is
+    # blind, so what it hands ROUTE is a question, never a silence.
+    if case.get("outcome") == "context-needed" and "hint" not in gold:
+        faults.append(f"{cid}: outcome 'context-needed' with no hint — READ must say what it "
+                      f"suspects, or ROUTE has nothing to resolve")
+    # v2.5: A REJECT MUST SAY WHY. The operator's rule (08-22) is that a rejected sentence
+    #   comes back as an ASK carrying the reason — "the project does not support
+    #   multi-language sentences". A refusal with no reason is a silence, and a silence is
+    #   the one thing this seam is not allowed to answer with.
+    if case.get("outcome") == "reject" and "hint" not in gold:
+        faults.append(f"{cid}: outcome 'reject' with no hint — a refusal must carry the "
+                      f"reason the operator is shown")
+    # Testimony is evidence: it must carry one.
+    if case.get("outcome") == "testimony" and not any(
+            sp.get("type") == "evidence" for sp in gold.get("spans") or []):
+        faults.append(f"{cid}: outcome 'testimony' with no evidence span — testimony IS "
+                      f"evidence (operator 08-22), so it must carry the fact it reports")
+
+    # v2.2: NO ACTIONS <=> AN OUTCOME. An empty reading must say why, and a declared
+    #   outcome must not come with an act — "none" that acts is a contradiction, "reject"
+    #   that acts is the licence hole this field exists to close.
+    if not actions and "outcome" not in case:
+        faults.append(f"{cid}: no actions and no outcome — an empty reading needs "
+                      f"'outcome': 'none' or 'reject'")
+    if actions and case.get("outcome") in OUTCOMES:
+        faults.append(f"{cid}: outcome {case['outcome']!r} declares no act, but "
+                      f"{len(actions)} action(s) are gold")
+
+    # v2.1 (RULED 08-22, certification of v3): EVIDENCE IS CARRIED. A symptom clause is
+    # testimony FOR an act — "carry the evidence to stop because it's a future reference".
+    # An evidence span nothing attaches to is a painted-but-orphaned reading: the reviewer
+    # shows it in yellow and the action line never mentions it. Five v3 golds had exactly
+    # that (ca-0001/2, co-0001/2, ca-0002-ej); every frozen set already obeys this.
+    carried = {ix for att in gold["attachments"] if isinstance(att, dict)
+               and isinstance(att.get("objects"), list)
+               for ix, _role in members_of(att)}
+    # ⇒ v2.4 THE EXCEPTION, GENERALISED: **an actless turn has nothing to attach evidence
+    #   TO.** First written for `testimony` alone; the mood channel exposed the rest — "hey,
+    #   check" is context-needed, carries a phatic mood, and therefore evidence, with no act
+    #   in sight. Requiring attachment there is incoherent, not strict. Every case the
+    #   original v2.1 rule caught (ca-0001, co-0001…) HAD an act, so this is strictly the
+    #   same rule stated correctly.
+    if not actions:
+        carried = carried | {i for i, sp in enumerate(spans) if sp.get("type") == "evidence"}
+    for i, span in enumerate(spans):
+        if span.get("type") == "evidence" and i not in carried:
+            faults.append(f"{cid}: spans[{i}] is evidence nothing carries — attach it "
+                          f"with role 'evidence'")
     return faults
 
 
@@ -438,6 +620,35 @@ def selfcheck() -> List[str]:
         "manner", {"text": "nope", "start": 0, "end": 4}), "gold says")
     broken(lambda c: c["gold"]["actions"][0].__setitem__(
         "manner", {"text": "restart", "start": 0, "end": 7, "why": "x"}), "unknown key")
+    # v2.4 mood — a wrong species, a lying offset, and an unfiled mood must all refuse
+    broken(lambda c: c["gold"].__setitem__("mood", [{"kind": "smug", "text": "restart",
+                                                     "start": 0, "end": 7}]), "not one of")
+    broken(lambda c: c["gold"].__setitem__("mood", [{"kind": "deference", "text": "nope",
+                                                     "start": 0, "end": 4}]), "gold says")
+    broken(lambda c: c["gold"].__setitem__("mood", [{"kind": "deference", "text": "restart",
+                                                     "start": 0, "end": 7}]),
+           "not carried as evidence")
+    broken(lambda c: c["gold"].__setitem__("mood", []), "non-empty list")
+    # v2.3 hint + context — the outbound half must not lie either
+    broken(lambda c: c["gold"].__setitem__("hint", {"kind": "vibes", "says": "x"}),
+           "not one of")
+    broken(lambda c: c["gold"].__setitem__("hint", {"kind": "possible-reference"}),
+           "exactly {kind, says}")
+    broken(lambda c: c["gold"].__setitem__("hint",
+           {"kind": "possible-reference", "says": "  "}), "says nothing")
+    broken(lambda c: c.__setitem__("context", {}), "non-empty object")
+    broken(lambda c: (c.__setitem__("outcome", "reject"),
+                      c["gold"].__setitem__("actions", []),
+                      c["gold"].__setitem__("attachments", [])), "must carry the reason")
+    broken(lambda c: c.__setitem__("context", {"expecting": ["y", "n"]}), "must be flat")
+    # v2.2 outcome — the three ways an empty reading can lie
+    broken(lambda c: c.__setitem__("outcome", "vibes"), "not one of")
+    broken(lambda c: c.__setitem__("outcome", "none"), "declares no act")
+    broken(lambda c: (c["gold"].__setitem__("actions", []),
+                      c["gold"].__setitem__("attachments", [])), "needs 'outcome'")
+    # v2.1 evidence is carried — an orphaned evidence span must refuse
+    broken(lambda c: c["gold"]["spans"].append(
+        {"text": "and", "start": 19, "end": 22, "type": "evidence"}), "nothing carries")
     broken(lambda c: c.__setitem__("store", []), "non-empty list")
     broken(lambda c: c.__setitem__("store", [{}]), "non-empty object")
     broken(lambda c: c.__setitem__("store", [{"word": ["nested"]}]), "flat")

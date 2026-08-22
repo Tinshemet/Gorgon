@@ -24,6 +24,10 @@ an approval of today's**, which is the fixture-moved-and-the-check-did-not lesso
 
     stop [the web vm]₀ and launch [the db vm]₁          objects in cyan · evidence yellow
     actions underlined · attachments listed as  action -> objects
+    restart [the vms]₀ ⟨one at a time⟩m                  channels magenta: ⟨…⟩t trigger · ⟨…⟩m manner
+    outcome: NONE · store: word=grubnash, kind=vm        an empty reading says why; the mock is shown
+    context: expecting=yes-no · hint [answer-shaped] …   v2.3: what RESOLVE supplied, what READ answers
+    mood [deference] 'when you have a sec'               v2.4: the turn's stance, carried as evidence too
 
 Keys:  a accept · r reject (asks one line: why) · s skip for now · u undo last · q quit.
 Progress is saved after EVERY key — quitting mid-run loses nothing.
@@ -51,11 +55,20 @@ from .schema import load, validate
 
 BOLD, DIM, CYAN, YELLOW, UL, OFF = ("\x1b[1m", "\x1b[2m", "\x1b[36m", "\x1b[33m",
                                     "\x1b[4m", "\x1b[0m")
+MAGENTA = "\x1b[35m"          # an action's CHANNELS (trigger · manner) — v2.0 gold
+CHANNELS = ("trigger", "manner")
 
 
 def _hash(case: dict) -> str:
-    body = json.dumps({"sentence": case["sentence"], "gold": case["gold"]},
-                      sort_keys=True)
+    # ⇒ THE SEAL BINDS EVERYTHING JUDGED. Found 08-22: `store` (v2.0) and `outcome` (v2.2)
+    #   were outside the hash, so a changed mock or a changed outcome never staled a
+    #   verdict — "an accept ratifies the store, decoys included" was a sentence, not a
+    #   binding. Now it is a binding; the cases carrying a store go STALE once, by design.
+    judged = {"sentence": case["sentence"], "gold": case["gold"]}
+    for extra in ("store", "outcome", "context"):   # ADDITIVE: a case without them keeps its hash
+        if extra in case:
+            judged[extra] = case[extra]
+    body = json.dumps(judged, sort_keys=True)
     return hashlib.sha256(body.encode()).hexdigest()[:16]
 
 
@@ -95,6 +108,12 @@ def painted(case: dict) -> str:
         marks.append((s["start"], s["end"], f"{colour}[", f"]{DIM}{i}{OFF}"))
     for a in case["gold"]["actions"]:
         marks.append((a["start"], a["end"], UL, OFF))
+        # The channels ride the action, not the span list — unpainted they were INVISIBLE,
+        # and two manner golds were rejected for "missing" what they carried (08-22).
+        for ch in CHANNELS:
+            if a.get(ch):
+                marks.append((a[ch]["start"], a[ch]["end"],
+                              f"{MAGENTA}⟨", f"⟩{DIM}{ch[0]}{OFF}"))
     out, at = [], 0
     for start, end, open_, close in sorted(marks):
         if start < at:                        # overlapping action/object — paint sequentially
@@ -123,11 +142,38 @@ def show(case: dict, verdicts: Dict[str, dict], by_id: Dict[str, dict]) -> None:
         objs = " + ".join(
             f"{spans[ix]['text']!r}" + (f" ({role})" if role else "")
             for ix, role in members_of(at))
-        print(f"      {act['text']!r}{tag} -> {objs}")
+        print(f"      {act['text']!r}{tag} -> {objs}{_channels(act)}")
     acts_attached = {at["action"] for at in case["gold"]["attachments"]}
     for i, a in enumerate(case["gold"]["actions"]):
         if i not in acts_attached:
-            print(f"      {a['text']!r} -> (nothing)")
+            print(f"      {a['text']!r} -> (nothing){_channels(a)}")
+    # v2.3: THE INBOUND HINT — what RESOLVE supplied. Shown FIRST, because the reading
+    #   below is only correct UNDER it (operator 08-22: "READ is fed by RESOLVE").
+    if case.get("context"):
+        print(f"      {MAGENTA}context:{OFF} " + " · ".join(
+            f"{k}={v}" for k, v in case["context"].items()))
+    # v2.2: the OUTCOME of an empty reading is part of the gold — shown, so it is judged
+    if case.get("outcome"):
+        print(f"      {MAGENTA}outcome: {case['outcome'].upper()}{OFF}  "
+              f"{DIM}(no act is the reading — is that right?){OFF}")
+    # v2.4: THE MOOD CHANNEL — a span with a species, carried as evidence too.
+    for m in case["gold"].get("mood") or []:
+        print(f"      {MAGENTA}mood [{m['kind']}]{OFF} {m['text']!r}")
+    # v2.3: THE OUTBOUND HINT — what READ writes for ROUTE. The `kind` is scored; the
+    #   `says` gloss is ratified by this accept and never string-matched.
+    if case["gold"].get("hint"):
+        h = case["gold"]["hint"]
+        print(f"      {MAGENTA}hint [{h['kind']}]{OFF} {h['says']}")
+    # v2.0: the store is ratified by the accept — shown, so it is judged
+    if case.get("store"):
+        print(f"      {DIM}store:{OFF} " + " · ".join(
+            ", ".join(f"{k}={v}" for k, v in e.items()) for e in case["store"]))
+
+
+def _channels(act: dict) -> str:
+    """The action's trigger/manner, listed beside its objects — part of the gold judged."""
+    return "".join(f"  {MAGENTA}{ch}: {act[ch]['text']!r}{OFF}"
+                   for ch in CHANNELS if act.get(ch))
     for a in case["gold"]["actions"]:
         if a.get("trigger"):
             print(f"      {a['text']!r} STARTS WHEN: {a['trigger']['text']!r}")

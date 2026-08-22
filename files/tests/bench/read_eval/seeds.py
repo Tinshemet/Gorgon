@@ -101,6 +101,10 @@ class Seed(NamedTuple):
     pair_id: str = ""                         # "" = none; a hand twin names its clean case
     source: str = "seed"                      # "real-failure" where a documented defect said it
     note: str = ""
+    outcome: str = ""                         # v2.2: none | reject | testimony | context-needed
+    context: Dict[str, object] = {}           # v2.3: the INBOUND hint — what RESOLVE supplies
+    hint: Tuple[str, str] = ()                # v2.3: the OUTBOUND hint READ writes — (kind, says)
+    mood: List[Tuple[str, Text]] = []         # v2.4: turn-level stance — [(species, span)]
 
 
 def _at(sentence: str, spec: Text, what: str) -> Tuple[int, int]:
@@ -151,6 +155,21 @@ def build(seed: Seed) -> dict:
             "gold": {"spans": spans, "actions": actions, "attachments": attachments}}
     if seed.store:
         case["store"] = [dict(entry) for entry in seed.store]
+    if seed.outcome:
+        case["outcome"] = seed.outcome
+    if seed.context:
+        case["context"] = dict(seed.context)
+    if seed.hint:
+        case["gold"]["hint"] = {"kind": seed.hint[0], "says": seed.hint[1]}
+    if seed.mood:
+        # v2.4: a mood is a span with a species — and the operator's rule is that it is ALSO
+        #   evidence, so the seed must have declared the same span in `evidence`. The
+        #   validator enforces it; this only places the offsets.
+        case["gold"]["mood"] = []
+        for kind, spec in seed.mood:
+            ms, me = _at(seed.sentence, spec, seed.id)
+            case["gold"]["mood"].append({"kind": kind, "text": seed.sentence[ms:me],
+                                         "start": ms, "end": me})
     return case
 
 
