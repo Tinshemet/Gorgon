@@ -121,3 +121,77 @@ def test_mg_0002_a_magnitude_selector_is_not_lifted():
     # `with` — a selector, magnitudes_in's to read, not ours to lift
     rows = _rows("list the vms with more than 2 cores")
     assert not any(r.kind == "value" for r in rows)
+
+
+# ── step 3: the owner scrutinises, the target takes or refuses, the gate tells ──────────
+def test_the_owner_scrutinises_from_the_declaration_alone():
+    assert B.accept("vm", "memory_mb", "16gb") == (16384, None)
+    assert B.accept("vm", "memory_mb", "8 gigs") == (8192, None)
+    assert B.accept("vm", "memory_mb", "512mb") == (512, None)
+    assert B.accept("vm", "cpu_cores", "4 cores") == (4, None)
+    assert B.accept("vm", "ip", "10.0.0.5") == ("10.0.0.5", None)
+    assert B.accept("vm", "label", "prod") == ("prod", None)          # no class: open text
+    v, why = B.accept("vm", "memory_mb", "2 potatoes")
+    assert v is None and "potatoes" in why and "mb" in why
+    v, why = B.accept("vm", "ip", "10.0.0")
+    assert v is None and "well-formed" in why
+
+
+def test_a_new_target_takes_the_accepted_values_for_its_creator():
+    rows = _rows("create a vm with 4 cores and 8gb of ram")
+    vm = rows[0]
+    assert vm.where == {"cpu_cores": 4, "memory_mb": 8192} and set(vm.assigned) == {"cpu_cores", "memory_mb"}
+    vals = {r.span: r.value for r in rows if r.kind == "value"}
+    assert vals["4 cores"]["target"] == "a vm" and vals["4 cores"]["accepted"] == 4
+    assert vals["8gb"]["target"] == "a vm" and vals["8gb"]["accepted"] == 8192, "after `and`, its own clause"
+
+
+def test_a_reference_finds_its_target():
+    # `it` is read as a vm row of its own (the 08-16 clause rule); the value targets THAT
+    # row and the owner's typed 4 lands in its `where` — no longer the raw string '4'
+    rows = _rows("create a vm named alpha. give it 4 cores.")
+    val = next(r for r in rows if r.kind == "value")
+    target = next(r for r in rows if r.span == val.value["target"])
+    assert target.kind == "vm" and target.where.get("cpu_cores") == 4 and "cpu_cores" in target.assigned
+
+
+def test_an_existing_target_without_a_setter_refuses_with_the_owners_reason():
+    for s, attr in [("give the db vm 16gb of memory", "memory_mb"),
+                    ("set the cpu of the web vm to 4 cores", "cpu_cores")]:
+        val = next(r for r in _rows(s) if r.kind == "value")
+        assert attr in val.value["refused"] and "existing vm" in val.value["refused"]
+        assert "accepted" not in val.value
+
+
+def test_the_value_span_is_never_replaced_by_the_number():
+    val = next(r for r in _rows("create a vm with 8gb of ram") if r.kind == "value")
+    assert val.span == "8gb" and val.value["accepted"] == 8192
+
+
+def test_an_assigned_key_names_no_handle():
+    rows = _rows("create a vm with 4 cores and 8gb of ram")
+    assert [s.handle for s in P2.symbol_table(rows, B)] == ["vm"], "not `4_vms`"
+
+
+def _piped(s):
+    import engines.channel as channel
+    from orchestrator.languages.english.seam import pipeline as PL
+    was = channel.constrained
+    channel.constrained = lambda *a, **k: {}
+    try:
+        return PL.run(s, board=B)
+    finally:
+        channel.constrained = was
+
+
+def test_the_refusal_reaches_the_operator_and_not_the_model():
+    r = _piped("give the db vm 16gb of memory")
+    assert any("cannot set memory_mb on an existing vm" in a for a in r.asks)
+    assert r.outcome == "ASK" and r.bounces == [], r.bounces
+    assert not any("'value'" in a for a in r.asks), "a value is not a kind the lab lacks"
+    assert not any("16gb" in a and "name" in a for a in r.asks), "16gb is read, not residue"
+
+
+def test_the_owners_number_is_not_an_invented_value():
+    r = _piped("create a vm with 4 cores and 8gb of ram")
+    assert not any("8192" in a or "never says" in a for a in r.asks + r.bounces)

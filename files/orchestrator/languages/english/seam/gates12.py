@@ -96,6 +96,8 @@ def gate1(rows: List[S.Declared], request: str,
             out.append(Finding(1, "invented", row.name,
                                f"nothing in the request says {row.name!r} — did you mean it?"))
         for attr, value in (row.where or {}).items():
+            if attr in (row.assigned or ()):
+                continue                  # the owner's conversion of a value row (08-23)
             if not _traces(value, request):
                 out.append(Finding(1, "invented-value", row.name,
                                    f"the request never says {attr} is {value!r} — "
@@ -157,6 +159,12 @@ def completeness(rows: List[S.Declared], operations, table,
 
     used = {str(op.on) for op in operations}
     used |= {str(op.value) for op in operations if op.value}
+    # ⇒ A THING WHOSE ONLY ASSIGNMENT THE OWNER REFUSED IS ACCOUNTED FOR — by the refusal,
+    #   which gate 4 is telling the operator. Bouncing "no operation touches it" to the model
+    #   would ask it to invent the step the manifest says does not exist (08-23).
+    refused_targets = {str((r.value or {}).get("target")) for r in rows
+                       if r.object_type == S.VALUE_KIND and (r.value or {}).get("refused")}
+    rows = [r for r in rows if r.object_type != S.VALUE_KIND]
 
     # ⇒⇒ A CREATOR ACCOUNTS FOR WHAT IT PRODUCES, NOT ONLY FOR WHAT IT NAMES.
     #
@@ -241,6 +249,8 @@ def completeness(rows: List[S.Declared], operations, table,
             continue
         if any(S.governs(g, sym.row) for g in (goals or ())):
             continue
+        if str(sym.row.span) in refused_targets or str(sym.row.name) in refused_targets:
+            continue                      # its one assignment was refused — accounted for
         out.append(Finding(1, "unused-declaration", sym.handle,
                            f"{sym.handle!r} was declared and no operation touches it — either "
                            f"it is not a thing, or a step is missing"))
@@ -411,8 +421,13 @@ def report(rows: List[S.Declared], request: str, board: Optional[Board] = None,
            world=None) -> Dict[str, object]:
     """Both gates over one symbol table. NOTHING IS REPAIRED — findings are questions."""
     board = board or Board()
-    found = (gate1(rows, request, board) + gate2(rows, board)
-             + conflicts(rows, world, board) + residues(rows, request, board, world))
+    # ⇒ A VALUE ROW IS NOT A DECLARATION (08-23, [[gorgon-attributes-are-leaves]]): it claims
+    #   its words for gate 1 — `16gb`, `of memory` are READ — but it is not a thing the lab
+    #   keeps (gate 2 asked "this lab has no 'value'") and conflicts with nothing; residue
+    #   sees it only to count its words as read.
+    things = [r for r in rows if r.object_type != S.VALUE_KIND]
+    found = (gate1(rows, request, board) + gate2(things, board)
+             + conflicts(things, world, board) + residues(rows, request, board, world))
     return {
         "findings": found,
         # ⇒ THE OPERATOR'S HALF ONLY. A bounce is not a question — the words are already in the

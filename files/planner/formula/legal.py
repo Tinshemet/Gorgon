@@ -58,6 +58,46 @@ class Board:
         """Attributes that must be ASKED. These are the binding-time hazards."""
         return sorted(self._spec(kind).get("observed") or {})
 
+    def accept(self, kind: str, attr: str, text: str):
+        """THE OWNER SCRUTINISES A VALUE — (value, None) or (None, reason). 08-23.
+
+        READ hands the owner the bytes it spanned (`16gb`, `4 cores`) and nothing else;
+        what they MEAN is the owner's, and the owner says it in the manifest: `attr_classes`
+        declares the class (count · quantity with `units` · a `shape`). Nothing is inferred:
+        a unit the class does not declare is refused with the reason, and an attribute with
+        no class passes the text through untouched — open text is the owner's to keep.
+        """
+        import re as _re
+        cls = ((self._spec(kind).get("attr_classes") or {}).get(attr)) or {}
+        raw = str(text).strip()
+        low = raw.lower()
+        if not cls:
+            return raw, None
+        typ = str(cls.get("type") or "")
+        if typ == "count":
+            m = _re.fullmatch(r"(\d+)\s*([a-z]*)", low)
+            if not m:
+                return None, f"{kind}.{attr} takes a count, not {raw!r}"
+            return int(m.group(1)), None
+        if typ == "quantity":
+            units = {str(u).lower(): float(f) for u, f in (cls.get("units") or {}).items()}
+            base = str(cls.get("unit") or "").lower()
+            m = _re.fullmatch(r"(\d+(?:\.\d+)?)\s*([a-z]*)", low)
+            if not m:
+                return None, f"{kind}.{attr} takes a quantity, not {raw!r}"
+            unit = m.group(2) or base
+            if unit not in units and unit != base:
+                return None, (f"{kind}.{attr} is measured in {base}"
+                              f"{' (' + ', '.join(sorted(units)) + ')' if units else ''}, "
+                              f"not {unit!r}")
+            factor = units.get(unit, 1.0)
+            return int(round(float(m.group(1)) * factor)), None
+        if cls.get("shape"):
+            if not _re.fullmatch(str(cls["shape"]), low):
+                return None, f"{raw!r} is not a well-formed {kind}.{attr} ({typ or 'value'})"
+            return raw, None
+        return raw, None
+
     def values(self, kind: str, attr: str) -> Optional[List[str]]:
         """The CLOSED set a value may take, or None when the value is open text."""
         table = self._spec(kind).get("attr_values") or {}

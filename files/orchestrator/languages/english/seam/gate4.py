@@ -54,6 +54,20 @@ def _destroyers(board: Board):
             if isinstance(spec, dict) and spec.get("delete")}
 
 
+def refused_values(rows, board: Optional[Board] = None) -> List[str]:
+    """A value the OWNER refused — to the operator, in the owner's words (08-23).
+
+    *"give the db vm 16gb of memory"*: the manifest declares no setter for `memory_mb`, so no
+    program can do it and no retry would find one. Not the model's miss (BOUNCE), not a guess
+    to resolve — the lab's limit, said once ([[gorgon-can-the-world-satisfy-it]]).
+    """
+    out: List[str] = []
+    for r in rows:
+        if getattr(r, "object_type", None) == "value" and (r.value or {}).get("refused"):
+            out.append(str(r.value["refused"]))
+    return out
+
+
 def unhonourable_exclusions(table, board: Optional[Board] = None) -> List[str]:
     """A set that leaves something out, that the ENGINE could not actually express.
 

@@ -33,7 +33,7 @@ this file, and everything it settled arrives here as a DECISION rather than a gu
   `golden` case is NOT reachable from the request at all and belongs to the book keeper
   ([[gorgon-twopass-item-1]]).
 """
-from typing import Dict, List, NamedTuple, Optional
+from typing import Dict, List, NamedTuple, Optional, Tuple
 
 from planner.formula.legal import Board
 
@@ -74,6 +74,10 @@ class Declared(NamedTuple):
     #   (or the conflict, when two owners tie — then `hint` says so for ROUTE). READ never
     #   interprets the value; the owner package does, on this span.
     value: Optional[dict] = None
+    # ⇒ WHICH `where` KEYS WERE ASSIGNED by a value row rather than READ as a descriptor (08-23).
+    #   `a vm with 4 cores` is not "the vms where cpu_cores = 4" — an assignment names nothing
+    #   (no `4_vms` handle) and the request never "says" the owner's converted number (gate 1).
+    assigned: Tuple[str, ...] = ()
     # ⇒⇒ **THE OPERATOR SAID SO — provenance on `existence`, not a second copy of it.**
     #   `existence` is the model's weakest field (85%, every error toward NEW), which is why
     #   `derive_creators` refuses to mint anything NAMED: a wrong NEW would quietly build a

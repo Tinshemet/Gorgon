@@ -376,10 +376,20 @@ def report(rows: List[S.Declared], request: str, board: Optional[Board] = None,
     """Every word in every declaration that nothing can account for, with its verdict."""
     board = board or Board()
     identified = _names_declared_here(rows, board)
+    # ⇒ A VALUE ROW'S WORDS ARE READ (08-23): `unread` re-walks a phrase from its head and
+    #   re-swallows the `16gb` the value reader lifted out — so the lifted words are claimed
+    #   here, and a value row is never itself a declaration with residue.
+    claimed = set()
+    for v in rows:
+        if v.object_type == S.VALUE_KIND:
+            for text in [v.span, *(v.references or ())]:
+                claimed |= {w.strip(".,'\"") for w in str(text).lower().split()}
     out: List[Residue] = []
     for row in rows:
+        if row.object_type == S.VALUE_KIND:
+            continue
         for word in unread(row, request, board):
-            if word.lower() in identified:
+            if word.lower() in identified or word.lower().strip(".,'\"") in claimed:
                 continue          # it names a row declared elsewhere — a reference, not residue
             verdict, why = classify(word, row.kind, request, world)
             out.append(Residue(word, row.name, row.kind, verdict, why))

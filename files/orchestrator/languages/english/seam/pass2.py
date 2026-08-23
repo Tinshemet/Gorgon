@@ -108,6 +108,8 @@ def _stem_for(row: S.Declared, board: Board) -> str:
 
     # a CONDITION describes the set better than a number ever could
     for attr, value in (row.where or {}).items():
+        if attr in (row.assigned or ()):
+            continue                      # assigned, not a descriptor — names nothing (08-23)
         if isinstance(value, bool) or str(value).lower() in ("true", "false"):
             truthy = value is True or str(value).lower() == "true"
             stem = f"{attr}_{_plural(kind)}" if truthy else f"not_{attr}_{_plural(kind)}"

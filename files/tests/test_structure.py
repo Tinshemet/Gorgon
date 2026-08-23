@@ -650,11 +650,13 @@ def test_a_clause_takes_its_kind_from_the_clause_that_named_it():
     check("the clause is the window, not the span",
           clause_around("create a vm named alpha. give it 4 cores.", "4 cores").strip()
           == "give it 4 cores")
+    # ⇒ 08-23, ATTRIBUTES ARE LEAVES: the value is the owner's TYPED 4 (Board.accept), not
+    #   the raw string '4' — the reading is the same, the carrier is now scrutinised.
     check("a following clause is read against the kind that was named",
-          ("vm_set", None, {"cpu_cores": "4"})
+          ("vm_set", None, {"cpu_cores": 4})
           in rows("create a vm named alpha. give it 4 cores."))
     check("and the same across `and` rather than a full stop",
-          ("vm_set", None, {"cpu_cores": "4"})
+          ("vm_set", None, {"cpu_cores": 4})
           in rows("create a vm named alpha and give it 4 cores"))
     check("the numeral is NOT a count — that reading was four machines",
           all(r[1] != 4 for r in rows("create a vm named alpha. give it 4 cores.")))

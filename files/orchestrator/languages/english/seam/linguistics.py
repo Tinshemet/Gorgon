@@ -591,5 +591,10 @@ def report(request: str, rows: List[S.Declared], operations: List[Operation], ta
     #   dangling one, inside the step whose whole purpose is keeping references sound.
     fresh_table, notes = settle_with_verb(operations, table, board)
     settled = [sym.row for sym in fresh_table]
-    return settled, fresh_table, notes + findings(request, settled, operations, fresh_table,
-                                                  goals=goals, board=board)
+    # ⇒ THE VALUE ROWS RIDE THROUGH (08-23). They are never in the table — a value is not a
+    #   handle — so rebuilding rows from the table silently dropped them, and with them the
+    #   owner's refusal gate 4 is meant to surface. They are not the linguistics gate's
+    #   business; they are appended after it has looked.
+    values = [r for r in rows if r.object_type == S.VALUE_KIND]
+    return (settled + values, fresh_table,
+            notes + findings(request, settled, operations, fresh_table, goals=goals, board=board))

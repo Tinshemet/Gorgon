@@ -803,6 +803,8 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     for bad in illegal:
         (asks if bad.rule in ANSWERABLE else bounces).append(repr(bad))
     asks += gate4.confirmations(operations, table, request, board)
+    # ⇒ A VALUE THE OWNER REFUSED — the lab's limit, to the operator (08-23)
+    asks += gate4.refused_values(rows, board)
     # ⇒ ACT OR ANSWER. Beside the destructive confirmation because it is the same kind of
     #   question one notch wider — that one asks whether the operator meant to REMOVE, this
     #   asks whether they meant to DO anything at all. It is an ASK and never a refusal, and
