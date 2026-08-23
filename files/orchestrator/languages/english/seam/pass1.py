@@ -757,7 +757,11 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
     #   consumer) carried sets with their carve-outs SILENTLY MISSING. Idempotent: the
     #   duplicate-carve check makes the pipeline's own later call harmless.
     rows = resolve_proforms(rows)
-    return attach_exclusions(rows, board, request=request)
+    rows = attach_exclusions(rows, board, request=request)
+    # ⇒ AND AN ASSIGNED VALUE IS ITS OWN SPAN (08-23, [[gorgon-attributes-are-leaves]]) —
+    #   on the same one path, for the same reason. `the db vm 16gb` was one row.
+    from .values import read_values
+    return read_values(rows, request, board)
 
 
 def resolve_proforms(rows: List[S.Declared]) -> List[S.Declared]:

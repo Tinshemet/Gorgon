@@ -50,6 +50,8 @@ NOT_LANGUAGE = {
     "linguistics.py": {"OWNS"},
     "pass1.py":      {"EXPECTED", "BUILDS"},
     "pass2.py":      {"WANT"},
+    # _DETS is DEFINITE | INDEFINITE from the codex, composed at import — not a list of its own
+    "values.py":     {"_DETS"},
 }
 
 # ── C: who calls the language from outside its folder, and for what ───────────────────────

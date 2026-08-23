@@ -165,6 +165,8 @@ def symbol_table(rows: List[S.Declared], board: Optional[Board] = None,
     taken: set = set()
     out: List[Symbol] = []
     for row in rows:
+        if row.object_type == S.VALUE_KIND:
+            continue                     # a value is never an address (08-23)
         handle = row.name if handles == "span" else handle_for(row, board, taken)
         where = ", ".join(f"{k} = {v}" for k, v in (row.where or {}).items())
         kind = row.kind if row.kind in board.kinds else "thing"

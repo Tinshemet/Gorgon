@@ -667,8 +667,13 @@ def test_a_clause_takes_its_kind_from_the_clause_that_named_it():
     check("rung 11 is unmoved",
           ("vm_set", None, {"alive": False})
           in rows("ping every vm and stop the ones that do not answer"))
+    # ⇒ 08-23, ATTRIBUTES ARE LEAVES: `4 cores` is no longer a kindless `?` row but a VALUE
+    #   row of its own (cpu_cores, owner vm). The control's point stands unchanged — nothing
+    #   INHERITED the vm kind through a pro-form, because there is no pro-form.
     check("no pro-form, no inheritance",
-          ("?", None, {}) in rows("create a vm named alpha, with 4 cores"))
+          ("value", None, {}) in rows("create a vm named alpha, with 4 cores")
+          and ("vm_set", None, {"cpu_cores": "4"})
+          not in rows("create a vm named alpha, with 4 cores"))
     check("a stated noun outranks the hint",
           scan("network", "create a vm and a network", board, kind_hint="vm").kind == "network")
 

@@ -47,6 +47,9 @@ SET_SUFFIX = "_set"
 # are the same until the world says otherwise — and gate 2 asks. It lives HERE, beside the row
 # it appears in, so a gate can name it without importing the runner that produces it.
 UNKNOWN_KIND = "?"
+# ⇒ A ROW THAT IS A VALUE, NOT A THING (08-23, [[gorgon-attributes-are-leaves]]): its own span,
+#   never a handle — `symbol_table` skips it, so pass 2 can never act ON a value.
+VALUE_KIND = "value"
 
 
 class Declared(NamedTuple):
@@ -66,6 +69,11 @@ class Declared(NamedTuple):
     #   to the operator. Only ever set by `settle_by_routing`; kindless rows nobody asked about
     #   stay False, so absence of the mark means UNASKED rather than ROUTABLE.
     unroutable: bool = False
+    # ⇒⇒ ATTRIBUTES ARE LEAVES (08-23). Set ONLY on a VALUE_KIND row — what READ found and
+    #   nothing more: the learned word, the attribute it names, the owner class ranked in
+    #   (or the conflict, when two owners tie — then `hint` says so for ROUTE). READ never
+    #   interprets the value; the owner package does, on this span.
+    value: Optional[dict] = None
     # ⇒⇒ **THE OPERATOR SAID SO — provenance on `existence`, not a second copy of it.**
     #   `existence` is the model's weakest field (85%, every error toward NEW), which is why
     #   `derive_creators` refuses to mint anything NAMED: a wrong NEW would quietly build a

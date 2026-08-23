@@ -185,6 +185,28 @@ ACHIEVE_MARKERS = ("make sure", "makes sure", "ensure", "ensures", "there should
 
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
+# ═ PASS 1 — the VALUE reader (consumer: seam/values.py)
+# ═   ATTRIBUTES ARE LEAVES (operator, 08-23): a learned unit or attribute word in an owner's
+# ═   context is spanned as a value of its own. These two classes decide WHERE it sits.
+# ═══════════════════════════════════════════════════════════════════════════════════════
+
+# ⇒ A value introduced INSIDE a noun phrase by one of these RESTRICTS the thing — *"the vm at
+#   10.0.0.5"*, *"every vm with over 6gb of ram"* — it SELECTS, and stays in the phrase's
+#   `where`/magnitude. A value not so introduced is ASSIGNED — *"give the db vm 16gb"*, *"set
+#   the cpu of the web vm to 4 cores"*, *"create a vm with 4 cores"* (NEW: nothing to select
+#   among) — and is its own span ([[gorgon-reading-names-writing-mints]]).
+SELECTOR_PREPOSITIONS = frozenset({"at", "with", "on", "over", "under", "above", "below",
+                                   "than", "in", "having"})
+
+# ⇒ What is left dangling at the cut when a value is lifted out of the phrase that swallowed
+#   it — *"a vm with ▸4 cores"* leaves `a vm with`; the connector goes with the value.
+VALUE_CONNECTORS = frozenset({"with", "of", "and", "to", "at", "on", ","})
+
+# ⇒ The word that names WHICH attribute a bare unit belongs to — *"8gb OF ram"*.
+ATTRIBUTE_LINKERS = frozenset({"of"})
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════
 # ═ PASS 1 — distinctness, exclusion, plural pronouns
 # ═   (consumer: pass1.py)
 # ═══════════════════════════════════════════════════════════════════════════════════════
