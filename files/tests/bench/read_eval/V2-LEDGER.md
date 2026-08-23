@@ -505,3 +505,44 @@ that the project does not support multi-language sentences."*
   channel post-dates their seal. Recorded in READ.md under "Declared gaps in the frozen
   sets": a reader scored against those releases is neither billed nor credited for mood, and
   v3 is the first set where mood is scored. A seal means a seal.
+
+## 17 · ATTRIBUTES ARE LEAVES, AND A NAME IS ONE — v3 RESET (operator, 2026-08-23)
+
+**The ruling, in the operator's words:** *"attributes are 'leaves' of the class world since
+they are meaningless technically to the AI … if the AI has no use for it, it's meaningless to
+explain it. Their owner is the classes they are related to; one attribute can appear in a few
+classes and their inherited children, but we use context to understand which is which. For
+READ it's seamless — it only needs to understand that this is a 'learned' word that it's
+looking for in which context: if a word appears in the correct context READ spans it, and if
+there is a conflict it gives it to ROUTE for ASK with the hint 'X creates a conflict between
+ClassX and ClassY'."* · *"the unit alone spans it if the class owns that unit; a learned word
+could be a class, an attribute, a value — held in the archive: entry RAM, type unit, owners
+computer (and its children)."* · *"attributes such as cores or ram should stay in their own
+span because they need to be scrutinized differently … each attribute should be scrutinized
+based on its class owner."* · on a tie: *"context and fit are both needed — if they are the
+same then it's a tie; if something is MORE correct we use the more correct one."*
+
+**And a NAME is a leaf** (ruled 08-23, on the question put as: its own span when assigned
+at creation, scrutinised by the owner — yes). Read together with #11's naming-lists ruling
+("a naming spec is one generative unit"): a LITERAL name at creation is a leaf per name
+(`a` · `b` · `c`); a GENERATOR spec is itself the leaf — one value span (`1-5`, `after
+musicians`) the owner runs. A name that REFERS (`stop alpha`) stays in its phrase.
+
+**What changed in the gold:** `un-0002` — the value is NUMBER + UNIT (`8gb`), the attribute
+word is context (matches `un-0001`'s `16gb`). `nl-0001..4` — patient is the minted kind
+alone, every name a value span (nl-0004's single create keeps plain members: two mints, no
+direction claimed). The sealed sets keep `a vm named alpha` whole — declared in READ.md.
+
+**THE RESET (operator: "lets reset v3 entirely since a lot of changes have been made"):**
+`v3-draft.review.json` → `.before-reset-0823`; the draft re-emitted from `seeds_v3`;
+**110 pending** — every verdict to be made under the current rulings. The accepts of
+08-21/22 are kept on disk as history, not as signatures.
+
+**What the code does now (commits 172ad24 · 182e35a · 001ff55):** `archive.learned(word)`
+serves {type · owners} for manifest and told words alike; `seam/values.py` lifts an assigned
+number+unit out of its phrase as a VALUE_KIND row, ranks owners by context + fit, carries a
+tie as `conflict` + hint; `Board.accept` is the owner's scrutiny read off `attr_classes`
+(`16gb` → 16384); a NEW target takes the accepted value for its creator, an EXISTING target
+without a setter REFUSES and gate 4 tells the operator. **Names as leaves are RULED, not yet
+READ** — the reader lifts units today; names are the next step.
+

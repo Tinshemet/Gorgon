@@ -79,6 +79,15 @@ down, offset maps composing back to original bytes, every repair a notice.
   amending them would re-open certified gold and is a release decision, not a fix. A reader
   scored against v1/v2/v2.1 is therefore never billed for a mood it did miss, and never
   credited for one it read. v3 is the first set where mood is scored.
+- **A NAME ASSIGNED AT CREATION IS FOLDED INTO ITS PHRASE IN v1/v2/v2.1 (declared
+  2026-08-23, not repaired).** The ruling ATTRIBUTES ARE LEAVES (08-23) makes every value
+  assigned at creation its own span, names included — `create a vm named alpha` is `a vm` +
+  `alpha` (role value, attribute name) — and v3 is shaped that way. The sealed sets predate
+  it: 5 clean cases in v1 (`ana-0001`, `coord-0002`, `cs-0001`, `cs-0003`, `mc-0003`) and
+  their noise twins in v2/v2.1 keep `a vm named alpha` as one object span. **Not
+  retro-fitted — a seal means a seal.** A reader that lifts the name scores a boundary miss
+  on those cases against v1/v2/v2.1 and is right to; v3 is the first set where the name is
+  scored as a leaf.
 
 ## What v3 added
 

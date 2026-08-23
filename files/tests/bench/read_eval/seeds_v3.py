@@ -50,13 +50,15 @@ SEEDS_V3: List[Seed] = [
          note="the unit names the attribute (gb -> memory_mb through the class); the "
               "value span is the quantity+unit token, bare — coord-0005's convention"),
     Seed("un-0002", "units", "create a vm with 4 cores and 8gb of ram",
-         ["a vm", "4 cores", "8gb of ram"], ["create"],
+         ["a vm", "4 cores", "8gb"], ["create"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"},
               {"span": 2, "role": "value"}]},
          note="RULED 08-21: 'each value should be scored indpendently' — spec values "
               "CARVED OUT: patient is the minted kind, every literal value its own "
-              "value-role span. (The line vs naming specs: literal values carve; a "
-              "generative naming spec stays whole — see nl-0001)"),
+              "value-role span. 08-23 (ATTRIBUTES ARE LEAVES): the value is the "
+              "NUMBER + UNIT the owner scrutinises — `8gb`, as un-0001's `16gb`; "
+              "`of ram` is the attribute word, context not value. (Naming specs are "
+              "leaves too now — see nl-0001)"),
     Seed("un-0003", "units", "set the cpu of the web vm to 4 cores",
          ["the web vm", "4 cores"], ["set"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}]},
@@ -296,25 +298,36 @@ SEEDS_V3: List[Seed] = [
          ["the oldest snapshot of alpha"], ["delete"], {0: [0]}),
 
     # ══ naming-lists — one act MINTING several names ═════════════════════════════════
+    # ⇒ 08-23, ATTRIBUTES ARE LEAVES — RULED: A NAME IS A LEAF. A name assigned at creation
+    #   is a value of its own (role value, attribute name), scrutinised by the owner; a name
+    #   that REFERS (`stop alpha`) stays in its phrase. Read together with 08-21's "a naming
+    #   spec is one generative unit": a LITERAL name is a leaf per name (a · b · c); a
+    #   GENERATOR spec is itself the leaf — ONE value span (`1-5`, `after musicians`) the
+    #   owner runs. The names it mints still never exist as bytes.
     Seed("nl-0001", "naming-lists", "create three vms named a, b and c",
-         ["three vms named a, b and c"], ["create"], {0: [0]},
-         note="RULED 08-21: ONE span carrying the mints — naming specs are often "
-              "GENERATORS (ranges, themes), not lists; the names may not exist as "
-              "bytes at all. Literal values carve (un-0002); a naming spec is one "
-              "generative unit — mints happen where the generator runs"),
+         ["three vms", ("a", 3), "b", ("c", 2)], ["create"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"},
+              {"span": 2, "role": "value"}, {"span": 3, "role": "value"}]},
+         note="RULED 08-21: naming specs are often GENERATORS. RULED 08-23: a name is a "
+              "LEAF — three literal names, three value spans, the patient is the minted "
+              "kind alone"),
     Seed("nl-0002", "naming-lists", "create two networks called front and back",
-         ["two networks called front and back"], ["create"], {0: [0]}),
+         ["two networks", "front", "back"], ["create"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"},
+              {"span": 2, "role": "value"}]}),
     Seed("nl-0003", "naming-lists", "create 5 vms named 1-5",
-         ["5 vms named 1-5"], ["create"], {0: [0]},
+         ["5 vms", "1-5"], ["create"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}]},
          note="the operator's own sentence — a RANGE generator: no five name spans "
-              "exist; the spec stays whole and the generator runs downstream"),
+              "exist; the SPEC is the leaf, one value span, and the generator runs "
+              "where the owner runs it"),
     Seed("nl-0004", "naming-lists",
          "create 3 vms named after musicians and a network called the stadium "
          "and add those vms to it",
-         ["3 vms named after musicians", "a network called the stadium", "those vms"],
+         ["3 vms", "after musicians", "a network", "the stadium", "those vms"],
          ["create", "add"],
-         {0: [0, 1],
-          1: [{"span": 2, "role": "patient"}, {"span": 1, "role": "destination"}]},
+         {0: [0, 1, 2, 3],            # one create, two mints: plain members, no direction
+          1: [{"span": 4, "role": "patient"}, {"span": 2, "role": "destination"}]},
          note="the operator's own sentence — a THEME generator plus a compound: one "
               "create distributing two mints (plain members, no direction claimed), "
               "then an add. RULED 08-22: 'add does not have a patient and a "
