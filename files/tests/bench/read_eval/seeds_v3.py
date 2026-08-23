@@ -19,10 +19,16 @@ from .schema import validate
 
 SEEDS_V3: List[Seed] = [
     # ══ identifiers — typed values the stores taught (ip/mac/serial mocks) ═══════════
+    # ⇒ 08-23, ATTRIBUTES ARE LEAVES — RULED: A SELECTING VALUE IS A LEAF TOO (schema v2.6,
+    #   role `selector`). `the vm at 10.0.0.5` is `the vm` + `10.0.0.5`, exactly as the
+    #   assigned `a vm` + `4 cores`; the role says it PICKS the thing rather than being given
+    #   to it. ba-0001's convention stands for THINGS: `the vms on the lab network` keeps `the
+    #   lab network` inside because a network is a thing the lab keeps, not a leaf value.
     Seed("id-0001", "identifiers", "stop the vm at 10.0.0.5",
-         ["the vm at 10.0.0.5"], ["stop"], {0: [0]},
-         note="an identifier in a restrictive PP is part of the NP, exactly as "
-              "'the vms on the lab network' is (ba-0001's convention)"),
+         ["the vm", "10.0.0.5"], ["stop"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector"}]},
+         note="RULED 08-23: a selecting identifier is its own span (role selector); "
+              "`at` is the preposition that makes it a selector, context not value"),
     Seed("id-0002", "identifiers", "which vm has mac aa:bb:cc:dd:ee:ff?",
          ["which vm", "aa:bb:cc:dd:ee:ff"], ["which vm has mac aa:bb:cc:dd:ee:ff"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}]},
@@ -36,7 +42,9 @@ SEEDS_V3: List[Seed] = [
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}]},
          note="identifier as ASSIGNED value — the attribute-class thesis, write side"),
     Seed("id-0004", "identifiers", "stop the vm with serial 7f3k-2210",
-         ["the vm with serial 7f3k-2210"], ["stop"], {0: [0]}),
+         ["the vm", "7f3k-2210"], ["stop"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector"}]},
+         note="RULED 08-23: selector leaf; `with serial` is the attribute word, context"),
     Seed("id-0005", "identifiers", "stop the vm at 8g:77q",
          ["the vm at 8g:77q"], ["stop"], {0: [0]},
          note="an identifier shape NO class declares — the read keeps the span whole; "
@@ -160,10 +168,15 @@ SEEDS_V3: List[Seed] = [
 
     # ══ magnitude — comparison over an attribute, the closed comparator class ════════
     Seed("mg-0001", "magnitude", "stop every vm with over 6gb of ram",
-         ["every vm with over 6gb of ram"], ["stop"], {0: [0]},
-         note="read 08-16 as (gt, 6, gb, memory_mb); the span is the filtered NP whole"),
+         ["every vm", "6gb"], ["stop"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector"}]},
+         note="read 08-16 as (gt, 6, gb, memory_mb). RULED 08-23: the value is a selector "
+              "leaf — NUMBER + UNIT as un-0002; `over` (the comparator) and `of ram` (the "
+              "attribute word) are context the READING carries (magnitudes_in), not gold"),
     Seed("mg-0002", "magnitude", "list the vms with more than 2 cores",
-         ["the vms with more than 2 cores"], ["list"], {0: [0]}),
+         ["the vms", "2 cores"], ["list"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector"}]},
+         note="RULED 08-23: selector leaf; `more than` is the comparator, context"),
     Seed("mg-0003", "magnitude", "delete the snapshots older than a month",
          ["the snapshots older than a month"], ["delete"], {0: [0]}),
 
@@ -724,7 +737,7 @@ SEEDS_V3: List[Seed] = [
               "אלפא) — #12 said names pass through the slot; does the sentence rule swallow "
               "that too?"),
     Seed("id-0001-cs", "identifiers", "תעצור את the vm at 10.0.0.5",
-         ["the vm at 10.0.0.5"], [], {},
+         ["the vm", "10.0.0.5"], [], {},
          noise="code-switch", pair_id="id-0001", outcome="reject",
          hint=("unsupported-language",
                "the sentence mixes languages — Gorgon reads English; the verb is not "

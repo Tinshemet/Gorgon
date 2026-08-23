@@ -46,11 +46,12 @@ def test_read_never_interprets_the_value():
     assert "16384" not in str(row) and "mb" not in row.span
 
 
-def test_a_selector_value_stays_in_its_phrase():
-    # inside an EXISTING phrase behind a selector preposition — where's and magnitudes_in's
+def test_a_selector_value_is_a_leaf_too_marked_as_selector():
+    # RULED 08-23 (v2.6): a selecting value is its own span; it PICKS, it is not given
     rows = _rows("stop every vm with over 6gb of ram")
-    assert not any(r.kind == "value" for r in rows)
-    assert rows[0].span.startswith("every vm with over 6gb")
+    val = next(r for r in rows if r.kind == "value")
+    assert val.span == "6gb" and val.value["selector"] and "refused" not in val.value
+    assert rows[0].span == "every vm"
 
 
 def test_a_value_is_never_a_handle():
@@ -116,11 +117,12 @@ def test_pw_0004_a_value_lifted_out_of_a_phrase_leaves_the_thing_behind():
     assert [g[0] for g in got] == ["web", "db", "4 cores", "8gb"]
 
 
-def test_mg_0002_a_magnitude_selector_is_not_lifted():
-    # the phrase swallowed the NUMBER and not the unit; the value starts inside it behind
-    # `with` — a selector, magnitudes_in's to read, not ours to lift
+def test_mg_0002_a_magnitude_selector_is_lifted_whole():
+    # the phrase had swallowed the NUMBER and not the unit; the value starts inside it
+    # behind `with` — a selector, lifted whole, its comparator named
     rows = _rows("list the vms with more than 2 cores")
-    assert not any(r.kind == "value" for r in rows)
+    val = next(r for r in rows if r.kind == "value")
+    assert val.span == "2 cores" and val.value["comparator"] == "more than"
 
 
 # ── step 3: the owner scrutinises, the target takes or refuses, the gate tells ──────────
@@ -265,14 +267,39 @@ def _shaped(s):
              for r in rows if r.kind == "value"])
 
 
-def test_id_0001_a_selector_ip_extends_the_phrase_and_fills_where():
-    things, values = _shaped("stop the vm at 10.0.0.5")
-    assert things == [("the vm at 10.0.0.5", "vm", {"ip": "10.0.0.5"})] and values == []
+def _sel(s):
+    rows = _rows(s)
+    return ([(r.span, r.kind, r.where) for r in rows if r.kind != "value"],
+            [(r.span, r.value["attribute"], r.value.get("selector"), r.value.get("comparator"))
+             for r in rows if r.kind == "value"])
 
 
-def test_id_0004_a_selector_serial_is_read_whole():
-    things, values = _shaped("stop the vm with serial 7f3k-2210")
-    assert things == [("the vm with serial 7f3k-2210", "vm", {"serial": "7f3k-2210"})] and values == []
+def test_id_0001_a_selecting_ip_is_its_own_span_and_the_phrase_keeps_the_filter():
+    # RULED 08-23 (schema v2.6, role selector): "wouldn't this make sense that 10.0.0.5 is
+    # a different span since it's an attribute?" — one rule for every value a class owns
+    things, values = _sel("stop the vm at 10.0.0.5")
+    assert things == [("the vm", "vm", {"ip": "10.0.0.5"})]
+    assert values == [("10.0.0.5", "ip", True, None)]
+
+
+def test_id_0004_a_selecting_serial_takes_its_attribute_word_as_context():
+    things, values = _sel("stop the vm with serial 7f3k-2210")
+    assert things == [("the vm", "vm", {"serial": "7f3k-2210"})]
+    assert values == [("7f3k-2210", "serial", True, None)]
+
+
+def test_mg_0001_a_compared_selector_names_its_comparator_and_fills_no_where():
+    # `where` holds one value per attribute and cannot hold a comparison (magnitudes_in's)
+    things, values = _sel("stop every vm with over 6gb of ram")
+    assert things == [("every vm", "vm", {})]
+    assert values == [("6gb", "memory_mb", True, "over")]
+    things, values = _sel("list the vms with more than 2 cores")
+    assert things == [("the vms", "vm", {})] and values == [("2 cores", "cpu_cores", True, "more than")]
+
+
+def test_a_duration_no_class_owns_stays_in_the_phrase():
+    things, values = _sel("delete the snapshots older than a month")
+    assert things == [("the snapshots older than a month", "snapshot", {})] and values == []
 
 
 def test_id_0002_a_query_value_is_a_predicate_not_an_assignment():

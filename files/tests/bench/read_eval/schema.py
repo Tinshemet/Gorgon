@@ -118,8 +118,14 @@ SPAN_TYPES = ("object", "evidence")
 #     `beneficiary` — for-whom ("a network for the test vms"): a silently dropped
 #     purpose qualifier (the linguistic sweep's measured gap) becomes a visible miss.
 #     A beneficiary expresses for-whom; it never infers extra acts.
+#   ⇒ **v2.6 — `selector` (RULED 08-23, ATTRIBUTES ARE LEAVES, ledger #17):** an attribute
+#     value that RESTRICTS the patient — `the vm at 10.0.0.5`, `every vm with over 6gb of
+#     ram` — is its own span like any other leaf; `selector` says it picks the thing rather
+#     than being given to it (`value`). One rule for every attribute value a class owns;
+#     a token no class owns (`8g:77q`) is not a leaf and stays in the phrase. Operator:
+#     *"wouldn't this make sense that 10.0.0.5 is a different span since it's an attribute?"*
 ROLES = ("patient", "destination", "source", "value", "excluded", "evidence",
-         "reference", "beneficiary")
+         "reference", "beneficiary", "selector")
 
 # ── v1.3: QUERY ACTS (operator, mid-review 08-18: mc-0002's second clause is "a dropped
 #   clause, that is a query"). A question is a THIRD of the sentence taxonomy — order ·

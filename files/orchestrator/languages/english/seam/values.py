@@ -16,11 +16,14 @@ So this file does FOUR things and refuses a fifth:
            it — in the same clause) + fit (the class declares this unit / the linked
            attribute agrees). The best wins; a TIE is a conflict, carried on the row with
            its hint — READ does not pick
-  3 PLACE  a value INSIDE an existing phrase behind a SELECTOR_PREPOSITION selects and stays
-           where it is (`the vm at 10.0.0.5`, `every vm with over 6gb of ram` — that is
-           `where`'s and `magnitudes_in`'s); every other value is ASSIGNED and becomes a
-           VALUE_KIND row of its own, lifted OUT of whatever phrase swallowed it
-           (`the db vm 16gb` -> `the db vm` + `16gb`; `a vm with 4` -> `a vm` + `4 cores`)
+  3 PLACE  every value a class owns is its own VALUE_KIND row, lifted OUT of whatever
+           phrase swallowed it (`the db vm 16gb` -> `the db vm` + `16gb`; `a vm with 4` ->
+           `a vm` + `4 cores`). One that sits INSIDE an existing phrase behind a
+           SELECTOR_PREPOSITION is a SELECTOR (`the vm at ▸10.0.0.5`, `every vm with over
+           ▸6gb of ram`): it picks the thing rather than being given to it — the phrase keeps
+           the filter in `where` (unless a comparator governs it, which `magnitudes_in`
+           carries), and the span is the value's own. RULED 08-23: *"wouldn't this make
+           sense that 10.0.0.5 is a different span since it's an attribute?"* — one rule.
   4 CLEAN  a kindless row that is the value itself or its attribute word (`8gb`, `ram`,
            `the cpu`) is not a thing — it is consumed by the value that explains it
   5 ASSIGN (step 3, 08-23) the value to its TARGET — the owner-class row in the clause.
@@ -37,11 +40,10 @@ So this file does FOUR things and refuses a fifth:
            itself the one leaf the owner runs (#11: one generative unit). A name on an
            EXISTING thing refers (`stop the vm named web`) and stays in its phrase.
   7 SHAPE  (step 5) a token matching a declared class's `shape` — an ip, a mac, a serial —
-           is a value of that attribute wherever it stands. Inside an existing phrase behind
-           a selector preposition it SELECTS: the phrase is extended over it (the walk cut
-           `10.0.0.5` at the first `.`) and it fills `where`. In a question it is a
-           PREDICATE value (`which vm has mac …`): its own span, nothing assigned, nothing
-           refused. Otherwise it is assigned like any value (`give the web vm the ip …`).
+           is a value of that attribute wherever it stands: a selector behind `at`/`with`
+           (the walk had cut `10.0.0.5` at the first `.`), a PREDICATE value in a question
+           (`which vm has mac …` — its own span, nothing assigned, nothing refused), or
+           assigned like any value (`give the web vm the ip …`).
   ✗ NEVER  interpret the value HERE. The span stays the bytes `16gb`; the number 16384 is
            the owner's answer, recorded beside it, never in its place.
 
@@ -81,6 +83,10 @@ def _candidates(request: str, board, archive) -> List[dict]:
         if not entries:
             continue
         start, end = m.start(), m.end()
+        # a quantity is a WHOLE token: `8g` inside `8g:77q` is an identifier's piece, not
+        # eight gigabytes (id-0005, the decoy no class owns — 08-23)
+        if (start > 0 and low[start - 1] in ":-/_@.") or (end < len(low) and low[end] in ":-/_@"):
+            continue
         # the attribute word that names which attribute a bare unit belongs to: `8gb OF ram`
         linked = None
         tail = re.match(r"\s+(%s)\s+(?:the\s+)?([a-z_]+)" % "|".join(ATTRIBUTE_LINKERS),
@@ -274,39 +280,15 @@ def _shape_candidates(request: str, board, archive) -> List[dict]:
     return out
 
 
-def _extend_selector(rows: List[S.Declared], cand: dict, request: str,
-                     board) -> List[S.Declared]:
-    """A shaped value that SELECTS: the phrase that holds its head is extended over the
-    whole value (`the vm at 10` -> `the vm at 10.0.0.5`) and the value fills `where`;
-    a kindless row that is a piece of the value (`5`) is consumed."""
-    low = str(request).lower()
-    out: List[S.Declared] = []
-    for r in rows:
-        if r.object_type == S.VALUE_KIND:
-            out.append(r)
-            continue
-        span = str(r.span or "")
-        at = low.find(span.lower())
-        if at < 0 or not (at <= cand["start"] < at + len(span)):
-            if _is_consumed(r, cand, request, board):
-                continue
-            out.append(r)
-            continue
-        new_span = request[at:max(at + len(span), cand["end"])]
-        accepted, reason = board.accept(r.kind if r.kind in board.kinds else cand["owner"],
-                                        cand["attribute"], cand["text"])
-        where = dict(r.where or {})
-        if not reason:
-            where[cand["attribute"]] = accepted
-        if new_span == span and where == (r.where or {}):
-            out.append(r)
-            continue
-        out.append(S.declare_from(new_span, r.object_type, where, r.existence, board,
-                                  references=list(r.references), count=r.count,
-                                  comparator=r.comparator, span=new_span, identity=r.identity,
-                                  sanctioned=r.sanctioned)._replace(
-                                      excludes=r.excludes, unroutable=r.unroutable))
-    return out
+def _comparator_before(request: str, at: int) -> Optional[str]:
+    """The MAGNITUDE phrase right before a value (`over`, `more than`) — a comparison
+    `where` cannot hold; `magnitudes_in` carries it. Named here so the value row says so."""
+    from ..codex import MAGNITUDE
+    head = str(request).lower()[:at].rstrip()
+    for phrase in sorted(MAGNITUDE, key=len, reverse=True):
+        if head.endswith(phrase):
+            return phrase
+    return None
 
 
 def _is_predicate(v: S.Declared, request: str) -> bool:
@@ -367,6 +349,17 @@ def _selects(cand: dict, rows: List[S.Declared], request: str) -> bool:
     return False
 
 
+def _dangling(board) -> set:
+    """What a lifted value leaves hanging at a phrase's edge and takes with it: a connector
+    or preposition (`with`, `at`, `of`), a naming cue (`named`), a comparator word (`over`,
+    `more than`). An attribute word (`serial`, `ram`) is tested separately, by name."""
+    from ..codex import MAGNITUDE
+    out = set(VALUE_CONNECTORS) | set(NAMING_CUES) | set(SELECTOR_PREPOSITIONS) | {"as"}
+    for phrase in MAGNITUDE:
+        out |= set(str(phrase).split())
+    return out
+
+
 def _lift(row: S.Declared, cand: dict, request: str, board) -> Optional[S.Declared]:
     """The row with the value cut out of its phrase; None if nothing is left of it."""
     low = str(request).lower()
@@ -384,8 +377,9 @@ def _lift(row: S.Declared, cand: dict, request: str, board) -> Optional[S.Declar
         if gap:
             return row                              # something else stands between
         words = span.split()
-        dangling = set(VALUE_CONNECTORS) | set(NAMING_CUES) | {"as"}
-        while words and words[-1].strip(".,'\"").lower() in dangling:
+        dangling = _dangling(board)
+        while words and (words[-1].strip(".,'\"").lower() in dangling
+                         or _attribute_named(words[-1].strip(".,'\""), board)):
             words.pop()
         new = " ".join(words).strip(" ,")
         if not new or new == span or all(w.lower() in _DETS for w in new.split()):
@@ -401,8 +395,9 @@ def _lift(row: S.Declared, cand: dict, request: str, board) -> Optional[S.Declar
     right = request[min(e0, cand["end"]):e0].lstrip()
     kept = left if left.strip() else right
     words = kept.split()
-    dangling = set(VALUE_CONNECTORS) | set(NAMING_CUES) | {"as"}
-    while words and words[-1].strip(".,'\"").lower() in dangling:
+    dangling = _dangling(board)
+    while words and (words[-1].strip(".,'\"").lower() in dangling
+                     or _attribute_named(words[-1].strip(".,'\""), board)):
         words.pop()
     while words and words[0].strip(".,'\"").lower() in VALUE_CONNECTORS:
         words.pop(0)
@@ -452,10 +447,7 @@ def read_values(rows: List[S.Declared], request: str, board=None,
     out = list(rows)
     values: List[S.Declared] = []
     for cand in cands:
-        if _selects(cand, out, request):
-            if cand.get("shaped"):
-                out = _extend_selector(out, cand, request, board)
-            continue
+        cand["selector"] = _selects(cand, out, request)
         if cand.get("naming") or cand.get("shaped"):
             scores = {cand["owner"]: 2}
         else:
@@ -488,6 +480,9 @@ def read_values(rows: List[S.Declared], request: str, board=None,
                      "hint": f"'{cand['word']}' creates a conflict between "
                              + " and ".join(w.capitalize() for w in winners)}
         cand["attribute"] = attribute
+        if cand["selector"]:
+            value["selector"] = True
+            value["comparator"] = _comparator_before(request, cand["start"])
         lifted: List[S.Declared] = []
         consumed: List[str] = []
         for r in out:
@@ -568,6 +563,18 @@ def _assign(things: List[S.Declared], values: List[S.Declared], request: str, bo
         accepted, reason = board.accept(target.kind if target.kind in board.kinds else owner,
                                         attribute, v.span)
         info["target"] = target.span
+        if info.get("selector"):
+            # it PICKS the thing: the phrase keeps the filter, nothing is given or refused
+            if reason:
+                info["malformed"] = reason
+            else:
+                info["accepted"] = accepted
+                if not info.get("comparator"):
+                    where = dict(target.where or {})
+                    where[attribute] = accepted
+                    out[target_ix] = target._replace(where=where)
+            done.append(v._replace(value=info, references=claims))
+            continue
         if _is_predicate(v, request):
             info["predicate"] = True                 # `which vm has mac …` — asked, not set
             if reason:

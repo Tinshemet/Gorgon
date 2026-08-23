@@ -546,3 +546,16 @@ tie as `conflict` + hint; `Board.accept` is the owner's scrutiny read off `attr_
 without a setter REFUSES and gate 4 tells the operator. **Names as leaves are RULED, not yet
 READ** — the reader lifts units today; names are the next step.
 
+### 17b · A SELECTING VALUE IS A LEAF TOO — role `selector`, schema v2.6 (operator, 2026-08-23)
+
+Asked on id-0001: *"stop [the vm at 10.0.0.5] — wouldn't this make sense that 10.0.0.5 is a
+different span since it's an attribute?"* Ruled yes: one rule for every attribute value a class
+owns — its own span whether it is GIVEN to the thing (`value`) or PICKS it (`selector`). The
+owner scrutinises a selector exactly as an assignment (`8g:77q` is no ip, which is how the lab
+knows it cannot look it up). A token no class owns stays in the phrase (id-0005, mg-0003's
+`a month`); a THING inside a phrase stays too (`the vms on the lab network` — a network is a
+thing, ba-0001's convention stands). Reshaped: id-0001 · id-0004 · id-0001-cs (`the vm` +
+the identifier), mg-0001 · mg-0002 (`every vm` + `6gb`, `the vms` + `2 cores`; the comparator
+and the attribute word are context the reading carries). The reader lifts selectors like every
+other leaf; the phrase keeps the filter in `where` unless a comparator governs it.
+
