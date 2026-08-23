@@ -601,3 +601,23 @@ operator had already keyed ACCEPT on po-0001 · po-0002 · po-0003 under the old
 withdrew it here; those three accepts are STALE against the corrected gold and are re-asked.
 po-0001-ej was never keyed and stays pending.
 
+## 20 · AN UNSHAPED IDENTIFIER IN THE SELECTOR SLOT IS AN ATTRIBUTE VALUE (operator, 2026-08-23/24)
+
+Rejecting id-0005 mid-grading: *"8g:77q is a selector"*, then, asked to rule: *"8g:77q is an
+attribute the same way an ip is, so it should be treated the same."* This overturns #17b's
+one clause "a token no class owns stays in the phrase" — the SLOT is the licence, exactly as
+the genitive slot is in #19: `the vm at ▸8g:77q` reads as `the vm` (patient) + `8g:77q`
+(selector), and what differs from an ip is only the WORLD's answer at ASSIGN — the vm declares
+no attribute of that shape, so the owner REFUSES and gate 4 asks the operator which attribute
+it is. The old downstream (a capability BOUNCE to the model) asked the one party that cannot
+know. 8g:77q itself is invented — planted 08-20 as the decoy no class owns — but the situation
+it stands for is real: a serial from another system, a typo'd mac, a store the lab cannot read.
+
+Built the same day (`values.py` rule 9 SELECT-UNSHAPED): the slot claims only an identifier
+SHAPE — a digit or a separator in the token. The first cut fired on bare words and the controls
+caught it before commit: `on lab` (rr-0001, ba-0001-te), `in here` (nt-0003), `than you`
+(adj-0004, SEALED) — a bare word may be a NAME and stays in the phrase, ba-0001's convention
+intact. Guards: declared shape (7's) · quantity (1's) · English (cc-0007) · clock (`at 21:30`,
+qual-0005 sealed ×3, unmoved) · state · thing · attribute word · comparator. Capture: id-0005
+the only mover in all four files; sealed 365/365 identical; suite 985.
+

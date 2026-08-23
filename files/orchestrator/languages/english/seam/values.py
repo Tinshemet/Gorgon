@@ -57,6 +57,18 @@ So this file does FOUR things and refuses a fifth:
            — `beta has no 'disk'`. A leaf REFERS; it is never assigned, so no setter is
            needed. NOT read here: the copula contraction (`alpha's running` — `running` is a
            declared VALUE, so the split is refused) · possessive pronouns (proforms).
+  9 SELECT-UNSHAPED (ledger #20, 08-23) a token in the SELECTOR SLOT of an existing
+           phrase — `the vm at ▸8g:77q` — is an attribute value even when no class declares
+           its shape. The operator, rejecting id-0005: *"8g:77q is an attribute the same way
+           an ip is, so it should be treated the same."* READ spans it exactly as it spans an
+           ip; the owner's scrutiny at ASSIGN is what differs — an attribute nobody declares
+           is REFUSED, and gate 4 asks the operator which attribute it is (never a BOUNCE to
+           the model, which cannot know). Overturns #17b's "stays in the phrase" clause.
+           Only an identifier SHAPE (a digit or a separator in the token) claims the
+           slot — a bare word may be a NAME (`on lab`, ba-0001) and stays in the phrase.
+           Guarded: a declared shape (7's) · a quantity (1's) · English (cc-0007) · a clock
+           (`at 21:30` — temporal's, already cut from the phrase) · a state · a thing (the
+           vms ON THE LAB NETWORK, ba-0001) · an attribute word (`with SERIAL …`, context).
   ✗ NEVER  interpret the value HERE. The span stays the bytes `16gb`; the number 16384 is
            the owner's answer, recorded beside it, never in its place.
 
@@ -290,6 +302,54 @@ def _shape_candidates(request: str, board, archive) -> List[dict]:
             out.append({"text": request[start:end], "start": start, "end": end, "word": attr,
                         "entries": entries, "linked": attr, "linked_text": linked_text,
                         "shaped": True, "owner": kind, "attribute": attr})
+            break
+    return out
+
+
+def _unshaped_selector_candidates(rows: List[S.Declared], request: str, board,
+                                  archive) -> List[dict]:
+    """Rule 9 — the slot, not the shape, is the licence; the world answers at ASSIGN."""
+    from .scan import _index
+    from .temporal import clock_in
+    low = str(request).lower()
+    shapes = [re.compile(str(cls["shape"])) for spec in (board.kinds or {}).values()
+              for cls in ((spec or {}).get("attr_classes") or {}).values()
+              if isinstance(cls, dict) and cls.get("shape")]
+    stop = _stop_words(board) | _dangling(board)     # `more than`, `over` — a comparator
+    states = _declared_values(board)                 #   heads the value, it never IS one
+    nouns = _index(board)
+    preps = "|".join(sorted(SELECTOR_PREPOSITIONS, key=len, reverse=True))
+    out: List[dict] = []
+    for r in rows:
+        if r.object_type == S.VALUE_KIND or r.existence != S.EXISTING:
+            continue
+        span = str(r.span or r.name)
+        at = low.find(span.lower())
+        if at < 0:
+            continue
+        for m in re.finditer(r"\b(%s)\s+(\S+)" % preps, span.lower()):
+            tok = m.group(2).rstrip("?.,;:!'\"")
+            if not tok or len(tok) < 3:
+                continue
+            if not (re.search(r"\d", tok) or re.search(r"[:\-_@./]", tok)):
+                continue                        # a BARE WORD may be a NAME (`on lab`, ba-0001)
+                                                #   — only an identifier SHAPE claims the slot
+            if any(p in stop for p in re.split(r"[-:.]", tok) if p):
+                continue                        # an identifier is never made of English
+            if tok in states or tok in nouns or _attribute_named(tok, board):
+                continue                        # a state, a thing, or the attribute WORD
+            if any(rx.fullmatch(tok) for rx in shapes):
+                continue                        # a declared shape — step 7 owns it
+            if _NUMBER_UNIT.fullmatch(tok) or tok.replace(".", "").isdigit():
+                continue                        # a quantity — step 1 owns it
+            if clock_in(m.group(0)):
+                continue                        # a time is the trigger's, not a selector
+            start = at + m.start(2)
+            out.append({"text": request[start:start + len(tok)], "start": start,
+                        "end": start + len(tok), "word": tok, "entries": [],
+                        "linked": None, "linked_text": "", "unshaped": True,
+                        "owner": r.kind if r.kind in board.kinds else "?",
+                        "attribute": None})
             break
     return out
 
@@ -586,7 +646,8 @@ def read_values(rows: List[S.Declared], request: str, board=None,
         return rows                                 # already read
     cands = (_candidates(request, board, archive) + _naming_candidates(rows, request, board)
              + _shape_candidates(request, board, archive)
-             + _genitive_candidates(rows, request, board, archive))
+             + _genitive_candidates(rows, request, board, archive)
+             + _unshaped_selector_candidates(rows, request, board, archive))
     if not cands:
         return rows
     cands.sort(key=lambda c: c["start"])
@@ -594,7 +655,8 @@ def read_values(rows: List[S.Declared], request: str, board=None,
     values: List[S.Declared] = []
     for cand in cands:
         cand["selector"] = _selects(cand, out, request)
-        if cand.get("naming") or cand.get("shaped") or cand.get("genitive"):
+        if (cand.get("naming") or cand.get("shaped") or cand.get("genitive")
+                or cand.get("unshaped")):
             scores = {cand["owner"]: 2}
         else:
             scores = rank_owners(cand, out, request, archive)
@@ -611,6 +673,13 @@ def read_values(rows: List[S.Declared], request: str, board=None,
             owner, attribute = cand["owner"], cand["attribute"]
             value = {"word": cand["word"], "attribute": attribute, "owner": owner,
                      "linked": attribute, "linked_text": cand["linked_text"], "shaped": True}
+        elif cand.get("unshaped"):
+            owner, attribute = cand["owner"], None
+            thing = f"a {owner}" if owner != "?" else "the thing"
+            value = {"word": cand["word"], "attribute": None, "owner": owner,
+                     "linked": None, "linked_text": "", "unshaped": True,
+                     "hint": (f"{cand['text']!r} picks {thing} by an attribute this lab "
+                              f"does not declare — which is it?")}
         elif cand.get("genitive"):
             owner, attribute = cand["owner"], cand["attribute"]
             value = {"word": cand["word"], "attribute": attribute, "owner": owner,
@@ -700,6 +769,14 @@ def _assign(things: List[S.Declared], values: List[S.Declared], request: str, bo
         # (`of memory`) — so gate 1 counts those words as read
         claims = [t for t in [info.get("linked_text") or "", *(info.get("consumed") or ())]
                   if str(t).strip()]
+        if info.get("unshaped"):
+            # rule 9: the slot licensed the span; nobody declares the attribute — the
+            # owner refuses, and gate 4 asks the operator (never the model)
+            target_ix = _target_of(v, out, request, str(info.get("owner") or ""), archive)
+            info["target"] = out[target_ix].span if target_ix is not None else None
+            info["refused"] = info["hint"]
+            done.append(v._replace(value=info, references=claims))
+            continue
         if info.get("genitive"):
             # rule 8: the grammar named the target; the leaf REFERS, nothing is set
             target_ix = next((i for i, r in enumerate(out) if r.object_type != S.VALUE_KIND

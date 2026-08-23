@@ -316,9 +316,13 @@ def test_id_0003_an_assigned_ip_on_an_existing_vm_is_refused_by_the_owner():
     assert any("cannot set ip on an existing vm" in a for a in r.asks) and r.outcome == "ASK"
 
 
-def test_id_0005_a_token_no_class_declares_is_not_a_value():
+def test_id_0005_a_token_in_the_selector_slot_is_a_value_even_unshaped():
+    # RULED 08-23 (ledger #20), overturning #17b's stays-in-the-phrase clause: "8g:77q is
+    # an attribute the same way an ip is, so it should be treated the same" — the slot is
+    # the licence; the owner refuses what nobody declares and gate 4 asks the operator
     things, values = _shaped("stop the vm at 8g:77q")
-    assert things == [("the vm at 8g:77q", "vm", {})] and values == []
+    assert things == [("the vm", "vm", {})]
+    assert values == [("8g:77q", None, {"refused"})]
 
 
 def test_a_shaped_value_at_creation_is_taken_by_the_creator():
@@ -413,3 +417,38 @@ def test_the_verb_governs_the_leaf_not_its_owner():
 def test_rule_8_is_idempotent():
     rows = _rows("delete alpha's snapshots")
     assert V.read_values(rows, "delete alpha's snapshots", B) == rows
+
+
+# ── rule 9 · SELECT-UNSHAPED — the slot is the licence, the owner answers (ledger #20) ───────
+
+def test_an_unshaped_selector_is_refused_with_the_ask():
+    refused = [r.value["refused"] for r in _rows("stop the vm at 8g:77q") if r.kind == "value"]
+    assert refused and "'8g:77q'" in refused[0] and "which is it" in refused[0]
+
+
+def test_the_ask_reaches_the_operator_not_the_model():
+    r = _piped("stop the vm at 8g:77q")
+    assert any("8g:77q" in a for a in r.asks), r.asks
+
+
+def test_a_bare_word_in_the_slot_may_be_a_name_and_stays():
+    # ba-0001's convention holds: `lab` behind `on` is a NAME, not an attribute value —
+    # only an identifier SHAPE (a digit or separator) claims the slot (rr-0001, adj-0004)
+    for s in ("stop the vms running on lab", "stop the vm at zzz"):
+        assert not any(r.kind == "value" for r in _rows(s)), s
+
+
+def test_a_clock_is_never_a_selector():
+    # qual-0005 (sealed x3) and dt-0001 share the slot's preposition with a TIME
+    for s in ("snapshot every vm at 21:30", "stop every vm at 9pm"):
+        assert not any(r.kind == "value" for r in _rows(s)), s
+
+
+def test_a_thing_and_an_attribute_word_stay_in_the_phrase():
+    things, values = _shaped("stop the vms on the lab network")
+    assert values == [] and things[0][2] == {"network": "lab"}
+
+
+def test_rule_9_is_idempotent():
+    rows = _rows("stop the vm at 8g:77q")
+    assert V.read_values(rows, "stop the vm at 8g:77q", B) == rows

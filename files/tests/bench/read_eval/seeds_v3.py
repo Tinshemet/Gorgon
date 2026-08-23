@@ -46,10 +46,14 @@ SEEDS_V3: List[Seed] = [
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector"}]},
          note="RULED 08-23: selector leaf; `with serial` is the attribute word, context"),
     Seed("id-0005", "identifiers", "stop the vm at 8g:77q",
-         ["the vm at 8g:77q"], ["stop"], {0: [0]},
-         note="an identifier shape NO class declares — the read keeps the span whole; "
-              "the BOUNCE (a class with no reader) is downstream and deliberate "
-              "([[gorgon-attribute-classes]]: unknown-noun ASK becomes capability BOUNCE)"),
+         ["the vm", "8g:77q"], ["stop"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector"}]},
+         note="RULED 08-23 (ledger #20): '8g:77q is an attribute the same way an ip is, so it "
+              "should be treated the same' — a token in the selector slot is an attribute "
+              "value, its own span, whether or not a class declares its shape; the OWNER "
+              "decides: an ip is accepted into `where`, this is refused and the operator is "
+              "asked which attribute it is. (#17b's 'stays in the phrase' clause overturned; "
+              "the old downstream was a capability BOUNCE, now an ASK.)"),
 
     # ══ units — quantity + unit paired to a declared attribute ═══════════════════════
     Seed("un-0001", "units", "give the db vm 16gb of memory",
