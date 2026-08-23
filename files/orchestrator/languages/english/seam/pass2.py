@@ -325,6 +325,13 @@ def _first_cut(piece: str):
         predicate has been seen, nothing cuts — a long subject cannot fake it
       6 a second imperative (a base-form operation word taking a determiner object)
         is its own clause (`don't stop the web vm ▸ stop the db vm`)
+      8 a GOAL head (`make sure`, `ensure`, `verify that` — ACHIEVE_MARKERS) takes a
+        CLAUSE, not an object: the noun phrase after it is a SUBJECT and the first
+        base-form op word after that is its PREDICATE, not a second imperative — rule 5's
+        discipline, extended. A CUT MUST NOT SPLIT A NOUN PHRASE FROM THE PREDICATE THAT
+        RESTRICTS IT: `exactly 3 vms ▸ carry the 'prod' label` lost `label=prod` and
+        became `count(vm)=3` — the DELETION shape (language benchmark rung 7, 08-22).
+        Once that predicate is seen, a later imperative cuts as before.
     Quotes are opaque. A piece none of this touches returns whole — fail closed.
     Deliberately NOT here: bare-name lists without commas (scan's NP reading) and value
     respeaks without commas (self_repair's) — named out of scope, not forgotten.
@@ -379,7 +386,11 @@ def _first_cut(piece: str):
                 return cut
     # 5 · a piece-initial condition head: the subordinate ends after its predicate
     # 6 · a second imperative is its own clause  (one walk serves both)
-    conditioned = words[0] in ({"if", "unless", "when", "whenever"} | set(_T.EVENTS))
+    from ..codex import ACHIEVE_MARKERS
+    # 8 · a goal head's complement is a clause — its subject's predicate must be seen
+    goal_headed = any(low.lstrip().startswith(m) for m in ACHIEVE_MARKERS)
+    conditioned = (words[0] in ({"if", "unless", "when", "whenever"} | set(_T.EVENTS))
+                   or goal_headed)
     from .scan import _operation_words
     base_ops = {w for w in _operation_words(None)
                 if not w.endswith("s") and w not in GRAMMAR}
@@ -389,6 +400,13 @@ def _first_cut(piece: str):
         prev, nxt = words[i - 1], words[i + 1]
         if w in AUXILIARIES or (w.endswith("s") and w not in GRAMMAR
                                 and w not in NON_VERB_SEGMENTS):
+            predicate_seen = True
+            continue
+        # 8 · a PLURAL subject's predicate is base-form — the exact shape of an
+        #     imperative. Inside a subordinate, the first such word is the predicate
+        #     (`3 vms CARRY the label`, `you STOP the web vm`), never a cut.
+        if (conditioned and not predicate_seen and w in base_ops and nxt in _CUT_DETS
+                and prev not in _CUT_NEG and prev not in AUXILIARIES):
             predicate_seen = True
             continue
         if (nxt in _CUT_DETS and w not in GRAMMAR and w not in _CUT_DETS
