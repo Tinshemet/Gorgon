@@ -78,6 +78,15 @@ class Declared(NamedTuple):
     #   `a vm with 4 cores` is not "the vms where cpu_cores = 4" — an assignment names nothing
     #   (no `4_vms` handle) and the request never "says" the owner's converted number (gate 1).
     assigned: Tuple[str, ...] = ()
+    # ⇒⇒ THE LATER MENTIONS OF THIS THING, WITH OFFSETS (08-23, ledger #18): `those vms`
+    #   after `3 vms`, `it` after `a network`. Bound by NUMBER AGREEMENT — the operator:
+    #   *"'those' is plural, and the only plural here is '3 vms' — it should be paired based
+    #   on the plurality"* — with a matching noun or modifier as the tie-breaker; a tie
+    #   binds nothing and is carried as a conflict for ROUTE. Each: {text, start, end,
+    #   number, bare}. `references` keeps the words (the older carrier); this keeps the
+    #   evidence. A full-phrase mention is reported as a span; a bare pronoun is not (the
+    #   gold points at the thing, never at the pointer).
+    mentions: Tuple[dict, ...] = ()
     # ⇒⇒ **THE OPERATOR SAID SO — provenance on `existence`, not a second copy of it.**
     #   `existence` is the model's weakest field (85%, every error toward NEW), which is why
     #   `derive_creators` refuses to mint anything NAMED: a wrong NEW would quietly build a

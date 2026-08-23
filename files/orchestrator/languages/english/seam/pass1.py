@@ -758,6 +758,10 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
     #   duplicate-carve check makes the pipeline's own later call harmless.
     rows = resolve_proforms(rows)
     rows = attach_exclusions(rows, board, request=request)
+    # ⇒ A LATER MENTION BINDS BY NUMBER AGREEMENT (08-23, ledger #18) — before the values,
+    #   so a value can reach its target through the mention (`give IT 4 cores`)
+    from .proforms import bind_mentions
+    rows = bind_mentions(rows, request, board)
     # ⇒ AND AN ASSIGNED VALUE IS ITS OWN SPAN (08-23, [[gorgon-attributes-are-leaves]]) —
     #   on the same one path, for the same reason. `the db vm 16gb` was one row.
     from .values import read_values

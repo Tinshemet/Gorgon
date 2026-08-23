@@ -181,6 +181,16 @@ def read_case(sentence: str, board=None) -> dict:
                                 "where": dict(row.where or {}),
                                 "start": where[0] if where else None,
                                 "end": where[1] if where else None})
+        # ⇒ A FULL-PHRASE LATER MENTION IS A SPAN OF THE SAME THING (08-23, ledger #18):
+        #   `those vms` after `3 vms` is the patient of `add`, and the gold spans it. A bare
+        #   pronoun is bound but never reported — the gold points at the thing, not the
+        #   pointer. A tied mention bound nothing and is reported by the gate, not here.
+        for m in (getattr(row, "mentions", None) or ()):
+            if m.get("bound") and not m.get("bare"):
+                predicted_spans.append({"row": i, "span": m["text"], "kind": row.object_type,
+                                        "type": "object", "where": dict(row.where or {}),
+                                        "start": int(m["start"]), "end": int(m["end"]),
+                                        "mention": True})
     # ⇒⇒ **THE SEAM'S EVIDENCE READING WAS NEVER COLLECTED — found on the first shakedown.**
     #   `quoted_clauses` has read *"the log says 'cannot allocate memory'"* since 08-16, and
     #   this function surfaced only pass 1's ROWS — so a gold evidence span could never be

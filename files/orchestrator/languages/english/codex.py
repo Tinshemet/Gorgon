@@ -185,6 +185,20 @@ ACHIEVE_MARKERS = ("make sure", "makes sure", "ensure", "ensures", "there should
 
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
+# ═ PASS 1 — the PRO-FORM reader (consumer: seam/proforms.py)
+# ═   A later mention binds to the thing it AGREES with in NUMBER (operator, 08-23, ledger
+# ═   #18): `those` is plural, so it pairs with the only plural thing; `it` with the only
+# ═   singular one. These two classes say which number a pro-form carries.
+# ═══════════════════════════════════════════════════════════════════════════════════════
+
+SINGULAR_PROFORMS = frozenset({"it", "this", "that", "one", "the one"})
+PLURAL_PROFORMS = frozenset({"them", "they", "these", "those", "both", "ones", "the ones",
+                             "the rest", "the others", "all of them", "each of them"})
+# a demonstrative that may HEAD a phrase — `those vms`, `this network` — carrying its number
+DEMONSTRATIVES = {"this": "one", "that": "one", "these": "many", "those": "many"}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════
 # ═ PASS 1 — the VALUE reader (consumer: seam/values.py)
 # ═   ATTRIBUTES ARE LEAVES (operator, 08-23): a learned unit or attribute word in an owner's
 # ═   context is spanned as a value of its own. These two classes decide WHERE it sits.

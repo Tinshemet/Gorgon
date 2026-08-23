@@ -68,6 +68,15 @@ def refused_values(rows, board: Optional[Board] = None) -> List[str]:
     return out
 
 
+def unbound_mentions(rows) -> List[str]:
+    """A later mention two things could be — to the operator, once (08-23, ledger #18).
+    *"create a vm and a network, then stop it"*: both agree with `it` in number and nothing
+    picks one. Not a guess to make — the 08-22 bare-pronoun rule points at the thing, and
+    here there are two."""
+    from .proforms import unbound
+    return unbound(rows)
+
+
 def unhonourable_exclusions(table, board: Optional[Board] = None) -> List[str]:
     """A set that leaves something out, that the ENGINE could not actually express.
 

@@ -559,3 +559,19 @@ the identifier), mg-0001 · mg-0002 (`every vm` + `6gb`, `the vms` + `2 cores`; 
 and the attribute word are context the reading carries). The reader lifts selectors like every
 other leaf; the phrase keeps the filter in `where` unless a comparator governs it.
 
+## 18 · A LATER MENTION BINDS BY NUMBER AGREEMENT (operator, 2026-08-23)
+
+On nl-0004's one miss — `add THOSE VMS to IT` — the operator: *"'those' is plural, and the only
+plural here is the '3 vms', meaning it should be paired based on the plurality."* Three
+mechanisms had bound a later mention and none looked at number: the scan re-sighting the same
+NOUN, the bare-pronoun rule taking the MOST RECENT row, `resolve_proforms` matching a
+modifier's CONTENT. Ruled: a mention carries a NUMBER (the codex's SINGULAR_PROFORMS /
+PLURAL_PROFORMS, or the demonstrative heading a phrase); its candidates are the things declared
+before it; AGREEMENT filters; a matching noun or modifier is the tie-breaker; exactly one best
+binds, more than one binds NOTHING and travels to ROUTE as an ASK — *"'it' could be a vm or a
+network"* — the same shape as the leaf rule. A full-phrase mention (`those vms`) is reported as
+a span of its own thing; a bare pronoun is bound but never reported (the 08-22 rule: point at
+the thing, never the pointer). Built as `seam/proforms.py` on the live path; nl-0004 reads
+5/5. **The v3 draft was RESET AGAIN at the operator's word so every key is made under #17,
+#17b and #18 together: 110 pending.**
+

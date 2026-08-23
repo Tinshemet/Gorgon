@@ -388,7 +388,8 @@ def _lift(row: S.Declared, cand: dict, request: str, board) -> Optional[S.Declar
                               board, references=list(row.references), count=row.count,
                               comparator=row.comparator, span=new, identity=row.identity,
                               sanctioned=row.sanctioned)._replace(
-                                  excludes=row.excludes, unroutable=row.unroutable)
+                                  excludes=row.excludes, unroutable=row.unroutable,
+                                  mentions=row.mentions, assigned=row.assigned)
     # keep the side of the phrase that does not hold the value (the value never sits mid-phrase
     # with content on both sides that belongs to the thing — if it does, keep the head side)
     left = request[s0:max(s0, cand["start"])].rstrip()
@@ -410,7 +411,8 @@ def _lift(row: S.Declared, cand: dict, request: str, board) -> Optional[S.Declar
                           references=list(row.references), count=row.count,
                           comparator=row.comparator, span=new, identity=row.identity,
                           sanctioned=row.sanctioned)._replace(
-                              excludes=row.excludes, unroutable=row.unroutable)
+                              excludes=row.excludes, unroutable=row.unroutable,
+                              mentions=row.mentions, assigned=row.assigned)
 
 
 def _is_consumed(row: S.Declared, cand: dict, request: str, board) -> bool:
