@@ -805,6 +805,8 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     asks += gate4.confirmations(operations, table, request, board)
     # ⇒ A VALUE THE OWNER REFUSED — the lab's limit, to the operator (08-23)
     asks += gate4.refused_values(rows, board)
+    # ⇒ A LEAF THE VERB ACTS ON THAT NO STEP TAKES — the lab's limit, to the operator (#19)
+    asks += gate4.ungoverned_leaves(rows, operations, table)
     # ⇒ A MENTION TWO THINGS COULD BE — agreement found a tie, nothing picks (08-23, #18)
     asks += gate4.unbound_mentions(rows)
     # ⇒ ACT OR ANSWER. Beside the destructive confirmation because it is the same kind of

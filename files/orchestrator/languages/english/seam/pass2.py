@@ -1045,6 +1045,15 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
     board = board or Board()
     table = symbol_table(rows, board)
     names = [s.handle for s in table]
+    # handle -> the genitive leaves this row OWNS (`alpha` -> {"snapshots"}), rule 8
+    _leaf_of: Dict[str, set] = {}
+    for _v in rows:
+        _info = (_v.value or {}) if _v.object_type == S.VALUE_KIND else {}
+        if _info.get("genitive") and _info.get("target_span"):
+            for _sym in table:
+                if _sym.row.span == _info["target_span"]:
+                    _leaf_of.setdefault(_sym.handle, set()).update(
+                        {str(_v.span).lower(), str(_info.get("word") or "").lower()})
     if not names:
         return []
     operators = operators_offered(board)
@@ -1180,6 +1189,16 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
         for step in got.get("operations") or []:
             if isinstance(step, dict) and step.get("operator") and step.get("on"):
                 if _q_clause and not str(step["operator"]).startswith("probe_"):
+                    continue
+                # ⇒⇒ THE VERB GOVERNS THE LEAF, NOT ITS OWNER (ledger #19, 08-23). *"delete
+                #   alpha's snapshots"* reads `alpha` + leaf `snapshots`; the only address
+                #   the model has is `alpha`, and `delete_vm(alpha)` came back — a destructive
+                #   step on the WRONG thing. The one legal shape is op(on = owner, value =
+                #   leaf); a step on the owner that does not carry the leaf as its value is
+                #   a wrong CHOICE and is dropped — the clause is then unasked, which the
+                #   existing finding raises. Subtractive: an option removed, nothing caught.
+                _leaf = _leaf_of.get(str(step["on"]))
+                if _leaf and str(step.get("value") or "").strip().lower() not in _leaf:
                     continue
                 if str(step["operator"]).startswith("probe_"):
                     _probed = True

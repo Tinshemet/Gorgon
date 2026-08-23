@@ -44,6 +44,19 @@ So this file does FOUR things and refuses a fifth:
            (the walk had cut `10.0.0.5` at the first `.`), a PREDICATE value in a question
            (`which vm has mac …` — its own span, nothing assigned, nothing refused), or
            assigned like any value (`give the web vm the ip …`).
+  8 POSSESS (ledger #19, 08-23) a GENITIVE — `alpha'S snapshots`, `the web vm'S disk`,
+           `the vmS' labels` — is owner + leaf, the relation `the cpu OF X` states with `of`.
+           The leaf is its own VALUE row, lifted out of the phrase; the owner keeps the
+           phrase minus the clitic and is re-typed by ITS head (`alpha` is not a
+           `snapshot_set`). The grammar names the owner, so nothing is ranked — the only
+           question is FIT, asked of the world in the settle order: a declared attribute or
+           alias of the owner's kind (`alpha's ram`) · a taught word · a KIND whose attrs or
+           refs name the owner's kind (`snapshot.vm` — so a vm owns `snapshots`: a declared
+           fact read backwards, not an inference) · else an UNKNOWN leaf, still spanned (the
+           slot decides) and REFUSED by the owner at ASSIGN, which gate 4 tells the operator
+           — `beta has no 'disk'`. A leaf REFERS; it is never assigned, so no setter is
+           needed. NOT read here: the copula contraction (`alpha's running` — `running` is a
+           declared VALUE, so the split is refused) · possessive pronouns (proforms).
   ✗ NEVER  interpret the value HERE. The span stays the bytes `16gb`; the number 16384 is
            the owner's answer, recorded beside it, never in its place.
 
@@ -56,8 +69,9 @@ import re
 from typing import Dict, List, Optional, Tuple
 
 from . import schema as S
-from ..codex import (ATTRIBUTE_LINKERS, CUT_DETERMINERS, DEFINITE, INDEFINITE, NAMING_CUES,
-                     SELECTOR_PREPOSITIONS, VALUE_CONNECTORS)
+from ..codex import (ATTRIBUTE_LINKERS, CONTRACTIONS, CUT_DETERMINERS, DEFINITE,
+                     GENITIVE_CLITICS, INDEFINITE, NAMING_CUES, SELECTOR_PREPOSITIONS,
+                     VALUE_CONNECTORS)
 
 _NUMBER_UNIT = re.compile(r"\b(\d+)\s*([a-z]+)\b")
 _DETS = set(DEFINITE) | set(INDEFINITE)          # the codex's, not a list of our own
@@ -280,6 +294,126 @@ def _shape_candidates(request: str, board, archive) -> List[dict]:
     return out
 
 
+_CLITICS = "|".join(re.escape(c) for c in sorted(GENITIVE_CLITICS, key=len, reverse=True))
+_GENITIVE = re.compile(r"^(?P<owner>.+?)(?P<clitic>%s)(?:\s+(?P<leaf>\S.*))?$" % _CLITICS)
+
+
+def _declared_values(board) -> set:
+    """Every declared attribute VALUE and its aliases (`running`, `up`) — a word that can only
+    be a STATE, never a leaf. `alpha's running` is the copula, not a possessive."""
+    out: set = set()
+    for spec in (board.kinds or {}).values():
+        for vals in ((spec or {}).get("attr_values") or {}).values():
+            out |= {str(v).lower() for v in (vals or ())}
+        for aliases in ((spec or {}).get("value_aliases") or {}).values():
+            out |= {str(a).lower() for a in (aliases or {})}
+    return out
+
+
+def _kinds_owned_by(owner: str, board) -> List[str]:
+    """The kinds that declare a reference to `owner` — `snapshot.attrs` holds `vm`,
+    `network.refs.members -> vm`. Read off the manifest, never listed."""
+    out: List[str] = []
+    for kind, spec in (board.kinds or {}).items():
+        spec = spec or {}
+        attrs = {str(a).lower() for a in (spec.get("attrs") or ())}
+        refs = {str(v).lower() for v in (spec.get("refs") or {}).values()}
+        if owner in attrs or owner in refs:
+            out.append(kind)
+    return out
+
+
+def _leaf_fit(leaf_words: List[str], owner_kind: Optional[str], board,
+              archive) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """(attribute, owner, of_kind) for a genitive leaf, in the settle order — or three Nones
+    when nobody declares it. `owner` is the kind that owns the leaf: the owner phrase's own
+    kind when it has one, else the kind the leaf's declaration names (the leaf decides what
+    a bare name is, as the verb decides the noun)."""
+    from .scan import _index, _kind_of
+    head = leaf_words[-1].strip(".,;:!?'\"")
+    # 1 · 2  a declared attribute/alias, or a taught word, of the owner's kind
+    attr = _attribute_named(head, board)
+    entries = [e for e in _learned(head, board, archive) if e.owners]
+    owners = sorted({o for e in entries for o in e.owners})
+    if attr or entries:
+        attribute = attr or next((e.attribute for e in entries if e.attribute), None) or head
+        if owner_kind and (owner_kind in owners or attr in (board._spec(owner_kind).get("attrs")
+                                                             or ()) or attr in (
+                                                                 board._spec(owner_kind).get("aliases") or {})):
+            return attribute, owner_kind, None
+        if owner_kind and owner_kind in board.kinds:
+            return attribute, owner_kind, None         # the owner scrutinises at ASSIGN
+        if owners:
+            return attribute, owners[0], None
+        return attribute, owner_kind, None
+    # 3  a kind that declares a reference to the owner: the owner HAS those
+    leaf_kind = _kind_of(leaf_words, _index(board))
+    if leaf_kind:
+        for owner in ([owner_kind] if owner_kind in board.kinds else list(board.kinds)):
+            if leaf_kind in _kinds_owned_by(owner, board):
+                return leaf_kind, owner, leaf_kind
+    return None, owner_kind if owner_kind in board.kinds else None, None
+
+
+def _genitive_candidates(rows: List[S.Declared], request: str, board,
+                         archive) -> List[dict]:
+    """Every `OWNER's LEAF` inside a declared phrase — rule 8. The clitic is read only INSIDE
+    a row the walk declared, so `let's stop alpha` and `it's hot` are never split."""
+    from .scan import _index, _kind_of
+    low = str(request).lower()
+    states = _declared_values(board)
+    out: List[dict] = []
+    for r in rows:
+        if r.object_type == S.VALUE_KIND:
+            continue
+        span = str(r.span or r.name)
+        m = _GENITIVE.match(span.lower())
+        if not m:
+            continue
+        owner_text = m.group("owner")
+        if m.group("clitic") == "s'":
+            owner_text += "s"                           # `the vms'` — the s is the noun's
+        owner_words = owner_text.split()
+        at = low.find(span.lower())
+        if at < 0 or not owner_words:
+            continue
+        if m.group("leaf"):
+            leaf_at, leaf_end = at + m.start("leaf"), at + m.end("leaf")
+        else:
+            # the walk cut at the apostrophe (`the vms'` | `labels`): the leaf is the row that
+            # starts right after, else the words that do, up to the first word the seam knows
+            after = at + len(span)
+            nxt = next((o for o in rows if o is not r and o.object_type != S.VALUE_KIND
+                        and low.find(str(o.span or o.name).lower()) == after + 1), None)
+            if nxt is not None:
+                leaf_at, leaf_end = after + 1, after + 1 + len(str(nxt.span or nxt.name))
+            else:
+                tail = re.match(r"\s+(\S+)", low[after:])
+                if not tail:
+                    continue
+                leaf_at, leaf_end = after + tail.start(1), after + tail.end(1)
+        leaf_words = low[leaf_at:leaf_end].split()
+        if not leaf_words:
+            continue
+        if (owner_words[-1] + m.group("clitic") in CONTRACTIONS
+                or owner_words[-1] in _stop_words(board) or owner_words[-1] in S.PRONOUNS):
+            continue                                    # `let's`, `it's`, `that's` — the codex's
+        if leaf_words[0].strip(".,;:!?'\"") in states:
+            continue                                    # `alpha's running` — the copula
+        owner_kind = _kind_of(owner_words, _index(board))
+        plural = m.group("clitic") == "s'"
+        attribute, owner, of_kind = _leaf_fit(leaf_words, owner_kind, board, archive)
+        owner_type = ((owner_kind + (S.SET_SUFFIX if plural else "")) if owner_kind
+                      else S.UNKNOWN_KIND)
+        out.append({"text": request[leaf_at:leaf_end], "start": leaf_at, "end": leaf_end,
+                    "word": leaf_words[-1].strip(".,;:!?'\""), "entries": [],
+                    "linked": attribute, "linked_text": "", "genitive": True,
+                    "owner": owner or "?", "attribute": attribute, "of_kind": of_kind,
+                    "owner_text": request[at:at + len(owner_text)], "owner_type": owner_type,
+                    "holder_span": span, "target_span": request[at:at + len(owner_text)]})
+    return out
+
+
 def _comparator_before(request: str, at: int) -> Optional[str]:
     """The MAGNITUDE phrase right before a value (`over`, `more than`) — a comparison
     `where` cannot hold; `magnitudes_in` carries it. Named here so the value row says so."""
@@ -364,6 +498,15 @@ def _lift(row: S.Declared, cand: dict, request: str, board) -> Optional[S.Declar
     """The row with the value cut out of its phrase; None if nothing is left of it."""
     low = str(request).lower()
     span = str(row.span or "")
+    if cand.get("genitive") and cand.get("holder_span") == span:
+        # rule 8: the phrase that held `OWNER's LEAF` becomes the OWNER, typed by its head
+        new = str(cand["owner_text"])
+        return S.declare_from(new, cand["owner_type"], dict(row.where or {}), row.existence,
+                              board, references=list(row.references), count=row.count,
+                              comparator=row.comparator, span=new, identity=row.identity,
+                              sanctioned=row.sanctioned)._replace(
+                                  excludes=row.excludes, unroutable=row.unroutable,
+                                  mentions=row.mentions, assigned=row.assigned)
     at = low.find(span.lower())
     if at < 0:
         return row
@@ -442,7 +585,8 @@ def read_values(rows: List[S.Declared], request: str, board=None,
     if any(r.object_type == S.VALUE_KIND for r in rows):
         return rows                                 # already read
     cands = (_candidates(request, board, archive) + _naming_candidates(rows, request, board)
-             + _shape_candidates(request, board, archive))
+             + _shape_candidates(request, board, archive)
+             + _genitive_candidates(rows, request, board, archive))
     if not cands:
         return rows
     cands.sort(key=lambda c: c["start"])
@@ -450,7 +594,7 @@ def read_values(rows: List[S.Declared], request: str, board=None,
     values: List[S.Declared] = []
     for cand in cands:
         cand["selector"] = _selects(cand, out, request)
-        if cand.get("naming") or cand.get("shaped"):
+        if cand.get("naming") or cand.get("shaped") or cand.get("genitive"):
             scores = {cand["owner"]: 2}
         else:
             scores = rank_owners(cand, out, request, archive)
@@ -467,6 +611,15 @@ def read_values(rows: List[S.Declared], request: str, board=None,
             owner, attribute = cand["owner"], cand["attribute"]
             value = {"word": cand["word"], "attribute": attribute, "owner": owner,
                      "linked": attribute, "linked_text": cand["linked_text"], "shaped": True}
+        elif cand.get("genitive"):
+            owner, attribute = cand["owner"], cand["attribute"]
+            value = {"word": cand["word"], "attribute": attribute, "owner": owner,
+                     "linked": attribute, "linked_text": "", "genitive": True,
+                     "of_kind": cand["of_kind"], "target_span": cand["target_span"]}
+            if attribute is None:
+                value["hint"] = (f"{cand['target_span']!r} has no {cand['word']!r} — nothing in "
+                                 f"the manifest or the archive declares it; teach the word "
+                                 f"or name the attribute")
         elif len(winners) == 1:
             owner = winners[0]
             attribute = next((e.attribute for e in cand["entries"] if owner in e.owners
@@ -547,6 +700,27 @@ def _assign(things: List[S.Declared], values: List[S.Declared], request: str, bo
         # (`of memory`) — so gate 1 counts those words as read
         claims = [t for t in [info.get("linked_text") or "", *(info.get("consumed") or ())]
                   if str(t).strip()]
+        if info.get("genitive"):
+            # rule 8: the grammar named the target; the leaf REFERS, nothing is set
+            target_ix = next((i for i, r in enumerate(out) if r.object_type != S.VALUE_KIND
+                              and r.span == info.get("target_span")), None)
+            target = out[target_ix] if target_ix is not None else None
+            info["target"] = target.span if target is not None else None
+            kind = (target.kind if target is not None and target.kind in board.kinds
+                    else owner if owner in board.kinds else None)
+            if not attribute:
+                info["refused"] = info.get("hint") or (
+                    f"{info.get('target_span')!r} has no {info.get('word')!r}")
+            elif kind:
+                accepted, reason = board.accept(kind, attribute, v.span)
+                if reason:
+                    info["malformed"] = reason
+                else:
+                    info["accepted"] = accepted
+            else:
+                info["accepted"] = v.span
+            done.append(v._replace(value=info, references=claims))
+            continue
         if not owner or not attribute:
             done.append(v._replace(references=claims))
             continue

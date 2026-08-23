@@ -584,8 +584,19 @@ produced, and both were wrong. The genitive is owner + leaf, the same shape as `
 (un-0003, ledger #17): the owner is the **patient**, the leaf is a **value** span of its own, and
 the `'s` belongs to neither. Operator confirmed: *"patient for the owner."*
 
-Gold only. The reader still returns one `snapshot_set` row for the NP (and swallows
-`snapshot beta's disk` whole, no operation) — that is the next step, briefed separately. The
+Gold first (2fca62c); the reader followed in the next commit — `values.py` rule 8 POSSESS,
+`GENITIVE_CLITICS` in the codex: the leaf is lifted out as its own VALUE row, the owner keeps
+the phrase minus the clitic and is re-typed by its own head; FIT is asked of the world in the
+settle order (attribute/alias · taught word · a kind whose attrs/refs name the owner — so a vm
+owns `snapshots` by `snapshot.vm`, read backwards) and an undeclared leaf (`disk`) is spanned
+and REFUSED by the owner, to the operator via gate 4. The codex's contractions (`let's`,
+`it's`) and a declared state word (`alpha's running`) are never split. **And the verb governs
+the leaf, not its owner:** with the model live the split produced `delete_vm(alpha)` — pass 2
+now drops a step on the owner that does not carry the leaf as its value, and gate 4 says the
+lab's limit (`ungoverned_leaves`). Capture moved on exactly po-0001 · po-0001-ej · po-0002 ·
+po-0003, and on 8 SEALED readings — qual-0006 · mc-0004 · mc-0004-nt in v1/v2/v21 — whose
+gold is the whole NP and now needs re-certification under this ruling (operator's seal, one
+at a time). `snapshot beta's disk` still glues the verb to the name (fix B, separate). The
 operator had already keyed ACCEPT on po-0001 · po-0002 · po-0003 under the old gold and
 withdrew it here; those three accepts are STALE against the corrected gold and are re-asked.
 po-0001-ej was never keyed and stays pending.

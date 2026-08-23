@@ -164,6 +164,10 @@ def completeness(rows: List[S.Declared], operations, table,
     #   would ask it to invent the step the manifest says does not exist (08-23).
     refused_targets = {str((r.value or {}).get("target")) for r in rows
                        if r.object_type == S.VALUE_KIND and (r.value or {}).get("refused")}
+    # ⇒ and the OWNER of a genitive leaf is accounted for by the leaf (#19): the verb acts on
+    #   `alpha's snapshots`, and gate 4 says what the lab can do about that — not a bounce
+    refused_targets |= {str((r.value or {}).get("target")) for r in rows
+                        if r.object_type == S.VALUE_KIND and (r.value or {}).get("genitive")}
     rows = [r for r in rows if r.object_type != S.VALUE_KIND]
 
     # ⇒⇒ A CREATOR ACCOUNTS FOR WHAT IT PRODUCES, NOT ONLY FOR WHAT IT NAMES.

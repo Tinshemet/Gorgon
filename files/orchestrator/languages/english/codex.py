@@ -219,6 +219,13 @@ VALUE_CONNECTORS = frozenset({"with", "of", "and", "to", "at", "on", ","})
 # ⇒ The word that names WHICH attribute a bare unit belongs to — *"8gb OF ram"*.
 ATTRIBUTE_LINKERS = frozenset({"of"})
 
+# ⇒ THE GENITIVE CLITIC — *"alpha'S snapshots"*, *"the vmS' disks"*. A closed class of two
+#   spellings, and the whole licence for reading a possessive: what stands before it OWNS,
+#   what follows is a LEAF of the owner and its own span (ruling 08-23, ledger #19 — the same
+#   relation `the cpu OF the web vm` states with `of`). The clitic itself belongs to neither
+#   span. `'s` = one owner, `s'` = many.
+GENITIVE_CLITICS = ("'s", "s'")
+
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # ═ PASS 1 — distinctness, exclusion, plural pronouns

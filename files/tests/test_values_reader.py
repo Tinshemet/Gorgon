@@ -336,3 +336,80 @@ def test_an_identifier_is_never_made_of_english():
     # `read-only` fits the serial shape xxxx-xxxx and is two English words (cc-0007)
     things, values = _shaped("treat prod as read-only")
     assert values == []
+
+
+# ── rule 8 · POSSESS — `X's snapshot`: the leaf is its own span, X its owner (ledger #19) ────
+
+def _genitive(s):
+    rows = _rows(s)
+    return ([(r.span, r.kind) for r in rows if r.kind != "value"],
+            [(r.span, r.value["attribute"], r.value.get("owner"), r.value.get("target"),
+              {k for k in ("accepted", "refused") if k in r.value}) for r in rows if r.kind == "value"])
+
+
+def test_po_0001_delete_alphas_snapshots_is_owner_plus_leaf():
+    # the operator, 08-23: "'X's snapshot' — snapshot here should be a value as a span";
+    # "patient for the owner". `snapshots` fits vm because `snapshot.attrs` names `vm`.
+    things, values = _genitive("delete alpha's snapshots")
+    assert things == [("alpha", "?")]
+    assert values == [("snapshots", "snapshot", "vm", "alpha", {"accepted"})]
+
+
+def test_po_0002_the_owner_phrase_keeps_its_own_kind():
+    things, values = _genitive("list the web vm's snapshots")
+    assert things == [("the web vm", "vm")]
+    assert values[0][:2] == ("snapshots", "snapshot") and values[0][3] == "the web vm"
+
+
+def test_the_clitic_belongs_to_neither_span():
+    s = "delete alpha's snapshots"
+    rows = _rows(s)
+    spans = [str(r.span) for r in rows]
+    assert spans == ["alpha", "snapshots"]
+    assert s[7:12] == "alpha" and s[15:24] == "snapshots"      # the gold's offsets (v3 po-0001)
+
+
+def test_a_declared_attribute_behind_the_clitic_resolves_to_its_canonical_name():
+    things, values = _genitive("alpha's ram")
+    assert things == [("alpha", "?")]
+    assert values[0][:3] == ("ram", "memory_mb", "vm")
+
+
+def test_po_0003_an_undeclared_leaf_is_spanned_and_refused_by_the_owner():
+    # `disk` is declared nowhere — the slot still spans it (UNKNOWN is never filtered) and
+    # the owner refuses it, which gate 4 tells the operator: teach the word
+    things, values = _genitive("check beta's disk")
+    assert [t[0] for t in things] == ["beta"]
+    assert values[0][0] == "disk" and values[0][1] is None and "refused" in values[0][4]
+    refused = [r.value["refused"] for r in _rows("check beta's disk") if r.kind == "value"][0]
+    assert "'disk'" in refused and "beta" in refused
+
+
+def test_a_plural_clitic_makes_the_owner_a_set():
+    things, values = _genitive("the vms' labels")
+    assert things == [("the vms", "vm")] and values[0][:2] == ("labels", "label")
+    assert [r.is_set for r in _rows("the vms' labels") if r.kind != "value"] == [True]
+
+
+def test_the_copula_contraction_is_not_a_possessive():
+    # `running` is a declared VALUE of status — `alpha's running` says alpha IS running
+    assert not any(r.kind == "value" for r in _rows("alpha's running"))
+
+
+def test_the_codex_contractions_are_never_split():
+    for s in ("let's stop alpha", "it's down", "that's the db vm"):
+        assert not any((r.value or {}).get("genitive") for r in _rows(s)), s
+
+
+def test_the_verb_governs_the_leaf_not_its_owner():
+    # pass 2's one address is the owner; `delete_vm(alpha)` for `delete alpha's snapshots`
+    # is a destructive step on the wrong thing and is dropped — the lab's limit is then
+    # gate 4's line to the operator, never a silent empty program
+    r = _piped("delete alpha's snapshots")
+    assert not any(op.operator == "delete_vm" and op.on == "alpha" for op in r.operations)
+    assert any("alpha's snapshots" in a for a in r.asks), r.asks
+
+
+def test_rule_8_is_idempotent():
+    rows = _rows("delete alpha's snapshots")
+    assert V.read_values(rows, "delete alpha's snapshots", B) == rows

@@ -68,6 +68,30 @@ def refused_values(rows, board: Optional[Board] = None) -> List[str]:
     return out
 
 
+def ungoverned_leaves(rows, operations, table) -> List[str]:
+    """A genitive leaf the verb acts on, that no legal step takes — to the operator (#19).
+
+    *"delete alpha's snapshots"* reads `alpha` + leaf `snapshots`. The one legal shape is
+    op(on = alpha, value = snapshots); `delete_vm(alpha)` was the model's answer and pass 2
+    dropped it as a wrong choice. What is left is the lab's limit, said once: nothing here
+    takes a vm's snapshots. Not the model's miss, not a guess to resolve."""
+    by_span = {str(sym.row.span): sym.handle for sym in table}
+    out: List[str] = []
+    for r in rows:
+        info = (getattr(r, "value", None) or {}) if getattr(r, "object_type", None) == "value" else {}
+        if not info.get("genitive") or not info.get("target") or info.get("refused"):
+            continue
+        owner = by_span.get(str(info["target"]))
+        leaf = {str(r.span).lower(), str(info.get("word") or "").lower()}
+        if any(str(op.on) == owner and str(op.value or "").strip().lower() in leaf
+               for op in operations):
+            continue
+        out.append(f"the request acts on {info['target']}'s {r.span} — this lab has no "
+                   f"operation that takes {'a ' + info['owner'] if info.get('owner') and info['owner'] != '?' else 'its'}"
+                   f" {r.span}; what should be done with it?")
+    return out
+
+
 def unbound_mentions(rows) -> List[str]:
     """A later mention two things could be — to the operator, once (08-23, ledger #18).
     *"create a vm and a network, then stop it"*: both agree with `it` in number and nothing
