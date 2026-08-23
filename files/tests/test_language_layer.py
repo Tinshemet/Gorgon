@@ -38,6 +38,9 @@ PKG = "orchestrator.languages.english"
 # ── A: module-level constants that LOOK like closed classes but are the MODEL's words ──────
 # (check names the gates own, speech-act kinds, in-module fixtures). Pinned, not inferred.
 NOT_LANGUAGE = {
+    # WORD_TYPES: what KIND of learned word an archive entry is (class · attribute · unit ·
+    # value) — a fact about the STORE, the same in every language; not a word of English
+    "archive.py":    {"WORD_TYPES"},
     "asking.py":     {"TAKES"},
     "effects.py":    {"CASES"},
     "gate3.py":      {"OWNS"},

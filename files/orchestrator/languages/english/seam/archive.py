@@ -76,6 +76,17 @@ from typing import Dict, List, NamedTuple, Optional, Tuple
 # ⇒ WHO SAID IT. Only TOLD entries may ever be ratified into routing; anything from an external
 #   source is a SUGGESTION a person confirms. The ledger's own CLAIMED/SEEN split, one store on.
 TOLD, IMPORTED = "told", "imported"
+# ⇒ THE MANIFEST IS A SOURCE TOO (08-23): its attr_classes, aliases, attrs and nouns are
+#   learned words of the same shape — rung 1 of the ladder, served through the same lookup
+#   as rung 2, never merged into the told rows (the manifest is not a proposal).
+MANIFEST = "manifest"
+
+# ⇒⇒ WHAT KIND OF WORD A LEARNED WORD IS — the operator, 08-23: *"a learned word could be a
+#   lot of things: a class, an attribute, a value … entry: RAM, Type: unit, Owners: computer
+#   (and its children) / entry: grabnash, Type: OS, Owners: computer"*. CLOSED: a type that is
+#   not here is not a type; `value` is the open leaf (an OS name, a label text), and the
+#   owner — not READ — says what it means ([[gorgon-attributes-are-leaves]]).
+WORD_TYPES = ("class", "attribute", "unit", "value")
 
 PENDING, RATIFIED, SUPERSEDED = "pending", "ratified", "superseded"
 
@@ -106,6 +117,14 @@ class Entry(NamedTuple):
     said: str = ""                             # the sentence it came from — provenance
     who: Optional[str] = None
     at: Optional[float] = None
+    # ⇒⇒ ATTRIBUTES ARE LEAVES (operator, 08-23). What KIND of word this is, and WHICH CLASSES
+    #   own it — *"one attribute can appear in a few classes and their inherited children"*.
+    #   READ asks only whether a learned word is present in an owner's context and spans it;
+    #   it never interprets the value — that is the owner package's scrutiny, on the span.
+    #   `owners` names classes; a child inherits through the same `classes` walk `kind_of`
+    #   uses (`vm` is a `computer` ⇒ `vm` owns what `computer` owns). Empty = unowned.
+    type: Optional[str] = None                 # one of WORD_TYPES, or None for an old row
+    owners: Tuple[str, ...] = ()
 
     @property
     def routes(self) -> bool:
@@ -125,7 +144,8 @@ class Archive:
     # ── writing ──────────────────────────────────────────────────────────────────────────
     def propose(self, word: str, description: str = "", kind: Optional[str] = None,
                 holds: bool = True, source: str = TOLD, said: str = "",
-                who: Optional[str] = None, classes=(), methods=(), attributes=()) -> Entry:
+                who: Optional[str] = None, classes=(), methods=(), attributes=(),
+                type: Optional[str] = None, owners=(), attribute: Optional[str] = None) -> Entry:
         """File a PENDING entry. It describes; it does not yet permit.
 
         ⇒ SUPERSESSION RATHER THAN OVERWRITE: the previous ratified entry for a word stays on
@@ -133,10 +153,14 @@ class Archive:
           and silent"* and a store you cannot audit backwards cannot answer that.
         """
         word = str(word).strip().lower()
+        if type is not None and type not in WORD_TYPES:
+            raise ValueError(f"not a word type: {type!r} (one of {WORD_TYPES})")
         entry = Entry(word=word, description=str(description).strip(), kind=kind,
                       holds=bool(holds), source=source, status=PENDING, said=str(said),
                       who=who, at=time.time(), classes=tuple(classes),
-                      methods=tuple(methods), attributes=tuple(attributes))
+                      methods=tuple(methods), attributes=tuple(attributes),
+                      type=type, owners=tuple(str(o).strip().lower() for o in owners),
+                      attribute=attribute)
         self._rows.append(entry)
         return entry
 
@@ -297,6 +321,51 @@ class Archive:
     def rows(self) -> List[Entry]:
         return list(self._rows)
 
+    # ── learned words: rung 1 (manifest) and rung 2 (told) through ONE lookup ───────────
+    def learned(self, word: str, board=None) -> List[Entry]:
+        """Every entry this word has — the manifest's built-ins and the RATIFIED told rows.
+
+        ⇒ ONE WORD, SEVERAL OWNERS, BY DESIGN. `address` may be owned by vm and by network;
+          the reader ranks owners by context + fit and a tie is an ASK, so this returns the
+          LIST and never picks ([[gorgon-attributes-are-leaves]] rule 4).
+        ⇒ `known` is untouched: it still answers the told rows only, so nothing that routed
+          on it yesterday routes differently today.
+        """
+        word = str(word).strip().lower()
+        out = [e for e in manifest_entries(board) if e.word == word]
+        told = self.known(word)
+        if told is not None:
+            out.append(told)
+        return out
+
+    def ancestors(self, kind: str, _seen=None) -> Tuple[str, ...]:
+        """The classes a kind inherits from, through the told rows' `classes` walk —
+        `vm is a computer` makes `computer` an ancestor of `vm`. Cycle-safe."""
+        kind = str(kind).strip().lower()
+        seen = _seen or set()
+        if kind in seen:
+            return ()
+        seen.add(kind)
+        entry = self.known(kind)
+        if entry is None:
+            return ()
+        out: List[str] = []
+        for c in entry.classes:
+            c = str(c).strip().lower()
+            if c not in out:
+                out.append(c)
+            for a in self.ancestors(c, seen):
+                if a not in out:
+                    out.append(a)
+        return tuple(out)
+
+    def owns(self, entry: Entry, kind: str) -> bool:
+        """Does `kind` own this word — directly, or by inheriting from an owner?"""
+        kind = str(kind).strip().lower()
+        if not entry.owners:
+            return False
+        return kind in entry.owners or any(a in entry.owners for a in self.ancestors(kind))
+
     # ── persistence ──────────────────────────────────────────────────────────────────────
     def save(self) -> None:
         if not self.path:
@@ -311,8 +380,63 @@ class Archive:
             return
         self._rows = [Entry(**{**r, "classes": tuple(r.get("classes") or ()),
                                "methods": tuple(r.get("methods") or ()),
-                               "attributes": tuple(r.get("attributes") or ())})
+                               "attributes": tuple(r.get("attributes") or ()),
+                               "owners": tuple(r.get("owners") or ())})
                       for r in rows if isinstance(r, dict) and r.get("word")]
+
+
+def manifest_entries(board=None) -> List[Entry]:
+    """The manifest's vocabulary as learned words — READ, NEVER LISTED (rule W5).
+
+    For every kind K:
+      K, and each of its `nouns`               type class      owners ()      kind K
+      each `attrs` entry and `attr_classes`    type attribute  owners (K,)    attribute a
+      each alias -> a                          type attribute  owners (K,)    attribute a
+      a class's `unit` and each `units` key    type unit       owners (K,)    attribute a
+    `attr_values` are NOT listed: a value is the open leaf, and which values a class accepts
+    is the owner's scrutiny, not a vocabulary. Source MANIFEST, status RATIFIED — the
+    manifest is signed by construction. Cached per board identity; a manifest that gains a
+    word gains it here.
+    """
+    from planner.formula.legal import Board
+    from planner.ir import config as _config
+    board = board or Board()
+    key = id(board.kinds)
+    hit = _MANIFEST_CACHE.get(key)
+    if hit is not None:
+        return hit
+    out: List[Entry] = []
+
+    seen = set()
+
+    def add(word, **kw):
+        word = str(word).strip().lower()
+        key = (word, kw.get("type"), kw.get("owners", ()), kw.get("attribute"), kw.get("kind"))
+        if word and key not in seen:             # `ip` is an attr AND its own alias — once
+            seen.add(key)
+            out.append(Entry(word=word, source=MANIFEST, status=RATIFIED, **kw))
+    for kind in board.kinds:
+        spec = _config.KINDS.get(kind) or board.kinds.get(kind) or {}
+        add(kind, type="class", kind=kind)
+        for noun in (spec.get("nouns") or ()):
+            add(noun, type="class", kind=kind)
+        classes = spec.get("attr_classes") or {}
+        for a in (spec.get("attrs") or ()):
+            add(a, type="attribute", owners=(kind,), attribute=str(a))
+        for a, cls in classes.items():
+            if a not in (spec.get("attrs") or ()):
+                add(a, type="attribute", owners=(kind,), attribute=str(a))
+            if isinstance(cls, dict):
+                for u in [cls.get("unit")] + list((cls.get("units") or {}).keys()):
+                    if u:
+                        add(u, type="unit", owners=(kind,), attribute=str(a))
+        for alias, real in (spec.get("aliases") or {}).items():
+            add(alias, type="attribute", owners=(kind,), attribute=str(real))
+    _MANIFEST_CACHE[key] = out
+    return out
+
+
+_MANIFEST_CACHE: Dict[int, List[Entry]] = {}
 
 
 # ⇒⇒ WHAT A STATEMENT ASKS THE ARCHIVE TO DO. One vocabulary for the four effects, so a caller
