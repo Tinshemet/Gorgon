@@ -710,7 +710,8 @@
      "type": "token",
      "owner": "vm",
      "source": "declared",
-     "shape": "[0-9a-z]{4}-[0-9a-z]{4}"
+     "shape": "(?=[^-]*\\d|[^-]*-[^-]*\\d)[0-9a-z]{4}-[0-9a-z]{4}",
+     "doc": "MOCK: a serial carries at least one digit — declared 2026-08-23 after `read-only` (cc-0007) fit the bare xxxx-xxxx shape. The owner says what an identifier looks like; READ never guesses."
     },
     "cpu_cores": {
      "type": "count",

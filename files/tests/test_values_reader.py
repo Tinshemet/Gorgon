@@ -255,3 +255,57 @@ def test_the_list_ends_where_the_next_clause_begins():
 def test_the_naming_cue_is_claimed_not_left_over():
     r = _piped("create a vm named alpha")
     assert not any("'named'" in b for b in r.bounces), r.bounces
+
+
+# ── step 5: SHAPES — ip · mac · serial by the class's declared shape ─────────────────────
+def _shaped(s):
+    rows = _rows(s)
+    return ([(r.span, r.kind, r.where) for r in rows if r.kind != "value"],
+            [(r.span, r.value["attribute"], {k for k in ("accepted", "refused", "predicate") if k in r.value})
+             for r in rows if r.kind == "value"])
+
+
+def test_id_0001_a_selector_ip_extends_the_phrase_and_fills_where():
+    things, values = _shaped("stop the vm at 10.0.0.5")
+    assert things == [("the vm at 10.0.0.5", "vm", {"ip": "10.0.0.5"})] and values == []
+
+
+def test_id_0004_a_selector_serial_is_read_whole():
+    things, values = _shaped("stop the vm with serial 7f3k-2210")
+    assert things == [("the vm with serial 7f3k-2210", "vm", {"serial": "7f3k-2210"})] and values == []
+
+
+def test_id_0002_a_query_value_is_a_predicate_not_an_assignment():
+    things, values = _shaped("which vm has mac aa:bb:cc:dd:ee:ff?")
+    assert [t[0] for t in things] == ["which vm"]
+    assert values == [("aa:bb:cc:dd:ee:ff", "mac", {"predicate"})]
+
+
+def test_id_0003_an_assigned_ip_on_an_existing_vm_is_refused_by_the_owner():
+    things, values = _shaped("give the web vm the ip 10.0.0.7")
+    assert [t[0] for t in things] == ["the web vm"]
+    assert values == [("10.0.0.7", "ip", {"refused"})]
+    r = _piped("give the web vm the ip 10.0.0.7")
+    assert any("cannot set ip on an existing vm" in a for a in r.asks) and r.outcome == "ASK"
+
+
+def test_id_0005_a_token_no_class_declares_is_not_a_value():
+    things, values = _shaped("stop the vm at 8g:77q")
+    assert things == [("the vm at 8g:77q", "vm", {})] and values == []
+
+
+def test_a_shaped_value_at_creation_is_taken_by_the_creator():
+    things, values = _shaped("create a vm named alpha with ip 10.0.0.9")
+    assert things == [("a vm", "vm", {"name": "alpha", "ip": "10.0.0.9"})]
+    assert ("10.0.0.9", "ip", {"accepted"}) in values
+
+
+def test_the_attribute_word_before_a_shape_is_claimed():
+    r = _piped("which vm has mac aa:bb:cc:dd:ee:ff?")
+    assert not any("'mac'" in b for b in r.bounces), r.bounces
+
+
+def test_an_identifier_is_never_made_of_english():
+    # `read-only` fits the serial shape xxxx-xxxx and is two English words (cc-0007)
+    things, values = _shaped("treat prod as read-only")
+    assert values == []

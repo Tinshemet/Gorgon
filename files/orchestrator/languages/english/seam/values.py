@@ -36,6 +36,12 @@ So this file does FOUR things and refuses a fifth:
            one leaf per name (a · b · c); a GENERATOR spec (`1-5`, `after musicians`) is
            itself the one leaf the owner runs (#11: one generative unit). A name on an
            EXISTING thing refers (`stop the vm named web`) and stays in its phrase.
+  7 SHAPE  (step 5) a token matching a declared class's `shape` — an ip, a mac, a serial —
+           is a value of that attribute wherever it stands. Inside an existing phrase behind
+           a selector preposition it SELECTS: the phrase is extended over it (the walk cut
+           `10.0.0.5` at the first `.`) and it fills `where`. In a question it is a
+           PREDICATE value (`which vm has mac …`): its own span, nothing assigned, nothing
+           refused. Otherwise it is assigned like any value (`give the web vm the ip …`).
   ✗ NEVER  interpret the value HERE. The span stays the bytes `16gb`; the number 16384 is
            the owner's answer, recorded beside it, never in its place.
 
@@ -232,6 +238,86 @@ def _naming_candidates(rows: List[S.Declared], request: str, board) -> List[dict
     return out
 
 
+def _shape_candidates(request: str, board, archive) -> List[dict]:
+    """Every token that fully matches a declared class's `shape` — rule 7."""
+    low = str(request).lower()
+    shapes = []
+    for kind, spec in (board.kinds or {}).items():
+        for attr, cls in ((spec or {}).get("attr_classes") or {}).items():
+            if isinstance(cls, dict) and cls.get("shape"):
+                shapes.append((kind, attr, re.compile(str(cls["shape"]))))
+    out: List[dict] = []
+    stop = _stop_words(board) if shapes else set()
+    for m in re.finditer(r"\S+", low):
+        tok = m.group(0).rstrip("?.,;:!'\"")
+        if not tok or len(tok) < 3:
+            continue
+        # an identifier is never made of English: `read-only` fits the serial shape
+        # (xxxx-xxxx) and is two words the codex knows (cc-0007, 08-23)
+        if any(piece in stop for piece in re.split(r"[-:.]", tok) if piece):
+            continue
+        for kind, attr, rx in shapes:
+            if not rx.fullmatch(tok):
+                continue
+            start, end = m.start(), m.start() + len(tok)
+            entries = [e for e in _learned(attr, board, archive) if e.attribute == attr and e.owners]
+            # the attribute word before it — `mac aa:…`, `the ip 10…`, `serial 7f3k-…` — is
+            # context, and is claimed by the value (gate 1)
+            linked_text = ""
+            before = re.search(r"(?:(?:the|its|their|a)\s+)?([a-z_]+)\s+$", low[:start])
+            if before and _attribute_named(before.group(1), board) == attr:
+                linked_text = request[before.start():start].strip()
+            out.append({"text": request[start:end], "start": start, "end": end, "word": attr,
+                        "entries": entries, "linked": attr, "linked_text": linked_text,
+                        "shaped": True, "owner": kind, "attribute": attr})
+            break
+    return out
+
+
+def _extend_selector(rows: List[S.Declared], cand: dict, request: str,
+                     board) -> List[S.Declared]:
+    """A shaped value that SELECTS: the phrase that holds its head is extended over the
+    whole value (`the vm at 10` -> `the vm at 10.0.0.5`) and the value fills `where`;
+    a kindless row that is a piece of the value (`5`) is consumed."""
+    low = str(request).lower()
+    out: List[S.Declared] = []
+    for r in rows:
+        if r.object_type == S.VALUE_KIND:
+            out.append(r)
+            continue
+        span = str(r.span or "")
+        at = low.find(span.lower())
+        if at < 0 or not (at <= cand["start"] < at + len(span)):
+            if _is_consumed(r, cand, request, board):
+                continue
+            out.append(r)
+            continue
+        new_span = request[at:max(at + len(span), cand["end"])]
+        accepted, reason = board.accept(r.kind if r.kind in board.kinds else cand["owner"],
+                                        cand["attribute"], cand["text"])
+        where = dict(r.where or {})
+        if not reason:
+            where[cand["attribute"]] = accepted
+        if new_span == span and where == (r.where or {}):
+            out.append(r)
+            continue
+        out.append(S.declare_from(new_span, r.object_type, where, r.existence, board,
+                                  references=list(r.references), count=r.count,
+                                  comparator=r.comparator, span=new_span, identity=r.identity,
+                                  sanctioned=r.sanctioned)._replace(
+                                      excludes=r.excludes, unroutable=r.unroutable))
+    return out
+
+
+def _is_predicate(v: S.Declared, request: str) -> bool:
+    """A value in a QUESTION or a statement of fact is a predicate's value, not an
+    assignment — `which vm has mac …`, `alpha has ip …`: nothing to take, nothing to refuse."""
+    from .speech_act import AUXILIARIES, WH_WORDS
+    clause = _clause_of(request, v.span)
+    words = [w.strip(".,'\"?") for w in clause.split()]
+    return bool(words) and (words[0] in WH_WORDS or words[0] in AUXILIARIES)
+
+
 def _clause_of(request: str, text: str) -> str:
     from .scan import clause_around
     try:
@@ -358,7 +444,8 @@ def read_values(rows: List[S.Declared], request: str, board=None,
         from .archive import ARCHIVE as archive
     if any(r.object_type == S.VALUE_KIND for r in rows):
         return rows                                 # already read
-    cands = _candidates(request, board, archive) + _naming_candidates(rows, request, board)
+    cands = (_candidates(request, board, archive) + _naming_candidates(rows, request, board)
+             + _shape_candidates(request, board, archive))
     if not cands:
         return rows
     cands.sort(key=lambda c: c["start"])
@@ -366,8 +453,10 @@ def read_values(rows: List[S.Declared], request: str, board=None,
     values: List[S.Declared] = []
     for cand in cands:
         if _selects(cand, out, request):
+            if cand.get("shaped"):
+                out = _extend_selector(out, cand, request, board)
             continue
-        if cand.get("naming"):
+        if cand.get("naming") or cand.get("shaped"):
             scores = {cand["owner"]: 2}
         else:
             scores = rank_owners(cand, out, request, archive)
@@ -380,6 +469,10 @@ def read_values(rows: List[S.Declared], request: str, board=None,
             value = {"word": cand["word"], "attribute": attribute, "owner": owner,
                      "linked": attribute, "linked_text": cand["linked_text"],
                      "naming": True, "target_span": cand["target_span"]}
+        elif cand.get("shaped"):
+            owner, attribute = cand["owner"], cand["attribute"]
+            value = {"word": cand["word"], "attribute": attribute, "owner": owner,
+                     "linked": attribute, "linked_text": cand["linked_text"], "shaped": True}
         elif len(winners) == 1:
             owner = winners[0]
             attribute = next((e.attribute for e in cand["entries"] if owner in e.owners
@@ -475,6 +568,12 @@ def _assign(things: List[S.Declared], values: List[S.Declared], request: str, bo
         accepted, reason = board.accept(target.kind if target.kind in board.kinds else owner,
                                         attribute, v.span)
         info["target"] = target.span
+        if _is_predicate(v, request):
+            info["predicate"] = True                 # `which vm has mac …` — asked, not set
+            if reason:
+                info["malformed"] = reason
+            done.append(v._replace(value=info, references=claims))
+            continue
         if reason:
             info["refused"] = reason
         elif target.existence == S.NEW or (info.get("naming")
