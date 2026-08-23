@@ -575,3 +575,18 @@ the thing, never the pointer). Built as `seam/proforms.py` on the live path; nl-
 5/5. **The v3 draft was RESET AGAIN at the operator's word so every key is made under #17,
 #17b and #18 together: 110 pending.**
 
+## 19 · 'X's SNAPSHOT' — THE LEAF IS ITS OWN SPAN, X IS ITS OWNER (operator, 2026-08-23)
+
+Before grading v3 the operator rejected po-0001 · po-0002 · po-0003 (and the twin po-0001-ej)
+as authored: *"'X's snapshot' — snapshot here should be a value as a span."* The gold had kept
+the whole genitive NP (`alpha's snapshots`) as one object span — it matched what the reader
+produced, and both were wrong. The genitive is owner + leaf, the same shape as `the cpu of X`
+(un-0003, ledger #17): the owner is the **patient**, the leaf is a **value** span of its own, and
+the `'s` belongs to neither. Operator confirmed: *"patient for the owner."*
+
+Gold only. The reader still returns one `snapshot_set` row for the NP (and swallows
+`snapshot beta's disk` whole, no operation) — that is the next step, briefed separately. The
+operator had already keyed ACCEPT on po-0001 · po-0002 · po-0003 under the old gold and
+withdrew it here; those three accepts are STALE against the corrected gold and are re-asked.
+po-0001-ej was never keyed and stays pending.
+

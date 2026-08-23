@@ -77,13 +77,18 @@ SEEDS_V3: List[Seed] = [
 
     # ══ possessive — the genitive is a reference, and the reference is the target ════
     Seed("po-0001", "possessive", "delete alpha's snapshots",
-         ["alpha's snapshots"], ["delete"], {0: [0]},
-         note="structure_map hole: the apostrophe survives tokenisation and the name "
-              "was lost — the span is the whole genitive NP; alpha is its owner READ"),
+         ["alpha", "snapshots"], ["delete"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}]},
+         note="RULED 08-23 (ledger #19): 'X's snapshot' — snapshot is a VALUE, its own "
+              "span; X is its owner, the patient. The genitive is owner + leaf, like "
+              "`the cpu of X` (un-0003) — never one NP. (Earlier gold kept the whole NP "
+              "and matched the reader; both were wrong.)"),
     Seed("po-0002", "possessive", "list the web vm's snapshots",
-         ["the web vm's snapshots"], ["list"], {0: [0]}),
+         ["the web vm", "snapshots"], ["list"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}]}),
     Seed("po-0003", "possessive", "snapshot beta's disk",
-         ["beta's disk"], ["snapshot"], {0: [0]}),
+         ["beta", "disk"], ["snapshot"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}]}),
     Seed("po-0004", "possessive", "how many snapshots does alpha have?",
          ["alpha"], ["how many snapshots does alpha have"], {0: [0]}, queries=[0],
          note="the genitive relation asked interrogatively — the COUNT is produced"),
@@ -403,7 +408,8 @@ SEEDS_V3: List[Seed] = [
     # twins are authored by hand and certified like any case. The slot decides junk;
     # the closed classes do not grow.
     Seed("po-0001-ej", "possessive", "delete adsfk alpha's snapshots",
-         ["alpha's snapshots"], ["delete"], {0: [0]},
+         ["alpha", "snapshots"], ["delete"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}]},
          noise="embedded-junk", pair_id="po-0001",
          note="keyboard mash in a CLOSED position — junk between verb and NP joins no "
               "span (the slot decides); the same bytes in a naming slot would be a "
