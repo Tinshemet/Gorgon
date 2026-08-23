@@ -636,3 +636,34 @@ values.py) — no third marker. Gold only; the reader that satisfies it is fix C
 today both sentences read as junk (`how many snapshots` a set, `does alpha` nothing). The
 frame lives in these two cases only — no sealed have-frame exists, zero sealed movers.
 
+## 22 · SCHEMA v3.0 — FULL VECTOR DECONSTRUCTION PER WORD, AND THE PURPOSE STRATUM (operator, 2026-08-24)
+
+The operator, mid-grading: *"decomp every single sentence to its based components and compute
+it as a vector (mood, plurality, etc) … so i can see if the verdict is right AND WHICH WORDS
+FLIP IT THE WRONG WAY … this is the final form of this READ: full vector deconstruction per
+word"* — and on scope: **v4 IS v3**, same sentences, gold deepened, ONE grading pass. Two
+corrections told and taken: cells are DISCRETE closed-class facts, never embeddings; the fold
+is COMPUTED from the words (*"the overall vector is calculated by the READ and i approve or
+reject it"*).
+
+Built (four steps + the rank path): `vectors.py` — 11 word dimensions + 7 fold dimensions,
+every cell from a real reader, never a word list (the naive tagger read `let's` as a
+genitive; the codex contraction wins, and that is now a test); `seeds_v3 --emit` attaches
+vectors to all cases; `schema.py` v3.0 validates words-mirror-tokens and the closed dimension
+lists; `capture.py` hashes PER DIMENSION so a diff names the axis that moved; `review.py`
+binds the vector into the seal (every keyed verdict went STALE once, by design — the
+operator accepted regrading) and gains `f` — FLIP a cell, the per-cell reject, machine-
+readable so the fix lands where the cell was computed. RANKING NEVER SEES THE VECTOR:
+`_rank_hash` binds to what the rater SAW, proven headless — ranks survive gold+vector churn,
+only a reworded sentence stales. Grading and ranking stay two different issues.
+
+**And the one corpus hole closed — PURPOSE, the operator's design:** *"purpose is
+constructed from 2 things which are already implemented in a 'sibling', diagnosis, but on
+the other way around … this a ledger entry, with a request attached … 'why is vm3 stopped?'
+-> 'vm3 was stopped due to it being idle, reverse the decision?'"* Three seeds (pu-0001..3),
+the to-/so-clause as EVIDENCE by cause's certified 08-22 convention, carried by the act.
+The reader today DROPS the clause (det 1/2 on all three, code-only) — the 08-16
+silent-qualifier defect, now priced in gold; the purpose reader mirrors the because-reader,
+a future step. 113 cases; the corpus is otherwise declared CLOSED — anything further is a
+repeat or remix (operator, 08-24).
+

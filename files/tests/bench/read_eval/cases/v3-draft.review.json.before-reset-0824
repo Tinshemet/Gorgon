@@ -1,0 +1,67 @@
+{
+ "id-0001": {
+  "hash": "64d6ba8e4a04a355",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "id-0002": {
+  "hash": "61dbf681bcf45b1b",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "id-0003": {
+  "hash": "b11de1442059deb8",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "id-0004": {
+  "hash": "18079e008300a5cd",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "id-0005": {
+  "hash": "f051372bf1f6004c",
+  "note": "8g:77q is a selector",
+  "verdict": "rejected"
+ },
+ "po-0001": {
+  "hash": "5d8aac6dd6636c04",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "po-0002": {
+  "hash": "5c3748415b5c7995",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "po-0003": {
+  "hash": "6c87ee27412774a8",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "po-0004": {
+  "hash": "9cc91fdba8896c39",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "un-0001": {
+  "hash": "ac2b9cc62d95245d",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "un-0002": {
+  "hash": "3c6bd9156eac70f1",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "un-0003": {
+  "hash": "555dedd7a16d6d86",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "un-0004": {
+  "hash": "6ad1de18d95af297",
+  "note": "",
+  "verdict": "accepted"
+ }
+}

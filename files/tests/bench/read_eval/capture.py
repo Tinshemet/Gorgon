@@ -47,6 +47,20 @@ def capture(cases: List[dict]) -> Dict[str, dict]:
                 "reading": hashlib.sha256(json.dumps(reading, sort_keys=True, default=str)
                                           .encode()).hexdigest()[:16],
             }
+            # ⇒ v3.0: one hash PER DIMENSION, so a diff names the axis that moved — the
+            #   operator's attribution requirement, priced at the control (08-24)
+            from .vectors import vector_of, FOLD_DIMENSIONS, WORD_DIMENSIONS
+            vec = vector_of(case, board)
+            dims = {}
+            for d in WORD_DIMENSIONS:
+                cells = [w["cells"].get(d) for w in vec["words"]]
+                if any(c is not None for c in cells):
+                    dims[d] = hashlib.sha256(json.dumps(cells, default=str)
+                                             .encode()).hexdigest()[:8]
+            for d in FOLD_DIMENSIONS:
+                dims["fold." + d] = hashlib.sha256(
+                    json.dumps(vec["fold"].get(d)).encode()).hexdigest()[:8]
+            fields["vector"] = dims
             out[case["id"]] = fields
     finally:
         channel.constrained = was
@@ -62,7 +76,16 @@ def diff(before: Dict[str, dict], after: Dict[str, dict]) -> List[str]:
         if b is None or a is None:
             lines.append(f"{cid:14} {'added' if b is None else 'removed'}")
             continue
-        changed = [k for k in sorted(set(b) | set(a)) if b.get(k) != a.get(k)]
+        changed = []
+        for k in sorted(set(b) | set(a)):
+            if b.get(k) == a.get(k):
+                continue
+            if isinstance(b.get(k), dict) and isinstance(a.get(k), dict):
+                sub = [d for d in sorted(set(b[k]) | set(a[k]))
+                       if b[k].get(d) != a[k].get(d)]
+                changed.append(f"{k}[{','.join(sub)}]")     # the AXIS that moved, named
+            else:
+                changed.append(k)
         lines.append(f"{cid:14} {' '.join(changed)}")
     return lines
 

@@ -65,6 +65,7 @@ expects these to verify several times faster; nothing else about the flow change
 import hashlib
 import json
 import os
+import re
 import sys
 from typing import Dict, List, Optional
 
@@ -82,7 +83,7 @@ def _hash(case: dict) -> str:
     #   verdict — "an accept ratifies the store, decoys included" was a sentence, not a
     #   binding. Now it is a binding; the cases carrying a store go STALE once, by design.
     judged = {"sentence": case["sentence"], "gold": case["gold"]}
-    for extra in ("store", "outcome", "context"):   # ADDITIVE: a case without them keeps its hash
+    for extra in ("store", "outcome", "context", "vector"):   # ADDITIVE: a case without them keeps its hash
         if extra in case:
             judged[extra] = case[extra]
     body = json.dumps(judged, sort_keys=True)
@@ -169,6 +170,21 @@ def show(case: dict, verdicts: Dict[str, dict], by_id: Dict[str, dict]) -> None:
     if case.get("context"):
         print(f"      {MAGENTA}context:{OFF} " + " · ".join(
             f"{k}={v}" for k, v in case["context"].items()))
+    # v3.0: THE VECTOR — every cell judged with the case; flip a wrong one with `f`.
+    #   Compact: only words that earned cells; the fold last (it is a FUNCTION of the
+    #   words — a fold flip rules the fold RULE, not this one case).
+    vec = case.get("vector")
+    if vec:
+        for wi, w in enumerate(vec["words"]):
+            cells = w["cells"]
+            if not cells:
+                continue
+            body = " · ".join(
+                f"{d}={','.join(v) if isinstance(v, list) else v}"
+                for d, v in sorted(cells.items()))
+            print(f"      {DIM}w{wi:<2}{OFF} {w['w']:14} {body}")
+        print(f"      {DIM}fold{OFF} " + " · ".join(
+            f"{d}={v}" for d, v in sorted(vec["fold"].items())))
     # v2.2: the OUTCOME of an empty reading is part of the gold — shown, so it is judged
     if case.get("outcome"):
         print(f"      {MAGENTA}outcome: {case['outcome'].upper()}{OFF}  "
@@ -243,8 +259,31 @@ def review(cases: List[dict], cases_path: str) -> int:
             save_verdicts(cases_path, verdicts)
             history.append(case["id"])
             at += 1
+        elif key == "f" and case.get("vector"):
+            # ⇒ v3.0: FLIP A CELL — the per-cell reject (operator 08-24: "WHICH WORDS FLIP
+            #   IT THE WRONG WAY"). Machine-readable, so the fix lands where the cell was
+            #   computed; several flips stack on one case. `w3.kind=network why...`,
+            #   `fold.mood=ACHIEVE why...` — empty input finishes the case as rejected.
+            flips = []
+            while True:
+                line = input("      flip (wN.dim=value why · empty=done): ").strip()
+                if not line:
+                    break
+                m = re.match(r"^(w\d+|fold)\.([a-z]+)\s*=\s*(\S+)\s*(.*)$", line)
+                if not m:
+                    print(f"      {DIM}form: w3.kind=network the head is the net{OFF}")
+                    continue
+                flips.append({"at": m.group(1), "dim": m.group(2),
+                              "to": m.group(3), "why": m.group(4).strip()})
+            if flips:
+                verdicts[case["id"]] = {
+                    "verdict": "rejected", "hash": _hash(case), "flips": flips,
+                    "note": "; ".join(f"{f['at']}.{f['dim']}→{f['to']}" for f in flips)}
+                save_verdicts(cases_path, verdicts)
+                history.append(case["id"])
+                at += 1
         else:
-            print(f"  {DIM}a / r / s / u / q{OFF}")
+            print(f"  {DIM}a accept · r reject · f flip cells · s / u / q{OFF}")
     return status(cases, cases_path)
 
 

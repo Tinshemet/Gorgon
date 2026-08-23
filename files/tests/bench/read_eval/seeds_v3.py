@@ -161,6 +161,35 @@ SEEDS_V3: List[Seed] = [
          note="RULED 08-22: carried — 'an important reference, regardless if its used "
               "as part of the operator'"),
 
+    # ══ purpose — the reason GIVEN with the act: diagnosis, reversed ═════════════════
+    # ⇒ OPERATOR 08-24, closing the one hole the 08-16 sweep named: "purpose is
+    #   constructed from 2 things which are already implemented in a 'sibling',
+    #   diagnosis, but on the other way around: we have a request and evidence/rule …
+    #   this a ledger entry, with a request attached, it actually a good way to teach
+    #   ROUTE and RESOLVE, human makes decision and gives evidence for it … 'why is vm3
+    #   stopped?' -> 'vm3 was stopped due to it being idle, reverse the decision?'"
+    #   The to-clause is EVIDENCE by the certified 08-22 convention (cause's mirror),
+    #   carried by the act — the future why-answer's source. Cross-turn use is ROUTE's.
+    Seed("pu-0001", "purpose", "stop the idle vms to free memory",
+         ["the idle vms"], ["stop"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "evidence"}]},
+         evidence=["to free memory"],
+         note="the operator's own sentence — the decision and its reason in one breath; "
+              "dropping the to-clause is the silent-qualifier defect (08-16), the act "
+              "must CARRY it"),
+    Seed("pu-0002", "purpose", "snapshot the db vm so we can roll back",
+         ["the db vm"], ["snapshot"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "evidence"}]},
+         evidence=["so we can roll back"],
+         note="`so (that)` — the second purpose marker; the reason names a FUTURE use, "
+              "not a present symptom, which is exactly diagnosis reversed"),
+    Seed("pu-0003", "purpose", "delete the old snapshots to save space",
+         ["the old snapshots"], ["delete"],
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "evidence"}]},
+         evidence=["to save space"],
+         note="a DESTRUCTIVE act with its justification attached — the ledger entry the "
+              "operator described, written at request time"),
+
     # ══ concession — an exception the operator already thought about ═════════════════
     Seed("co-0001", "concession", "stop the test vms even though alpha is busy",
          ["the test vms"], ["stop"],
@@ -771,6 +800,10 @@ SEEDS_V3: List[Seed] = [
 def emit() -> List[dict]:
     """Build every v3 seed and refuse to hand over anything the schema rejects."""
     cases = [build(s) for s in SEEDS_V3]
+    # ⇒ schema v3.0 (operator 08-24): every case carries its COMPUTED per-word vector —
+    #   the third gold layer, certified by exception in review ([[vectors.py]])
+    from .vectors import attach
+    attach(cases)
     faults = validate(cases)
     if faults:
         raise SystemExit("\n".join(f"  ✗ {f}" for f in faults))

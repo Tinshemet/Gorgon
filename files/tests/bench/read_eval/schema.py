@@ -76,7 +76,7 @@ EARNED_STRATA = ("qualifiers", "adjunct-clauses", "diagnosis", "cross-cutting")
 # ⇒ v3 — THE CLOSING STRATA (operator-scoped 08-20: learned patterns + the
 #   structure_map's open holes; v3 is the LAST release and closes the READ saga)
 V3_STRATA = ("identifiers", "units", "possessive", "alternatives",
-             "reduced-relative", "apposition", "cause", "concession",
+             "reduced-relative", "apposition", "cause", "purpose", "concession",
              "magnitude", "manner", "learned-words", "self-address",
              "ordinals", "fallback", "pairwise", "negated-query", "schedules",
              "superlatives", "naming-lists", "quoted-values", "audit", "capability", "preference",
@@ -172,7 +172,7 @@ ACTION_KINDS = ("instruct", "query", "rule", "report")
 #   primitive facts; their deeper shape belongs to the stores, not this schema.
 
 CASE_KEYS = {"id", "stratum", "noise", "pair_id", "source", "sentence", "gold"}
-OPTIONAL_KEYS = {"store", "outcome", "context"}
+OPTIONAL_KEYS = {"store", "outcome", "context", "vector"}
 
 # ── v2.2: THE OUTCOME — an empty reading is a STATEMENT, not an omission (operator, 08-22) ─
 #
@@ -304,6 +304,26 @@ def validate_case(case: dict) -> List[str]:
     # v2.2 outcome: declared from the closed set; checked against the actions below
     if "outcome" in case and case["outcome"] not in OUTCOMES:
         faults.append(f"{cid}: outcome {case['outcome']!r} is not one of {OUTCOMES}")
+
+    # v3.0 vector (operator 08-24): the per-word decomposition + the fold — COMPUTED by
+    #   the emitter, certified by exception. Words must mirror the sentence token for
+    #   token; cells and fold keys come from the declared dimensions, nothing rides along.
+    if "vector" in case:
+        import re as _re
+        vec = case["vector"]
+        from .vectors import FOLD_DIMENSIONS, WORD_DIMENSIONS
+        toks = [m.group(0) for m in _re.finditer(r"\S+", case["sentence"])]
+        words = (vec or {}).get("words") if isinstance(vec, dict) else None
+        if not isinstance(vec, dict) or not isinstance(words, list):
+            faults.append(f"{cid}: vector is not {{words, fold}}")
+        elif [w.get("w") for w in words] != toks:
+            faults.append(f"{cid}: vector words do not mirror the sentence tokens")
+        else:
+            for wi, w in enumerate(words):
+                for k in set(w.get("cells") or {}) - set(WORD_DIMENSIONS):
+                    faults.append(f"{cid}: vector word {wi} has unknown dimension {k!r}")
+            for k in set(vec.get("fold") or {}) - set(FOLD_DIMENSIONS):
+                faults.append(f"{cid}: vector fold has unknown dimension {k!r}")
 
     # v2.3 context: the INBOUND hint — a flat, non-empty declaration of the prior state
     if "context" in case:
