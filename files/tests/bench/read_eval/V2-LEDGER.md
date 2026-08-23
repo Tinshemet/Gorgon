@@ -621,3 +621,18 @@ intact. Guards: declared shape (7's) · quantity (1's) · English (cc-0007) · c
 qual-0005 sealed ×3, unmoved) · state · thing · attribute word · comparator. Capture: id-0005
 the only mover in all four files; sealed 365/365 identical; suite 985.
 
+## 21 · THE HAVE-FRAME IS THE GENITIVE ASKED — LEAF AS VALUE, NEVER SELECTOR (operator, 2026-08-24)
+
+Asked before grading: *"should queries also include the new selector rule? … 'how many
+snapshots does alpha have?' — snapshots becomes a selector?"* and, on the pair: *"same with
+un-0004?"* Ruled: **"value not selector."** The line the gold already draws (id-0002 vs
+id-0004): a SELECTOR picks the thing out of many; in the have-frame the thing is NAMED and
+the leaf is what is ASKED — `does alpha have L` is `alpha's L` (#19) worn as a question, so
+the leaf takes the same role the genitive gave it. po-0004 → `snapshots` (value) + `alpha`
+(patient); un-0004 → `memory` (value) + `alpha` (patient); the COUNT/AMOUNT stays the
+produced answer, unspanned. On flagging: already flagged twice — the action sits in
+`queries` (gold) and the reading's predicate path marks "asked, not set" (id-0002's, in
+values.py) — no third marker. Gold only; the reader that satisfies it is fix C, unbuilt:
+today both sentences read as junk (`how many snapshots` a set, `does alpha` nothing). The
+frame lives in these two cases only — no sealed have-frame exists, zero sealed movers.
+

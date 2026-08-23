@@ -77,7 +77,13 @@ SEEDS_V3: List[Seed] = [
          note="partitive-of over an ATTRIBUTE — `the cpu of X` names X's attribute, "
               "never a second thing"),
     Seed("un-0004", "units", "how much memory does alpha have?",
-         ["alpha"], ["how much memory does alpha have"], {0: [0]}, queries=[0]),
+         ["memory", "alpha"], ["how much memory does alpha have"],
+         {0: [{"span": 0, "role": "value"}, {"span": 1, "role": "patient"}]}, queries=[0],
+         note="RULED 08-24 (ledger #21): the have-frame is the genitive asked — owner "
+              "patient, leaf VALUE (id-0002's precedent: the asked predicate is a value, "
+              "never a selector — a selector PICKS the thing, here the thing is named). "
+              "Asked-ness is flagged by the query action + the reading's `predicate`, "
+              "nothing new. The AMOUNT is the produced answer, unspanned."),
 
     # ══ possessive — the genitive is a reference, and the reference is the target ════
     Seed("po-0001", "possessive", "delete alpha's snapshots",
@@ -94,8 +100,10 @@ SEEDS_V3: List[Seed] = [
          ["beta", "disk"], ["snapshot"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}]}),
     Seed("po-0004", "possessive", "how many snapshots does alpha have?",
-         ["alpha"], ["how many snapshots does alpha have"], {0: [0]}, queries=[0],
-         note="the genitive relation asked interrogatively — the COUNT is produced"),
+         ["snapshots", "alpha"], ["how many snapshots does alpha have"],
+         {0: [{"span": 0, "role": "value"}, {"span": 1, "role": "patient"}]}, queries=[0],
+         note="RULED 08-24 (ledger #21): `alpha's snapshots` (#19) worn as a question — "
+              "owner patient, leaf VALUE; the COUNT is produced, never spanned"),
 
     # ══ alternatives — or-coordination: the read records BOTH, choosing is route's ═══
     Seed("al-0001", "alternatives", "stop alpha or beta",
