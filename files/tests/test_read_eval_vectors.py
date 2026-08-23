@@ -66,3 +66,11 @@ def test_capture_names_the_dimension_that_moved():
     a = {"x": {"asked": [], "reading": "r", "vector": {"kind": "1", "fold.act": "2"}}}
     b = {"x": {"asked": [], "reading": "r", "vector": {"kind": "9", "fold.act": "2"}}}
     assert CAP.diff(a, b) == ["x              vector[kind]"]
+
+
+def test_the_rank_door_opens_nothing_but_ranking():
+    # the ranker's command can only rank: the module's public surface carries no verdict
+    # access, so forgetting a flag cannot land anyone in the grading version
+    import tests.bench.read_eval.rank as RK
+    assert sorted(n for n in dir(RK) if not n.startswith("_")) == [
+        "List", "Optional", "load", "main", "rank", "rank_status", "validate"]
