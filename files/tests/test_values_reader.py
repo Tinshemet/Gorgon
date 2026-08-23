@@ -150,7 +150,7 @@ def test_a_reference_finds_its_target():
     # `it` is read as a vm row of its own (the 08-16 clause rule); the value targets THAT
     # row and the owner's typed 4 lands in its `where` — no longer the raw string '4'
     rows = _rows("create a vm named alpha. give it 4 cores.")
-    val = next(r for r in rows if r.kind == "value")
+    val = next(r for r in rows if r.kind == "value" and r.span == "4 cores")
     target = next(r for r in rows if r.span == val.value["target"])
     assert target.kind == "vm" and target.where.get("cpu_cores") == 4 and "cpu_cores" in target.assigned
 
@@ -195,3 +195,63 @@ def test_the_refusal_reaches_the_operator_and_not_the_model():
 def test_the_owners_number_is_not_an_invented_value():
     r = _piped("create a vm with 4 cores and 8gb of ram")
     assert not any("8192" in a or "never says" in a for a in r.asks + r.bounces)
+
+
+# ── step 4: A NAME IS A LEAF (ledger #17) ───────────────────────────────────────────────
+def _named(s):
+    rows = _rows(s)
+    return ([(r.span, r.kind, r.where) for r in rows if r.kind != "value"],
+            [(r.span, r.value["attribute"], r.value.get("target")) for r in rows if r.kind == "value"])
+
+
+def test_a_name_at_creation_is_its_own_span():
+    things, values = _named("create a vm named alpha")
+    assert things == [("a vm", "vm", {"name": "alpha"})]
+    assert values == [("alpha", "name", "a vm")]
+
+
+def test_a_network_name_uses_the_kinds_key_attribute():
+    things, values = _named("create a network called lab")
+    assert things == [("a network", "network", {"net_name": "lab"})]
+    assert values == [("lab", "net_name", "a network")]
+
+
+def test_nl_0001_a_literal_list_is_one_leaf_per_name():
+    things, values = _named("create three vms named a, b and c")
+    assert [t[0] for t in things] == ["three vms"]
+    assert [v[0] for v in values] == ["a", "b", "c"] and all(v[1] == "name" for v in values)
+
+
+def test_nl_0002_two_networks_called_front_and_back():
+    things, values = _named("create two networks called front and back")
+    assert [t[0] for t in things] == ["two networks"]
+    assert [v[0] for v in values] == ["front", "back"]
+
+
+def test_nl_0003_a_generator_spec_is_itself_the_one_leaf():
+    things, values = _named("create 5 vms named 1-5")
+    assert things == [("5 vms", "vm", {"name": "1-5"})], "the spec, not the old partial '1'"
+    assert values == [("1-5", "name", "5 vms")]
+
+
+def test_nl_0004_a_theme_generator_and_a_named_network():
+    things, values = _named("create 3 vms named after musicians and a network called the stadium "
+                            "and add those vms to it")
+    # `those vms` is folded into `3 vms` as a reference by resolve_proforms (pre-existing)
+    assert [t[0] for t in things] == ["3 vms", "a network"], things
+    assert [v[0] for v in values] == ["after musicians", "the stadium"]
+
+
+def test_a_name_that_refers_stays_in_its_phrase():
+    things, values = _named("stop the vm named web")
+    assert things == [("the vm named web", "vm", {"name": "web"})] and values == []
+
+
+def test_the_list_ends_where_the_next_clause_begins():
+    things, values = _named("create a vm named alpha and launch it")
+    assert [v[0] for v in values] == ["alpha"]
+
+
+def test_the_naming_cue_is_claimed_not_left_over():
+    r = _piped("create a vm named alpha")
+    assert not any("'named'" in b for b in r.bounces), r.bounces

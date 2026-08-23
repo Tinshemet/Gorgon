@@ -30,10 +30,17 @@ def check(label, ok):
 
 
 def _canned(handle):
+    """The model answers `create_vm` on the ONE handle the schema offers — the handle's
+    spelling follows the row (`grubnash` cold, `alpha` once the answer settles the kind and
+    the name is its key — ledger #17), and this test is about the write-back, not the name."""
     was = channel.constrained
-    channel.constrained = (lambda p, pl, s, **k:
-                           {"operations": [{"operator": "create_vm", "on": handle}]}
-                           if "operations" in (s.get("properties") or {}) else {})
+
+    def fake(p, pl, s, **k):
+        if "operations" not in (s.get("properties") or {}):
+            return {}
+        offered = s["properties"]["operations"]["items"]["properties"]["on"].get("enum") or [handle]
+        return {"operations": [{"operator": "create_vm", "on": offered[0]}]}
+    channel.constrained = fake
     return was
 
 
@@ -41,7 +48,8 @@ def _rows(answers=None):
     board = Board()
     rows = pass1.settle_with_world(pass1.run_scanned(REQUEST, board=board), Lab(), board)
     settled, clashes = pass1.settle_with_answers(rows, answers or {}, board)
-    return settled, board, clashes
+    # `alpha` is a VALUE row since ledger #17 — these tests are about the THING's kind
+    return [r for r in settled if r.kind != "value"], board, clashes
 
 
 def test_an_unknown_noun_refuses_until_it_is_answered():
@@ -52,10 +60,14 @@ def test_an_unknown_noun_refuses_until_it_is_answered():
         cold = PL.run(REQUEST, board=Board(), world=Lab())
         warm = PL.run(REQUEST, board=Board(), world=Lab(),
                       answers={"grubnash": "a grubnash is a vm"})
-        check(f"unanswered it refuses ({cold.outcome})", cold.outcome == PL.REFUSE)
+        # ⇒ 08-23: cold is an ASK — gate 2's own question ("what is a grubnash?") is one the
+        #   operator can answer, and the pipeline's rule says that is never a refusal. The
+        #   REFUSE this check used to see was an ARTEFACT: the stub's frozen handle matched
+        #   no declared row cold, so gate 3 called every step illegal.
+        check(f"unanswered it asks ({cold.outcome})", cold.outcome == PL.ASK)
         check(f"answered it serves ({warm.outcome})", warm.outcome == PL.SERVE)
         check("and the row is typed by what the operator said",
-              all(r.object_type == "vm" for r in warm.declarations))
+              all(r.object_type == "vm" for r in warm.declarations if r.kind != "value"))
     finally:
         channel.constrained = was
 
@@ -69,7 +81,7 @@ def test_an_answer_naming_no_kind_settles_nothing():
     """
     print("\n[b2] an answer that names no kind is declined, never guessed at")
     rows, board, clashes = _rows(
-        {"a grubnash named alpha": ("kind-not-settled", "a grubnash is a wombat")})
+        {"a grubnash": ("kind-not-settled", "a grubnash is a wombat")})   # the row is `a grubnash` (#17)
     check("the row stays unsettled", all(r.object_type == "?" for r in rows))
     # ⇒ AND THE OPERATOR IS TOLD WHY. We cannot ground an answer — nothing here can check
     #   whether what a person said is TRUE — but we can see that it names no kind, and a

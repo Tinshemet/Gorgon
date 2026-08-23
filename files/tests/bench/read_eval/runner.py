@@ -170,6 +170,12 @@ def read_case(sentence: str, board=None) -> dict:
     predicted_spans = []
     for i, row in enumerate(rows):
         where = _find(sentence, row.span or row.name)
+        # ⇒ A VALUE ROW KNOWS WHERE IT WAS READ (08-23): `a` in `named a, b and c` is also
+        #   the first letter of `create`, and a text search would place it there. The reader
+        #   recorded the offset in the VIEW's text; it maps back with the rest, below.
+        _v = getattr(row, "value", None) or {}
+        if _v.get("start") is not None and row.span:
+            where = (int(_v["start"]), int(_v["start"]) + len(str(row.span)))
         predicted_spans.append({"row": i, "span": row.span, "kind": row.object_type,
                                 "type": "object",
                                 "where": dict(row.where or {}),

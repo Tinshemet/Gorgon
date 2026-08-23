@@ -30,6 +30,12 @@ So this file does FOUR things and refuses a fifth:
            an EXISTING target takes it only if the manifest declares a SETTER for that
            attribute — otherwise the value is REFUSED with the owner's reason, and gate 4
            tells the operator, never the model ([[gorgon-can-the-world-satisfy-it]])
+  6 NAME   (step 4, ledger #17 — A NAME IS A LEAF) a naming cue on a NEW thing — `a vm
+           NAMED alpha`, `two networks CALLED front and back` — makes the name(s) after it
+           value rows of the thing's KEY attribute (`name` · `net_name`). A literal list is
+           one leaf per name (a · b · c); a GENERATOR spec (`1-5`, `after musicians`) is
+           itself the one leaf the owner runs (#11: one generative unit). A name on an
+           EXISTING thing refers (`stop the vm named web`) and stays in its phrase.
   ✗ NEVER  interpret the value HERE. The span stays the bytes `16gb`; the number 16384 is
            the owner's answer, recorded beside it, never in its place.
 
@@ -42,8 +48,8 @@ import re
 from typing import Dict, List, Optional, Tuple
 
 from . import schema as S
-from ..codex import (ATTRIBUTE_LINKERS, DEFINITE, INDEFINITE, SELECTOR_PREPOSITIONS,
-                     VALUE_CONNECTORS)
+from ..codex import (ATTRIBUTE_LINKERS, CUT_DETERMINERS, DEFINITE, INDEFINITE, NAMING_CUES,
+                     SELECTOR_PREPOSITIONS, VALUE_CONNECTORS)
 
 _NUMBER_UNIT = re.compile(r"\b(\d+)\s*([a-z]+)\b")
 _DETS = set(DEFINITE) | set(INDEFINITE)          # the codex's, not a list of our own
@@ -78,6 +84,151 @@ def _candidates(request: str, board, archive) -> List[dict]:
         out.append({"text": request[start:end], "start": start, "end": end, "word": word,
                     "entries": entries, "linked": linked,
                     "linked_text": request[end:end + tail.end()] if tail and linked else ""})
+    return out
+
+
+_CUE = re.compile(r"\b(%s)(?:\s+as)?\b" % "|".join(sorted(NAMING_CUES, key=len, reverse=True)))
+_RANGE = re.compile(r"^\d+\s*-\s*\d+$")
+_BARE = re.compile(r"^[a-z0-9][a-z0-9_.-]*$")
+
+
+def _stop_words(board) -> set:
+    """The English the seam already knows — a name is never one of these words, so the
+    first one AFTER the spec's head ends the spec: `dmz ▸ instead`, `core ▸ , except db`.
+    The head itself is exempt: `named AFTER musicians`, `called THE stadium`."""
+    from .scan import GRAMMAR, _operation_words
+    from ..codex import EXCLUDERS, RELATIONAL_WORDS
+    return (set(GRAMMAR) | set(RELATIONAL_WORDS) | set(EXCLUDERS) | set(CUT_DETERMINERS)
+            | set(_DETS) | set(NAMING_CUES) | set(SELECTOR_PREPOSITIONS)
+            | set(_operation_words(board)) | {"then", "but", "as"})
+
+
+def _name_spec(low: str, at: int, board) -> Tuple[int, int]:
+    """The naming spec after a cue at `at`: word by word until the clause ends or a word
+    the codex knows appears — and across `,`/`and` only onto another bare name (`a, b AND
+    c` goes on; `core, EXCEPT db`, `alpha AND launch it`, `musicians AND A network` stop)."""
+    from .pass2 import CLAUSE_MARKS
+    stop = _stop_words(board)
+    marks = set(CLAUSE_MARKS) - {","}
+    i, n = at, len(low)
+    while i < n and low[i] in " ,":                 # a comma the front door may have restored
+        i += 1
+    start = i
+    end = start
+    first = True
+    while i < n:
+        if low[i] in marks:
+            break
+        if low[i] in " ,":
+            m = re.match(r"[ ,]*(?:(and)\s+)?(\S+)", low[i:])
+            if not m:
+                break
+            nxt = m.group(2).strip(".,'\"")
+            sep = m.group(1) or "," in low[i:i + m.start(2)]
+            if sep and (nxt in stop or not _BARE.match(nxt)):
+                break
+            if not sep and nxt in stop:
+                break
+            i += m.start(2)
+            first = False
+            continue
+        m = re.match(r"\S+", low[i:])
+        tok = m.group(0).strip(".,'\"")
+        if not first and tok in stop:
+            break
+        end = i + len(m.group(0).rstrip(".,'\""))
+        i += len(m.group(0))
+        first = False
+    text = low[start:end].rstrip(" ,")
+    return start, start + len(text)
+
+
+def _pieces(spec: str) -> List[Tuple[int, str]]:
+    """(offset, text) per name — a LITERAL list splits on `,` and `and`; anything else
+    (a range, a theme, a phrase) is one piece: the spec is the leaf."""
+    seps = list(re.finditer(r"\s*(?:,|\band\b)\s*", spec))
+    parts, at = [], 0
+    for m in seps:
+        parts.append((at, spec[at:m.start()]))
+        at = m.end()
+    parts.append((at, spec[at:]))
+    out = []
+    for off, text in parts:
+        lead = len(text) - len(text.lstrip())
+        if text.strip():
+            out.append((off + lead, text.strip()))
+
+    def literal(t: str) -> bool:
+        w = t.split()
+        if len(w) > 1 and w[0] in _DETS:            # `the stadium`; a bare `a` IS a name
+            w = w[1:]
+        return len(w) == 1 and bool(_BARE.match(w[0])) and not _RANGE.match(w[0])
+    if out and all(literal(t) for _o, t in out):
+        return out
+    lead = len(spec) - len(spec.lstrip())
+    return [(lead, spec.strip())]
+
+
+def _creator_verbs(board) -> set:
+    """The verbs the manifest's creators are named by — `create`, `clone` — read, never listed."""
+    from ..codex import NON_VERB_SEGMENTS
+    out = set()
+    for spec in (board.kinds or {}).values():
+        for c in ((spec or {}).get("creators") or {}).values():
+            for seg in str((c or {}).get("tool") or "").lower().split("_"):
+                if seg and seg not in NON_VERB_SEGMENTS:
+                    out.add(seg)
+    return out
+
+
+def _created_here(row: S.Declared, request: str, board) -> bool:
+    """THE VERB DECIDES: a phrase governed by a creator verb is NEW whatever the existence
+    question answered — `create two networks called front and back` has no determiner, so
+    existence was ASKED (85%, the model's weakest field) and a stub or a wobble says
+    EXISTING. The verb already said."""
+    from .scan import clause_around
+    try:
+        clause = str(clause_around(request, str(row.span or row.name))).lower()
+    except Exception:
+        return False
+    words = [w.strip(".,'\"") for w in clause.split()]
+    verbs = _creator_verbs(board)
+    return any(w in verbs for w in words[:3])
+
+
+def _naming_candidates(rows: List[S.Declared], request: str, board) -> List[dict]:
+    """Every name a NEW thing is given — one candidate per leaf (rule 6)."""
+    from planner.gates import claims as _claims
+    low = str(request).lower()
+    out: List[dict] = []
+    things = [r for r in rows if r.object_type != S.VALUE_KIND]
+    for m in _CUE.finditer(low):
+        cue_s, cue_e = m.start(), m.end()
+        # the thing this cue names: the row whose phrase holds the cue, else the nearest before
+        holder = None
+        for r in things:
+            span = str(r.span or r.name).lower()
+            at = low.find(span)
+            if at >= 0 and at <= cue_s < at + len(span) + 1:
+                holder = r
+        if holder is None:
+            before = [r for r in things if 0 <= low.find(str(r.span or r.name).lower()) < cue_s]
+            holder = before[-1] if before else None
+        if holder is None or not (holder.existence == S.NEW
+                                  or _created_here(holder, request, board)):
+            continue                                  # a name that REFERS stays (selector)
+        spec_s, spec_e = _name_spec(low, cue_e, board)
+        if spec_e <= spec_s:
+            continue
+        kind = holder.kind if holder.kind in board.kinds else None
+        attribute = (_claims.key_of(kind, board.kinds) if kind else None) or "name"
+        for off, text in _pieces(low[spec_s:spec_e]):
+            start = spec_s + off
+            out.append({"text": request[start:start + len(text)], "start": start,
+                        "end": start + len(text), "word": m.group(1), "entries": [],
+                        "linked": attribute, "linked_text": request[cue_s:cue_e],
+                        "naming": True, "owner": kind or "?", "attribute": attribute,
+                        "target_span": holder.span})
     return out
 
 
@@ -138,15 +289,34 @@ def _lift(row: S.Declared, cand: dict, request: str, board) -> Optional[S.Declar
     if at < 0:
         return row
     s0, e0 = at, at + len(span)
-    if cand["end"] <= s0 or cand["start"] >= e0:
-        return row                                  # the value is not in this phrase
+    if cand["end"] <= s0:
+        return row                                  # the value is before this phrase
+    if cand["start"] >= e0:
+        # the value sits right AFTER the phrase: only a dangling cue/connector at the
+        # phrase's end belongs to the value (`3 vms named ▸ after musicians`)
+        gap = low[e0:cand["start"]].strip(" ,")
+        if gap:
+            return row                              # something else stands between
+        words = span.split()
+        dangling = set(VALUE_CONNECTORS) | set(NAMING_CUES) | {"as"}
+        while words and words[-1].strip(".,'\"").lower() in dangling:
+            words.pop()
+        new = " ".join(words).strip(" ,")
+        if not new or new == span or all(w.lower() in _DETS for w in new.split()):
+            return row
+        return S.declare_from(new, row.object_type, dict(row.where or {}), row.existence,
+                              board, references=list(row.references), count=row.count,
+                              comparator=row.comparator, span=new, identity=row.identity,
+                              sanctioned=row.sanctioned)._replace(
+                                  excludes=row.excludes, unroutable=row.unroutable)
     # keep the side of the phrase that does not hold the value (the value never sits mid-phrase
     # with content on both sides that belongs to the thing — if it does, keep the head side)
     left = request[s0:max(s0, cand["start"])].rstrip()
     right = request[min(e0, cand["end"]):e0].lstrip()
     kept = left if left.strip() else right
     words = kept.split()
-    while words and words[-1].strip(".,'\"").lower() in VALUE_CONNECTORS:
+    dangling = set(VALUE_CONNECTORS) | set(NAMING_CUES) | {"as"}
+    while words and words[-1].strip(".,'\"").lower() in dangling:
         words.pop()
     while words and words[0].strip(".,'\"").lower() in VALUE_CONNECTORS:
         words.pop(0)
@@ -186,22 +356,31 @@ def read_values(rows: List[S.Declared], request: str, board=None,
     board = board or Board()
     if archive is None:
         from .archive import ARCHIVE as archive
-    cands = _candidates(request, board, archive)
-    if not cands:
-        return rows
     if any(r.object_type == S.VALUE_KIND for r in rows):
         return rows                                 # already read
+    cands = _candidates(request, board, archive) + _naming_candidates(rows, request, board)
+    if not cands:
+        return rows
+    cands.sort(key=lambda c: c["start"])
     out = list(rows)
     values: List[S.Declared] = []
     for cand in cands:
         if _selects(cand, out, request):
             continue
-        scores = rank_owners(cand, out, request, archive)
+        if cand.get("naming"):
+            scores = {cand["owner"]: 2}
+        else:
+            scores = rank_owners(cand, out, request, archive)
         if not scores:
             continue
         best = max(scores.values())
         winners = sorted(o for o, sc in scores.items() if sc == best)
-        if len(winners) == 1:
+        if cand.get("naming"):
+            owner, attribute = cand["owner"], cand["attribute"]
+            value = {"word": cand["word"], "attribute": attribute, "owner": owner,
+                     "linked": attribute, "linked_text": cand["linked_text"],
+                     "naming": True, "target_span": cand["target_span"]}
+        elif len(winners) == 1:
             owner = winners[0]
             attribute = next((e.attribute for e in cand["entries"] if owner in e.owners
                               and (cand["linked"] is None or e.attribute == cand["linked"])),
@@ -230,11 +409,12 @@ def read_values(rows: List[S.Declared], request: str, board=None,
                 lifted.append(kept)
         out = lifted
         value["consumed"] = tuple(t for t in consumed if t.lower() != cand["text"].lower())
+        value["start"] = cand["start"]           # request order — `a` is also inside `create`
         values.append(S.Declared(name=cand["text"], object_type=S.VALUE_KIND, where={},
                                  existence=S.EXISTING, settled="read", span=cand["text"],
                                  value=value))
     # the values take their place in request order, after the things
-    values = sorted(values, key=lambda v: str(request).find(v.span))
+    values = sorted(values, key=lambda v: (v.value or {}).get("start", 0))
     return _assign(out, values, request, board, archive)
 
 
@@ -269,6 +449,7 @@ def _assign(things: List[S.Declared], values: List[S.Declared], request: str, bo
     """Step 3: each value finds its target and the owner says whether it can be taken."""
     out = list(things)
     done: List[S.Declared] = []
+    values = list(values)
     for v in values:
         info = dict(v.value or {})
         owner, attribute = info.get("owner"), info.get("attribute")
@@ -279,7 +460,14 @@ def _assign(things: List[S.Declared], values: List[S.Declared], request: str, bo
         if not owner or not attribute:
             done.append(v._replace(references=claims))
             continue
-        target_ix = _target_of(v, out, request, owner, archive)
+        if info.get("naming"):
+            target_ix = next((i for i, r in enumerate(out)
+                              if r.object_type != S.VALUE_KIND
+                              and (r.span == info.get("target_span")
+                                   or str(info.get("target_span") or "").startswith(
+                                       str(r.span or "") + " "))), None)
+        else:
+            target_ix = _target_of(v, out, request, owner, archive)
         if target_ix is None:
             done.append(v._replace(value={**info, "target": None}, references=claims))
             continue
@@ -289,10 +477,22 @@ def _assign(things: List[S.Declared], values: List[S.Declared], request: str, bo
         info["target"] = target.span
         if reason:
             info["refused"] = reason
-        elif target.existence == S.NEW:
+        elif target.existence == S.NEW or (info.get("naming")
+                                           and _created_here(target, request, board)):
             info["accepted"] = accepted
             where = dict(target.where or {})
-            where[attribute] = accepted          # the creator reads `where`; one copy, typed
+            if info.get("naming"):
+                # the phrase walk already read a name into `where` (`alpha`, `stadium`); keep
+                # what it read. A partial read of a GENERATOR (`1` of `1-5`) is replaced by
+                # the spec; a LIST leaves `where` alone — the names are the value rows.
+                siblings = sum(1 for o in values if (o.value or {}).get("naming")
+                               and (o.value or {}).get("target_span") == info.get("target_span"))
+                had = str(where.get(attribute, ""))
+                if siblings == 1 and (not had or (_RANGE.match(str(accepted))
+                                                  and str(accepted).startswith(had))):
+                    where[attribute] = accepted
+            else:
+                where[attribute] = accepted      # the creator reads `where`; one copy, typed
             out[target_ix] = target._replace(
                 where=where, assigned=tuple(sorted(set(target.assigned) | {attribute})))
         elif attribute in board.settable(target.kind):

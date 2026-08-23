@@ -381,9 +381,15 @@ def _first_cut(piece: str):
             if len(toks) > 1:
                 return e
     # 4 · a mid-clause condition head opens a subordinate
+    #     — unless a NAMING CUE stands right before it: `3 vms named ▸ after musicians` is
+    #     a naming spec, not a temporal clause (ledger #17: the spec is one leaf). Same
+    #     family as rule 8: a cut must not split a head from what restricts it.
+    from .scan import NAMING_CUES as _NC
     heads = {"if", "unless"} | set(_T.EVENTS)
     for i in range(1, len(toks)):
         w, s, _e = toks[i]
+        if w in heads and words[i - 1] in _NC:
+            continue
         if w in heads and not (w == "if" and words[i - 1] in _iso._WHETHER_HOSTS):
             cut = toks[i - 1][1] if words[i - 1] in _iso._FOCUS else s
             if cut > 0:

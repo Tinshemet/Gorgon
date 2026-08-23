@@ -601,7 +601,9 @@ def test_an_unquoted_multi_word_name_is_a_KNOWN_LIMIT_and_the_naive_fix_is_forbi
     board = Board()
 
     def where(text):
-        return [row.where for row in P.run_scanned(text, board=board)]
+        # 08-23: a name at creation is its own VALUE row (ledger #17); these checks are
+        # about the THING's phrase walk, so they look at thing rows only
+        return [row.where for row in P.run_scanned(text, board=board) if row.kind != "value"]
 
     check("the limit is real and is one word",
           where("create a vm named data pipeline") == [{"name": "data"}])
@@ -645,7 +647,8 @@ def test_a_clause_takes_its_kind_from_the_clause_that_named_it():
     board = Board()
 
     def rows(text):
-        return [(r.object_type, r.count, r.where) for r in P.run_scanned(text, board=board)]
+        return [(r.object_type, r.count, r.where) for r in P.run_scanned(text, board=board)
+                if r.kind != "value"]                     # things only (ledger #17)
 
     check("the clause is the window, not the span",
           clause_around("create a vm named alpha. give it 4 cores.", "4 cores").strip()
@@ -672,10 +675,13 @@ def test_a_clause_takes_its_kind_from_the_clause_that_named_it():
     # ⇒ 08-23, ATTRIBUTES ARE LEAVES: `4 cores` is no longer a kindless `?` row but a VALUE
     #   row of its own (cpu_cores, owner vm). The control's point stands unchanged — nothing
     #   INHERITED the vm kind through a pro-form, because there is no pro-form.
+    #   ⇒ and since step 3, the value is ASSIGNED to the thing before it by the value reader
+    #     (`a vm named alpha, with 4 cores` is one vm with 4 cores) — by target rules, never
+    #     by pro-form inheritance, which is what this control guards
     check("no pro-form, no inheritance",
-          ("value", None, {}) in rows("create a vm named alpha, with 4 cores")
-          and ("vm_set", None, {"cpu_cores": "4"})
-          not in rows("create a vm named alpha, with 4 cores"))
+          any(r.kind == "value" and r.span == "4 cores"
+              for r in P.run_scanned("create a vm named alpha, with 4 cores", board=board))
+          and ("?", None, {}) not in rows("create a vm named alpha, with 4 cores"))
     check("a stated noun outranks the hint",
           scan("network", "create a vm and a network", board, kind_hint="vm").kind == "network")
 
@@ -723,7 +729,8 @@ def test_a_folded_reference_carries_what_its_clause_SAYS():
     board = Board()
 
     def rows(text):
-        return [(r.object_type, r.where) for r in P.run_scanned(text, board=board)]
+        return [(r.object_type, r.where) for r in P.run_scanned(text, board=board)
+                if r.kind != "value"]                     # things only (ledger #17)
 
     check("a state named by a following clause reaches the row",
           rows("create a vm named alpha and make it running")
@@ -770,7 +777,7 @@ def test_the_repair_is_applied_before_anything_is_scanned():
         board = Board()
 
         def names(text):
-            return [r.name for r in P.run_scanned(text, board=board)]
+            return [r.name for r in P.run_scanned(text, board=board) if r.kind != "value"]
 
         check("a correction keeps ONLY the corrected target",
               names("restart the web vm, no wait, the db one") == ["the db one"])
@@ -787,7 +794,7 @@ def test_the_repair_is_applied_before_anything_is_scanned():
               names("actually, never mind") == [])
         # ⇒ THE CONTROLS — no marker, no mending
         check("an ordinary request is untouched",
-              names("create a vm named alpha") == ["a vm named alpha"])
+              names("create a vm named alpha") == ["a vm"])     # `alpha` is a leaf (#17)
         check("two clauses that repeat a verb are a REQUEST, not a repair",
               names("stop alpha, stop beta") == ["alpha", "beta"])
     finally:

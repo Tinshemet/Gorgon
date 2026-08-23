@@ -629,7 +629,8 @@ def test_a_meaningless_word_is_not_laundered_into_an_object():
         # it — "create a grubnash vm named alpha" reads as one vm and no gate speaks. What is
         # pinned is only that it does not become a SECOND object; whether an unread descriptor
         # inside a span should be flagged is the next item, not this one.
-        inside = P.run_scanned("create a grubnash vm named alpha", board=board)
+        inside = [r for r in P.run_scanned("create a grubnash vm named alpha", board=board)
+                  if r.kind != "value"]               # `alpha` is a VALUE row (ledger #17)
         check("junk inside a span does not spawn a second object", len(inside) == 1)
     finally:
         channel.constrained = was
