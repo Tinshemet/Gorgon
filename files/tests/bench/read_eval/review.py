@@ -3,6 +3,7 @@
     PYTHONPATH=. python3 -m tests.bench.read_eval.review cases/seeds.jsonl        # review
     PYTHONPATH=. python3 -m tests.bench.read_eval.review cases/seeds.jsonl --status
     PYTHONPATH=. python3 -m tests.bench.read_eval.review cases/seeds.jsonl --freeze v1
+    PYTHONPATH=. python3 -m tests.bench.read_eval.review cases/seeds.jsonl --rank     # a 2nd person
 
 # ⇒⇒ WHAT THE TOOL RECORDS, AND WHAT IT DELIBERATELY DOES NOT DO
 
@@ -38,6 +39,22 @@ Progress is saved after EVERY key — quitting mid-run loses nothing.
 them, or it refuses and says which are not. A frozen release is immutable except via explicit
 commit with a note (the spec's own rule), so the freeze also writes `v1.review.json` beside it
 — the verdicts as the audit trail of who approved what. Both are committed DELIBERATELY.
+
+# ⇒ --rank IS A DIFFERENT PERSON'S JOB, AND THE FLAG KEEPS THE TWO APART
+
+Without the flag the command CERTIFIES (the operator: accept/reject). With `--rank` it ranks
+DIFFICULTY (a second person, 1-10: would a reader find this hard or ambiguous?) — the
+readability axis agreed 08-22; the structural axis is computed from the gold and is nobody's
+to rank. The roles are split on purpose: the one who signed the gold does not grade how hard
+it was, and the one who grades has seen nothing. So the rank loop is BLIND BY CONSTRUCTION:
+  · it never opens `.review.json` — no verdict, no note, no STALE banner
+  · it shows the sentence UNPAINTED plus what the reader is given (`context`, `store`) —
+    never the gold, never the stratum/noise/source/id (the id prefix names the stratum)
+  · the queue is in a fixed shuffled order, so a stratum's cases do not arrive as a run
+  · ranks land in `<cases>.rank.json`, bound to the hash of WHAT WAS SHOWN — a reworded
+    sentence stales its rank; a re-emitted gold does not, the rater never saw it
+One rater means no agreement number; if a second ever joins, keep scores per rater — a
+contested difficulty is a finding about the sentence, not noise to average away.
 
 # ⇒ THE TWIN FAST PATH (dormant until expansion lands)
 
@@ -168,19 +185,19 @@ def show(case: dict, verdicts: Dict[str, dict], by_id: Dict[str, dict]) -> None:
     if case.get("store"):
         print(f"      {DIM}store:{OFF} " + " · ".join(
             ", ".join(f"{k}={v}" for k, v in e.items()) for e in case["store"]))
+    # The STALE banner — orphaned behind `_channels`'s return in f125461 (found 08-23), so
+    # every STALE case was re-judged with its old note INVISIBLE. It lives at the end of
+    # `show`, where it was.
+    v = verdicts.get(case["id"])
+    if v and state_of(case, verdicts) == "STALE":
+        print(f"    {YELLOW}⚠ STALE — judged {v['verdict']!r} but the gold has changed "
+              f"since. Note then: {v.get('note') or '—'}{OFF}")
 
 
 def _channels(act: dict) -> str:
     """The action's trigger/manner, listed beside its objects — part of the gold judged."""
     return "".join(f"  {MAGENTA}{ch}: {act[ch]['text']!r}{OFF}"
                    for ch in CHANNELS if act.get(ch))
-    for a in case["gold"]["actions"]:
-        if a.get("trigger"):
-            print(f"      {a['text']!r} STARTS WHEN: {a['trigger']['text']!r}")
-    v = verdicts.get(case["id"])
-    if v and state_of(case, verdicts) == "STALE":
-        print(f"    {YELLOW}⚠ STALE — judged {v['verdict']!r} but the gold has changed "
-              f"since. Note then: {v.get('note') or '—'}{OFF}")
 
 
 def review(cases: List[dict], cases_path: str) -> int:
@@ -272,6 +289,126 @@ def freeze(cases: List[dict], cases_path: str, name: str) -> int:
     return 0
 
 
+# ── rank: the second person's loop — blind, 1-10, its own file ─────────────────────
+RANK_KEYS = tuple(str(n) for n in range(1, 11))
+
+
+def _rank_hash(case: dict) -> str:
+    """Binds the rank to WHAT THE RATER SAW: sentence + context + store. NOT the gold —
+    the rater never saw it, so a re-emitted gold must not stale a difficulty score."""
+    shown = {"sentence": case["sentence"]}
+    for extra in ("context", "store"):
+        if extra in case:
+            shown[extra] = case[extra]
+    body = json.dumps(shown, sort_keys=True)
+    return hashlib.sha256(body.encode()).hexdigest()[:16]
+
+
+def _ranks_path(cases_path: str) -> str:
+    return os.path.splitext(cases_path)[0] + ".rank.json"
+
+
+def load_ranks(cases_path: str) -> Dict[str, dict]:
+    path = _ranks_path(cases_path)
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    return {}
+
+
+def save_ranks(cases_path: str, ranks: Dict[str, dict]) -> None:
+    with open(_ranks_path(cases_path), "w", encoding="utf-8") as fh:
+        json.dump(ranks, fh, indent=1, sort_keys=True)
+
+
+def rank_state_of(case: dict, ranks: Dict[str, dict]) -> str:
+    """unranked · ranked · STALE (ranked, then the shown bytes changed)."""
+    r = ranks.get(case["id"])
+    if not r:
+        return "unranked"
+    if r.get("hash") != _rank_hash(case):
+        return "STALE"
+    return "ranked"
+
+
+def rank_order(cases: List[dict]) -> List[dict]:
+    """A fixed shuffle by id-hash: the same order every run (resumable), but never the
+    file's order — which groups a stratum's cases together and would hand the rater a
+    difficulty class by position."""
+    return sorted(cases, key=lambda c: hashlib.sha256(c["id"].encode()).hexdigest())
+
+
+def show_for_rank(case: dict) -> None:
+    """The sentence as a reader meets it — unpainted — and only what the reader is given."""
+    print(f"\n    {BOLD}{case['sentence']}{OFF}")
+    if case.get("context"):
+        print(f"      {DIM}context:{OFF} " + " · ".join(
+            f"{k}={v}" for k, v in case["context"].items()))
+    if case.get("store"):
+        print(f"      {DIM}store:{OFF} " + " · ".join(
+            ", ".join(f"{k}={v}" for k, v in e.items()) for e in case["store"]))
+
+
+def rank(cases: List[dict], cases_path: str) -> int:
+    if not sys.stdin.isatty():
+        print("  rank is interactive — run it in a terminal")
+        return 2
+    ranks = load_ranks(cases_path)
+    queue = [c for c in rank_order(cases) if rank_state_of(c, ranks) in ("unranked", "STALE")]
+    print(f"  {len(queue)} to rank of {len(cases)} "
+          f"({sum(1 for c in cases if rank_state_of(c, ranks) == 'ranked')} ranked)")
+    print(f"  {DIM}1-10 how hard or ambiguous would a reader find this? "
+          f"(1 trivial · 10 a person would get it wrong){OFF}")
+    print(f"  {DIM}s skip · u undo last · q quit — saved every key{OFF}")
+    history: List[str] = []
+    at = 0
+    while at < len(queue):
+        case = queue[at]
+        show_for_rank(case)
+        try:
+            key = input(f"  [{at + 1}/{len(queue)}] > ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        if key == "q":
+            break
+        elif key == "s":
+            at += 1
+        elif key == "u" and history:
+            gone = history.pop()
+            ranks.pop(gone, None)
+            save_ranks(cases_path, ranks)
+            at = max(0, at - 1)
+            print(f"  {DIM}undid the last rank{OFF}")
+        elif key in RANK_KEYS:
+            ranks[case["id"]] = {"rank": int(key), "hash": _rank_hash(case)}
+            save_ranks(cases_path, ranks)
+            history.append(case["id"])
+            at += 1
+        else:
+            print(f"  {DIM}1-10 / s / u / q{OFF}")
+    return rank_status(cases, cases_path)
+
+
+def rank_status(cases: List[dict], cases_path: str) -> int:
+    """Coverage and the distribution — never joined to verdicts or results here; that join
+    is the analyst's step, after both files are complete."""
+    ranks = load_ranks(cases_path)
+    counts: Dict[str, int] = {}
+    hist: Dict[int, int] = {}
+    for c in cases:
+        s = rank_state_of(c, ranks)
+        counts[s] = counts.get(s, 0) + 1
+        if s == "ranked":
+            r = ranks[c["id"]]["rank"]
+            hist[r] = hist.get(r, 0) + 1
+    print(f"\n  {len(cases)} cases: " + " · ".join(
+        f"{n} {s}" for s, n in sorted(counts.items())))
+    if hist:
+        print("  difficulty: " + " · ".join(f"{r}:{hist[r]}" for r in sorted(hist)))
+    return 0
+
+
 # ── practice: five throwaway cases, three with PLANTED faults, and an answer key ─────
 def _practice_cases() -> List[dict]:
     """Schema-valid, semantically judged — two right, three planted wrong. NOT the eval."""
@@ -357,7 +494,7 @@ def main(argv: Optional[List[str]] = None) -> int:                # pragma: no c
     path = next((a for a in argv if not a.startswith("--")), None)
     if not path:
         print("usage: python3 -m tests.bench.read_eval.review <cases.jsonl> "
-              "[--status | --freeze <name>] | --practice")
+              "[--status | --freeze <name> | --rank [--status]] | --practice")
         return 2
     if not os.path.isabs(path):
         here = os.path.dirname(os.path.abspath(__file__))
@@ -368,6 +505,9 @@ def main(argv: Optional[List[str]] = None) -> int:                # pragma: no c
         print("\n".join(f"  ✗ {b}" for b in bad))
         print("  the case file is not valid — nothing to review until it is")
         return 1
+    if "--rank" in argv:
+        # the second person's door: nothing past this line reads a verdict
+        return rank_status(cases, path) if "--status" in argv else rank(cases, path)
     if "--freeze" in argv:
         return freeze(cases, path, argv[argv.index("--freeze") + 1])
     if "--status" in argv:
