@@ -74,3 +74,26 @@ def test_the_rank_door_opens_nothing_but_ranking():
     import tests.bench.read_eval.rank as RK
     assert sorted(n for n in dir(RK) if not n.startswith("_")) == [
         "List", "Optional", "load", "main", "rank", "rank_status", "validate"]
+
+
+def test_sup_0002_the_leaf_is_bare_and_the_adjective_lives_on_its_word():
+    # ledger #23: "oldest is an attribute/adjective, snapshot is a value inside of alpha"
+    c = BY_ID["sup-0002"]
+    assert [(s["text"],) for s in c["gold"]["spans"]] == [("snapshot",), ("alpha",)]
+    cells = {w["w"]: w["cells"] for w in c["vector"]["words"]}
+    assert "adj:sup" in cells["oldest"]["class"] and "attr" not in cells["oldest"]
+    assert cells["snapshot"]["span"] == "s0:value" and cells["alpha"]["span"] == "s1:patient"
+
+
+def test_a_superlative_on_a_thing_stays_in_the_things_span():
+    # 08-21 (or-0001) stands: sup-0001's NP is whole; the form is still tagged on the word
+    c = BY_ID["sup-0001"]
+    assert [s["text"] for s in c["gold"]["spans"]] == ["the biggest vm"]
+    cells = {w["w"]: w["cells"] for w in c["vector"]["words"]}
+    assert "adj:sup" in cells["biggest"]["class"]
+
+
+def test_est_morphology_never_claims_english():
+    # `the test vms` (cap-0002) — a 3+ stem is required, so test/rest/west never fire
+    cells = {w["w"]: w["cells"] for w in BY_ID["cap-0002"]["vector"]["words"]}
+    assert "class" not in cells["test"] or "adj:sup" not in cells["test"]["class"]

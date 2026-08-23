@@ -354,7 +354,15 @@ SEEDS_V3: List[Seed] = [
               "class's TYPE (count/quantity = orderable) is what licenses (max, "
               "memory_mb). Span whole, like every filtered NP"),
     Seed("sup-0002", "superlatives", "delete the oldest snapshot of alpha",
-         ["the oldest snapshot of alpha"], ["delete"], {0: [0]}),
+         ["snapshot", "alpha"], ["delete"],
+         {0: [{"span": 0, "role": "value"}, {"span": 1, "role": "patient"}]},
+         note="RULED 08-24 (ledger #23): 'delete is the verb, oldest is an attribute/"
+              "adjective, snapshot is a value inside of alpha and alpha is the patient' — "
+              "the of-genitive is #19's other spelling, and the leaf span is the BARE "
+              "leaf; `oldest` is a fact about its own word (vector class adj:sup, no "
+              "declared axis — RESOLVE asks the world which attribute orders it). "
+              "sup-0001 is untouched: a superlative on a THING stays in the thing's "
+              "span (08-21, or-0001)."),
 
     # ══ naming-lists — one act MINTING several names ═════════════════════════════════
     # ⇒ 08-23, ATTRIBUTES ARE LEAVES — RULED: A NAME IS A LEAF. A name assigned at creation

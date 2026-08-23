@@ -667,3 +667,17 @@ silent-qualifier defect, now priced in gold; the purpose reader mirrors the beca
 a future step. 113 cases; the corpus is otherwise declared CLOSED — anything further is a
 repeat or remix (operator, 08-24).
 
+## 23 · THE OF-GENITIVE'S LEAF IS BARE; THE ADJECTIVE LIVES ON ITS WORD (operator, 2026-08-24)
+
+On sup-0002, the last open gold before grading: *"delete is the verb, oldest is an
+attribute/adjective, snapshot is a value inside of alpha and alpha is the patient."* The
+of-genitive is #19's other spelling and the leaf span is the BARE leaf — `snapshot` (value)
++ `alpha` (patient); `the oldest` sits outside every span, and `oldest` is a fact about its
+own word: vector class `adj:sup` (superlative FORM — morphology with a 3+ stem so `the test
+vms` never fires, plus most/least). It maps to NO declared attribute — like `disk`, the
+world is missing the axis, and WHICH attribute orders "oldest" is RESOLVE's question to ask,
+not READ's to guess. **08-21 stands untouched for THINGS** (or-0001: "the ordinal stays
+inside the span"; sup-0001 "the biggest vm" is whole) — a filter on a thing lives in the
+thing's span; a fact about a leaf-word lives on the word. Gold + vector only; the reader
+already splits the two rows.
+

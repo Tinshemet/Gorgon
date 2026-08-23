@@ -34,8 +34,8 @@ from orchestrator.languages.english.seam import speech_act as SA, temporal as T
 # per WORD (sparse: absent = not this):
 WORD_DIMENSIONS = (
     "class",   # closed-class tags, sorted: det:def/indef/univ · neg · aux · wh · prep:sel
-               #   · clitic · contraction · proform:one/many · comparator · cue:name · sub
-               #   · fallback · hedge · emph · excl · hort · punct-final
+               #   · clitic · contraction · proform:one/many · comparator · adj:sup
+               #   · cue:name · sub · fallback · hedge · emph · excl · hort
     "wh",      # WHAT IS SOUGHT (the operator's cells): which→pick-member · what→meaning
                #   · who/whom→object-ref · whose→owner · why→reason · when→time
                #   · where→place · how→manner · how many→count · how much→amount
@@ -92,6 +92,16 @@ def _maps(board):
 _NUM_UNIT = re.compile(r"\d+(?:\.\d+)?[a-z]*$")
 
 
+def _superlative(t: str, nxt: Optional[str]) -> bool:
+    """The superlative FORM — a fact about the word, not the world (ledger #23: `oldest`
+    is an attribute/adjective; WHICH attribute orders it is RESOLVE's question). Morphology
+    with a guard: `-est` only over a stem of 3+ (`test`, `rest`, `west` never fire —
+    `the test vms` is cap-0002), or `most`/`least` heading the next word."""
+    if t in ("most", "least") and nxt:
+        return True
+    return t.endswith("est") and len(t) >= 6 and t[:-3].isalpha()
+
+
 def word_cells(tok: str, nxt: Optional[str], case: dict, start: int, end: int,
                board, maps) -> Dict[str, object]:
     """Every cell one word earns. Sparse, deterministic, declared-facts only."""
@@ -116,6 +126,7 @@ def word_cells(tok: str, nxt: Optional[str], case: dict, start: int, end: int,
     if t in C.SINGULAR_PROFORMS: tags.append("proform"); cells["num"] = "one"
     if t in C.PLURAL_PROFORMS: tags.append("proform"); cells["num"] = "many"
     if t in compwords: tags.append("comparator")
+    if _superlative(t, nxt): tags.append("adj:sup")
     if t in C.NAMING_CUES: tags.append("cue:name")
     if low in C.CONTRACTIONS:
         tags.append("contraction")
