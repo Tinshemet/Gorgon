@@ -975,6 +975,23 @@ def _derive_probes(clause, table, operators, board) -> List[Operation]:
     return got
 
 
+def _foreign_verb_position(clause: str) -> bool:
+    """⇒ THE LICENCE HOLE (measured 08-22, n=3: Hebrew `תעצור the web vm` fired stop_vm).
+    The verb licence read the FIRST `[a-z]+` WORD, so a clause whose verb is in another
+    script was licensed by its first English word — a noun, never an op segment — and
+    translated freely: the least constrained verb in the language was the one Gorgon
+    declared it cannot read. Gorgon reads English by declaration (ledger #12/#16): a
+    foreign token in the verb position licenses NOTHING mutating. Subtractive — every
+    English clause is untouched; `florp` is English-SHAPED and stays the model's job,
+    because telling it from `restart` needs a lexicon the codex does not claim to be."""
+    for tok in str(clause).split():
+        letters = [ch for ch in tok if ch.isalpha()]
+        if not letters:
+            continue                      # punctuation or a number ahead of the verb
+        return any(not ("a" <= ch.lower() <= "z") for ch in letters)
+    return False
+
+
 def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[Board] = None,
                          model=None, temp: float = 0.0, timeout: int = 300,
                          rejected: Optional[List[str]] = None,
@@ -1263,7 +1280,10 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
             #   `stop_vm on vm` against a table holding only {vms_but_db_vm, db}.
             if op.on not in handles:
                 continue
-            # the verb licence itself — restriction only when the verb NAMES an operation
+            # the verb licence itself — restriction only when the verb NAMES an operation;
+            # a verb Gorgon cannot read names nothing and licenses nothing
+            if _foreign_verb_position(clause):
+                continue
             _vwords = re.findall(r"[a-z]+", str(clause).lower())
             _lic = _licence.get(_vwords[0]) if _vwords else None
             if _lic is not None and op.operator not in _lic:
@@ -1294,6 +1314,8 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
     #   row's kind picks the member (`launch the blue ones` -> launch_vm on the blue
     #   row; `delete the oldest snapshot` -> delete_snapshot). The spared gate holds.
     for clause in _asked_imperatives:
+        if _foreign_verb_position(clause):
+            continue
         _cw0 = re.findall(r"[a-z']+", str(clause).lower())
         fam = _licence.get(_cw0[0]) if _cw0 else None
         if not fam:
@@ -1321,6 +1343,8 @@ def operations_by_clause(request: str, rows: List[S.Declared], board: Optional[B
     if len(_setter_types) == 1:
         _sname, (_okind, _rkind) = next(iter(_setter_types.items()))
         for clause in _asked_imperatives:
+            if _foreign_verb_position(clause):
+                continue
             _cw1 = re.findall(r"[a-z']+", str(clause).lower())
             if not _cw1 or _cw1[0] not in {"put", "add", "move", "place", "attach"}:
                 continue
