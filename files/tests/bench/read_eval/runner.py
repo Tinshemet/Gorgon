@@ -206,9 +206,21 @@ def read_case(sentence: str, board=None) -> dict:
     # ⇒ and the STRUCTURAL testimony predicates (D1's front door, 08-18) — the seam reads
     #   "is not working" now, and a reading the runner does not collect scores as a miss
     #   in both directions
+    # ⇒ 08-25 — the REASON reading (because · although · to/so-that), collected the same
+    #   way: a reason the seam reads and the runner ignores scores as a miss both ways
+    from orchestrator.languages.english.seam import reasons as _RS
+    for reason in _RS.read(sentence, board):
+        predicted_spans.append({"row": None, "span": reason.span, "kind": "evidence",
+                                "type": "evidence", "where": {},
+                                "start": reason.start, "end": reason.end})
     from orchestrator.languages.english.seam import testimony as _TT
+    _reason_regions = [(x.start, x.end) for x in _RS.read(sentence, board)]
     for t in _TT.read(sentence):
         where = _locate(sentence, t.predicate)
+        # ⇒ a symptom INSIDE a reason clause is the reason's — one clause, one span
+        #   (`because it WON'T ANSWER` double-collected as testimony, ca-0002's halluc)
+        if where and any(rs <= where[0] and where[1] <= re_ for rs, re_ in _reason_regions):
+            continue
         predicted_spans.append({"row": None, "span": t.predicate, "kind": "evidence",
                                 "type": "evidence", "where": {},
                                 "start": where[0] if where else None,

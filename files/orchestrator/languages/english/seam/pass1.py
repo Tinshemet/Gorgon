@@ -756,6 +756,10 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
     #   was the only caller of attach_exclusions, so the eval's readings (and any future
     #   consumer) carried sets with their carve-outs SILENTLY MISSING. Idempotent: the
     #   duplicate-carve check makes the pipeline's own later call harmless.
+    # ⇒ a REASON CLAUSE is the act's evidence, never a thing (08-25, [[reasons.py]]) —
+    #   subtractive on the rows BEFORE anything binds to them
+    from .reasons import strip as _strip_reasons
+    rows = _strip_reasons(rows, request, board)
     rows = resolve_proforms(rows)
     rows = attach_exclusions(rows, board, request=request)
     # ⇒ A LATER MENTION BINDS BY NUMBER AGREEMENT (08-23, ledger #18) — before the values,

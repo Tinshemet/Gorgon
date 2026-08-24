@@ -498,3 +498,30 @@ def test_a_subtractive_quantifier_is_one_phrase():
 
 def test_but_without_a_universal_still_cuts():
     assert [r.span for r in _rows("stop alpha but not beta")] == ["alpha", "not beta"]
+
+
+# ── reasons.py · a REASON GIVEN WITH THE ACT — because · although · to/so (08-25) ────────────
+
+def test_the_three_reason_families_read_at_their_certified_boundaries():
+    from orchestrator.languages.english.seam.reasons import read
+    assert [(r.family, r.span) for r in read("stop the vms because they are stuck", B)] == [
+        ("cause", "they are stuck")]
+    assert [(r.family, r.span) for r in read(
+        "launch the fleet even though the lab network is slow", B)] == [
+        ("concession", "the lab network is slow")]
+    assert [(r.family, r.span) for r in read("stop the idle vms to free memory", B)] == [
+        ("purpose", "to free memory")]
+
+
+def test_a_transfer_to_and_a_value_to_are_never_a_purpose():
+    from orchestrator.languages.english.seam.reasons import read
+    for s in ("move it to the dmz network", "add those vms to it",
+              "set the cpu of the web vm to 4 cores"):
+        assert read(s, B) == [], s
+
+
+def test_the_reason_clause_is_stripped_from_the_rows():
+    rows = _rows("launch the fleet even though the lab network is slow")
+    assert [r.span for r in rows] == ["the fleet"]
+    rows = _rows("stop the idle vms to free memory")
+    assert [r.span for r in rows] == ["the idle vms"]
