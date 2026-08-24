@@ -162,7 +162,7 @@ def word_cells(tok: str, nxt: Optional[str], case: dict, start: int, end: int,
         cells["verb"] = sorted(ops)
     if _NUM_UNIT.fullmatch(t) or t.isdigit():
         cells["qty"] = t
-    elif t in C.ENUMERATORS:
+    elif t in C.ENUMERATORS and str(C.ENUMERATORS[t]).isdigit():
         cells["qty"] = str(C.ENUMERATORS[t])            # `two` -> 2, the closed cardinals
         tags.append("quant:card"); cells["class"] = sorted(set(tags))
     elif t in _PARTIAL:
