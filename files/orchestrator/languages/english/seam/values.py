@@ -354,6 +354,58 @@ def _unshaped_selector_candidates(rows: List[S.Declared], request: str, board,
     return out
 
 
+def _superlative_word(t: str) -> bool:
+    """The superlative FORM (ledger #23) — morphology with the 3+ stem guard (`test` is
+    English), plus most/least. Mirrors vectors.py's cell; one rule, said twice is a bug."""
+    t = t.strip(".,;:!?'\"").lower()
+    return t in ("most", "least") or (t.endswith("est") and len(t) >= 6 and t[:-3].isalpha())
+
+
+def _of_genitive_candidates(rows: List[S.Declared], request: str, board,
+                            archive) -> List[dict]:
+    """Rule 8's OF spelling (ledger #23): `the oldest snapshot OF alpha` is `alpha's oldest
+    snapshot` — the leaf span is the BARE head (`snapshot`), the adjectives stay OUTSIDE
+    the span and ride as ORDERING context (`oldest`), and the owner is the row after `of`.
+    Fires only when the holder's head names a KIND (an attribute head — `the cpu of X` —
+    is step 1/4's; a quantifier head — `two of the vms` — is the partitive, structural)."""
+    from .scan import _index, _kind_of
+    low = str(request).lower()
+    nouns = _index(board)
+    out: List[dict] = []
+    for r in rows:
+        if r.object_type == S.VALUE_KIND:
+            continue
+        span = str(r.span or r.name)
+        at = low.find(span.lower())
+        if at < 0:
+            continue
+        words = span.split()
+        head = words[-1].strip(".,;:!?'\"").lower()
+        if head not in nouns or _attribute_named(head, board):
+            continue                                # a kind head only
+        m = re.match(r"\s+of\s+(\S+)", low[at + len(span):])
+        if not m:
+            continue
+        owner_text = m.group(1).strip(".,;:!?'\"")
+        owner = next((o for o in rows if o is not r and o.object_type != S.VALUE_KIND
+                      and str(o.span or o.name).lower() == owner_text), None)
+        if owner is None:
+            continue                                # the owner must be a thing the walk read
+        owner_kind = owner.kind if owner.kind in board.kinds else None
+        attribute, owner_cls, of_kind = _leaf_fit([head], owner_kind, board, archive)
+        head_at = at + span.lower().rfind(head)
+        ordering = next((w.strip(".,;:!?'\"").lower() for w in words
+                         if _superlative_word(w)), None)
+        out.append({"text": request[head_at:head_at + len(head)], "start": head_at,
+                    "end": head_at + len(head), "word": head, "entries": [],
+                    "linked": attribute, "linked_text": "", "genitive": True, "of": True,
+                    "owner": owner_cls or "?", "attribute": attribute, "of_kind": of_kind,
+                    "owner_text": str(owner.span or owner.name), "owner_type": None,
+                    "holder_span": span, "ordering": ordering,
+                    "target_span": str(owner.span or owner.name)})
+    return out
+
+
 _CLITICS = "|".join(re.escape(c) for c in sorted(GENITIVE_CLITICS, key=len, reverse=True))
 _GENITIVE = re.compile(r"^(?P<owner>.+?)(?P<clitic>%s)(?:\s+(?P<leaf>\S.*))?$" % _CLITICS)
 
@@ -558,6 +610,9 @@ def _lift(row: S.Declared, cand: dict, request: str, board) -> Optional[S.Declar
     """The row with the value cut out of its phrase; None if nothing is left of it."""
     low = str(request).lower()
     span = str(row.span or "")
+    if cand.get("of") and cand.get("holder_span") == span:
+        return None       # rule 8-of: `the oldest snapshot` IS the leaf — the value row
+                          #   replaces it, and `alpha` already stands as its own row
     if cand.get("genitive") and cand.get("holder_span") == span:
         # rule 8: the phrase that held `OWNER's LEAF` becomes the OWNER, typed by its head
         new = str(cand["owner_text"])
@@ -647,6 +702,7 @@ def read_values(rows: List[S.Declared], request: str, board=None,
     cands = (_candidates(request, board, archive) + _naming_candidates(rows, request, board)
              + _shape_candidates(request, board, archive)
              + _genitive_candidates(rows, request, board, archive)
+             + _of_genitive_candidates(rows, request, board, archive)
              + _unshaped_selector_candidates(rows, request, board, archive))
     if not cands:
         return rows
@@ -685,6 +741,8 @@ def read_values(rows: List[S.Declared], request: str, board=None,
             value = {"word": cand["word"], "attribute": attribute, "owner": owner,
                      "linked": attribute, "linked_text": "", "genitive": True,
                      "of_kind": cand["of_kind"], "target_span": cand["target_span"]}
+            if cand.get("ordering"):
+                value["ordering"] = cand["ordering"]   # `oldest` — the axis is RESOLVE's ask
             if attribute is None:
                 value["hint"] = (f"{cand['target_span']!r} has no {cand['word']!r} — nothing in "
                                  f"the manifest or the archive declares it; teach the word "

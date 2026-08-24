@@ -92,6 +92,45 @@ def ungoverned_leaves(rows, operations, table) -> List[str]:
     return out
 
 
+def unordered_superlatives(rows, board: Optional[Board] = None) -> List[str]:
+    """A superlative with no licensed ordering axis — to the operator (#23, and sup-0001's
+    own note: 'the attr-class TYPE (count/quantity = orderable) licenses the ordering').
+
+    `stop the biggest vm`: the vm declares TWO orderable axes (cpu_cores, memory_mb) and
+    `biggest` names neither — RESOLVE cannot pick a machine without knowing which. `the
+    oldest snapshot of alpha`: the snapshot declares NO orderable axis — the world is
+    missing the fact, and the model cannot supply it by any authority. One ask each."""
+    from .values import _superlative_word
+    board = board or Board()
+
+    def _axes(kind: str) -> List[str]:
+        spec = board._spec(kind) if kind in board.kinds else {}
+        return sorted(a for a, cls in (spec.get("attr_classes") or {}).items()
+                      if isinstance(cls, dict) and cls.get("type") in ("count", "quantity"))
+
+    out: List[str] = []
+    for r in rows:
+        if getattr(r, "object_type", None) == "value":
+            info = r.value or {}
+            word, kind = info.get("ordering"), info.get("of_kind") or info.get("owner")
+            span = r.span
+        else:
+            word = next((w.strip(".,;:!?'\"").lower()
+                         for w in str(r.span or "").split() if _superlative_word(w)), None)
+            kind, span = r.kind, r.span
+        if not word:
+            continue
+        axes = _axes(str(kind)) if kind else []
+        if len(axes) == 1:
+            continue                       # one orderable axis — licensed, the world picks
+        if axes:
+            out.append(f"{word!r} orders {span!r} by one of {', '.join(axes)} — which?")
+        else:
+            out.append(f"{word!r} orders {span!r} by an attribute this lab does not "
+                       f"declare — teach the axis, or name it")
+    return out
+
+
 def unbound_mentions(rows) -> List[str]:
     """A later mention two things could be — to the operator, once (08-23, ledger #18).
     *"create a vm and a network, then stop it"*: both agree with `it` in number and nothing

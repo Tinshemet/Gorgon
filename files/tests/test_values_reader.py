@@ -452,3 +452,33 @@ def test_a_thing_and_an_attribute_word_stay_in_the_phrase():
 def test_rule_9_is_idempotent():
     rows = _rows("stop the vm at 8g:77q")
     assert V.read_values(rows, "stop the vm at 8g:77q", B) == rows
+
+
+# ── rule 8-of · the genitive's OF spelling + the ordering axis (ledger #23) ──────────────────
+
+def test_sup_0002_the_of_genitive_leaf_is_bare_and_carries_its_ordering():
+    rows = _rows("delete the oldest snapshot of alpha")
+    assert [(r.span, r.kind) for r in rows] == [("alpha", "?"), ("snapshot", "value")]
+    v = next(r.value for r in rows if r.kind == "value")
+    assert v["ordering"] == "oldest" and v["owner"] == "vm" and v["target"] == "alpha"
+
+
+def test_the_attribute_of_form_still_belongs_to_step_one():
+    # `the cpu of the web vm` — an ATTRIBUTE head is step 1/4's; rule 8-of must not double-read
+    assert _shape(_rows("set the cpu of the web vm to 4 cores")) == [
+        ("the web vm", "vm", None), ("4 cores", "value", "cpu_cores")]
+
+
+def test_a_quantifier_head_is_the_partitive_not_a_leaf():
+    for s in ("stop two of the lab vms", "stop half of the vms"):
+        assert not any(r.kind == "value" for r in _rows(s)), s
+
+
+def test_the_ordering_axis_ask_is_licensed_by_the_declared_types():
+    from orchestrator.languages.english.seam.gate4 import unordered_superlatives
+    # two orderable axes on vm -> WHICH; none on snapshot -> TEACH; ordinals never fire
+    asks = unordered_superlatives(_rows("stop the biggest vm"), B)
+    assert len(asks) == 1 and "cpu_cores, memory_mb — which?" in asks[0]
+    asks = unordered_superlatives(_rows("delete the oldest snapshot of alpha"), B)
+    assert len(asks) == 1 and "teach the axis" in asks[0]
+    assert unordered_superlatives(_rows("delete the last snapshot"), B) == []
