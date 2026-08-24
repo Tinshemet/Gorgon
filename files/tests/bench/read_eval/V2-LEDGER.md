@@ -681,3 +681,29 @@ inside the span"; sup-0001 "the biggest vm" is whole) — a filter on a thing li
 thing's span; a fact about a leaf-word lives on the word. Gold + vector only; the reader
 already splits the two rows.
 
+## 24 · THE QUEUE OF 08-25 — THE READER CATCHES UP TO THE GOLD (built while the operator returned to grade)
+
+Six commits, one day, zero regressions on any control (code-only all-spans-exact 63 → 79 of
+113; sealed readings moved on exactly FOUR terse/typo twins, every one now exact against its
+sealed gold):
+· **rule 8-of + the ordering ask** (58db5e1) — `the oldest snapshot of alpha` reads BARE
+  leaf + owner (#23); `gate4.unordered_superlatives` asks by the declared TYPE licence
+  (two axes → which? · none → teach).
+· **E5b/E5c** (5d1e1c3) — a CARDINAL partitive is one quantifier (`two of` · `all but two
+  of`), pt-* 6/6 exact; the cardinal is REQUIRED (`everything but the running vms` carves by
+  predicate — the structure guard caught the first cut's fuse). Vector quant cells.
+· **reasons.py** (7b6d348) — the operator's purpose-is-diagnosis-reversed design: because ·
+  although · to/so-that read as EVIDENCE carried by the act; rows stripped subtractively;
+  the runner collects; a symptom inside a reason is the reason's. The whole evidence family
+  (cause · concession · purpose) went from unread to exact.
+· **fix B** (3ca24dd) — D8's bare-name arm: anchor slide + left wall, licensed by verb
+  EVIDENCE (`_verb_ops`) or — for a verb the manifest never met (`restart`) — the CLAUSE's
+  own directive act; the first cut slid on `oh`/`please` and the 8-case regression was
+  caught by the control before commit. Deferred-time adjuncts (`in 10 minutes` · `for an
+  hour` · `tomorrow morning`) ride the act, never the thing.
+· **rule 10** (this commit) — the HAVE-FRAME is the genitive asked (#21): `how many
+  snapshots does alpha have?` reads `alpha` + bare `snapshots`; the frame's skin (`does
+  alpha` · `have`) is never a thing.
+· Closed classes homed: REASON_*, TRANSFER_VERBS, OBJECT_PRONOUNS in the codex — the
+  language-layer guard enforced its own rule on the new module.
+

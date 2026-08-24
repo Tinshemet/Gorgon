@@ -306,6 +306,40 @@ def _shape_candidates(request: str, board, archive) -> List[dict]:
     return out
 
 
+_HAVE_FRAME = re.compile(
+    r"\bhow (?:many|much)\s+(?P<leaf>\w+)\s+(?:does|do|did)\s+(?P<owner>\w+)\s+have\b")
+
+
+def _have_frame_candidates(rows: List[S.Declared], request: str, board,
+                           archive) -> List[dict]:
+    """Rule 10 (ledger #21): `how many snapshots does alpha have?` is `alpha's snapshots`
+    ASKED — the genitive with its owner named later. The same split by the same machinery:
+    the wh-headed holder row becomes the leaf VALUE (bare, #21/#23), the owner stands as
+    its own row, the COUNT stays the produced answer. The reading marks nothing set —
+    a genitive leaf refers (id-0002's predicate convention holds one frame over)."""
+    low = str(request).lower()
+    out: List[dict] = []
+    m = _HAVE_FRAME.search(low)
+    if not m:
+        return out
+    leaf, owner_text = m.group("leaf"), m.group("owner")
+    holder = next((r for r in rows if r.object_type != S.VALUE_KIND
+                   and leaf in str(r.span or r.name).lower().split()), None)
+    if holder is None:
+        return out
+    attribute, owner, of_kind = _leaf_fit([leaf], None, board, archive)
+    start = m.start("leaf")
+    out.append({"text": request[start:start + len(leaf)], "start": start,
+                "end": start + len(leaf), "word": leaf, "entries": [],
+                "linked": attribute, "linked_text": "", "genitive": True,
+                "owner": owner or "?", "attribute": attribute, "of_kind": of_kind,
+                "owner_text": request[m.start("owner"):m.end("owner")],
+                "owner_type": S.UNKNOWN_KIND, "holder_span": str(holder.span or holder.name),
+                "frame": (m.start(), m.end()),
+                "target_span": request[m.start("owner"):m.end("owner")]})
+    return out
+
+
 def _unshaped_selector_candidates(rows: List[S.Declared], request: str, board,
                                   archive) -> List[dict]:
     """Rule 9 — the slot, not the shape, is the licence; the world answers at ASSIGN."""
@@ -622,6 +656,15 @@ def _lift(row: S.Declared, cand: dict, request: str, board) -> Optional[S.Declar
     """The row with the value cut out of its phrase; None if nothing is left of it."""
     low = str(request).lower()
     span = str(row.span or "")
+    if cand.get("frame"):
+        # rule 10: the have-frame owns its whole question — a row inside it is the frame's
+        # skin (`does alpha` · `have`), never a thing; the OWNER's own row stays
+        fs, fe = cand["frame"]
+        at0 = low.find(span.lower())
+        if (at0 >= 0 and fs <= at0 and at0 + len(span) <= fe
+                and span.lower() != str(cand["owner_text"]).lower()
+                and span != cand.get("holder_span")):
+            return None
     if cand.get("of") and cand.get("holder_span") == span:
         return None       # rule 8-of: `the oldest snapshot` IS the leaf — the value row
                           #   replaces it, and `alpha` already stands as its own row
@@ -715,6 +758,7 @@ def read_values(rows: List[S.Declared], request: str, board=None,
              + _shape_candidates(request, board, archive)
              + _genitive_candidates(rows, request, board, archive)
              + _of_genitive_candidates(rows, request, board, archive)
+             + _have_frame_candidates(rows, request, board, archive)
              + _unshaped_selector_candidates(rows, request, board, archive))
     if not cands:
         return rows

@@ -219,6 +219,25 @@ VALUE_CONNECTORS = frozenset({"with", "of", "and", "to", "at", "on", ","})
 # ⇒ The word that names WHICH attribute a bare unit belongs to — *"8gb OF ram"*.
 ATTRIBUTE_LINKERS = frozenset({"of"})
 
+# ⇒ THE REASON MARKERS — a reason GIVEN with the act (08-25, [[reasons.py]] — the operator's
+#   purpose-is-diagnosis-reversed design). Closed classes of English, longest first; a
+#   SUBORDINATING marker stays OUTSIDE its span, the purposive marker is PART of it (the
+#   certified v3 convention). The marker words also strip off a row's glued tail.
+REASON_CAUSE = ("because", "since")
+REASON_CONCESSION = ("even though", "although", "though")
+REASON_PURPOSE_SO = ("so that", "so")
+REASON_MARKER_WORDS = frozenset({"though", "although", "even", "because", "since", "so",
+                                 "to", "that"})
+
+# ⇒ THE OBJECT PRONOUNS — what a purposive `to` can never head (`add those vms TO IT` is
+#   the transfer's argument, `TO free memory` is a reason). A closed class of English.
+OBJECT_PRONOUNS = frozenset({"it", "them", "me", "us", "him", "her", "this", "that",
+                             "these", "those"})
+
+# ⇒ A TRANSFER verb's preposition heads the verb's own argument (`put ... ON the lab
+#   network`, `move it TO the dmz`) — shared by scan's walk stop and the purpose guard.
+TRANSFER_VERBS = frozenset({"put", "add", "move", "place", "clone", "give", "attach"})
+
 # ⇒ THE GENITIVE CLITIC — *"alpha'S snapshots"*, *"the vmS' disks"*. A closed class of two
 #   spellings, and the whole licence for reading a possessive: what stands before it OWNS,
 #   what follows is a LEAF of the owner and its own span (ruling 08-23, ledger #19 — the same

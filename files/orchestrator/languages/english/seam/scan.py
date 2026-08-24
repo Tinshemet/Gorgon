@@ -548,10 +548,14 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
     while left > max(0, _d8_floor) and (toks[left - 1][0] not in BOUNDARIES
                         or (toks[left - 1][0] == "of" and left >= 2
                             and toks[left - 2][0] in _QUANT)
-                        # ⇒ E5c: `ALL BUT two of the vms` — a universal + `but` + cardinal
-                        #   is ONE subtractive quantifier; `stop alpha but ...` still cuts
+                        # ⇒ E5c: `ALL BUT two of the vms` — a universal + `but` + CARDINAL
+                        #   is ONE subtractive quantifier. The cardinal is required:
+                        #   `everything but the running vms` carves by PREDICATE and the
+                        #   exclusion reader owns it (the structure guard caught the fuse)
                         or (toks[left - 1][0] == "but" and left >= 2
-                            and toks[left - 2][0] in {"all", "none", "any", "everything"})):
+                            and toks[left - 2][0] in {"all", "none", "any", "everything"}
+                            and left < len(toks)
+                            and (toks[left][0] in ENUMERATORS or toks[left][0].isdigit()))):
         word = toks[left - 1][0]
         if question and left - 1 == clause_first and word in _AUX:
             break                             # the fronted auxiliary is the question's skin

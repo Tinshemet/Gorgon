@@ -548,3 +548,18 @@ def test_a_deferred_time_adjunct_rides_the_act_not_the_thing():
     assert [r.span for r in _rows("stop alpha for an hour")] == ["alpha"]
     # the trigger reader keeps its own: `at 9pm` was never the row's
     assert [r.span for r in _rows("stop every vm at 9pm")] == ["every vm"]
+
+
+# ── rule 10 · the HAVE-FRAME is the genitive asked (ledger #21, reader side) ─────────────────
+
+def test_the_have_frame_reads_owner_and_bare_leaf():
+    rows = _rows("how many snapshots does alpha have?")
+    assert [(r.span, r.kind) for r in rows] == [("alpha", "?"), ("snapshots", "value")]
+    rows = _rows("how much memory does alpha have?")
+    assert [(r.span, r.kind, r.value["attribute"]) for r in rows if r.kind == "value"] == [
+        ("memory", "value", "memory_mb")]
+
+
+def test_the_frame_skin_is_never_a_thing():
+    rows = _rows("how much memory does alpha have?")
+    assert [r.span for r in rows if r.kind != "value"] == ["alpha"]

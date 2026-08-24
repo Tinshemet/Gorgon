@@ -26,7 +26,9 @@ PART of it (`to free memory`, `so we can roll back`).
 import re
 from typing import List, NamedTuple, Optional
 
-from ..codex import CUT_DETERMINERS, DEFINITE, INDEFINITE, SUBORDINATING
+from ..codex import (CUT_DETERMINERS, DEFINITE, INDEFINITE, OBJECT_PRONOUNS,
+                     REASON_CAUSE, REASON_CONCESSION, REASON_MARKER_WORDS,
+                     REASON_PURPOSE_SO, TRANSFER_VERBS)
 
 
 class Reason(NamedTuple):
@@ -36,14 +38,11 @@ class Reason(NamedTuple):
     end: int
 
 
-# subordinate REASON markers — the reason subset of SUBORDINATING, longest first
-_CAUSE = ("because", "since")
-_CONCESSION = ("even though", "although", "though")
-_PURPOSE_SO = ("so that", "so")
+# the codex owns the classes ([[test_codex_is_the_only_home]]); these are its names
+_CAUSE, _CONCESSION, _PURPOSE_SO = REASON_CAUSE, REASON_CONCESSION, REASON_PURPOSE_SO
+_MARKER_WORDS, _TRANSFER = REASON_MARKER_WORDS, TRANSFER_VERBS
 _DETS = set(DEFINITE) | set(INDEFINITE) | set(CUT_DETERMINERS)
-_PRONOUNS = {"it", "them", "me", "us", "him", "her", "this", "that", "these", "those"}
-_TRANSFER = {"put", "add", "move", "place", "clone", "give", "attach"}
-_MARKER_WORDS = {"though", "although", "even", "because", "since", "so", "to", "that"}
+_PRONOUNS = OBJECT_PRONOUNS
 
 
 def _tail(text: str, at: int) -> str:
