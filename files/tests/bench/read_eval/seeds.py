@@ -101,6 +101,7 @@ class Seed(NamedTuple):
     pacing: Dict[int, Text] = {}              # v3.1: action index -> a META-CONTROL pacing
                                               #   condition on the AGENT (`when you have a sec`)
     meta_controls: List[int] = []             # v3.1: acts that are meta-control (kind)
+    frame: List[Tuple[Text, str]] = []        # v3.1: (span, party) — i=user, you=agent
     store: List[dict] = []                    # v2.0: the per-case mock certification ratifies
     noise: str = ""                           # "" = clean; hand-authored twins name their class
     pair_id: str = ""                         # "" = none; a hand twin names its clean case
@@ -173,6 +174,17 @@ def build(seed: Seed) -> dict:
         case["context"] = dict(seed.context)
     if seed.hint:
         case["gold"]["hint"] = {"kind": seed.hint[0], "says": seed.hint[1]}
+    if seed.frame:
+        fr = []
+        for spec, party in seed.frame:
+            fs, fe = _at(seed.sentence, spec, seed.id)
+            # frame spans are declared object spans; find the matching span index
+            ix = next((i for i, sp in enumerate(case["gold"]["spans"])
+                       if sp["start"] == fs and sp["end"] == fe), None)
+            if ix is None:
+                raise SystemExit(f"{seed.id}: frame span {spec!r} not in the spans list")
+            fr.append({"span": ix, "party": party})
+        case["gold"]["frame"] = fr
     if seed.mood:
         # v2.4: a mood is a span with a species — and the operator's rule is that it is ALSO
         #   evidence, so the seed must have declared the same span in `evidence`. The

@@ -157,8 +157,15 @@ def show(case: dict, verdicts: Dict[str, dict], by_id: Dict[str, dict]) -> None:
         act = case["gold"]["actions"][at["action"]]
         tag = {"query": " (QUERY)", "rule": " (RULE)",
                "report": " (DIAGNOSIS)"}.get(act.get("kind") or "", "")
+        def _memtag(at, ix, role):
+            for o in at.get("objects", ()):
+                if isinstance(o, dict) and o.get("span") == ix:
+                    k = f":{o['kind']}" if o.get("kind") else ""
+                    r = f"->{o['refers']}" if o.get("refers") is not None else ""
+                    return f" ({role}{k}{r})" if role else ""
+            return f" ({role})" if role else ""
         objs = " + ".join(
-            f"{spans[ix]['text']!r}" + (f" ({role})" if role else "")
+            f"{spans[ix]['text']!r}" + _memtag(at, ix, role)
             for ix, role in members_of(at))
         print(f"      {act['text']!r}{tag} -> {objs}{_channels(act)}")
     acts_attached = {at["action"] for at in case["gold"]["attachments"]}
@@ -189,6 +196,10 @@ def show(case: dict, verdicts: Dict[str, dict], by_id: Dict[str, dict]) -> None:
     if case.get("outcome"):
         print(f"      {MAGENTA}outcome: {case['outcome'].upper()}{OFF}  "
               f"{DIM}(no act is the reading — is that right?){OFF}")
+    # v3.1: THE FRAME — speech-act participants (i=user, you=agent), not verb arguments.
+    for f in case["gold"].get("frame") or []:
+        txt = case["gold"]["spans"][f["span"]]["text"]
+        print(f"      {MAGENTA}frame:{OFF} {txt!r} = {f['party']}")
     # v2.4: THE MOOD CHANNEL — a span with a species, carried as evidence too.
     for m in case["gold"].get("mood") or []:
         print(f"      {MAGENTA}mood [{m['kind']}]{OFF} {m['text']!r}")

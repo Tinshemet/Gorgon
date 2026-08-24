@@ -20,13 +20,13 @@
   "verdict": "accepted"
  },
  "au-0001": {
-  "hash": "1a56e0c69f180484",
-  "note": "'you' should be spanned as a reference tself",
-  "verdict": "rejected"
+  "hash": "78317e23e0095cd9",
+  "note": "",
+  "verdict": "accepted"
  },
  "au-0002": {
-  "hash": "395c8a42a1222a47",
-  "note": "'today' temporal, and here 'changes' is whats being asked so it would be the patient",
+  "hash": "4e80c6d3df1a39d4",
+  "note": "again, today is a temporal selector, same issue as before",
   "verdict": "rejected"
  },
  "ca-0001": {
@@ -45,8 +45,8 @@
   "verdict": "accepted"
  },
  "cap-0001": {
-  "hash": "aff45bb1ce3a4f78",
-  "note": "'you' = reference to self, network is a qthe object IE patient, and here the query is about ability and the patient is network, directed at self as gorgon",
+  "hash": "22f976c0633079c6",
+  "note": "debating if we should also span create here, since it is important, as well as the 'run' in au-0001, same verb issue",
   "verdict": "rejected"
  },
  "cap-0002": {
@@ -60,8 +60,8 @@
   "verdict": "accepted"
  },
  "cb-0002": {
-  "hash": "cb239d74165450f4",
-  "note": "'it'-s should still be spanned as references",
+  "hash": "828df5d096f2c10c",
+  "note": "fix reference to show it",
   "verdict": "rejected"
  },
  "cb-0003": {
@@ -105,8 +105,8 @@
   "verdict": "accepted"
  },
  "fb-0001": {
-  "hash": "738da74d5dee4021",
-  "note": "'it' here is a reference and its not expressed correctly",
+  "hash": "6fa79aa19a037c95",
+  "note": "nitpick, but when you span a reference, include wha it references, IE 'that' (reference = if it fails), so i know the references are correct",
   "verdict": "rejected"
  },
  "fb-0002": {
@@ -155,8 +155,8 @@
   "verdict": "accepted"
  },
  "io-0003": {
-  "hash": "8ddf79df32924b9f",
-  "note": "'you' still need to be spanned as self reference",
+  "hash": "065a2be6c8c77d93",
+  "note": "same issue as before with 'i' and 'you'",
   "verdict": "rejected"
  },
  "io-0004": {
@@ -175,8 +175,8 @@
   "verdict": "accepted"
  },
  "io-0007": {
-  "hash": "54235d72a117983b",
-  "note": "'were down' is status reference asking if the vm is live",
+  "hash": "6df7fcfd881a0597",
+  "note": "i dont remember if we labeled were down as selector but it is a status, so its probably correct, i just want to go over this with you to confirm",
   "verdict": "rejected"
  },
  "lw-0001": {
@@ -190,23 +190,23 @@
   "verdict": "accepted"
  },
  "lw-0003": {
-  "hash": "c98151a6765bd3e2",
-  "note": "'courtesy' is not evidence, usually can be ignored, what it does point to, 'am i (gorgon as a whole) busy?' because if you were free the user wont add it, its not an evidence per se its more awareness, i dont know how to put it, mmaybe it need its own tier.",
+  "hash": "aa8374850809cb93",
+  "note": "self dont get get included in stop, but it get sent in the hint as 'self-reference' meaning the user is telling you to do this.",
   "verdict": "rejected"
  },
  "mg-0001": {
-  "hash": "1a5121b98b030e28",
-  "note": "over should be labelled as conditional like or while 6gb is the selector for it.",
-  "verdict": "rejected"
+  "hash": "6a5bbedd222a5d5b",
+  "note": "",
+  "verdict": "accepted"
  },
  "mg-0002": {
-  "hash": "b4f836edc2044b37",
-  "note": "more than is a conditional and 2 cores is the selector",
-  "verdict": "rejected"
+  "hash": "a36311ae4107eb80",
+  "note": "",
+  "verdict": "accepted"
  },
  "mg-0003": {
-  "hash": "11684e4a6936df7c",
-  "note": "'the snapshots' are the patient, 'older' is the selector and 'more than' is a conditional, and 'month' is the temporal reference for 'older' IE age < month, which 'older' points to, younger would be age > month. this is a complex conditional and needs to be decomposed correctly",
+  "hash": "d89532f5ad0791a4",
+  "note": "'a month' here is the same temporal selector as 'last week', it IS an anchor just need to specify KIND",
   "verdict": "rejected"
  },
  "mn-0001": {
@@ -235,24 +235,24 @@
   "verdict": "accepted"
  },
  "nl-0004": {
-  "hash": "ef86f35b0b25fd95",
-  "note": "both 'after musicians' and 'the stadium' are values for their respective objects of what to name them, and 'it' at the end is a reference which isnt acted apon here",
+  "hash": "776001a5e543fbf5",
+  "note": "after musicians and the stadium needs to be labled as 'values' because its the value of what to name the vms and network respectivly",
   "verdict": "rejected"
  },
  "nq-0001": {
-  "hash": "a980fe9818381f31",
-  "note": "'not running' is a status/selector, its asking for a which vms, status != running.",
-  "verdict": "rejected"
+  "hash": "23664d1eecbeae51",
+  "note": "",
+  "verdict": "accepted"
  },
  "nq-0002": {
-  "hash": "16e6451393f1b99b",
-  "note": "alpha needs to be extracted as its own sssssspan as patient and responding is a status indicator, i dont know what to do about it since it is a verb but not in this context",
-  "verdict": "rejected"
+  "hash": "781228a7e68d8f7d",
+  "note": "",
+  "verdict": "accepted"
  },
  "nt-0001": {
-  "hash": "f3f335cd576bac8e",
-  "note": "outcome is acknowledge",
-  "verdict": "rejected"
+  "hash": "3804832609d8f4f1",
+  "note": "",
+  "verdict": "accepted"
  },
  "nt-0002": {
   "hash": "807c84175651bdfd",
@@ -270,18 +270,18 @@
   "verdict": "accepted"
  },
  "nt-0005": {
-  "hash": "f177458073631ff9",
-  "note": "outcome is nothing, but mood should be remembered",
-  "verdict": "rejected"
+  "hash": "e9181f45fd8be455",
+  "note": "",
+  "verdict": "accepted"
  },
  "nt-0006": {
-  "hash": "1d11adb6ac153197",
-  "note": "should be decomp, like tomorrow being a temporal reference",
-  "verdict": "rejected"
+  "hash": "bfaf54375fa51545",
+  "note": "",
+  "verdict": "accepted"
  },
  "nt-0007": {
-  "hash": "c805155e406fac61",
-  "note": "needs to be decomp, stop and alpha should be decomped as part of the testimony",
+  "hash": "888ed49764692d6b",
+  "note": "same as pr-0002, 'i' spanned but wrong place",
   "verdict": "rejected"
  },
  "nt-0008": {
@@ -290,24 +290,24 @@
   "verdict": "accepted"
  },
  "nt-0009": {
-  "hash": "c3bbde37905da5a3",
-  "note": "needs to be decomped like 'nor' being a conditional, and 'neither' being the manner-ish, i dont know how to span it. the hint is wrong, the hint should state this as a rule 'dont stop alpha and beta'",
-  "verdict": "rejected"
+  "hash": "93fd37b513dd568d",
+  "note": "",
+  "verdict": "accepted"
  },
  "or-0001": {
-  "hash": "fa83051806a20e1a",
-  "note": "'first' doesnt get an allocated span, and it is important to decomp since its a type of 'manner'",
-  "verdict": "rejected"
+  "hash": "76e8b70643e6cfd2",
+  "note": "",
+  "verdict": "accepted"
  },
  "or-0002": {
-  "hash": "3785663d265bd799",
-  "note": "'last' is a mannor, which is a pointer to a runtime reference to 'the last' vm, should be its own span",
-  "verdict": "rejected"
+  "hash": "f5f471cef76bbb4b",
+  "note": "",
+  "verdict": "accepted"
  },
  "or-0003": {
-  "hash": "c0578e7f744bad5d",
-  "note": "same as the rest of 'or'",
-  "verdict": "rejected"
+  "hash": "26fc9da19356972b",
+  "note": "",
+  "verdict": "accepted"
  },
  "po-0001": {
   "hash": "666ae5e590863589",
@@ -335,34 +335,34 @@
   "verdict": "accepted"
  },
  "pr-0001": {
-  "hash": "a37f8c095e671835",
-  "note": "needs decomp for objects, to know which will be affected, like 'new vms' and 'lab network'",
-  "verdict": "rejected"
+  "hash": "4b69ad0f35bb3032",
+  "note": "",
+  "verdict": "accepted"
  },
  "pr-0002": {
-  "hash": "520bb13f4f7a6f76",
-  "note": "i dont even know how this would be decomposed",
+  "hash": "0e871c16e4f0c0aa",
+  "note": "'i' here is spanned correctly but its unneeded to be put in the 'use' it needs to be as testimony",
   "verdict": "rejected"
  },
  "pt-0001": {
-  "hash": "1d176a6f7bdd5b35",
-  "note": "needs decomp, lab being the destination, vms  the patient and the 'two of the' being a manner",
-  "verdict": "rejected"
+  "hash": "a6041c47bfc60118",
+  "note": "",
+  "verdict": "accepted"
  },
  "pt-0002": {
-  "hash": "19627aeda6e3d1a9",
-  "note": "same as before",
-  "verdict": "rejected"
+  "hash": "fe33c480838775ef",
+  "note": "",
+  "verdict": "accepted"
  },
  "pt-0003": {
-  "hash": "81ac12ccc02eeae4",
-  "note": "'any' is a manner",
-  "verdict": "rejected"
+  "hash": "67f34c921c38b104",
+  "note": "",
+  "verdict": "accepted"
  },
  "pt-0004": {
-  "hash": "a8a7ffe9fc14cc14",
-  "note": "'half of' is a manner and 'the vms' is the patient, decomp",
-  "verdict": "rejected"
+  "hash": "7bd9aadf77a24d22",
+  "note": "",
+  "verdict": "accepted"
  },
  "pt-0005": {
   "hash": "171a958a8227fbcc",
@@ -420,18 +420,18 @@
   "verdict": "accepted"
  },
  "rr-0001": {
-  "hash": "b3a6467aeed971db",
+  "hash": "f53a773d9b55bf9c",
   "note": "",
   "verdict": "accepted"
  },
  "rr-0002": {
-  "hash": "d5d331a2f506a5e7",
-  "note": "'last' and 'week' sas well as 'taken' are missing their spans, taken is ownership, last week together are a temporal reference, this i a temporal reference issue, the temporal reference of last week is an anchor and the snapshots are the patient",
+  "hash": "18b407193dc2579a",
+  "note": "although i framed 'last week' as an 'anchor', it IS an anchor but a temporal selector, needs work",
   "verdict": "rejected"
  },
  "rr-0003": {
-  "hash": "41f387b9b0001a13",
-  "note": "vms should be labelled as patient and stuck at boot is a condition/status, so this is actually a conditional.",
+  "hash": "cef0b2e676db8876",
+  "note": "the conditional here needs to be expressed as a trigger, i named it a conditional as way to signify that 'stuck at boot' is a status meaning this is a request based on status, like 'launch any vms that are down', that 'that are down' is a status check, needs work",
   "verdict": "rejected"
  },
  "sa-0001": {
@@ -440,14 +440,14 @@
   "verdict": "accepted"
  },
  "sa-0002": {
-  "hash": "3e78842a8e0547d3",
-  "note": "'good morning' is again, courtesy and its not needed as evidence since it doesnt carry info, just mood indecator.",
-  "verdict": "rejected"
+  "hash": "88ee418d1b9a6428",
+  "note": "",
+  "verdict": "accepted"
  },
  "sa-0002-cs": {
-  "hash": "bf0c32ed725e6592",
-  "note": "'stop' still needs to be spanned as the verb even if the sentence is rejected",
-  "verdict": "rejected"
+  "hash": "b9a91a85a633acf5",
+  "note": "",
+  "verdict": "accepted"
  },
  "sch-0001": {
   "hash": "36bfc19cb0fa757a",
@@ -460,14 +460,14 @@
   "verdict": "accepted"
  },
  "sup-0001": {
-  "hash": "bb06fb76970fcc6c",
-  "note": "biggest should be its own span since its a selector, which will produce a singular",
-  "verdict": "rejected"
+  "hash": "647c2d1292d5fa5d",
+  "note": "",
+  "verdict": "accepted"
  },
  "sup-0002": {
-  "hash": "9b81dfe70c2359b4",
-  "note": "oldest is a temporal selector, which produces a singular",
-  "verdict": "rejected"
+  "hash": "a4f56b304751f6ab",
+  "note": "",
+  "verdict": "accepted"
  },
  "td-0001": {
   "hash": "a64f2bfab9981b92",
@@ -485,24 +485,24 @@
   "verdict": "accepted"
  },
  "td-0004": {
-  "hash": "8bab82bb8de599f4",
-  "note": "'yeah' still needs to be spanned even if it relates to nothing",
-  "verdict": "rejected"
+  "hash": "a6b950797ba5e224",
+  "note": "",
+  "verdict": "accepted"
  },
  "td-0005": {
-  "hash": "a87274897153a274",
-  "note": "still needs to be spanned even if it relates to nothing",
-  "verdict": "rejected"
+  "hash": "3e34908b16467972",
+  "note": "",
+  "verdict": "accepted"
  },
  "td-0006": {
-  "hash": "c42d494fb47fb7a9",
-  "note": "same as before, check is a verb its important to span it since it could be reference",
-  "verdict": "rejected"
+  "hash": "7945fec1807b5d33",
+  "note": "",
+  "verdict": "accepted"
  },
  "td-0007": {
-  "hash": "9e06481d24622650",
-  "note": "'that' needs to be spanned as the reference",
-  "verdict": "rejected"
+  "hash": "dcdbcd9f0a39d7dd",
+  "note": "",
+  "verdict": "accepted"
  },
  "td-0008": {
   "hash": "223b8dc4389ab4eb",
@@ -510,9 +510,9 @@
   "verdict": "accepted"
  },
  "td-0009": {
-  "hash": "80e7110fbef8f354",
-  "note": "still needs to be spanned as a possible reference as well a request under meta control",
-  "verdict": "rejected"
+  "hash": "4968d3619bdf843d",
+  "note": "",
+  "verdict": "accepted"
  },
  "td-0010": {
   "hash": "f0fde541b88e5ff5",
@@ -520,8 +520,8 @@
   "verdict": "accepted"
  },
  "tp-0001": {
-  "hash": "a7fa8d9d0ab8461e",
-  "note": "here 'i stopped alpha' is evidence",
+  "hash": "95487750dc1c8ef4",
+  "note": "'i' issue again, other than that its fine",
   "verdict": "rejected"
  },
  "tp-0002": {
@@ -540,8 +540,8 @@
   "verdict": "accepted"
  },
  "tp-0005": {
-  "hash": "922a005ba54034c2",
-  "note": "'i' here is a testimony",
+  "hash": "9231c8c8f3cd2df5",
+  "note": "this is actually accepted i just want to explain that here again here 'i' would needs to be in a different category is either a testimony or as who made the action, not as just 'operator'",
   "verdict": "rejected"
  },
  "un-0001": {

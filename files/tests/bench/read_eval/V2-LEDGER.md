@@ -763,3 +763,29 @@ moods are not evidence. FIXED a latent bug: FOLD had two `mood` keys (DO/ACHIEVE
 ALL 113 verdicts STALE (the corpus-wide vector change tone/priority stales even gold-unchanged
 cases, since the seal covers the vector — #22). Suite 1011 passed.
 
+## 27 · THE POST-REGRADE REFINEMENTS — FRAME, SELECTOR KINDS, REFERS (operator, 2026-08-25)
+
+After re-grading v3.1 (98 accept · 15 reject), the 15 rejects resolved into a few ideas:
+- **FRAME** — `i`/`you` are NOT verb arguments, they are speech-act PARTICIPANTS. One
+  mechanism: a `frame` gold field, party `user` (i, leans testimony) or `agent` (you, leans
+  meta). Moved out of the attachment objects (tp-0001/0005, nt-0007, pr-0002, io-0003,
+  lw-0003, cap-0001, au-0001).
+- **SELECTOR/ANCHOR/VALUE gain a KIND** (temporal · status · magnitude · identifier ·
+  attribute). Resolves the anchor/selector confusion: ANCHOR only when it is the operand of
+  a conditional (`a month` for `older than`); a standalone temporal filter is a SELECTOR
+  kind temporal (rr-0002 `last week`, au-0002 `today`). STATUS is oracle-evaluated (the world
+  reports it — decision 6): rr-0003 `stuck at boot` and io-0007 `were down` are status —
+  `stuck at boot` a status SELECTOR (filters the set), `were down` a status VALUE (wished
+  state of a named thing, achieve target). pr-0002 `smaller` selector kind magnitude
+  (comparative, relational).
+- **REFERS** — a reference span now names what it points to: a span index, or `a{N}` for an
+  ACTION. cb-0002 both `it`->alpha(0); fb-0001 `that`->the stop ACTION(a0), `it`->alpha(0);
+  nl-0004 `it`->the network(2).
+- **QUERIES span the verb** — a capability query asks about the ACTION-unit: cap-0001
+  `create` (query), au-0001 `run` (query), the `you` in frame.
+- **nl-0004 naming values** — `after musicians` · `the stadium` = value (two patients now
+  allowed for a compound create; one-patient rule relaxed to >=1).
+
+Schema: `frame` gold key, MEMBER_KINDS, member optional `kind`/`refers`, party user/agent.
+Review shows frame + kind/refers. Suite 1011. 15 cases STALE for re-grade.
+

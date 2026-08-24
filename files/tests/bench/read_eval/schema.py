@@ -124,6 +124,10 @@ SPAN_TYPES = ("object", "evidence")
 #     than being given to it (`value`). One rule for every attribute value a class owns;
 #     a token no class owns (`8g:77q`) is not a leaf and stays in the phrase. Operator:
 #     *"wouldn't this make sense that 10.0.0.5 is a different span since it's an attribute?"*
+# v3.1 (operator 2026-08-25): a selector/anchor/value may carry a KIND — WHAT it filters or
+# assigns by. `status` is oracle-evaluated (the world reports it — decision 6).
+MEMBER_KINDS = ("temporal", "status", "magnitude", "identifier", "attribute")
+
 ROLES = ("patient", "destination", "source", "value", "excluded", "evidence",
          "reference", "beneficiary", "selector",
          # v3.1 (operator 2026-08-25, corpus decomposition): a comparison/condition
@@ -216,7 +220,7 @@ OPTIONAL_KEYS = {"store", "outcome", "context", "vector"}
 #               nothing is dropped for being vague; ROUTE decides whether a reference exists.
 OUTCOMES = ("none", "reject", "testimony", "context-needed", "acknowledge")
 GOLD_KEYS = {"spans", "actions", "attachments"}
-OPTIONAL_GOLD_KEYS = {"hint", "mood"}
+OPTIONAL_GOLD_KEYS = {"hint", "mood", "frame"}
 
 # ── v2.3: THE TWO HINTS — how READ, ROUTE and RESOLVE talk (operator, 2026-08-22) ────────
 #
@@ -477,8 +481,10 @@ def validate_case(case: dict) -> List[str]:
             if is_query:
                 if patients > 1:
                     faults.append(f"{where}: a query takes at most one patient")
-            elif patients == 1:
-                pass                                  # a reference beside it is appositive
+            elif patients >= 1:
+                pass                                  # >=1 patient: a compound create (a
+                                                      # naming list) makes several; a
+                                                      # reference beside one is appositive
             elif patients == 0 and refs == 1:
                 pass                                  # the pronoun fills the subject slot
             elif patients == 0 and refs == 0 and any(r == "excluded" for r in tagged):
@@ -494,8 +500,20 @@ def validate_case(case: dict) -> List[str]:
                 faults.append(f"{where}: a tagged attachment needs exactly one patient "
                               f"(or, with none, one reference)")
         for member in objs:
-            if isinstance(member, dict) and set(member) != {"span", "role"}:
-                faults.append(f"{where}: a tagged member is exactly {{span, role}}")
+            if isinstance(member, dict):
+                extra = set(member) - {"span", "role", "kind", "refers"}
+                if extra:
+                    faults.append(f"{where}: a tagged member has unknown key {extra!r}")
+                if "kind" in member and member["kind"] not in MEMBER_KINDS:
+                    faults.append(f"{where}: member kind {member['kind']!r} is not one of "
+                                  f"{MEMBER_KINDS}")
+                if "refers" in member:
+                    ref = member["refers"]
+                    ok = (isinstance(ref, int) and 0 <= ref < len(spans)) or (
+                        isinstance(ref, str) and ref.startswith("a")
+                        and ref[1:].isdigit() and int(ref[1:]) < len(gold["actions"]))
+                    if not ok:
+                        faults.append(f"{where}: refers {ref!r} is not a span index or a{{N}}")
 
     # v2.4 mood: a span with a species, and it must ALSO be evidence (the operator's rule)
     if "mood" in gold:
@@ -530,6 +548,23 @@ def validate_case(case: dict) -> List[str]:
                     faults.append(f"{where}: mood is not carried as evidence — the operator's "
                                   f"rule (08-22) is that a mood span is ALSO an evidence span "
                                   f"at the same offsets, so downstream can file it")
+
+    # v3.1 FRAME (operator 08-25): the speech-act participants — `i`/`you` are NOT verb
+    # arguments, they are WHO is speaking. `i` = user (leans testimony), `you` = agent
+    # (leans meta). Each entry names a span and its party.
+    if "frame" in gold:
+        fr = gold["frame"]
+        if not isinstance(fr, list) or not fr:
+            faults.append(f"{cid}: frame is not a non-empty list")
+        else:
+            for j, f in enumerate(fr):
+                if not isinstance(f, dict) or set(f) != {"span", "party"}:
+                    faults.append(f"{cid}: frame[{j}] is exactly {{span, party}}")
+                    continue
+                if not (isinstance(f["span"], int) and 0 <= f["span"] < len(spans)):
+                    faults.append(f"{cid}: frame[{j}] span out of range")
+                if f["party"] not in ("user", "agent"):
+                    faults.append(f"{cid}: frame[{j}] party {f['party']!r} is not user/agent")
 
     # v2.3 hint: closed kind, free gloss — the OUTBOUND half of the loop
     if "hint" in gold:
@@ -701,9 +736,12 @@ def selfcheck() -> List[str]:
         "objects", [{"span": 0, "role": "vibes"}]), "not one of")
     broken(lambda c: c["gold"]["attachments"][0].__setitem__(
         "objects", [{"span": 0, "role": "patient"}, 1]), "mixed tagged and untagged")
-    broken(lambda c: c["gold"]["attachments"][0].__setitem__(
-        "objects", [{"span": 0, "role": "patient"}, {"span": 1, "role": "patient"}]),
-        "exactly one patient")
+    # v3.1: two patients is now LEGAL (a compound create); instead, an unknown member kind
+    # and a bad `refers` must both refuse
+    broken(lambda c: c["gold"]["attachments"][0]["objects"].__setitem__(
+        0, {"span": 0, "role": "selector", "kind": "wat"}), "member kind")
+    broken(lambda c: c["gold"]["attachments"][0]["objects"].__setitem__(
+        0, {"span": 0, "role": "reference", "refers": 99}), "not a span index")
     broken(lambda c: c["gold"]["attachments"][0].__setitem__(
         "objects", [{"span": 0, "role": "destination"}]), "exactly one patient")
     # v1.2 triggers — lying offsets and stowaway keys must both refuse
