@@ -525,6 +525,11 @@ def score_case(case: dict, reading: dict, misses: Optional[list] = None) -> dict
             elif role == "excluded":
                 # INVERTED: honoured only if nothing in the ENTIRE reading acts on it
                 hit = row not in acted_on
+            elif role in ("conditional", "anchor", "ownership"):
+                # v3.1 modifiers: the reader does not emit these as op rows yet, so they
+                # score as detected-but-unattached until the decomposing reader lands —
+                # the honest "gold ahead of reader" signal (same as fix B/C)
+                hit = row in (on_rows | value_rows)
             else:                               # destination · source · value
                 hit = row in value_rows
             att_hit += 1 if hit else 0

@@ -707,3 +707,59 @@ sealed gold):
 · Closed classes homed: REASON_*, TRANSFER_VERBS, OBJECT_PRONOUNS in the codex — the
   language-layer guard enforced its own rule on the new module.
 
+## 25 · A REDUCED RELATIVE DECOMPOSES — IT IS NOT ONE BLOB (operator, 2026-08-25, mid-grading)
+
+Caught an accidental ACCEPT on rr-0001 and ruled the whole stratum: *"vms is the patient and
+'running' should be labelled as status as well as 'on lab' as lab being a destination"* ·
+*"all of rr are rejects"* · *"stuck at boot as one symptom span, last week as selector."* The
+reduced-relative NP was gold as ONE object span (`the vms running on lab`); it splits into the
+head (patient) + its restrictors, each its own span:
+- **rr-0001** `stop the vms running on lab` — `the vms` patient · `running` SELECTOR (a status
+  value; vector state=status:running) · `lab` (from `on lab`) DESTINATION.
+- **rr-0002** `delete the snapshots taken last week` — `the snapshots` patient · `last week`
+  temporal SELECTOR; `taken` is the elided relativizer, unspanned.
+- **rr-0003** `restart the vms stuck at boot` — `the vms` patient · `stuck at boot` kept as
+  ONE SYMPTOM span (SELECTOR) — a described condition the world cannot query cleanly, kept
+  whole rather than split.
+
+Gold only; supersedes the "keep the NP whole" reading these carried. All three verdicts went
+STALE on re-emit (the accidental accept undone, the two rejects re-asked against new gold).
+Both rr-0001 role calls then CONFIRMED by the operator: `running` = SELECTOR on the grounded
+`status` attribute (a declared OBSERVED attribute — the `alive`/guest_ping fact answers it,
+three-valued; RESOLVE reads the Active Library else probes the findings ledger — decision 6);
+`lab` = DESTINATION ("technically a destination in this context"). Settled.
+
+## 26 · THE CORPUS DECOMPOSITION PASS — 41 REJECTS, ONE ONTOLOGY (operator, 2026-08-25)
+
+After grading v3.1 (72 accept · 41 reject), the operator ruled the 41 rejects were one theme:
+"a lot are just repeats of no decomp at all." Worked through cluster by cluster; every ruling
+is in [[gorgon-41-reject-rulings]] and [[gorgon-decomp-roles-pass]]. Gold + schema only, the
+reader unchanged — the honest "gold ahead of reader" state.
+
+NEW ROLES: conditional (over · more than · older than · stuck at boot) · anchor (last week ·
+a month · today) · ownership (taken) · self (you = Gorgon, unique) · operator (i = the human,
+mirror of self) · quantifier (two of · half of · any · all but · none) · ordinal (first/last
++ superlatives biggest/oldest — RANK and pick one; unified 08-25).
+NEW ACTION KINDS: testimony (the operator's own reported act) · meta-control (governs the
+INTERACTION not the lab — pacing, order, session flow).
+NEW CHANNEL: pacing (an agent-availability condition on an act, `when you have a sec`).
+NEW: outcome `acknowledge` · mood kind `affirmation` · hint kind `prohibition`.
+PRODUCED SIGNALS (vector fold, for ROUTE/RESOLVE): tone (bland/affirmation/deference/urgency/
+hedge/apology — emotional) · priority (deferrable/normal — pacing). Vector cells adj:sup
+(superlative→ordinal) · adj:cmp (comparative→selector) · quant:card · quant:part.
+
+KEY RULINGS: queries decompose the ASKED attribute (nq-0001 'not running' selector), not just
+the subject; a reference (`it`/`that`) may point at an OBJECT or an ACTION (fb-0001), and one
+object may have several (cb-0002); PREFERENCE = a meta-control ORDERING ('prefer X' = try X
+first), not a new kind; -EST superlatives are ordinals (pick the extreme), -ER comparatives
+are selectors (relational, 'smaller than what?'); courtesy splits on FLUFF vs INFO — 'good
+morning' pure phatic, 'when you have a sec' a pacing meta-control carrying "agent is busy".
+Validator relaxed: subject may be patient OR (none) one reference OR a prohibition's all-
+excluded OR a self-only meta-control; a query may have zero; phatic/affirmation/pacing-carried
+moods are not evidence. FIXED a latent bug: FOLD had two `mood` keys (DO/ACHIEVE and emotional)
+— the second clobbered the first; emotional renamed `tone`, DO/ACHIEVE `mood` restored.
+
+38+ cases reshaped across clusters A-J plus nl-0004 · io-0007 · nt-0009. Schema bump v3.1;
+ALL 113 verdicts STALE (the corpus-wide vector change tone/priority stales even gold-unchanged
+cases, since the seal covers the vector — #22). Suite 1011 passed.
+

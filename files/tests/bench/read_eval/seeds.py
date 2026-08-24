@@ -94,8 +94,13 @@ class Seed(NamedTuple):
     queries: List[int] = []                   # indices into `actions` that are QUERY acts
     rules: List[int] = []                     # indices into `actions` that are RULE acts
     reports: List[int] = []                   # indices into `actions` that are REPORT acts
+    testimonies: List[int] = []               # v3.1: acts that are the OPERATOR's own,
+                                              #   reported not executed (kind: testimony)
     triggers: Dict[int, Text] = {}            # action index -> the clause that STARTS it
     manner: Dict[int, Text] = {}              # v2.0: action index -> HOW its execution runs
+    pacing: Dict[int, Text] = {}              # v3.1: action index -> a META-CONTROL pacing
+                                              #   condition on the AGENT (`when you have a sec`)
+    meta_controls: List[int] = []             # v3.1: acts that are meta-control (kind)
     store: List[dict] = []                    # v2.0: the per-case mock certification ratifies
     noise: str = ""                           # "" = clean; hand-authored twins name their class
     pair_id: str = ""                         # "" = none; a hand twin names its clean case
@@ -138,12 +143,19 @@ def build(seed: Seed) -> dict:
         if i in seed.manner:
             ms, me = _at(seed.sentence, seed.manner[i], seed.id)
             act["manner"] = {"text": seed.sentence[ms:me], "start": ms, "end": me}
+        if i in seed.pacing:
+            ps, pe = _at(seed.sentence, seed.pacing[i], seed.id)
+            act["pacing"] = {"text": seed.sentence[ps:pe], "start": ps, "end": pe}
         if i in seed.queries:
             act["kind"] = "query"
         if i in seed.rules:
             act["kind"] = "rule"
         if i in seed.reports:
             act["kind"] = "report"
+        if i in seed.testimonies:
+            act["kind"] = "testimony"
+        if i in seed.meta_controls:
+            act["kind"] = "meta-control"
         actions.append(act)
     # v1.1 — a member may be a plain index or {"span": i, "role": "..."}; passed through,
     # the schema validates the role vocabulary and the one-patient rule

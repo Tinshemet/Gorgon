@@ -76,19 +76,26 @@ def test_the_rank_door_opens_nothing_but_ranking():
         "List", "Optional", "load", "main", "rank", "rank_status", "validate"]
 
 
-def test_sup_0002_the_leaf_is_bare_and_the_adjective_lives_on_its_word():
-    # ledger #23: "oldest is an attribute/adjective, snapshot is a value inside of alpha"
+def test_sup_0002_leaf_bare_and_the_superlative_is_an_ordinal():
+    # ledger #23 + 08-25 (cluster H): 'oldest' is now its OWN span, role ORDINAL (ranks the
+    # set, picks one); alpha patient, snapshot the bare value leaf. adj:sup carries the key.
     c = BY_ID["sup-0002"]
-    assert [(s["text"],) for s in c["gold"]["spans"]] == [("snapshot",), ("alpha",)]
+    spans = {s["text"]: next((o["role"] for a in c["gold"]["attachments"]
+             for o in a["objects"] if isinstance(o, dict) and o["span"] == i), None)
+             for i, s in enumerate(c["gold"]["spans"])}
+    assert spans == {"alpha": "patient", "snapshot": "value", "oldest": "ordinal"}
     cells = {w["w"]: w["cells"] for w in c["vector"]["words"]}
     assert "adj:sup" in cells["oldest"]["class"] and "attr" not in cells["oldest"]
-    assert cells["snapshot"]["span"] == "s0:value" and cells["alpha"]["span"] == "s1:patient"
 
 
-def test_a_superlative_on_a_thing_stays_in_the_things_span():
-    # 08-21 (or-0001) stands: sup-0001's NP is whole; the form is still tagged on the word
+def test_a_superlative_is_an_ordinal_that_produces_a_singular():
+    # 08-25 (cluster H, operator): superlatives UNIFIED under `ordinal` — 'biggest' its own
+    # span, ranking a set to one; NOT the whole-NP reading, NOT a selector.
     c = BY_ID["sup-0001"]
-    assert [s["text"] for s in c["gold"]["spans"]] == ["the biggest vm"]
+    spans = {s["text"]: next((o["role"] for a in c["gold"]["attachments"]
+             for o in a["objects"] if isinstance(o, dict) and o["span"] == i), None)
+             for i, s in enumerate(c["gold"]["spans"])}
+    assert spans == {"vm": "patient", "biggest": "ordinal"}
     cells = {w["w"]: w["cells"] for w in c["vector"]["words"]}
     assert "adj:sup" in cells["biggest"]["class"]
 

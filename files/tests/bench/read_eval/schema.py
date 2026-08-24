@@ -125,7 +125,23 @@ SPAN_TYPES = ("object", "evidence")
 #     a token no class owns (`8g:77q`) is not a leaf and stays in the phrase. Operator:
 #     *"wouldn't this make sense that 10.0.0.5 is a different span since it's an attribute?"*
 ROLES = ("patient", "destination", "source", "value", "excluded", "evidence",
-         "reference", "beneficiary", "selector")
+         "reference", "beneficiary", "selector",
+         # v3.1 (operator 2026-08-25, corpus decomposition): a comparison/condition
+         # operator (`over`, `more than`, `stuck at boot`), a temporal reference
+         # (`last week`, `a month`), and a creation/possession participle (`taken`).
+         "conditional", "anchor", "ownership",
+         # v3.1b: `self` — a UNIQUE reference to Gorgon (`you`), always resolving to the
+         # agent itself; distinct from `reference` (`it`/`that`, ambiguous, needs a referent)
+         "self",
+         # v3.1c (operator 2026-08-25): selection over the SET's membership — `quantifier`
+         # (two of · half of · any · all but · none), and `ordinal` — RANK the set and pick
+         # ONE (produces a singular): first/last/second (by position) AND biggest/oldest
+         # (superlative, by an attribute; ranking key in the vector adj:sup). Distinct from
+         # `selector`, which FILTERS by an attribute value and may match many.
+         "quantifier", "ordinal",
+         # v3.1d: `operator` — a reference to the HUMAN user (`i`), the mirror of `self`
+         # (Gorgon). Marks a testimony's subject: the act is the operator's, not Gorgon's.
+         "operator")
 
 # ── v1.3: QUERY ACTS (operator, mid-review 08-18: mc-0002's second clause is "a dropped
 #   clause, that is a query"). A question is a THIRD of the sentence taxonomy — order ·
@@ -145,7 +161,12 @@ ROLES = ("patient", "destination", "source", "value", "excluded", "evidence",
 #   attachment BINDS the patient to the testimony (ledger item 7, taken): exactly one
 #   `patient`, the rest role `evidence`. Ops never absorb under a report — acting on a
 #   symptom description is the delete_vm-from-"is not working" defect, billed.
-ACTION_KINDS = ("instruct", "query", "rule", "report")
+ACTION_KINDS = ("instruct", "query", "rule", "report", "testimony",
+                # v3.1 (operator 08-25): META-CONTROL — governs the INTERACTION (pacing,
+                # order, session flow), not the lab. A rule constrains WHAT may happen; a
+                # meta-control governs WHEN/HOW. Standalone (`lets continue`) or via the
+                # `pacing` channel on another act (`when you have a sec, stop the db vm`).
+                "meta-control")
 
 # ── v1.2: ACTION TRIGGERS (V2-LEDGER item 4, taken mid-review 08-18 at the operator's
 #   instruction — the second time the flattening fought the reviewer in one pass). An action
@@ -193,7 +214,7 @@ OPTIONAL_KEYS = {"store", "outcome", "context", "vector"}
 #       context-needed  the turn is only readable against the previous one. *"an unrelated
 #               'check' is processed as if it is important, ALL are … READ is blind here"* —
 #               nothing is dropped for being vague; ROUTE decides whether a reference exists.
-OUTCOMES = ("none", "reject", "testimony", "context-needed")
+OUTCOMES = ("none", "reject", "testimony", "context-needed", "acknowledge")
 GOLD_KEYS = {"spans", "actions", "attachments"}
 OPTIONAL_GOLD_KEYS = {"hint", "mood"}
 
@@ -227,7 +248,9 @@ HINT_KINDS = ("possible-reference",     # may point at a previous turn's act or 
               # v2.5 — the two REFUSALS, because a reject that says nothing is a silence and
               #   the whole point is that the operator is told WHY:
               "unsupported-language",   # the sentence mixes languages — Gorgon reads English
-              "inexpressible")          # a licensing slot holds what no closed class expresses
+              "inexpressible",          # a licensing slot holds what no closed class expresses
+              "prohibition")            # v3.1: a negative rule — `neither X nor Y` reads as
+                                        #   "do NOT act on these" (all objects excluded)
 # ⇒ `mood` was briefly a hint kind and GRADUATED the same night — see MOOD_KINDS below. One
 #   fact, one home: a free-text gloss and a closed channel for the same thing is the
 #   twin-owner defect this project keeps refusing.
@@ -249,7 +272,8 @@ HINT_KINDS = ("possible-reference",     # may point at a previous turn's act or 
 #   an act. `gold.mood` is a LIST: a turn may carry two ("ugh, please…" is frustration AND
 #   deference), and the reading must not have to choose.
 MOOD_KINDS = ("deference", "closure", "frustration", "hostility",
-              "hedge", "urgency", "phatic", "filler")
+              "hedge", "urgency", "phatic", "filler",
+              "affirmation")   # v3.1: yeah/ok/yes — usually ack + affirm together
 
 
 def members_of(attachment: dict):
@@ -379,15 +403,15 @@ def validate_case(case: dict) -> List[str]:
     for i, span in enumerate(spans):
         faults += _offsets(f"{cid}: spans[{i}]", span, sentence, typed=True)
     for i, act in enumerate(actions):
-        known = {"text", "start", "end", "trigger", "kind", "manner"}
+        known = {"text", "start", "end", "trigger", "kind", "manner", "pacing"}
         for extra in set(act) - known:
             faults.append(f"{cid}: actions[{i}]: unknown key {extra!r}")
         if "kind" in act and act["kind"] not in ACTION_KINDS:
             faults.append(f"{cid}: actions[{i}]: kind {act['kind']!r} is not one of "
                           f"{ACTION_KINDS}")
-        slim = {k: v for k, v in act.items() if k not in ("trigger", "kind", "manner")}
+        slim = {k: v for k, v in act.items() if k not in ("trigger", "kind", "manner", "pacing")}
         faults += _offsets(f"{cid}: actions[{i}]", slim, sentence, typed=False)
-        for channel in ("trigger", "manner"):
+        for channel in ("trigger", "manner", "pacing"):
             if channel in act:
                 clause = act[channel]
                 if not isinstance(clause, dict):
@@ -439,8 +463,36 @@ def validate_case(case: dict) -> List[str]:
             for role in tagged:
                 if role not in ROLES:
                     faults.append(f"{where}: role {role!r} is not one of {ROLES}")
-            if sum(1 for r in tagged if r == "patient") != 1:
-                faults.append(f"{where}: a tagged attachment needs exactly one patient")
+            # v3.1: the ACTED-ON subject is one `patient`, OR — when there is no patient —
+            # one `reference` (a pronoun `it`/`that` filling the slot). A `reference`
+            # ALONGSIDE a patient is an appositive (apposition: `alpha, the jumpbox`), which
+            # is why patient==1 passes regardless of references. `self` (you) is the
+            # addressee, orthogonal. A QUERY may have ZERO acted-on (the answer is sought,
+            # not given).
+            patients = sum(1 for r in tagged if r == "patient")
+            refs = sum(1 for r in tagged if r == "reference")
+            act_i = att.get("action")
+            is_query = (isinstance(act_i, int) and 0 <= act_i < len(gold["actions"])
+                        and gold["actions"][act_i].get("kind") == "query")
+            if is_query:
+                if patients > 1:
+                    faults.append(f"{where}: a query takes at most one patient")
+            elif patients == 1:
+                pass                                  # a reference beside it is appositive
+            elif patients == 0 and refs == 1:
+                pass                                  # the pronoun fills the subject slot
+            elif patients == 0 and refs == 0 and any(r == "excluded" for r in tagged):
+                pass                                  # a PROHIBITION (neither X nor Y): all
+                                                      # excluded, nothing is acted on
+            elif (patients == 0 and refs == 0 and any(r == "self" for r in tagged)
+                  and isinstance(act_i, int) and 0 <= act_i < len(gold["actions"])
+                  and gold["actions"][act_i].get("kind") == "meta-control"):
+                pass                                  # a META-CONTROL on self (`lets
+                                                      # continue`): governs the session, no
+                                                      # lab object
+            else:
+                faults.append(f"{where}: a tagged attachment needs exactly one patient "
+                              f"(or, with none, one reference)")
         for member in objs:
             if isinstance(member, dict) and set(member) != {"span", "role"}:
                 faults.append(f"{where}: a tagged member is exactly {{span, role}}")
@@ -464,7 +516,17 @@ def validate_case(case: dict) -> List[str]:
                     faults.append(f"{where}: kind {m.get('kind')!r} is not one of {MOOD_KINDS}")
                 slim = {k: v for k, v in m.items() if k != "kind"}
                 faults += _offsets(where, slim, case["sentence"], typed=False)
-                if (m.get("start"), m.get("end")) not in evidence_at:
+                # v3.1: a PHATIC greeting or an AFFIRMATION is pure mood — no info — so
+                # it is NOT also evidence (operator 08-25: 'good morning'/'yeah' mark
+                # nothing). A mood the PACING channel already carries (a deference softener
+                # `when you have a sec`, filed as a meta-control) is likewise not evidence.
+                # Every other mood species still carries as evidence (08-22).
+                pacing_at = {(a["pacing"]["start"], a["pacing"]["end"])
+                             for a in gold.get("actions", []) if isinstance(a, dict)
+                             and isinstance(a.get("pacing"), dict)}
+                if (m.get("kind") not in ("phatic", "affirmation")
+                        and (m.get("start"), m.get("end")) not in evidence_at
+                        and (m.get("start"), m.get("end")) not in pacing_at):
                     faults.append(f"{where}: mood is not carried as evidence — the operator's "
                                   f"rule (08-22) is that a mood span is ALSO an evidence span "
                                   f"at the same offsets, so downstream can file it")
@@ -503,8 +565,11 @@ def validate_case(case: dict) -> List[str]:
     if not actions and "outcome" not in case:
         faults.append(f"{cid}: no actions and no outcome — an empty reading needs "
                       f"'outcome': 'none' or 'reject'")
-    if actions and case.get("outcome") in OUTCOMES:
-        faults.append(f"{cid}: outcome {case['outcome']!r} declares no act, but "
+    # v3.1 (operator 08-25): the VERB is always read — a `reject`/`context-needed`/
+    #   `testimony` outcome may coexist with the act it spans (the act is read, the outcome
+    #   governs whether it RUNS). Only `none` — a genuinely empty reading — forbids an act.
+    if actions and case.get("outcome") == "none":
+        faults.append(f"{cid}: outcome 'none' declares no act, but "
                       f"{len(actions)} action(s) are gold")
 
     # v2.1 (RULED 08-22, certification of v3): EVIDENCE IS CARRIED. A symptom clause is
@@ -523,6 +588,12 @@ def validate_case(case: dict) -> List[str]:
     #   same rule stated correctly.
     if not actions:
         carried = carried | {i for i, sp in enumerate(spans) if sp.get("type") == "evidence"}
+    # a PHATIC mood ('hey') is a session-opener, not evidence FOR an act (v3.1): its span
+    # need not attach even when a verb is present beside it (`hey, check`)
+    phatic_at = {(m.get("start"), m.get("end")) for m in gold.get("mood", [])
+                 if isinstance(m, dict) and m.get("kind") == "phatic"}
+    carried = carried | {i for i, sp in enumerate(spans)
+                         if (sp.get("start"), sp.get("end")) in phatic_at}
     for i, span in enumerate(spans):
         if span.get("type") == "evidence" and i not in carried:
             faults.append(f"{cid}: spans[{i}] is evidence nothing carries — attach it "

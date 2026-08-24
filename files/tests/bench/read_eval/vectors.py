@@ -36,6 +36,7 @@ WORD_DIMENSIONS = (
     "class",   # closed-class tags, sorted: det:def/indef/univ · neg · aux · wh · prep:sel
                #   · clitic · contraction · proform:one/many · comparator · adj:sup
                #   · quant:card (`two`, qty carries the number) · quant:part (`half`)
+               #   · adj:sup (superlative, ordinal) · adj:cmp (comparative, selector)
                #   · cue:name · sub · fallback · hedge · emph · excl · hort
     "wh",      # WHAT IS SOUGHT (the operator's cells): which→pick-member · what→meaning
                #   · who/whom→object-ref · whose→owner · why→reason · when→time
@@ -60,9 +61,45 @@ FOLD_DIMENSIONS = (
     "reads",   # the code-only reading's channel census: i/q/t/r counts (instructs·queries
                #   ·triggers·rules+reports) — what the seam DID with it, model stubbed
     "words",   # token count
+    "tone",    # v3.1 (operator 08-25): the emotional MOOD HINT READ produces for
+               #   ROUTE/RESOLVE — bland · affirmation · deference · urgency · hedge · apology
+    "priority",  # v3.1: the PACING hint — `deferrable` when a meta-control availability
+                 #   marker is present (`when you have a sec`), else `normal`. For ROUTE.
 )
 
 from orchestrator.languages.english.codex import PARTIAL as _PARTIAL
+from orchestrator.languages.english.codex import (AFFIRMATION as _AFFIRM, APOLOGY as _APOL,
+                                                  EMPHATIC as _EMPH, HEDGES as _HEDGE)
+
+
+def _mood_hint(sentence: str, words) -> str:
+    """The overall mood READ hands ROUTE/RESOLVE. Closed-class markers, first match wins;
+    nothing matched = bland (operator 08-25: 'if it has no pretexts its bland')."""
+    toks = {w["w"].strip(".,;:!?'\"").lower() for w in words}
+    low = str(sentence).lower()
+    if toks & _APOL:
+        return "apology"
+    if "!!" in sentence or toks & _EMPH:
+        return "urgency"
+    if "please" in toks or "kindly" in toks:
+        return "deference"
+    if toks & _HEDGE:
+        return "hedge"
+    if toks & _AFFIRM:
+        return "affirmation"
+    return "bland"
+
+
+_DEFER = ("when you have a sec", "when you have a second", "when you get a chance",
+          "when you're free", "when youre free", "when you are free", "when you're done",
+          "when youre done", "when you are done", "no rush", "no hurry", "whenever you can")
+
+
+def _priority_hint(sentence: str) -> str:
+    """`deferrable` when the turn defers to the AGENT's availability (a pacing meta-control
+    on self — operator 08-25), else `normal`. A closed list of self-availability markers."""
+    low = str(sentence).lower()
+    return "deferrable" if any(m in low for m in _DEFER) else "normal"
 
 _WH_SOUGHT = {"which": "pick-member", "what": "meaning", "who": "object-ref",
               "whom": "object-ref", "whose": "owner", "why": "reason", "when": "time",
@@ -93,6 +130,17 @@ def _maps(board):
 
 
 _NUM_UNIT = re.compile(r"\d+(?:\.\d+)?[a-z]*$")
+
+
+def _comparative(t: str, nxt: Optional[str]) -> bool:
+    """The comparative FORM (`smaller`, `bigger`, `older`) — RELATIONAL, needs a reference,
+    so it FILTERS (a selector), unlike the superlative which ranks-and-picks (ordinal).
+    Morphology with the 3+ stem guard, plus more/less heading the next word."""
+    t = t.strip(".,;:!?'\"").lower()
+    # a closed list — English -er comparatives that appear in the lab domain; morphology
+    # alone catches `prefer`/`rather`/`cluster`, so this is a WORD LIST not a suffix rule
+    return t in ("more", "less", "smaller", "bigger", "larger", "older", "newer", "younger",
+                 "faster", "slower", "higher", "lower", "greater", "fewer", "cheaper")
 
 
 def _superlative(t: str, nxt: Optional[str]) -> bool:
@@ -130,6 +178,7 @@ def word_cells(tok: str, nxt: Optional[str], case: dict, start: int, end: int,
     if t in C.PLURAL_PROFORMS: tags.append("proform"); cells["num"] = "many"
     if t in compwords: tags.append("comparator")
     if _superlative(t, nxt): tags.append("adj:sup")
+    if _comparative(t, nxt): tags.append("adj:cmp")
     if t in C.NAMING_CUES: tags.append("cue:name")
     if low in C.CONTRACTIONS:
         tags.append("contraction")
@@ -211,6 +260,8 @@ def fold_cells(case: dict, words: List[dict], board) -> Dict[str, str]:
         "reads": (f"i{len(r['instructs'])}·q{len(r['queries'])}·t{len(r['triggers'])}"
                   f"·r{len(r['rules']) + len(r['reports'])}"),
         "words": str(len(words)),
+        "tone": _mood_hint(s, words),
+        "priority": _priority_hint(s),
     }
 
 
