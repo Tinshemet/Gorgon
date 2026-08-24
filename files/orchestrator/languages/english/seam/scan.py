@@ -481,6 +481,48 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
     while clause_first > 0 and toks[clause_first - 1][0] not in BOUNDARIES:
         clause_first -= 1
     question = bool(toks) and clause_first < len(toks) and         toks[clause_first][0] in (_AUX | _WH)
+    # ⇒⇒ D8, THE BARE-NAME ARM (08-25, fix B — po-0003 · dt-0002 · ca-0002): the anchor
+    #   sits ON the clause-initial word, that word is (or shapes like) the imperative's
+    #   VERB, and a NAME-position token follows — `SNAPSHOT beta's disk`, `RESTART alpha`.
+    #   The verb is the ACT, never part of the thing: the anchor slides one right and the
+    #   walk reads the thing. `snapshot the db vm` (determiner arm) · `snapshot it`
+    #   (pronoun rule) · `db vm crashed` (the next token IS a noun) all keep their paths.
+    from .speech_act import DIRECTIVE_ACT as _D_ACT, _verb_ops as _d8_ops, act_of as _act_of
+
+    def _d8_verbish(w: str) -> bool:
+        # verb EVIDENCE (the manifest's word, or a kind whose acts it names), or — for a
+        # word the manifest has never met (`restart`) — the CLAUSE's own act: only an
+        # order licenses the verb reading (`oh it's really hot` slid and spawned junk;
+        # an assertive/expressive clause keeps its words)
+        if w in verbs or _d8_ops(w, board):
+            return True
+        if w in nouns:
+            return False
+        _end = clause_first
+        while _end < len(toks) and toks[_end][0] not in BOUNDARIES:
+            _end += 1
+        _clause = request[toks[clause_first][1]:toks[_end - 1][2]]
+        try:
+            return _act_of(_clause, board) == _D_ACT
+        except Exception:
+            return False
+    if (first == clause_first and not question and first + 1 < len(toks)
+            and _d8_verbish(toks[first][0])
+            and not toks[first + 1][0].isdigit()      # `vm 3` — a digit names, never objects
+            and toks[first][0] not in GRAMMAR and toks[first][0] not in ENUMERATORS
+            and not toks[first][0].isdigit()
+            and toks[first + 1][0] not in nouns
+            and toks[first + 1][0] not in BOUNDARIES
+            and not any(toks[first + 1][0] in cls for cls in
+                        (_AUX, _WH, PARTICLES, {"it", "them", "me", "us", "one", "ones"}))
+            and toks[first + 1][0].strip(".,;:!?'\"") not in
+                {"a", "an", "the", "every", "each", "all", "any", "both", "no", "some"}):
+        first += 1
+        last = max(last, first + 1)
+        left = first                  # `left` was taken from the pre-slide anchor
+        _d8_floor = first             # the verb is a WALL: the left walk never re-absorbs it
+    else:
+        _d8_floor = 0
     asked_values = set()
     if question:
         for _kind, _spec in (board.kinds or {}).items():
@@ -503,7 +545,7 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
     #   and digits join the crossing set; `a snapshot OF every vm` still cuts.
     _QUANT = _QUANT | set(ENUMERATORS) | {str(n) for n in range(2, 100)}
     _TRANSFER = {"put", "add", "move", "place", "clone", "give", "attach"}
-    while left > 0 and (toks[left - 1][0] not in BOUNDARIES
+    while left > max(0, _d8_floor) and (toks[left - 1][0] not in BOUNDARIES
                         or (toks[left - 1][0] == "of" and left >= 2
                             and toks[left - 2][0] in _QUANT)
                         # ⇒ E5c: `ALL BUT two of the vms` — a universal + `but` + cardinal
@@ -537,6 +579,15 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
             break
         if word in verbs and word not in nouns:
             break                             # `snapshot` the noun still walks; the verb stops
+        # ⇒ D8's bare-name arm, LEFT side (08-25): the clause-initial word is the VERB by
+        #   the same licence the anchor slide uses — an anchor INSIDE the phrase must not
+        #   walk back over it (`beta` walked into `SNAPSHOT beta's disk`)
+        if (left - 1 == clause_first and left < len(toks)
+                and word not in _DETS and not toks[left][0].isdigit()
+                and toks[left][0] not in nouns and toks[left][0] not in _DETS
+                and toks[left][0] not in _AUX and toks[left][0] not in _WH
+                and _d8_verbish(word)):
+            break
         if word in {"if", "unless", "because", "though", "although", "whenever", "when",
                     "after", "once", "before"}:
             break                             # an anchor INSIDE a tail stays inside it —
@@ -718,6 +769,11 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
                     _CLOCK.match(toks[right + 1][0])
                     or toks[right + 1][0] in {"noon", "midnight"}):
                 break                         # the clock adjunct is the trigger's
+            from ..codex import UNITS as _TUNITS
+            if (_rw == "in" and right + 2 < len(toks) and toks[right + 1][0].isdigit()
+                    and toks[right + 2][0] in _TUNITS):
+                break                         # `in 10 minutes` — the DELAY is deferred-
+                                              # time's adjunct, never the thing (dt-0002)
             if " ".join(t[0] for t in toks[right:right + 4]) in {"one at a time",
                                                                  "all at once"}:
                 break                         # manner is HOW, never part of the thing

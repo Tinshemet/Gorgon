@@ -441,9 +441,16 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
 
     for _round in range(4):
         claimed = [(g.start, g.end) for g in (scan(a, request, board) for a in anchors) if g]
+        from .temporal import adjunct_regions as _adj
+        _adj_at = _adj(request)
+        _low_req = str(request).lower()
+
+        def _in_adjunct(w: str) -> bool:
+            i = _low_req.find(str(w).lower())
+            return i >= 0 and any(rs <= i < re_ for rs, re_ in _adj_at)
         fresh = [w for w in uncovered(request, claimed, board)
                  if w not in anchors and not _asked(w) and w not in _testimonial
-                 and w not in _released]
+                 and w not in _released and not _in_adjunct(w)]
         if not fresh:
             break
         anchors += fresh
@@ -760,6 +767,10 @@ def run_scanned(request: str, board: Optional[Board] = None, model=None, temp=0.
     #   subtractive on the rows BEFORE anything binds to them
     from .reasons import strip as _strip_reasons
     rows = _strip_reasons(rows, request, board)
+    # ⇒ and a DEFERRED-TIME adjunct the same way (08-25) — `in 10 minutes` · `for an
+    #   hour` · `tomorrow morning` ride the act, never the thing
+    from .temporal import strip_adjuncts as _strip_time
+    rows = _strip_time(rows, request, board)
     rows = resolve_proforms(rows)
     rows = attach_exclusions(rows, board, request=request)
     # ⇒ A LATER MENTION BINDS BY NUMBER AGREEMENT (08-23, ledger #18) — before the values,

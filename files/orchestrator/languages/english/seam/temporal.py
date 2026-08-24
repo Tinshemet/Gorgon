@@ -237,3 +237,61 @@ def read(text: str, speech_act=None) -> Optional[str]:
     if events_in(text, speech_act):
         return EVENT
     return clock_in(text) or None
+
+
+# ── the DEFERRED-TIME adjuncts — regions, for the walk to give back (08-25) ──────────────
+
+_ADJUNCT = None
+
+
+def adjunct_regions(text):
+    """`in 10 minutes` · `for an hour` · `tomorrow morning` — a DELAY or a DATE riding an
+    act. The store can hold them (deferred-time's own machinery); a THING cannot: a row
+    that swallowed one gives it back, exactly as a reason clause is given back
+    ([[reasons.py]]). Regions at offsets; the trigger reader stays the one owner of
+    `at 9pm` / `every night`."""
+    import re as _re
+    global _ADJUNCT
+    if _ADJUNCT is None:
+        from ..codex import COARSE, UNITS
+        unit = "|".join(sorted(set(UNITS) | set(COARSE), key=len, reverse=True))
+        _ADJUNCT = _re.compile(
+            r"\b(?:(?:in|within|after|for)\s+(?:a|an|\d+)\s+(?:%s)"
+            r"|(?:tomorrow|today|tonight|yesterday)(?:\s+(?:morning|afternoon|evening"
+            r"|night))?)\b" % unit)
+    return [(m.start(), m.end()) for m in _ADJUNCT.finditer(str(text).lower())]
+
+
+def strip_adjuncts(rows, request, board=None):
+    """Subtractive on the rows: fully-inside rows vanish, overlapping rows are trimmed."""
+    from . import schema as S
+    regions = adjunct_regions(request)
+    if not regions:
+        return rows
+    low = str(request).lower()
+    out = []
+    for row in rows:
+        span = str(row.span or row.name)
+        at = low.find(span.lower())
+        if at < 0:
+            out.append(row)
+            continue
+        s0, e0 = at, at + len(span)
+        if any(rs <= s0 and e0 <= re_ for rs, re_ in regions):
+            continue
+        cut = min((rs for rs, re_ in regions if s0 < rs < e0), default=None)
+        if cut is None:
+            out.append(row)
+            continue
+        new = request[s0:cut].strip().rstrip(",;")
+        if not new:
+            continue
+        out.append(S.declare_from(new, row.object_type, dict(row.where or {}),
+                                  row.existence, board, references=list(row.references),
+                                  count=row.count, comparator=row.comparator, span=new,
+                                  identity=row.identity, sanctioned=row.sanctioned
+                                  )._replace(excludes=row.excludes,
+                                             unroutable=row.unroutable,
+                                             mentions=row.mentions,
+                                             assigned=row.assigned))
+    return out

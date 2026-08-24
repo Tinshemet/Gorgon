@@ -489,6 +489,18 @@ def _genitive_candidates(rows: List[S.Declared], request: str, board,
         at = low.find(span.lower())
         if at < 0 or not owner_words:
             continue
+        # ⇒ D8's bare-name arm reaches the genitive too (08-25, po-0003): `SNAPSHOT beta's
+        #   disk` — a clause-initial operation word heading the owner is the VERB, never
+        #   the owner's first name. One word, clause start only.
+        if len(owner_words) > 1 and at == 0:
+            from .scan import _index as _idx, _operation_words
+            head = owner_words[0].strip(".,;:!?'\"").lower()
+            from .speech_act import _verb_ops as _ops
+            if ((head in _operation_words(board) or _ops(head, board))
+                    and owner_words[1] not in _idx(board)):
+                owner_words = owner_words[1:]
+                owner_text = " ".join(owner_words)     # the leaf offsets and the holder
+                                                       #   span stay on the ORIGINAL bytes
         if m.group("leaf"):
             leaf_at, leaf_end = at + m.start("leaf"), at + m.end("leaf")
         else:

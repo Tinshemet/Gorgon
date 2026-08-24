@@ -525,3 +525,26 @@ def test_the_reason_clause_is_stripped_from_the_rows():
     assert [r.span for r in rows] == ["the fleet"]
     rows = _rows("stop the idle vms to free memory")
     assert [r.span for r in rows] == ["the idle vms"]
+
+
+# ── D8's bare-name arm + the adjunct strips (08-25, fix B) ───────────────────────────────────
+
+def test_the_clause_initial_verb_never_joins_the_thing():
+    assert [r.span for r in _rows("snapshot beta's disk") if r.kind != "value"] == ["beta"]
+    assert [r.span for r in _rows("restart alpha because it won't answer")
+            if r.kind != "value"][0] == "alpha"
+    assert [r.span for r in _rows("snapshot alpha in 10 minutes")] == ["alpha"]
+
+
+def test_only_an_order_licenses_the_unknown_verb_reading():
+    # an assertive/expressive clause keeps its words — the 8-case regression the control caught
+    rows = _rows("oh it's really hot in here")
+    assert len(rows) <= 1
+    assert [r.span for r in _rows("alpha was stopped yesterday")][0] == "alpha"
+
+
+def test_a_deferred_time_adjunct_rides_the_act_not_the_thing():
+    assert [r.span for r in _rows("launch beta tomorrow morning")] == ["beta"]
+    assert [r.span for r in _rows("stop alpha for an hour")] == ["alpha"]
+    # the trigger reader keeps its own: `at 9pm` was never the row's
+    assert [r.span for r in _rows("stop every vm at 9pm")] == ["every vm"]
