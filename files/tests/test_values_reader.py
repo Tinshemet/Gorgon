@@ -482,3 +482,19 @@ def test_the_ordering_axis_ask_is_licensed_by_the_declared_types():
     asks = unordered_superlatives(_rows("delete the oldest snapshot of alpha"), B)
     assert len(asks) == 1 and "teach the axis" in asks[0]
     assert unordered_superlatives(_rows("delete the last snapshot"), B) == []
+
+
+# ── E5b/E5c · the cardinal partitive is ONE quantifier (08-25, pt-0001/pt-0002) ─────────────
+
+def test_a_cardinal_partitive_keeps_its_count():
+    rows = _rows("stop two of the lab vms")
+    assert [(r.span, r.count) for r in rows] == [("two of the lab vms", 2)]
+
+
+def test_a_subtractive_quantifier_is_one_phrase():
+    rows = _rows("stop all but two of the vms")
+    assert [(r.span, r.count) for r in rows] == [("all but two of the vms", 2)]
+
+
+def test_but_without_a_universal_still_cuts():
+    assert [r.span for r in _rows("stop alpha but not beta")] == ["alpha", "not beta"]

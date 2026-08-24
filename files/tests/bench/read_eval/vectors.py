@@ -35,6 +35,7 @@ from orchestrator.languages.english.seam import speech_act as SA, temporal as T
 WORD_DIMENSIONS = (
     "class",   # closed-class tags, sorted: det:def/indef/univ · neg · aux · wh · prep:sel
                #   · clitic · contraction · proform:one/many · comparator · adj:sup
+               #   · quant:card (`two`, qty carries the number) · quant:part (`half`)
                #   · cue:name · sub · fallback · hedge · emph · excl · hort
     "wh",      # WHAT IS SOUGHT (the operator's cells): which→pick-member · what→meaning
                #   · who/whom→object-ref · whose→owner · why→reason · when→time
@@ -60,6 +61,8 @@ FOLD_DIMENSIONS = (
                #   ·triggers·rules+reports) — what the seam DID with it, model stubbed
     "words",   # token count
 )
+
+from orchestrator.languages.english.codex import PARTIAL as _PARTIAL
 
 _WH_SOUGHT = {"which": "pick-member", "what": "meaning", "who": "object-ref",
               "whom": "object-ref", "whose": "owner", "why": "reason", "when": "time",
@@ -159,6 +162,11 @@ def word_cells(tok: str, nxt: Optional[str], case: dict, start: int, end: int,
         cells["verb"] = sorted(ops)
     if _NUM_UNIT.fullmatch(t) or t.isdigit():
         cells["qty"] = t
+    elif t in C.ENUMERATORS:
+        cells["qty"] = str(C.ENUMERATORS[t])            # `two` -> 2, the closed cardinals
+        tags.append("quant:card"); cells["class"] = sorted(set(tags))
+    elif t in _PARTIAL:
+        tags.append("quant:part"); cells["class"] = sorted(set(tags))
     matched = next((attr for attr, rx in shapes if rx.fullmatch(t)), None)
     if matched:
         cells["ident"] = matched

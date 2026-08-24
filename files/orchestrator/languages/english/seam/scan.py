@@ -498,10 +498,18 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
     #   quantifier and the two-things reading stands.
     _QUANT = {"most", "some", "all", "none", "half", "few", "many", "each",
               "both", "any", "one"}
+    # ⇒ E5b (08-25, pt-0001): a CARDINAL is a quantifier too — `two of the lab vms` lost
+    #   its count to the of-boundary exactly as `most of the vms` once did. ENUMERATORS
+    #   and digits join the crossing set; `a snapshot OF every vm` still cuts.
+    _QUANT = _QUANT | set(ENUMERATORS) | {str(n) for n in range(2, 100)}
     _TRANSFER = {"put", "add", "move", "place", "clone", "give", "attach"}
     while left > 0 and (toks[left - 1][0] not in BOUNDARIES
                         or (toks[left - 1][0] == "of" and left >= 2
-                            and toks[left - 2][0] in _QUANT)):
+                            and toks[left - 2][0] in _QUANT)
+                        # ⇒ E5c: `ALL BUT two of the vms` — a universal + `but` + cardinal
+                        #   is ONE subtractive quantifier; `stop alpha but ...` still cuts
+                        or (toks[left - 1][0] == "but" and left >= 2
+                            and toks[left - 2][0] in {"all", "none", "any", "everything"})):
         word = toks[left - 1][0]
         if question and left - 1 == clause_first and word in _AUX:
             break                             # the fronted auxiliary is the question's skin
@@ -582,6 +590,12 @@ def scan(anchor: str, request: str, board: Optional[Board] = None,
             count = int(word) if word.isdigit() else ENUMERATORS[word]
             count_at = left - 1
             left -= 1
+            # ⇒ E5c (08-25, pt-0002): `ALL BUT two of the vms` — the subtractive head is
+            #   part of the ONE quantifier and the walk takes it before it rests;
+            #   `stop alpha but two ...` has no universal and still cuts at `but`
+            if (left >= 2 and toks[left - 1][0] == "but"
+                    and toks[left - 2][0] in {"all", "none", "any", "everything"}):
+                left -= 2
             comparator, matched, left = _comparator_before(toks, left)
             break
         left -= 1
