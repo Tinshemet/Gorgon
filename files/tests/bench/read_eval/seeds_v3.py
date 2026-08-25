@@ -26,7 +26,7 @@ SEEDS_V3: List[Seed] = [
     #   lab network` inside because a network is a thing the lab keeps, not a leaf value.
     Seed("id-0001", "identifiers", "stop the vm at 10.0.0.5",
          ["the vm", "10.0.0.5"], ["stop"],
-         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector"}]},
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector", "kind": "identifier"}]},
          note="RULED 08-23: a selecting identifier is its own span (role selector); "
               "`at` is the preposition that makes it a selector, context not value"),
     Seed("id-0002", "identifiers", "which vm has mac aa:bb:cc:dd:ee:ff?",
@@ -43,11 +43,11 @@ SEEDS_V3: List[Seed] = [
          note="identifier as ASSIGNED value — the attribute-class thesis, write side"),
     Seed("id-0004", "identifiers", "stop the vm with serial 7f3k-2210",
          ["the vm", "7f3k-2210"], ["stop"],
-         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector"}]},
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector", "kind": "identifier"}]},
          note="RULED 08-23: selector leaf; `with serial` is the attribute word, context"),
     Seed("id-0005", "identifiers", "stop the vm at 8g:77q",
          ["the vm", "8g:77q"], ["stop"],
-         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector"}]},
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector", "kind": "identifier"}]},
          note="RULED 08-23 (ledger #20): '8g:77q is an attribute the same way an ip is, so it "
               "should be treated the same' — a token in the selector slot is an attribute "
               "value, its own span, whether or not a class declares its shape; the OWNER "
@@ -123,7 +123,7 @@ SEEDS_V3: List[Seed] = [
     Seed("rr-0001", "reduced-relative", "stop the vms running on lab",
          ["the vms", "running", "lab"], ["stop"],
          {0: [{"span": 0, "role": "patient"},
-              {"span": 1, "role": "selector"},
+              {"span": 1, "role": "selector", "kind": "status"},
               {"span": 2, "role": "destination"}]},
          note="RULED 08-25 (operator, mid-grading — reject of an accidental accept): a "
               "reduced relative DECOMPOSES, it is not one blob. 'the vms' is the patient; "
@@ -136,9 +136,9 @@ SEEDS_V3: List[Seed] = [
               "satisfies it from the Active Library, else probes into the findings ledger "
               "(the book keeper). The dual sourcing is RESOLVE's, downstream of this gold."),
     Seed("rr-0002", "reduced-relative", "delete the snapshots taken last week",
-         ["the snapshots", "taken", "last week"], ["delete"],
-         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "ownership"},
-              {"span": 2, "role": "selector", "kind": "temporal"}]},
+         ["the snapshots", "last week"], ["delete"],
+         {0: [{"span": 0, "role": "patient"},
+              {"span": 1, "role": "selector", "kind": "temporal"}]},
          note="RULED 08-25 (operator, revised): 'the snapshots' patient; 'taken' is "
               "OWNERSHIP (the creation/possession participle, its own span); 'last week' is "
               "a temporal ANCHOR, not a selector — the reference the age is pinned to"),
@@ -152,7 +152,8 @@ SEEDS_V3: List[Seed] = [
     # ══ apposition — a rename in flight, the archive's own X-is-Y ════════════════════
     Seed("ap-0001", "apposition", "alpha, the jumpbox, is down",
          ["alpha", "the jumpbox"], ["is down"],
-         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "reference"},
+         {0: [{"span": 0, "role": "patient"},
+              {"span": 1, "role": "reference", "refers": "alpha"},
               {"span": 2, "role": "evidence"}]},
          reports=[0], evidence=["is down"],
          note="RULED 08-21: 'the renames are scanned as well but are treated as "
@@ -161,7 +162,8 @@ SEEDS_V3: List[Seed] = [
               "equivalence the apposition-as-teaching harvest depends on"),
     Seed("ap-0002", "apposition", "stop the jumpbox, alpha",
          ["the jumpbox", "alpha"], ["stop"],
-         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "reference"}]},
+         {0: [{"span": 0, "role": "patient"},
+              {"span": 1, "role": "reference", "refers": "the jumpbox"}]},
          note="imperative apposition, same ruling mirrored — `alpha` co-names the "
               "patient as a reference"),
 
@@ -236,14 +238,14 @@ SEEDS_V3: List[Seed] = [
     Seed("mg-0001", "magnitude", "stop every vm with over 6gb of ram",
          ["every vm", "over", "6gb"], ["stop"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "conditional"},
-              {"span": 2, "role": "selector"}]},
+              {"span": 2, "role": "selector", "kind": "magnitude"}]},
          note="RULED 08-25 (operator): decompose — 'every vm' patient, 'over' CONDITIONAL "
               "(the comparator, its own span now, not just context), '6gb' the selector it "
               "governs. Supersedes the 08-23 comparator-as-context reading."),
     Seed("mg-0002", "magnitude", "list the vms with more than 2 cores",
          ["the vms", "more than", "2 cores"], ["list"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "conditional"},
-              {"span": 2, "role": "selector"}]},
+              {"span": 2, "role": "selector", "kind": "magnitude"}]},
          note="RULED 08-25: 'the vms' patient, 'more than' CONDITIONAL, '2 cores' selector"),
     Seed("mg-0003", "magnitude", "delete the snapshots older than a month",
          ["the snapshots", "older than", "a month"], ["delete"],
@@ -284,7 +286,7 @@ SEEDS_V3: List[Seed] = [
          note="the taught word in a creation frame, same populated mock as lw-0001"),
     Seed("lw-0003", "learned-words", "when you have a sec, stop the db vm",
          ["the db vm", "you"], ["stop"],
-         {0: [{"span": 0, "role": "patient"}]}, frame=[("you", "agent")],
+         {0: [{"span": 0, "role": "patient"}]}, frame=[("you", "meta")],
          pacing={0: "when you have a sec"},
          mood=[("deference", "when you have a sec")],
          note="RULED 08-25 (operator): NOT evidence — a META-CONTROL of PACING. 'when you "
@@ -329,8 +331,8 @@ SEEDS_V3: List[Seed] = [
     Seed("fb-0001", "fallback", "stop alpha, and if that fails, kill it",
          ["alpha", "that", "it"], ["stop", "kill"],
          {0: [{"span": 0, "role": "patient"},
-              {"span": 1, "role": "reference", "refers": "a0"}],
-          1: [{"span": 2, "role": "reference", "refers": 0}]},
+              {"span": 1, "role": "reference", "refers": "stop"}],
+          1: [{"span": 2, "role": "reference", "refers": "alpha"}]},
          triggers={1: "if that fails"},
          note="RULED 08-25 (operator): TWO references of different kinds — 'that' references "
               "the ACTION (stopping alpha), recorded on action 0 (stop) it points back to; "
@@ -370,7 +372,7 @@ SEEDS_V3: List[Seed] = [
     # ══ negated-query — negation composed with the interrogative ═════════════════════
     Seed("nq-0001", "negated-query", "which vms are not running?",
          ["which vms", "not running"], ["which vms are not running"],
-         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector"}]},
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector", "kind": "status"}]},
          queries=[0],
          note="RULED 08-25 (operator): decompose the QUERY — 'which vms' the patient (the "
               "sought set), 'not running' the status SELECTOR (status != running). The asked "
@@ -378,7 +380,7 @@ SEEDS_V3: List[Seed] = [
               "v4 vector. Supersedes 'the asked property stays unmarked'."),
     Seed("nq-0002", "negated-query", "is alpha not responding?",
          ["alpha", "not responding"], ["is alpha not responding"],
-         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector"}]},
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector", "kind": "status"}]},
          queries=[0],
          note="RULED 08-25 (operator): 'alpha' patient; 'not responding' is STATUS, a status "
               "SELECTOR (same shape as nq-0001 'not running') — not a symptom/conditional"),
@@ -446,8 +448,8 @@ SEEDS_V3: List[Seed] = [
          ["create", "add"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"},
               {"span": 2, "role": "patient"}, {"span": 3, "role": "value"}],
-          1: [{"span": 4, "role": "patient"},
-              {"span": 5, "role": "reference", "refers": 2}]},
+          1: [{"span": 4, "role": "reference", "refers": "3 vms"},
+              {"span": 5, "role": "reference", "refers": "a network"}]},
          note="the operator's own sentence — a THEME generator plus a compound: one "
               "create distributing two mints (plain members, no direction claimed), "
               "then an add. RULED 08-22: 'add does not have a patient and a "
@@ -471,14 +473,14 @@ SEEDS_V3: List[Seed] = [
     # ══ audit — a question about OUR OWN behaviour, never sent at the lab ════════════
     Seed("au-0001", "audit", "what did you just run?",
          ["you"], ["run"],
-         {}, queries=[0], frame=[("you", "agent")],
+         {}, queries=[0], frame=[("you", "meta")],
          note="coverage_map ⚠⚠: events.log is the arbiter and no sentence reaches it. "
               "NO object spans — the question is about the agent's ledger, not a lab "
               "thing; any lab op emitted from it scores hallucinated. Pairs with "
               "self-address: 'you' is the agent"),
     Seed("au-0002", "audit", "what changed in the lab today?",
          ["changed", "the lab", "today"], ["what changed in the lab today"],
-         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector"},
+         {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector", "kind": "entity"},
               {"span": 2, "role": "selector", "kind": "temporal"}]},
          queries=[0],
          note="RULED 08-25 (operator): decompose the query — 'changed' is the PATIENT (what "
@@ -488,7 +490,7 @@ SEEDS_V3: List[Seed] = [
     # ══ capability — CAN-you generic vs CAN-you polite order ═════════════════════════
     Seed("cap-0001", "capability", "can you create networks?",
          ["you", "networks"], ["create"],
-         {0: [{"span": 1, "role": "patient"}]}, queries=[0], frame=[("you", "agent")],
+         {0: [{"span": 1, "role": "patient"}]}, queries=[0], frame=[("you", "meta")],
          note="BARE PLURAL, no determiner = a question about ABILITY — no object, no "
               "create op (one emitted scores hallucinated). The twin below is the "
               "adversary"),
@@ -513,7 +515,7 @@ SEEDS_V3: List[Seed] = [
          ["i", "profile", "smaller"], ["use"],
          {0: [{"span": 1, "role": "patient"},
               {"span": 2, "role": "selector", "kind": "magnitude"}]},
-         frame=[("i", "user")],
+         frame=[("i", "testimony")],
          meta_controls=[0],
          note="RULED 08-25 (operator): preference = META-CONTROL ordering ('i'd rather' = "
               "try-first). 'i' operator, 'use' the meta-control act, 'profile' patient; "
@@ -592,7 +594,7 @@ SEEDS_V3: List[Seed] = [
     Seed("nt-0007", "null-turn", "i'll stop alpha myself",
          ["i'll", "alpha"], ["stop"],
          {0: [{"span": 1, "role": "patient"}]}, testimonies=[0],
-         frame=[("i'll", "user")],
+         frame=[("i'll", "testimony")],
          note="RULED 08-25 (operator): decompose the testimony — \"i'll\" the OPERATOR, "
               "'stop' a testimony act (the user will do it themselves, Gorgon does NOT), "
               "'alpha' the patient. Was one evidence blob; now decomposed. The act is the "
@@ -712,7 +714,7 @@ SEEDS_V3: List[Seed] = [
               "NEEDED: the counterpart NOT drafted is 'ok, got it' after an ACT, which by "
               "this ruling is `none` — its own case, or does nt-0001 carry it?"),
     Seed("td-0009", "turn-dependent", "lets continue", ["lets"], ["continue"],
-         {0: [{"span": 0, "role": "self"}]}, meta_controls=[0],
+         {}, meta_controls=[0], frame=[("lets", "meta")],
          outcome="context-needed",
          hint=("possible-reference", "'lets continue' is a META-CONTROL of session flow — "
                                      "resume what was under way; 'continue' names no lab act "
@@ -732,7 +734,7 @@ SEEDS_V3: List[Seed] = [
          note="passive with a deontic — the patient is the SUBJECT; order, not report"),
     Seed("io-0003", "indirect-orders", "would you mind stopping alpha?",
          ["you", "alpha"], ["stopping"],
-         {0: [{"span": 1, "role": "patient"}]}, frame=[("you", "agent")],
+         {0: [{"span": 1, "role": "patient"}]}, frame=[("you", "meta")],
          note="polite order in question form — a REFUSABLE order (cap-0002's ruling), the "
               "gerund is the act. RULING NEEDED: query kind (like 'can you check') or "
               "plain act — drafted as the ACT, because 'mind' asks consent for an act, "
@@ -759,7 +761,7 @@ SEEDS_V3: List[Seed] = [
     Seed("tp-0001", "tense-person", "i stopped alpha",
          ["i", "alpha"], ["stopped"],
          {0: [{"span": 1, "role": "patient"}]}, testimonies=[0],
-         frame=[("i", "user")],
+         frame=[("i", "testimony")],
          note="RULED 08-25 (operator): decomposed TESTIMONY — 'i' the OPERATOR, 'stopped' a "
               "testimony act (kind testimony, reported not run), 'alpha' its patient"),
     Seed("tp-0002", "tense-person", "alpha stopped",
@@ -781,7 +783,7 @@ SEEDS_V3: List[Seed] = [
     Seed("tp-0005", "tense-person", "i just stopped alpha, launch beta",
          ["i", "alpha", "beta"], ["stopped", "launch"],
          {0: [{"span": 1, "role": "patient"}],
-          1: [{"span": 2, "role": "patient"}]}, frame=[("i", "user")],
+          1: [{"span": 2, "role": "patient"}]}, frame=[("i", "testimony")],
          testimonies=[0],
          note="RULED 08-25: testimony ('i' operator + 'stopped' testimony act + 'alpha' "
               "patient) AND a real order ('launch beta') in one sentence — kept apart"),
@@ -815,9 +817,9 @@ SEEDS_V3: List[Seed] = [
          "if alpha is up, snapshot it, otherwise launch it",
          ["alpha", ("it", 1), ("it", 2)], ["snapshot", "launch"],
          {0: [{"span": 0, "role": "patient"},
-              {"span": 1, "role": "reference", "refers": 0}],
+              {"span": 1, "role": "reference", "refers": "alpha"}],
           1: [{"span": 0, "role": "patient"},
-              {"span": 2, "role": "reference", "refers": 0}]},
+              {"span": 2, "role": "reference", "refers": "alpha"}]},
          triggers={0: "if alpha is up", 1: "otherwise"},
          note="the ELSE branch — two acts on one referent under complementary triggers; "
               "'otherwise' is the trigger word of the second (its condition is the "

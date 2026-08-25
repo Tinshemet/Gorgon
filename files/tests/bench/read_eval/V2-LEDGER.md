@@ -789,3 +789,31 @@ After re-grading v3.1 (98 accept · 15 reject), the 15 rejects resolved into a f
 Schema: `frame` gold key, MEMBER_KINDS, member optional `kind`/`refers`, party user/agent.
 Review shows frame + kind/refers. Suite 1011. 15 cases STALE for re-grade.
 
+## 28 · CONSISTENCY PASS — THE ONTOLOGY APPLIED RETROSPECTIVELY, v3 RESET (operator, 2026-08-25)
+
+The operator asked whether ledger #27's fixes were applied corpus-wide or only to the rejected
+cases. Honest audit: only the rejected ones — leaving 9 selectors without a KIND, 1 i/you not
+in FRAME, 4 references without REFERS. Ruled: apply retrospectively, and reset v3 to grade
+fresh tomorrow.
+
+- **FRAME party renamed** user->TESTIMONY, agent->META — a user-frame IS a testimony, flagged
+  as such (operator). `i`->testimony, `you`/`lets`->meta. td-0009 `lets` moved into frame.
+- **REFERS now carries the WORDS** it references, not a span index (operator: "carry the
+  name/words its referencing"). cb-0002 it->"alpha"; fb-0001 that->"stop" (the action),
+  it->"alpha"; nl-0004 those vms->"3 vms", it->"a network"; ap-0001 the jumpbox->"alpha";
+  ap-0002 alpha->"the jumpbox". or-0003 `one` and td-0007 `that` stay refers-less (cross-turn,
+  the hint/context explains).
+- **KINDS retrofitted on all 9 selectors**: identifier (10.0.0.5, 7f3k-2210, 8g:77q), status
+  (running, not running, not responding), magnitude (6gb, 2 cores), entity (the lab — new KIND
+  added). Now EVERY selector/anchor carries a kind.
+- **nl-0004** those vms -> reference (not just patient); the add is two references, no patient
+  (subject rule relaxed to patients==0 with refs>=1).
+- **OWNERSHIP role RETIRED** — rr-0002 `taken` dropped (operator: "delete last week's
+  snapshots — taken serves no purpose"); the role had no other user.
+- Prior round: 98 accept / 15 reject -> reshaped (frame/kinds/refers) -> re-graded 107 accept /
+  6 reject -> this consistency pass. Review shows frame + kind/refers.
+
+Schema: MEMBER_KINDS += entity; refers = words (string); frame party testimony/meta; ownership
+retired. Suite 1011. **v3 GRADING RESET — 113 pending, fresh grade tomorrow** (backup
+.pre-reset-0825pm).
+

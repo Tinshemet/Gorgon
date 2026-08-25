@@ -126,7 +126,7 @@ SPAN_TYPES = ("object", "evidence")
 #     *"wouldn't this make sense that 10.0.0.5 is a different span since it's an attribute?"*
 # v3.1 (operator 2026-08-25): a selector/anchor/value may carry a KIND — WHAT it filters or
 # assigns by. `status` is oracle-evaluated (the world reports it — decision 6).
-MEMBER_KINDS = ("temporal", "status", "magnitude", "identifier", "attribute")
+MEMBER_KINDS = ("temporal", "status", "magnitude", "identifier", "attribute", "entity")
 
 ROLES = ("patient", "destination", "source", "value", "excluded", "evidence",
          "reference", "beneficiary", "selector",
@@ -485,8 +485,9 @@ def validate_case(case: dict) -> List[str]:
                 pass                                  # >=1 patient: a compound create (a
                                                       # naming list) makes several; a
                                                       # reference beside one is appositive
-            elif patients == 0 and refs == 1:
-                pass                                  # the pronoun fills the subject slot
+            elif patients == 0 and refs >= 1:
+                pass                                  # pronoun(s) fill the subject slot
+                                                      # (nl-0004 add: `those vms` + `it`)
             elif patients == 0 and refs == 0 and any(r == "excluded" for r in tagged):
                 pass                                  # a PROHIBITION (neither X nor Y): all
                                                       # excluded, nothing is acted on
@@ -509,11 +510,9 @@ def validate_case(case: dict) -> List[str]:
                                   f"{MEMBER_KINDS}")
                 if "refers" in member:
                     ref = member["refers"]
-                    ok = (isinstance(ref, int) and 0 <= ref < len(spans)) or (
-                        isinstance(ref, str) and ref.startswith("a")
-                        and ref[1:].isdigit() and int(ref[1:]) < len(gold["actions"]))
-                    if not ok:
-                        faults.append(f"{where}: refers {ref!r} is not a span index or a{{N}}")
+                    if not (isinstance(ref, str) and ref.strip()):
+                        faults.append(f"{where}: refers {ref!r} must be the referent's "
+                                      f"words (a non-empty string)")
 
     # v2.4 mood: a span with a species, and it must ALSO be evidence (the operator's rule)
     if "mood" in gold:
@@ -563,8 +562,9 @@ def validate_case(case: dict) -> List[str]:
                     continue
                 if not (isinstance(f["span"], int) and 0 <= f["span"] < len(spans)):
                     faults.append(f"{cid}: frame[{j}] span out of range")
-                if f["party"] not in ("user", "agent"):
-                    faults.append(f"{cid}: frame[{j}] party {f['party']!r} is not user/agent")
+                if f["party"] not in ("testimony", "meta"):
+                    faults.append(f"{cid}: frame[{j}] party {f['party']!r} is not "
+                                  f"testimony/meta")
 
     # v2.3 hint: closed kind, free gloss — the OUTBOUND half of the loop
     if "hint" in gold:
@@ -741,7 +741,7 @@ def selfcheck() -> List[str]:
     broken(lambda c: c["gold"]["attachments"][0]["objects"].__setitem__(
         0, {"span": 0, "role": "selector", "kind": "wat"}), "member kind")
     broken(lambda c: c["gold"]["attachments"][0]["objects"].__setitem__(
-        0, {"span": 0, "role": "reference", "refers": 99}), "not a span index")
+        0, {"span": 0, "role": "reference", "refers": 99}), "referent's words")
     broken(lambda c: c["gold"]["attachments"][0].__setitem__(
         "objects", [{"span": 0, "role": "destination"}]), "exactly one patient")
     # v1.2 triggers — lying offsets and stowaway keys must both refuse
