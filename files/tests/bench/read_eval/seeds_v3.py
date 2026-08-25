@@ -108,14 +108,14 @@ SEEDS_V3: List[Seed] = [
     # ══ alternatives — or-coordination: the read records BOTH, choosing is route's ═══
     Seed("al-0001", "alternatives", "stop alpha or beta",
          ["alpha", "beta"], ["stop"], {0: [0, 1]},
-         triggers={0: "or"},
+         triggers={0: ("or", "coordination", [])},
          note="RULED 08-21: 'score both — the or is scored like a trigger since "
               "boolean operators are triggers; the decision is at RESOLVE, not ROUTE'. "
               "No alternation flag: both members score, the operator rides the trigger "
               "channel, the world satisfies one member at resolve"),
     Seed("al-0002", "alternatives", "launch the web vm or the db vm, whichever is stopped",
          ["the web vm", "the db vm"], ["launch"], {0: [0, 1]},
-         triggers={0: "whichever is stopped"},
+         triggers={0: ("whichever is stopped", "conditional", [("whichever", "selector", None, None), ("stopped", "selector", "status", None)])},
          note="the whichever-clause IS the condition — the trigger channel carries it "
               "(the al-0001 ruling unifies the family); choosing is RESOLVE's"),
 
@@ -333,7 +333,7 @@ SEEDS_V3: List[Seed] = [
          {0: [{"span": 0, "role": "patient"},
               {"span": 1, "role": "reference", "refers": "stop"}],
           1: [{"span": 2, "role": "reference", "refers": "alpha"}]},
-         triggers={1: "if that fails"},
+         triggers={1: ("if that fails", "conditional", [("that", "reference", None, "stop"), ("fails", "selector", "status", None)])},
          note="RULED 08-25 (operator): TWO references of different kinds — 'that' references "
               "the ACTION (stopping alpha), recorded on action 0 (stop) it points back to; "
               "'it' references the OBJECT alpha, the kill's target. Object-reference vs "
@@ -343,7 +343,7 @@ SEEDS_V3: List[Seed] = [
          {0: [{"span": 0, "role": "patient"}],
           1: [{"span": 1, "role": "patient"},
               {"span": 2, "role": "reference", "refers": "launch"}]},
-         triggers={1: "if that doesn't work"}),
+         triggers={1: ("if that doesn't work", "conditional", [("that", "reference", None, "launch"), ("doesn't work", "selector", "status", None)])}),
 
     # ══ pairwise — coordination with DIFFERENT values per conjunct ═══════════════════
     Seed("pw-0001", "pairwise", "label web 'ready' and db 'hold'",
@@ -392,13 +392,13 @@ SEEDS_V3: List[Seed] = [
     #    today exactly as the clock was) ═══════════════════════════════════════════════
     Seed("sch-0001", "schedules", "snapshot the db vm every night",
          ["the db vm"], ["snapshot"], {0: [0]},
-         triggers={0: "every night"},
+         triggers={0: ("every night", "temporal", [("night", "anchor", "temporal", None)])},
          note="the recurrence is the trigger — clock_tail's sibling, RECURRENCE arm; "
               "today it has no offset reader, so this seed holds the slot open exactly "
               "as qual-0005 held the clock's"),
     Seed("sch-0002", "schedules", "check the lab network every 2 hours",
          ["the lab network"], ["check"], {0: [0]},
-         triggers={0: "every 2 hours"}),
+         triggers={0: ("every 2 hours", "temporal", [("2 hours", "anchor", "temporal", None)])}),
 
     # ══ superlatives — an ORDERING over an attribute (attr classes license it) ═══════
     Seed("sup-0001", "superlatives", "stop the biggest vm",
@@ -795,13 +795,13 @@ SEEDS_V3: List[Seed] = [
     #   `schedules` covers recurrence; "stop every vm at 9pm" RUNS NOW today. A discarded
     #   time qualifier is a wrong CHOICE, not padding.
     Seed("dt-0001", "deferred-time", "stop every vm at 9pm",
-         ["every vm"], ["stop"], {0: [0]}, triggers={0: "at 9pm"},
+         ["every vm"], ["stop"], {0: [0]}, triggers={0: ("at 9pm", "temporal", [("9pm", "anchor", "temporal", None)])},
          note="one-shot CLOCK — the trigger channel carries it (like 'every night')"),
     Seed("dt-0002", "deferred-time", "snapshot alpha in 10 minutes",
-         ["alpha"], ["snapshot"], {0: [0]}, triggers={0: "in 10 minutes"},
+         ["alpha"], ["snapshot"], {0: [0]}, triggers={0: ("in 10 minutes", "temporal", [("10 minutes", "anchor", "temporal", None)])},
          note="relative delay — a trigger on the clock from now"),
     Seed("dt-0003", "deferred-time", "launch beta tomorrow morning",
-         ["beta"], ["launch"], {0: [0]}, triggers={0: "tomorrow morning"},
+         ["beta"], ["launch"], {0: [0]}, triggers={0: ("tomorrow morning", "temporal", [("tomorrow morning", "anchor", "temporal", None)])},
          note="deictic day + part — temporal.DEICTIC reads 'tomorrow'; the trigger is the "
               "whole phrase"),
     Seed("dt-0004", "deferred-time", "stop alpha for an hour",
@@ -813,7 +813,7 @@ SEEDS_V3: List[Seed] = [
 
     # ══ conditional-branches — the other branch: unless · otherwise · both ═════════════
     Seed("cb-0001", "conditional-branches", "stop alpha unless it is the jumpbox",
-         ["alpha"], ["stop"], {0: [0]}, triggers={0: "unless it is the jumpbox"},
+         ["alpha"], ["stop"], {0: [0]}, triggers={0: ("unless it is the jumpbox", "conditional", [("it", "reference", None, "alpha"), ("the jumpbox", "selector", "entity", None)])},
          note="negative condition — a trigger whose polarity is inverted; the act is the "
               "same. 'the jumpbox' is a predicate nominal, not an object (apposition's kin)"),
     Seed("cb-0002", "conditional-branches",
@@ -823,7 +823,7 @@ SEEDS_V3: List[Seed] = [
               {"span": 1, "role": "reference", "refers": "alpha"}],
           1: [{"span": 0, "role": "patient"},
               {"span": 2, "role": "reference", "refers": "alpha"}]},
-         triggers={0: "if alpha is up", 1: "otherwise"},
+         triggers={0: ("if alpha is up", "conditional", [("alpha", "patient", None, None), ("up", "selector", "status", None)]), 1: ("otherwise", "fallback", [])},
          note="the ELSE branch — two acts on one referent under complementary triggers; "
               "'otherwise' is the trigger word of the second (its condition is the "
               "negation of the first, RESOLVE's to expand). Both 'it' are bare pronouns "
@@ -840,7 +840,7 @@ SEEDS_V3: List[Seed] = [
          ["alpha", "it", "that"], ["restart", "tell me"],
          {0: [{"span": 1, "role": "reference", "refers": "alpha"}],
           1: [{"span": 2, "role": "reference", "refers": "restart"}]},
-         triggers={0: "if alpha is down", 1: "if that doesn't help"}, queries=[1],
+         triggers={0: ("if alpha is down", "conditional", [("alpha", "patient", None, None), ("down", "selector", "status", None)]), 1: ("if that doesn't help", "conditional", [("that", "reference", None, "restart"), ("doesn't help", "selector", "status", None)])}, queries=[1],
          note="a condition AND a fallback on one referent, the fallback a QUERY (report "
               "back) — the chain's shape, certified at READ"),
 

@@ -222,9 +222,22 @@ def show(case: dict, verdicts: Dict[str, dict], by_id: Dict[str, dict]) -> None:
 
 
 def _channels(act: dict) -> str:
-    """The action's trigger/manner, listed beside its objects — part of the gold judged."""
-    return "".join(f"  {MAGENTA}{ch}: {act[ch]['text']!r}{OFF}"
-                   for ch in CHANNELS if act.get(ch))
+    """The action's trigger/manner, listed beside its objects — part of the gold judged.
+    A decomposed trigger (v3.1) shows its kind and sub-spans."""
+    out = []
+    for ch in CHANNELS:
+        if not act.get(ch):
+            continue
+        c = act[ch]
+        tag = f"[{c['kind']}]" if c.get("kind") else ""
+        subs = ""
+        if c.get("spans"):
+            subs = " {" + ", ".join(
+                f"{sp['text']!r}={sp['role']}" + (f":{sp['kind']}" if sp.get('kind') else "")
+                + (f"->{sp['refers']}" if sp.get('refers') else "")
+                for sp in c["spans"]) + "}"
+        out.append(f"  {MAGENTA}{ch}{tag}: {c['text']!r}{subs}{OFF}")
+    return "".join(out)
 
 
 def review(cases: List[dict], cases_path: str) -> int:

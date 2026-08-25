@@ -837,3 +837,22 @@ Fresh grade: 108 accept / 5 reject. The rejects:
 
 Suite 1011. The corpus stays uniform.
 
+## 30 · TRIGGERS DECOMPOSE — THE LAST BLOB (operator, 2026-08-26)
+
+The operator: *"do we decompose triggers? … i think its the last thing we dont really
+decompose."* Yes. A trigger stops being one `{text}` clause and gains a KIND (conditional ·
+temporal · fallback · coordination) and self-contained sub-SPANS (subject + condition),
+mirroring the main clause. All 14 decomposed:
+- **conditional** — `if alpha is up` -> alpha (patient) + up (selector status); `if that
+  fails` -> that (reference->"stop") + fails (selector status); `unless it is the jumpbox` ->
+  it (reference->"alpha") + the jumpbox (selector entity); `whichever is stopped`.
+- **temporal** — `at 9pm`/`every night`/`in 10 minutes`/`tomorrow morning` -> the time
+  (anchor kind temporal).
+- **fallback** — `otherwise`; **coordination** — `or`.
+The status inside a conditional is the same oracle-evaluated `selector kind status` as the
+main clause; the time is the same `anchor kind temporal`. Self-contained (own offsets), so the
+main span list is untouched. Schema: TRIGGER_KINDS, trigger.kind + trigger.spans; seeds.py
+triggers[i] = (clause, kind, [subspans]); review shows the decomposition. Suite 1011.
+
+THE DECOMPOSITION IS COMPLETE — no gold element is a blob any longer.
+

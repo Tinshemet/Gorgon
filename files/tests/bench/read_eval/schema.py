@@ -128,6 +128,10 @@ SPAN_TYPES = ("object", "evidence")
 # assigns by. `status` is oracle-evaluated (the world reports it — decision 6).
 MEMBER_KINDS = ("temporal", "status", "magnitude", "identifier", "attribute", "entity")
 
+# v3.1 (operator 2026-08-26): a TRIGGER decomposes — the last blob. Its KIND, and its own
+# self-contained sub-spans (subject + condition), mirroring the main clause.
+TRIGGER_KINDS = ("conditional", "temporal", "fallback", "coordination")
+
 ROLES = ("patient", "destination", "source", "value", "excluded", "evidence",
          "reference", "beneficiary", "selector",
          # v3.1 (operator 2026-08-25, corpus decomposition): a comparison/condition
@@ -420,9 +424,27 @@ def validate_case(case: dict) -> List[str]:
                 clause = act[channel]
                 if not isinstance(clause, dict):
                     faults.append(f"{cid}: actions[{i}]: {channel} is not an object")
-                else:
-                    faults += _offsets(f"{cid}: actions[{i}].{channel}", clause,
-                                       sentence, typed=False)
+                    continue
+                # v3.1: a trigger may carry a KIND and decomposed SPANS — slim them out of
+                # the clause-offset check, validate them separately
+                slimch = {k: v for k, v in clause.items() if k not in ("kind", "spans")}
+                faults += _offsets(f"{cid}: actions[{i}].{channel}", slimch, sentence,
+                                   typed=False)
+                if channel == "trigger" and "kind" in clause \
+                        and clause["kind"] not in TRIGGER_KINDS:
+                    faults.append(f"{cid}: actions[{i}].trigger kind {clause['kind']!r} is "
+                                  f"not one of {TRIGGER_KINDS}")
+                for k, sub in enumerate(clause.get("spans", []) if channel == "trigger" else []):
+                    w = f"{cid}: actions[{i}].trigger.spans[{k}]"
+                    slim = {x: v for x, v in sub.items() if x not in ("role", "kind", "refers")}
+                    faults += _offsets(w, slim, sentence, typed=False)
+                    if sub.get("role") not in ROLES:
+                        faults.append(f"{w}: role {sub.get('role')!r} is not one of {ROLES}")
+                    if "kind" in sub and sub["kind"] not in MEMBER_KINDS:
+                        faults.append(f"{w}: kind {sub['kind']!r} is not one of {MEMBER_KINDS}")
+                    if "refers" in sub and not (isinstance(sub["refers"], str)
+                                                and sub["refers"].strip()):
+                        faults.append(f"{w}: refers must be the referent's words")
 
     # same-type spans must not overlap — two golds claiming one character is an authoring slip
     placed = [(s["start"], s["end"], s.get("type"), i) for s in spans

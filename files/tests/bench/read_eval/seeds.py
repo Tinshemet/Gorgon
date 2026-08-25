@@ -139,8 +139,29 @@ def build(seed: Seed) -> dict:
         start, end = _at(seed.sentence, spec, seed.id)
         act = {"text": seed.sentence[start:end], "start": start, "end": end}
         if i in seed.triggers:
-            ts, te = _at(seed.sentence, seed.triggers[i], seed.id)
-            act["trigger"] = {"text": seed.sentence[ts:te], "start": ts, "end": te}
+            tspec = seed.triggers[i]
+            clause, tkind, tsubs = (tspec, None, []) if isinstance(tspec, str) else tspec
+            ts, te = _at(seed.sentence, clause, seed.id)
+            trig = {"text": seed.sentence[ts:te], "start": ts, "end": te}
+            if tkind:
+                trig["kind"] = tkind
+            if tsubs:
+                subs = []
+                for sub in tsubs:                       # (text, role[, kind[, refers]])
+                    stext, srole = sub[0], sub[1]
+                    local = seed.sentence[ts:te].find(stext)  # find WITHIN the trigger clause
+                    if local < 0:
+                        raise SystemExit(f"{seed.id}: trigger sub-span {stext!r} not in "
+                                         f"{clause!r}")
+                    ss = ts + local
+                    m = {"text": stext, "start": ss, "end": ss + len(stext), "role": srole}
+                    if len(sub) > 2 and sub[2]:
+                        m["kind"] = sub[2]
+                    if len(sub) > 3 and sub[3]:
+                        m["refers"] = sub[3]
+                    subs.append(m)
+                trig["spans"] = subs
+            act["trigger"] = trig
         if i in seed.manner:
             ms, me = _at(seed.sentence, seed.manner[i], seed.id)
             act["manner"] = {"text": seed.sentence[ms:me], "start": ms, "end": me}
