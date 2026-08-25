@@ -900,3 +900,16 @@ it. AUDITOR RE-RUN: NO INCONSISTENCIES. Suite 1011.
 
 THE ONTOLOGY IS FULLY DECOMPOSED AND UNIFORM — verified by an auditor, not by hand.
 
+## 33 · MANNER DECOMPOSES TOO — and `one` is a cardinal, NOT an ordinal (operator, 2026-08-26)
+
+Operator asked whether mn-0001 should decompose with `one` as an ordinal. Answer: NO — `one`
+in `one at a time` is a CARDINAL inside a pacing idiom, not an ordinal (an ordinal ranks the
+set and picks a member; this paces the whole set). But the MANNER channel should decompose
+like the others, so all 4 done: `one at a time` -> sequential [one=quantifier]; `all at once`
+-> simultaneous [all=quantifier]; `for an hour` -> duration [an hour=anchor temporal];
+`not just one` -> scope [one=quantifier]. MANNER_KINDS = sequential/simultaneous/duration/
+scope. Auditor extended (manner-no-kind) and RE-RUN: 0 inconsistencies. Suite 1011.
+
+Every channel and clause in the gold now decomposes: trigger · manner · pacing · ask (query)
+· finding (diagnosis) · evidence. The decomposition is total.
+

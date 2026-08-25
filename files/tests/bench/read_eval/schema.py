@@ -139,6 +139,8 @@ QUERY_KINDS = ("identity", "selection", "object-ref", "reason", "count", "amount
 DIAGNOSIS_KINDS = ("state", "event", "progress")
 # v3.1 (operator 2026-08-26): an EVIDENCE clause decomposes like a finding — a reason/report.
 EVIDENCE_KINDS = ("state", "event", "progress", "purpose", "outcome")
+# v3.1 (operator 2026-08-26): a MANNER channel decomposes too.
+MANNER_KINDS = ("sequential", "simultaneous", "duration", "scope")
 
 ROLES = ("patient", "destination", "source", "value", "excluded", "evidence",
          "reference", "beneficiary", "selector",
@@ -459,7 +461,7 @@ def validate_case(case: dict) -> List[str]:
                     faults += _offsets(f"{cid}: actions[{i}].{channel}", slimch, sentence,
                                        typed=False)
                 _kset = {"trigger": TRIGGER_KINDS, "ask": QUERY_KINDS,
-                         "finding": DIAGNOSIS_KINDS}.get(channel)
+                         "finding": DIAGNOSIS_KINDS, "manner": MANNER_KINDS}.get(channel)
                 if _kset is not None and "kind" in clause and clause["kind"] not in _kset:
                     faults.append(f"{cid}: actions[{i}].{channel} kind {clause['kind']!r} "
                                   f"is not one of {_kset}")

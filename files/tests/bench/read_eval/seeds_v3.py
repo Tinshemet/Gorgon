@@ -258,13 +258,13 @@ SEEDS_V3: List[Seed] = [
     # ══ manner — HOW binds this request only, and dropping it changes what runs ══════
     Seed("mn-0001", "manner", "restart the vms one at a time",
          ["the vms"], ["restart"], {0: [0]},
-         manner={0: "one at a time"},
+         manner={0: ("one at a time", "sequential", [("one", "quantifier", None, None)])},
          note="RULED 08-21 (schema ruling 1): manner is EXPRESSED — the act's second "
               "control channel, how-execution-is-handled; the derived loop inherits "
               "it at lowering as serial pacing"),
     Seed("mn-0002", "manner", "stop the lab vms all at once",
          ["the lab vms"], ["stop"], {0: [0]},
-         manner={0: "all at once"}),
+         manner={0: ("all at once", "simultaneous", [("all", "quantifier", None, None)])}),
 
     # ══ learned-words — the stores teach, the reader picks it up (SCHEMA QUESTION 2) ═
     Seed("lw-0001", "learned-words", "stop the grubnash",
@@ -805,7 +805,7 @@ SEEDS_V3: List[Seed] = [
          note="deictic day + part — temporal.DEICTIC reads 'tomorrow'; the trigger is the "
               "whole phrase"),
     Seed("dt-0004", "deferred-time", "stop alpha for an hour",
-         ["alpha"], ["stop"], {0: [0]}, manner={0: "for an hour"},
+         ["alpha"], ["stop"], {0: [0]}, manner={0: ("for an hour", "duration", [("an hour", "anchor", "temporal", None)])},
          note="DURATION — stop, and launch again after an hour: one act with a bounded "
               "extent, the reverse act derived downstream. RULING NEEDED: duration is "
               "drafted on the MANNER channel (execution control: how long), not trigger "
@@ -829,7 +829,7 @@ SEEDS_V3: List[Seed] = [
               "negation of the first, RESOLVE's to expand). Both 'it' are bare pronouns "
               "-> the one span"),
     Seed("cb-0003", "conditional-branches", "stop both alpha and beta, not just one",
-         ["alpha", "beta"], ["stop"], {0: [0, 1]}, manner={0: "not just one"},
+         ["alpha", "beta"], ["stop"], {0: [0, 1]}, manner={0: ("not just one", "scope", [("one", "quantifier", None, None)])},
          note="RULED 08-22: \"'not just one' is ambigius since it could mean launch both or "
               "if you cant launch one dont launch the other as well — this is for ROUTE or "
               "resolve but SHOULD BE TAGGED ANYWAY as 'procedure control', like 'one at a "

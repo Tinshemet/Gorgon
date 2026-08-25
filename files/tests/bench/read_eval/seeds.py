@@ -180,8 +180,26 @@ def build(seed: Seed) -> dict:
                 trig["spans"] = subs
             act["trigger"] = trig
         if i in seed.manner:
-            ms, me = _at(seed.sentence, seed.manner[i], seed.id)
-            act["manner"] = {"text": seed.sentence[ms:me], "start": ms, "end": me}
+            mspec = seed.manner[i]
+            mclause, mkind, msubs = (mspec, None, []) if isinstance(mspec, str) else mspec
+            ms, me = _at(seed.sentence, mclause, seed.id)
+            man = {"text": seed.sentence[ms:me], "start": ms, "end": me}
+            if mkind:
+                man["kind"] = mkind
+            if msubs:
+                arr = []
+                for sub in msubs:
+                    stext, srole = sub[0], sub[1]
+                    local = seed.sentence[ms:me].find(stext)
+                    ss = ms + (local if local >= 0 else 0)
+                    m = {"text": stext, "start": ss, "end": ss + len(stext), "role": srole}
+                    if len(sub) > 2 and sub[2]:
+                        m["kind"] = sub[2]
+                    if len(sub) > 3 and sub[3]:
+                        m["refers"] = sub[3]
+                    arr.append(m)
+                man["spans"] = arr
+            act["manner"] = man
         if i in seed.pacing:
             ps, pe = _at(seed.sentence, seed.pacing[i], seed.id)
             act["pacing"] = {"text": seed.sentence[ps:pe], "start": ps, "end": pe}
