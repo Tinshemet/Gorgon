@@ -153,9 +153,8 @@ SEEDS_V3: List[Seed] = [
     Seed("ap-0001", "apposition", "alpha, the jumpbox, is down",
          ["alpha", "the jumpbox"], ["is down"],
          {0: [{"span": 0, "role": "patient"},
-              {"span": 1, "role": "reference", "refers": "alpha"},
-              {"span": 2, "role": "evidence"}]},
-         reports={0: ("state", [("down", "value", "status", None)])}, evidence=[("is down", "state", [("down", "value", "status", None)])],
+              {"span": 1, "role": "reference", "refers": "alpha"}]},
+         reports={0: ("state", [("down", "value", "status", None)])},
          note="RULED 08-21: 'the renames are scanned as well but are treated as "
               "refernces' — the apposition IS expressed, bound to the SAME referent "
               "with a reference role. One patient; the reader is scored on the "

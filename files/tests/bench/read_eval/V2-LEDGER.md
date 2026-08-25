@@ -936,3 +936,19 @@ run?` IS the sought object, so it is a `patient` (in the attachment) AND the `se
 `ask`) — now structurally identical to cap-0001: `you` frame meta + a patient + a query with
 `ask`. Auditor clean, suite 1011.
 
+## 36 · THE VECTOR CAUGHT UP TO THE GOLD — the missed layer (operator, 2026-08-26)
+
+After v3 hit 113/113, the operator: *"go through it to see if we missed anything or any
+inconsistency."* A deep audit found the gold decomposition consistent, but the VECTOR layer
+(ledger #22) had drifted BEHIND it: it recorded top-level roles but not member KINDS (13),
+frame PARTY (12), or any SUB-decomposition (45 evidence/trigger/manner/ask/finding internals).
+Operator chose to bring the vector up to date. `vectors.py` now computes per word:
+- `span` = s{i}:{role}:{kind} (the kind included: `s2:selector:status`),
+- `frame` = the party (testimony/meta/request) for a speech-act participant,
+- `sub` = parent[kind].role:kind for a word inside a decomposed evidence span or a
+  trigger/manner/ask/finding channel (`evidence[state].value:status`, `ask[identity].seek`).
+Also cleaned an inconsistency the vector exposed: ap-0001 carried `is down` as BOTH an evidence
+span AND a report+finding (the only diagnosis that did) — removed the redundant evidence span,
+so it matches tp-0002/3/4. FINAL GAP CHECK: kind 0 · frame 0 · sub 0. The vector fully mirrors
+the gold. Auditor clean, suite 1011. THE PER-WORD VECTOR IS NOW THE COMPLETE DECONSTRUCTION.
+

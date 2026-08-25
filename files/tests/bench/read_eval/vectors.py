@@ -48,8 +48,11 @@ WORD_DIMENSIONS = (
     "verb",    # the operations this word names, off the manifest (stop→stop_vm)
     "qty",     # a quantity token (8gb, 4) — step 1's licence
     "ident",   # an identifier: the declared shape it matches (ip·mac·serial) or `unshaped`
-    "span",    # gold: which span holds this word + its role (s0:patient) — the certified
+    "span",    # gold: which span holds this word + its role + kind (s0:selector:status)
     "action",  # gold: which action holds it (a0, +q when the action is a query)
+    "frame",   # gold: the word is a speech-act participant — party testimony/meta/request
+    "sub",     # gold: the word is inside a DECOMPOSED evidence/trigger/manner/ask/finding —
+               #   parent[kind].role:kind (evidence[state].value:status)
 )
 # per SENTENCE (the fold — computed FROM the words + the code-only reading):
 FOLD_DIMENSIONS = (
@@ -226,16 +229,42 @@ def word_cells(tok: str, nxt: Optional[str], case: dict, start: int, end: int,
     g = case.get("gold") or {}
     for si, sp in enumerate(g.get("spans") or ()):
         if sp["start"] <= start < sp["end"]:
-            role = next((o["role"] for at in g.get("attachments") or ()
-                         for o in at["objects"] if isinstance(o, dict) and o["span"] == si),
-                        None)
-            cells["span"] = f"s{si}" + (f":{role}" if role else "")
-    queries = set()
+            member = next((o for at in g.get("attachments") or ()
+                           for o in at["objects"]
+                           if isinstance(o, dict) and o["span"] == si), None)
+            role = member.get("role") if member else None
+            kind = member.get("kind") if member else None
+            cells["span"] = (f"s{si}" + (f":{role}" if role else "")
+                             + (f":{kind}" if kind else ""))
+    # FRAME: is this word a speech-act participant?
+    for f in g.get("frame") or ():
+        fsp = (g.get("spans") or [])[f["span"]] if f["span"] < len(g.get("spans") or []) else None
+        if fsp and fsp["start"] <= start < fsp["end"]:
+            cells["frame"] = f["party"]
+    # SUB: is this word inside a decomposed evidence span or a channel's sub-spans?
+    def _sub(parent, container):
+        if not isinstance(container, dict):
+            return None
+        for m in container.get("spans") or ():
+            if m["start"] <= start < m["end"]:
+                pk = f"[{container['kind']}]" if container.get("kind") else ""
+                mk = f":{m['kind']}" if m.get("kind") else ""
+                return f"{parent}{pk}.{m['role']}{mk}"
+        return None
+    for sp in g.get("spans") or ():
+        if sp.get("type") == "evidence":
+            hit = _sub("evidence", sp)
+            if hit:
+                cells["sub"] = hit
     for ai, act in enumerate(g.get("actions") or ()):
         if act.get("kind") == "query":
-            queries.add(ai)
+            pass
         if act["start"] <= start < act["end"]:
             cells["action"] = f"a{ai}" + ("+q" if act.get("kind") == "query" else "")
+        for ch in ("trigger", "manner", "ask", "finding"):
+            hit = _sub(ch, act.get(ch))
+            if hit:
+                cells["sub"] = hit
     return cells
 
 
