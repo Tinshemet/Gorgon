@@ -1,0 +1,127 @@
+{
+ "al-0001": {
+  "hash": "473e334d978d0289",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "al-0002": {
+  "hash": "48ac00ba77545ebf",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "ap-0001": {
+  "hash": "b16f9182adef44d4",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "ap-0002": {
+  "hash": "b641c50d819cef5a",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "ca-0001": {
+  "hash": "30a949310f95faad",
+  "note": "need to decomp the evidence like ap-0001",
+  "verdict": "rejected"
+ },
+ "ca-0002": {
+  "hash": "0a4e30dd2bf3be84",
+  "note": "need to decomp the evidence like ap-0001",
+  "verdict": "rejected"
+ },
+ "id-0001": {
+  "hash": "fd9951a31bfd3de0",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "id-0002": {
+  "hash": "5db8c52561ad1d2f",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "id-0003": {
+  "hash": "52126111b79f7e2c",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "id-0004": {
+  "hash": "89910b70bee5997d",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "id-0005": {
+  "hash": "c18261170dea44c8",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "po-0001": {
+  "hash": "666ae5e590863589",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "po-0002": {
+  "hash": "cc2abc2633fa1e6d",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "po-0003": {
+  "hash": "6de12e14dd1ae388",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "po-0004": {
+  "hash": "a33764212adc8690",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "pu-0001": {
+  "hash": "2b25a17bf4c150cc",
+  "note": "need to decomp the evidence like ap-0001",
+  "verdict": "rejected"
+ },
+ "pu-0002": {
+  "hash": "f59a9746a4fd5847",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "pu-0003": {
+  "hash": "906d1a93dd4c6103",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "rr-0001": {
+  "hash": "9fe2a3f7be4b2358",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "rr-0002": {
+  "hash": "4e3cf3456fdbac4e",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "rr-0003": {
+  "hash": "ff56f579a99b0f0b",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "un-0001": {
+  "hash": "bfadb2a303d305fc",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "un-0002": {
+  "hash": "74126d43055bbb26",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "un-0003": {
+  "hash": "f33965c8d30687c2",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "un-0004": {
+  "hash": "5690751584d7d310",
+  "note": "",
+  "verdict": "accepted"
+ }
+}
