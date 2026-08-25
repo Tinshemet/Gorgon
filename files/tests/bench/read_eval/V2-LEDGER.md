@@ -817,3 +817,23 @@ Schema: MEMBER_KINDS += entity; refers = words (string); frame party testimony/m
 retired. Suite 1011. **v3 GRADING RESET — 113 pending, fresh grade tomorrow** (backup
 .pre-reset-0825pm).
 
+## 29 · TESTIMONY IS EVIDENCE, NOT AN ACTION + the day's rejects (operator, 2026-08-26)
+
+Fresh grade: 108 accept / 5 reject. The rejects:
+- **cb-0004 / fb-0002** — missed references: `it`->alpha, `that`->the prior act (restart /
+  launch), spanned with `refers` (the words). Same as cb-0002/fb-0001.
+- **rr-0001** — `on lab` reconsidered: destination -> SELECTOR kind entity (it filters which
+  vms, it does not receive them).
+- **sa-0001** — `you` (frame meta) + `check` (the queried verb) spanned — a capability query
+  like cap-0001/au-0001.
+- **tp-0005 -> THE MODEL CORRECTION** — *"'stopped alpha' is evidence, not an act directed at
+  the AI, it's the frame."* A user REPORTING their own act is EVIDENCE carried under a
+  frame(testimony), NOT a `testimony` action kind. **The testimony action kind is RETIRED**;
+  applied to ALL THREE (tp-0001, tp-0005, nt-0007 — even the two accepted, operator: "make all
+  testimony = evidence even the ones i approved"). A pure report (tp-0001, nt-0007) is evidence
+  + frame + outcome testimony, no action; a report beside a command (tp-0005) is evidence +
+  frame + the real act (launch beta). Schema: `testimony` removed from ACTION_KINDS; evidence
+  under a testimony frame is carried by the frame (exempt from needing an act).
+
+Suite 1011. The corpus stays uniform.
+

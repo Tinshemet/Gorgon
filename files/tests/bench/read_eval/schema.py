@@ -165,11 +165,11 @@ ROLES = ("patient", "destination", "source", "value", "excluded", "evidence",
 #   attachment BINDS the patient to the testimony (ledger item 7, taken): exactly one
 #   `patient`, the rest role `evidence`. Ops never absorb under a report — acting on a
 #   symptom description is the delete_vm-from-"is not working" defect, billed.
-ACTION_KINDS = ("instruct", "query", "rule", "report", "testimony",
+ACTION_KINDS = ("instruct", "query", "rule", "report",
                 # v3.1 (operator 08-25): META-CONTROL — governs the INTERACTION (pacing,
-                # order, session flow), not the lab. A rule constrains WHAT may happen; a
-                # meta-control governs WHEN/HOW. Standalone (`lets continue`) or via the
-                # `pacing` channel on another act (`when you have a sec, stop the db vm`).
+                # order, session flow), not the lab. Standalone (`lets continue`) or via the
+                # `pacing` channel on another act. (`testimony` kind RETIRED 08-26: a user
+                # report is EVIDENCE + frame(testimony), not an action.)
                 "meta-control")
 
 # ── v1.2: ACTION TRIGGERS (V2-LEDGER item 4, taken mid-review 08-18 at the operator's
@@ -622,6 +622,10 @@ def validate_case(case: dict) -> List[str]:
     #   original v2.1 rule caught (ca-0001, co-0001…) HAD an act, so this is strictly the
     #   same rule stated correctly.
     if not actions:
+        carried = carried | {i for i, sp in enumerate(spans) if sp.get("type") == "evidence"}
+    # v3.1 (08-26): a TESTIMONY frame carries its evidence — a user REPORT (`i stopped
+    # alpha`) is evidence the frame owns, even beside a real command (`launch beta`)
+    if any(f.get("party") == "testimony" for f in gold.get("frame", [])):
         carried = carried | {i for i, sp in enumerate(spans) if sp.get("type") == "evidence"}
     # a PHATIC mood ('hey') is a session-opener, not evidence FOR an act (v3.1): its span
     # need not attach even when a verb is present beside it (`hey, check`)

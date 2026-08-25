@@ -124,7 +124,7 @@ SEEDS_V3: List[Seed] = [
          ["the vms", "running", "lab"], ["stop"],
          {0: [{"span": 0, "role": "patient"},
               {"span": 1, "role": "selector", "kind": "status"},
-              {"span": 2, "role": "destination"}]},
+              {"span": 2, "role": "selector", "kind": "entity"}]},
          note="RULED 08-25 (operator, mid-grading — reject of an accidental accept): a "
               "reduced relative DECOMPOSES, it is not one blob. 'the vms' is the patient; "
               "'running' is the STATUS filter (a status value that selects — its own span, "
@@ -301,10 +301,10 @@ SEEDS_V3: List[Seed] = [
 
     # ══ self-address — 'you' is the agent; it must never become a thing ══════════════
     Seed("sa-0001", "self-address", "can you check the web vm?",
-         ["the web vm"], ["can you check the web vm"], {0: [0]}, queries=[0],
-         note="'you' is the agent ([[gorgon-you-is-the-agent]]): the read only FLAGS "
-              "the pronoun — the gold check is that no 'you' row exists (a row would "
-              "score hallucinated). Routing stays post-READ, as ruled"),
+         ["you", "the web vm"], ["check"],
+         {0: [{"span": 1, "role": "patient"}]}, queries=[0], frame=[("you", "meta")],
+         note="RULED 08-26 (operator): span 'you' (frame meta) and 'check' (the queried "
+              "verb — a capability query, like cap-0001/au-0001); 'the web vm' the patient"),
     Seed("sa-0002", "self-address", "good morning, stop the lab vms",
          ["the lab vms"], ["stop"],
          {0: [{"span": 0, "role": "patient"}]},
@@ -339,7 +339,10 @@ SEEDS_V3: List[Seed] = [
               "'it' references the OBJECT alpha, the kill's target. Object-reference vs "
               "action-reference, same role. Supersedes the no-span bare-pronoun rule here."),
     Seed("fb-0002", "fallback", "launch the db vm, and if that doesn't work, restart the host",
-         ["the db vm", "the host"], ["launch", "restart"], {0: [0], 1: [1]},
+         ["the db vm", "the host", "that"], ["launch", "restart"],
+         {0: [{"span": 0, "role": "patient"}],
+          1: [{"span": 1, "role": "patient"},
+              {"span": 2, "role": "reference", "refers": "launch"}]},
          triggers={1: "if that doesn't work"}),
 
     # ══ pairwise — coordination with DIFFERENT values per conjunct ═══════════════════
@@ -592,9 +595,9 @@ SEEDS_V3: List[Seed] = [
               "whole clause is the testimony (co-0001's convention: evidence is the WHOLE "
               "clause). 'the labels' still names an attribute, not a thing — no span"),
     Seed("nt-0007", "null-turn", "i'll stop alpha myself",
-         ["i'll", "alpha"], ["stop"],
-         {0: [{"span": 1, "role": "patient"}]}, testimonies=[0],
-         frame=[("i'll", "testimony")],
+         ["i'll", "stop alpha"], [],
+         {}, outcome="testimony", frame=[("i'll", "testimony")],
+         evidence=["stop alpha"],
          note="RULED 08-25 (operator): decompose the testimony — \"i'll\" the OPERATOR, "
               "'stop' a testimony act (the user will do it themselves, Gorgon does NOT), "
               "'alpha' the patient. Was one evidence blob; now decomposed. The act is the "
@@ -759,11 +762,12 @@ SEEDS_V3: List[Seed] = [
 
     # ══ tense-person — the verb form decides order vs report ═════════════════════════
     Seed("tp-0001", "tense-person", "i stopped alpha",
-         ["i", "alpha"], ["stopped"],
-         {0: [{"span": 1, "role": "patient"}]}, testimonies=[0],
-         frame=[("i", "testimony")],
-         note="RULED 08-25 (operator): decomposed TESTIMONY — 'i' the OPERATOR, 'stopped' a "
-              "testimony act (kind testimony, reported not run), 'alpha' its patient"),
+         ["i", "stopped alpha"], [],
+         {}, outcome="testimony", frame=[("i", "testimony")],
+         evidence=["stopped alpha"],
+         note="RULED 08-26 (operator): a testimony is EVIDENCE, not an action — the user "
+              "REPORTS their own act, the AI records it, never runs it. 'i' frame(testimony), "
+              "'stopped alpha' evidence. The `testimony` action kind is RETIRED."),
     Seed("tp-0002", "tense-person", "alpha stopped",
          ["alpha"], ["stopped"], {0: [0]}, reports=[0],
          note="intransitive past — a state change OBSERVED; report, not order"),
@@ -781,10 +785,9 @@ SEEDS_V3: List[Seed] = [
          ["alpha"], ["is stopping"], {0: [0]}, reports=[0],
          note="progressive — a state IN PROGRESS, observed; report"),
     Seed("tp-0005", "tense-person", "i just stopped alpha, launch beta",
-         ["i", "alpha", "beta"], ["stopped", "launch"],
-         {0: [{"span": 1, "role": "patient"}],
-          1: [{"span": 2, "role": "patient"}]}, frame=[("i", "testimony")],
-         testimonies=[0],
+         ["i", "stopped alpha", "beta"], ["launch"],
+         {0: [{"span": 2, "role": "patient"}]}, frame=[("i", "testimony")],
+         evidence=["stopped alpha"],
          note="RULED 08-25: testimony ('i' operator + 'stopped' testimony act + 'alpha' "
               "patient) AND a real order ('launch beta') in one sentence — kept apart"),
 
@@ -834,7 +837,9 @@ SEEDS_V3: List[Seed] = [
               "the control faithfully, the two readings are settled downstream"),
     Seed("cb-0004", "conditional-branches",
          "if alpha is down restart it, and if that doesn't help, tell me",
-         ["alpha"], ["restart", "tell me"], {0: [0], 1: [0]},
+         ["alpha", "it", "that"], ["restart", "tell me"],
+         {0: [{"span": 1, "role": "reference", "refers": "alpha"}],
+          1: [{"span": 2, "role": "reference", "refers": "restart"}]},
          triggers={0: "if alpha is down", 1: "if that doesn't help"}, queries=[1],
          note="a condition AND a fallback on one referent, the fallback a QUERY (report "
               "back) — the chain's shape, certified at READ"),
