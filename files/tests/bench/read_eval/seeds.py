@@ -168,12 +168,38 @@ def build(seed: Seed) -> dict:
         if i in seed.pacing:
             ps, pe = _at(seed.sentence, seed.pacing[i], seed.id)
             act["pacing"] = {"text": seed.sentence[ps:pe], "start": ps, "end": pe}
-        if i in seed.queries:
+        def _decomp(spec):
+            akind, asubs = spec
+            d = {}
+            if akind:
+                d["kind"] = akind
+            arr = []
+            for sub in (asubs or []):
+                stext, srole = sub[0], sub[1]
+                ss, se = _at(seed.sentence, stext, seed.id)
+                m = {"text": stext, "start": ss, "end": se, "role": srole}
+                if len(sub) > 2 and sub[2]:
+                    m["kind"] = sub[2]
+                if len(sub) > 3 and sub[3]:
+                    m["refers"] = sub[3]
+                arr.append(m)
+            if arr:
+                d["spans"] = arr
+            return d
+        _q = seed.queries
+        q_items = {j: None for j in _q} if isinstance(_q, (list, tuple)) else _q
+        if i in q_items:
             act["kind"] = "query"
+            if q_items[i]:
+                act["ask"] = _decomp(q_items[i])
         if i in seed.rules:
             act["kind"] = "rule"
-        if i in seed.reports:
+        _r = seed.reports
+        r_items = {j: None for j in _r} if isinstance(_r, (list, tuple)) else _r
+        if i in r_items:
             act["kind"] = "report"
+            if r_items[i]:
+                act["finding"] = _decomp(r_items[i])
         if i in seed.testimonies:
             act["kind"] = "testimony"
         if i in seed.meta_controls:

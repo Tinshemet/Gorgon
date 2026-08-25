@@ -32,7 +32,7 @@ SEEDS_V3: List[Seed] = [
     Seed("id-0002", "identifiers", "which vm has mac aa:bb:cc:dd:ee:ff?",
          ["which vm", "aa:bb:cc:dd:ee:ff"], ["which vm has mac aa:bb:cc:dd:ee:ff"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}]},
-         queries=[0],
+         queries={0: ("selection", [("which", "seek", None, None)])},
          note="RULED 08-21: 'mark it as a query — since we have the value but not the "
               "key' — a REVERSE LOOKUP: the given value is the query's input argument "
               "(value role), the wh-NP is the asked side. cs-0007 refined: an asked "
@@ -78,7 +78,7 @@ SEEDS_V3: List[Seed] = [
               "never a second thing"),
     Seed("un-0004", "units", "how much memory does alpha have?",
          ["memory", "alpha"], ["how much memory does alpha have"],
-         {0: [{"span": 0, "role": "value"}, {"span": 1, "role": "patient"}]}, queries=[0],
+         {0: [{"span": 0, "role": "value"}, {"span": 1, "role": "patient"}]}, queries={0: ("amount", [("how much", "seek", None, None)])},
          note="RULED 08-24 (ledger #21): the have-frame is the genitive asked — owner "
               "patient, leaf VALUE (id-0002's precedent: the asked predicate is a value, "
               "never a selector — a selector PICKS the thing, here the thing is named). "
@@ -101,7 +101,7 @@ SEEDS_V3: List[Seed] = [
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "value"}]}),
     Seed("po-0004", "possessive", "how many snapshots does alpha have?",
          ["snapshots", "alpha"], ["how many snapshots does alpha have"],
-         {0: [{"span": 0, "role": "value"}, {"span": 1, "role": "patient"}]}, queries=[0],
+         {0: [{"span": 0, "role": "value"}, {"span": 1, "role": "patient"}]}, queries={0: ("count", [("how many", "seek", None, None)])},
          note="RULED 08-24 (ledger #21): `alpha's snapshots` (#19) worn as a question — "
               "owner patient, leaf VALUE; the COUNT is produced, never spanned"),
 
@@ -155,7 +155,7 @@ SEEDS_V3: List[Seed] = [
          {0: [{"span": 0, "role": "patient"},
               {"span": 1, "role": "reference", "refers": "alpha"},
               {"span": 2, "role": "evidence"}]},
-         reports=[0], evidence=["is down"],
+         reports={0: ("state", [("down", "value", "status", None)])}, evidence=["is down"],
          note="RULED 08-21: 'the renames are scanned as well but are treated as "
               "refernces' — the apposition IS expressed, bound to the SAME referent "
               "with a reference role. One patient; the reader is scored on the "
@@ -302,7 +302,7 @@ SEEDS_V3: List[Seed] = [
     # ══ self-address — 'you' is the agent; it must never become a thing ══════════════
     Seed("sa-0001", "self-address", "can you check the web vm?",
          ["you", "the web vm"], ["check"],
-         {0: [{"span": 1, "role": "patient"}]}, queries=[0], frame=[("you", "meta")],
+         {0: [{"span": 1, "role": "patient"}]}, queries={0: ("polar", [("can", "seek", None, None)])}, frame=[("you", "meta")],
          note="RULED 08-26 (operator): span 'you' (frame meta) and 'check' (the queried "
               "verb — a capability query, like cap-0001/au-0001); 'the web vm' the patient"),
     Seed("sa-0002", "self-address", "good morning, stop the lab vms",
@@ -376,7 +376,7 @@ SEEDS_V3: List[Seed] = [
     Seed("nq-0001", "negated-query", "which vms are not running?",
          ["which vms", "not running"], ["which vms are not running"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector", "kind": "status"}]},
-         queries=[0],
+         queries={0: ("selection", [("which", "seek", None, None)])},
          note="RULED 08-25 (operator): decompose the QUERY — 'which vms' the patient (the "
               "sought set), 'not running' the status SELECTOR (status != running). The asked "
               "PROPERTY is now a span, not dropped; the answer-shape (members) stays in the "
@@ -384,7 +384,7 @@ SEEDS_V3: List[Seed] = [
     Seed("nq-0002", "negated-query", "is alpha not responding?",
          ["alpha", "not responding"], ["is alpha not responding"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector", "kind": "status"}]},
-         queries=[0],
+         queries={0: ("polar", [("is", "seek", None, None)])},
          note="RULED 08-25 (operator): 'alpha' patient; 'not responding' is STATUS, a status "
               "SELECTOR (same shape as nq-0001 'not running') — not a symptom/conditional"),
 
@@ -476,7 +476,7 @@ SEEDS_V3: List[Seed] = [
     # ══ audit — a question about OUR OWN behaviour, never sent at the lab ════════════
     Seed("au-0001", "audit", "what did you just run?",
          ["you"], ["run"],
-         {}, queries=[0], frame=[("you", "meta")],
+         {}, queries={0: ("identity", [("what", "seek", None, None)])}, frame=[("you", "meta")],
          note="coverage_map ⚠⚠: events.log is the arbiter and no sentence reaches it. "
               "NO object spans — the question is about the agent's ledger, not a lab "
               "thing; any lab op emitted from it scores hallucinated. Pairs with "
@@ -485,7 +485,7 @@ SEEDS_V3: List[Seed] = [
          ["changed", "the lab", "today"], ["what changed in the lab today"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "selector", "kind": "entity"},
               {"span": 2, "role": "selector", "kind": "temporal"}]},
-         queries=[0],
+         queries={0: ("identity", [("what", "seek", None, None)])},
          note="RULED 08-25 (operator): decompose the query — 'changed' is the PATIENT (what "
               "is being asked about; the verb spans it, no noun to grab), 'the lab' the "
               "SELECTOR (changes related to the lab), 'today' the temporal ANCHOR"),
@@ -493,7 +493,7 @@ SEEDS_V3: List[Seed] = [
     # ══ capability — CAN-you generic vs CAN-you polite order ═════════════════════════
     Seed("cap-0001", "capability", "can you create networks?",
          ["you", "networks"], ["create"],
-         {0: [{"span": 1, "role": "patient"}]}, queries=[0], frame=[("you", "meta")],
+         {0: [{"span": 1, "role": "patient"}]}, queries={0: ("polar", [("can", "seek", None, None)])}, frame=[("you", "meta")],
          note="BARE PLURAL, no determiner = a question about ABILITY — no object, no "
               "create op (one emitted scores hallucinated). The twin below is the "
               "adversary"),
@@ -697,7 +697,7 @@ SEEDS_V3: List[Seed] = [
               "'that' gets no span (the bare-pronoun rule: point at the thing, and the "
               "thing is not here). Resolving it is LAST's, which stays out of scope — "
               "READ's job is to produce the act and SAY where the target lives"),
-    Seed("td-0008", "turn-dependent", "whats next", [], ["whats next"], {}, queries=[0],
+    Seed("td-0008", "turn-dependent", "whats next", [], ["whats next"], {}, queries={0: ("identity", [("whats", "seek", None, None)])},
          context={"from": "resolve", "heading": "a plan is part-run", "waited_response": False},
          hint=("possible-reference", "asks about the state of something already under way — "
                                      "the referent is the running plan"),
@@ -769,12 +769,12 @@ SEEDS_V3: List[Seed] = [
               "REPORTS their own act, the AI records it, never runs it. 'i' frame(testimony), "
               "'stopped alpha' evidence. The `testimony` action kind is RETIRED."),
     Seed("tp-0002", "tense-person", "alpha stopped",
-         ["alpha"], ["stopped"], {0: [0]}, reports=[0],
+         ["alpha"], ["stopped"], {0: [0]}, reports={0: ("event", [("stopped", "value", "status", None)])},
          note="intransitive past — a state change OBSERVED; report, not order"),
     Seed("tp-0003", "tense-person", "alpha was stopped yesterday",
          ["alpha"], ["was stopped"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "evidence"}]},
-         evidence=["yesterday"], reports=[0],
+         evidence=["yesterday"], reports={0: ("event", [("stopped", "value", "status", None)])},
          note="RULED 08-22 (THE TENSE RULE, LEDGER #14): 'yesterday is a sensitive "
               "temporal reference … its not a temporal trigger but a reference, every day "
               "is a temporal trigger for example — PAST ACTION ARE EVIDENCE AND FUTURE ARE "
@@ -782,7 +782,7 @@ SEEDS_V3: List[Seed] = [
               "the report; the deferred-time stratum's future phrases stay TRIGGERS. "
               "Unmarked, the report reads as a timeless state"),
     Seed("tp-0004", "tense-person", "alpha is stopping",
-         ["alpha"], ["is stopping"], {0: [0]}, reports=[0],
+         ["alpha"], ["is stopping"], {0: [0]}, reports={0: ("progress", [("stopping", "value", "status", None)])},
          note="progressive — a state IN PROGRESS, observed; report"),
     Seed("tp-0005", "tense-person", "i just stopped alpha, launch beta",
          ["i", "stopped alpha", "beta"], ["launch"],

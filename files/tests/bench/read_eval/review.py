@@ -156,7 +156,14 @@ def show(case: dict, verdicts: Dict[str, dict], by_id: Dict[str, dict]) -> None:
     for at in case["gold"]["attachments"]:
         act = case["gold"]["actions"][at["action"]]
         tag = {"query": " (QUERY)", "rule": " (RULE)",
-               "report": " (DIAGNOSIS)"}.get(act.get("kind") or "", "")
+               "report": " (DIAGNOSIS)", "meta-control": " (META)"}.get(act.get("kind") or "", "")
+        for fld in ("ask", "finding"):
+            d = act.get(fld)
+            if d:
+                subs = "".join(f" {sp['text']!r}={sp['role']}"
+                               + (f":{sp['kind']}" if sp.get('kind') else "")
+                               for sp in d.get("spans", []))
+                tag += f" [{fld}:{d.get('kind','?')}{subs}]"
         def _memtag(at, ix, role):
             for o in at.get("objects", ()):
                 if isinstance(o, dict) and o.get("span") == ix:

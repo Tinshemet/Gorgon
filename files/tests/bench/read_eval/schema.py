@@ -132,6 +132,12 @@ MEMBER_KINDS = ("temporal", "status", "magnitude", "identifier", "attribute", "e
 # self-contained sub-spans (subject + condition), mirroring the main clause.
 TRIGGER_KINDS = ("conditional", "temporal", "fallback", "coordination")
 
+# v3.1 (operator 2026-08-26): a QUERY decomposes too — its `ask` object carries the wh-TYPE
+# (what it seeks) and the wh-word as a sub-span. A DIAGNOSIS (report) carries a `finding`.
+QUERY_KINDS = ("identity", "selection", "object-ref", "reason", "count", "amount",
+               "polar", "manner", "time", "place")
+DIAGNOSIS_KINDS = ("state", "event", "progress")
+
 ROLES = ("patient", "destination", "source", "value", "excluded", "evidence",
          "reference", "beneficiary", "selector",
          # v3.1 (operator 2026-08-25, corpus decomposition): a comparison/condition
@@ -149,7 +155,8 @@ ROLES = ("patient", "destination", "source", "value", "excluded", "evidence",
          "quantifier", "ordinal",
          # v3.1d: `operator` — a reference to the HUMAN user (`i`), the mirror of `self`
          # (Gorgon). Marks a testimony's subject: the act is the operator's, not Gorgon's.
-         "operator")
+         "operator",
+         "seek")   # the wh-word of a query — what it seeks
 
 # ── v1.3: QUERY ACTS (operator, mid-review 08-18: mc-0002's second clause is "a dropped
 #   clause, that is a query"). A question is a THIRD of the sentence taxonomy — order ·
@@ -411,31 +418,33 @@ def validate_case(case: dict) -> List[str]:
     for i, span in enumerate(spans):
         faults += _offsets(f"{cid}: spans[{i}]", span, sentence, typed=True)
     for i, act in enumerate(actions):
-        known = {"text", "start", "end", "trigger", "kind", "manner", "pacing"}
+        known = {"text", "start", "end", "trigger", "kind", "manner", "pacing", "ask", "finding"}
         for extra in set(act) - known:
             faults.append(f"{cid}: actions[{i}]: unknown key {extra!r}")
         if "kind" in act and act["kind"] not in ACTION_KINDS:
             faults.append(f"{cid}: actions[{i}]: kind {act['kind']!r} is not one of "
                           f"{ACTION_KINDS}")
-        slim = {k: v for k, v in act.items() if k not in ("trigger", "kind", "manner", "pacing")}
+        slim = {k: v for k, v in act.items() if k not in ("trigger", "kind", "manner", "pacing", "ask", "finding")}
         faults += _offsets(f"{cid}: actions[{i}]", slim, sentence, typed=False)
-        for channel in ("trigger", "manner", "pacing"):
+        for channel in ("trigger", "manner", "pacing", "ask", "finding"):
             if channel in act:
                 clause = act[channel]
                 if not isinstance(clause, dict):
                     faults.append(f"{cid}: actions[{i}]: {channel} is not an object")
                     continue
-                # v3.1: a trigger may carry a KIND and decomposed SPANS — slim them out of
-                # the clause-offset check, validate them separately
-                slimch = {k: v for k, v in clause.items() if k not in ("kind", "spans")}
-                faults += _offsets(f"{cid}: actions[{i}].{channel}", slimch, sentence,
-                                   typed=False)
-                if channel == "trigger" and "kind" in clause \
-                        and clause["kind"] not in TRIGGER_KINDS:
-                    faults.append(f"{cid}: actions[{i}].trigger kind {clause['kind']!r} is "
-                                  f"not one of {TRIGGER_KINDS}")
-                for k, sub in enumerate(clause.get("spans", []) if channel == "trigger" else []):
-                    w = f"{cid}: actions[{i}].trigger.spans[{k}]"
+                # v3.1: a trigger/manner/pacing has clause TEXT; ask/finding are pure
+                # {kind, spans} decomposition objects with no text of their own.
+                if channel not in ("ask", "finding"):
+                    slimch = {k: v for k, v in clause.items() if k not in ("kind", "spans")}
+                    faults += _offsets(f"{cid}: actions[{i}].{channel}", slimch, sentence,
+                                       typed=False)
+                _kset = {"trigger": TRIGGER_KINDS, "ask": QUERY_KINDS,
+                         "finding": DIAGNOSIS_KINDS}.get(channel)
+                if _kset is not None and "kind" in clause and clause["kind"] not in _kset:
+                    faults.append(f"{cid}: actions[{i}].{channel} kind {clause['kind']!r} "
+                                  f"is not one of {_kset}")
+                for k, sub in enumerate(clause.get("spans", []) if _kset is not None else []):
+                    w = f"{cid}: actions[{i}].{channel}.spans[{k}]"
                     slim = {x: v for x, v in sub.items() if x not in ("role", "kind", "refers")}
                     faults += _offsets(w, slim, sentence, typed=False)
                     if sub.get("role") not in ROLES:

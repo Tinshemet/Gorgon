@@ -856,3 +856,24 @@ triggers[i] = (clause, kind, [subspans]); review shows the decomposition. Suite 
 
 THE DECOMPOSITION IS COMPLETE — no gold element is a blob any longer.
 
+## 31 · QUERIES AND DIAGNOSIS DECOMPOSE TOO (operator, 2026-08-26)
+
+Same treatment as triggers, extended to queries and diagnosis:
+- **QUERY -> `ask` object** {kind: what it SEEKS, spans: [the wh-word, role `seek`]}.
+  QUERY_KINDS = identity(what) · selection(which) · object-ref(who) · reason(why) ·
+  count(how many) · amount(how much) · polar(is/can/does) · manner(how) · time(when) ·
+  place(where). 10 queries decomposed (id-0002 selection, po-0004 count, un-0004 amount,
+  nq-0002 polar, au-0001/au-0002 identity, cap-0001/sa-0001 polar, td-0008 identity). `tell
+  me` (cb-0004) stays a bare query — no wh-word.
+- **DIAGNOSIS (report) -> `finding` object** {kind: aspect, spans: [the status, value kind
+  status]}. DIAGNOSIS_KINDS = state (`is down`) · event (`stopped`, `was stopped`) · progress
+  (`is stopping`). ap-0001, tp-0002/3/4.
+New role `seek` (the wh-word). ask/finding are pure {kind, spans} objects (no clause text of
+their own, unlike triggers). Review shows them. Suite 1011.
+
+Note: `ownership` role — ledger #28's "retired" edit silently no-op'd (it is followed by more
+roles, not a paren); it stays DEFINED but UNUSED (rr-0002's `taken` was still dropped). Harmless.
+
+**THE FULL ONTOLOGY IS DECOMPOSED**: spans, roles+kinds, references(refers), frame, channels
+(trigger/manner/pacing), triggers, queries(ask), diagnosis(finding). Nothing is a blob.
+
