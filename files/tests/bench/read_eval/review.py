@@ -203,6 +203,14 @@ def show(case: dict, verdicts: Dict[str, dict], by_id: Dict[str, dict]) -> None:
     if case.get("outcome"):
         print(f"      {MAGENTA}outcome: {case['outcome'].upper()}{OFF}  "
               f"{DIM}(no act is the reading — is that right?){OFF}")
+    # v3.1: DECOMPOSED EVIDENCE — a reason/report clause broken into subject + status.
+    for sp in case["gold"]["spans"]:
+        if sp.get("type") == "evidence" and sp.get("kind"):
+            subs = "".join(f" {x['text']!r}={x['role']}"
+                           + (f":{x['kind']}" if x.get("kind") else "")
+                           + (f"->{x['refers']}" if x.get("refers") else "")
+                           for x in sp.get("spans", []))
+            print(f"      {MAGENTA}evidence[{sp['kind']}]:{OFF} {sp['text']!r}{subs}")
     # v3.1: THE FRAME — speech-act participants (i=user, you=agent), not verb arguments.
     for f in case["gold"].get("frame") or []:
         txt = case["gold"]["spans"][f["span"]]["text"]

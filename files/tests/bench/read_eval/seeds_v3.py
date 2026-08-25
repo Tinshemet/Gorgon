@@ -155,7 +155,7 @@ SEEDS_V3: List[Seed] = [
          {0: [{"span": 0, "role": "patient"},
               {"span": 1, "role": "reference", "refers": "alpha"},
               {"span": 2, "role": "evidence"}]},
-         reports={0: ("state", [("down", "value", "status", None)])}, evidence=["is down"],
+         reports={0: ("state", [("down", "value", "status", None)])}, evidence=[("is down", "state", [("down", "value", "status", None)])],
          note="RULED 08-21: 'the renames are scanned as well but are treated as "
               "refernces' — the apposition IS expressed, bound to the SAME referent "
               "with a reference role. One patient; the reader is scored on the "
@@ -171,7 +171,7 @@ SEEDS_V3: List[Seed] = [
     Seed("ca-0001", "cause", "stop the vms because they are stuck",
          ["the vms"], ["stop"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "evidence"}]},
-         evidence=["they are stuck"],
+         evidence=[("they are stuck", "state", [("they", "reference", None, "the vms"), ("stuck", "value", "status", None)])],
          note="RULED 08-22 (certification): 'you do need to carry the evidence to stop "
               "because its a future reference' — the because-clause is the SYMPTOM, "
               "evidence by the certified convention, and it is CARRIED by the act, "
@@ -179,7 +179,7 @@ SEEDS_V3: List[Seed] = [
     Seed("ca-0002", "cause", "restart alpha because it won't answer",
          ["alpha"], ["restart"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "evidence"}]},
-         evidence=["it won't answer"],
+         evidence=[("it won't answer", "state", [("it", "reference", None, "alpha"), ("won't answer", "value", "status", None)])],
          note="RULED 08-22: carried — 'an important reference, regardless if its used "
               "as part of the operator'"),
 
@@ -195,20 +195,20 @@ SEEDS_V3: List[Seed] = [
     Seed("pu-0001", "purpose", "stop the idle vms to free memory",
          ["the idle vms"], ["stop"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "evidence"}]},
-         evidence=["to free memory"],
+         evidence=[("to free memory", "purpose", [("memory", "patient", None, None)])],
          note="the operator's own sentence — the decision and its reason in one breath; "
               "dropping the to-clause is the silent-qualifier defect (08-16), the act "
               "must CARRY it"),
     Seed("pu-0002", "purpose", "snapshot the db vm so we can roll back",
          ["the db vm"], ["snapshot"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "evidence"}]},
-         evidence=["so we can roll back"],
+         evidence=[("so we can roll back", "purpose", [])],
          note="`so (that)` — the second purpose marker; the reason names a FUTURE use, "
               "not a present symptom, which is exactly diagnosis reversed"),
     Seed("pu-0003", "purpose", "delete the old snapshots to save space",
          ["the old snapshots"], ["delete"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "evidence"}]},
-         evidence=["to save space"],
+         evidence=[("to save space", "purpose", [("space", "patient", None, None)])],
          note="a DESTRUCTIVE act with its justification attached — the ledger entry the "
               "operator described, written at request time"),
 
@@ -216,7 +216,7 @@ SEEDS_V3: List[Seed] = [
     Seed("co-0001", "concession", "stop the test vms even though alpha is busy",
          ["the test vms"], ["stop"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "evidence"}]},
-         evidence=["alpha is busy"],
+         evidence=[("alpha is busy", "state", [("alpha", "patient", None, None), ("busy", "value", "status", None)])],
          note="RULED 08-21: testimony on a bystander, NEVER an excluded-role — 'even "
               "though' pre-empts an objection, it removes no one ('except' is v2's "
               "excluded role, already covered). RULED 08-22 (certification, LEDGER "
@@ -228,7 +228,7 @@ SEEDS_V3: List[Seed] = [
     Seed("co-0002", "concession", "launch the fleet even though the lab network is slow",
          ["the fleet"], ["launch"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "evidence"}]},
-         evidence=["the lab network is slow"],
+         evidence=[("the lab network is slow", "state", [("the lab network", "patient", None, None), ("slow", "value", "status", None)])],
          note="RULED 08-22 (LEDGER #12), the operator's own shape: 'stop vmA because "
               "networkA is slow' becomes stop -> vmA + evidence 'networkA is slow', "
               "FILED -> 'networkA is slow' (cross-turn evidence, not acted upon). "
@@ -540,7 +540,7 @@ SEEDS_V3: List[Seed] = [
     Seed("ca-0002-ej", "cause", "restart alpha adsfk because it won't answer",
          ["alpha"], ["restart"],
          {0: [{"span": 0, "role": "patient"}, {"span": 1, "role": "evidence"}]},
-         evidence=["it won't answer"],
+         evidence=[("it won't answer", "state", [("it", "reference", None, "alpha"), ("won't answer", "value", "status", None)])],
          noise="embedded-junk", pair_id="ca-0002",
          note="junk between patient and cause-clause — outside every span; the "
               "evidence still binds"),
@@ -562,7 +562,7 @@ SEEDS_V3: List[Seed] = [
               "acknowledgement and stays `none`. Its control is td-0010, the same bytes "
               "under an answered query, which IS testimony"),
     Seed("nt-0002", "null-turn", "thanks, that worked", [], [], {},
-         evidence=["thanks", "that worked"], outcome="testimony",
+         evidence=["thanks", ("that worked", "outcome", [("worked", "value", "status", None)])], outcome="testimony",
          mood=[("closure", "thanks")],
          note="RULED 08-22 (LEDGER #14): 'should be treated as testimony, a subset of "
               "evidence which are user input' — RESOLUTION: the system's act succeeded, a "
@@ -588,7 +588,7 @@ SEEDS_V3: List[Seed] = [
               "which is the direct countermeasure to the 7/7 measured hazard where a "
               "courtesy word was resolved into intent"),
     Seed("nt-0006", "null-turn", "i'll add the labels myself tomorrow", [], [],
-         {}, evidence=["i'll add the labels myself tomorrow"], outcome="testimony",
+         {}, evidence=[("i'll add the labels myself tomorrow", "event", [("the labels", "patient", None, None), ("tomorrow", "anchor", "temporal", None)])], outcome="testimony",
          note="RULED 08-22: testimony — 'evidence for a user resolved'. The OPERATOR says "
               "THEY will act, so a reader that emits add_label has taken an act nobody "
               "asked for; the fact that the user took it is what the ledger files. The "
@@ -597,7 +597,7 @@ SEEDS_V3: List[Seed] = [
     Seed("nt-0007", "null-turn", "i'll stop alpha myself",
          ["i'll", "stop alpha"], [],
          {}, outcome="testimony", frame=[("i'll", "testimony")],
-         evidence=["stop alpha"],
+         evidence=[("stop alpha", "event", [("alpha", "patient", None, None)])],
          note="RULED 08-25 (operator): decompose the testimony — \"i'll\" the OPERATOR, "
               "'stop' a testimony act (the user will do it themselves, Gorgon does NOT), "
               "'alpha' the patient. Was one evidence blob; now decomposed. The act is the "
@@ -704,7 +704,7 @@ SEEDS_V3: List[Seed] = [
          note="a QUERY whose subject is the session itself, not the lab — audit's kin, and "
               "it produces (the query act) rather than bouncing"),
     Seed("td-0010", "turn-dependent", "ok, got it", [], [],
-         {}, evidence=["got it"], outcome="testimony",
+         {}, evidence=[("got it", "outcome", [])], outcome="testimony",
          context={"from": "resolve", "heading": "a query was just answered",
                   "topic": "information", "waited_response": True},
          hint=("answer-shaped", "an acknowledgement of INFORMATION — the question that was "
@@ -764,7 +764,7 @@ SEEDS_V3: List[Seed] = [
     Seed("tp-0001", "tense-person", "i stopped alpha",
          ["i", "stopped alpha"], [],
          {}, outcome="testimony", frame=[("i", "testimony")],
-         evidence=["stopped alpha"],
+         evidence=[("stopped alpha", "event", [("alpha", "patient", None, None)])],
          note="RULED 08-26 (operator): a testimony is EVIDENCE, not an action — the user "
               "REPORTS their own act, the AI records it, never runs it. 'i' frame(testimony), "
               "'stopped alpha' evidence. The `testimony` action kind is RETIRED."),
@@ -787,7 +787,7 @@ SEEDS_V3: List[Seed] = [
     Seed("tp-0005", "tense-person", "i just stopped alpha, launch beta",
          ["i", "stopped alpha", "beta"], ["launch"],
          {0: [{"span": 2, "role": "patient"}]}, frame=[("i", "testimony")],
-         evidence=["stopped alpha"],
+         evidence=[("stopped alpha", "event", [("alpha", "patient", None, None)])],
          note="RULED 08-25: testimony ('i' operator + 'stopped' testimony act + 'alpha' "
               "patient) AND a real order ('launch beta') in one sentence — kept apart"),
 

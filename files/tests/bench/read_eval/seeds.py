@@ -131,9 +131,26 @@ def build(seed: Seed) -> dict:
         spans.append({"text": seed.sentence[start:end], "start": start, "end": end,
                       "type": "object"})
     for spec in seed.evidence:
-        start, end = _at(seed.sentence, spec, seed.id)
-        spans.append({"text": seed.sentence[start:end], "start": start, "end": end,
-                      "type": "evidence"})
+        etext, ekind, esubs = (spec, None, []) if isinstance(spec, str) else spec
+        start, end = _at(seed.sentence, etext, seed.id)
+        ev = {"text": seed.sentence[start:end], "start": start, "end": end,
+                      "type": "evidence"}
+        if ekind:
+            ev["kind"] = ekind
+        if esubs:
+            subs = []
+            for sub in esubs:                           # (text, role[, kind[, refers]])
+                stext, srole = sub[0], sub[1]
+                local = etext.find(stext)
+                ss = start + (local if local >= 0 else 0)
+                m = {"text": stext, "start": ss, "end": ss + len(stext), "role": srole}
+                if len(sub) > 2 and sub[2]:
+                    m["kind"] = sub[2]
+                if len(sub) > 3 and sub[3]:
+                    m["refers"] = sub[3]
+                subs.append(m)
+            ev["spans"] = subs
+        spans.append(ev)
     actions = []
     for i, spec in enumerate(seed.actions):
         start, end = _at(seed.sentence, spec, seed.id)

@@ -137,6 +137,8 @@ TRIGGER_KINDS = ("conditional", "temporal", "fallback", "coordination")
 QUERY_KINDS = ("identity", "selection", "object-ref", "reason", "count", "amount",
                "polar", "manner", "time", "place")
 DIAGNOSIS_KINDS = ("state", "event", "progress")
+# v3.1 (operator 2026-08-26): an EVIDENCE clause decomposes like a finding — a reason/report.
+EVIDENCE_KINDS = ("state", "event", "progress", "purpose", "outcome")
 
 ROLES = ("patient", "destination", "source", "value", "excluded", "evidence",
          "reference", "beneficiary", "selector",
@@ -416,7 +418,25 @@ def validate_case(case: dict) -> List[str]:
     sentence = case["sentence"] if isinstance(case["sentence"], str) else ""
     spans, actions = gold["spans"], gold["actions"]
     for i, span in enumerate(spans):
-        faults += _offsets(f"{cid}: spans[{i}]", span, sentence, typed=True)
+        # v3.1: an evidence span may carry a decomposition (kind + sub-spans) — slim those
+        # out of the offset check, validate them separately
+        slim = ({k: v for k, v in span.items() if k not in ("kind", "spans")}
+                if isinstance(span, dict) and span.get("type") == "evidence" else span)
+        faults += _offsets(f"{cid}: spans[{i}]", slim, sentence, typed=True)
+        if isinstance(span, dict) and span.get("type") == "evidence":
+            if "kind" in span and span["kind"] not in EVIDENCE_KINDS:
+                faults.append(f"{cid}: spans[{i}] evidence kind {span['kind']!r} is not "
+                              f"one of {EVIDENCE_KINDS}")
+            for k, sub in enumerate(span.get("spans", [])):
+                w = f"{cid}: spans[{i}].spans[{k}]"
+                slimsub = {x: v for x, v in sub.items() if x not in ("role", "kind", "refers")}
+                faults += _offsets(w, slimsub, sentence, typed=False)
+                if sub.get("role") not in ROLES:
+                    faults.append(f"{w}: role {sub.get('role')!r} is not one of {ROLES}")
+                if "kind" in sub and sub["kind"] not in MEMBER_KINDS:
+                    faults.append(f"{w}: kind {sub['kind']!r} is not one of {MEMBER_KINDS}")
+                if "refers" in sub and not (isinstance(sub["refers"], str) and sub["refers"].strip()):
+                    faults.append(f"{w}: refers must be the referent's words")
     for i, act in enumerate(actions):
         known = {"text", "start", "end", "trigger", "kind", "manner", "pacing", "ask", "finding"}
         for extra in set(act) - known:

@@ -877,3 +877,26 @@ roles, not a paren); it stays DEFINED but UNUSED (rr-0002's `taken` was still dr
 **THE FULL ONTOLOGY IS DECOMPOSED**: spans, roles+kinds, references(refers), frame, channels
 (trigger/manner/pacing), triggers, queries(ask), diagnosis(finding). Nothing is a blob.
 
+## 32 · EVIDENCE DECOMPOSES TOO — AND A FULL CONSISTENCY AUDIT (operator, 2026-08-26)
+
+Rejects (ca-0001, ca-0002, pu-0001): *"decomp the evidence like ap-0001."* The operator's real
+ask: *"go through ALL prompts, make ALL RULES CONSISTENT, not just the ones i rejected."*
+
+Built a corpus-wide AUDITOR (every rule x every case). It found the ONE remaining gap:
+**evidence clauses were not decomposed** (15 cases) — every other rule (selector kinds,
+refers, frame, trigger/query/diagnosis decomposition) was already uniform from the prior
+consistency pass. Fixed all 15: an evidence span gains a KIND (state/event/progress/purpose/
+outcome) and self-contained sub-spans, like a finding:
+- **cause/concession** (they are stuck · it won't answer · alpha is busy · the lab network is
+  slow) -> kind state, subject(reference/patient) + status(value kind status).
+- **purpose** (to free memory · to save space) -> kind purpose + the goal object; `so we can
+  roll back` kind purpose, no object.
+- **testimony** (stopped alpha · stop alpha · i'll add the labels ... tomorrow) -> kind event,
+  the reported act's patient (+ tomorrow anchor temporal).
+- **outcome** (that worked · got it) -> kind outcome (+ status if any).
+ap-0001's evidence span decomposed to match its report finding. Schema: EVIDENCE_KINDS,
+evidence-span kind+spans validation; seeds.py evidence=(text, kind, [subspans]); review shows
+it. AUDITOR RE-RUN: NO INCONSISTENCIES. Suite 1011.
+
+THE ONTOLOGY IS FULLY DECOMPOSED AND UNIFORM — verified by an auditor, not by hand.
+
