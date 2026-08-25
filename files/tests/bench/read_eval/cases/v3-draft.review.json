@@ -20,9 +20,9 @@
   "verdict": "accepted"
  },
  "au-0001": {
-  "hash": "72cb060ad73ce667",
-  "note": "treat it like cap-0001, as a query",
-  "verdict": "rejected"
+  "hash": "6cb72cf154387f2d",
+  "note": "",
+  "verdict": "accepted"
  },
  "au-0002": {
   "hash": "800e79dfe291fe7e",
