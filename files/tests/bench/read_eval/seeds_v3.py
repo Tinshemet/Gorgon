@@ -475,8 +475,9 @@ SEEDS_V3: List[Seed] = [
 
     # ══ audit — a question about OUR OWN behaviour, never sent at the lab ════════════
     Seed("au-0001", "audit", "what did you just run?",
-         ["you"], ["run"],
-         {}, queries={0: ("identity", [("what", "seek", None, None)])}, frame=[("you", "meta")],
+         ["you", "what"], ["run"],
+         {0: [{"span": 1, "role": "patient"}]},
+         queries={0: ("identity", [("what", "seek", None, None)])}, frame=[("you", "meta")],
          note="coverage_map ⚠⚠: events.log is the arbiter and no sentence reaches it. "
               "NO object spans — the question is about the agent's ledger, not a lab "
               "thing; any lab op emitted from it scores hallucinated. Pairs with "

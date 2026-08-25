@@ -928,3 +928,11 @@ Final grade: 106 accept, 5 issues (a light pass).
   request; io-0007 `it would be great` -> frame request over the achieve(alpha down).
 Frame parties now: testimony · meta · request. Auditor clean, suite 1011.
 
+## 35 · au-0001 PARALLELS cap-0001 (operator, 2026-08-26)
+
+Final pass: 112 accept, 1 reject — au-0001 *"treat it like cap-0001, as a query."* The gap:
+cap-0001 has a PATIENT (`networks`), au-0001 had none. Fixed: `what` in `what did you just
+run?` IS the sought object, so it is a `patient` (in the attachment) AND the `seek` (in the
+`ask`) — now structurally identical to cap-0001: `you` frame meta + a patient + a query with
+`ask`. Auditor clean, suite 1011.
+
