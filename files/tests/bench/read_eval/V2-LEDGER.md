@@ -913,3 +913,18 @@ scope. Auditor extended (manner-no-kind) and RE-RUN: 0 inconsistencies. Suite 10
 Every channel and clause in the gold now decomposes: trigger · manner · pacing · ask (query)
 · finding (diagnosis) · evidence. The decomposition is total.
 
+## 34 · POLITE REQUESTS + the day's small issues (operator, 2026-08-26)
+
+Final grade: 106 accept, 5 issues (a light pass).
+- **au-0001** `what did you just run?` — confirmed a QUERY (an audit query about the agent's
+  own ledger; frame you=meta). No change.
+- **cb-0003** `stop both alpha and beta` — `both` added as a QUANTIFIER (+ the manner
+  `not just one` already scope-decomposed).
+- **dt-0004** — the manner `for an hour` was already decomposed (duration, an hour=anchor
+  temporal); the reject was on the pre-decomp version.
+- **io-0001 `i need alpha stopped` + io-0007 `it would be great if alpha were down`** — both
+  are POLITE/INDIRECT REQUESTS. New FRAME PARTY **`request`** (the user asks indirectly),
+  distinct from `testimony` (reports) and `meta` (addresses the agent). io-0001 `i` -> frame
+  request; io-0007 `it would be great` -> frame request over the achieve(alpha down).
+Frame parties now: testimony · meta · request. Auditor clean, suite 1011.
+

@@ -729,9 +729,11 @@ SEEDS_V3: List[Seed] = [
 
     # ══ indirect-orders — the measured 0/14 family, an order by another mechanism ═══════
     Seed("io-0001", "indirect-orders", "i need alpha stopped",
-         ["alpha"], ["stopped"], {0: [0]},
-         note="nominalised order — the PARTICIPLE is the act, the patient precedes it. "
-              "RULING NEEDED: is the verb span 'stopped' or 'need alpha stopped'"),
+         ["i", "alpha"], ["stopped"],
+         {0: [{"span": 1, "role": "patient"}]}, frame=[("i", "request")],
+         note="RULED 08-26 (operator): a POLITE/INDIRECT REQUEST — 'i need' frames it, so "
+              "'i' is frame party REQUEST (the user asks, vs testimony=reports, meta=agent); "
+              "'stopped' the nominalised act, 'alpha' its patient"),
     Seed("io-0002", "indirect-orders", "alpha needs to be stopped",
          ["alpha"], ["stopped"], {0: [0]},
          note="passive with a deontic — the patient is the SUBJECT; order, not report"),
@@ -752,9 +754,10 @@ SEEDS_V3: List[Seed] = [
          ["alpha"], ["stopped"], {0: [0]},
          note="deontic passive — same act as io-0005 with the patient as subject"),
     Seed("io-0007", "indirect-orders", "it would be great if alpha were down",
-         ["alpha", "were down"], ["were down"],
-         {0: [{"span": 0, "role": "patient"},
-              {"span": 1, "role": "value", "kind": "status"}]},
+         ["it would be great", "alpha", "were down"], ["were down"],
+         {0: [{"span": 1, "role": "patient"},
+              {"span": 2, "role": "value", "kind": "status"}]},
+         frame=[("it would be great", "request")],
          note="RULED 08-25 (operator): 'were down' is a STATUS, same as 'down' in 'is vm2 "
               "down?' (legal, down=stopped) — grammatically similar, just add 'were' to the "
               "span. 'alpha' patient, 'were down' the status SELECTOR (vector state="
@@ -829,7 +832,10 @@ SEEDS_V3: List[Seed] = [
               "negation of the first, RESOLVE's to expand). Both 'it' are bare pronouns "
               "-> the one span"),
     Seed("cb-0003", "conditional-branches", "stop both alpha and beta, not just one",
-         ["alpha", "beta"], ["stop"], {0: [0, 1]}, manner={0: ("not just one", "scope", [("one", "quantifier", None, None)])},
+         ["both", "alpha", "beta"], ["stop"],
+         {0: [{"span": 0, "role": "quantifier"}, {"span": 1, "role": "patient"},
+              {"span": 2, "role": "patient"}]},
+         manner={0: ("not just one", "scope", [("one", "quantifier", None, None)])},
          note="RULED 08-22: \"'not just one' is ambigius since it could mean launch both or "
               "if you cant launch one dont launch the other as well — this is for ROUTE or "
               "resolve but SHOULD BE TAGGED ANYWAY as 'procedure control', like 'one at a "

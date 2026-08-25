@@ -615,9 +615,9 @@ def validate_case(case: dict) -> List[str]:
                     continue
                 if not (isinstance(f["span"], int) and 0 <= f["span"] < len(spans)):
                     faults.append(f"{cid}: frame[{j}] span out of range")
-                if f["party"] not in ("testimony", "meta"):
+                if f["party"] not in ("testimony", "meta", "request"):
                     faults.append(f"{cid}: frame[{j}] party {f['party']!r} is not "
-                                  f"testimony/meta")
+                                  f"testimony/meta/request")
 
     # v2.3 hint: closed kind, free gloss — the OUTBOUND half of the loop
     if "hint" in gold:
