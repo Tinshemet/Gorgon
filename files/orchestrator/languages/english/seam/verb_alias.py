@@ -48,7 +48,11 @@ PENDING, RATIFIED, SUPERSEDED = "pending", "ratified", "superseded"
 class AliasEntry(NamedTuple):
     """One mask word, the lab operation it unfolds to, and how the surface binds to it."""
     word: str                                  # THE MASK — lowercased ("relab", "contain")
-    operation: str                             # the manifest operation it expands to ("reset_lab")
+    operation: str                             # what it expands to: an operation PHRASE
+    #   ("reset the lab") when target is "operation", or a saved-procedure NAME ("quarantine")
+    #   when target is "procedure". The two use-paths differ: an operation phrase re-reads
+    #   through the seam; a procedure NAME is run by the engine (`procedures run`), gated the same.
+    target: str = "operation"                  # "operation" (re-read) | "procedure" (engine run)
     # ⇒ DOES THE SURFACE OBJECT FILL THE OPERATION'S PATIENT? `contain IT` — the `it` the sentence
     #   names becomes the patient of `container_mode`. `relab` binds nothing (it takes no object).
     binds_patient: bool = False
@@ -77,14 +81,14 @@ class AliasStore:
     # ── writing ──────────────────────────────────────────────────────────────────────────
     def propose(self, word: str, operation: str, binds_patient: bool = False,
                 description: str = "", source: str = TOLD, said: str = "",
-                who: Optional[str] = None) -> AliasEntry:
+                who: Optional[str] = None, target: str = "operation") -> AliasEntry:
         """File a PENDING alias. It describes; it does not yet permit.
 
         ⇒ SUPERSESSION RATHER THAN OVERWRITE: a prior ratified alias for the word stays and is
           marked when a newer one is ratified, so a changed mask is always auditable backwards.
         """
         entry = AliasEntry(word=str(word).strip().lower(), operation=str(operation).strip(),
-                           binds_patient=bool(binds_patient),
+                           binds_patient=bool(binds_patient), target=str(target),
                            description=str(description).strip(), source=source,
                            status=PENDING, said=str(said), who=who, at=time.time())
         self._rows.append(entry)
@@ -167,7 +171,7 @@ class AliasStore:
             rows = json.loads(self.path.read_text())
         except Exception:
             return
-        self._rows = [AliasEntry(**{k: r.get(k) for k in AliasEntry._fields}) for r in rows]
+        self._rows = [AliasEntry(**{k: r[k] for k in AliasEntry._fields if k in r}) for r in rows]
 
 
 def _alias_home() -> str:
@@ -179,6 +183,17 @@ def _alias_home() -> str:
 # ⇒ THE PROCESS-WIDE MASK STORE, mirroring `archive.ARCHIVE`. Loaded on first import, saved by
 #   whoever writes — a store nobody can audit is the failure the archive names.
 ALIASES = AliasStore(_alias_home())
+
+
+def procedure_for(word: str) -> Optional[str]:
+    """The saved-procedure NAME a ratified PROCEDURE mask points at, or None.
+
+    ⇒ The use-path for a procedure mask is not a seam re-read (a procedure is compiled, not NL);
+      it is an engine run via `procedures run`, gated by the procedure's own gauntlet. This is
+      the lookup the shortcut layer uses to route a masked word to that runner.
+    """
+    e = ALIASES.known(str(word).strip().lower())
+    return e.operation if (e is not None and e.target == "procedure") else None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
@@ -217,7 +232,15 @@ def aliases_from(request: str, board=None, world=None) -> List[dict]:
         # ⇒ the mask WORD may not itself be a lab verb — you cannot repaint `stop`.
         if word in lab or not operation:
             continue
-        out.append({"word": word, "operation": operation, "said": m.group(0).strip()})
+        # ⇒ `define X as (the) <name> procedure` binds a PROCEDURE, run by the engine; anything
+        #   else is an operation phrase that re-reads through the seam.
+        pm = _re.match(r"^(?:the\s+)?(\w+)\s+procedure$", operation, _re.I)
+        if pm:
+            out.append({"word": word, "operation": pm.group(1).strip().lower(),
+                        "target": "procedure", "said": m.group(0).strip()})
+        else:
+            out.append({"word": word, "operation": operation,
+                        "target": "operation", "said": m.group(0).strip()})
     return out
 
 
@@ -231,7 +254,8 @@ def file_all(aliases: List[dict], who: Optional[str] = None) -> List[str]:
     said: List[str] = []
     for a in aliases:
         try:
-            entry = ALIASES.propose(a["word"], a["operation"], said=a.get("said", ""), who=who)
+            entry = ALIASES.propose(a["word"], a["operation"], said=a.get("said", ""), who=who,
+                                    target=a.get("target", "operation"))
         except Exception as e:                      # a malformed proposal is not a crash
             said.append(f"could not file alias {a.get('word')!r} — {e}")
             continue
@@ -278,7 +302,9 @@ def expand_aliases(request: str, board=None) -> Tuple[str, List[str]]:
         lead, verb, rest = m.group(1), m.group(2), m.group(3)
         entry = ALIASES.known(verb.lower())
         # ⇒ never expand a word the lab owns as a verb — the manifest wins (the shadow guard).
-        if entry is None or verb.lower() in lab:
+        #   A PROCEDURE alias is not surface-substituted here; it is run by the engine at the
+        #   shortcut layer, so the seam leaves it alone.
+        if entry is None or entry.target != "operation" or verb.lower() in lab:
             continue
         parts[i] = lead + entry.operation + rest
         notices.append(f"expanded mask {verb!r} -> {entry.operation!r}")

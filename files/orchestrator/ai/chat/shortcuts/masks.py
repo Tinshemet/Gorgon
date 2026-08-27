@@ -69,13 +69,15 @@ class Masks(Shortcut):
         if known:
             console.print(f"[bold]{len(known)} mask(s) in force[/bold]")
             for e in known:
-                console.print(f"    {e.word:16} -> {e.operation[:48]:48}")
+                tag = "  [dim](procedure)[/dim]" if e.target == "procedure" else ""
+                console.print(f"    {e.word:16} -> {e.operation[:44]:44}{tag}")
 
         if waiting:
             console.print(f"\n[bold yellow]{len(waiting)} waiting for you[/bold yellow] "
                           f"[dim](these do NOT expand)[/dim]")
             for e in waiting:
-                console.print(f"    {e.word:16} -> {e.operation[:40]:40} "
-                              f"[dim]from: {e.said[:28]}[/dim]")
+                tag = " (procedure)" if e.target == "procedure" else ""
+                console.print(f"    {e.word:16} -> {(e.operation+tag)[:40]:40} "
+                              f"[dim]from: {e.said[:24]}[/dim]")
             console.print("[dim]    `masks ratify <word>` to sign one, "
                           "`masks reject <word>` to refuse it[/dim]")

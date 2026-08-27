@@ -274,7 +274,7 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #   the `define … as …` frame. INERT for every other request.
     for _al in _va.aliases_from(request, board, world):
         _va.ALIASES.propose(_al["word"], _al["operation"], said=_al.get("said", ""),
-                            source=_va.TOLD)
+                            source=_va.TOLD, target=_al.get("target", "operation"))
         _va.ALIASES.save()
     # ⇒ USE a mask: a ratified alias that opens a clause expands to its operation, deterministic
     #   and INERT until ratified — the expansion re-reads into the SAME gated operations.

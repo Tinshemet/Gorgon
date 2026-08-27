@@ -161,6 +161,78 @@ def test_persistence_round_trips():
         if os.path.exists(path): os.remove(path)
 
 
+def test_a_macro_alias_expands_to_multiple_gated_ops():
+    # macros come free from Option B: a multi-step expansion re-reads into >1 gated op, and is
+    # still byte-identical to typing the steps out, so each step faces the authority gate.
+    from orchestrator.languages.english.seam import pipeline
+    V.ALIASES.propose("cleanup", "stop alpha and stop beta"); V.ALIASES.ratify("cleanup")
+    try:
+        masked = pipeline.run("cleanup")
+        plain = pipeline.run("stop alpha and stop beta")
+        check("a macro mask == the plain multi-step request", masked == plain)
+        check("... and it produced two operations", len(masked.operations) == 2)
+    finally:
+        V.ALIASES.retract("cleanup")
+
+
+def test_procedure_alias_declaration_and_skip():
+    # `define X as the <name> procedure` binds a PROCEDURE, not an operation phrase.
+    got = V.aliases_from("define contain as the quarantine procedure")
+    check("reads a procedure-target mask", got and got[0]["target"] == "procedure")
+    check("the target is the procedure name", got and got[0]["operation"] == "quarantine")
+    check("a plain phrase stays an operation target",
+          V.aliases_from("define relab as reset the lab")[0]["target"] == "operation")
+    s = V.AliasStore()
+    s.propose("contain", "quarantine", target="procedure"); s.ratify("contain")
+    check("a procedure mask is NOT surface-substituted (seam leaves it alone)",
+          _expand_with(s, "contain it") == "contain it")
+
+
+def _expand_with(store, text):
+    import orchestrator.languages.english.seam.verb_alias as m
+    saved = m.ALIASES
+    try:
+        m.ALIASES = store
+        return m.expand_aliases(text)[0]
+    finally:
+        m.ALIASES = saved
+
+
+def test_procedure_for_only_returns_procedure_masks():
+    s = V.AliasStore()
+    s.propose("contain", "quarantine", target="procedure"); s.ratify("contain")
+    s.propose("relab", "reset the lab", target="operation"); s.ratify("relab")
+    import orchestrator.languages.english.seam.verb_alias as m
+    saved = m.ALIASES
+    try:
+        m.ALIASES = s
+        check("procedure_for returns the name for a procedure mask", m.procedure_for("contain") == "quarantine")
+        check("procedure_for returns None for an operation mask", m.procedure_for("relab") is None)
+        check("procedure_for returns None for an unknown word", m.procedure_for("nope") is None)
+    finally:
+        m.ALIASES = saved
+
+
+def test_procedure_mask_runs_through_the_gated_runner():
+    # the bridge: a procedure-mask word reaches Procedures._run_one with the resolved name.
+    import orchestrator.languages.english.seam.verb_alias as m
+    from orchestrator.ai.chat.shortcuts.procedures import Procedures
+    from orchestrator.ai.chat.shortcuts.mask_run import MaskRun
+    s = V.AliasStore(); s.propose("contain", "quarantine", target="procedure"); s.ratify("contain")
+    saved, orig = m.ALIASES, Procedures._run_one
+    calls = []
+    try:
+        m.ALIASES = s
+        Procedures._run_one = staticmethod(lambda lib, name, given, verbose: calls.append((name, given)))
+        mr = MaskRun()
+        check("matches a ratified procedure mask", mr.matches("contain") is True)
+        mr.run("contain os=linux", [], 0, False)
+        check("run() invokes the runner with the resolved procedure name", calls and calls[0][0] == "quarantine")
+        check("... and passes k=v params through", calls and calls[0][1] == ["os=linux"])
+    finally:
+        m.ALIASES, Procedures._run_one = saved, orig
+
+
 if __name__ == "__main__":
     for fn in [test_nothing_routes_until_a_person_says_so, test_patient_binding_is_recorded,
                test_imported_never_routes, test_supersession_keeps_the_old_row,
@@ -169,7 +241,10 @@ if __name__ == "__main__":
                test_cannot_mask_a_lab_verb, test_file_all_proposes_pending_then_ratify_routes,
                test_expand_is_inert_until_ratified, test_mask_expands_in_verb_position_only,
                test_running_a_mask_is_byte_identical_to_the_plain_operation,
-               test_persistence_round_trips]:
+               test_persistence_round_trips,
+               test_a_macro_alias_expands_to_multiple_gated_ops,
+               test_procedure_alias_declaration_and_skip, test_procedure_for_only_returns_procedure_masks,
+               test_procedure_mask_runs_through_the_gated_runner]:
         print(fn.__name__)
         fn()
     print(f"\n{_PASS} passed · {_FAIL} failed")
