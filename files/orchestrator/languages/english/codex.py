@@ -98,6 +98,28 @@ CONTRACT_VERBS: Tuple[str, ...] = ("treat", "regard", "consider")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
+# ═ ALIASING — the verb that teaches a MASK over a lab operation
+# ═   (consumer: verb_alias.py)
+# ═══════════════════════════════════════════════════════════════════════════════════════
+
+# ⇒⇒ **THE VERB-SIDE MIRROR OF THE ARCHIVE.** The archive learns a NOUN (`grubnash is a vm`);
+#   this learns a VERB by masking one the lab already owns. *"define relab as reset the lab"*
+#   teaches that `relab` stands in for `reset the lab`. It is the same declared-at-the-operation
+#   move as CONTRACT_VERBS and `forget` — a fact about THIS system, not about English (*"define
+#   is a synonym for specify"* would be the second, and is refused).
+#
+#   ⇒ **THE `as` COMPLEMENT IS REQUIRED, the same tightening CONTRACT_VERBS relies on.**
+#     `define X AS <operation>` binds a mask; *"define the problem"* binds nothing and is not a
+#     declaration. Without the `as` test the verb alone would claim any sentence it opened.
+#
+#   ⇒ ⚠ **AND A MASK MAY NEVER SHADOW A VERB THE LAB OWNS.** The manifest is checked first
+#     (`head not in manifest_verbs(board)`), exactly as for CONTRACT_VERBS — so no alias can
+#     quietly repaint an order, and a mask expands to a REAL operation the authority gate still
+#     checks. See [[gorgon-verb-alias-mask]].
+ALIAS_VERBS: Tuple[str, ...] = ("define",)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════
 # ═ ISO — stance markers: hedges, emphasis, backchannel, trouble, apology, filled pauses
 # ═   (consumer: iso.py)
 # ═══════════════════════════════════════════════════════════════════════════════════════

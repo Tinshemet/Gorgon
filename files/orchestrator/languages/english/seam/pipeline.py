@@ -263,6 +263,23 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     """The whole chain. Two model calls' worth of questions in pass 1, one in pass 2."""
     board = board or Board()
 
+    # ⇒ VERB MASKS — a ratified alias that opens a clause expands to its operation BEFORE the
+    #   read, deterministically (`define relab as reset the lab` makes `relab` stand in). It is
+    #   INERT until a mask is ratified, so it changes no existing read; the expansion re-reads
+    #   through the ordinary chain, so the authority gate checks the REAL operation and a mask
+    #   carries no authority a plain call would not. See [[gorgon-verb-alias-mask]].
+    from . import verb_alias as _va
+    # ⇒ LEARN a mask: `define X as Y` files a PENDING alias (permits nothing until `masks
+    #   ratify`). Read on the RAW request, before the front door restores a clause break inside
+    #   the `define … as …` frame. INERT for every other request.
+    for _al in _va.aliases_from(request, board, world):
+        _va.ALIASES.propose(_al["word"], _al["operation"], said=_al.get("said", ""),
+                            source=_va.TOLD)
+        _va.ALIASES.save()
+    # ⇒ USE a mask: a ratified alias that opens a clause expands to its operation, deterministic
+    #   and INERT until ratified — the expansion re-reads into the SAME gated operations.
+    request, _mask_notes = _va.expand_aliases(request, board)
+
     # ⇒⇒ THE FRONT DOOR (operator ruling 2026-08-19: junk out ASAP, ONE layer down) —
     #   filled pauses dropped, a typo'd word inside a closed-set phrase read as the
     #   phrase word. The whole chain below reads the VIEW; every fix is a notice, so
