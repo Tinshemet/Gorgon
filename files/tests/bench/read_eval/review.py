@@ -43,7 +43,7 @@ commit with a note (the spec's own rule), so the freeze also writes `v1.review.j
 # ⇒ --rank IS A DIFFERENT PERSON'S JOB, AND THE FLAG KEEPS THE TWO APART
 
 Without the flag the command CERTIFIES (the operator: accept/reject). With `--rank` it ranks
-DIFFICULTY (a second person, 1-10: would a reader find this hard or ambiguous?) — the
+DIFFICULTY (a second person, 0-14 rubric: would a reader find this hard or ambiguous?) — the
 readability axis agreed 08-22; the structural axis is computed from the gold and is nobody's
 to rank. The roles are split on purpose: the one who signed the gold does not grade how hard
 it was, and the one who grades has seen nothing. So the rank loop is BLIND BY CONSTRUCTION:
@@ -367,8 +367,8 @@ def freeze(cases: List[dict], cases_path: str, name: str) -> int:
     return 0
 
 
-# ── rank: the second person's loop — blind, 1-10, its own file ─────────────────────
-RANK_KEYS = tuple(str(n) for n in range(1, 11))
+# ── rank: the second person's loop — blind, 0-14 rubric, its own file ─────────────────────
+RANK_KEYS = tuple(str(n) for n in range(0, 15))   # 0-14 rubric (0 = illegal/reject)
 
 
 def _rank_hash(case: dict) -> str:
@@ -464,7 +464,7 @@ def rank(cases: List[dict], cases_path: str) -> int:
             history.append(case["id"])
             at += 1
         else:
-            print(f"  {DIM}1-10 / s / u / q{OFF}")
+            print(f"  {DIM}0-14 / s / u / q{OFF}")
     return rank_status(cases, cases_path)
 
 

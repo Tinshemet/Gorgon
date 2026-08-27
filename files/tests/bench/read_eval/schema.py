@@ -86,7 +86,7 @@ V3_STRATA = ("identifiers", "units", "possessive", "alternatives",
              "conditional-branches", "partitives",
              # v2.3 — the class the operator named: "only understandable by the fact of the
              # previous turns" (08-22). READ is blind; RESOLVE supplies the state.
-             "turn-dependent")
+             "turn-dependent", "difficulty")
 STRATA = SPEC_STRATA + EARNED_STRATA + V3_STRATA
 
 NOISE = ("terse", "typos", "no-punct", "voice", "fused", "embedded-junk", "code-switch",

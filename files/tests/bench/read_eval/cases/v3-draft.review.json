@@ -84,6 +84,126 @@
   "note": "",
   "verdict": "accepted"
  },
+ "dc-06-1": {
+  "hash": "013dd4bb0a7972fa",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-06-2": {
+  "hash": "6acdb547109dc5cd",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-07-1": {
+  "hash": "575ca6cdadad809a",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-08-1": {
+  "hash": "341bdd72a0d3abe6",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-08-2": {
+  "hash": "4762cbe73428fe67",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-08-3": {
+  "hash": "eaa43cd30c8e46d7",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-09-1": {
+  "hash": "6766d82be5a15ac2",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-09-2": {
+  "hash": "8dbe0b67314945cd",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-09-3": {
+  "hash": "3cfa69bc026787c9",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-10-1": {
+  "hash": "8879e318fb3244b6",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-10-2": {
+  "hash": "23ce10022e27a2fb",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-10-3": {
+  "hash": "15c4f341acc60475",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-11-1": {
+  "hash": "40b05b4f54c8d6de",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-11-2": {
+  "hash": "77f041093a8de5ea",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-11-3": {
+  "hash": "421c7e9dbc82dcb2",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-12-1": {
+  "hash": "596741974dfe12d0",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-12-2": {
+  "hash": "84ada75ac120f971",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-12-3": {
+  "hash": "9eb18152dc80653e",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-13-1": {
+  "hash": "1840aab9332eda5b",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-13-2": {
+  "hash": "f3d228577e5f4736",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-13-3": {
+  "hash": "a93c00e97e5c0c80",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-14-1": {
+  "hash": "a2caef16a3faa8b6",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-14-2": {
+  "hash": "924862b863c4a4c0",
+  "note": "",
+  "verdict": "accepted"
+ },
+ "dc-14-3": {
+  "hash": "de3b8cd69731abd3",
+  "note": "",
+  "verdict": "accepted"
+ },
  "dt-0001": {
   "hash": "69403c57ba7c57d7",
   "note": "",
