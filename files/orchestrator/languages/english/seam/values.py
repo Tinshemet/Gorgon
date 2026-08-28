@@ -82,10 +82,17 @@ from typing import Dict, List, Optional, Tuple
 
 from . import schema as S
 from ..codex import (ATTRIBUTE_LINKERS, CONTRACTIONS, CUT_DETERMINERS, DEFINITE,
-                     GENITIVE_CLITICS, INDEFINITE, NAMING_CUES, SELECTOR_PREPOSITIONS,
-                     VALUE_CONNECTORS)
+                     GENITIVE_CLITICS, INDEFINITE, NAMING_CUES, NUMERAL_WORDS,
+                     SELECTOR_PREPOSITIONS, VALUE_CONNECTORS)
 
-_NUMBER_UNIT = re.compile(r"\b(\d+)\s*([a-z]+)\b")
+# ⇒ a quantity is a DIGIT or a spelled-out NUMBER-WORD before a learned unit — `6gb`, `4 cores`,
+#   AND `six gigabytes`, `four cores` (08-28). Was `\d+` only, so a worded magnitude scattered
+#   and RESOLVE never saw a value to convert. Number-words from the codex SSOT, longest-first so
+#   `seventeen` wins over `seven`. The `_learned` guard (group 2 must be a real unit) keeps
+#   `six vms` from ever reading as a magnitude. (Compound `six thousand mb` still needs multi-
+#   word number parsing — a separate, deeper fix.)
+_NUM = r"\d+|" + "|".join(sorted(NUMERAL_WORDS, key=len, reverse=True))
+_NUMBER_UNIT = re.compile(r"\b(%s)\s*([a-z]+)\b" % _NUM)
 _DETS = set(DEFINITE) | set(INDEFINITE)          # the codex's, not a list of our own
 
 

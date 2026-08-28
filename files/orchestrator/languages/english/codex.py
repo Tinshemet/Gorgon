@@ -346,9 +346,27 @@ COMPARATORS: Dict[str, str] = {
     "exactly": "eq", "precisely": "eq", "just": "eq",
 }
 
+# THE CARDINAL NUMBER-WORDS — one closed lexicon, the SSOT both `ENUMERATORS` (the count
+# table) and `DETERMINERS` (the numeral-prefix set) draw from. The two used to hand-list
+# `one..ten` SEPARATELY — exactly the drift the `PARTIAL` note warns of — and BOTH stopped at
+# ten, so `fifteen vms` / `a dozen vms` read as a SINGLE machine: the quantity was lost in the
+# reader, upstream of any role decomposition. Atomic words only; a spaced compound
+# (`twenty five`) still reads as a quantified SET token-by-token, and the exact composite count
+# is the digit form's job. (`ai/autonomous.py:_NUMWORDS` is a SEPARATE one..ten list for
+# cardinal CREATION name-minting — deliberately left, since widening it changes how many VMs
+# `create twenty vms` instantiates.)
+NUMERAL_WORDS: Dict[str, int] = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+    "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
+    "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18,
+    "nineteen": 19, "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60,
+    "seventy": 70, "eighty": 80, "ninety": 90, "hundred": 100, "thousand": 1000, "dozen": 12,
+}
+
+# the count table: the numerals, plus the articles (a/an = 1), `both` (= 2), zero (`no`), and
+# the universals (`every`/`all`/`each`/`any` -> the string "all").
 ENUMERATORS: Dict[str, object] = {
-    "a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
-    "seven": 7, "eight": 8, "nine": 9, "ten": 10, "both": 2, "no": 0,
+    **NUMERAL_WORDS, "a": 1, "an": 1, "both": 2, "no": 0,
     "every": "all", "all": "all", "each": "all", "any": "all",
 }
 
@@ -372,7 +390,7 @@ PARTICLES = frozenset({"up", "down", "off", "out", "over", "away", "back", "sure
 OBJECT_OPENERS = frozenset({
     "a", "an", "the", "every", "each", "all", "any", "both", "no",
     "it", "them", "me", "us",
-    "most", "some", "several", "few", "many", "half", "everything", "one", "ones"})
+    "most", "some", "several", "few", "many", "half", "none", "everything", "one", "ones"})
 
 SHAPE_NEGATION = frozenset({"don't", "do", "not", "never"})
 
@@ -509,7 +527,7 @@ RESTRICTORS = ("that", "which", "who", "whose", "with", "without", "not")
 
 # ── A TRUNCATED NAME IS REPAIRED FROM THE REQUEST, NOT RE-ASKED ────────────────────────
 DETERMINERS = ("the", "a", "an", "every", "all", "each", "both", "any", "some", "no",
-               "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")
+               ) + tuple(NUMERAL_WORDS)      # numerals from the SSOT above (was hand-listed one..ten)
 
 BOUNDARY_SEPARATORS = (",", ";", " and ", " then ", " but ", "—", " - ")
 
