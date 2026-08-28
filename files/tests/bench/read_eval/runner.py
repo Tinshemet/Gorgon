@@ -139,6 +139,7 @@ def read_case(sentence: str, board=None) -> dict:
     from orchestrator.languages.english.seam import pass1 as P1, pass2 as P2
 
     board = board or Board()
+    import re as _re0
     # ⇒⇒ THE FRONT DOOR (operator ruling 2026-08-19: junk out ASAP, ONE layer down) —
     #   the whole seam reads the VIEW; every offset below maps back to the ORIGINAL
     #   bytes before it is reported, so gold offsets still hold.
@@ -194,17 +195,49 @@ def read_case(sentence: str, board=None) -> dict:
     #   carries its binding; an UNBOUND one still gets its span, and the binding is deferred to
     #   RESOLVE (`bound=False`). annotate_roles gives both role `reference`. Deduped by offset,
     #   preferring the bound reading when the same pointer is seen on two rows.
+    # the ANTECEDENT of a bound mention is the OBJECT row it is a mention of (its row index) —
+    #   NOT a mention row (a pronoun chain). Exclude mentions so the alias points at the real thing.
+    _ante = {p["row"]: p for p in predicted_spans
+             if not p.get("mention") and p.get("row") is not None and p.get("start") is not None}
     _best = {}
     for i, otype, owhere, m in _all_mentions:
         key = (int(m["start"]), int(m["end"]))
         if key not in _best or (m.get("bound") and not _best[key][3].get("bound")):
             _best[key] = (i, otype, owhere, m)
     for (s0, e0), (i, otype, owhere, m) in _best.items():
+        # ⇒ THE ALIAS MODEL (operator 2026-08-28): a BOUND reference is an ALIAS for its
+        #   ANTECEDENT — the row it is a mention of. (1) SURFACE the binding: `refers` = that
+        #   row's span. (2) SWAP the alias in: emit the antecedent as the PATIENT of the act the
+        #   pointer heads — `snapshot it` == `snapshot alpha`, so alpha is a patient per act.
+        #   Only for a real ENTITY antecedent (a bare name), never a pronoun chain.
+        _an = _ante.get(i) if m.get("bound") else None
+        # ⇒ ALIAS EXTENSION (operator 2026-08-28 "extend and close"): the antecedent may be a
+        #   MULTI-WORD entity — `the grubnash`, `a network`, `3 vms`. `_ante` already excludes
+        #   pronoun chains, so accept any real object row that NAMES a thing (optional
+        #   determiner/number + word(s)); still reject a VALUE row — a quoted label is not an
+        #   entity to alias. (Was `[a-z][a-z0-9_-]*`, which dropped every two-word name and so
+        #   left `it -> the grubnash` bound-but-unaliased on 14 corpus cases.)
+        if _an is not None and (_an.get("kind") == "value" or not _re0.fullmatch(
+                r"(?:the |a |an |\d+ )?[a-z][a-z0-9_-]*(?: [a-z0-9_-]+)*",
+                str(_an.get("span") or "").strip().lower())):
+            _an = None
         predicted_spans.append({"row": i, "span": m["text"], "kind": otype,
                                 "type": "object", "where": owhere,
                                 "start": s0, "end": e0,
                                 "mention": True, "bare": bool(m.get("bare")),
-                                "bound": bool(m.get("bound"))})
+                                "bound": bool(m.get("bound")),
+                                "refers": (_an.get("span") if _an else None)})
+        if _an is not None:
+            # ⇒ ROLE-CARRYING ALIAS (operator 2026-08-28): the referent takes the SLOT the
+            #   POINTER fills. A pointer right after a transfer/location preposition is the
+            #   DESTINATION (`add those vms to it`); otherwise the PATIENT (`restart it`) — the
+            #   same in/on/to rule the gold uses and the destination override (below) applies.
+            _pw = _re0.search(r"(\w+)\s*$", sentence[:s0])
+            _arole = "destination" if (_pw and _pw.group(1).lower() in
+                                       {"to", "into", "onto", "in", "on"}) else "patient"
+            predicted_spans.append({"row": i, "span": _an["span"], "kind": _an.get("kind"),
+                                    "type": "object", "where": {}, "start": _an["start"],
+                                    "end": _an["end"], "role": _arole, "sub": True, "alias": True})
     # ⇒⇒ **THE SEAM'S EVIDENCE READING WAS NEVER COLLECTED — found on the first shakedown.**
     #   `quoted_clauses` has read *"the log says 'cannot allocate memory'"* since 08-16, and
     #   this function surfaced only pass 1's ROWS — so a gold evidence span could never be
