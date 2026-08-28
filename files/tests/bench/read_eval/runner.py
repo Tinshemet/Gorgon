@@ -239,6 +239,14 @@ def read_case(sentence: str, board=None) -> dict:
                                 "type": "evidence", "where": {},
                                 "start": where[0] if where else None,
                                 "end": where[1] if where else None})
+    # ⇒ a PAST-DEICTIC temporal detail is EVIDENCE for a testimony: `alpha was stopped YESTERDAY`
+    #   -> `yesterday` is the WHEN of the report (tp-0003). Future deictics (tomorrow/tonight) are
+    #   schedule triggers, not evidence, so only the past one is emitted here.
+    import re as _rd
+    for _dm in _rd.finditer(r"\byesterday\b", sentence, _rd.I):
+        predicted_spans.append({"row": None, "span": _dm.group(), "kind": "evidence",
+                                "type": "evidence", "where": {},
+                                "start": _dm.start(), "end": _dm.end()})
     # ⇒ v1.2 — the seam's CONDITION reading, collected the same way evidence was: a clause
     #   `iso.is_condition` flags becomes a predicted trigger at its located offsets. A clock
     #   phrase ("at 21:30") has NO offset-bearing reader today, so it can never be predicted —
@@ -533,6 +541,29 @@ def annotate_roles(reading: dict) -> dict:
             reading.setdefault("rows", []).append(
                 {"row": None, "span": _wm.group(), "type": "object", "kind": "?",
                  "start": _ws, "end": _q["start"] + _wm.end(), "role": "patient", "sub": True})
+    # ⇒ BENEFICIARY (08-28): the `for X` in `a network FOR the test vms` — the party the act is
+    #   done FOR. Split it off the chunked row and emit X as beneficiary.
+    import re as _rb
+    for _p in list(reading.get("rows", [])):
+        if _p.get("sub") or _p.get("type") != "object" or _p.get("start") is None:
+            continue
+        _fm = _rb.search(r"\bfor\s+((?:the|a|an|new|test|these|those)\b.+)$", _p.get("span") or "", _rb.I)
+        if _fm:
+            _fs = _p["start"] + _fm.start(1)
+            reading["rows"].append({"row": _p.get("row"), "span": _fm.group(1), "type": "object",
+                                    "kind": "?", "start": _fs, "end": _p["start"] + _fm.end(1),
+                                    "role": "beneficiary", "sub": True})
+    # ⇒ DESTINATION (08-28, frame-of-reference sibling): a TRANSFER centres the act on a LOCATION
+    #   — `put web on lab` -> add_vm_to_network(on=lab): the network is the DESTINATION, not the
+    #   patient. Override the on_row role for a single-entity location (a chunked `db on dmz` is
+    #   left — that needs the seam chunking split, and re-labelling it would drop the db patient).
+    _TRANSFER = {"add_vm_to_network"}
+    _on_dest = {o["on_row"] for o in ops if o.get("operator") in _TRANSFER and o.get("on_row") is not None}
+    for _p in reading.get("rows", []):
+        if _p.get("sub") or _p.get("row") not in _on_dest or _p.get("start") is None:
+            continue
+        if _rb.fullmatch(r"[a-z][a-z0-9_-]*", (_p.get("span") or "").strip().lower()):
+            _p["role"] = "destination"
     return reading
 
 
