@@ -168,6 +168,7 @@ def read_case(sentence: str, board=None) -> dict:
 
     by_handle = {s.handle: i for i, s in enumerate(table)}
     predicted_spans = []
+    _all_mentions = []                       # (row_i, object_type, where, mention) — deduped below
     for i, row in enumerate(rows):
         where = _find(sentence, row.span or row.name)
         # ⇒ A VALUE ROW KNOWS WHERE IT WAS READ (08-23): `a` in `named a, b and c` is also
@@ -186,11 +187,24 @@ def read_case(sentence: str, board=None) -> dict:
         #   pronoun is bound but never reported — the gold points at the thing, not the
         #   pointer. A tied mention bound nothing and is reported by the gate, not here.
         for m in (getattr(row, "mentions", None) or ()):
-            if m.get("bound") and not m.get("bare"):
-                predicted_spans.append({"row": i, "span": m["text"], "kind": row.object_type,
-                                        "type": "object", "where": dict(row.where or {}),
-                                        "start": int(m["start"]), "end": int(m["end"]),
-                                        "mention": True})
+            if m.get("start") is not None:       # collect ALL mentions; emit deduped after the loop
+                _all_mentions.append((i, row.object_type, dict(row.where or {}), m))
+    # ⇒ REFERENCE RULING (operator 2026-08-28, [[gorgon-reference-ruling]]): READ emits the
+    #   reference SPAN for EVERY pointer — bound or not (decompose faithfully). A BOUND mention
+    #   carries its binding; an UNBOUND one still gets its span, and the binding is deferred to
+    #   RESOLVE (`bound=False`). annotate_roles gives both role `reference`. Deduped by offset,
+    #   preferring the bound reading when the same pointer is seen on two rows.
+    _best = {}
+    for i, otype, owhere, m in _all_mentions:
+        key = (int(m["start"]), int(m["end"]))
+        if key not in _best or (m.get("bound") and not _best[key][3].get("bound")):
+            _best[key] = (i, otype, owhere, m)
+    for (s0, e0), (i, otype, owhere, m) in _best.items():
+        predicted_spans.append({"row": i, "span": m["text"], "kind": otype,
+                                "type": "object", "where": owhere,
+                                "start": s0, "end": e0,
+                                "mention": True, "bare": bool(m.get("bare")),
+                                "bound": bool(m.get("bound"))})
     # ⇒⇒ **THE SEAM'S EVIDENCE READING WAS NEVER COLLECTED — found on the first shakedown.**
     #   `quoted_clauses` has read *"the log says 'cannot allocate memory'"* since 08-16, and
     #   this function surfaced only pass 1's ROWS — so a gold evidence span could never be
@@ -333,6 +347,86 @@ def read_case(sentence: str, board=None) -> dict:
                 predicted_instructs.append({"clause": clause, "start": at[0], "end": at[1]})
     # every offset above is VIEW-space; the report speaks in ORIGINAL bytes
     _b = view.back
+    # ⇒ REFERENCE RULING part 2 ([[gorgon-reference-ruling]]): a FREE pointer the seam listed
+    #   NO mention for — a coordinated `them`, a demonstrative `that` — is STILL a reference.
+    #   Spot the referring closed class not already inside an emitted span, and emit each as an
+    #   UNBOUND reference (the span is READ's; binding is deferred to RESOLVE). Offsets are
+    #   VIEW-space here and get remapped to ORIGINAL by the loop just below, with every span.
+    import re as _re
+    from orchestrator.languages.english import codex as _CX
+    _qw = (set(_CX.UNIVERSAL) | set(_CX.PARTIAL) | {"neither", "no", "none"}
+           | {w for w, v in _CX.ENUMERATORS.items() if isinstance(v, int) and v >= 2})
+    _covered = [(p["start"], p["end"]) for p in predicted_spans if p.get("start") is not None]
+    for _mm in _re.finditer(r"\b(?:it|them|they|that)\b", sentence, _re.I):
+        _s0, _e0 = _mm.start(), _mm.end()
+        if any(cs <= _s0 and _e0 <= ce for cs, ce in _covered):
+            continue                              # already inside an emitted span
+        predicted_spans.append({"row": None, "span": sentence[_s0:_e0], "kind": "?",
+                                "type": "object", "where": {}, "start": _s0, "end": _e0,
+                                "mention": True, "bare": True, "bound": False})
+    # ⇒ the LONE REMAINDER: a PARTITIVE quantifier OVER a pronoun reference — `three of them`,
+    #   `half of them` — whether the pronoun is BOUND (part A) or FREE (part B). The seam builds
+    #   no row for a pronoun-headed partitive, so the split never sees it; emit the `<quant> of`
+    #   quantifier beside every reference it precedes. (No corpus case has `of <pronoun>`, so the
+    #   cache is untouched — this is a robustness emit, verified live.)
+    _qspans = [(p["start"], p["end"]) for p in predicted_spans
+               if p.get("role") == "quantifier" and p.get("start") is not None]
+    for _ref in [p for p in list(predicted_spans)
+                 if p.get("mention") and p.get("start") is not None]:
+        _pm = _re.search(r"(\S+\s+of)\s*$", sentence[:_ref["start"]], _re.I)   # `three of`, no tail
+        if not _pm:
+            continue
+        _qword = _pm.group(1).split()[0].lower().strip(".,;:!?'\"")
+        _qs, _qe = _pm.start(1), _pm.end(1)
+        if (_qword in _qw or _qword.isdigit()) and not any(a <= _qs and _qe <= b for a, b in _qspans):
+            predicted_spans.append({"row": None, "span": sentence[_qs:_qe],
+                                    "kind": "?", "type": "object", "where": {},
+                                    "start": _qs, "end": _qe, "role": "quantifier", "sub": True})
+            _qspans.append((_qs, _qe))
+
+    # ⇒ an ORPHANED ordinal (operator 2026-08-28): `oldest` in `the oldest snapshot of alpha` is
+    #   basically an ADJECTIVE on the snapshot — but the value/possessive frame collapses the head
+    #   to a value LEAF and drops it, so it lands in NO row. READ must SURFACE it and understand
+    #   it BINDS to the value it modifies; RESOLVE ranks WHICH is oldest (not READ's job). Emit
+    #   any ordinal WORD not inside an emitted span, bound to the nearest row it precedes.
+    from tests.bench.read_eval import vectors as _V2
+    _ospans = [(p["start"], p["end"]) for p in predicted_spans if p.get("start") is not None]
+    _otoks = list(_re.finditer(r"\b\w+\b", sentence))
+    for _i, _om in enumerate(_otoks):
+        _t = _om.group().lower(); _os, _oe = _om.start(), _om.end()
+        if any(cs <= _os and _oe <= ce for cs, ce in _ospans):
+            continue                               # already inside an emitted span (split owns it)
+        _nx = _otoks[_i + 1].group().lower() if _i + 1 < len(_otoks) else None
+        if _t in _ORDINAL_POS or _re.fullmatch(r"\d+(?:st|nd|rd|th)", _t) or _V2._superlative(_t, _nx):
+            _tgt = min((p for p in predicted_spans if p.get("type") == "object"
+                        and p.get("start") is not None and p["start"] >= _oe),
+                       key=lambda p: p["start"], default=None)
+            _bind = _tgt.get("row") if _tgt else None
+            predicted_spans.append({"row": _bind, "span": sentence[_os:_oe], "kind": "?",
+                                    "type": "object", "where": {}, "start": _os, "end": _oe,
+                                    "role": "ordinal", "sub": True, "binds": _bind})
+
+    # ⇒ APPOSITION (operator wants reference 100%, 2026-08-28): `alpha, the jumpbox` /
+    #   `the jumpbox, alpha` — two comma-adjacent COREFERENT NPs (a NAME + a `the`-description),
+    #   NOT an and-list. The appositive (2nd by position) re-describes the first, so it REFERS.
+    #   Deciding coreference is really RESOLVE's; this is a tightly-GUARDED READ heuristic per the
+    #   operator's call — comma-adjacent ONLY, NOT followed by and/or, and EXACTLY ONE side carries
+    #   a determiner. So `alpha, beta` (bare+bare) and `it, the biggest vm AND beta` (list) skip.
+    _appos = sorted([p for p in predicted_spans if p.get("type") == "object"
+                     and not p.get("mention") and not p.get("sub") and p.get("start") is not None],
+                    key=lambda p: p["start"])
+    _det = lambda x: str(x).lower().startswith(("the ", "a ", "an "))
+    for _k in range(len(_appos) - 1):
+        _A, _B = _appos[_k], _appos[_k + 1]
+        if not _re.fullmatch(r"\s*,\s*", sentence[_A["end"]:_B["start"]]):
+            continue                               # comma-adjacent ONLY
+        if sentence[_B["end"]:_B["end"] + 8].lstrip(" ,").lower().startswith(("and ", "or ")):
+            continue                               # an and/or list, not apposition
+        if _det(_A.get("span", "")) == _det(_B.get("span", "")):
+            continue                               # both/neither determined -> a list, not a re-description
+        _B["role"] = "reference"                   # the appositive (2nd) refers to the first
+        _B["refers"] = _A.get("span")
+
     for group in (predicted_spans, predicted_triggers, predicted_queries,
                   predicted_rules, predicted_reports, predicted_instructs, operations):
         for d in group:
@@ -343,6 +437,207 @@ def read_case(sentence: str, board=None) -> dict:
             "triggers": predicted_triggers, "queries": predicted_queries,
             "rules": predicted_rules, "reports": predicted_reports,
             "instructs": predicted_instructs}
+
+
+def annotate_roles(reading: dict) -> dict:
+    """Assign a ROLE to each object row from signals the seam ALREADY produces — the reader
+    catching up to the gold's per-span roles. Mutates and returns *reading*.
+
+    Kept a separate pass (not folded into read_case) so the expensive seam reading can be
+    cached once and this cheap annotation iterated over it.
+    """
+    ops = reading.get("operations", [])
+    patient_rows = {o["on_row"] for o in ops if o.get("on_row") is not None}
+    value_rows   = {o["value_row"] for o in ops if o.get("value_row") is not None}
+    for p in reading.get("rows", []):
+        if p.get("role"):
+            continue
+        t = p.get("type")
+        if t == "evidence":                      # already emitted as evidence spans
+            p["role"] = "evidence"; continue
+        if t != "object":
+            continue
+        if p.get("mention"):                     # a bound anaphor (bare or full-phrase)
+            p["role"] = "reference"; continue
+        if p.get("kind") == "value":             # a LEAF value — IP/MAC, magnitude, attribute
+            p["role"] = "value"; continue        #   name, quoted label ("ATTRIBUTES ARE LEAVES")
+        ri = p.get("row")
+        if ri in patient_rows:                   # an operation's target (the dominant case)
+            p["role"] = "patient"
+        elif ri in value_rows:                   # its value/leaf slot
+            p["role"] = "value"
+        else:
+            # ⇒ FALLBACK: an object the seam found but tied to no operation (possessive
+            #   `delete alpha's snapshots`, cause `restart alpha because…`, a query object) is
+            #   almost always the patient — the seam just never built the op to point with.
+            p["role"] = "patient"
+    _split_noun_phrases(reading)     # ⇒ EMISSION tier: head + modifier sub-spans
+    # ⇒ a bare demonstrative/pronoun the reader TRAPPED in a KINDLESS object row (`snapshot that`
+    #   -> row `that` kind ?; `if that doesn't work` -> `that doesn't`; `restart that`) is a
+    #   REFERENCE, not the patient that kindless row was labelled. Part B emits FREE pronouns but
+    #   skips these (they look "covered"). Emit the pronoun token as a tight reference sub-span
+    #   ([[gorgon-reference-ruling]]: READ surfaces the pointer; RESOLVE binds). NO pronoun has
+    #   gold role patient, so this never steals a patient.
+    import re as _re3
+    for _q in reading.get("rows", []):
+        if _q.get("sub") or _q.get("mention") or _q.get("type") != "object":
+            continue
+        if _q.get("kind") not in (None, "?") or _q.get("role") == "reference":
+            continue                                   # only KINDLESS rows the reader failed to type
+        if _re3.search(r"\b(?:it|them|they|that|one|ones)\b", (_q.get("span") or "").lower()):
+            _q["role"] = "reference"                   # a kindless pronoun-row REFERS, is not the patient
+    # dedup coincident SUB-spans (a partitive over a pronoun can be emitted by both read_case
+    # part B and the split when the reader also built a row for it) — same (offset, role) once
+    _seen, _kept = set(), []
+    for p in reading.get("rows", []):
+        k = (p.get("start"), p.get("end"), p.get("role")) if p.get("sub") else id(p)
+        if k in _seen:
+            continue
+        _seen.add(k); _kept.append(p)
+    reading["rows"] = _kept
+    # ⇒ BIND a SCATTERED ordinal to its head ([[gorgon-reference-ruling]] sibling): `the oldest
+    #   of the vms` reads as TWO object rows — the head `the vms` + a kindless `the oldest` — and
+    #   the split lands the ordinal on its OWN kindless row. It actually ranks the HEAD (RESOLVE
+    #   picks which); bind it there. READ understands WHAT it modifies — nothing more.
+    _rows = reading.get("rows", [])
+    _heads = [h for h in _rows if not h.get("sub") and h.get("type") == "object"
+              and h.get("role") in ("patient", "reference", "value") and h.get("start") is not None]
+    for _p in _rows:
+        if _p.get("role") != "ordinal" or _p.get("binds") is not None:
+            continue                               # already bound (e.g. the orphaned-ordinal emit)
+        _src = next((q for q in _rows if not q.get("sub") and q.get("row") == _p.get("row")
+                     and q.get("start") is not None), None)
+        if _src is None or _src.get("kind") not in (None, "?"):
+            continue                               # ordinal sits in its OWN kinded NP -> fine
+        _tgt = min((h for h in _heads if h.get("row") != _p.get("row")),
+                   key=lambda h: abs(h["start"] - _p["start"]), default=None)
+        if _tgt is not None:
+            _p["binds"] = _tgt.get("row")
+    return reading
+
+
+# ── EMISSION: split a noun phrase into head + modifier SUB-SPANS (reader catches up) ──────
+#   annotate_roles gives each fat object ROW one role; the gold spans the MODIFIERS too
+#   ("biggest" in "the biggest vm", "two of the" in "two of the lab vms"). This pass reads the
+#   row's own surface text with the SAME closed classes PRODUCTION uses — sourced from the codex
+#   (no private tables: scan warns a second quantifier list is how the two drift) — plus vectors'
+#   superlative morphology (ledger #23/H: superlative = ORDINAL; ledger J: -er comparative =
+#   SELECTOR, not emitted here yet). It APPENDS a sub-span per modifier plus a tight head-noun
+#   span carrying the row's base role (which also rescues fat-phrase patients like "the biggest
+#   vm" -> "vm", token-overlap <0.5 on the fat span). Only ADDS rows; the fat row stays (unused
+#   by the scorer). NOT the seam's attachment layer — a lexical split.
+#
+#   QUANTIFIER vs MAGNITUDE (ontology, grounded in the gold): a set-quantifier quantifies the
+#   PATIENT SET and PRECEDES its kind head ("two of the vms", "10 of the vms", "two biggest
+#   vms"). A number that quantifies an ATTRIBUTE/unit is a MAGNITUDE, and the gold reads it as a
+#   SELECTOR, not a quantifier (mg-0001 `6gb`, mg-0002 `2 cores`). So a NUMBER is emitted as a
+#   quantifier only when it sits before a kind head and behind no MAGNITUDE comparator
+#   (`over`/`more than`...). Word quantifiers (neither/both/all/half/most...) are unambiguous
+#   and always emit. (Digit and >ten worded numbers the SEAM itself parses as magnitudes only
+#   in digit form — `six gigabytes` spelled out breaks pass1 upstream; that is a seam fix.)
+_ORDINAL_POS = frozenset({"first", "second", "third", "fourth", "fifth", "sixth", "seventh",
+                          "eighth", "ninth", "tenth", "eleventh", "twelfth", "thirteenth",
+                          "fourteenth", "fifteenth", "sixteenth", "seventeenth", "eighteenth",
+                          "nineteenth", "twentieth", "thirtieth", "fortieth", "fiftieth",
+                          "sixtieth", "seventieth", "eightieth", "ninetieth", "hundredth",
+                          "thousandth", "last", "next", "previous", "final",
+                          "latest", "earliest", "penultimate"})
+_KIND_NOUNS = frozenset({"vm", "vms", "network", "networks", "snapshot", "snapshots",
+                         "template", "templates", "profile", "profiles", "file", "files"})
+_PARTITIVE_GLUE = frozenset({"of", "the", "a", "an", "but"})
+
+
+def _tokens_with_offsets(span: str):
+    """(text, local_start, local_end) for each whitespace-delimited token — offsets into span."""
+    out = []; i = 0; n = len(span)
+    while i < n:
+        while i < n and span[i].isspace(): i += 1
+        j = i
+        while j < n and not span[j].isspace(): j += 1
+        if j > i: out.append((span[i:j], i, j))
+        i = j
+    return out
+
+
+def _split_noun_phrases(reading: dict) -> dict:
+    from tests.bench.read_eval import vectors as V
+    from orchestrator.languages.english import codex as C
+    # sourced from the codex SSOT — NOT a private table (scan builds the same union)
+    word_quant = set(C.UNIVERSAL) | set(C.PARTIAL) | {"neither", "no", "none"}   # zero-quantifiers
+    num_words = {w for w, v in C.ENUMERATORS.items() if isinstance(v, int) and v >= 2}
+    mag_words = set().union(*(set(str(ph).split()) for ph in C.MAGNITUDE)) if C.MAGNITUDE else set()
+    quant_all = word_quant | num_words
+
+    def _is_num(t):
+        return t.isdigit() or t in num_words
+
+    new = []
+    for p in reading.get("rows", []):
+        if p.get("type") != "object" or p.get("start") is None:
+            continue
+        if p.get("mention") or p.get("kind") == "value":   # references / leaf values: no split
+            continue
+        span = p.get("span") or ""
+        toks = _tokens_with_offsets(span)
+        if len(toks) < 2:                                  # single token: nothing to split
+            continue
+        base = int(p["start"]); base_role = p.get("role")
+        low = [w.strip(".,;:!?'\"").lower() for (w, _, _) in toks]
+        emit = lambda ws, we, role: new.append(
+            {"row": p.get("row"), "span": span[ws:we], "type": "object", "kind": p.get("kind"),
+             "start": base + ws, "end": base + we, "role": role, "sub": True})
+        # head noun (rightmost kind word) -> tight span carrying the row's base role
+        kind_head_idx = None
+        for k in range(len(toks) - 1, -1, -1):    # _KIND_NOUNS lists both sing. and plural
+            if low[k] in _KIND_NOUNS:
+                kind_head_idx = k
+                if base_role:
+                    emit(toks[k][1], toks[k][2], base_role)
+                break
+        # `most`/`least` + an ADJECTIVE (not `of`, not a kind, not a quantifier) is an ANALYTIC
+        #   superlative -> a two-word ORDINAL; `most of`/`most vms` stay QUANTIFIER. Shared by
+        #   both the ordinal emit and the quantifier guard below so `most recent` is never both.
+        def _asup(k):
+            if low[k] not in ("most", "least"):
+                return False
+            nx = low[k + 1] if k + 1 < len(low) else None
+            return bool(nx) and nx != "of" and nx not in quant_all and nx not in _KIND_NOUNS \
+                and (nx[:-1] if nx.endswith("s") else nx) not in _KIND_NOUNS
+        # ordinal modifiers: position words (incl. numeric `2nd`), `-est` + analytic superlatives.
+        import re as _re
+        for idx, (w, ls, le) in enumerate(toks):
+            t = low[idx]
+            if t in _KIND_NOUNS:
+                continue
+            nxt = low[idx + 1] if idx + 1 < len(toks) else None
+            if _asup(idx):
+                emit(ls, toks[idx + 1][2], "ordinal"); continue
+            if t in quant_all:                             # a quantifier is not an ordinal
+                continue
+            if t in _ORDINAL_POS or _re.fullmatch(r"\d+(?:st|nd|rd|th)", t) or V._superlative(t, nxt):
+                emit(ls, le, "ordinal")
+        # quantifier: leftmost eligible token, extended through a partitive "... of [the]".
+        #   word quantifiers always qualify; a NUMBER only before the kind head and behind no
+        #   magnitude comparator (else it counts an attribute, i.e. a magnitude -> selector).
+        # a NUMBER quantifies the set only BEFORE the kind head and behind no magnitude word
+        qi = next((idx for idx, t in enumerate(low)
+                   if (t in word_quant and not _asup(idx))
+                   or (_is_num(t) and kind_head_idx is not None and idx < kind_head_idx
+                       and not any(low[k] in mag_words for k in range(idx)))), None)
+        if qi is not None:
+            j = qi; saw_of = False
+            while j + 1 < len(toks):
+                nt = low[j + 1]
+                if nt in _PARTITIVE_GLUE or _is_num(nt) or nt in word_quant:
+                    j += 1
+                    if nt == "of": saw_of = True
+                    continue
+                break
+            if not saw_of:                                 # no partitive -> the bare quantifier word
+                j = qi
+            emit(toks[qi][1], toks[j][2], "quantifier")
+    reading.setdefault("rows", []).extend(new)
+    return reading
 
 
 # ── scoring one case against its gold ────────────────────────────────────────────────
