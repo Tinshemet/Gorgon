@@ -541,6 +541,19 @@ def annotate_roles(reading: dict) -> dict:
             reading.setdefault("rows", []).append(
                 {"row": None, "span": _wm.group(), "type": "object", "kind": "?",
                  "start": _ws, "end": _q["start"] + _wm.end(), "role": "patient", "sub": True})
+    # ⇒ CHUNKING (08-28): a coordinated label target the seam glued to its value —
+    #   `label web 'ready' and db 'hold'` mis-parses as label(web, "db 'hold'"), trapping `db`.
+    #   A row of the form `NAME 'value'` carries a PATIENT (the bare name) chunked with a value;
+    #   split the name off as a patient. (Catch-up for a seam coordination-parse bug.)
+    import re as _rc2
+    for _p in list(reading.get("rows", [])):
+        if _p.get("sub") or _p.get("type") != "object" or _p.get("start") is None:
+            continue
+        _cm = _rc2.match(r"([a-z][a-z0-9_-]*)\s+['\"]", _p.get("span") or "", _rc2.I)
+        if _cm:
+            reading["rows"].append({"row": _p.get("row"), "span": _cm.group(1), "type": "object",
+                                    "kind": "?", "start": _p["start"] + _cm.start(1),
+                                    "end": _p["start"] + _cm.end(1), "role": "patient", "sub": True})
     # ⇒ BENEFICIARY (08-28): the `for X` in `a network FOR the test vms` — the party the act is
     #   done FOR. Split it off the chunked row and emit X as beneficiary.
     import re as _rb
