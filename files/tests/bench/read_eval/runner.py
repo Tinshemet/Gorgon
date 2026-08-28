@@ -464,8 +464,15 @@ def annotate_roles(reading: dict) -> dict:
         ri = p.get("row")
         if ri in patient_rows:                   # an operation's target (the dominant case)
             p["role"] = "patient"
-        elif ri in value_rows:                   # its value/leaf slot
-            p["role"] = "value"
+        elif ri in value_rows:
+            # ⇒ FRAME OF REFERENCE (operator 2026-08-28): the patient is the ENTITY ACTED UPON,
+            #   not where the action is centered. A transfer (`put web on lab` -> add_vm_to_network
+            #   with the moved vm in the VALUE slot) or a coordinated act leaves the acted-on
+            #   ENTITY in value_row — a bare NAME there is the PATIENT. An attribute-value (quoted
+            #   label, magnitude, IP, multi-word) stays a value. (`it` is caught as a mention above.)
+            import re as _rr
+            _sp = (p.get("span") or "").strip().lower()
+            p["role"] = "patient" if _rr.fullmatch(r"[a-z][a-z0-9_-]*", _sp) else "value"
         else:
             # ⇒ FALLBACK: an object the seam found but tied to no operation (possessive
             #   `delete alpha's snapshots`, cause `restart alpha because…`, a query object) is
@@ -513,6 +520,19 @@ def annotate_roles(reading: dict) -> dict:
                    key=lambda h: abs(h["start"] - _p["start"]), default=None)
         if _tgt is not None:
             _p["binds"] = _tgt.get("row")
+    # ⇒ HIDDEN SUBJECT (operator 2026-08-28): a query's patient is what we EXPECT TO FIND — the
+    #   wh-target (`tell me WHICH are still up` -> `which`), not a surface subject. Emit the
+    #   wh-word in a query clause as a patient span; RESOLVE finds the actual set it stands for.
+    import re as _rq
+    for _q in reading.get("queries", []):
+        if _q.get("start") is None:
+            continue
+        _wm = _rq.search(r"\b(which|what|who|whose)\b", _q.get("clause") or "", _rq.I)
+        if _wm:
+            _ws = _q["start"] + _wm.start()
+            reading.setdefault("rows", []).append(
+                {"row": None, "span": _wm.group(), "type": "object", "kind": "?",
+                 "start": _ws, "end": _q["start"] + _wm.end(), "role": "patient", "sub": True})
     return reading
 
 
