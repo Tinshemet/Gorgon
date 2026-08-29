@@ -481,6 +481,20 @@ def read_case(sentence: str, board=None) -> dict:
             "instructs": predicted_instructs}
 
 
+_MANIFEST_STATES = None
+def _manifest_states() -> dict:
+    """The manifest's declared STATUS VALUES ({`running`: 'status=running', `up`: …}) — the very
+    map `vectors._maps` builds from the board's attr_values, the SSOT `scan` itself uses. Cached
+    (the world is static per process). SPARSE BY DESIGN: only what the manifest declares is a
+    grounded status; `idle`/`stuck`/`responding` are OUT until the world names them."""
+    global _MANIFEST_STATES
+    if _MANIFEST_STATES is None:
+        from planner.formula.legal import Board
+        from tests.bench.read_eval import vectors as _V
+        _MANIFEST_STATES = _V._maps(Board())[1]
+    return _MANIFEST_STATES
+
+
 def annotate_roles(reading: dict) -> dict:
     """Assign a ROLE to each object row from signals the seam ALREADY produces — the reader
     catching up to the gold's per-span roles. Mutates and returns *reading*.
@@ -550,6 +564,52 @@ def annotate_roles(reading: dict) -> dict:
         _before = _MARK_BEFORE.search(_pre) and not _COPULA_NOT.search(_pre)   # marker, not `is not`
         if _glued or _before:
             _xp["role"] = "excluded"
+    # ⇒ SELECTOR — MAGNITUDE THRESHOLD (2026-08-29, [[gorgon-patient-form-gaps]]): a leaf VALUE
+    #   governed by a magnitude COMPARATOR (over/more than/… — codex.MAGNITUDE SSOT) FILTERS the
+    #   entity; it is not a value being set. The comparator is the discriminator: `list the vms
+    #   with MORE THAN 2 cores` selects; `create a vm WITH 4 cores` (no comparator) stays a value
+    #   (un-0002, the regression that guards this).
+    from orchestrator.languages.english import codex as _CXm
+    _MAGCMP = _rx.compile(r"\b(?:%s)\s*$" % "|".join(
+        sorted((_rx.escape(_m) for _m in _CXm.MAGNITUDE), key=len, reverse=True)), _rx.I)
+    for _sv in reading.get("rows", []):
+        if _sv.get("sub") or _sv.get("kind") != "value" or _sv.get("start") is None:
+            continue
+        if _sv.get("role") == "value" and _MAGCMP.search(_sent[:_sv["start"]]):
+            _sv["role"] = "selector"
+    # ⇒ SELECTOR — IDENTIFIER (2026-08-29): a leaf VALUE in a LOCATIVE/identifying frame picks the
+    #   entity — `stop the vm AT 10.0.0.5` / `WITH SERIAL 7f3k-2210` selects. NOT the have-frame
+    #   (`which has mac X` -> value, ruling #21) nor assignment (`the ip X` -> value). Discriminator:
+    #   the frame word `at`/`serial`, never `mac`/`ip`/`has` (id-0002/id-0003 stay value).
+    _IDFRAME = _rx.compile(r"\b(?:at|serial)\s*$", _rx.I)
+    for _si in reading.get("rows", []):
+        if _si.get("sub") or _si.get("kind") != "value" or _si.get("start") is None:
+            continue
+        if _si.get("role") == "value" and _IDFRAME.search(_sent[:_si["start"]]):
+            _si["role"] = "selector"
+    # ⇒ SELECTOR — STATE (2026-08-29, manifest-grounded): a post-head word naming a STATUS VALUE
+    #   the manifest declares (running/stopped/up/down via _manifest_states) FILTERS the set —
+    #   `the vms RUNNING on lab` -> running=selector. A directly-preceding `not` is kept. NOT a
+    #   regex: the world's own status vocabulary (the SSOT), so it never over-fires on a plain word.
+    _states = _manifest_states()
+    for _sr in list(reading.get("rows", [])):
+        if _sr.get("sub") or _sr.get("type") != "object" or _sr.get("start") is None:
+            continue
+        if _sr.get("kind") == "value" or _sr.get("role") in ("reference", "excluded"):
+            continue
+        _span = _sr.get("span") or ""
+        for _wm in _rx.finditer(r"\b[a-z]+\b", _span, _rx.I):
+            if _wm.group(0).lower() not in _states:
+                continue
+            if _rx.search(r"\b(?:is|are|was|were|be|been)\s+(?:not\s+)?$", _span[:_wm.start()], _rx.I):
+                continue                                    # a COPULAR state is a value/predicate
+            if _span[:_wm.start()].rstrip().endswith(("'", '"')):
+                continue                                    # a QUOTED state is a label value (`'up'`)
+            _ns = _rx.search(r"\bnot\s+$", _span[:_wm.start()], _rx.I)   # keep a preceding `not`
+            _b0 = _ns.start() if _ns else _wm.start()
+            reading["rows"].append({"row": _sr.get("row"), "span": _span[_b0:_wm.end()],
+                "type": "object", "kind": "?", "role": "selector", "sub": True,
+                "start": _sr["start"] + _b0, "end": _sr["start"] + _wm.end()})
     _split_noun_phrases(reading)     # ⇒ EMISSION tier: head + modifier sub-spans
     # ⇒ a bare demonstrative/pronoun the reader TRAPPED in a KINDLESS object row (`snapshot that`
     #   -> row `that` kind ?; `if that doesn't work` -> `that doesn't`; `restart that`) is a
@@ -746,6 +806,9 @@ def _split_noun_phrases(reading: dict) -> dict:
                 continue
             if t in _ORDINAL_POS or _re.fullmatch(r"\d+(?:st|nd|rd|th)", t) or V._superlative(t, nxt):
                 emit(ls, le, "ordinal")
+            elif V._comparative(t, nxt) and t not in ("more", "less"):   # -er comparative (adj:cmp)
+                emit(ls, le, "selector")                                 #   FILTERS -> selector, not
+            #   ranks; `more`/`less` are magnitude comparators handled on the value above.
         # quantifier: leftmost eligible token, extended through a partitive "... of [the]".
         #   word quantifiers always qualify; a NUMBER only before the kind head and behind no
         #   magnitude comparator (else it counts an attribute, i.e. a magnitude -> selector).
