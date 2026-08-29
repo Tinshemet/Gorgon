@@ -144,6 +144,7 @@ def read_case(sentence: str, board=None) -> dict:
     #   the whole seam reads the VIEW; every offset below maps back to the ORIGINAL
     #   bytes before it is reported, so gold offsets still hold.
     from orchestrator.languages.english.seam import front_door as FD
+    _original = sentence            # ORIGINAL bytes: row offsets remap back here (annotate_roles context)
     view = FD.read(sentence)
     sentence = view.text
     rows = P1.run_scanned(sentence, board=board)
@@ -474,7 +475,7 @@ def read_case(sentence: str, board=None) -> dict:
             for a, z in (("start", "end"), ("clause_start", "clause_end")):
                 if d.get(a) is not None and d.get(z) is not None:
                     d[a], d[z] = _b[d[a]], _b[d[z]]
-    return {"rows": predicted_spans, "operations": operations,
+    return {"rows": predicted_spans, "operations": operations, "sentence": _original,
             "triggers": predicted_triggers, "queries": predicted_queries,
             "rules": predicted_rules, "reports": predicted_reports,
             "instructs": predicted_instructs}
@@ -519,6 +520,36 @@ def annotate_roles(reading: dict) -> dict:
             #   `delete alpha's snapshots`, cause `restart alpha because…`, a query object) is
             #   almost always the patient — the seam just never built the op to point with.
             p["role"] = "patient"
+    # ⇒ EXCLUDED (operator ruling 2026-08-29, [[gorgon-patient-form-gaps]]): an exclusion marker
+    #   (not/except/nor/neither) governing an ENTITY removes it from the action set — the OPPOSITE
+    #   of a patient (labelling it patient is the safety bug this fixes). Grounded: all 11 corpus
+    #   excluded members are `marker + entity`; every negation-SELECTOR is `not + state` in a
+    #   copular predicate — never a standalone object row, so iterating object rows already
+    #   separates the two (the copula guard is belt-and-braces for a held-out `the vm is not
+    #   running`). Two surface shapes: (a) marker glued into / immediately before a clean entity
+    #   row -> RE-LABEL excluded; (b) `neither X nor Y` in one row -> SPLIT names into excluded.
+    import re as _rx
+    _sent = reading.get("sentence") or ""
+    _MARK_BEFORE = _rx.compile(r"(?:^|\W)(?:but\s+)?(?:not|except|nor|neither)\s*$", _rx.I)
+    _COPULA_NOT = _rx.compile(r"\b(?:is|are|isn't|aren't|was|were|be|been)\s+not\s*$", _rx.I)
+    for _xp in list(reading.get("rows", [])):
+        if _xp.get("sub") or _xp.get("type") != "object" or _xp.get("start") is None:
+            continue
+        _xlow = (_xp.get("span") or "").strip().lower()
+        if _xlow.startswith("neither ") or " nor " in _xlow:          # (b) neither X nor Y
+            _xp["role"] = "excluded"
+            for _xm in _rx.finditer(r"\b([a-z][a-z0-9_-]*)\b", _xp.get("span") or "", _rx.I):
+                if _xm.group(1).lower() in ("neither", "nor", "and", "or"):
+                    continue
+                reading["rows"].append({"row": _xp.get("row"), "span": _xm.group(1),
+                    "type": "object", "kind": _xp.get("kind"), "role": "excluded", "sub": True,
+                    "start": _xp["start"] + _xm.start(1), "end": _xp["start"] + _xm.end(1)})
+            continue
+        _pre = _sent[:_xp["start"]]
+        _glued = _rx.match(r"(?:not|except)\b", _xlow)                # (a) `not alpha` / `except beta`
+        _before = _MARK_BEFORE.search(_pre) and not _COPULA_NOT.search(_pre)   # marker, not `is not`
+        if _glued or _before:
+            _xp["role"] = "excluded"
     _split_noun_phrases(reading)     # ⇒ EMISSION tier: head + modifier sub-spans
     # ⇒ a bare demonstrative/pronoun the reader TRAPPED in a KINDLESS object row (`snapshot that`
     #   -> row `that` kind ?; `if that doesn't work` -> `that doesn't`; `restart that`) is a
@@ -530,8 +561,10 @@ def annotate_roles(reading: dict) -> dict:
     for _q in reading.get("rows", []):
         if _q.get("sub") or _q.get("mention") or _q.get("type") != "object":
             continue
-        if _q.get("kind") not in (None, "?") or _q.get("role") == "reference":
-            continue                                   # only KINDLESS rows the reader failed to type
+        if _q.get("kind") not in (None, "?") or _q.get("role") in ("reference", "excluded"):
+            continue                                   # only KINDLESS rows the reader failed to type;
+            #   EXCLUSION takes precedence over the `one` proform re-label (`not the db one` stays
+            #   excluded, not reference) — the interaction [[gorgon-reference-ruling]] flagged.
         if _re3.search(r"\b(?:it|them|they|that|one|ones)\b", (_q.get("span") or "").lower()):
             _q["role"] = "reference"                   # a kindless pronoun-row REFERS, is not the patient
     # dedup coincident SUB-spans (a partitive over a pronoun can be emitted by both read_case
