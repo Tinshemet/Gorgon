@@ -580,6 +580,16 @@ def annotate_roles(reading: dict) -> dict:
             reading.setdefault("rows", []).append({"row": None, "span": _qm.group(1),
                 "type": "object", "kind": "value", "role": "value", "sub": True,
                 "start": _qm.start(1), "end": _qm.end(1)})
+    # ⇒ VALUE — a COPULAR STATUS REPORT (2026-08-29): `alpha were down` / `alpha is down` states a
+    #   STATUS as a value (io-0007 wish `it would be great if alpha were down`) — not a set-filter.
+    #   Emit copula+status as value:status. Grounded statuses only, so a filter `running on lab`
+    #   (which carries no copula) is never touched.
+    _COPVAL = _rx.compile(r"\b(?:is|are|was|were|be|been)\s+(?:not\s+)?(?:%s)\b"
+                          % "|".join(_rx.escape(_s) for _s in _manifest_states()), _rx.I)
+    for _cv in _COPVAL.finditer(_sent):
+        reading.setdefault("rows", []).append({"row": None, "span": _sent[_cv.start():_cv.end()],
+            "type": "object", "kind": "value", "role": "value", "sub": True,
+            "start": _cv.start(), "end": _cv.end()})
     # ⇒ SELECTOR — MAGNITUDE THRESHOLD (2026-08-29, [[gorgon-patient-form-gaps]]): a leaf VALUE
     #   governed by a magnitude COMPARATOR (over/more than/… — codex.MAGNITUDE SSOT) FILTERS the
     #   entity; it is not a value being set. The comparator is the discriminator: `list the vms
