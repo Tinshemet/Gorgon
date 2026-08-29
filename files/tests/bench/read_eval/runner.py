@@ -590,6 +590,27 @@ def annotate_roles(reading: dict) -> dict:
         reading.setdefault("rows", []).append({"row": None, "span": _sent[_cv.start():_cv.end()],
             "type": "object", "kind": "value", "role": "value", "sub": True,
             "start": _cv.start(), "end": _cv.end()})
+    # ⇒ CONDITIONAL — the COMPARISON OPERATOR (2026-08-29): `over` / `more than` / `older than` is
+    #   the OPERATOR of a threshold filter, distinct from the value it bounds. Magnitude comparators
+    #   (codex.MAGNITUDE SSOT) OR a `<comparative> than`.
+    # ⇒ ANCHOR — the REFERENCE POINT of a comparative-than: `older than A MONTH` -> `a month`. (A
+    #   magnitude comparator's object is the selector/value; a comparative-than's object is the anchor.)
+    from orchestrator.languages.english import codex as _CXc
+    _CONDMAG = _rx.compile(r"\b(?:%s)\b" % "|".join(
+        sorted((_rx.escape(_m) for _m in _CXc.MAGNITUDE), key=len, reverse=True)), _rx.I)
+    for _cd in _CONDMAG.finditer(_sent):
+        reading.setdefault("rows", []).append({"row": None, "span": _sent[_cd.start():_cd.end()],
+            "type": "object", "kind": "?", "role": "conditional", "sub": True,
+            "start": _cd.start(), "end": _cd.end()})
+    from tests.bench.read_eval import vectors as _Vc
+    _CMPTHAN = _rx.compile(r"\b([a-z]+er\s+than)\s+((?:a|an|the|\d+)\s+[a-z]+)\b", _rx.I)
+    for _ct in _CMPTHAN.finditer(_sent):
+        if not _Vc._comparative(_ct.group(1).split()[0], "than"):
+            continue
+        reading.setdefault("rows", []).append({"row": None, "span": _ct.group(1), "type": "object",
+            "kind": "?", "role": "conditional", "sub": True, "start": _ct.start(1), "end": _ct.end(1)})
+        reading["rows"].append({"row": None, "span": _ct.group(2), "type": "object", "kind": "?",
+            "role": "anchor", "sub": True, "start": _ct.start(2), "end": _ct.end(2)})
     # ⇒ SELECTOR — MAGNITUDE THRESHOLD (2026-08-29, [[gorgon-patient-form-gaps]]): a leaf VALUE
     #   governed by a magnitude COMPARATOR (over/more than/… — codex.MAGNITUDE SSOT) FILTERS the
     #   entity; it is not a value being set. The comparator is the discriminator: `list the vms
