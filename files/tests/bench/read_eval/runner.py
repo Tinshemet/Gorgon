@@ -481,6 +481,19 @@ def read_case(sentence: str, board=None) -> dict:
             "instructs": predicted_instructs}
 
 
+_ACTIVE_LIBRARY = None
+def _active_library() -> dict:
+    """The ACTIVE LIBRARY — known reference OBJECTS -> kind (operator 2026-08-29: READ consults the
+    library so it can UNDERSTAND objects; `lab`/`dmz` are the standing networks). A SUPPLIER READ
+    may read, unlike the live lab (which is the call site's, per the settle ladder). The world
+    declares its standing objects here; the frozen eval is cold, so it needs this catalog to know
+    `lab` is a network. SSOT — not a private list in the reader."""
+    global _ACTIVE_LIBRARY
+    if _ACTIVE_LIBRARY is None:
+        _ACTIVE_LIBRARY = {"lab": "network", "dmz": "network"}
+    return _ACTIVE_LIBRARY
+
+
 _MANIFEST_STATES = None
 def _manifest_states() -> dict:
     """The manifest's declared STATUS VALUES ({`running`: 'status=running', `up`: …}) — the very
@@ -624,6 +637,21 @@ def annotate_roles(reading: dict) -> dict:
             reading["rows"].append({"row": _ow.get("row"), "span": _ow.get("span"),
                 "type": "object", "kind": "?", "role": "ownership", "sub": True,
                 "start": _ow["start"], "end": _ow["end"]})
+    # ⇒ OWNERSHIP — a NOUN-MODIFIER network owner (`the lab vms`): READ recognizes `lab` as a
+    #   NETWORK from the ACTIVE LIBRARY, so it OWNS the vms it heads. `db`/`test`/`new` are NOT in
+    #   the library -> descriptors, not owners; `the lab NETWORK` (same kind) is the network's NAME,
+    #   not an owner; `put web ON lab` (no kind head) is a destination. The library is how READ
+    #   understands an object it did not just meet.
+    _lib = _active_library()
+    for _lo in list(reading.get("rows", [])):
+        if _lo.get("sub") or _lo.get("type") != "object" or _lo.get("start") is None:
+            continue
+        _lm = _rx.search(r"\b([a-z][a-z0-9_-]*)\s+(?:vms?|snapshots?|files?)\b",
+                         _lo.get("span") or "", _rx.I)
+        if _lm and _lib.get(_lm.group(1).lower()) == "network":
+            reading["rows"].append({"row": _lo.get("row"), "span": _lm.group(1),
+                "type": "object", "kind": "network", "role": "ownership", "sub": True,
+                "start": _lo["start"] + _lm.start(1), "end": _lo["start"] + _lm.end(1)})
     # ⇒ SELECTOR — MAGNITUDE THRESHOLD (2026-08-29, [[gorgon-patient-form-gaps]]): a leaf VALUE
     #   governed by a magnitude COMPARATOR (over/more than/… — codex.MAGNITUDE SSOT) FILTERS the
     #   entity; it is not a value being set. The comparator is the discriminator: `list the vms
