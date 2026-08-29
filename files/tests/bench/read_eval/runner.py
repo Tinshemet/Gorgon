@@ -564,6 +564,22 @@ def annotate_roles(reading: dict) -> dict:
         _before = _MARK_BEFORE.search(_pre) and not _COPULA_NOT.search(_pre)   # marker, not `is not`
         if _glued or _before:
             _xp["role"] = "excluded"
+    # ⇒ VALUE vs EVIDENCE — a QUOTED LABEL/NAME (2026-08-29): read_case emits every quoted clause
+    #   as evidence (the `the log says '…'` frame). But `label X 'up'` / `call X 'staging east'` ->
+    #   the quote is the VALUE being assigned. A value-assigning verb (label/call/name/tag) RE-CASTS
+    #   the quoted evidence span to a value. (The dual diagnoses carry no such verb -> stay evidence.)
+    _VALVERB = _rx.compile(r"\b(?:label|call|name|tag|rename|mark|dub|title)\b", _rx.I)
+    for _ev in reading.get("rows", []):
+        if _ev.get("type") == "evidence" and _ev.get("start") is not None \
+                and _VALVERB.search(_sent[:_ev["start"]]):
+            _ev["type"] = "value"; _ev["kind"] = "value"; _ev["role"] = "value"
+    # and in a value-assigning frame EVERY quoted string is a value — recovers a coordinated label
+    #   list (`label alpha 'up', beta 'down' and gamma 'hold'`) whose members the seam drops/chunks.
+    if _VALVERB.search(_sent):
+        for _qm in _rx.finditer(r"['\"]([^'\"]+)['\"]", _sent):
+            reading.setdefault("rows", []).append({"row": None, "span": _qm.group(1),
+                "type": "object", "kind": "value", "role": "value", "sub": True,
+                "start": _qm.start(1), "end": _qm.end(1)})
     # ⇒ SELECTOR — MAGNITUDE THRESHOLD (2026-08-29, [[gorgon-patient-form-gaps]]): a leaf VALUE
     #   governed by a magnitude COMPARATOR (over/more than/… — codex.MAGNITUDE SSOT) FILTERS the
     #   entity; it is not a value being set. The comparator is the discriminator: `list the vms
