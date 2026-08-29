@@ -642,11 +642,15 @@ def annotate_roles(reading: dict) -> dict:
     #   restrictor naturally avoids the DESTINATION collision (`put web ON lab` leaves `lab` a
     #   SEPARATE row, never inside the patient's NP). Drop the preposition, keep the determiner.
     _LOCPP = _rx.compile(r"\b(?:on|in)\s+((?:the\s+)?[a-z][a-z0-9_-]*)\b", _rx.I)
+    _xfer_on = {o.get("on_row") for o in reading.get("operations", [])
+                if o.get("operator") == "add_vm_to_network"}
     for _lr in list(reading.get("rows", [])):
         if _lr.get("sub") or _lr.get("type") != "object" or _lr.get("start") is None:
             continue
         if _lr.get("kind") == "value" or _lr.get("role") in ("reference", "excluded"):
             continue
+        if _lr.get("row") in _xfer_on:
+            continue                              # a TRANSFER target — `on dmz` is a DESTINATION, not a filter
         for _lm in _LOCPP.finditer(_lr.get("span") or ""):
             reading["rows"].append({"row": _lr.get("row"), "span": _lm.group(1),
                 "type": "object", "kind": "?", "role": "selector", "sub": True,
@@ -787,6 +791,17 @@ def annotate_roles(reading: dict) -> dict:
             continue
         if _rb.fullmatch(r"[a-z][a-z0-9_-]*", (_p.get("span") or "").strip().lower()):
             _p["role"] = "destination"
+        else:
+            # a CHUNKED transfer target the seam glued — `db on dmz`: split NAME (patient) + the
+            #   dest (destination), the same shape the label chunk-split handles.
+            _cm2 = _rb.match(r"\s*([a-z][a-z0-9_-]*)\s+(?:on|to|into|onto)\s+([a-z][a-z0-9_-]*)\s*$",
+                             _p.get("span") or "", _rb.I)
+            if _cm2:
+                _b2 = _p["start"]
+                for _gi, _grole in ((1, "patient"), (2, "destination")):
+                    reading["rows"].append({"row": _p.get("row"), "span": _cm2.group(_gi),
+                        "type": "object", "kind": "?", "role": _grole, "sub": True,
+                        "start": _b2 + _cm2.start(_gi), "end": _b2 + _cm2.end(_gi)})
     return reading
 
 
