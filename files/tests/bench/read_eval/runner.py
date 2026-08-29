@@ -611,6 +611,19 @@ def annotate_roles(reading: dict) -> dict:
             "kind": "?", "role": "conditional", "sub": True, "start": _ct.start(1), "end": _ct.end(1)})
         reading["rows"].append({"row": None, "span": _ct.group(2), "type": "object", "kind": "?",
             "role": "anchor", "sub": True, "start": _ct.start(2), "end": _ct.end(2)})
+    # ⇒ OWNERSHIP (operator ruling 2026-08-29): the GENITIVE OWNER is an `ownership` role — `alpha's
+    #   snapshots`, `the web vm's snapshots` (a network also OWNS vms: `the lab vms`). Common enough
+    #   to be a general rule. The owned thing keeps its role; the owner ALSO carries ownership (dual
+    #   with its patient). Explicit `'s`: the entity immediately before `'s`.
+    for _ow in list(reading.get("rows", [])):
+        if _ow.get("sub") or _ow.get("type") != "object" or _ow.get("start") is None:
+            continue
+        if _ow.get("kind") == "value" or _ow.get("role") in ("reference", "excluded"):
+            continue
+        if _sent[_ow["end"]:_ow["end"] + 2].lower() == "'s":
+            reading["rows"].append({"row": _ow.get("row"), "span": _ow.get("span"),
+                "type": "object", "kind": "?", "role": "ownership", "sub": True,
+                "start": _ow["start"], "end": _ow["end"]})
     # ⇒ SELECTOR — MAGNITUDE THRESHOLD (2026-08-29, [[gorgon-patient-form-gaps]]): a leaf VALUE
     #   governed by a magnitude COMPARATOR (over/more than/… — codex.MAGNITUDE SSOT) FILTERS the
     #   entity; it is not a value being set. The comparator is the discriminator: `list the vms
