@@ -639,11 +639,18 @@ def annotate_roles(reading: dict) -> dict:
     #   CONDITION that filters — `which vms are NOT RUNNING`, `is alpha NOT RESPONDING`. Distinct
     #   from `not <entity>` (excluded, above): a participle (-ing/-ed) is a state, not a target.
     #   Surfaced whole; RESOLVE reads the diagnosis ([[gorgon-patient-form-gaps]] operator ruling).
-    _NEGSTATE = _rx.compile(r"\bnot\s+[a-z]+(?:ing|ed)\b", _rx.I)
+    _NEGSTATE = _rx.compile(r"\bnot\s+([a-z]+(?:ing|ed))\b", _rx.I)
     for _nm in _NEGSTATE.finditer(_sent):
-        reading.setdefault("rows", []).append({"row": None, "span": _sent[_nm.start():_nm.end()],
-            "type": "object", "kind": "?", "role": "selector", "sub": True,
-            "start": _nm.start(), "end": _nm.end()})
+        # DUAL TYPE (operator 2026-08-29): an UNGROUNDED negated state is a DIAGNOSIS — evidence by
+        #   nature, selector by use (`not responding`). A GROUNDED one (`not running`, a declared
+        #   status) is a straight selector. The manifest is the dividing line.
+        _roles = [("selector", "object")]
+        if _nm.group(1).lower() not in _states:
+            _roles.append(("evidence", "evidence"))
+        for _role, _typ in _roles:
+            reading.setdefault("rows", []).append({"row": None, "span": _sent[_nm.start():_nm.end()],
+                "type": _typ, "kind": "?", "role": _role, "sub": True,
+                "start": _nm.start(), "end": _nm.end()})
     _split_noun_phrases(reading)     # ⇒ EMISSION tier: head + modifier sub-spans
     # ⇒ SELECTOR — DIAGNOSIS (operator ruling 2026-08-29): a post-head restrictor a KINDED patient
     #   row carries that NO tighter selector (state/location/time) reached is a DIAGNOSIS — surface
@@ -668,9 +675,10 @@ def annotate_roles(reading: dict) -> dict:
         _txt = _sent[_rs:_re_]; _res = _txt.strip()
         if _res:
             _lead = len(_txt) - len(_txt.lstrip())
-            reading["rows"].append({"row": _dr.get("row"), "span": _res, "type": "object",
-                "kind": "?", "role": "selector", "sub": True,
-                "start": _rs + _lead, "end": _rs + _lead + len(_res)})
+            _ds, _de = _rs + _lead, _rs + _lead + len(_res)
+            for _role, _typ in (("selector", "object"), ("evidence", "evidence")):   # DUAL
+                reading["rows"].append({"row": _dr.get("row"), "span": _res, "type": _typ,
+                    "kind": "?", "role": _role, "sub": True, "start": _ds, "end": _de})
     # ⇒ a bare demonstrative/pronoun the reader TRAPPED in a KINDLESS object row (`snapshot that`
     #   -> row `that` kind ?; `if that doesn't work` -> `that doesn't`; `restart that`) is a
     #   REFERENCE, not the patient that kindless row was labelled. Part B emits FREE pronouns but

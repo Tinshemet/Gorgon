@@ -509,8 +509,11 @@ def validate_case(case: dict) -> List[str]:
         if any(not isinstance(ix, int) or not (0 <= ix < len(spans)) for ix in indices):
             faults.append(f"{where}: objects {objs!r} reference spans that do not exist")
             continue
-        if len(set(indices)) != len(indices):
-            faults.append(f"{where}: objects repeat an index")
+        # a span may carry DISTINCT roles in one attachment — a DUAL TYPE (operator 2026-08-29:
+        # a diagnosis like `stuck at boot` is EVIDENCE by nature and a SELECTOR by use). Only an
+        # exact (index, role) duplicate is a fault.
+        if len(set(members)) != len(members):
+            faults.append(f"{where}: objects repeat an (index, role) pair")
         # v1.1 roles: all-or-none per attachment, roles from the closed set, ONE patient
         tagged = [role for _ix, role in members if role is not None]
         if tagged:
