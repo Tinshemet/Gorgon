@@ -610,7 +610,67 @@ def annotate_roles(reading: dict) -> dict:
             reading["rows"].append({"row": _sr.get("row"), "span": _span[_b0:_wm.end()],
                 "type": "object", "kind": "?", "role": "selector", "sub": True,
                 "start": _sr["start"] + _b0, "end": _sr["start"] + _wm.end()})
+    # ⇒ SELECTOR — TIME (2026-08-29): a temporal expression that FILTERS a set — `snapshots taken
+    #   LAST WEEK`, `what changed TODAY` — is a selector (WHICH members), distinct from a testimony's
+    #   WHEN (`yesterday` -> evidence) and a schedule (`tomorrow`/`at 9pm` -> trigger), which keep
+    #   their owners. Present/past filters only (today · this|last|past <period> · <N> <period> ago).
+    _TIMESEL = _rx.compile(
+        r"\b(?:today|(?:this|last|past)\s+(?:week|month|day|night|year|hour)"
+        r"|\d+\s+(?:days?|weeks?|months?|hours?|minutes?)\s+ago)\b", _rx.I)
+    for _tm in _TIMESEL.finditer(_sent):
+        reading.setdefault("rows", []).append({"row": None, "span": _sent[_tm.start():_tm.end()],
+            "type": "object", "kind": "?", "role": "selector", "sub": True,
+            "start": _tm.start(), "end": _tm.end()})
+    # ⇒ SELECTOR — LOCATION (2026-08-29): a locative PP INSIDE a fat object row — `the vms running
+    #   ON lab`, `what changed IN the lab` — filters by host/place. Extracting from INSIDE the
+    #   restrictor naturally avoids the DESTINATION collision (`put web ON lab` leaves `lab` a
+    #   SEPARATE row, never inside the patient's NP). Drop the preposition, keep the determiner.
+    _LOCPP = _rx.compile(r"\b(?:on|in)\s+((?:the\s+)?[a-z][a-z0-9_-]*)\b", _rx.I)
+    for _lr in list(reading.get("rows", [])):
+        if _lr.get("sub") or _lr.get("type") != "object" or _lr.get("start") is None:
+            continue
+        if _lr.get("kind") == "value" or _lr.get("role") in ("reference", "excluded"):
+            continue
+        for _lm in _LOCPP.finditer(_lr.get("span") or ""):
+            reading["rows"].append({"row": _lr.get("row"), "span": _lm.group(1),
+                "type": "object", "kind": "?", "role": "selector", "sub": True,
+                "start": _lr["start"] + _lm.start(1), "end": _lr["start"] + _lm.end(1)})
+    # ⇒ SELECTOR — NEGATED STATE / DIAGNOSIS (2026-08-29): `not <participle>` predicates a
+    #   CONDITION that filters — `which vms are NOT RUNNING`, `is alpha NOT RESPONDING`. Distinct
+    #   from `not <entity>` (excluded, above): a participle (-ing/-ed) is a state, not a target.
+    #   Surfaced whole; RESOLVE reads the diagnosis ([[gorgon-patient-form-gaps]] operator ruling).
+    _NEGSTATE = _rx.compile(r"\bnot\s+[a-z]+(?:ing|ed)\b", _rx.I)
+    for _nm in _NEGSTATE.finditer(_sent):
+        reading.setdefault("rows", []).append({"row": None, "span": _sent[_nm.start():_nm.end()],
+            "type": "object", "kind": "?", "role": "selector", "sub": True,
+            "start": _nm.start(), "end": _nm.end()})
     _split_noun_phrases(reading)     # ⇒ EMISSION tier: head + modifier sub-spans
+    # ⇒ SELECTOR — DIAGNOSIS (operator ruling 2026-08-29): a post-head restrictor a KINDED patient
+    #   row carries that NO tighter selector (state/location/time) reached is a DIAGNOSIS — surface
+    #   it WHOLE (`the vms STUCK AT BOOT`); RESOLVE decomposes it. Skips restrictors already covered
+    #   (`running on lab`, `taken last week`), so it adds only what nothing else did.
+    _rows2 = reading.get("rows", [])
+    _sel = [(p["start"], p["end"]) for p in _rows2
+            if p.get("role") == "selector" and p.get("start") is not None]
+    for _dr in list(_rows2):
+        if _dr.get("sub") or _dr.get("type") != "object" or _dr.get("start") is None:
+            continue
+        if _dr.get("kind") in (None, "?", "value") or _dr.get("role") != "patient":
+            continue
+        _hd = [p for p in _rows2 if p.get("sub") and p.get("row") == _dr.get("row")
+               and p.get("kind") == _dr.get("kind") and p.get("start") is not None
+               and _dr["start"] <= p["start"] < _dr["end"]]
+        if not _hd:
+            continue
+        _rs, _re_ = max(h["end"] for h in _hd), _dr["end"]
+        if _re_ - _rs < 3 or any(not (se <= _rs or ss >= _re_) for ss, se in _sel):
+            continue
+        _txt = _sent[_rs:_re_]; _res = _txt.strip()
+        if _res:
+            _lead = len(_txt) - len(_txt.lstrip())
+            reading["rows"].append({"row": _dr.get("row"), "span": _res, "type": "object",
+                "kind": "?", "role": "selector", "sub": True,
+                "start": _rs + _lead, "end": _rs + _lead + len(_res)})
     # ⇒ a bare demonstrative/pronoun the reader TRAPPED in a KINDLESS object row (`snapshot that`
     #   -> row `that` kind ?; `if that doesn't work` -> `that doesn't`; `restart that`) is a
     #   REFERENCE, not the patient that kindless row was labelled. Part B emits FREE pronouns but
