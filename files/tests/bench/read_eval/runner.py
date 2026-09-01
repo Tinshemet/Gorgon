@@ -597,12 +597,23 @@ def annotate_roles(reading: dict) -> dict:
     #   STATUS as a value (io-0007 wish `it would be great if alpha were down`) — not a set-filter.
     #   Emit copula+status as value:status. Grounded statuses only, so a filter `running on lab`
     #   (which carries no copula) is never touched.
-    _COPVAL = _rx.compile(r"\b(?:is|are|was|were|be|been)\s+(?:not\s+)?(?:%s)\b"
+    #   BUT a QUERY (`which vms are running`) or a present-indicative CONDITIONAL (`if alpha is down
+    #   restart it`) uses the status to FILTER/CONDITION the set -> it is a SELECTOR, not a reported
+    #   value. Subjunctive wishes stay value (io-0007 `if alpha WERE down` — desired state, not filter).
+    _COPVAL = _rx.compile(r"\b(is|are|was|were|be|been)\s+(?:not\s+)?(%s)\b"
                           % "|".join(_rx.escape(_s) for _s in _manifest_states()), _rx.I)
+    _QPFX = _rx.match(r"\s*(?:which|what)\b", _sent, _rx.I)          # a set-query filters
     for _cv in _COPVAL.finditer(_sent):
-        reading.setdefault("rows", []).append({"row": None, "span": _sent[_cv.start():_cv.end()],
-            "type": "object", "kind": "value", "role": "value", "sub": True,
-            "start": _cv.start(), "end": _cv.end()})
+        _cond = _cv.group(1).lower() in ("is", "are") and \
+            _rx.search(r"\b(?:if|when|unless|whenever)\b", _sent[:_cv.start()], _rx.I)
+        if _QPFX or _cond:                                          # FILTER/CONDITION -> selector (status word only)
+            reading.setdefault("rows", []).append({"row": None, "span": _cv.group(2),
+                "type": "object", "kind": "?", "role": "selector", "sub": True,
+                "start": _cv.start(2), "end": _cv.end(2)})
+        else:                                                       # STATUS REPORT / wish -> value
+            reading.setdefault("rows", []).append({"row": None, "span": _sent[_cv.start():_cv.end()],
+                "type": "object", "kind": "value", "role": "value", "sub": True,
+                "start": _cv.start(), "end": _cv.end()})
     # ⇒ CONDITIONAL — the COMPARISON OPERATOR (2026-08-29): `over` / `more than` / `older than` is
     #   the OPERATOR of a threshold filter, distinct from the value it bounds. Magnitude comparators
     #   (codex.MAGNITUDE SSOT) OR a `<comparative> than`.
@@ -652,6 +663,24 @@ def annotate_roles(reading: dict) -> dict:
             reading["rows"].append({"row": _lo.get("row"), "span": _lm.group(1),
                 "type": "object", "kind": "network", "role": "ownership", "sub": True,
                 "start": _lo["start"] + _lm.start(1), "end": _lo["start"] + _lm.end(1)})
+    # ⇒ OWNERSHIP — a POST-NOMINAL network owner with NO preposition (`label vms dmz`, `label vm
+    #   stuck dmz`): a network from the ACTIVE LIBRARY that FOLLOWS a group noun (vms/snapshots/
+    #   files, at most one adjective between) and is NOT the object of on/to/in/at (that frame is a
+    #   destination/location, handled elsewhere) OWNS the set — the terse form of `the dmz vms` /
+    #   `the vms on dmz`. Regex on the view text: the seam often drops the bare trailing network.
+    _netalt = "|".join(_rx.escape(_n) for _n in _lib)
+    if _netalt:
+        _POSTOWN = _rx.compile(
+            r"\b(?:vms?|snapshots?|files?)\b(?:\s+[a-z][a-z0-9_-]*)?\s+(%s)\b" % _netalt, _rx.I)
+        for _po in _POSTOWN.finditer(_sent):
+            if _rx.search(r"\b(?:on|to|in|into|onto|from|at)\s*$", _sent[:_po.start(1)].rstrip(), _rx.I):
+                continue                          # object of a preposition -> destination/location
+            if any(r.get("start") == _po.start(1) and r.get("role") == "ownership"
+                   for r in reading.get("rows", [])):
+                continue                          # already tagged (pre-nominal / genitive)
+            reading.setdefault("rows", []).append({"row": None, "span": _po.group(1),
+                "type": "object", "kind": "network", "role": "ownership", "sub": True,
+                "start": _po.start(1), "end": _po.end(1)})
     # ⇒ SELECTOR — MAGNITUDE THRESHOLD (2026-08-29, [[gorgon-patient-form-gaps]]): a leaf VALUE
     #   governed by a magnitude COMPARATOR (over/more than/… — codex.MAGNITUDE SSOT) FILTERS the
     #   entity; it is not a value being set. The comparator is the discriminator: `list the vms
