@@ -187,7 +187,7 @@
     "hugepages": false,
     "balloon": true,
     "gpu": "virtio",
-    "display": "sdl",
+    "display": "spice",
     "opengl": true,
     "resolution": "1920x1080",
     "audio": "hda",

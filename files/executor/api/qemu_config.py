@@ -160,6 +160,14 @@ class MachineConfig:
             # when display isn't vnc: both consumers (qemu_arg_builder, the
             # post-launch QMP set_password step) already gate on display=="vnc".
             self.vnc_bind_local = True
+        # Clipboard by default: the non-stealth display DEFAULT is SPICE (config.json
+        # machine_config_defaults), which carries the spice-vdagent virtio-serial channel
+        # so host<->guest copy-paste (and dynamic resolution) work out of the box. A
+        # STEALTH VM must never expose that virtio-serial bus (a hypervisor tell), so it
+        # drops to SDL — whether SPICE came from the default or was set explicitly. An
+        # explicit non-stealth display choice (sdl/gtk/vnc/none) is respected as-is.
+        if self.stealth and self.display == "spice":
+            self.display = "sdl"
         if self.bios in ("ovmf", "ovmf_ms"):
             if OVMF["available"]:
                 self.uefi = True   # bios=ovmf always implies uefi=True
