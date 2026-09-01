@@ -1579,3 +1579,8 @@ Sufficient to pass casual and automated fingerprinting checks.
 ---
 
 > See [files/complementary/GUIDE.txt](files/complementary/GUIDE.txt) for the complete reference guide (v7), including the remote setup walkthrough (Section 14), all technical details, and full function-level documentation.
+
+## License
+
+Gorgon is licensed under the Apache License, Version 2.0. See [`LICENSE`](LICENSE)
+and [`NOTICE`](NOTICE) for the full terms and attribution.
