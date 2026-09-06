@@ -255,12 +255,45 @@ CLAUSE_ASK = ("Say what has to be DONE for the marked part of the request, as a 
               "Use only the operations and the names offered. Do not invent a name.")
 
 # a clause ends at these; `of` is a PHRASE boundary and is deliberately not one of them
-CLAUSE_MARKS = (",", ";", ".", "—", "–")
+# `&&` and `||` are SHELL clause operators — closed punctuation, exactly like `;`. A pasted
+# command line (`sudo service beta stop && sudo service beta snapshot it`) is two clauses and
+# was being read as one, which buried the second act's object (marathon Class A, 2026-09-06).
+CLAUSE_MARKS = (",", ";", ".", "—", "–", "&&", "||")
 from ..codex import CLAUSE_WORDS
 
 
 from ..codex import CUT_DETERMINERS as _CUT_DETS
 from ..codex import CUT_NEGATION as _CUT_NEG
+
+
+def _outside_quotes(text: str, pat: str):
+    """Every match of `pat` in `text` that is NOT inside a quotation.
+
+    ⇒ QUOTES ARE OPAQUE — the law `_first_cut` states and keeps — but the ROUGH mark split did
+      not, so a clause mark inside a pasted command tore the citation in half before any clause
+      rule could see it: `run the command 'svn revert --recursive .'` split at the period and the
+      quote never closed (marathon Class A, 2026-09-06). Same marks, same order; only the quoted
+      regions are skipped, so a request with no punctuation inside quotes is unaffected.
+    """
+    import re as _re
+    from .front_door import _quoted
+    opaque = _quoted(text.lower())
+    for m in _re.finditer(pat, text):
+        if any(qs <= m.start() and m.end() <= qe for qs, qe in opaque):
+            continue
+        yield m
+
+
+def _rough_split(text: str) -> List[str]:
+    """The clause-mark split, quote-aware. Replaces a sequential `.split(mark)` per mark, which
+    could not tell a mark inside a quotation from one outside it."""
+    import re as _re
+    pat = "|".join(sorted((_re.escape(m) for m in CLAUSE_MARKS), key=len, reverse=True))
+    out, at = [], 0
+    for m in _outside_quotes(text, pat):
+        out.append(text[at:m.start()]); at = m.end()
+    out.append(text[at:])
+    return out
 
 
 def _comma_free_cuts(piece: str) -> List[str]:
@@ -288,7 +321,7 @@ def merge_cut_points(request: str) -> List[int]:
                   + [_re.escape(w) for w in CLAUSE_WORDS], key=len, reverse=True)
     at = 0
     segments = []
-    for m in _re.finditer("|".join(seps), request):
+    for m in _outside_quotes(request, "|".join(seps)):   # a mark inside a quote is no boundary
         segments.append((at, m.start()))
         at = m.end()
     segments.append((at, len(request)))
@@ -462,9 +495,7 @@ def clauses_of(request: str) -> List[str]:
         buf.append(chunk)
     text = "".join(buf)
 
-    rough: List[str] = [text]
-    for mark in CLAUSE_MARKS:
-        rough = [bit for part in rough for bit in part.split(mark)]
+    rough: List[str] = _rough_split(text)
     out: List[str] = []
     for part in rough:
         pieces = [part]
