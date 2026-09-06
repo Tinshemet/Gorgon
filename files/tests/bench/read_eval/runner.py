@@ -144,8 +144,19 @@ def read_case(sentence: str, board=None) -> dict:
     #   the whole seam reads the VIEW; every offset below maps back to the ORIGINAL
     #   bytes before it is reported, so gold offsets still hold.
     from orchestrator.languages.english.seam import front_door as FD
+    _known = set(_active_library())
     _original = sentence            # ORIGINAL bytes: row offsets remap back here (annotate_roles context)
-    view = FD.read(sentence)
+    view = FD.read(sentence, known=_known)                   # declared standing objects de-fuse (db-down)
+    # ⇒ THE RULE LAYER READS THE DE-FUSED ORIGINAL (2026-09-06, marathon negation gap): annotate_roles
+    #   regexes `reading["sentence"]` — which was the RAW bytes — while the MODEL was handed the
+    #   normalized view. So a separator fusion stayed fused at the rule layer: `do-not-stop-beta`
+    #   normalized to `do not stop beta` for the model, but `_IMPNEG` was still matching against
+    #   `do-not-stop-beta` and could never fire, leaving a PROHIBITED target labelled `patient`
+    #   (the safety bug that rule exists to kill). Every regex rule below was reading raw text —
+    #   the separator pass was built (2026-09-02) and never called where three of the four fixes
+    #   actually work. The separator pass is same-length by construction, so the de-fused original
+    #   is offset-IDENTICAL to the original and the rows' remapped offsets still index it exactly.
+    _original = FD.defused(_original, board, _known)
     sentence = view.text
     rows = P1.run_scanned(sentence, board=board)
     table = P2.symbol_table(rows, board)
@@ -490,7 +501,9 @@ def _active_library() -> dict:
     `lab` is a network. SSOT — not a private list in the reader."""
     global _ACTIVE_LIBRARY
     if _ACTIVE_LIBRARY is None:
-        _ACTIVE_LIBRARY = {"lab": "network", "dmz": "network"}
+        _ACTIVE_LIBRARY = {"lab": "network", "dmz": "network",
+                           "alpha": "vm", "beta": "vm", "gamma": "vm",
+                           "web": "vm", "db": "vm", "grubnash": "vm"}
     return _ACTIVE_LIBRARY
 
 
@@ -577,6 +590,32 @@ def annotate_roles(reading: dict) -> dict:
         _before = _MARK_BEFORE.search(_pre) and not _COPULA_NOT.search(_pre)   # marker, not `is not`
         if _glued or _before:
             _xp["role"] = "excluded"
+    # ⇒ EXCLUDED — IMPERATIVE PRE-VERBAL NEGATION (2026-09-01, marathon negation gap): a command
+    #   negated BEFORE its verb (`do not stop beta`, `don't restart alpha`, `never delete web`)
+    #   carves the governed ENTITY out of the action set -> excluded — exactly the prohibition the
+    #   nt-0009 gold HINT states ("the rule is: do NOT stop alpha and beta" -> excluded). The marker
+    #   rule above only catches `not` ADJACENT to the entity (`but not the db one`); here `not`
+    #   precedes the VERB with the entity after it, so READ was leaving the target `patient` — the
+    #   same safety bug (a PROHIBITED target read as a target). Guards: a negation inside a QUOTE is
+    #   a label VALUE (`label X 'do not touch'`, qv-0001), never a command -> skipped; scope ends at
+    #   the next clause boundary so `do not stop alpha, restart beta` excludes only alpha. Over-
+    #   exclusion (protecting a thing) is the SAFE failure direction. Fires on ZERO v3 corpus cases
+    #   (only match is the quoted qv-0001), so it cannot regress the sealed 307/307.
+    _IMPNEG = _rx.compile(r"\b(?:do\s+not|don'?t|do\s+n'?t|never)\s+[a-z]+\b", _rx.I)
+    for _nm in _IMPNEG.finditer(_sent):
+        _npre = _sent[:_nm.start()]
+        if _npre.count("'") % 2 or _npre.count('"') % 2:             # inside a quoted label -> skip
+            continue
+        _ns = _nm.end()
+        _nb = _rx.search(r"[,;.]| then | but ", _sent[_ns:], _rx.I)  # clause boundary ends the scope
+        _ne = _ns + (_nb.start() if _nb else len(_sent) - _ns)
+        for _np in reading.get("rows", []):
+            if _np.get("type") != "object" or _np.get("start") is None:
+                continue
+            if _np.get("kind") == "value" or _np.get("role") in ("reference", "excluded"):
+                continue
+            if _ns <= _np["start"] < _ne:                            # governed by the negated verb
+                _np["role"] = "excluded"
     # ⇒ VALUE vs EVIDENCE — a QUOTED LABEL/NAME (2026-08-29): read_case emits every quoted clause
     #   as evidence (the `the log says '…'` frame). But `label X 'up'` / `call X 'staging east'` ->
     #   the quote is the VALUE being assigned. A value-assigning verb (label/call/name/tag) RE-CASTS
@@ -614,6 +653,21 @@ def annotate_roles(reading: dict) -> dict:
             reading.setdefault("rows", []).append({"row": None, "span": _sent[_cv.start():_cv.end()],
                 "type": "object", "kind": "value", "role": "value", "sub": True,
                 "start": _cv.start(), "end": _cv.end()})
+    # ⇒ SELECTOR — POLAR STATUS QUERY (2026-09-02, marathon gap): `is beta running`, `are the vms
+    #   stopped` — a yes/no status question where the SUBJECT sits BETWEEN the copula and the status
+    #   word, so the adjacent-only _COPVAL above never matches and the status atom is dropped. The
+    #   queried status asks/filters the set -> selector (matches the nt gold `is {X} running` ->
+    #   running:selector). Fires ONLY on a clause-initial copula (a question), never on the report
+    #   `alpha is running` (copula preceded by its subject), so it can't reclassify a status report.
+    _POLARQ = _rx.compile(
+        r"(?:^|[.;!?,]\s*|\b(?:and|or|then)\s+)(?:is|are)\s+(?:[a-z][a-z0-9_-]*\s+){1,3}(%s)\b"
+        % "|".join(_rx.escape(_s) for _s in _manifest_states()), _rx.I)
+    for _pq in _POLARQ.finditer(_sent):
+        if any(r.get("start") == _pq.start(1) for r in reading.get("rows", [])):
+            continue                                               # already tagged at that span
+        reading.setdefault("rows", []).append({"row": None, "span": _pq.group(1),
+            "type": "object", "kind": "?", "role": "selector", "sub": True,
+            "start": _pq.start(1), "end": _pq.end(1)})
     # ⇒ CONDITIONAL — the COMPARISON OPERATOR (2026-08-29): `over` / `more than` / `older than` is
     #   the OPERATOR of a threshold filter, distinct from the value it bounds. Magnitude comparators
     #   (codex.MAGNITUDE SSOT) OR a `<comparative> than`.
@@ -668,19 +722,65 @@ def annotate_roles(reading: dict) -> dict:
     #   files, at most one adjective between) and is NOT the object of on/to/in/at (that frame is a
     #   destination/location, handled elsewhere) OWNS the set — the terse form of `the dmz vms` /
     #   `the vms on dmz`. Regex on the view text: the seam often drops the bare trailing network.
-    _netalt = "|".join(_rx.escape(_n) for _n in _lib)
+    _netalt = "|".join(_rx.escape(_n) for _n in _lib if _lib[_n] == "network")
     if _netalt:
+        # ⇒ THE RELATION WORD IS NOT A REASON TO EMIT NOTHING (2026-09-06, marathon Class B).
+        #   This rule used to SKIP when a preposition governed the network ("handled elsewhere"),
+        #   but "elsewhere" — the destination handlers below — only ever RELABELS rows the model
+        #   already emitted, and the model DROPS the network in exactly this frame (`label the
+        #   stuck vms on dmz` -> spans `the stuck vms on`/`on`/`on`, `dmz` never a row; measured
+        #   3/3 deterministic, and the same sentence WITHOUT `on` recovers 3/3). So the guard
+        #   excluded the only case that needed the rescue. Now the relation word is CONSUMED and
+        #   the row is always built; the VERB decides its role (rule D8) — a TRANSFER verb makes
+        #   the place a DESTINATION (`put web on lab`), anything else makes it an OWNER.
+        from orchestrator.languages.english import codex as _CXp
+        _rel = "|".join(_rx.escape(_r) for _r in
+                        sorted(_CXp.LOCATIVE_PREPOSITIONS, key=len, reverse=True))
+        # the anchor is a group noun OR an entity PROFORM (`add IT dmz`, `move THEM to lab`) —
+        #   codex's own proform sets, so a pronoun that refers to an ENTITY counts and an indirect
+        #   object (`show ME lab`) never does.
+        _anch = "|".join(_rx.escape(_a) for _a in sorted(
+            {"vm", "vms", "snapshot", "snapshots", "file", "files"}
+            | set(_CXp.SINGULAR_PROFORMS) | set(_CXp.PLURAL_PROFORMS), key=len, reverse=True))
         _POSTOWN = _rx.compile(
-            r"\b(?:vms?|snapshots?|files?)\b(?:\s+[a-z][a-z0-9_-]*)?\s+(%s)\b" % _netalt, _rx.I)
+            r"\b(?:%s)\b" % _anch +                     # the group noun / proform it hangs off
+            r"(?:\s+[a-z][a-z0-9_-]*)?"                  # at most one adjective
+            r"(?:\s+(?:%s))?"                            # an OPTIONAL locative relation word
+            r"\s+(%s)\b" % (_rel, _netalt), _rx.I)
+        _TRANSFERV = _rx.compile(r"\b(?:%s)\b" % "|".join(
+            sorted((_rx.escape(_v) for _v in _CXp.TRANSFER_VERBS), key=len, reverse=True)), _rx.I)
         for _po in _POSTOWN.finditer(_sent):
-            if _rx.search(r"\b(?:on|to|in|into|onto|from|at)\s*$", _sent[:_po.start(1)].rstrip(), _rx.I):
-                continue                          # object of a preposition -> destination/location
-            if any(r.get("start") == _po.start(1) and r.get("role") == "ownership"
+            # THIS RULE IS A RESCUE, NOT AN OPINION (2026-09-06): it exists because the model
+            #   DROPS the trailing network in this frame. If ANY row already covers that span —
+            #   whatever role it carries — the reading is not missing the name and this rule has
+            #   nothing to add. Staying silent there is what keeps it off the sealed corpus:
+            #   rr-0001/dc-06-2 (`stop the vms running on lab`) gold `lab` as a SELECTOR, and
+            #   overriding that with `ownership` would be a regression against a sealed gold.
+            _pstart, _pend = _po.start(1), _po.end(1)
+            if any(r.get("start") is not None and r.get("start") < _pend and _pstart < (
+                       r.get("end") if r.get("end") is not None else r.get("start"))
                    for r in reading.get("rows", [])):
-                continue                          # already tagged (pre-nominal / genitive)
+                continue                          # the name is already in the reading — leave it
+            _prole = "destination" if _TRANSFERV.search(_sent[:_po.start(1)]) else "ownership"
             reading.setdefault("rows", []).append({"row": None, "span": _po.group(1),
-                "type": "object", "kind": "network", "role": "ownership", "sub": True,
+                "type": "object", "kind": "network", "role": _prole, "sub": True,
                 "start": _po.start(1), "end": _po.end(1)})
+    # ⇒ DESTINATION — A TRANSFER VERB RE-CASTS A LOCATIVE NETWORK (2026-09-06, marathon Class B
+    #   sibling): the rescue above only builds a row when the name is ABSENT, so a network the
+    #   model DID surface kept whatever role it was given — `put web on lab` came back with `lab`
+    #   as PATIENT. Rule D8 again: the governing verb decides. A declared NETWORK immediately
+    #   preceded by a locative relation, with a TRANSFER verb before it, is the verb's PLACE
+    #   argument -> destination. Non-transfer frames are untouched, which is what keeps the sealed
+    #   `stop the vms running on lab` (gold: SELECTOR) exactly where it is.
+    if _netalt:
+        _LOCBEFORE = _rx.compile(r"\b(?:%s)\s*$" % _rel, _rx.I)
+        for _tp in reading.get("rows", []):
+            if _tp.get("start") is None or _tp.get("role") == "destination":
+                continue
+            if _lib.get((_tp.get("span") or "").strip().lower()) != "network":
+                continue
+            if _LOCBEFORE.search(_sent[:_tp["start"]].rstrip()) and _TRANSFERV.search(_sent[:_tp["start"]]):
+                _tp["role"] = "destination"
     # ⇒ SELECTOR — MAGNITUDE THRESHOLD (2026-08-29, [[gorgon-patient-form-gaps]]): a leaf VALUE
     #   governed by a magnitude COMPARATOR (over/more than/… — codex.MAGNITUDE SSOT) FILTERS the
     #   entity; it is not a value being set. The comparator is the discriminator: `list the vms
@@ -1063,7 +1163,15 @@ def score_case(case: dict, reading: dict, misses: Optional[list] = None) -> dict
                             (predicted[best]["start"], predicted[best]["end"]))
         else:
             span_match.append(None)
-    hallucinated_spans = len(predicted) - len(taken)
+    # ⇒ a predicted span that is not matched to a gold span but sits WHOLLY INSIDE a gold span's
+    #   extent is a sub-span DECOMPOSITION (the head/modifier emission of _split_noun_phrases),
+    #   not an invented span — do not bill it as a hallucination. A hallucination points at text
+    #   NO gold span covers; a sub-span points at gold text, just more finely.
+    _gold_extents = [(g["start"], g["end"]) for g in gold_spans]
+    def _within_gold(p) -> bool:
+        return any(gs <= p["start"] and p["end"] <= ge for gs, ge in _gold_extents)
+    hallucinated_spans = sum(1 for j, p in enumerate(predicted)
+                             if j not in taken and not _within_gold(p))
 
     # ── actions: an operation is ABSORBED by the gold action it serves, or hallucinated.
     #

@@ -47,10 +47,22 @@ class View(NamedTuple):
     original: str
 
 
-def read(request: str, board=None) -> View:
-    """One pass, at the entrance. Clean text returns the identity view."""
-    text = str(request)
-    # 0 · FUSED WORDS FIRST — ledger #9, built against its measurement (9d59f14-*:
+def read(request: str, board=None, known=None) -> View:
+    """One pass, at the entrance. Clean text returns the identity view. `known` — extra standing
+    object NAMES (the world's declared vms/networks) the SEPARATOR pass may treat as closed for
+    de-fusing (`db-down` -> `db down`). They are fed ONLY to the separator pass, NEVER to typo
+    recognition, so the operator's rule holds: a typo'd name is still the name (`alpah` stays)."""
+    _req = str(request)
+    text = _req
+    # 0 · SEPARATOR-JOINED closed words -> spaces (2026-09-02): a hyphen/underscore joining two
+    #     KNOWN closed words (or declared standing objects) is a fusion separator the tokenizer
+    #     already sees but the text kept, so `do-not-stop-x`/`db-down` never fed the words apart.
+    #     A single-char swap, so offsets stay byte-exact and compose through the passes below; an
+    #     UNDECLARED name (never known) is never broken (`web-01`, `foo-bar` keep the name whole).
+    edits_s, notes_s = _separator_pass(text, board, known)
+    if edits_s:
+        text = _apply(text, edits_s)[0]        # same-length -> offsets unchanged, maps stay 1:1
+    # 0b · FUSED WORDS (no separator) — ledger #9, built against its measurement (9d59f14-*:
     #     4 spans, 3 acts, +3 halluc in 10 pairs, all where the fusion hides a CLOSED
     #     word). A split changes tokenization, so it runs before every other pass and
     #     the offset maps COMPOSE.
@@ -59,8 +71,50 @@ def read(request: str, board=None) -> View:
         text0, back0 = _apply(text, edits0)
         inner = _read_stages(text0, board)
         back = [back0[b] for b in inner.back]
-        return View(inner.text, back, notes0 + inner.notices, text)
-    return _read_stages(text, board)
+        return View(inner.text, back, notes_s + notes0 + inner.notices, _req)
+    inner = _read_stages(text, board)
+    return View(inner.text, inner.back, notes_s + inner.notices, _req)
+
+
+def defused(request: str, board=None, known=None) -> str:
+    """The SEPARATOR-ONLY view of the original bytes (2026-09-06) — hyphen/underscore fusions of
+    KNOWN closed words (and declared standing objects) opened to spaces, and NOTHING else.
+    Every separator edit is a single-char swap, so the result is the SAME LENGTH as `request`
+    and every offset into it is an offset into the original. That is what makes it safe as the
+    RULE LAYER's text: annotate_roles regexes this string while the rows it labels carry ORIGINAL
+    offsets, so the two must stay in the same coordinate space. `_split_pass` is deliberately NOT
+    run here — it changes length, which would break that correspondence."""
+    _req = str(request)
+    edits, _ = _separator_pass(_req, board, known)
+    return _apply(_req, edits)[0] if edits else _req
+
+
+def _separator_pass(text: str, board=None, known_extra=None):
+    """A hyphen or underscore JOINING two KNOWN words (closed-set, or a declared standing object in
+    `known_extra`) is a fusion separator, read as a space (`do-not-stop` -> `do not stop`,
+    `db-down` -> `db down`). Only a KNOWN-KNOWN pair splits (with the same particle+particle guard
+    as `_split_pass`, so `back-up` stays `backup`), so an UNDECLARED name is never broken. A
+    single-char replacement keeps every offset byte-exact. Sim-check principle for separators."""
+    low = text.lower()
+    opaque = _quoted(low)
+    _openers, _nouns, _ops, known = _vocab(board)
+    if known_extra:
+        known = known | {str(k).lower() for k in known_extra}
+    from .scan import PARTICLES as _parts
+    edits: List[Tuple[int, int, str]] = []
+    notices: List[str] = []
+    for m in re.finditer(r"[a-z']+(?:[-_][a-z']+)+", low):
+        rs, re_ = m.start(), m.end()
+        if any(qs <= rs and re_ <= qe for qs, qe in opaque):
+            continue                                    # quoted: opaque
+        parts = list(re.finditer(r"[a-z']+", m.group(0)))
+        for k in range(len(parts) - 1):
+            a, b = parts[k].group(0), parts[k + 1].group(0)
+            if a in known and b in known and not (a in _parts and b in _parts):
+                sep = rs + parts[k].end()               # the one separator char between a and b
+                edits.append((sep, sep + 1, " "))
+                notices.append(f"read '{a}{text[sep]}{b}' as '{a} {b}'")
+    return edits, notices
 
 
 def _split_pass(text: str, board=None):
@@ -238,6 +292,18 @@ def _board():
     return Board()
 
 
+def _statuses(board=None):
+    """The manifest's declared STATUS values (`attr_values`) — the SSOT `scan` itself reads, so a
+    typo'd status can be recognised (`dawn`->`down`, `stoppd`->`stopped`). SPARSE by design: only
+    what the world names. Same shape scan uses; no dependency on the read_eval harness."""
+    b = board if board is not None else _board()
+    out = set()
+    for _spec in (b.kinds or {}).values():
+        for _vals in ((_spec or {}).get("attr_values") or {}).values():
+            out |= {str(v).lower() for v in _vals}
+    return out
+
+
 def _recognise(w, toks, at, board):
     """The sim check. Each closed-set candidate is tried in its slot; the grammar votes.
 
@@ -249,6 +315,7 @@ def _recognise(w, toks, at, board):
     """
     from .scan import OBJECT_OPENERS
     openers, nouns, ops, known = _vocab(board)
+    states = _statuses(board)                        # manifest STATUS values (running/stopped/up/down)
     if w in known:
         return None
     words = [t[0] for t in toks]
@@ -256,12 +323,19 @@ def _recognise(w, toks, at, board):
     prev = words[i - 1] if i > 0 else None
     nxt = words[i + 1] if i + 1 < len(words) else None
     _PRONOUNS = {"it", "them", "me", "us", "one", "ones", "everything"}
+    _COPULAS = {"is", "are", "was", "were", "be", "been"}
     fits = set()
-    for cand in openers | nouns | ops:
+    for cand in openers | nouns | ops | states:
         if not _damerau1(w, cand) or len(cand) < 4 and cand not in _PRONOUNS:
             continue
         if cand in _PRONOUNS:
             if prev in ops:
+                fits.add(cand)
+        elif cand in states:
+            # a STATUS sits after a copula in its clause: `is dawn` -> down, `is beta runnin`
+            # -> running, `are the vms stoppd` -> stopped — a report, a polar query and a
+            # relative clause all put a copula within the few words before the status.
+            if any(words[j] in _COPULAS for j in range(max(0, i - 3), i)):
                 fits.add(cand)
         elif cand in openers:
             if nxt in nouns:

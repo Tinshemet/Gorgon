@@ -234,6 +234,19 @@ DEMONSTRATIVES = {"this": "one", "that": "one", "these": "many", "those": "many"
 SELECTOR_PREPOSITIONS = frozenset({"at", "with", "on", "over", "under", "above", "below",
                                    "than", "in", "having"})
 
+# ⇒ THE LOCATIVE RELATION WORDS — every closed word that can head a PLACE argument (`the vms ON
+#   dmz`, `the files IN lab`, `move it INTO the dmz`, `the snapshots OUT OF lab`). Distinct from
+#   SELECTOR_PREPOSITIONS (which filter an attribute: `with 4 cores`, `over 8G`): these relate an
+#   entity to a LOCATION, and it is the governing VERB — not the preposition — that says whether
+#   that location is a DESTINATION (a transfer: TRANSFER_VERBS) or an OWNER (anything else). Rule
+#   D8, [[gorgon-verb-decides-the-noun]]. Longest first at the call site so `out of` beats `out`.
+LOCATIVE_PREPOSITIONS = frozenset({
+    "on", "onto", "upon", "in", "into", "inside", "within", "at", "to", "toward", "towards",
+    "from", "out of", "off", "off of", "over", "under", "underneath", "above", "below",
+    "beneath", "near", "next to", "beside", "by", "across", "through", "between", "among",
+    "amongst", "around", "behind", "in front of", "against", "along", "via",
+})
+
 # ⇒ What is left dangling at the cut when a value is lifted out of the phrase that swallowed
 #   it — *"a vm with ▸4 cores"* leaves `a vm with`; the connector goes with the value.
 VALUE_CONNECTORS = frozenset({"with", "of", "and", "to", "at", "on", ","})
