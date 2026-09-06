@@ -301,6 +301,14 @@ def _statuses(board=None):
     for _spec in (b.kinds or {}).values():
         for _vals in ((_spec or {}).get("attr_values") or {}).values():
             out |= {str(v).lower() for v in _vals}
+        # ⇒ AND THE DECLARED VALUE ALIASES (2026-09-06). The manifest declares `up`->running and
+        #   `down`->stopped in `value_aliases` — the operator's own row, 2026-08-05, whose doc says
+        #   a declared synonym IS a manifest row. They are as much a declared status word as
+        #   `running`, and `_manifest_states()` (the scorer's SSOT) has always counted them.
+        #   Reading only `attr_values` was reading HALF the manifest: `dawn`->`down` could not be
+        #   recognised, and the gap looked like a GOLD/MANIFEST mismatch when it was ours.
+        for _amap in ((_spec or {}).get("value_aliases") or {}).values():
+            out |= {str(k).lower() for k in (_amap or {})}
     return out
 
 
@@ -335,6 +343,15 @@ def _recognise(w, toks, at, board):
             # a STATUS sits after a copula in its clause: `is dawn` -> down, `is beta runnin`
             # -> running, `are the vms stoppd` -> stopped — a report, a polar query and a
             # relative clause all put a copula within the few words before the status.
+            # ...but NEVER straight after a DETERMINER (2026-09-06): a status is a predicate,
+            # never the head of a noun phrase, so `is the GOWN ready` is not `is the down ready`.
+            # Adding the declared aliases `up`/`down` to the candidate set put `gown` one edit
+            # from `down` and broke fix #3's own control; the determiner is the closed-class
+            # discriminator that keeps it out. `is beta dawn` / `are the vms stoppd` are
+            # untouched — their status word does not follow a determiner.
+            from ..codex import CUT_DETERMINERS as _DETS
+            if prev in _DETS:
+                continue
             if any(words[j] in _COPULAS for j in range(max(0, i - 3), i)):
                 fits.add(cand)
         elif cand in openers:
