@@ -524,6 +524,17 @@ def _manifest_states() -> dict:
 # ⇒ THE PROFORMS THAT REFER — one closed set, shared by the diagnosis rule and the kindless-
 #   pronoun rule so the two can never disagree about what a pronoun is. `both` is excluded on
 #   purpose: the sealed gold calls it a QUANTIFIER, not a reference.
+_READ_BOARD = None
+def _read_board():
+    """A cached Board for the rules in annotate_roles, which takes no board argument (the world is
+    static per process — the same reason `_manifest_states` caches)."""
+    global _READ_BOARD
+    if _READ_BOARD is None:
+        from planner.formula.legal import Board
+        _READ_BOARD = Board()
+    return _READ_BOARD
+
+
 _PROREF = __import__("re").compile(r"\b(?:it|them|they|that|one|ones)\b", __import__("re").I)
 
 
@@ -934,6 +945,31 @@ def annotate_roles(reading: dict) -> dict:
             #   excluded, not reference) — the interaction [[gorgon-reference-ruling]] flagged.
         if _PROREF.search((_q.get("span") or "").lower()):
             _q["role"] = "reference"                   # a kindless pronoun-row REFERS, is not the patient
+    # ⇒ THE REFERENTS INSIDE A REASON CLAUSE (operator ruling 2026-09-06). The reason keeps its
+    #   ONE evidence span — that reading is untouched — but a referent NAMED inside it is also
+    #   surfaced, because READ spans what the request mentions. `stop the test vms even though
+    #   ALPHA is busy` gave `alpha` no span at all: a declared machine, named in the request,
+    #   invisible to the reader. The corpus already contradicted itself — a CONDITIONAL's interior
+    #   IS spanned (fb-0001 `if THAT fails, kill IT` -> reference; io-0007 `if ALPHA were down` ->
+    #   patient) while a REASON's was not. Roles follow those precedents, not invention. Runs LAST,
+    #   so it can see every row and add ONLY what nothing else already points at; and the eval does
+    #   not bill these, since a span wholly inside a gold span is a sub-span, not a hallucination.
+    from orchestrator.languages.english.seam import reasons as _RSi
+    _rregions = [(x.start, x.end) for x in _RSi.read(_sent, _read_board())]
+    if _rregions:
+        _libn = set(_active_library())
+        for _rs0, _re0 in _rregions:
+            for _im in _rx.finditer(r"[a-z][a-z0-9_-]*", _sent[_rs0:_re0].lower()):
+                _w0 = _im.group(0)
+                _role0 = "reference" if _PROREF.fullmatch(_w0) else ("patient" if _w0 in _libn else None)
+                if _role0 is None:
+                    continue
+                _s0, _e0 = _rs0 + _im.start(), _rs0 + _im.end()
+                if any(q.get("start") == _s0 and q.get("end") == _e0 for q in reading.get("rows", [])):
+                    continue                      # the reader already points at this token
+                reading.setdefault("rows", []).append({"row": None, "span": _sent[_s0:_e0],
+                    "type": "object", "kind": "?", "role": _role0, "sub": True,
+                    "start": _s0, "end": _e0})
     # dedup coincident SUB-spans (a partitive over a pronoun can be emitted by both read_case
     # part B and the split when the reader also built a row for it) — same (offset, role) once
     _seen, _kept = set(), []
