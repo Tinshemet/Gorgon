@@ -521,6 +521,12 @@ def _manifest_states() -> dict:
     return _MANIFEST_STATES
 
 
+# ⇒ THE PROFORMS THAT REFER — one closed set, shared by the diagnosis rule and the kindless-
+#   pronoun rule so the two can never disagree about what a pronoun is. `both` is excluded on
+#   purpose: the sealed gold calls it a QUANTIFIER, not a reference.
+_PROREF = __import__("re").compile(r"\b(?:it|them|they|that|one|ones)\b", __import__("re").I)
+
+
 def annotate_roles(reading: dict) -> dict:
     """Assign a ROLE to each object row from signals the seam ALREADY produces — the reader
     catching up to the gold's per-span roles. Mutates and returns *reading*.
@@ -897,6 +903,18 @@ def annotate_roles(reading: dict) -> dict:
         if _res:
             _lead = len(_txt) - len(_txt.lstrip())
             _ds, _de = _rs + _lead, _rs + _lead + len(_res)
+            # ⇒ A PROFORM IS NEVER A DIAGNOSIS (2026-09-06, marathon `&&` case). A post-head
+            #   restrictor that is nothing but a pronoun POINTS; it does not describe a condition.
+            #   `sudo service beta snapshot IT` came back as the model's one glob, and this rule
+            #   read the trailing `it` as a restrictor — emitting the selector+evidence DUAL and
+            #   never a reference, so the atom scored lost. The gold is unambiguous: every bare
+            #   proform in the sealed corpus (`it`, `that`, `them`, `one`) is a REFERENCE. Same
+            #   closed set the kindless-pronoun rule below owns, so the two cannot disagree;
+            #   `both` is deliberately NOT in it — gold calls that a QUANTIFIER.
+            if _PROREF.fullmatch(_res.lower()):
+                reading["rows"].append({"row": _dr.get("row"), "span": _res, "type": "object",
+                    "kind": "?", "role": "reference", "sub": True, "start": _ds, "end": _de})
+                continue
             for _role, _typ in (("selector", "object"), ("evidence", "evidence")):   # DUAL
                 reading["rows"].append({"row": _dr.get("row"), "span": _res, "type": _typ,
                     "kind": "?", "role": _role, "sub": True, "start": _ds, "end": _de})
@@ -914,7 +932,7 @@ def annotate_roles(reading: dict) -> dict:
             continue                                   # only KINDLESS rows the reader failed to type;
             #   EXCLUSION takes precedence over the `one` proform re-label (`not the db one` stays
             #   excluded, not reference) — the interaction [[gorgon-reference-ruling]] flagged.
-        if _re3.search(r"\b(?:it|them|they|that|one|ones)\b", (_q.get("span") or "").lower()):
+        if _PROREF.search((_q.get("span") or "").lower()):
             _q["role"] = "reference"                   # a kindless pronoun-row REFERS, is not the patient
     # dedup coincident SUB-spans (a partitive over a pronoun can be emitted by both read_case
     # part B and the split when the reader also built a row for it) — same (offset, role) once
