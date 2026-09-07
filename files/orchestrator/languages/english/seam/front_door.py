@@ -439,9 +439,19 @@ def _recognise(w, toks, at, board):
             # discriminator that keeps it out. `is beta dawn` / `are the vms stoppd` are
             # untouched — their status word does not follow a determiner.
             from ..codex import CUT_DETERMINERS as _DETS
-            if prev in _DETS:
-                continue
-            if any(words[j] in _COPULAS for j in range(max(0, i - 3), i)):
+            # SLOT ONE — after a copula (`is beta dawn`, `are the vms stoppd`). A determiner
+            #   directly before the word means it heads a noun phrase, not a predicate, so
+            #   `is the GOWN ready` is refused here.
+            if any(words[j] in _COPULAS for j in range(max(0, i - 3), i)) and prev not in _DETS:
+                fits.add(cand)
+            # SLOT TWO — PRE-NOMINAL, directly before a KIND noun (2026-09-07): `the RUNNIN vms`,
+            #   `th STPPED vm`. A state modifies the kind it restricts, and that is as much a
+            #   state slot as the copular one — the recogniser only licensed the copular half, so
+            #   `restart the runnin VMs on lab` (no copula anywhere) went uncorrected. This is
+            #   DENOISE, never inference: the slot licenses the class, the candidate must be a
+            #   DECLARED status, and `_recognise` still changes nothing unless exactly one fits.
+            #   A determiner before is normal here (`THE running vms`), so no determiner guard.
+            elif nxt in nouns:
                 fits.add(cand)
         elif cand in openers:
             if nxt in nouns:
