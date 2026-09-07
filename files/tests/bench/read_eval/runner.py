@@ -685,6 +685,38 @@ def annotate_roles(reading: dict) -> dict:
         reading.setdefault("rows", []).append({"row": None, "span": _pq.group(1),
             "type": "object", "kind": "?", "role": "selector", "sub": True,
             "start": _pq.start(1), "end": _pq.end(1)})
+    # ⇒ SELECTOR/EVIDENCE — AN UNGROUNDED STATE IN A STATE SLOT (2026-09-07, held-out gap).
+    #   READ surfaced an undeclared state as a DIAGNOSIS when it sat in a post-head restrictor
+    #   (`stop the vms STUCK AT BOOT` -> selector+evidence) but not when it sat in the copular
+    #   predicate of a query (`which vms are STUCK` -> nothing at all). Same word, same word class,
+    #   two positions, two answers — an inconsistency, not a ruling. The manifest's sparseness is
+    #   about GROUNDING, not SPANNING: READ spans, never interprets, and RESOLVE decides that the
+    #   world cannot hold `stuck`. So the state slot after a copula, in a query or a conditional,
+    #   emits the DUAL the 2026-08-29 ungrounded-state ruling already defines — selector by use,
+    #   evidence by nature. A DECLARED status never reaches here (_COPVAL/_POLARQ own those), and
+    #   a closed-class word, a declared name and a manifest kind are all refused, so `which vms are
+    #   ON lab` never makes `on` a state.
+    _STATESLOT = _rx.compile(
+        r"(?:^\s*(?:which|what)\b[^.;!?]*?|\b(?:if|when|unless|whenever)\b[^.;!?]*?|"
+        r"(?:^|[.;!?,]\s*))\b(?:is|are|was|were)\s+([a-z][a-z0-9_-]{2,})\b", _rx.I)
+    from orchestrator.languages.english import codex as _CXs
+    _ss_states = set(_manifest_states())
+    _ss_lib = set(_active_library())
+    _ss_kinds = set(_read_board().subjects())
+    _closed = set(_CXs.HEDGES) | set(_CXs.EMPHATIC) | set(_CXs.NEGATION) | set(_CXs.AFFIRMATION) \
+        | set(_CXs.OBJECT_PRONOUNS) | set(_CXs.SELECTOR_PREPOSITIONS) | set(_CXs.LOCATIVE_PREPOSITIONS) \
+        | set(_CXs.CUT_DETERMINERS) | set(_CXs.SINGULAR_PROFORMS) | set(_CXs.PLURAL_PROFORMS) \
+        | {"the", "a", "an", "not", "there", "here", "still", "also", "safe", "sure"}
+    for _ss in _STATESLOT.finditer(_sent):
+        _wd = _ss.group(1).lower()
+        if _wd in _ss_states or _wd in _closed or _wd in _ss_lib or _wd in _ss_kinds:
+            continue                                   # declared status / closed class / name / kind
+        if any(r.get("start") == _ss.start(1) for r in reading.get("rows", [])):
+            continue                                   # something already points at it
+        for _role, _typ in (("selector", "object"), ("evidence", "evidence")):   # the DUAL
+            reading.setdefault("rows", []).append({"row": None, "span": _ss.group(1),
+                "type": _typ, "kind": "?", "role": _role, "sub": True,
+                "start": _ss.start(1), "end": _ss.end(1)})
     # ⇒ CONDITIONAL — the COMPARISON OPERATOR (2026-08-29): `over` / `more than` / `older than` is
     #   the OPERATOR of a threshold filter, distinct from the value it bounds. Magnitude comparators
     #   (codex.MAGNITUDE SSOT) OR a `<comparative> than`.
