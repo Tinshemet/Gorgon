@@ -94,3 +94,20 @@ def test_explaining_a_name_is_the_catalogue_s_job_refusing_it_is_the_caller_s():
 def test_an_identical_word_carries_no_prints():
     assert NP.explain("running", "running") == ()
     assert NP.explain("running", "RUNNING") == ()          # case never blocks recognition
+
+
+def test_two_letter_swaps_turn_a_word_into_a_different_word():
+    """`restart` -> `restore` is two substitutions. Admitting it rewrote `restart` across eleven
+    sealed corpus cases. The mechanical prints leave a wreck; substitution lands on real words."""
+    assert NP.explain("restore", "restart") is None
+    assert NP.explain("restart", "restore") is None
+
+
+def test_one_letter_swap_is_still_a_print():
+    assert NP.explain("down", "dawn") == ("substitute",)
+    assert NP.explain("gamma", "gamna") == ("key-adjacent",)
+
+
+def test_leet_is_exempt_from_the_swap_cap():
+    """A digit standing for a letter cannot produce a real word, so two are still explained."""
+    assert NP.explain("create", "cr34te") == ("leet", "leet")

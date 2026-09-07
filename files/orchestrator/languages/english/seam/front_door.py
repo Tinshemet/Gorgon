@@ -327,9 +327,13 @@ def _read_stages(request: str, board=None) -> View:
             continue
         got = _recognise(w, toks, s_, board)
         if got:
+            _word, _prints = got
             taken2.append((s_, e_))
-            edits.append((s_, e_, got))
-            notices.append(f"read '{w}' as '{got}'")
+            edits.append((s_, e_, _word))
+            #   the notice carries WHY, not just what: a repair without its evidence is a guess
+            #   that happens to be right.
+            _why = " + ".join(_prints) if _prints else "exact"
+            notices.append(f"read '{w}' as '{_word}' ({_why})")
 
     if edits:
         mid, back1 = _apply(text, edits)
@@ -421,13 +425,23 @@ def _recognise(w, toks, at, board):
     nxt = words[i + 1] if i + 1 < len(words) else None
     _PRONOUNS = {"it", "them", "me", "us", "one", "ones", "everything"}
     _COPULAS = {"is", "are", "was", "were", "be", "been"}
-    fits = set()
+    # ⇒ THE GATE IS THE CATALOGUE, NOT A DISTANCE (2026-09-07). `_damerau1` asked "is this within
+    #   one edit" — a similarity score, which admits any near miss and refuses any real corruption
+    #   that happens to carry two. The catalogue asks whether every edit is a DECLARED print, so a
+    #   composition (27% of measured noise) is admitted WITH its evidence, and an undeclared edit is
+    #   refused however close it looks. Candidates still come only from our own closed sets, so a
+    #   NAME can never be one and the ruling that a typo'd name is the name holds structurally.
+    from ..noise_prints import explain as _explain
+    fits = {}
     for cand in openers | nouns | ops | states:
-        if not _damerau1(w, cand) or len(cand) < 4 and cand not in _PRONOUNS:
+        if len(cand) < 4 and cand not in _PRONOUNS:
+            continue
+        _prints = _explain(cand, w)
+        if not _prints:                     # None = undeclared · () = identical, nothing to repair
             continue
         if cand in _PRONOUNS:
             if prev in ops:
-                fits.add(cand)
+                fits[cand] = _prints
         elif cand in states:
             # a STATUS sits after a copula in its clause: `is dawn` -> down, `is beta runnin`
             # -> running, `are the vms stoppd` -> stopped — a report, a polar query and a
@@ -443,7 +457,7 @@ def _recognise(w, toks, at, board):
             #   directly before the word means it heads a noun phrase, not a predicate, so
             #   `is the GOWN ready` is refused here.
             if any(words[j] in _COPULAS for j in range(max(0, i - 3), i)) and prev not in _DETS:
-                fits.add(cand)
+                fits[cand] = _prints
             # SLOT TWO — PRE-NOMINAL, directly before a KIND noun (2026-09-07): `the RUNNIN vms`,
             #   `th STPPED vm`. A state modifies the kind it restricts, and that is as much a
             #   state slot as the copular one — the recogniser only licensed the copular half, so
@@ -452,17 +466,30 @@ def _recognise(w, toks, at, board):
             #   DECLARED status, and `_recognise` still changes nothing unless exactly one fits.
             #   A determiner before is normal here (`THE running vms`), so no determiner guard.
             elif nxt in nouns:
-                fits.add(cand)
+                fits[cand] = _prints
         elif cand in openers:
             if nxt in nouns:
-                fits.add(cand)
+                fits[cand] = _prints
         elif cand in nouns:
             if prev in openers or (i >= 2 and words[i - 2] in openers):
-                fits.add(cand)
+                fits[cand] = _prints
         elif cand in ops:
             if i == 0 or prev in {"then", "and", "but"}:
-                fits.add(cand)
-    return fits.pop() if len(fits) == 1 else None
+                fits[cand] = _prints
+    #   THE SIMPLEST EXPLANATION WINS, AND ONLY IF IT IS STRICTLY SIMPLEST. Widening the gate from
+    #   one edit to the catalogue admits a plural alongside its singular — `netwrk` is `network` by
+    #   ONE print (drop-vowel) and `networks` by TWO (drop-vowel + truncate) — and calling that
+    #   ambiguity refuses a reading nobody would call ambiguous. Fewer assumed corruptions is not
+    #   inference about MEANING; it is declining to assume corruption that the evidence does not
+    #   require. But a TIE stays a tie: `stpped` explains `stopped` and `stepped` at one print
+    #   each, and that changes nothing — which is the ASK the caller will make.
+    if not fits:
+        return None
+    _least = min(len(v) for v in fits.values())
+    _best = [(c, pr) for c, pr in fits.items() if len(pr) == _least]
+    if len(_best) != 1:
+        return None
+    return _best[0]
 
 
 def _tokens(low: str):

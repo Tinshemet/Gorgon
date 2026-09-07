@@ -176,6 +176,15 @@ def explain(clean: str, observed: str) -> Optional[Tuple[str, ...]]:
             continue
         collapsed.append(f)
     found = collapsed
+    # ⇒ AT MOST ONE LETTER-FOR-LETTER SUBSTITUTION. The mechanical prints — a dropped letter, a
+    #   repeat, a swap, a cut — rarely land on ANOTHER REAL WORD; they leave a wreck. Substituting
+    #   one letter for another is the print that turns a word into a different word, and two of
+    #   them almost always do: `restart` <- `restore` is two substitutions, and admitting it
+    #   rewrote `restart` across ELEVEN sealed corpus cases (caught by capture --diff, 2026-09-07).
+    #   Leet is exempt — a digit standing for a letter cannot produce a real word.
+    _swaps = sum(1 for f in found if f in ("substitute", "key-adjacent"))
+    if _swaps > 1:
+        return None
     # ⇒ A BOUND, OR THE CATALOGUE EXPLAINS ANYTHING. Enough declared prints compose into any word
     #   from any other: `running` <- `walking` came back as four substitutions. A corruption is a
     #   corruption of a word; past roughly a third of the word it is a different word, and the
