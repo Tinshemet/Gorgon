@@ -85,9 +85,9 @@ def read(request: str, board=None, known=None) -> View:
         text0, back0 = _apply(text, edits0)
         inner = _read_stages(text0, board)
         back = [back0[b] for b in inner.back]
-        return View(inner.text, back, notes_s + notes0 + inner.notices, _req)
+        return View(inner.text, back, notes_s + notes0 + inner.notices + _shape_pass(inner.text), _req)
     inner = _read_stages(text, board)
-    return View(inner.text, inner.back, notes_s + inner.notices, _req)
+    return View(inner.text, inner.back, notes_s + inner.notices + _shape_pass(inner.text), _req)
 
 
 def defused(request: str, board=None, known=None) -> str:
@@ -111,6 +111,39 @@ _FUNCTION_WORDS = frozenset({
     "for", "from", "with", "by", "as", "is", "are", "was", "were", "be", "been", "do", "does",
     "did", "you", "your", "me", "my", "we", "our", "all", "any", "every", "each", "please",
 })
+
+
+def _shape_pass(text: str):
+    """DETECT the code-world shapes; never rewrite them (operator rulings, 2026-09-07).
+
+    A path is already decomposable by its own structure — `/etc/web/temp.cfg` is root -> etc ->
+    web -> temp, type cfg — so it only needs to be RECOGNISED; whoever cares about it will take it
+    apart, and a wrong path is caught downstream. camelCase, snake_case and a run-on are the same
+    kind of thing: conventionally CODE, an identifier whose other side we cannot see. The
+    orchestrator is language-independent and code-independent, so splitting one would inject a
+    meaning we cannot justify — `getUserName` and `alphaSHOULDbERESTARTEDNOW` are the same shape
+    and we genuinely cannot tell them apart. Detecting says what the token IS and leaves the
+    decision to a layer that can ask.
+
+    Emits notices only. Byte-identical output, so it composes with every pass and costs no offset.
+    """
+    out: List[str] = []
+    seen = set()
+    for tok in text.split():
+        t = tok.strip(",;:!?\"'`")
+        if len(t) < 3 or t.lower() in seen:
+            continue
+        if re.match(r"^[a-z][a-z0-9+.-]*://", t, re.I):        shape = "a url"
+        elif "/" in t or "\\" in t:                            shape = "a path"
+        elif re.search(r"\.[a-z]{2,4}$", t, re.I) and t.count(".") == 1:  shape = "a filename"
+        elif re.search(r"[$|]|&&|[a-z]=[^ ]", t, re.I):          shape = "a shell expression"
+        elif re.search(r"[a-z][A-Z]", t):                        shape = "camelCase — an identifier"
+        elif re.fullmatch(r"[a-z0-9]+(?:_[a-z0-9]+)+", t):       shape = "snake_case — an identifier"
+        else:
+            continue
+        seen.add(t.lower())
+        out.append(f"{t!r} looks like {shape} — left whole")
+    return out
 
 
 def _separator_pass(text: str, board=None, known_extra=None):
