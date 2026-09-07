@@ -103,6 +103,16 @@ def defused(request: str, board=None, known=None) -> str:
     return _apply(_req, edits)[0] if edits else _req
 
 
+# ⇒ THE FUNCTION WORDS — the closed classes a NAME never contains. Evidence, per the operator's
+#   closed-class doctrine, that a separator run is a fused sentence rather than an identifier.
+_FUNCTION_WORDS = frozenset({
+    "the", "a", "an", "this", "that", "these", "those", "it", "its", "them", "they", "their",
+    "and", "or", "but", "not", "no", "if", "then", "than", "to", "of", "on", "in", "into", "at",
+    "for", "from", "with", "by", "as", "is", "are", "was", "were", "be", "been", "do", "does",
+    "did", "you", "your", "me", "my", "we", "our", "all", "any", "every", "each", "please",
+})
+
+
 def _separator_pass(text: str, board=None, known_extra=None):
     """A hyphen or underscore JOINING two KNOWN words (closed-set, or a declared standing object in
     `known_extra`) is a fusion separator, read as a space (`do-not-stop` -> `do not stop`,
@@ -117,11 +127,19 @@ def _separator_pass(text: str, board=None, known_extra=None):
     from .scan import PARTICLES as _parts
     edits: List[Tuple[int, int, str]] = []
     notices: List[str] = []
-    for m in re.finditer(r"[a-z']+(?:[-_][a-z']+)+", low):
+    # ⇒ WHICH CHARACTERS JOIN (2026-09-07): a backslash and a plus fuse exactly as a hyphen and an
+    #   underscore do — `virsh\\shutdown\\db`, `it+wld+bt+fr+web`. And a segment carrying a DIGIT
+    #   (`over-2gb`, `to_16gb`) used to TERMINATE the run, so the separators either side of it never
+    #   opened; digits are allowed inside a segment now. Name safety is unchanged: it rests on the
+    #   evidence test below, not on the character class.
+    for m in re.finditer(r"[a-z0-9']+(?:[-_\\+][a-z0-9']+)+", low):
         rs, re_ = m.start(), m.end()
         if any(qs <= rs and re_ <= qe for qs, qe in opaque):
             continue                                    # quoted: opaque
-        parts = list(re.finditer(r"[a-z']+", m.group(0)))
+        # the PARTS class must match the RUN class, or the character between two parts is not the
+        #   separator at all and the pass overwrites content: with a letters-only parts regex,
+        #   `gr8+fr` replaced the DIGIT `8` with a space (caught by this rule's own control).
+        parts = list(re.finditer(r"[a-z0-9']+", m.group(0)))
         # ⇒ THE RUN, NOT THE PAIR (2026-09-06, marathon family C). Splitting only ADJACENT
         #   known-known pairs left every chain with one unknown token in it half-fused, and the
         #   atom behind the block stayed lost: `which-vms-r-stopped` -> `which vms-r-stopped`
@@ -131,11 +149,24 @@ def _separator_pass(text: str, board=None, known_extra=None):
         #   (`web-01` never even matches this pattern, `foo-bar-baz` has none), so the operator's
         #   ruling that a typo'd name is still the name holds. Below two, nothing changes.
         _kn = sum(1 for _p in parts if _p.group(0) in known)
+        # ⇒ A FUNCTION WORD IS THE STRONGEST EVIDENCE OF A FUSED SENTENCE (2026-09-07). Two known
+        #   words freed the long chains but refused the short ones — `un-doh-that` kept `that`
+        #   glued because only one segment was known. A NAME never contains a proform, a
+        #   determiner or a conjunction: `web-01`, `foo-bar-baz`, `alpah-01` carry none. So one
+        #   closed-class FUNCTION word in the run is evidence a name can't produce, and it opens
+        #   the run on its own.
+        _fn = any(_p.group(0) in _FUNCTION_WORDS for _p in parts)
         for k in range(len(parts) - 1):
             a, b = parts[k].group(0), parts[k + 1].group(0)
             if a in _parts and b in _parts:
                 continue                                # `back-up` stays `backup`
-            if _kn >= 2 or (a in known and b in known):
+            # ⇒ A PURE-DIGIT SEGMENT IS AN IDENTIFIER SUFFIX, NEVER A WORD (2026-09-07):
+            #   `web-01`, `test01-node`, `vm-2` — cutting either side of it breaks a NAME, which
+            #   the operator's ruling forbids. `over-2gb` is untouched by this: `2gb` is a digit
+            #   AND letters, a value shape, not a bare index.
+            if a.isdigit() or b.isdigit():
+                continue
+            if _kn >= 2 or _fn or (a in known and b in known):
                 sep = rs + parts[k].end()               # the one separator char between a and b
                 edits.append((sep, sep + 1, " "))
                 notices.append(f"read '{a}{text[sep]}{b}' as '{a} {b}'")
