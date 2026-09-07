@@ -47,13 +47,27 @@ class View(NamedTuple):
     original: str
 
 
+_UNICODE_SPACES = {0x00A0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006,
+                   0x2007, 0x2008, 0x2009, 0x200A, 0x202F, 0x205F, 0x3000}
+
+
+def _despace(text: str) -> str:
+    """A NON-BREAKING SPACE (and its kin) is a SPACE (2026-09-06). `vm\xa0stop\xa0biggest_vm` is
+    what pasting from a web page or a rendered doc gives you — the tokenizer saw one long token and
+    the patient was lost. Not the Serpent inventing noise: real people paste. One character for one
+    character, so every offset stays byte-exact and this composes with every pass below."""
+    if not any(ord(c) in _UNICODE_SPACES for c in text):
+        return text
+    return "".join(" " if ord(c) in _UNICODE_SPACES else c for c in text)
+
+
 def read(request: str, board=None, known=None) -> View:
     """One pass, at the entrance. Clean text returns the identity view. `known` — extra standing
     object NAMES (the world's declared vms/networks) the SEPARATOR pass may treat as closed for
     de-fusing (`db-down` -> `db down`). They are fed ONLY to the separator pass, NEVER to typo
     recognition, so the operator's rule holds: a typo'd name is still the name (`alpah` stays)."""
     _req = str(request)
-    text = _req
+    text = _despace(_req)            # unicode spaces -> ' ' (same length, offsets byte-exact)
     # 0 · SEPARATOR-JOINED closed words -> spaces (2026-09-02): a hyphen/underscore joining two
     #     KNOWN closed words (or declared standing objects) is a fusion separator the tokenizer
     #     already sees but the text kept, so `do-not-stop-x`/`db-down` never fed the words apart.
@@ -84,7 +98,7 @@ def defused(request: str, board=None, known=None) -> str:
     RULE LAYER's text: annotate_roles regexes this string while the rows it labels carry ORIGINAL
     offsets, so the two must stay in the same coordinate space. `_split_pass` is deliberately NOT
     run here — it changes length, which would break that correspondence."""
-    _req = str(request)
+    _req = _despace(str(request))
     edits, _ = _separator_pass(_req, board, known)
     return _apply(_req, edits)[0] if edits else _req
 
@@ -108,9 +122,20 @@ def _separator_pass(text: str, board=None, known_extra=None):
         if any(qs <= rs and re_ <= qe for qs, qe in opaque):
             continue                                    # quoted: opaque
         parts = list(re.finditer(r"[a-z']+", m.group(0)))
+        # ⇒ THE RUN, NOT THE PAIR (2026-09-06, marathon family C). Splitting only ADJACENT
+        #   known-known pairs left every chain with one unknown token in it half-fused, and the
+        #   atom behind the block stayed lost: `which-vms-r-stopped` -> `which vms-r-stopped`
+        #   (`r`, a typo of "are", freezes `stopped`), `delete-the-vms-over-4gb` stops at `4gb`,
+        #   `show-me-alphas-logs` never split at all. TWO known words ANYWHERE in the run is the
+        #   evidence that the run is a fused SENTENCE rather than a name — a name has at most one
+        #   (`web-01` never even matches this pattern, `foo-bar-baz` has none), so the operator's
+        #   ruling that a typo'd name is still the name holds. Below two, nothing changes.
+        _kn = sum(1 for _p in parts if _p.group(0) in known)
         for k in range(len(parts) - 1):
             a, b = parts[k].group(0), parts[k + 1].group(0)
-            if a in known and b in known and not (a in _parts and b in _parts):
+            if a in _parts and b in _parts:
+                continue                                # `back-up` stays `backup`
+            if _kn >= 2 or (a in known and b in known):
                 sep = rs + parts[k].end()               # the one separator char between a and b
                 edits.append((sep, sep + 1, " "))
                 notices.append(f"read '{a}{text[sep]}{b}' as '{a} {b}'")
