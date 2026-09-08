@@ -156,7 +156,15 @@ def read_case(sentence: str, board=None) -> dict:
     #   the separator pass was built (2026-09-02) and never called where three of the four fixes
     #   actually work. The separator pass is same-length by construction, so the de-fused original
     #   is offset-IDENTICAL to the original and the rows' remapped offsets still index it exactly.
-    _original = FD.defused(_original, board, _known)
+    #   ...and when the WHOLE view is the same length as the original it is offset-identical, so
+    #   the rule layer can have all of it — separator splits AND typo repairs. Without this the
+    #   rules still saw the typo: `is alpah rynning` was repaired to `running` for the MODEL, while
+    #   `_POLARQ` went on matching `rynning`, which is not a manifest status, so the polar-query
+    #   rule could not fire and the status was dropped (2026-09-08). Same defect as the separator
+    #   one above, one pass further on. A length change means `_split_pass` fired and the offsets
+    #   no longer correspond, so that case keeps the separator-only text.
+    _defused = FD.defused(_original, board, _known)
+    _original = view.text if len(view.text) == len(_original) else _defused
     sentence = view.text
     rows = P1.run_scanned(sentence, board=board)
     table = P2.symbol_table(rows, board)
