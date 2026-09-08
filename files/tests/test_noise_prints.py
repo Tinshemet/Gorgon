@@ -111,3 +111,14 @@ def test_one_letter_swap_is_still_a_print():
 def test_leet_is_exempt_from_the_swap_cap():
     """A digit standing for a letter cannot produce a real word, so two are still explained."""
     assert NP.explain("create", "cr34te") == ("leet", "leet")
+
+
+def test_the_front_of_a_word_is_never_lost():
+    """Truncation cuts the END — `runnin`, `templ`, `stat`. Nobody drops the first letters of a
+    word; a token missing them is a DIFFERENT word. Without this, `remove` <- `move` is two
+    mechanical drops that the substitution cap never sees, and the front door rewrote
+    `move db to dmz` as `remove db to dmz` seven times in one ruler — a transfer turned into a
+    deletion."""
+    assert NP.explain("remove", "move") is None
+    assert NP.explain("restore", "store") is None
+    assert NP.explain("running", "runnin") == ("truncate",)     # the end still truncates

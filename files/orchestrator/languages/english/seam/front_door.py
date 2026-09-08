@@ -374,9 +374,23 @@ def _vocab(board):
     ops = {w for w in _operation_words(None) if not w.endswith("s")}
     marker_words = {w for p in (tuple(_sr.CORRECTIONS) + tuple(_sr.RETRACTIONS)
                                 + WRAPPERS + COURTESY) for w in p.split()}
+    # ⇒ A WORD IN ANY DECLARED CLOSED CLASS IS A REAL WORD, AND A REAL WORD IS NEVER REPAIRED
+    #   (2026-09-08). The guard held only the classes the seam happens to consume, so ordinary
+    #   words the lab does not declare — `nope`, `lets`, `move` — were candidates for repair and
+    #   got rewritten into declared ones. Every closed class the codex declares now guards.
+    from ...english import codex as _CXk
+    _closed_classes = set()
+    for _n in ("NEGATION", "AFFIRMATION", "HEDGES", "EMPHATIC", "BACKCHANNEL", "APOLOGY",
+               "TROUBLE", "FOCUS_PARTICLES", "LIGHT_VERBS", "TRANSFER_VERBS", "OBJECT_PRONOUNS",
+               "SINGULAR_PROFORMS", "PLURAL_PROFORMS", "SELECTOR_PREPOSITIONS",
+               "LOCATIVE_PREPOSITIONS", "CUT_DETERMINERS", "REASON_MARKER_WORDS",
+               "DISTINCT", "PLURAL_PRONOUNS", "SIMILE"):
+        _v = getattr(_CXk, _n, None)
+        if _v:
+            _closed_classes |= {str(x).lower() for x in _v}
     known = (set(OBJECT_OPENERS) | set(GRAMMAR) | nouns | ops | marker_words
              | set(AUXILIARIES) | set(WH_WORDS) | set(PARTICLES)
-             | set(_iso.FILLED_PAUSE) | {"vms", "vm's"})
+             | set(_iso.FILLED_PAUSE) | _closed_classes | {"vms", "vm's"})
     return OBJECT_OPENERS, nouns, ops, known
 
 

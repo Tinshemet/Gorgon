@@ -140,6 +140,13 @@ def explain(clean: str, observed: str) -> Optional[Tuple[str, ...]]:
         if op == "transpose":
             found.append("transpose")
         elif op == "delete":
+            # ⇒ THE FRONT OF A WORD IS NOT LOST (2026-09-08). Truncation cuts the END — `runnin`,
+            #   `templ`, `stat`. Nobody drops the first letters of a word; a token missing them is
+            #   a DIFFERENT WORD. Without this, `remove` <- `move` is two mechanical drops and the
+            #   substitution cap never sees it — the front door rewrote `move db to dmz` as
+            #   `remove db to dmz` SEVEN times in one ruler, turning a transfer into a deletion.
+            if i == 0:
+                return None
             # a run of deletions off the end is the word being cut short, not letters going missing
             if i >= len(c) - 2 and j >= len(o):
                 found.append("truncate")
