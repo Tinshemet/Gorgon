@@ -165,7 +165,10 @@ def _separator_pass(text: str, board=None, known_extra=None):
     #   (`over-2gb`, `to_16gb`) used to TERMINATE the run, so the separators either side of it never
     #   opened; digits are allowed inside a segment now. Name safety is unchanged: it rests on the
     #   evidence test below, not on the character class.
-    for m in re.finditer(r"[a-z0-9']+(?:[-_\\+][a-z0-9']+)+", low):
+    #   `&` joins as the others do (`stop&restart_alpha`), and a RUN of separators is still one
+    #   separator: `snapshot\\_alpha` puts TWO characters between the words, and requiring exactly
+    #   one meant the whole run never matched and nothing was freed (2026-09-08).
+    for m in re.finditer(r"[a-z0-9']+(?:[-_\\+&]+[a-z0-9']+)+", low):
         rs, re_ = m.start(), m.end()
         if any(qs <= rs and re_ <= qe for qs, qe in opaque):
             continue                                    # quoted: opaque
@@ -200,9 +203,11 @@ def _separator_pass(text: str, board=None, known_extra=None):
             if a.isdigit() or b.isdigit():
                 continue
             if _kn >= 2 or _fn or (a in known and b in known):
-                sep = rs + parts[k].end()               # the one separator char between a and b
-                edits.append((sep, sep + 1, " "))
-                notices.append(f"read '{a}{text[sep]}{b}' as '{a} {b}'")
+                # the separator may be more than one character; each becomes a space, so the
+                #   replacement is the same LENGTH and every offset downstream still holds.
+                s0 = rs + parts[k].end(); e0 = rs + parts[k + 1].start()
+                edits.append((s0, e0, " " * (e0 - s0)))
+                notices.append(f"read '{a}{text[s0:e0]}{b}' as '{a} {b}'")
     return edits, notices
 
 
