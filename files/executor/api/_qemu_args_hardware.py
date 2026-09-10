@@ -72,7 +72,14 @@ class _ArgsHardwareMixin:
         """Append OVMF code + vars pflash drives (x86 only; no-op on ARM)."""
         if self.is_arm:
             return
-        bios_path = BIOS_OPTIONS.get(self.cfg.bios) or OVMF.get("code")
+        # BIOS_OPTIONS["seabios"] is None ON PURPOSE — SeaBIOS is QEMU's built-in
+        # default and there is no firmware file to pass. `.get(...) or ...` could not
+        # tell that None from a missing key, so it substituted OVMF and bios="seabios"
+        # has never once produced SeaBIOS: every legacy-BIOS guest was handed UEFI
+        # firmware and hung in the UEFI shell. Membership decides, not truthiness.
+        bios_path = (BIOS_OPTIONS[self.cfg.bios]
+                     if self.cfg.bios in BIOS_OPTIONS
+                     else OVMF.get("code"))
         if bios_path and os.path.exists(bios_path):
             self.args += ["-drive", f"if=pflash,format=raw,readonly=on,file={bios_path}"]
             vars_path = self.cfg.uefi_vars

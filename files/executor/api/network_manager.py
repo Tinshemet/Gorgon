@@ -213,6 +213,15 @@ class IsolatedNetManager:
             self._save()
         addr  = net["mcast_addr"]
         port  = net["mcast_port"]
+        # Without localaddr the kernel picks the multicast egress interface from the
+        # routing table, which on a wireless-primary host is the WLAN: `ip route get
+        # 230.0.0.1` gave `dev wlp0s20f3 rt_offload_failed`. Two costs, and the second
+        # is the serious one. The segment does not work — both VMs join the group and
+        # ARP still fails, measured: wifi LOST, loopback DELIVERED. And the frames of a
+        # network whose whole point is isolation were being multicast onto the physical
+        # LAN, which is the hole `_network_default_doc` exists to close. Loopback is the
+        # only egress that cannot leave the host, so an isolated net pins it.
+        local = _NET["localaddr"]
         netid = f"iso_{net_name}"
         hint  = None
         try:
@@ -221,7 +230,7 @@ class IsolatedNetManager:
         except FileNotFoundError:
             pass  # best-effort hint lookup — fall back to any real vendor OUI
         return [
-            "-netdev", f"socket,id={netid},mcast={addr}:{port}",
+            "-netdev", f"socket,id={netid},mcast={addr}:{port},localaddr={local}",
             "-device", f"virtio-net-pci,netdev={netid},mac={self._random_mac(hint)}",
         ]
 
@@ -254,12 +263,21 @@ class IsolatedNetManager:
                     "message": f"VM '{vm_name}' is already on isolated network '{net_name}'."}
         addr  = net["mcast_addr"]
         port  = net["mcast_port"]
+        # Without localaddr the kernel picks the multicast egress interface from the
+        # routing table, which on a wireless-primary host is the WLAN: `ip route get
+        # 230.0.0.1` gave `dev wlp0s20f3 rt_offload_failed`. Two costs, and the second
+        # is the serious one. The segment does not work — both VMs join the group and
+        # ARP still fails, measured: wifi LOST, loopback DELIVERED. And the frames of a
+        # network whose whole point is isolation were being multicast onto the physical
+        # LAN, which is the hole `_network_default_doc` exists to close. Loopback is the
+        # only egress that cannot leave the host, so an isolated net pins it.
+        local = _NET["localaddr"]
         hint  = cfg.networks[0].manufacturer_hint if cfg.networks else None
         # netid absent → append the full flag+value sequence as a unit (extend,
         # not the old per-arg loop, which also wrongly skipped the shared
         # -netdev/-device flag tokens when the VM was already on another net).
         cfg.extra_args.extend([
-            "-netdev", f"socket,id={netid},mcast={addr}:{port}",
+            "-netdev", f"socket,id={netid},mcast={addr}:{port},localaddr={local}",
             "-device", f"virtio-net-pci,netdev={netid},mac={self._random_mac(hint)}",
         ])
         if vm_name not in net["members"]:

@@ -9,7 +9,8 @@
   "template_label": "template",
   "network": {
     "mcast_addr": "230.0.0.1",
-    "start_port": 1234
+    "start_port": 1234,
+    "localaddr": "127.0.0.1"
   },
   "ports": {
     "vnc_start": 5900,

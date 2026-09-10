@@ -198,7 +198,19 @@ class _ArgsDevicesMixin:
         """
         # nec-usb-xhci: NEC uPD720200 USB 3.0 (PCI 1033:0194) — real chip PCI IDs.
         # qemu-xhci uses 1b36 (Red Hat/QEMU) which inxi detects as virtual.
-        self.args += ["-device", "nec-usb-xhci,id=usb"]
+        # xHCI needs a guest driver, and Linux only shipped one in 2.6.31. An
+        # i440FX guest may well predate that, and then usb-kbd is worse than
+        # useless: QEMU routes key events to the most recently registered
+        # keyboard handler, so it shadows the i8042 PS/2 pair and swallows every
+        # keystroke into a controller the guest never enumerated. PIIX3 USB is
+        # also the honest part for this chipset — a real i440FX board carries it,
+        # not an NEC USB 3.0 add-in — and its 8086:7020 IDs are a real Intel
+        # chip, so the stealth reasoning below is unaffected. bus=usb.0 is
+        # unchanged, so the unattended installer medium still resolves.
+        _usb_ctrl = ("piix3-usb-uhci"
+                     if self.cfg.machine_type == "pc"
+                     else "nec-usb-xhci")
+        self.args += ["-device", f"{_usb_ctrl},id=usb"]
         if not (self.cfg.stealth and not self.is_arm):
             self.args += ["-device", "usb-kbd"]
             # ARM stealth still lands here (no i8042 to fall back to), and the
