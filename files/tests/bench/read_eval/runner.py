@@ -908,6 +908,31 @@ def annotate_roles(reading: dict) -> dict:
         reading.setdefault("rows", []).append({"row": None, "span": _sent[_cs:_ce],
             "type": "object", "kind": "?", "role": "selector", "sub": True,
             "start": _cs, "end": _ce})
+    # ⇒ SELECTOR — FOR / FROM, A STRUCTURED SELECTOR (operator ruling 2026-09-14). `for` and `from`
+    #   mark a selector whose ROLE FOLLOWS ITS COMPLEMENT — the world decides. A WORLD OBJECT
+    #   complement (a kind noun, or a declared standing object) is SELECTED: `run "<cmd>" for the
+    #   vms`, `restore db from lab` — recovering the tail the model never points at past the quoted
+    #   command. A purpose (`for backup`) or a beneficiary (`for me`) is not a world object, so the
+    #   same structure stays an adjunct — keyed by what comes after, not by the preposition. A match
+    #   inside a quoted command is dropped by the passed-through-quotation rule further down.
+    _FORFROM = _rx.compile(
+        r"\b(?:for|from)\s+((?:the|a|an|each|every|all|both)\s+)?([a-z][a-z0-9_-]*)\b", _rx.I)
+    _forlib = set(_active_library()) | _KIND_NOUNS
+    _seltaken2 = [(p["start"], p["end"]) for p in reading.get("rows", [])
+                  if p.get("role") == "selector" and p.get("start") is not None]
+    for _fm in _FORFROM.finditer(_sent):
+        _head = _fm.group(2).lower()
+        _sing = _head[:-1] if _head.endswith("s") else _head
+        if _head not in _forlib and _sing not in _forlib:
+            continue                                  # not a world object — purpose/benefactive adjunct
+        _fs = _fm.start(1) if _fm.group(1) else _fm.start(2)   # include the determiner
+        _fe = _fm.end(2)
+        if any(not (_fe <= _ts or _te <= _fs) for _ts, _te in _seltaken2):
+            continue                                  # already a selector
+        _seltaken2.append((_fs, _fe))
+        reading.setdefault("rows", []).append({"row": None, "span": _sent[_fs:_fe],
+            "type": "object", "kind": "?", "role": "selector", "sub": True,
+            "start": _fs, "end": _fe})
     # ⇒ SELECTOR — TIME (2026-08-29): a temporal expression that FILTERS a set — `snapshots taken
     #   LAST WEEK`, `what changed TODAY` — is a selector (WHICH members), distinct from a testimony's
     #   WHEN (`yesterday` -> evidence) and a schedule (`tomorrow`/`at 9pm` -> trigger), which keep
