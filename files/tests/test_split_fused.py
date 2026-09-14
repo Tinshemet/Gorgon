@@ -71,3 +71,31 @@ def test_offsets_map_back_through_the_split():
     v = FD.read(original)
     s = v.text.index("then")
     assert original[v.back[s]:].startswith("then")
+
+
+# ── a flag is a code shape: an obvious leading-dash token is left whole (2026-09-14) ──────
+#    A `-`/`--` + letter run is shell option syntax; recognising it is syntactic, so the front
+#    door leaves it BYTE-IDENTICAL and names it — the decision (real option? which vms?) is
+#    READ/ROUTE's, the layer with the world. Extends the 2026-09-07 "detect code shapes" ruling.
+
+def test_a_flag_is_not_split_even_when_it_holds_a_function_word():
+    # `the` inside `--all-the-vms` used to make the separator pass read it as a fused sentence
+    assert FD.read("stop --all-the-vms").text == "stop --all-the-vms"
+    assert FD.read("get --no-color output").text == "get --no-color output"
+    assert FD.defused("stop --all-the-vms") == "stop --all-the-vms"
+
+
+def test_a_flag_is_named_as_a_code_shape():
+    v = FD.read("stop --all-the-vms")
+    assert any("--all-the-vms" in n and "flag" in n for n in v.notices)
+
+
+def test_a_real_fused_sentence_still_opens_without_a_leading_dash():
+    assert FD.read("do-not-stop beta").text == "do not stop beta"
+    assert "which vms r stopped" in FD.read("which-vms-r-stopped").text
+
+
+def test_obvious_enough_a_dash_before_a_digit_is_not_a_flag():
+    # `-5gb` is dash+digit, a value shape — recognition stays conservative, nothing is named
+    v = FD.read("resize the db to -5gb")
+    assert not any("flag" in n for n in v.notices)

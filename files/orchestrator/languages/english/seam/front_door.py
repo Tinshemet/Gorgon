@@ -123,6 +123,16 @@ _FUNCTION_WORDS = frozenset({
 })
 
 
+# ⇒ A FLAG IS A CODE SHAPE (operator ruling 2026-09-14, extending the 2026-09-07 code-shape
+#   ruling). A token that OBVIOUSLY begins with `-`/`--` and a letter is shell option syntax —
+#   `--all-the-vms`, `-xzf`, `--no-color`. Recognising it is purely SYNTACTIC (no world), so the
+#   front door leaves it BYTE-IDENTICAL and names it; whether it is a real option, and which vms,
+#   is READ/ROUTE's call — the layer that has the world. "Obvious enough" is dash(es) + a letter at
+#   a token start: `-5`, a bare `--`, and a mid-word hyphen never match, so a borderline token
+#   flows downstream instead of the front door guessing.
+_FLAG = re.compile(r"(?<!\S)--?[a-z][a-z0-9]*(?:-[a-z0-9]+)*", re.I)
+
+
 def _shape_pass(text: str):
     """DETECT the code-world shapes; never rewrite them (operator rulings, 2026-09-07).
 
@@ -147,6 +157,7 @@ def _shape_pass(text: str):
         elif "/" in t or "\\" in t:                            shape = "a path"
         elif re.search(r"\.[a-z]{2,4}$", t, re.I) and t.count(".") == 1:  shape = "a filename"
         elif re.search(r"[$|]|&&|[a-z]=[^ ]", t, re.I):          shape = "a shell expression"
+        elif re.match(r"^--?[a-z]", t, re.I):                    shape = "a flag / option"
         elif re.search(r"[a-z][A-Z]", t):                        shape = "camelCase — an identifier"
         elif re.fullmatch(r"[a-z0-9]+(?:_[a-z0-9]+)+", t):       shape = "snake_case — an identifier"
         else:
@@ -164,6 +175,9 @@ def _separator_pass(text: str, board=None, known_extra=None):
     single-char replacement keeps every offset byte-exact. Sim-check principle for separators."""
     low = text.lower()
     opaque = _quoted(low)
+    # a flag is a code shape (2026-09-14): opaque to the separator pass exactly like a quote, so the
+    #   run inside `--all-the-vms` is never opened. Detecting it is syntactic; the decision is READ/ROUTE's.
+    opaque = list(opaque) + [(m.start(), m.end()) for m in _FLAG.finditer(low)]
     _openers, _nouns, _ops, known = _vocab(board)
     if known_extra:
         known = known | {str(k).lower() for k in known_extra}
