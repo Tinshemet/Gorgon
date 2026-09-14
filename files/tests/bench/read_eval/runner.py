@@ -1121,6 +1121,32 @@ def annotate_roles(reading: dict) -> dict:
                     reading["rows"].append({"row": _p.get("row"), "span": _cm2.group(_gi),
                         "type": "object", "kind": "?", "role": _grole, "sub": True,
                         "start": _b2 + _cm2.start(_gi), "end": _b2 + _cm2.end(_gi)})
+    # ⇒ A QUOTED CLAUSE IS PASSED AS IS (operator ruling 2026-09-09: "anything in quotations,
+    #   unless indicated otherwise, can just be passed as is"). `quoted_clauses` already rules a
+    #   MULTI-WORD quote EVIDENCE — data handed to us, not a request — but the rows the seam read
+    #   INSIDE it survived alongside it, so the SAME command carried `evidence` AND `patient` (a
+    #   MULTIROLE flag) and its interior threw off spurious patient/selector rows. Nothing inside a
+    #   passed-through quotation carries another role. The evidence row itself STAYS, so the words
+    #   in it are still recognisable to anything reading the span. A ONE-WORD quote is not a clause
+    #   (`'web'` is a VALUE) and is untouched — that is the "unless indicated otherwise".
+    from orchestrator.languages.english.seam.scan import quoted_clauses as _qc
+    _qspans = []
+    for _q in _qc(_sent):
+        _at = _sent.find(_q)
+        if _at >= 0:
+            _qspans.append((_at, _at + len(_q)))
+    if _qspans:
+        _kept = []
+        for _p in reading.get("rows", []):
+            _s, _e = _p.get("start"), _p.get("end")
+            if (_s is None or _e is None
+                    or _p.get("type") == "evidence" or _p.get("role") == "evidence"):
+                _kept.append(_p)
+                continue
+            if any(_qs <= _s and _e <= _qe for _qs, _qe in _qspans):
+                continue                      # inside a passed-through quotation — dropped
+            _kept.append(_p)
+        reading["rows"] = _kept
     return reading
 
 

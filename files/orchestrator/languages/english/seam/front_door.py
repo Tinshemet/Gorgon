@@ -520,6 +520,7 @@ def _quoted(low: str):
     spans = [(m.start(), m.end())
              for m in re.finditer(r"(?<![a-z])'[^']*'(?![a-z])", low)]
     spans += [(m.start(), m.end()) for m in re.finditer(r'"[^"]*"', low)]
+    spans += [(m.start(), m.end()) for m in re.finditer(r"`[^`]*`", low)]
     return spans
 
 

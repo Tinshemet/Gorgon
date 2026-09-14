@@ -933,7 +933,14 @@ def _config_kinds():
 #   evidence. **Measured end to end, not by the unit test** — whose examples all happened to
 #   avoid contractions. So a single quote counts only when a letter does not stand on the
 #   inside of it: `won't` and `alpha's` are words, `'cannot allocate memory'` is a quotation.
-_QUOTED = re.compile(r"(?<![A-Za-z])'([^']{2,})'(?![A-Za-z])" + r'|"([^"]{2,})"')
+# ⇒ THE BACKTICK IS A QUOTATION MARK TOO (operator ruling 2026-09-09): "anything in
+#   quotations, unless indicated otherwise, can just be passed as is". Backticks were absent, so
+#   a backticked command was not a quoted run AT ALL — `mysqlshow --status db` fell through as an
+#   ordinary phrase and got read as the request: measured, its interior decomposes into
+#   patient/selector rows and the clause AFTER it is lost. 6 of the 9 command-quotes in the
+#   held-out ruler are backticked. The LENGTH discriminator below is unchanged, so a ONE-WORD
+#   backtick stays a VALUE exactly as `'web'` does — that is the "unless indicated otherwise".
+_QUOTED = re.compile(r"(?<![A-Za-z])'([^']{2,})'(?![A-Za-z])" + r'|"([^"]{2,})"' + r"|`([^`]{2,})`")
 
 
 def quoted_clauses(request: str) -> tuple:
@@ -963,7 +970,7 @@ def _quoted_runs(request: str) -> tuple:
     """EVERY quoted run, whatever its length — the operator's own boundary marks, read raw."""
     out = []
     for m in _QUOTED.finditer(str(request)):
-        span = (m.group(1) or m.group(2) or "").strip()
+        span = (m.group(1) or m.group(2) or m.group(3) or "").strip()
         if span:
             out.append(span)
     return tuple(out)
