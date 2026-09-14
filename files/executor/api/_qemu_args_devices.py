@@ -127,14 +127,25 @@ class _ArgsDevicesMixin:
                 self.args += ["-vnc", f":{display_num}"]
 
         if gpu_device and not self.is_raspi:
+            # ⇒ THE CONFIGURED RESOLUTION, ON EVERY VIRTIO PATH (2026-09-08). xres/yres were set
+            #   only on `virtio-vga-gl`, so whenever GL was unavailable the guest fell back to
+            #   plain `virtio-vga` with NO mode set and booted at the device default — a window at
+            #   the wrong aspect on a 1920x1080 host. The resolution is a declared field; it should
+            #   reach the device whichever variant is emitted.
+            _res = str(getattr(self.cfg, "resolution", "") or "")
+            _mode = ""
+            if gpu_device.startswith("virtio-vga") and "x" in _res:
+                _w, _, _h = _res.partition("x")
+                if _w.strip().isdigit() and _h.strip().isdigit():
+                    _mode = f",xres={_w.strip()},yres={_h.strip()}"
             if gpu_device == "virtio-vga-gl":
-                self.args += ["-device", "virtio-vga-gl,xres=1920,yres=1080"]
+                self.args += ["-device", f"virtio-vga-gl{_mode or ',xres=1920,yres=1080'}"]
             elif gpu_device == "vfio-pci":
                 pci = getattr(self.cfg, "_vfio_pci", "0000:01:00.0")
                 self.args += ["-device", f"vfio-pci,host={pci}"]
             else:
                 # vgamem_mb removed in QEMU 7+ — don't pass it
-                self.args += ["-device", gpu_device]
+                self.args += ["-device", gpu_device + _mode]
 
     def _audio(self) -> None:
         """Detect the platform audio server and append the matching -audiodev + -device."""
