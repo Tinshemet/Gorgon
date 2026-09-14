@@ -42,7 +42,9 @@ run_work() {
 setsid nohup bash -c "$(declare -f run_work); run_work" >"$MDIR/marathon.log" 2>&1 &
 WORK_PID=$!
 disown
-WORK_PGID="$WORK_PID"                 # setsid makes the child a group leader: pgid == pid
+# setsid makes the worker a session/group leader (pgid==pid, verified) — but read the REAL pgid
+#   rather than assume it, since this is the group the thermal backstop must kill on crit.
+WORK_PGID="$(ps -o pgid= -p "$WORK_PID" 2>/dev/null | tr -d ' ')"; WORK_PGID="${WORK_PGID:-$WORK_PID}"
 echo "$WORK_PGID" > "$MDIR/marathon.pgid"
 
 # The HARD BACKSTOP watchdog: poll temps; kill the whole run group on crit; exit when the run ends.
