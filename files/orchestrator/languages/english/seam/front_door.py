@@ -540,10 +540,21 @@ def _recognise(w, toks, at, board):
     #   indistinguishable from an ordinary unknown word, so `snapshot --create alpha snaphot-it`
     #   read as one silent patient blob and dropped `it`. The repair itself stays REFUSED — the
     #   clause-initial guard on a verb is what keeps a mid-clause NAME from being claimed.
-    _unlic = tuple(sorted(c for c in explained if c not in fits))
+    # only a SINGLE obvious corruption is actionable (2026-09-14): a multi-edit stretch is neither
+    #   repaired nor asked about — it passes through, so `great` is not surfaced as "did you mean create".
+    _unlic = tuple(sorted(c for c in explained if c not in fits and len(explained[c]) <= 1))
     if not fits:
         return Repair("", (), "unlicensed" if _unlic else "", _unlic)
     _least = min(len(v) for v in fits.values())
+    # ⇒ ONE OBVIOUS CORRUPTION, OR NOTHING (operator ruling 2026-09-14). Typo correction is a
+    #   never-ending cascade: to repair safely the front door would have to know every real word,
+    #   which it deliberately does not. So it repairs only a SINGLE declared corruption print and
+    #   passes a multi-edit stretch through UNTOUCHED — `great` -> `create` was substitute + truncate
+    #   (2 prints), a common word pulled toward an operator. Left whole, READ reads it as a
+    #   pleasantry and the world decides. Closed classes still guard the edit-distance-1 collisions
+    #   the cap cannot tell apart (`last` -> `list`); this only refuses the STRETCHES.
+    if _least > 1:
+        return Repair("", (), "", ())
     _best = [(c, pr) for c, pr in fits.items() if len(pr) == _least]
     if len(_best) != 1:
         return Repair("", (), "ambiguous", tuple(sorted(c for c, _ in _best)))

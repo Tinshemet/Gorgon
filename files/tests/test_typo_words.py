@@ -71,3 +71,28 @@ def test_offsets_still_map_back():
     v = FD.read(original)
     s = v.text.index("the dmz")
     assert original[v.back[s]:].startswith("the dmz")
+
+
+# ── one obvious corruption, or nothing (operator ruling 2026-09-14) ──────────────────────
+#    Typo correction is a never-ending cascade, so the front door repairs only a SINGLE declared
+#    corruption print and passes a multi-edit stretch through untouched — `great` -> `create` was
+#    substitute + truncate (two prints), a common word pulled toward an operator. Left whole, READ
+#    reads it as a pleasantry and the world decides.
+
+def test_a_multi_edit_stretch_is_not_repaired():
+    assert FD.read("great, now restart beta").text == "great, now restart beta"
+    assert FD.read("great restart beta").text == "great restart beta"
+    assert not any("create" in n for n in FD.read("great restart beta").notices)
+
+
+def test_a_multi_edit_stretch_is_not_even_asked_about():
+    # mid-clause no slot licenses it either, but a stretch is passed through, never surfaced as an ask
+    v = FD.read("that's great, stop the db")
+    assert v.text == "that's great, stop the db"
+    assert not any("great" in n.lower() for n in v.notices)
+
+
+def test_a_single_edit_repair_still_fires_under_the_cap():
+    v = FD.read("is alpah rynning")
+    assert "running" in v.text and "rynning" not in v.text          # substitute, one print
+    assert "launch beta" in FD.read("then launhc beta").text        # transpose, one print
