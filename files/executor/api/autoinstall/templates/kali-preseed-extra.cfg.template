@@ -20,5 +20,11 @@ d-i time/zone string UTC
 d-i grub-installer/only_debian boolean true
 d-i grub-installer/bootdev string default
 
-# passwd/username, passwd/user-fullname, passwd/user-password* deliberately left
-# UNSET so the installer still prompts for account creation.
+# --- account: fully unattended with known credentials (lab VM behind NAT) ---
+d-i passwd/root-login boolean false
+d-i passwd/user-fullname string kali
+d-i passwd/username string kali
+d-i passwd/user-password password kali
+d-i passwd/user-password-again password kali
+d-i user-setup/allow-password-weak boolean true
+d-i finish-install/reboot_in_progress note
