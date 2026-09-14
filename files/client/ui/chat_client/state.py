@@ -15,6 +15,7 @@ import threading
 from client import config as _cfg
 
 history       = []                 # (curses_attr, text) tuples
+scroll_offset = 0                  # lines scrolled UP from the bottom (0 = live tail)
 lock          = threading.Lock()
 resp_q        = queue.Queue()      # HTTP / mission worker puts results here
 quit_event    = threading.Event()

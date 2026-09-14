@@ -71,7 +71,12 @@ def draw(stdscr: "curses.window", input_buf) -> None:
     # Chat history (rows 2 .. sep_row-1)
     chat_rows = max(1, sep_row - 2)
     with state.lock:
-        visible = list(state.history[-chat_rows:])
+        _hist = state.history
+        _max_off = max(0, len(_hist) - chat_rows)     # cannot scroll past the top
+        if state.scroll_offset > _max_off:
+            state.scroll_offset = _max_off
+        _end = len(_hist) - state.scroll_offset
+        visible = list(_hist[max(0, _end - chat_rows):_end])
     for i, (attr, text) in enumerate(visible):
         row = 2 + i
         if row >= sep_row:

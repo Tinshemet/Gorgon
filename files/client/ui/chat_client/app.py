@@ -121,6 +121,7 @@ def _run(stdscr: "curses.window", verbose: bool = False, color_hex: str = None, 
             # line; the file editor will make the opposite choice over the same Buffer.
             cmd = input_buf.text.strip()
             recall.remember(cmd)
+            state.scroll_offset = 0            # a new message snaps the view back to the bottom
             input_buf = _Buffer()
             if not cmd and not state.allow_empty:      # empty Enter is a real answer when a wizard field allows blank
                 continue
@@ -202,14 +203,22 @@ def _run(stdscr: "curses.window", verbose: bool = False, color_hex: str = None, 
                            "home": input_buf.home, "end": input_buf.end}
                     _ON[action]()
                     continue
-            if action == "up" and not input_buf.up():
+            if ch in ("\x10", 16):            # Ctrl-P — recall the previous message (moved off up)
                 was = recall.back(input_buf.text)
                 if was is not None:
                     input_buf.set(was)
-            elif action == "down" and not input_buf.down():
+            elif ch in ("\x0e", 14):          # Ctrl-N — recall the next message
                 was = recall.forward()
                 if was is not None:
                     input_buf.set(was)
+            elif ch == curses.KEY_PPAGE:      # PageUp — scroll the scrollback up a chunk
+                state.scroll_offset += 10
+            elif ch == curses.KEY_NPAGE:      # PageDown — scroll back down a chunk
+                state.scroll_offset = max(0, state.scroll_offset - 10)
+            elif action == "up" and not input_buf.up():
+                state.scroll_offset += 1       # up at the buffer's top edge scrolls the scrollback
+            elif action == "down" and not input_buf.down():
+                state.scroll_offset = max(0, state.scroll_offset - 1)
             elif action == "newline":
                 input_buf.newline()
             elif action:
