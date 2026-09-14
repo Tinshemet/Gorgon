@@ -47,6 +47,16 @@ class View(NamedTuple):
     original: str
 
 
+class Repair(NamedTuple):
+    """What the sim check found. `word` is the repair ONLY when exactly one candidate was
+    licensed by its slot; otherwise it is empty and `ask` says why, which is the operator's
+    bounce/ask ruling (2026-09-09) made visible instead of silent."""
+    word: str            # "" unless exactly one candidate fit its slot
+    prints: tuple        # the declared evidence for that repair
+    ask: str             # "" | "ambiguous" | "unlicensed"
+    cands: tuple         # the candidates behind an ask
+
+
 _UNICODE_SPACES = {0x00A0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006,
                    0x2007, 0x2008, 0x2009, 0x200A, 0x202F, 0x205F, 0x3000}
 
@@ -331,14 +341,19 @@ def _read_stages(request: str, board=None) -> View:
         if any(not (e_ <= ts or te <= s_) for ts, te in taken2):
             continue
         got = _recognise(w, toks, s_, board)
-        if got:
-            _word, _prints = got
+        if got.word:
             taken2.append((s_, e_))
-            edits.append((s_, e_, _word))
+            edits.append((s_, e_, got.word))
             #   the notice carries WHY, not just what: a repair without its evidence is a guess
             #   that happens to be right.
-            _why = " + ".join(_prints) if _prints else "exact"
-            notices.append(f"read '{w}' as '{_word}' ({_why})")
+            _why = " + ".join(got.prints) if got.prints else "exact"
+            notices.append(f"read '{w}' as '{got.word}' ({_why})")
+        elif got.ask == "ambiguous":
+            notices.append(f"could not read '{w}' — it fits {' and '.join(got.cands)} equally; ask")
+        elif got.ask == "unlicensed":
+            notices.append(f"could not read '{w}' here — it looks like "
+                           f"{' or '.join(got.cands)}, but nothing in this slot licenses the "
+                           f"repair; ask")
 
     if edits:
         mid, back1 = _apply(text, edits)
@@ -389,7 +404,7 @@ def _vocab(board):
                "TROUBLE", "FOCUS_PARTICLES", "LIGHT_VERBS", "TRANSFER_VERBS", "OBJECT_PRONOUNS",
                "SINGULAR_PROFORMS", "PLURAL_PROFORMS", "SELECTOR_PREPOSITIONS",
                "LOCATIVE_PREPOSITIONS", "CUT_DETERMINERS", "REASON_MARKER_WORDS",
-               "DISTINCT", "PLURAL_PRONOUNS", "SIMILE"):
+               "DISTINCT", "PLURAL_PRONOUNS", "SIMILE", "ORDINALS"):
         _v = getattr(_CXk, _n, None)
         if _v:
             _closed_classes |= {str(x).lower() for x in _v}
@@ -437,7 +452,7 @@ def _recognise(w, toks, at, board):
     openers, nouns, ops, known = _vocab(board)
     states = _statuses(board)                        # manifest STATUS values (running/stopped/up/down)
     if w in known:
-        return None
+        return Repair("", (), "", ())
     words = [t[0] for t in toks]
     i = next(j for j, t in enumerate(toks) if t[1] == at)
     prev = words[i - 1] if i > 0 else None
@@ -452,12 +467,14 @@ def _recognise(w, toks, at, board):
     #   NAME can never be one and the ruling that a typo'd name is the name holds structurally.
     from ..noise_prints import explain as _explain
     fits = {}
+    explained = {}                          # every candidate the CATALOGUE explains, slot or no slot
     for cand in openers | nouns | ops | states:
         if len(cand) < 4 and cand not in _PRONOUNS:
             continue
         _prints = _explain(cand, w)
         if not _prints:                     # None = undeclared · () = identical, nothing to repair
             continue
+        explained[cand] = _prints
         if cand in _PRONOUNS:
             if prev in ops:
                 fits[cand] = _prints
@@ -502,13 +519,21 @@ def _recognise(w, toks, at, board):
     #   inference about MEANING; it is declining to assume corruption that the evidence does not
     #   require. But a TIE stays a tie: `stpped` explains `stopped` and `stepped` at one print
     #   each, and that changes nothing — which is the ASK the caller will make.
+    # ⇒ THE CATALOGUE'S TRICHOTOMY IS THE ASK-SIGNAL (2026-09-08), now SURFACED rather than
+    #   swallowed (operator ruling 2026-09-09, `snaphot-it`): ONE licensed reading repairs with its
+    #   evidence · TWO ask naming both · a word the catalogue DOES explain but NO slot licenses is
+    #   unreadable HERE, and saying so is the bounce/ask. Returning a bare None made the third case
+    #   indistinguishable from an ordinary unknown word, so `snapshot --create alpha snaphot-it`
+    #   read as one silent patient blob and dropped `it`. The repair itself stays REFUSED — the
+    #   clause-initial guard on a verb is what keeps a mid-clause NAME from being claimed.
+    _unlic = tuple(sorted(c for c in explained if c not in fits))
     if not fits:
-        return None
+        return Repair("", (), "unlicensed" if _unlic else "", _unlic)
     _least = min(len(v) for v in fits.values())
     _best = [(c, pr) for c, pr in fits.items() if len(pr) == _least]
     if len(_best) != 1:
-        return None
-    return _best[0]
+        return Repair("", (), "ambiguous", tuple(sorted(c for c, _ in _best)))
+    return Repair(_best[0][0], _best[0][1], "", ())
 
 
 def _tokens(low: str):

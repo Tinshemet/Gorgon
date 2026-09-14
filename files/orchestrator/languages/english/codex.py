@@ -383,6 +383,35 @@ ENUMERATORS: Dict[str, object] = {
     "every": "all", "all": "all", "each": "all", "any": "all",
 }
 
+# ⇒ THE ORDINALS — the words that pick ONE MEMBER OF AN ORDERED SET. Declared 2026-09-09 on the
+#   operator's ruling, after the front door's own ask-signal caught the class's absence: `last`
+#   sat in NO declared class, so the sim check read it as an unknown word and offered `list` as a
+#   repair. `restore db to the LAST snapshot` therefore raised a question about a word the
+#   operator had typed correctly — 9 times in one 766-turn ruler, 82% of that ruler's false asks.
+#   A word in a declared closed class is a real word and a real word is never repaired (the
+#   2026-09-08 rule); the class was simply missing, and the guard can only hold what is declared.
+#
+#   TWO GROUPS, ONE JOB, declared apart and consumed together. A SEQUENCE ordinal picks by
+#   position in an ordering (`the LAST snapshot`); a SUPERLATIVE picks by the extreme of a
+#   magnitude (`the BIGGEST vm`). That is different English doing the same act — SELECT ONE — and
+#   the read gold labels both `ordinal`, so a consumer that only wants "is this a real word" reads
+#   the union and never asks which group it came from.
+#   Evidence: `last` (81 atoms) and `biggest` (76) are the ONLY ordinal atoms the held-out ruler
+#   produces. `second` and `other` are NOT here — they say *not the one just mentioned*, which is
+#   DISTINCT's job, not a position in an ordering.
+SEQUENCE_ORDINALS = frozenset({
+    "first", "last", "latest", "earliest", "newest", "oldest", "previous", "prior",
+    "next", "final",
+})
+
+SUPERLATIVES = frozenset({
+    "biggest", "largest", "smallest", "longest", "shortest", "highest", "lowest",
+    "fastest", "slowest", "busiest", "fullest", "emptiest", "most", "least", "fewest",
+})
+
+# the one name a consumer reads — the guard does not care which group the word came from
+ORDINALS = SEQUENCE_ORDINALS | SUPERLATIVES
+
 # a clause ends here, and a span may never cross one
 # `of` ENDS A PHRASE AND OPENS ANOTHER. "a snapshot OF every running vm" is two things, and
 # without this the snapshot's span swallowed the machines, which then folded away as a
