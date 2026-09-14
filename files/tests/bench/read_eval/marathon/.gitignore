@@ -1,0 +1,4 @@
+# runtime artifacts — the frozen ruler and results are regenerated, not versioned
+frozen.jsonl
+results.jsonl
+*.log
