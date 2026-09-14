@@ -884,6 +884,30 @@ def annotate_roles(reading: dict) -> dict:
             reading["rows"].append({"row": _sr.get("row"), "span": _span[_b0:_wm.end()],
                 "type": "object", "kind": "?", "role": "selector", "sub": True,
                 "start": _sr["start"] + _b0, "end": _sr["start"] + _wm.end()})
+    # ⇒ SELECTOR — STATE AFTER A COPULA CLITIC (2026-09-09). The contraction `beta's down` /
+    #   `its down` / `it's up` carries the copula in a CLITIC, so the seam spans the status with
+    #   its owner (`beta's`) or not at all — the status falls OUTSIDE every object row and the
+    #   in-row emitter above never sees it. Measured on the held-out marathon: `restart beta if
+    #   its down` read only `restart beta`, and in `if beta's down and alpha's up restart beta`
+    #   only `up` survived. NOT a coordination bug — `up` merely happened to land inside a span
+    #   while `down` landed in none; written out (`beta is down and alpha is up`) BOTH are read.
+    #   `values.py` already declares the reading — *"`alpha's running` is the copula, not a
+    #   possessive"* — this emits the row that follows from it. The DECLARED status is the
+    #   licence, so `its disk` / `alpha's ram` never match. Sentence-level, like TIME below.
+    _CLITSTATE = _rx.compile(r"\b(?:[a-z][a-z0-9_-]*'s|its)\s+(not\s+)?([a-z]+)\b", _rx.I)
+    _seltaken = [(p["start"], p["end"]) for p in reading.get("rows", [])
+                 if p.get("role") == "selector" and p.get("start") is not None]
+    for _cm in _CLITSTATE.finditer(_sent):
+        if _cm.group(2).lower() not in _states:
+            continue
+        _cs = _cm.start(1) if _cm.group(1) else _cm.start(2)   # keep a preceding `not`
+        _ce = _cm.end(2)
+        if any(not (_ce <= _ts or _te <= _cs) for _ts, _te in _seltaken):
+            continue                                  # already a selector (the in-row emitter)
+        _seltaken.append((_cs, _ce))
+        reading.setdefault("rows", []).append({"row": None, "span": _sent[_cs:_ce],
+            "type": "object", "kind": "?", "role": "selector", "sub": True,
+            "start": _cs, "end": _ce})
     # ⇒ SELECTOR — TIME (2026-08-29): a temporal expression that FILTERS a set — `snapshots taken
     #   LAST WEEK`, `what changed TODAY` — is a selector (WHICH members), distinct from a testimony's
     #   WHEN (`yesterday` -> evidence) and a schedule (`tomorrow`/`at 9pm` -> trigger), which keep
