@@ -39,6 +39,9 @@ run_work() {
 }
 
 # Detach the worker in its OWN session/process group; record the pgid for the watchdog + manual stop.
+# EXPORT the vars run_work reads — a detached `bash -c` does NOT inherit the launcher's non-exported
+#   shell vars, so without this N/SEED/FILES arrive empty and the freeze dies on an empty argv.
+export FILES N SEED
 setsid nohup bash -c "$(declare -f run_work); run_work" >"$MDIR/marathon.log" 2>&1 &
 WORK_PID=$!
 disown
