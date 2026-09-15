@@ -19,10 +19,12 @@ def done_ids():
     return {json.loads(l)["id"] for l in open(RESULTS) if l.strip()}
 
 
-def run():
+def run(limit=None):
     have = done_ids()
     rows = [json.loads(l) for l in open(FROZEN) if l.strip()]
     todo = [r for r in rows if r["id"] not in have and r.get("said")]
+    if limit:
+        todo = todo[:limit]                   # bounded validation batch (e.g. 300) before the full run
     with open(RESULTS, "a") as f:
         for i, row in enumerate(todo):
             said = row["said"]; intent = {"atoms": [tuple(a) for a in row["atoms"]], "clean": row["clean"]}
@@ -83,4 +85,5 @@ if __name__ == "__main__":
     if "--summary" in sys.argv:
         summarize()
     else:
-        run(); summarize()
+        lim = next((int(a) for a in sys.argv[1:] if a.isdigit()), None)
+        run(lim); summarize()

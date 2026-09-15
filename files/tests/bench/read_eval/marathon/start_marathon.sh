@@ -14,8 +14,8 @@ set -u
 
 MDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FILES="$(cd "$MDIR/../../../.." && pwd)"          # repo files/ dir (PYTHONPATH root)
-N="${1:-2000}"; SEED="${2:-20260829}"
-CPU_CRIT=96; GPU_CRIT=90
+N="${1:-2000}"; SEED="${2:-20260829}"; READLIMIT="${3:-}"   # 3rd arg caps the READ batch (validation)
+CPU_CRIT=92; GPU_CRIT=90
 
 cpu_pkg() { for z in /sys/class/thermal/thermal_zone*; do
     [ "$(cat "$z/type" 2>/dev/null)" = x86_pkg_temp ] && { echo $(( $(cat "$z/temp" 2>/dev/null)/1000 )); return; }
@@ -34,14 +34,14 @@ run_work() {
   echo "=== FREEZE $(date -Is) ==="
   python3 -m tests.bench.read_eval.marathon.marathon_freeze "$N" "$SEED" || exit 1
   echo "=== READ $(date -Is) ==="
-  python3 -m tests.bench.read_eval.marathon.marathon_read
+  python3 -m tests.bench.read_eval.marathon.marathon_read $READLIMIT
   echo "=== DONE $(date -Is) ==="
 }
 
 # Detach the worker in its OWN session/process group; record the pgid for the watchdog + manual stop.
 # EXPORT the vars run_work reads — a detached `bash -c` does NOT inherit the launcher's non-exported
 #   shell vars, so without this N/SEED/FILES arrive empty and the freeze dies on an empty argv.
-export FILES N SEED
+export FILES N SEED READLIMIT
 setsid nohup bash -c "$(declare -f run_work); run_work" >"$MDIR/marathon.log" 2>&1 &
 WORK_PID=$!
 disown
@@ -59,7 +59,7 @@ watchdog() {
       kill -TERM -"$WORK_PGID" 2>/dev/null; sleep 5; kill -9 -"$WORK_PGID" 2>/dev/null
       exit 1
     fi
-    sleep 5
+    sleep 2
   done
   echo "$(date -Is) run ended; watchdog exiting (last cpu=$(cpu_pkg)C gpu=$(gpu_c)C)"
 }

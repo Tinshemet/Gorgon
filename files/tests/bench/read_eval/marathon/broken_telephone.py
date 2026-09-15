@@ -35,7 +35,7 @@ def cpu_temp():
     return None
 
 
-def cool_down(gpu_soft=83, cpu_soft=88, step=2.0, max_wait=40):
+def cool_down(gpu_soft=84, cpu_soft=80, step=2.0, max_wait=60):
     """Pause BEFORE a model call until BOTH the GPU and the CPU package are below their soft
     thresholds (adaptive throttle). Guards the CPU package as well as the GPU, because the 09-02
     thermal halt was the CPU at 100C and a GPU-only guard would not have caught it. None-safe: a
