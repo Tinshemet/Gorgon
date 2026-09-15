@@ -615,6 +615,29 @@ def annotate_roles(reading: dict) -> dict:
         _before = _MARK_BEFORE.search(_pre) and not _COPULA_NOT.search(_pre)   # marker, not `is not`
         if _glued or _before:
             _xp["role"] = "excluded"
+    # ⇒ EXCLUDED — `except <entity>` THE MODEL NEVER ROWED (2026-09-15, marathon gap). In
+    #   `launch all the vms except grubnash` the seam rows the quantified patient (`the vms`) but the
+    #   model does not point at the name carved out after `except`, so the re-label rule above has no
+    #   row to catch and the exclusion is LOST — a PROHIBITED target silently kept in, the safety-bad
+    #   direction. Read it deterministically, like the for/from selector: `except`/`but not`/`excluding`
+    #   heading a WORLD OBJECT (a declared name or a kind) emits an excluded row even with no model row.
+    #   The world-object guard keeps `except when` / `except that` from firing.
+    _EXCEPT = _rx.compile(r"\b(?:except(?:\s+for)?|but\s+not|excluding|apart\s+from)\s+"
+                          r"(?:the\s+|a\s+|an\s+)?([a-z][a-z0-9_-]*)\b", _rx.I)
+    _exlib = set(_active_library()) | _KIND_NOUNS
+    _extaken = [(p["start"], p["end"]) for p in reading.get("rows", [])
+                if p.get("role") == "excluded" and p.get("start") is not None]
+    for _em in _EXCEPT.finditer(_sent):
+        _ehead = _em.group(1).lower(); _esing = _ehead[:-1] if _ehead.endswith("s") else _ehead
+        if _ehead not in _exlib and _esing not in _exlib:
+            continue                                  # not a world object — `except when` / `except that`
+        _es, _ee = _em.start(1), _em.end(1)
+        if any(not (_ee <= _ts or _te <= _es) for _ts, _te in _extaken):
+            continue                                  # already excluded by a rule above
+        _extaken.append((_es, _ee))
+        reading.setdefault("rows", []).append({"row": None, "span": _sent[_es:_ee],
+            "type": "object", "kind": "?", "role": "excluded", "sub": True,
+            "start": _es, "end": _ee})
     # ⇒ EXCLUDED — IMPERATIVE PRE-VERBAL NEGATION (2026-09-01, marathon negation gap): a command
     #   negated BEFORE its verb (`do not stop beta`, `don't restart alpha`, `never delete web`)
     #   carves the governed ENTITY out of the action set -> excluded — exactly the prohibition the
