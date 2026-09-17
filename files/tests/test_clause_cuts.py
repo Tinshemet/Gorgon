@@ -8,7 +8,7 @@ to a DECLARED set of open disagreements, so:
 
     a NEW disagreement          turns this red — a rule regressed, or a case was added
     a FIXED disagreement        ALSO turns this red — the manifest is stale, say so
-    the three we know about     pass, each with its reason written down
+    the two we know about       pass, each with its reason written down
 
 That is the same shape as the eval/production parity manifest: the open list is data, in the
 repo, and drifting from it is an error rather than a thing somebody notices later.
@@ -42,12 +42,13 @@ KNOWN_DISAGREEMENTS = {
     "c3-01": "GOLD ERROR, mine: `stop alpha anyway restart beta` takes TWO cuts and the gold "
              "names one. `stop alpha, anyway, restart beta` is the English. Left in place so "
              "the disagreement list stays honest rather than retro-fitted.",
+    # c7-04 CLOSED 2026-09-17 — `predicate_end`'s modal arm now checks that its head is a
+    #   base-form operation word, so `put cant on the dmz network` is no longer read as
+    #   testimony. This line is deleted rather than kept as history: the open list must say
+    #   what is OPEN.
     "c6-02": "`snapshot` is absent from `_operation_words`, so rule 6's base-form test cannot "
              "see the second imperative in `restart the web vm snapshot the db vm`. The same "
              "vocabulary gap makes `restart` and `reboot` invisible to the front door.",
-    "c7-04": "rule 7 reads an operator's ORDER as testimony: `put cant on the dmz network` -> "
-             "`put cant on, the dmz network`. The only survivor of 3000 random English "
-             "sentences in the door sweep.",
 }
 
 # Every negator form that can negate a following verb, by spelling. `nope`/`nah` are excluded on
@@ -127,14 +128,18 @@ def test_the_spec_matches_its_declared_open_list():
         f"what makes the fix visible.")
 
 
-def test_the_safety_bucket_is_clean_apart_from_the_one_declared_case():
-    """must_not_cut is the safety axis: a spurious cut splits a clause silently."""
+def test_the_safety_bucket_is_completely_clean():
+    """must_not_cut is the safety axis: a spurious cut splits a clause silently.
+
+    ⇒ ASSERTED EMPTY, NOT "within the declared list". It was the weaker form while `c7-04` was
+      open; the moment rule 7 stopped reading an order as testimony the bucket went to 18/18,
+      and leaving the subset test in place would have let the NEXT spurious cut hide behind a
+      declared disagreement in a different bucket.
+    """
     rows = [r for r in _cases() if r["bucket"] == "must_not_cut"]
     assert len(rows) >= 18, f"only {len(rows)} must_not_cut cases"
-    fired = [r["id"] for r in rows if merge_cut_points(r["text"])]
-    assert set(fired) <= set(KNOWN_DISAGREEMENTS), (
-        f"a spurious cut fired on a case with no declared reason: "
-        f"{sorted(set(fired) - set(KNOWN_DISAGREEMENTS))}")
+    fired = [(r["id"], r["text"]) for r in rows if merge_cut_points(r["text"])]
+    assert not fired, f"a spurious cut fired where English has no clause boundary: {fired}"
 
 
 # THE ENTRY POINT BELONGS AT THE BOTTOM — `main()` ends in `sys.exit`, so anything defined below

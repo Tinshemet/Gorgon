@@ -139,6 +139,22 @@ def predicate_end(clause: str) -> Optional[int]:
                 return None
             if negated_copula and not words[head_at].endswith("ing"):
                 return None
+            # ⇒⇒ **AND THE MODAL/DO ARM MUST CHECK ITS HEAD IS A VERB** (2026-09-17). The copular
+            #   arm above has always checked (`-ing` or nothing); this one took `words[head_at]`
+            #   on trust, so `put cant on the dmz network` read as *subject `put`, negated modal
+            #   `cant`, verb head `on`* — `cant` IS in NEG_MODALS — and rule 7 released
+            #   `the dmz network` as the elaboration. An operator's ORDER, split in half. It was
+            #   the only survivor of 3000 random English sentences in the door sweep, and the
+            #   defect is the same shape as the split pass's: one half bound to a closed set and
+            #   the other licensed by position alone.
+            #   ⇒ THE HEAD OF A NEGATED MODAL IS A BASE-FORM OPERATION WORD — `won't START`,
+            #     `can't REACH`, `didn't RESPOND`, `doesn't BOOT`. A closed-class test, from the
+            #     manifest's own verbs, and no vote means no cut.
+            if not negated_copula:
+                from .scan import _operation_words
+                if words[head_at] not in {w for w in _operation_words(None)
+                                          if not w.endswith("s")}:
+                    return None
             return toks[head_at][2]
     return None
 
