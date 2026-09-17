@@ -307,8 +307,13 @@ def _split_pass(text: str, board=None, named=None):
         return x in known or x in _named
 
     edits, notices = [], []
+    # ⇒ THE DECLARED NON-FUSIONS (codex, 2026-09-17). An English word that decomposes into two
+    #   closed words is still one word, and no rule below can tell `beat` (`be at`) from `isnot`
+    #   (`is not`) — both are function+function, both halves closed, and one must split. There is
+    #   no structural signal, so the difference is DECLARED. 259 words, veto only.
+    from ...english.codex import FALSE_FUSIONS as _solid
     for idx, (w, s_, e_) in enumerate(toks):
-        if len(w) < 4 or "'" in w or w in known:
+        if len(w) < 4 or "'" in w or w in known or w in _solid:
             continue
         prev = words[idx - 1] if idx > 0 else None
         nxt = words[idx + 1] if idx + 1 < len(words) else None

@@ -881,3 +881,64 @@ ITERATIVES = frozenset({"keeps", "keep", "kept"})
 # marker — "SOMETHING IS WRONG with the dmz network". Closed pronouns, closed copulas;
 # the complement word is free because the FRAME carries the meaning.
 INDEFINITES = frozenset({"something", "anything", "nothing"})
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# ═ THE FRONT DOOR — words that LOOK fused and are not
+# ═══════════════════════════════════════════════════════════════════════════════════════
+
+# ⇒⇒ **AN ENGLISH WORD THAT DECOMPOSES INTO TWO CLOSED WORDS, AND IS STILL ONE WORD.**
+#   `_split_pass` opens an UNKNOWN token that splits into two known words — `isnot` -> `is not`,
+#   `onthe` -> `on the`. The rule is right and it has no way to tell those from `beat` (`be at`),
+#   `theme` (`the me`) or `stopping` (`stop ping`), because THERE IS NO STRUCTURAL SIGNAL:
+#   `isnot` and `beat` are both function-word + function-word, both halves closed, and one must
+#   split while the other must not. Measured 2026-09-17.
+#   ⇒ **SO IT IS DECLARED, WHICH IS WHAT A CLOSED CLASS IS FOR.** Not a dictionary: a dictionary
+#     would be a SECOND authority on what a word is, free to disagree with the manifest (which
+#     carries `boxs`), and if it were the system's own file it would differ by machine and by
+#     distribution — an undeclared variable in every measurement. This is Gorgon's, versioned
+#     with the repo, and the same shape as every other class in this file.
+#   ⇒ HOW IT WAS DERIVED, ONCE, OFF-LINE: every word of `/usr/share/dict/american-english` (4-14
+#     letters, not already in the reader's vocabulary) with EXACTLY ONE split into two closed
+#     words. 259 of 71,378 — 0.363%. A dictionary was the RESEARCH TOOL, not a dependency; the
+#     same way every other class here was measured and then written down.
+#   ⇒ IT MAY ONLY EVER VETO. The front door consults it to DECLINE a split; it never licenses
+#     one, names anything, or carries meaning. Subtractive only.
+#   ⇒ ⚠ **AND IT GOES STALE IF A CLOSED CLASS GROWS.** The set is `known` INTERSECT English, so a
+#     new closed word mints new collisions this list will not have.
+#     `tests/test_false_fusions.py` proves no member is DEAD; completeness against new collisions
+#     needs the word list again and belongs to whoever adds the word.
+FALSE_FUSIONS = frozenset({
+    "aback", "abut", "adder", "afresh", "alike", "allan", "allover", "allstate", "amok",
+    "anode", "anodes", "anon", "anthem", "anus", "anyhow", "anyone", "anyplace", "anywhere",
+    "aping", "areas", "aright", "assort", "assure", "asunder", "atone", "atones", "await",
+    "ayes", "backer", "backrest", "backspin", "backstop", "backus", "beam", "bean", "beat",
+    "beer", "beget", "begets", "behalf", "behave", "behaving", "benet", "betake", "betakes",
+    "bethe", "bother", "boxer", "cancan", "candid", "cannot", "canon", "canto", "carryall",
+    "carryout", "checker", "checklist", "checkout", "checkup", "commander", "conductor",
+    "connecter", "connector", "dodo", "dodoes", "doer", "dome", "donor", "door", "doping",
+    "dothan", "downer", "downright", "downstate", "eras", "ergo", "erin", "eris", "evener",
+    "everyone", "everyplace", "everywhere", "fewer", "forgets", "forgive", "forgives", "forgo",
+    "forrest", "forum", "fresher", "getaway", "getup", "giveaway", "goat", "goof", "gook",
+    "goon", "halfback", "heron", "inbox", "incompatible", "indefinitely", "indifferent",
+    "inlet", "inmost", "input", "instill", "insure", "intake", "intakes", "ishim", "isis",
+    "islet", "juster", "justin", "killer", "kinder", "launcher", "lefter", "leftmost",
+    "leftover", "letdown", "letup", "lister", "liston", "makeup", "markdown", "marker",
+    "markup", "mayan", "mayas", "mayer", "mayor", "meaner", "meany", "meat", "mego", "meme",
+    "merest", "muster", "nahum", "nearby", "nearer", "nether", "nome", "nook", "noon", "nous",
+    "nowhere", "noyes", "offer", "onus", "oran", "orin", "outdid", "outdo", "outdoes", "outer",
+    "outgo", "outlast", "outlet", "outperform", "outperforms", "outreach", "outright",
+    "outrun", "outtake", "outtakes", "overall", "overdid", "overdo", "overdoes", "overkill",
+    "overreach", "overrun", "overstate", "overtake", "overtakes", "owner", "performer",
+    "putin", "restfullest", "righter", "rightmost", "runaround", "runaway", "rundown",
+    "runoff", "sheller", "shoulder", "sincerest", "somehow", "someone", "someones",
+    "someplace", "somewhat", "somewhere", "soon", "sorest", "sorter", "soto", "sounder",
+    "soup", "spinoff", "starter", "startup", "stiller", "stopover", "stopping", "stopwatch",
+    "takeoff", "takeout", "takeover", "teller", "theme", "thereby", "therefrom", "therein",
+    "thereof", "thereon", "thereto", "thereupon", "therewith", "theseus", "throughout",
+    "throughput", "toby", "togo", "tome", "took", "toto", "umping", "undergo", "undermost",
+    "understate", "undertake", "undertakes", "upping", "upright", "upstart", "upstate",
+    "uptake", "uptakes", "user", "usher", "waiter", "washer", "watcher", "whatnot", "whereas",
+    "whereat", "whereby", "wherein", "whereof", "whereon", "whereupon", "willis", "wither",
+    "without",
+})
