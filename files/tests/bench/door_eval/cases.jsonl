@@ -1,0 +1,91 @@
+{"id": "mu-0001", "bucket": "must_repair", "text": "um, stop alpha", "expect": "stop alpha", "ask": "", "why": "FILLED_PAUSE 'um' at clause front, dropped with its comma+space"}
+{"id": "mu-0002", "bucket": "must_repair", "text": "uh, stop alpha", "expect": "stop alpha", "ask": "", "why": "FILLED_PAUSE 'uh' at clause front, dropped with its comma+space"}
+{"id": "mu-0003", "bucket": "must_repair", "text": "erm, stop alpha", "expect": "stop alpha", "ask": "", "why": "FILLED_PAUSE 'erm' at clause front, dropped with its comma+space"}
+{"id": "mu-0004", "bucket": "must_repair", "text": "hmm, stop alpha", "expect": "stop alpha", "ask": "", "why": "FILLED_PAUSE 'hmm' at clause front, dropped with its comma+space"}
+{"id": "mu-0005", "bucket": "must_repair", "text": "eh, stop alpha", "expect": "stop alpha", "ask": "", "why": "FILLED_PAUSE 'eh' at clause front, dropped with its comma+space"}
+{"id": "mu-0006", "bucket": "must_repair", "text": "er, stop alpha", "expect": "stop alpha", "ask": "", "why": "FILLED_PAUSE 'er' at clause front, dropped with its comma+space"}
+{"id": "mu-0007", "bucket": "must_repair", "text": "ehm, stop alpha", "expect": "stop alpha", "ask": "", "why": "FILLED_PAUSE 'ehm' at clause front, dropped with its comma+space"}
+{"id": "mu-0008", "bucket": "must_repair", "text": "uhm, stop alpha", "expect": "stop alpha", "ask": "", "why": "FILLED_PAUSE 'uhm' at clause front, dropped with its comma+space"}
+{"id": "mu-0009", "bucket": "must_repair", "text": "hm, stop alpha", "expect": "stop alpha", "ask": "", "why": "FILLED_PAUSE 'hm' at clause front, dropped with its comma+space"}
+{"id": "mu-0010", "bucket": "must_repair", "text": "stop um alpha", "expect": "stop alpha", "ask": "", "why": "FILLED_PAUSE 'um' mid-clause, dropped with the space after it"}
+{"id": "mu-0011", "bucket": "must_repair", "text": "stop uh alpha", "expect": "stop alpha", "ask": "", "why": "FILLED_PAUSE 'uh' mid-clause, dropped with the space after it"}
+{"id": "mu-0012", "bucket": "must_repair", "text": "stop erm alpha", "expect": "stop alpha", "ask": "", "why": "FILLED_PAUSE 'erm' mid-clause, dropped with the space after it"}
+{"id": "mu-0013", "bucket": "must_repair", "text": "stop hmm alpha", "expect": "stop alpha", "ask": "", "why": "FILLED_PAUSE 'hmm' mid-clause, dropped with the space after it"}
+{"id": "mu-0014", "bucket": "must_repair", "text": "stop eh alpha", "expect": "stop alpha", "ask": "", "why": "FILLED_PAUSE 'eh' mid-clause, dropped with the space after it"}
+{"id": "mu-0015", "bucket": "must_repair", "text": "stop alpha um", "expect": "stop alpha", "ask": "", "why": "FILLED_PAUSE 'um' at the very end, dropped with the space BEFORE it"}
+{"id": "mu-0016", "bucket": "must_repair", "text": "stop alpha uh", "expect": "stop alpha", "ask": "", "why": "FILLED_PAUSE 'uh' at the very end, dropped with the space BEFORE it"}
+{"id": "mu-0017", "bucket": "must_repair", "text": "stop alpha erm", "expect": "stop alpha", "ask": "", "why": "FILLED_PAUSE 'erm' at the very end, dropped with the space BEFORE it"}
+{"id": "mu-0018", "bucket": "must_repair", "text": "stop alpha hmm", "expect": "stop alpha", "ask": "", "why": "FILLED_PAUSE 'hmm' at the very end, dropped with the space BEFORE it"}
+{"id": "mu-0019", "bucket": "must_repair", "text": "no wati, stop alpha", "expect": "no wait, stop alpha", "ask": "", "why": "stage 2: one typo'd word inside the closed phrase 'no wait'"}
+{"id": "mu-0020", "bucket": "must_repair", "text": "i mesnt alpha", "expect": "i meant alpha", "ask": "", "why": "stage 2: one typo'd word inside the closed phrase 'i meant'"}
+{"id": "mu-0021", "bucket": "must_repair", "text": "i maen alpha", "expect": "i mean alpha", "ask": "", "why": "stage 2: one typo'd word inside the closed phrase 'i mean'"}
+{"id": "mu-0022", "bucket": "must_repair", "text": "mkae that beta", "expect": "make that beta", "ask": "", "why": "stage 2: one typo'd word inside the closed phrase 'make that'"}
+{"id": "mu-0023", "bucket": "must_repair", "text": "make thta beta", "expect": "make that beta", "ask": "", "why": "stage 2: one typo'd word inside the closed phrase 'make that'"}
+{"id": "mu-0024", "bucket": "must_repair", "text": "not thta one", "expect": "not that one", "ask": "", "why": "stage 2: one typo'd word inside the closed phrase 'not that'"}
+{"id": "mu-0025", "bucket": "must_repair", "text": "or rathr beta", "expect": "or rather beta", "ask": "", "why": "stage 2: one typo'd word inside the closed phrase 'or rather'"}
+{"id": "mu-0026", "bucket": "must_repair", "text": "wati no, stop beta", "expect": "wait no, stop beta", "ask": "", "why": "stage 2: one typo'd word inside the closed phrase 'wait no'"}
+{"id": "mu-0027", "bucket": "must_repair", "text": "cancle that", "expect": "cancel that", "ask": "", "why": "stage 2: one typo'd word inside the closed phrase 'cancel that'"}
+{"id": "mu-0028", "bucket": "must_repair", "text": "belya that", "expect": "belay that", "ask": "", "why": "stage 2: one typo'd word inside the closed phrase 'belay that'"}
+{"id": "mu-0029", "bucket": "must_repair", "text": "forgte it", "expect": "forget it", "ask": "", "why": "stage 2: one typo'd word inside the closed phrase 'forget it'"}
+{"id": "mu-0030", "bucket": "must_repair", "text": "ignroe that", "expect": "ignore that", "ask": "", "why": "stage 2: one typo'd word inside the closed phrase 'ignore that'"}
+{"id": "mu-0031", "bucket": "must_repair", "text": "scracth that", "expect": "scratch that", "ask": "", "why": "stage 2: one typo'd word inside the closed phrase 'scratch that'"}
+{"id": "mu-0032", "bucket": "must_repair", "text": "disregrad that", "expect": "disregard that", "ask": "", "why": "stage 2: one typo'd word inside the closed phrase 'disregard that'"}
+{"id": "mu-0033", "bucket": "must_repair", "text": "nevre mind", "expect": "never mind", "ask": "", "why": "stage 2: one typo'd word inside the closed phrase 'never mind'"}
+{"id": "mu-0034", "bucket": "must_repair", "text": "as you wree", "expect": "as you were", "ask": "", "why": "stage 2: one typo'd word inside the closed phrase 'as you were'"}
+{"id": "mu-0035", "bucket": "must_repair", "text": "tlel me which vms are up", "expect": "tell me which vms are up", "ask": "", "why": "stage 2: one typo'd word inside the closed phrase 'tell me'"}
+{"id": "mu-0036", "bucket": "must_repair", "text": "let me knwo when it is up", "expect": "let me know when it is up", "ask": "", "why": "stage 2: one typo'd word inside the closed phrase 'let me know'"}
+{"id": "mu-0037", "bucket": "must_repair", "text": "wehn you get a chance, stop alpha", "expect": "when you get a chance, stop alpha", "ask": "", "why": "stage 2: one typo'd word inside the closed phrase 'when you get a chance'"}
+{"id": "mu-0038", "bucket": "must_repair", "text": "if you get a chnace, stop alpha", "expect": "if you get a chance, stop alpha", "ask": "", "why": "stage 2: one typo'd word inside the closed phrase 'if you get a chance'"}
+{"id": "mu-0001", "bucket": "must_not_touch", "text": "stop alpah", "expect": "stop alpah", "ask": "", "why": "a typo'd or unknown NAME ('alpah') is the name \u2014 never a repair candidate"}
+{"id": "mu-0002", "bucket": "must_not_touch", "text": "stop grubnsah", "expect": "stop grubnsah", "ask": "", "why": "a typo'd or unknown NAME ('grubnsah') is the name \u2014 never a repair candidate"}
+{"id": "mu-0003", "bucket": "must_not_touch", "text": "stop zortlan", "expect": "stop zortlan", "ask": "", "why": "a typo'd or unknown NAME ('zortlan') is the name \u2014 never a repair candidate"}
+{"id": "mu-0004", "bucket": "must_not_touch", "text": "stop xqvim", "expect": "stop xqvim", "ask": "", "why": "a typo'd or unknown NAME ('xqvim') is the name \u2014 never a repair candidate"}
+{"id": "mu-0005", "bucket": "must_not_touch", "text": "stop plonkard", "expect": "stop plonkard", "ask": "", "why": "a typo'd or unknown NAME ('plonkard') is the name \u2014 never a repair candidate"}
+{"id": "mu-0006", "bucket": "must_not_touch", "text": "stop vurmish", "expect": "stop vurmish", "ask": "", "why": "a typo'd or unknown NAME ('vurmish') is the name \u2014 never a repair candidate"}
+{"id": "mu-0007", "bucket": "must_not_touch", "text": "stop web-01", "expect": "stop web-01", "ask": "", "why": "UNDECLARED hyphenated name 'web-01' \u2014 the separator pass opens only KNOWN closed words"}
+{"id": "mu-0008", "bucket": "must_not_touch", "text": "stop foo-bar", "expect": "stop foo-bar", "ask": "", "why": "UNDECLARED hyphenated name 'foo-bar' \u2014 the separator pass opens only KNOWN closed words"}
+{"id": "mu-0009", "bucket": "must_not_touch", "text": "stop db-7", "expect": "stop db-7", "ask": "", "why": "UNDECLARED hyphenated name 'db-7' \u2014 the separator pass opens only KNOWN closed words"}
+{"id": "mu-0010", "bucket": "must_not_touch", "text": "stop lab-core-2", "expect": "stop lab-core-2", "ask": "", "why": "UNDECLARED hyphenated name 'lab-core-2' \u2014 the separator pass opens only KNOWN closed words"}
+{"id": "mu-0011", "bucket": "must_not_touch", "text": "stop bteA", "expect": "stop bteA", "ask": "", "why": "camelCase 'bteA' is an identifier \u2014 a code shape, named not rewritten"}
+{"id": "mu-0012", "bucket": "must_not_touch", "text": "stop myVM", "expect": "stop myVM", "ask": "", "why": "camelCase 'myVM' is an identifier \u2014 a code shape, named not rewritten"}
+{"id": "mu-0013", "bucket": "must_not_touch", "text": "stop webServer", "expect": "stop webServer", "ask": "", "why": "camelCase 'webServer' is an identifier \u2014 a code shape, named not rewritten"}
+{"id": "mu-0014", "bucket": "must_not_touch", "text": "label alpha 'no wati um'", "expect": "label alpha 'no wati um'", "ask": "", "why": "evidence is opaque testimony \u2014 a typo'd marker AND a filled pause, both inside quotes"}
+{"id": "mu-0015", "bucket": "must_not_touch", "text": "label alpha \"um erm uh\"", "expect": "label alpha \"um erm uh\"", "ask": "", "why": "evidence is opaque testimony \u2014 nothing but filled pauses, inside double quotes"}
+{"id": "mu-0016", "bucket": "must_not_touch", "text": "label alpha 'i mesnt it'", "expect": "label alpha 'i mesnt it'", "ask": "", "why": "evidence is opaque testimony \u2014 a typo'd correction phrase inside quotes"}
+{"id": "mu-0017", "bucket": "must_not_touch", "text": "label alpha `forgte it`", "expect": "label alpha `forgte it`", "ask": "", "why": "evidence is opaque testimony \u2014 a typo'd retraction inside backticks"}
+{"id": "mu-0018", "bucket": "must_not_touch", "text": "label alpha 'alpah'", "expect": "label alpha 'alpah'", "ask": "", "why": "evidence is opaque testimony \u2014 a typo'd name inside quotes"}
+{"id": "mu-0019", "bucket": "must_not_touch", "text": "stop alpha --all-the-vms", "expect": "stop alpha --all-the-vms", "ask": "", "why": "flag '--all-the-vms' is a code shape \u2014 recognised, left byte-identical (ruling 2026-09-07/14)"}
+{"id": "mu-0020", "bucket": "must_not_touch", "text": "stop alpha --no-color", "expect": "stop alpha --no-color", "ask": "", "why": "flag '--no-color' is a code shape \u2014 recognised, left byte-identical (ruling 2026-09-07/14)"}
+{"id": "mu-0021", "bucket": "must_not_touch", "text": "stop alpha -xzf", "expect": "stop alpha -xzf", "ask": "", "why": "flag '-xzf' is a code shape \u2014 recognised, left byte-identical (ruling 2026-09-07/14)"}
+{"id": "mu-0022", "bucket": "must_not_touch", "text": "stop alpha /etc/web/temp.cfg", "expect": "stop alpha /etc/web/temp.cfg", "ask": "", "why": "path '/etc/web/temp.cfg' is a code shape \u2014 recognised, left byte-identical (ruling 2026-09-07/14)"}
+{"id": "mu-0023", "bucket": "must_not_touch", "text": "stop alpha /var/log/qemu.log", "expect": "stop alpha /var/log/qemu.log", "ask": "", "why": "path '/var/log/qemu.log' is a code shape \u2014 recognised, left byte-identical (ruling 2026-09-07/14)"}
+{"id": "mu-0024", "bucket": "must_not_touch", "text": "stop alpha ~/.gorgon/workspace", "expect": "stop alpha ~/.gorgon/workspace", "ask": "", "why": "path '~/.gorgon/workspace' is a code shape \u2014 recognised, left byte-identical (ruling 2026-09-07/14)"}
+{"id": "mu-0025", "bucket": "must_not_touch", "text": "no want, stop alpha", "expect": "no want, stop alpha", "ask": "", "why": "PRECISION TRAP: a real sentence one edit from 'no wait' in marker position"}
+{"id": "mu-0026", "bucket": "must_not_touch", "text": "forgot it, stop alpha", "expect": "forgot it, stop alpha", "ask": "", "why": "PRECISION TRAP: a real sentence one edit from 'forget it' in marker position"}
+{"id": "mu-0027", "bucket": "must_not_touch", "text": "made that beta", "expect": "made that beta", "ask": "", "why": "PRECISION TRAP: a real sentence one edit from 'make that' in marker position"}
+{"id": "mu-0028", "bucket": "must_not_touch", "text": "never find the vm", "expect": "never find the vm", "ask": "", "why": "PRECISION TRAP: a real sentence one edit from 'never mind' in marker position"}
+{"id": "mu-0029", "bucket": "must_not_touch", "text": "i meat alpha", "expect": "i meat alpha", "ask": "", "why": "PRECISION TRAP: a real sentence one edit from 'i mean / i meant' in marker position"}
+{"id": "mu-0030", "bucket": "must_not_touch", "text": "or rather beta", "expect": "or rather beta", "ask": "", "why": "PRECISION TRAP: a real sentence one edit from '(exact phrase, must NOT be re-repaired)' in marker position"}
+{"id": "mu-0031", "bucket": "must_not_touch", "text": "tall me which vms are up", "expect": "tall me which vms are up", "ask": "", "why": "PRECISION TRAP: a real sentence one edit from 'tell me' in marker position"}
+{"id": "mu-0032", "bucket": "must_not_touch", "text": "as you were told", "expect": "as you were told", "ask": "", "why": "PRECISION TRAP: a real sentence one edit from 'as you were' in marker position"}
+{"id": "mu-0033", "bucket": "must_not_touch", "text": "that's great, stop the db", "expect": "that's great, stop the db", "ask": "", "why": "a multi-edit stretch is neither repaired nor asked about (ruling 2026-09-14)"}
+{"id": "mu-0034", "bucket": "must_not_touch", "text": "the grate vm is down", "expect": "the grate vm is down", "ask": "", "why": "a multi-edit stretch is neither repaired nor asked about (ruling 2026-09-14)"}
+{"id": "mu-0035", "bucket": "must_not_touch", "text": "i thnkk alpha is up", "expect": "i thnkk alpha is up", "ask": "", "why": "a multi-edit stretch is neither repaired nor asked about (ruling 2026-09-14)"}
+{"id": "mu-0036", "bucket": "must_not_touch", "text": "nope, stop alpha", "expect": "nope, stop alpha", "ask": "", "why": "a word declared in ANY closed class is a real word and is never repaired (2026-09-08)"}
+{"id": "mu-0037", "bucket": "must_not_touch", "text": "lets stop alpha", "expect": "lets stop alpha", "ask": "", "why": "a word declared in ANY closed class is a real word and is never repaired (2026-09-08)"}
+{"id": "mu-0038", "bucket": "must_not_touch", "text": "move alpha to lab", "expect": "move alpha to lab", "ask": "", "why": "a word declared in ANY closed class is a real word and is never repaired (2026-09-08)"}
+{"id": "mu-0039", "bucket": "must_not_touch", "text": "ever stop alpha", "expect": "ever stop alpha", "ask": "", "why": "a word declared in ANY closed class is a real word and is never repaired (2026-09-08)"}
+{"id": "mu-0039", "bucket": "must_repair", "text": "do-not-stop-alpha", "expect": "do not stop alpha", "ask": "", "why": "pass 0a: every joined token is a KNOWN closed word, so the separator is a fusion"}
+{"id": "mu-0040", "bucket": "must_repair", "text": "do_not_stop_alpha", "expect": "do not stop alpha", "ask": "", "why": "pass 0a: every joined token is a KNOWN closed word, so the separator is a fusion"}
+{"id": "mu-0041", "bucket": "must_repair", "text": "is-the-vm-up", "expect": "is the vm up", "ask": "", "why": "pass 0a: every joined token is a KNOWN closed word, so the separator is a fusion"}
+{"id": "mu-0042", "bucket": "must_repair", "text": "stop-the-vm", "expect": "stop the vm", "ask": "", "why": "pass 0a: every joined token is a KNOWN closed word, so the separator is a fusion"}
+{"id": "mu-0043", "bucket": "must_repair", "text": "all-of-them", "expect": "all of them", "ask": "", "why": "pass 0a: every joined token is a KNOWN closed word, so the separator is a fusion"}
+{"id": "mu-0044", "bucket": "must_repair", "text": "restart-it-and-stop-beta", "expect": "restart it and stop beta", "ask": "", "why": "pass 0a: every joined token is a KNOWN closed word, so the separator is a fusion"}
+{"id": "mu-0045", "bucket": "must_repair", "text": "eveyr vm on lab", "expect": "every vm on lab", "ask": "", "why": "stage 3 (N2 sim check): opener, next word is a noun"}
+{"id": "mu-0046", "bucket": "must_repair", "text": "create two vms and put thrm on lab", "expect": "create two vms and put them on lab", "ask": "", "why": "stage 3 (N2 sim check): pronoun, previous word is a verb"}
+{"id": "mu-0047", "bucket": "must_repair", "text": "stop the netwrk", "expect": "stop the network", "ask": "", "why": "stage 3 (N2 sim check): noun, an opener stands before it"}
+{"id": "mu-0048", "bucket": "must_repair", "text": "restart the dmz netwrk", "expect": "restart the dmz network", "ask": "", "why": "stage 3 (N2 sim check): noun, opener two words back"}
+{"id": "mu-0049", "bucket": "must_repair", "text": "is alpha rynning", "expect": "is alpha running", "ask": "", "why": "stage 3 (N2 sim check): status, after a copula"}
+{"id": "mu-0050", "bucket": "must_repair", "text": "stop the runnin vms", "expect": "stop the running vms", "ask": "", "why": "stage 3 (N2 sim check): status, pre-nominal before a kind"}
+{"id": "am-0001", "bucket": "ambiguous", "text": "did you eveyr stop it", "expect": "did you eveyr stop it", "ask": "ambiguous-or-silent", "why": "`eveyr` fits `every` only before a NOUN; no slot votes here, so nothing fires"}
+{"id": "am-0002", "bucket": "ambiguous", "text": "stpped alpha", "expect": "stpped alpha", "ask": "ambiguous-or-silent", "why": "`stpped` explains `stopped` AND `stepped` at one print each \u2014 a tie is an ask"}
