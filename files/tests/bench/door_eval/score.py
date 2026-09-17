@@ -32,6 +32,17 @@ from orchestrator.languages.english.seam import front_door as FD
 HERE = os.path.dirname(os.path.abspath(__file__))
 CASES = os.path.join(HERE, "cases.jsonl")
 
+# ⇒⇒ THE LAB THE CORPUS ASSUMES. The door's behaviour legitimately depends on which standing
+#   objects the world declares — `thedb vm` is a fusion only if `db` names something. Scoring
+#   name-fusion cases against an EMPTY world tests the wrong thing: it asks whether the door
+#   guesses at names it was never told about, and the answer should be no.
+#   ⇒ FOUND 2026-09-17, by the split-pass fix: two must_repair cases "regressed" purely because
+#     nothing here declared `alpha` or `test`. Passing the world restored both while every
+#     precision fix held. Production calls `read()` with no world at all (divergence D2), which
+#     is a separate defect this line does not paper over — it makes the corpus honest, not the
+#     product correct.
+WORLD = ("alpha", "beta", "web", "db", "core", "lab", "test", "grubnash", "dmz")
+
 
 def _sha(path: str) -> str:
     return hashlib.sha256(open(path, "rb").read()).hexdigest()[:16]
@@ -49,7 +60,7 @@ def run(show_all: bool = False) -> dict:
     rows = [json.loads(l) for l in open(CASES) if l.strip()]
     out, buckets = [], {}
     for r in rows:
-        v = FD.read(r["text"])
+        v = FD.read(r["text"], known=WORLD)
         ok = v.text == r["expect"]
         rec = dict(r, got=v.text, notices=list(v.notices), ok=ok)
         out.append(rec)
@@ -57,7 +68,7 @@ def run(show_all: bool = False) -> dict:
         b["n"] += 1
         b["ok"] += int(ok)
 
-    print(f"corpus {os.path.basename(CASES)}  sha {_sha(CASES)}  git {_git()}  model: none")
+    print(f"corpus {os.path.basename(CASES)}  sha {_sha(CASES)}  git {_git()}  model: none  world: {len(WORLD)} declared")
     print(f"{'bucket':<18}{'n':>5}{'agree':>7}{'rate':>8}   the question it answers")
     Q = {"must_repair": "RECALL — declared junk removed",
          "must_not_touch": "FALSE REPAIR — text damaged that must not be (SAFETY)",

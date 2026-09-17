@@ -285,7 +285,25 @@ def run(request: str, board: Optional[Board] = None, world=None, model=None,
     #   phrase word. The whole chain below reads the VIEW; every fix is a notice, so
     #   recognition is visible and never silent.
     from . import front_door as _fd
-    _door = _fd.read(request)
+    # ⇒⇒ THE DOOR GETS THE WORLD (operator ruling 2026-09-17). It never had it: `read()` has
+    #   accepted the declared standing objects since 2026-09-02 and this call site passed
+    #   nothing, so the separator pass could not open `db-down` and the split pass had no way
+    #   to tell `stopalpha` (a fusion hiding a NAME) from `antiseptic` (a word that merely
+    #   begins with one). Measured before the world was wired: 188 of 6000 sampled dictionary
+    #   words damaged in the frame `stop the X vm` — 3.13%, every one a split whose free half
+    #   was licensed by a NEIGHBOUR rather than by anything nameable.
+    #   ⇒ `names()` IS THE INTERFACE THE LAB ALREADY OFFERS (`door.py:419` reads it the same
+    #     way), so this adds no second reader of what the world holds.
+    #   ⇒ AND NO LAB IS A LEGITIMATE ANSWER: a client-only checkout has no registry, `world`
+    #     is None, and the door falls back to closed words alone — which declines a fusion it
+    #     cannot justify instead of guessing at it. Degraded, honest, and the safe direction.
+    _held = None
+    if world is not None:
+        try:
+            _held = {str(n).lower() for n in (world.names() or ())}
+        except Exception:
+            _held = None
+    _door = _fd.read(request, known=_held)
     request = _door.text
 
     rows = pass1.run_scanned(request, board=board, model=model, timeout=timeout)

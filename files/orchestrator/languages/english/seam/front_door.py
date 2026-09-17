@@ -111,7 +111,7 @@ def read(request: str, board=None, known=None) -> View:
     #     4 spans, 3 acts, +3 halluc in 10 pairs, all where the fusion hides a CLOSED
     #     word). A split changes tokenization, so it runs before every other pass and
     #     the offset maps COMPOSE.
-    edits0, notes0 = _split_pass(text, board)
+    edits0, notes0 = _split_pass(text, board, known)
     if edits0:
         text0, back0 = _apply(text, edits0)
         inner = _read_stages(text0, board)
@@ -256,10 +256,38 @@ def _separator_pass(text: str, board=None, known_extra=None):
     return edits, notices
 
 
-def _split_pass(text: str, board=None):
+def _split_pass(text: str, board=None, named=None):
     """An UNKNOWN token that splits into two known words is read apart — where the
     grammar votes (the operator's sim-check principle). Exactly one fitting split wins;
-    ambiguity or no vote changes nothing (`cancel` never becomes `can cel`)."""
+    ambiguity or no vote changes nothing (`cancel` never becomes `can cel`).
+
+    ⇒⇒ **BOTH HALVES MUST BE WORDS THE SYSTEM KNOWS** (2026-09-17). Four of the six fit rules
+      are asymmetric — they bind ONE half to a closed set and licensed the other from a
+      NEIGHBOUR — and the free half was checked against nothing at all:
+
+          a in openers and (b in nouns or nxt in nouns)     # nxt a noun -> b unconstrained
+          b in nouns and (prev in openers or a in openers)  # prev an opener -> a unconstrained
+
+      In `stop the X vm` the next token is `vm`, a noun, so EVERY word opening with `an`/`no`/
+      `all`/`me` was torn whatever the remainder: `antiseptic` -> `an tiseptic`, `merchants` ->
+      `me rchants`, `cabinet` -> `cabi net`. Measured over 6000 sampled dictionary words in that
+      one frame: 188 damaged, 3.13%. The operator-visible ones were worse than the rate —
+      `stopping` -> `stop ping` turns a status report into TWO operation verbs, `~/.gorgon/...`
+      -> `~/.go rgon/...` corrupts a path, and `backer` -> `back` because the split feeds `er`
+      to the filled-pause drop and the word is LOST rather than mangled.
+
+    ⇒ THE CONSTRAINT IS THE DOCSTRING'S OWN FIRST LINE, ENFORCED: *two known words*. A closed
+      word, or a DECLARED STANDING OBJECT — which is why `named` exists. The name half is what
+      the asymmetric rules were FOR (`thedb vm`, `stopalpha`), and the world is the only thing
+      that can say whether `db` is a machine. `_separator_pass` has been given the declared
+      objects since 2026-09-02; this pass was not, and that asymmetry was the whole defect.
+
+    ⇒ WHEN NOBODY PASSES `named` THE DOOR GETS STRICTER, NOT WRONGER: with no world in hand a
+      split must be two closed words, which is rule 2. That is the safe direction — production
+      calls `read()` without the lab today ([[gorgon-handover-2026-09-17]] D2), so it simply
+      declines splits it cannot justify instead of guessing at them.
+    """
+    _named = {str(n).lower() for n in (named or ())}
     low = text.lower()
     opaque = _quoted(low)
     toks = [(w, s, e) for w, s, e in _tokens(low)
@@ -271,6 +299,13 @@ def _split_pass(text: str, board=None):
         "not", "no", "these", "those", "this", "that", "there", "their", "they",
         "than", "have", "has", "had"}
     heads = {"if", "unless", "when", "whenever", "after", "once"}
+
+    def _half(x: str) -> bool:
+        """Is this side of the split a word the system knows? A closed word, or a declared
+        standing object. Nothing else — a remainder nobody can name is evidence the token was
+        never fused in the first place."""
+        return x in known or x in _named
+
     edits, notices = [], []
     for idx, (w, s_, e_) in enumerate(toks):
         if len(w) < 4 or "'" in w or w in known:
@@ -291,13 +326,13 @@ def _split_pass(text: str, board=None):
                 # `backup` is a word, not `back` fused to `up` (found by the suite)
                 fit = not (a in _parts and b in _parts)
             elif a in ops and seg_initial:
-                fit = True                             # `stopalpha.` · `then launchbeta`
+                fit = _half(b)                         # `stopalpha.` · `then launchbeta`
             elif a in openers and (b in nouns or nxt in nouns):
-                fit = True                             # `thedb vm`
+                fit = _half(b)                         # `thedb vm`
             elif b in nouns and (prev in openers or a in openers):
-                fit = True                             # `the testvms`
+                fit = _half(a)                         # `the testvms`
             elif a in heads and seg_initial:
-                fit = True                             # `ifalpha is stopped`
+                fit = _half(b)                         # `ifalpha is stopped`
             else:
                 fit = False
             if fit:

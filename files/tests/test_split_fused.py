@@ -15,37 +15,49 @@ Exactly one fitting split wins, with a notice; ambiguity or no vote changes NOTH
 """
 from orchestrator.languages.english.seam import front_door as FD
 
+# ⇒⇒ **THE SPEC ABOVE HAS A PRECONDITION IT NEVER STATED: THE NAMES MUST BE DECLARED.** Three of
+#   its five rules split a fusion whose second half is a NAME — `thedb vm`, `stopalpha`,
+#   `ifalpha is stopped` — and until 2026-09-17 the pass was never told which names exist, so it
+#   licensed the free half from a NEIGHBOUR instead. In `stop the X vm` the next token is `vm`, a
+#   noun, and that alone tore every word opening with `an`/`no`/`all`/`me`: `antiseptic` ->
+#   `an tiseptic`, 188 of 6000 sampled dictionary words, 3.13%.
+#   ⇒ EVERY ASSERTION BELOW IS UNCHANGED and every one still passes; what changed is that the
+#     lab is now DECLARED, which is what production does too since `pipeline.run` began handing
+#     the door `world.names()`. A call with no lab is a different question — *may the door guess
+#     at a name nobody told it about* — and the answer to that one is no.
+LAB = ("alpha", "beta", "web", "db", "test", "vm2", "core", "lab", "dmz")
+
 
 # ── the measured damage this must heal ───────────────────────────────────────────────
 
 def test_a_fused_verb_splits_at_segment_start():
-    assert FD.read("stopalpha. then launchbeta.").text == "stop alpha. then launch beta."
+    assert FD.read("stopalpha. then launchbeta.", known=LAB).text == "stop alpha. then launch beta."
 
 
 def test_a_fused_testimony_frame_splits():
-    v = FD.read("vm2 isnot working, it boots to a bluescreen")
+    v = FD.read("vm2 isnot working, it boots to a bluescreen", known=LAB)
     assert "is not working" in v.text
 
 
 def test_a_fused_boundary_word_splits():
-    assert "vm and" in FD.read("restart the web vmand thedb vm").text
-    assert "vm except" in FD.read("stop every vmexcept thedb vm").text
+    assert "vm and" in FD.read("restart the web vmand thedb vm", known=LAB).text
+    assert "vm except" in FD.read("stop every vmexcept thedb vm", known=LAB).text
 
 
 def test_a_fused_courtesy_word_splits():
-    assert "a chance" in FD.read("when you get achance, stop the testvms").text
+    assert "a chance" in FD.read("when you get achance, stop the testvms", known=LAB).text
 
 
 def test_a_fused_opener_with_a_noun_in_reach():
-    assert "the db vm" in FD.read("restart thedb vm").text
+    assert "the db vm" in FD.read("restart thedb vm", known=LAB).text
 
 
 def test_a_fused_noun_with_an_opener_before():
-    assert "test vms" in FD.read("stop the testvms").text
+    assert "test vms" in FD.read("stop the testvms", known=LAB).text
 
 
 def test_a_fused_condition_head():
-    assert FD.read("ifalpha is stopped, launch it").text == \
+    assert FD.read("ifalpha is stopped, launch it", known=LAB).text == \
         "if alpha is stopped, launch it"
 
 
