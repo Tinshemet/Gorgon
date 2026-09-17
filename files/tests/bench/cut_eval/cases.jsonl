@@ -1,0 +1,29 @@
+{"id": "c1-01", "rule": 1, "bucket": "must_cut", "text": "when you get a chance stop alpha", "before": ["stop"], "why": "the courtesy literal closes at its own end; the order behind it is its own clause"}
+{"id": "c1-02", "rule": 1, "bucket": "must_cut", "text": "if you get a chance restart the web vm", "before": ["restart"], "why": "the other declared courtesy literal, same shape"}
+{"id": "c2-01", "rule": 2, "bucket": "must_cut", "text": "stop alpha tell me when it is down", "before": ["tell"], "why": "a WRAPPER mid-clause opens its own clause"}
+{"id": "c2-02", "rule": 2, "bucket": "must_not_cut", "text": "tell me which vms are up", "before": [], "why": "a wrapper at position 0 IS the clause \u2014 cutting at 0 cuts nothing off"}
+{"id": "c2-03", "rule": 2, "bucket": "must_not_cut", "text": "let me know which vms are up", "before": [], "why": "the other declared wrapper, also clause-initial"}
+{"id": "c3-01", "rule": 3, "bucket": "must_cut", "text": "stop alpha anyway restart beta", "before": ["anyway"], "why": "`anyway` releases what stands behind it"}
+{"id": "c4-01", "rule": 4, "bucket": "must_cut", "text": "restart alpha if it is down", "before": ["if"], "why": "a mid-clause condition head opens a subordinate; cut in front of it"}
+{"id": "c4-02", "rule": 4, "bucket": "must_cut", "text": "stop the web vm unless it is the last one", "before": ["unless"], "why": "`unless` is the other declared head"}
+{"id": "c4-03", "rule": 4, "bucket": "must_not_cut", "text": "tell me if the db vm restarted", "before": [], "why": "whether-`if` ASKS and does not condition \u2014 the host word before it is the guard"}
+{"id": "c4-04", "rule": 4, "bucket": "must_not_cut", "text": "let me know if alpha is up", "before": [], "why": "the same whether-`if`, behind the other wrapper host"}
+{"id": "c4-05", "rule": 4, "bucket": "must_not_cut", "text": "create three vms named after musicians", "before": [], "why": "a NAMING CUE before the head makes this a naming spec, one leaf (ledger #17)"}
+{"id": "c5-01", "rule": 5, "bucket": "must_cut", "text": "if alpha is stopped launch it", "before": ["launch"], "why": "the subordinate ends after its predicate; the imperative behind it is its own clause"}
+{"id": "c5-02", "rule": 5, "bucket": "must_cut", "text": "unless the db vm is running restart it", "before": ["restart"], "why": "same shape behind `unless`"}
+{"id": "c5-03", "rule": 5, "bucket": "must_not_cut", "text": "if the biggest vm on the lab network is stopped", "before": [], "why": "a long subject may not fake a boundary, and no imperative follows the predicate"}
+{"id": "c5-04", "rule": 5, "bucket": "must_not_cut", "text": "when you get a chance", "before": [], "why": "a subordinate's own content cannot open an imperative before its predicate"}
+{"id": "c6-01", "rule": 6, "bucket": "must_cut", "text": "dont stop the web vm stop the db vm", "before": ["stop the db"], "why": "a second base-form operation word taking a determiner object is its own clause"}
+{"id": "c6-02", "rule": 6, "bucket": "must_cut", "text": "restart the web vm snapshot the db vm", "before": ["snapshot"], "why": "two bare imperatives, no punctuation between them"}
+{"id": "c6-03", "rule": 6, "bucket": "must_not_cut", "text": "check the disk usage", "before": [], "why": "one imperative is one clause"}
+{"id": "c6-04", "rule": 6, "bucket": "must_not_cut", "text": "how many machines carry the fleet label", "before": [], "why": "a QUESTION SKIN is never cut \u2014 the wh frame governs the whole clause and `carry the` is no imperative inside it"}
+{"id": "c6-05", "rule": 6, "bucket": "must_not_cut", "text": "did you stop the web vm", "before": [], "why": "an AUXILIARY opening inverts and asks; the frame governs the whole clause"}
+{"id": "c6-06", "rule": 6, "bucket": "must_not_cut", "text": "stop the web vm on the lab network", "before": [], "why": "a prepositional tail is not a second imperative"}
+{"id": "c7-01", "rule": 7, "bucket": "must_cut", "text": "vm2 is not working it boots to a bluescreen", "before": ["it"], "why": "a testimony predicate releases its elaboration; three or more words remain"}
+{"id": "c7-02", "rule": 7, "bucket": "must_not_cut", "text": "the web vm is not working", "before": [], "why": "nothing follows the predicate \u2014 no elaboration, no cut"}
+{"id": "c7-03", "rule": 7, "bucket": "must_not_cut", "text": "alpha is down now", "before": [], "why": "fewer than three words remain behind the predicate \u2014 no vote, no cut"}
+{"id": "c7-04", "rule": 7, "bucket": "must_not_cut", "text": "put cant on the dmz network", "before": [], "why": "an IMPERATIVE is not testimony. The only survivor of 3000 random English sentences: `put cant on` was read as a predicate and `the dmz network` as its elaboration, splitting an operator's order in half"}
+{"id": "c7-05", "rule": 7, "bucket": "must_not_cut", "text": "put web on the dmz network", "before": [], "why": "the same order with a real machine name \u2014 the control for the case above"}
+{"id": "c8-01", "rule": 8, "bucket": "must_not_cut", "text": "make sure exactly three vms carry the prod label", "before": [], "why": "the noun phrase after a GOAL head is a SUBJECT and the base-form op after it is its PREDICATE. A cut loses `label=prod` and leaves `count(vm)=3` \u2014 the deletion shape, language benchmark rung 7 (2026-08-22)"}
+{"id": "c8-02", "rule": 8, "bucket": "must_not_cut", "text": "ensure every vm carries the fleet label", "before": [], "why": "the second declared goal head, same shape"}
+{"id": "c8-03", "rule": 8, "bucket": "must_not_cut", "text": "verify that the db vm holds a snapshot", "before": [], "why": "the third, with an explicit complementiser"}
