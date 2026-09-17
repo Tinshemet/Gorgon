@@ -978,3 +978,75 @@ FALSE_TYPOS = frozenset({
     "waits", "wake", "walt", "want", "ware", "wart", "watt", "wean", "weer", "well", "whens",
     "whet", "whew", "whey", "whit", "wind", "wore", "wren", "writ", "yell",
 })
+
+
+# ⇒⇒ **AND AN ENGLISH WORD IS NEVER A CORRUPTION OF A CANDIDATE EITHER.** Stage 3 — N2's SIM
+#   CHECK — tries every closed-set candidate in the slot and keeps the one the grammar votes for,
+#   which is how `netwrk` -> `network` and `rynning` -> `running` are recovered. It has guarded
+#   words in a declared closed class since 2026-09-08, but nothing guarded words that are simply
+#   ENGLISH: `made that` became `make that` (`make` is an operation word and the verb slot
+#   licensed it), `boxes` became `boxs` (the manifest's own misspelling, propagated onto correct
+#   English), and `dome` became `some`. Operator ruling 2026-09-17, the same principle a third
+#   time: a real word is never repaired.
+#   ⇒ DERIVED OFF-LINE like its two siblings: every dictionary word >=4 letters, not already in
+#     the reader's vocabulary, that `noise_prints.explain` accounts for with ONE print or fewer
+#     from any candidate in `openers | nouns | ops | states`. 478 words, 0.66% of the dictionary.
+#   ⇒ **THE THREE SETS ARE ALMOST DISJOINT AND THAT IS WHY THEY STAY THREE.** Measured: 842 words
+#     in the union against 881 summed — nine shared with FALSE_FUSIONS, twenty-five with
+#     FALSE_TYPOS. They are not three views of one list; they are three different derivations for
+#     three different passes, and merging them would hide which pass needs which entry and make
+#     every staleness check untargetable.
+#   ⇒ IT VETOES BEFORE THE ASK, TOO. A real word is not corrupt, so there is nothing to ask the
+#     operator about — the same silence `w in known` already produces, and not the bounce.
+#   ⇒ REAL TYPOS ARE SAFELY OUTSIDE IT, which is the whole reason it can be this large:
+#     `netwrk` `rynning` `eveyr` `thrm` `runnin` `stpo` are not words of English.
+FALSE_PRINTS = frozenset({
+    "ahem", "alice", "alike", "aline", "alone", "artefact", "artefacts", "atop", "avery",
+    "babel", "bach", "bake", "bark", "barry", "batch", "bath", "beach", "beth", "bets", "bile",
+    "bill", "blot", "boas", "boat", "bobs", "bode", "bodes", "bogs", "bolt", "bone", "boob",
+    "book", "boom", "boon", "boor", "boos", "booth", "booty", "bops", "bosh", "boss", "bout",
+    "bows", "boxes", "boys", "cake", "calf", "camry", "carey", "carly", "carr", "cary",
+    "catch", "cheek", "chem", "chick", "chock", "chuck", "cline", "clive", "cloned", "clones",
+    "close", "clove", "code", "codes", "come", "comma", "commands", "commend", "compatibles",
+    "compatibly", "cone", "conform", "coot", "cost", "costs", "crate", "crease", "created",
+    "creates", "crete", "crone", "cunning", "curry", "dark", "dawn", "deleted", "deletes",
+    "deplete", "described", "describes", "desk", "dick", "dill", "ding", "dink", "dire",
+    "dirk", "disc", "dish", "diss", "dive", "dome", "done", "donn", "doth", "drown", "dunning",
+    "dusk", "eery", "eire", "emery", "endure", "ensue", "ensured", "ensures", "enure",
+    "estate", "etch", "ever", "evert", "fake", "fife", "fifes", "filed", "filet", "fill",
+    "fills", "film", "films", "fine", "fines", "fire", "fires", "fisk", "fist", "five",
+    "fives", "fixes", "flies", "foot", "garry", "gave", "getup", "ghost", "ghosts", "gibe",
+    "gide", "giles", "gill", "gist", "gone", "goth", "gown", "guess", "gunning", "gust",
+    "gusts", "hake", "hale", "hall", "halo", "hals", "halt", "hark", "harry", "hatch",
+    "haunch", "hill", "hing", "hire", "hive", "hoist", "hoists", "holst", "holt", "home",
+    "hone", "hoot", "hoots", "hose", "hoses", "imaged", "ines", "instanced", "insure", "jake",
+    "jets", "jill", "jive", "kiel", "kiln", "kilo", "kilt", "king", "lake", "lapel", "lark",
+    "larry", "latch", "leach", "lest", "lets", "letup", "libel", "licit", "lift", "lilt",
+    "lint", "lire", "lisa", "lisp", "liszt", "live", "lode", "lodes", "lome", "lone", "loot",
+    "lost", "loth", "lunch", "lust", "mabel", "mace", "mach", "machined", "mack", "macy",
+    "made", "maker", "male", "mane", "mangy", "mani", "mann", "mans", "manx", "mara", "marc",
+    "mare", "mari", "marry", "mars", "mart", "marx", "mary", "mask", "mast", "match", "mate",
+    "maze", "memo", "mike", "mile", "miles", "mill", "ming", "mire", "misplay", "mist", "moat",
+    "mode", "modes", "moet", "moist", "molt", "mont", "moot", "mort", "moss", "moth", "mott",
+    "mown", "murk", "myst", "nark", "nest", "nests", "news", "newts", "nile", "nine", "nits",
+    "nods", "noes", "nome", "nona", "nose", "noses", "note", "notes", "notwork", "notworks",
+    "noyes", "nude", "nudes", "nuts", "odes", "olive", "onus", "opec", "ores", "oses", "owes",
+    "pang", "park", "parry", "patch", "paunch", "peach", "pets", "piing", "pile", "piles",
+    "pill", "pine", "pink", "pins", "pint", "pone", "pones", "post", "posts", "profiled",
+    "punning", "quest", "quests", "rake", "react", "reich", "remote", "removed", "remover",
+    "removes", "reside", "responds", "restored", "restorer", "restores", "retch", "revery",
+    "rile", "riles", "rill", "ring", "risk", "roach", "rode", "rome", "root", "roth",
+    "ruining", "sake", "sate", "secs", "sell", "serer", "serve", "served", "serves", "sets",
+    "sever", "severs", "shelf", "sheol", "shill", "shin", "shop", "shopped", "sill", "sing",
+    "sire", "skate", "skin", "slate", "slop", "slopped", "smart", "smell", "snell", "sole",
+    "somme", "soot", "sopped", "sore", "sown", "span", "spate", "speck", "sped", "spell",
+    "spew", "spews", "spit", "spun", "stage", "stake", "stale", "star", "stare", "stark",
+    "starr", "stars", "stat", "stated", "stater", "states", "stats", "stave", "step",
+    "stepped", "stol", "stomped", "stoop", "stooped", "stopper", "stow", "strop", "stropped",
+    "sublet", "sublets", "subset", "subsets", "sunning", "swatch", "swell", "swop", "swopped",
+    "taker", "tale", "tame", "tape", "tare", "tarry", "tate", "teach", "teem", "thea", "thee",
+    "tike", "tile", "tiles", "till", "ting", "tire", "toke", "tome", "tone", "toot", "tost",
+    "town", "tyke", "unsure", "vets", "vile", "wake", "ware", "wets", "wide", "wife", "wile",
+    "wiles", "wine", "wing", "wipe", "wired", "wires", "wiry", "wise", "wist", "witch", "wive",
+    "wore", "zany", "zing", "zone",
+})

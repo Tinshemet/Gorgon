@@ -1,9 +1,12 @@
 """test_false_fusions.py — the declared VETO SETS are all still ALIVE, and still needed.
 
-⇒ TWO SETS, ONE PRINCIPLE — *a real English word is never repaired*. `FALSE_FUSIONS` holds
+⇒ THREE SETS, ONE PRINCIPLE — *a real English word is never repaired*. `FALSE_FUSIONS` holds
   the split pass to it; `FALSE_TYPOS` holds stage 2's closed-phrase repair to it (operator
-  ruling 2026-09-17: **"forgot it stays as typed"**). Both are veto-only, both were derived
-  off-line from a dictionary that is not a dependency, and both rot the same two ways.
+  ruling 2026-09-17: **"forgot it stays as typed"**); `FALSE_PRINTS` holds stage 3's sim check to
+  it. All three are veto-only, all three were derived off-line from a dictionary that is not a
+  dependency, and all three rot the same two ways. They stay SEPARATE because they are nearly
+  disjoint — 842 in the union against 881 summed — so a merged list could not say which pass
+  needs which entry, and no staleness check could be aimed.
 
 ⇒⇒ **A DECLARED SET IS A CACHE OF A COMPUTATION, AND CACHES DRIFT.** `codex.FALSE_FUSIONS` is
 `known` INTERSECT English: every English word that `_split_pass`'s symmetric rule would tear into
@@ -180,6 +183,47 @@ def test_the_real_typos_were_not_eaten():
               if w in codex.FALSE_TYPOS]
     assert not inside, f"{inside} are declared NON-typos, which disables the repair for them"
     for text, want in REAL_TYPOS:
+        assert want in FD.read(text, known=LAB).text, f"{text!r} no longer repairs to {want!r}"
+
+
+def test_false_prints_is_well_formed_and_none_is_dead():
+    """Every member must still be an English word the sim check WOULD reach: not already in
+    `known`, and explained by at most one declared print from some candidate."""
+    from orchestrator.languages.english.noise_prints import explain as _explain
+    s = codex.FALSE_PRINTS
+    assert len(s) >= 200, f"only {len(s)} declared — the derivation did not run to completion"
+    openers, nouns, ops, known = FD._vocab(None)
+    cands = {c for c in (openers | nouns | ops | FD._statuses(None)) if len(c) >= 4}
+    dead = []
+    for w in sorted(s):
+        if w in known:
+            dead.append(w); continue
+        if not any((lambda p: p and len(p) <= 1)(_explain(c, w)) for c in cands):
+            dead.append(w)
+    assert not dead, (
+        f"{len(dead)} DEAD entries in FALSE_PRINTS — now covered by the `known` guard, or no "
+        f"candidate explains them in one print any more: {dead[:12]}")
+
+
+def test_the_print_veto_actually_fires():
+    """The stage-3 traps, in the frames that found them."""
+    still = []
+    for text in ("made that beta", "stop the boxes vm", "stop the dome vm", "stop the hale vm",
+                 "is the flies running", "the noes is up", "stop the gust vm"):
+        got = FD.read(text, known=LAB).text
+        if got != text:
+            still.append((text, got))
+    assert not still, f"declared English words were still repaired by the sim check: {still}"
+
+
+def test_the_real_sim_check_repairs_were_not_eaten():
+    """N2's capability must survive the veto — these are NOT words of English."""
+    inside = [w for w in ("netwrk", "rynning", "eveyr", "thrm", "runnin", "alpah")
+              if w in codex.FALSE_PRINTS]
+    assert not inside, f"{inside} are declared real words, which disables the sim check for them"
+    for text, want in (("stop the netwrk", "network"), ("is alpah rynning", "running"),
+                       ("stop the runnin vms", "running"), ("eveyr vm on lab", "every"),
+                       ("put thrm on the dmz network", "them")):
         assert want in FD.read(text, known=LAB).text, f"{text!r} no longer repairs to {want!r}"
 
 

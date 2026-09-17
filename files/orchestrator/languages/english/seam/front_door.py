@@ -546,7 +546,11 @@ def _recognise(w, toks, at, board):
     from .scan import OBJECT_OPENERS
     openers, nouns, ops, known = _vocab(board)
     states = _statuses(board)                        # manifest STATUS values (running/stopped/up/down)
-    if w in known:
+    # ⇒ A REAL WORD IS NEVER REPAIRED, and `known` was only ever Gorgon's half of that. The other
+    #   half is English (codex, operator ruling 2026-09-17) — `made`, `boxes`, `dome` are not
+    #   corrupt and have nothing to ask about, so they leave by the same door `known` does.
+    from ...english.codex import FALSE_PRINTS as _english
+    if w in known or w in _english:
         return Repair("", (), "", ())
     words = [t[0] for t in toks]
     i = next(j for j, t in enumerate(toks) if t[1] == at)
