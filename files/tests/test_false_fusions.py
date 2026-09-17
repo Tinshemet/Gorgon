@@ -1,4 +1,9 @@
-"""test_false_fusions.py — the declared non-fusions are all still ALIVE, and still needed.
+"""test_false_fusions.py — the declared VETO SETS are all still ALIVE, and still needed.
+
+⇒ TWO SETS, ONE PRINCIPLE — *a real English word is never repaired*. `FALSE_FUSIONS` holds
+  the split pass to it; `FALSE_TYPOS` holds stage 2's closed-phrase repair to it (operator
+  ruling 2026-09-17: **"forgot it stays as typed"**). Both are veto-only, both were derived
+  off-line from a dictionary that is not a dependency, and both rot the same two ways.
 
 ⇒⇒ **A DECLARED SET IS A CACHE OF A COMPUTATION, AND CACHES DRIFT.** `codex.FALSE_FUSIONS` is
 `known` INTERSECT English: every English word that `_split_pass`'s symmetric rule would tear into
@@ -44,6 +49,20 @@ LAB = ("alpha", "beta", "web", "db", "test", "core", "lab", "dmz")
 
 # The fusions the pass exists to open. None may ever be declared a false fusion.
 REAL_FUSIONS = ("isnot", "onthe", "stopalpha", "thedb", "testvms", "ifalpha", "vmand", "achance")
+
+# The typo'd phrase words stage 2 exists to repair. None may ever be declared a false typo.
+REAL_TYPOS = (("no wati, stop alpha", "no wait"), ("i mesnt alpha", "i meant"),
+              ("forgte it", "forget it"), ("tlel me which vms are up", "tell me"),
+              ("cancle that", "cancel that"), ("nevre mind", "never mind"),
+              ("as you wree", "as you were"),
+              ("wehn you get a chance, stop alpha", "when you get a chance"))
+
+
+def _phrase_words() -> set:
+    from orchestrator.languages.english.seam import self_repair as _sr
+    from orchestrator.languages.english.seam.speech_act import WRAPPERS, COURTESY
+    return {w for p in (tuple(_sr.CORRECTIONS) + tuple(_sr.RETRACTIONS) + WRAPPERS + COURTESY)
+            for w in p.split() if len(w) >= 4 and len(p.split()) >= 2}
 
 
 def _reader_vocabulary() -> set:
@@ -127,6 +146,41 @@ def test_the_real_fusions_were_not_eaten():
                        ("stopalpha", "stop alpha"), ("restart thedb vm", "the db"),
                        ("ifalpha is stopped, launch it", "if alpha")):
         assert want in FD.read(text, known=LAB).text, f"{text!r} no longer opens to {want!r}"
+
+
+def test_false_typos_is_well_formed_and_none_is_dead():
+    """Every member must still be an English word one edit from a phrase word AND not already
+    vetoed by the `known` guard — otherwise the list is carrying it for nothing."""
+    s = codex.FALSE_TYPOS
+    assert len(s) >= 50, f"only {len(s)} declared — the derivation did not run to completion"
+    known = _reader_vocabulary()
+    targets = _phrase_words()
+    dead = sorted(w for w in s
+                  if w in known or not any(FD._damerau1(w, t) for t in targets))
+    assert not dead, (
+        f"{len(dead)} DEAD entries in FALSE_TYPOS — either now covered by the `known` guard or "
+        f"no longer one edit from any phrase word: {dead[:12]}")
+
+
+def test_the_typo_veto_actually_fires():
+    """The ruling, in the frames that motivated it."""
+    still = []
+    for text in ("forgot it, stop alpha", "no want, stop alpha", "never find the vm",
+                 "i meat alpha", "tall me which vms are up", "take that snapshot",
+                 "i mean alpha"):
+        got = FD.read(text, known=LAB).text
+        if got != text:
+            still.append((text, got))
+    assert not still, f"declared non-typos were still repaired: {still}"
+
+
+def test_the_real_typos_were_not_eaten():
+    """The capability stage 2 exists for must survive the veto."""
+    inside = [w for w in ("wati", "mesnt", "forgte", "tlel", "cancle", "nevre", "wree", "wehn")
+              if w in codex.FALSE_TYPOS]
+    assert not inside, f"{inside} are declared NON-typos, which disables the repair for them"
+    for text, want in REAL_TYPOS:
+        assert want in FD.read(text, known=LAB).text, f"{text!r} no longer repairs to {want!r}"
 
 
 # THE ENTRY POINT BELONGS AT THE BOTTOM — `main()` ends in `sys.exit`, so anything defined below

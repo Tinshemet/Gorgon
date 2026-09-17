@@ -383,6 +383,25 @@ def _read_stages(request: str, board=None) -> View:
                                    + WRAPPERS + COURTESY)
                if len(p.split()) >= 2]
     taken = [(s, e) for s, e, _ in edits]
+    # ⇒⇒ **AN EXACT PHRASE IS NOT A TYPO OF A DIFFERENT PHRASE** (2026-09-17). `i mean` and
+    #   `i meant` are BOTH declared corrections. The exact match produced no edit — correctly,
+    #   there is nothing to repair — but it also left the span free, so the next phrase tried
+    #   `mean` against `meant`, found one edit, and rewrote a valid closed phrase into another
+    #   one. Claiming every exactly-matched phrase FIRST is the whole fix.
+    for pwords in phrases:
+        for i in range(len(toks) - len(pwords) + 1):
+            window = toks[i:i + len(pwords)]
+            if all(w == pw for (w, _s, _e), pw in zip(window, pwords)):
+                taken.append((window[0][1], window[-1][2]))
+    # ⇒⇒ **AND A WORD THE SYSTEM ALREADY KNOWS IS NEVER A TYPO OF ANYTHING** (2026-09-17). This
+    #   loop had no `known` guard at all, so `take that snapshot` became `make that snapshot` —
+    #   one declared OPERATION VERB rewritten into another, which changes the act. Stage 3 has
+    #   carried this guard since 2026-09-08 ("a word in any declared closed class is a real word
+    #   and a real word is never repaired"); stage 2 never got it.
+    _, _, _, _known = _vocab(board)
+    # ⇒ AND AN ENGLISH WORD IS NEVER A TYPO EITHER (codex, operator ruling 2026-09-17:
+    #   *"forgot it stays as typed"*). 144 declared; veto only, never a licence.
+    from ...english.codex import FALSE_TYPOS as _FALSE_TYPOS
     for pwords in phrases:
         for i in range(len(toks) - len(pwords) + 1):
             window = toks[i:i + len(pwords)]
@@ -391,6 +410,7 @@ def _read_stages(request: str, board=None) -> View:
                 if w == pw:
                     continue
                 if (fuzzy is None and len(w) >= 4 and len(pw) >= 4
+                        and w not in _known and w not in _FALSE_TYPOS
                         and _damerau1(w, pw)):
                     fuzzy = (w, s, e, pw)
                 else:

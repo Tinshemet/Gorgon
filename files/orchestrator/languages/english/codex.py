@@ -942,3 +942,39 @@ FALSE_FUSIONS = frozenset({
     "whereat", "whereby", "wherein", "whereof", "whereon", "whereupon", "willis", "wither",
     "without",
 })
+
+
+# ⇒⇒ **AN ENGLISH WORD ONE EDIT FROM A CLOSED PHRASE IS STILL THAT WORD.** Stage 2 of the front
+#   door repairs a typo'd word INSIDE a declared phrase — `no wati` -> `no wait`, `i mesnt` ->
+#   `i meant` — and `forgot it` is one edit from the retraction `forget it` while being an
+#   ordinary English sentence. Operator ruling 2026-09-17: **`forgot it` stays as typed.**
+#   ⇒ SAME PRINCIPLE AS [[FALSE_FUSIONS]] ABOVE, at a different pass: a real word is never a
+#     typo. Two sets rather than one because the DERIVATIONS differ — that one is `known`
+#     INTERSECT words-that-decompose, this one is `known`-complement INTERSECT one-edit-from-a-
+#     phrase-word — and merging them would hide which pass needs which entry.
+#   ⇒ DERIVED ONCE, OFF-LINE, the same way: every dictionary word >=4 letters at Damerau
+#     distance 1 from a phrase word of `self_repair.CORRECTIONS/RETRACTIONS` or
+#     `speech_act.WRAPPERS/COURTESY`. 154 exist; 10 are already vetoed because stage 2 now
+#     carries the `known` guard stage 3 has had since 2026-09-08, leaving these 144.
+#   ⇒ PROPER NOUNS ARE KEPT ON PURPOSE. `megan` is one edit from `mean` and a plausible machine
+#     name; the operator's rule that a typo'd name is the name applies to a name that is not
+#     even typo'd, so vetoing it costs nothing and refusing to would be the safety-bad
+#     direction.
+#   ⇒ VETO ONLY, and the same staleness caveat: a phrase added to a closed set mints traps this
+#     list will not have. `tests/test_false_fusions.py` proves no member is dead.
+FALSE_TYPOS = frozenset({
+    "await", "bait", "bake", "bather", "bean", "bela", "belau", "belays", "bell", "belly",
+    "bind", "cake", "cancels", "cancer", "cather", "cell", "chanced", "chancel", "chances",
+    "chancy", "change", "chat", "chen", "dean", "delay", "dell", "disregards", "ever", "fake",
+    "father", "fell", "fever", "find", "forge", "forged", "forger", "forges", "forgets",
+    "forgot", "gait", "gather", "gere", "hake", "hell", "here", "hind", "ignored", "ignores",
+    "jake", "jean", "jell", "knew", "knob", "knot", "known", "knows", "knox", "lake", "lather",
+    "lean", "lever", "lind", "mace", "made", "maker", "male", "mane", "mare", "mate", "mather",
+    "maze", "mead", "meal", "means", "meany", "meat", "medan", "megan", "mend", "mere", "mike",
+    "mild", "minds", "mindy", "mine", "mined", "ming", "mini", "mink", "minn", "mint", "minx",
+    "moan", "nell", "newer", "rake", "rasher", "relay", "rind", "sake", "scratchy", "sean",
+    "sell", "sere", "sever", "shat", "snow", "tall", "teal", "teat", "tells", "thad", "thai",
+    "thant", "thar", "thaw", "till", "toll", "tull", "waft", "waif", "wail", "waist", "waite",
+    "waits", "wake", "walt", "want", "ware", "wart", "watt", "wean", "weer", "well", "whens",
+    "whet", "whew", "whey", "whit", "wind", "wore", "wren", "writ", "yell",
+})
