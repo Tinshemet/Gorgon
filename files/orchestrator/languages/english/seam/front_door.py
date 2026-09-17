@@ -14,18 +14,31 @@ every reader forever. This module is the one pass instead: it runs BEFORE anythi
               lands on the ORIGINAL bytes — gold offsets and frozen sets untouched
     notices   one line per fix, surfaced — recognition is visible, never silent
 
-⇒⇒ WHAT IT MAY TOUCH — exactly two things, both closed:
-    1. a FILLED PAUSE (`iso.FILLED_PAUSE`, exact match) is dropped with its separator
-    2. a typo'd word INSIDE a closed-set phrase is read as the phrase word: every other
-       word of the phrase exact, the odd word >=4 letters at Damerau distance 1. The
-       phrases are the ones that already exist — `self_repair.CORRECTIONS/RETRACTIONS`,
-       `speech_act.WRAPPERS/COURTESY` — one copy each, imported.
+⇒⇒ WHAT IT MAY TOUCH — six passes, and EVERY candidate comes from a CLOSED set:
+    0   unicode spaces -> ' ', one character for one character (announced since 09-17)
+    0a  a SEPARATOR joining two known closed words -> a space (`db-down`), same length
+    0b  a FUSED pair with no separator, split only where the fusion hides a closed word
+    1   a FILLED PAUSE (`iso.FILLED_PAUSE`, exact match) dropped with its separator
+    2   a typo'd word INSIDE a closed-set phrase read as the phrase word: every other
+        word of the phrase exact, the odd word >=4 letters at Damerau distance 1. The
+        phrases are the ones that already exist — `self_repair.CORRECTIONS/RETRACTIONS`,
+        `speech_act.WRAPPERS/COURTESY` — one copy each, imported.
+    3   a LONE typo'd word, by N2's SIM CHECK (see the ruling below)
+    4   a missing CLAUSE BREAK restored where `pass2.merge_cut_points` votes (N3)
+
+⇒⇒ **AN OPERATION VERB *IS* REPAIRABLE, and this list said the opposite for a month.**
+    The 14:44 draft of this file (0f22b30, 2026-08-19) put an OPERATION VERB under NEVER
+    TOUCHES. N2 landed at 21:42 THE SAME DAY (07d0301) carrying the operator's ruling —
+    *"very distinct common words like thrm = them, OR EVEN VERBS — the system should try
+    to correct it"* — and the sim check has licensed a clause-initial verb ever since.
+    The stale line survived 14 commits to this file and was found by the property sweep
+    on 2026-09-17. A verb repair needs its slot to vote (clause-initial, or after
+    `then`/`and`/`but`) exactly like every other class; `restrt` stays only because no
+    single declared print explains it, not because verbs are exempt.
 
 ⇒⇒ WHAT IT NEVER TOUCHES — the operator's rulings, structural here by construction:
-    · a NAME — a typo'd name is the name (`alpah` stays `alpah`); only words sitting
-      inside a matched closed phrase can ever be edited, and names cannot sit there
-    · an OPERATION VERB — `restrt` measured as recoverable: imperative shape still
-      routes it and translation is the model's job
+    · a NAME — a typo'd name is the name (`alpah` stays `alpah`): every candidate is
+      drawn from a closed set, so a name can never BE one
     · anything in QUOTES — evidence is opaque testimony
     · a lone unknown word whose SLOT does not vote — single-word recognition (N2, the
       operator's ruling) fixes sure hits and runs the SIM CHECK on the rest: candidates
@@ -78,6 +91,14 @@ def read(request: str, board=None, known=None) -> View:
     recognition, so the operator's rule holds: a typo'd name is still the name (`alpah` stays)."""
     _req = str(request)
     text = _despace(_req)            # unicode spaces -> ' ' (same length, offsets byte-exact)
+    # ⇒ AND IT SAYS SO (operator ruling 2026-09-17, found by the property sweep). The fold
+    #   changes bytes, and *"recognition is visible, never silent"* admits no exception for a
+    #   change that happens to be harmless: a request pasted from a rendered doc IS edited, and
+    #   the operator has to be able to see that it was. ONE notice however many folded — the
+    #   count carries the information and a line per character would be the noise that makes
+    #   notices stop being read.
+    _folded = sum(1 for a, b in zip(_req, text) if a != b)
+    notes_d = [f"folded {_folded} unicode space{'' if _folded == 1 else 's'} to ' '"] if _folded else []
     # 0 · SEPARATOR-JOINED closed words -> spaces (2026-09-02): a hyphen/underscore joining two
     #     KNOWN closed words (or declared standing objects) is a fusion separator the tokenizer
     #     already sees but the text kept, so `do-not-stop-x`/`db-down` never fed the words apart.
@@ -95,9 +116,9 @@ def read(request: str, board=None, known=None) -> View:
         text0, back0 = _apply(text, edits0)
         inner = _read_stages(text0, board)
         back = [back0[b] for b in inner.back]
-        return View(inner.text, back, notes_s + notes0 + inner.notices + _shape_pass(inner.text), _req)
+        return View(inner.text, back, notes_d + notes_s + notes0 + inner.notices + _shape_pass(inner.text), _req)
     inner = _read_stages(text, board)
-    return View(inner.text, inner.back, notes_s + inner.notices + _shape_pass(inner.text), _req)
+    return View(inner.text, inner.back, notes_d + notes_s + inner.notices + _shape_pass(inner.text), _req)
 
 
 def defused(request: str, board=None, known=None) -> str:
