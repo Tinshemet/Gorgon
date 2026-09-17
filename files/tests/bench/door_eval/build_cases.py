@@ -28,19 +28,28 @@ this surface needs.
 ⇒ EVERY CASE CARRIES ITS `why`, naming the ruling or the closed set it comes from, so a
   disagreement can be adjudicated without re-deriving why the case exists.
 
-⇒⇒ **TWO PASSES ARE DELIBERATELY NOT COVERED, AND SAYING SO IS THE POINT.** The corpus scores
-  five of the door's seven passes. It does NOT score:
+⇒⇒ **`_split_pass` IS SCORED, AND ITS GOLD COMES FROM AN AUTHORITY OUTSIDE GORGON.** The first
+  build skipped it: which fusions "hide a closed word" looked like a rule that lives in code, so
+  deriving cases would have meant writing gold from what the door does. Re-reading the function's
+  own docstring settles it — *"an UNKNOWN token that splits into two known words is read apart"*.
+  **UNKNOWN is the whole contract, and a real English word is not an unknown token.** So:
 
-    0b  `_split_pass`  — fused words with NO separator. Which fusions "hide a closed word" is
-                        not stated anywhere as a rule; deriving cases would mean reading the
-                        implementation and writing gold from what it does, which is the circle
-                        this file exists to avoid.
+    must_repair      a fused token that is NOT a word, built from closed words (`stopthe`)
+    must_not_touch   a real English WORD that happens to decompose (`stopping`, `antiseptic`)
+
+  The `must_not_touch` half is adjudicated by `/usr/share/dict/american-english` — an authority
+  with no knowledge of this project — and the words are inlined here rather than read at build
+  time so the corpus stays portable and frozen.
+
+⇒⇒ ONE PASS IS STILL NOT COVERED, AND SAYING SO IS THE POINT.
+
     4   N3 comma restore — the cut points come from `pass2.merge_cut_points`, whose rule is a
-                        body of code rather than a stated contract. Same circle.
+                        body of code rather than a stated contract. Deriving cases would be the
+                        circle this file exists to avoid. Closing it means first writing that
+                        rule down as a spec, which is its own piece of work.
 
-  Both are real capabilities and both are UNMEASURED by this corpus. Closing them means first
-  writing down the rule they implement, as a spec, and that is its own piece of work. A number
-  from this corpus is a number about five passes and must be quoted that way.
+  A number from this corpus is a number about SIX of the door's seven passes, and must be quoted
+  that way.
 
 Usage:  PYTHONPATH=. python3 -m tests.bench.door_eval.build_cases       # writes cases.jsonl
 """
@@ -55,8 +64,14 @@ OUT = os.path.join(HERE, "cases.jsonl")
 CASES: list = []
 
 
+# ⇒ DISTINCT PREFIXES. `bucket[:2]` gave `must_repair` and `must_not_touch` the SAME prefix, so
+#   `mu-0052` named two different cases and a disagreement could not be cited unambiguously.
+#   Found 2026-09-17 by reading the score output rather than by any check — worth a check.
+_PREFIX = {"must_repair": "mr", "must_not_touch": "mn", "ambiguous": "am"}
+
+
 def case(bucket: str, text: str, expect: str, why: str, ask: str = "") -> None:
-    CASES.append({"id": f"{bucket[:2]}-{len([c for c in CASES if c['bucket'] == bucket]) + 1:04d}",
+    CASES.append({"id": f"{_PREFIX[bucket]}-{len([c for c in CASES if c['bucket'] == bucket]) + 1:04d}",
                   "bucket": bucket, "text": text, "expect": expect, "ask": ask, "why": why})
 
 
@@ -183,6 +198,59 @@ for _bad, _good, _slot in (
     ("stop the runnin vms",          "stop the running vms",         "status, pre-nominal before a kind"),
 ):
     case("must_repair", _bad, _good, f"stage 3 (N2 sim check): {_slot}")
+
+# ── must_repair · FUSED TOKENS THAT ARE NOT WORDS (pass 0b, `_split_pass`) ───────────────────
+# The contract's own word is UNKNOWN. None of these is an English word; each is two closed words
+# run together, which is exactly what the pass exists to open. Constructed here from the closed
+# sets rather than copied from the module's comments, so they are not the door's own examples
+# handed back to it.
+for _bad, _good in (
+    ("stopthe web vm",        "stop the web vm"),
+    ("onthe lab network",     "on the lab network"),
+    ("isnot running",         "is not running"),
+    ("ifalpha is stopped, restart it", "if alpha is stopped, restart it"),
+    ("the testvms",           "the test vms"),
+):
+    case("must_repair", _bad, _good,
+         "pass 0b: an UNKNOWN token (not an English word) made of two closed words")
+
+# ⇒ `restartalpha` IS NOT HERE, and the reason is a finding. `restart` is absent from
+#   `_operation_words` entirely — not in `ops`, not in `known`, and neither is `reboot` — so the
+#   door has nothing to split toward and nothing to repair `restrt` toward either. That resolves
+#   the module docstring's claim that "`restrt` measured as recoverable": it survives because the
+#   VOCABULARY lacks the word, not because verbs are exempt. Whether a common operation verb
+#   belongs in the closed sets is an OPERATOR question, so no case asserts an answer.
+
+# ── must_not_touch · A REAL WORD IS NOT AN UNKNOWN TOKEN ─────────────────────────────────────
+# ⚠⚠ THE BUCKET THE 2026-09-17 SWEEP EXISTS FOR. Each of these is in
+# `/usr/share/dict/american-english`. The pass's contract says it opens an UNKNOWN token; a word
+# in the dictionary is known to English whether or not Gorgon has enumerated it, so every one of
+# these must come back byte-identical. The first six are the ones an operator will actually type.
+for _w in ("stopping", "startup", "markup", "takeover", "runoff", "runaway",
+           "somewhere", "nowhere", "somehow", "everywhere", "insure", "beat",
+           "theme", "notable", "meat", "cabinet", "merchants", "antiseptic",
+           "animator", "novelties", "shadowbox", "nonmembers", "understate", "backer"):
+    case("must_not_touch", f"stop the {_w} vm", f"stop the {_w} vm",
+         f"{_w!r} is an English word (system dictionary) — not an UNKNOWN token, never split")
+# and in the frames where the damage was actually observed, not just the sweep frame
+for _t in ("the web vm is stopping",
+           "check the startup scripts",
+           "there is nowhere to put it",
+           "beat the deadline",
+           "the markup is wrong"):
+    case("must_not_touch", _t, _t,
+         "a real English word in a natural operator sentence — observed damaged 2026-09-17")
+
+# ── must_not_touch · THE MANIFEST'S OWN MISSPELLING MUST NOT BE PROPAGATED ───────────────────
+case("must_not_touch", "stop the boxes vm", "stop the boxes vm",
+     "`boxes` is correct English; `boxs` is a MISSPELLING in the manifest's noun set, and the "
+     "door 'corrects' the right spelling into it (2026-09-17). The defect is the manifest's, "
+     "but the door must not propagate it.")
+
+case("must_not_touch", "restrt alpha", "restrt alpha",
+     "`restart` is absent from `_operation_words`, so there is no candidate to repair toward. "
+     "This case pins TODAY's behaviour; if `restart` is ever added to the closed sets it must "
+     "move to must_repair, and this line is where that decision becomes visible.")
 
 # ── ambiguous · THE RIGHT ANSWER IS TO ASK ───────────────────────────────────────────────────
 for _t, _why in (
