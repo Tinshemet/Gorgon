@@ -147,24 +147,29 @@ def read_case(sentence: str, board=None) -> dict:
     _known = set(_active_library())
     _original = sentence            # ORIGINAL bytes: row offsets remap back here (annotate_roles context)
     view = FD.read(sentence, known=_known)                   # declared standing objects de-fuse (db-down)
-    # ⇒ THE RULE LAYER READS THE DE-FUSED ORIGINAL (2026-09-06, marathon negation gap): annotate_roles
-    #   regexes `reading["sentence"]` — which was the RAW bytes — while the MODEL was handed the
-    #   normalized view. So a separator fusion stayed fused at the rule layer: `do-not-stop-beta`
-    #   normalized to `do not stop beta` for the model, but `_IMPNEG` was still matching against
-    #   `do-not-stop-beta` and could never fire, leaving a PROHIBITED target labelled `patient`
-    #   (the safety bug that rule exists to kill). Every regex rule below was reading raw text —
-    #   the separator pass was built (2026-09-02) and never called where three of the four fixes
-    #   actually work. The separator pass is same-length by construction, so the de-fused original
-    #   is offset-IDENTICAL to the original and the rows' remapped offsets still index it exactly.
-    #   ...and when the WHOLE view is the same length as the original it is offset-identical, so
-    #   the rule layer can have all of it — separator splits AND typo repairs. Without this the
-    #   rules still saw the typo: `is alpah rynning` was repaired to `running` for the MODEL, while
-    #   `_POLARQ` went on matching `rynning`, which is not a manifest status, so the polar-query
-    #   rule could not fire and the status was dropped (2026-09-08). Same defect as the separator
-    #   one above, one pass further on. A length change means `_split_pass` fired and the offsets
-    #   no longer correspond, so that case keeps the separator-only text.
-    _defused = FD.defused(_original, board, _known)
-    _original = view.text if len(view.text) == len(_original) else _defused
+    # ⇒⇒ **THE RULE LAYER READS THE WHOLE VIEW NOW, AND THE LENGTH CAP IS GONE** (2026-09-17).
+    #   THE HISTORY, because it is three instances of one defect and the third is this line:
+    #     · 2026-09-06 — `annotate_roles` regexed the RAW bytes while the model got the
+    #       normalized view, so `do-not-stop-beta` stayed fused at the rule layer, `_IMPNEG`
+    #       could never fire, and a PROHIBITED target was labelled `patient`. Fixed by handing
+    #       the rules the SEPARATOR-ONLY view, which is same-length by construction.
+    #     · 2026-09-08 — the same shape one pass on: `is alpah rynning` was repaired for the
+    #       model while `_POLARQ` still matched `rynning`, and the status was dropped. Fixed by
+    #       letting the rules have the WHOLE view — but only when it happened to be the same
+    #       length, because a length change breaks the coordinate correspondence.
+    #     · 2026-09-17 — that CAP was the third instance. Five of the door's seven passes change
+    #       length (pause drop, phrase typo, word typo, comma restore, word split), so whenever
+    #       any of them fired the rules fell back to separator-only text and saw NONE of the
+    #       repairs. Measured: 6 of 137 gold cases, 46 of 2000 frozen turns — and in every gold
+    #       case the discarded repair was a RESTORED COMMA, which is precisely what the
+    #       negation-scope rule searches for (`[,;.]| then | but `) to find where a clause ends.
+    #       The comma-restore pass exists to hand downstream readers a boundary and its only
+    #       reader in this harness had it thrown away.
+    #   ⇒ THE COORDINATES ARE NOW CARRIED, NOT GUESSED AT. Rows keep `vstart`/`vend` beside the
+    #     reported offsets and the reading carries `view` + `back`; `annotate_roles` enters view
+    #     space, runs, and remaps on the way out. So the rules read the repaired text at any
+    #     length and the reported spans still land on the ORIGINAL bytes. `FD.defused` is no
+    #     longer called from here at all — there is nothing left for it to rescue.
     sentence = view.text
     rows = P1.run_scanned(sentence, board=board)
     table = P2.symbol_table(rows, board)
@@ -493,11 +498,21 @@ def read_case(sentence: str, board=None) -> dict:
         for d in group:
             for a, z in (("start", "end"), ("clause_start", "clause_end")):
                 if d.get(a) is not None and d.get(z) is not None:
+                    # ⇒ KEEP THE VIEW COORDINATES TOO (2026-09-17). Everything above was built
+                    #   against `view.text` — the REPAIRED text — and is about to be reported in
+                    #   ORIGINAL bytes so gold offsets still hold. Both are true and the rule
+                    #   layer needs the first: `annotate_roles` regexes the sentence AND slices
+                    #   it by these offsets, so text and offsets must share a coordinate space.
+                    #   Keeping both is what lets it work on the repaired text without the
+                    #   reported spans moving. See the note at `_original`'s fallback above.
+                    d["v" + a], d["v" + z] = d[a], d[z]
                     d[a], d[z] = _b[d[a]], _b[d[z]]
     return {"rows": predicted_spans, "operations": operations, "sentence": _original,
             "triggers": predicted_triggers, "queries": predicted_queries,
             "rules": predicted_rules, "reports": predicted_reports,
-            "instructs": predicted_instructs}
+            "instructs": predicted_instructs,
+            # ⇒ THE REPAIRED TEXT AND THE MAP BACK OFF IT — what the rule layer runs on.
+            "view": sentence, "back": _b}
 
 
 _ACTIVE_LIBRARY = None
@@ -552,7 +567,39 @@ def annotate_roles(reading: dict) -> dict:
 
     Kept a separate pass (not folded into read_case) so the expensive seam reading can be
     cached once and this cheap annotation iterated over it.
+
+    ⇒⇒ **IT RUNS IN VIEW SPACE — ON THE TEXT THE FRONT DOOR ACTUALLY REPAIRED** (2026-09-17).
+      Every rule below regexes `reading["sentence"]` AND slices it by row offsets, so the text
+      and the offsets must share one coordinate space. `read_case` reports ORIGINAL bytes (gold
+      offsets have to keep holding), and a repair that CHANGES LENGTH cannot be expressed there
+      — so the runner used to fall back to `FD.defused`, the separator-only view, and the rule
+      layer read text with the pauses, typos and restored commas MISSING. Measured: the fallback
+      fired on 6 of 137 gold cases and 46 of 2000 frozen turns, and in every gold case the lost
+      repair was a RESTORED COMMA — which is exactly what the negation-scope rule below hunts
+      for when it searches `[,;.]| then | but ` for where a clause ends. The pass that exists to
+      hand downstream readers a boundary had its output discarded by the only reader that wanted
+      it.
+      ⇒ THE FIX IS A COORDINATE SWAP, NOT A REWRITE. `read_case` now keeps `vstart`/`vend`
+        alongside the reported offsets and returns the repaired `view` plus the `back` map. This
+        function enters view space, runs UNCHANGED, and remaps on the way out — so none of the
+        two hundred lines between here and the return had to learn about coordinates, and rows
+        this pass CREATES from a regex over the view get mapped back with everything else.
+      ⇒ AND IT DEGRADES HONESTLY. A caller that hands over a reading with no `view`/`back` (an
+        older capture, a hand-built dict in a unit test) skips the swap and behaves exactly as
+        before — the rules simply read the original bytes, as they did until today.
     """
+    # ── enter VIEW space ──────────────────────────────────────────────────────────────────
+    _vs_back = reading.get("back")
+    _vs_view = reading.get("view")
+    _vs_orig = reading.get("sentence")
+    _in_view = _vs_back is not None and _vs_view is not None
+    if _in_view:
+        reading["sentence"] = _vs_view
+        for _vp in reading.get("rows", []) or []:
+            for _a, _z in (("start", "end"), ("clause_start", "clause_end")):
+                if _vp.get("v" + _a) is not None:
+                    _vp[_a], _vp[_z] = _vp["v" + _a], _vp["v" + _z]
+
     ops = reading.get("operations", [])
     patient_rows = {o["on_row"] for o in ops if o.get("on_row") is not None}
     value_rows   = {o["value_row"] for o in ops if o.get("value_row") is not None}
@@ -1195,6 +1242,19 @@ def annotate_roles(reading: dict) -> dict:
                 continue                      # inside a passed-through quotation — dropped
             _kept.append(_p)
         reading["rows"] = _kept
+
+    # ── leave VIEW space: every row, including the ones created above, reports ORIGINAL bytes
+    if _in_view:
+        reading["sentence"] = _vs_orig
+        _last = len(_vs_back) - 1
+        for _vp in reading.get("rows", []) or []:
+            for _a, _z in (("start", "end"), ("clause_start", "clause_end")):
+                _s, _e = _vp.get(_a), _vp.get(_z)
+                if _s is None or _e is None:
+                    continue
+                _vp["v" + _a], _vp["v" + _z] = _s, _e
+                _vp[_a] = _vs_back[min(max(_s, 0), _last)]
+                _vp[_z] = _vs_back[min(max(_e, 0), _last)]
     return reading
 
 

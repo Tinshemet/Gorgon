@@ -9,7 +9,9 @@ Four of them, in one audit, each one silent for weeks and each one quoted as a r
       corpus built to be adversarial contained no noise at all and said nothing about it
     a length-changing front-door repair is discarded before the rule layer, so the door's
       PRIMARY operation (dropping a filled pause always changes length) was invisible to
-      every rule in every run ever made
+      every rule in every run ever made  — **CLOSED 2026-09-17**: rows now carry `vstart`/
+      `vend` beside the reported offsets, `annotate_roles` enters view space and remaps on the
+      way out, and test 4 asserts the invariant instead of the symptom
     a results file records its overlap threshold and its temperature, but not WHICH BUILDER
       produced it — so no stored number can be attributed to a code path after the fact
 
@@ -29,8 +31,12 @@ been caught the day it appeared.
 integrity check that gets skipped, and a skipped check is the same silence this file exists to
 break. Every assertion below reads source, corpus or results — nothing calls the model.
 
-STATE AT BIRTH (2026-09-17): five of six RED, deliberately. They are the defects, not the test
-being wrong. Each failure message names the fix.
+STATE AT BIRTH (2026-09-17): five of six RED, deliberately — they are the defects, not the test
+being wrong, and each failure message names the fix.
+STATE NOW: FOUR red. The length-cap fallback is closed; what remains is the two-builder
+divergence, the noiseless frozen ruler, the faithfulness gate that failed 2000/2000 in silence,
+and results files that cannot be attributed to a builder. The first is phase B2's whole subject
+and the middle two are one re-freeze.
 """
 from __future__ import annotations
 
@@ -161,46 +167,82 @@ def test_the_faithfulness_gate_is_not_failing_silently():
         f"during the freeze before touching the gate.")
 
 
-# ⇒ 4 — THE DOOR'S PRIMARY OPERATION, INVISIBLE TO EVERY RULE.
-def test_a_front_door_repair_survives_into_the_text_the_rules_read():
-    """What the rule layer reads must carry the repairs the front door made.
+# ⇒ 4 — THE RULE LAYER READS WHAT THE DOOR REPAIRED, AT ANY LENGTH.
+def test_the_rule_layer_reads_the_repaired_text():
+    """`annotate_roles` must regex the text the front door actually produced.
 
-    `read_case` keeps the repaired view only when it is the same LENGTH as the original,
-    and falls back to `FD.defused` otherwise, because a length change means offsets moved.
-    Sound reasoning, wrong consequence: dropping a filled pause ALWAYS changes length, so
-    the door's first documented operation never reaches a rule.
+    ⇒ THIS TEST WAS REWRITTEN ON 2026-09-17 AND ITS FIRST FORM SAID SO IN ADVANCE. It used to
+      assert that `FD.defused` — what `read_case` fell back to whenever a repair changed length —
+      still carried the repairs, which it never did and never will. Its own docstring named the
+      alternative: *"if the fix instead teaches `read_case` to remap offsets and keep the
+      repaired view, this test is the one to update."* That is the fix that landed, so the
+      assertion now names the real invariant instead of the symptom.
 
-    ASSERTED ON `defused` RATHER THAN ON `read_case`, so that no copy of the runner's
-    conditional lives here to rot. If the fix instead teaches `read_case` to remap offsets
-    and keep the repaired view, this test is the one to update — say so in the commit.
+    ⇒ THE DEFECT IT REPLACES, measured: five of the door's seven passes change length, so any of
+      them firing sent the rule layer back to separator-only text. 6 of 137 gold cases, 46 of
+      2000 frozen turns, and in every gold case the discarded repair was a RESTORED COMMA —
+      which is what the negation-scope rule hunts for to find where a clause ends. The
+      behavioural case below is the consequence: with the comma missing, `dont`'s scope ran to
+      the end of the sentence and the whole `unless` clause was labelled EXCLUDED — five spans
+      carved out of the action set that belong in it.
+
+    ⇒ MODEL-FREE. The reading is built by hand from `FD.read`, so pass 1 and pass 2 never run.
     """
+    import re
     from orchestrator.languages.english.seam import front_door as FD
+    from tests.bench.read_eval.runner import annotate_roles
 
-    lost, exercised = {}, 0
-    for s in ("um, stop alpha", "uh stop alpha", "stop alpha um"):
-        view = FD.read(s)
-        if len(view.text) == len(s):
+    lab = ("lab", "dmz", "alpha", "beta", "web", "db", "jumpbox")
+
+    def reading_for(text, *, legacy):
+        view = FD.read(text, known=lab)
+        toks = [(m.group(0), m.start(), m.end())
+                for m in re.finditer(r"[a-z']+", view.text.lower())]
+        rows = [{"row": i, "type": "object", "span": w,
+                 "start": view.back[a], "end": view.back[b], "vstart": a, "vend": b}
+                for i, (w, a, b) in enumerate(toks)]
+        out = {"sentence": FD.defused(text, None, lab) if legacy else text,
+               "rows": rows, "operations": []}
+        if not legacy:
+            out["view"], out["back"] = view.text, view.back
+        return out, view
+
+    # (a) THE COORDINATE ROUND-TRIP IS EXACT. If the remap is wrong every reported span moves,
+    #     which would be a far worse defect than the one being fixed.
+    probes = ["stop alpha unless it is the jumpbox", "um, stop alpha",
+              "stop the lab vms all at once", "it would be great if alpha were down"]
+    exercised, moved = 0, []
+    for text in probes:
+        reading, view = reading_for(text, legacy=False)
+        if len(view.text) == len(text):
             continue                       # not a length-changing repair; nothing to prove here
         exercised += 1
-        dropped = set(_tok(s)) - set(_tok(view.text))
-        survived_into_fallback = dropped & set(_tok(FD.defused(s)))
-        if survived_into_fallback:
-            lost[s] = sorted(survived_into_fallback)
+        annotate_roles(reading)
+        assert reading["sentence"] == text, f"{text!r}: the sentence was not restored"
+        for p in reading["rows"]:
+            if p.get("start") is None or p.get("sub"):
+                continue
+            want, got = (p.get("span") or "").lower(), text[p["start"]:p["end"]].lower()
+            if want and want not in got:
+                moved.append((text, want, got))
+    assert exercised >= 3, (
+        f"only {exercised} probes produced a length-changing repair — the door stopped repairing "
+        f"these, so this test proves nothing until its probes are rewritten")
+    assert not moved, f"reported spans moved off their text: {moved[:4]}"
 
-    # ⇒ NOT VACUOUSLY GREEN. Every probe above hitting `continue` would leave `lost` empty and
-    #   pass this test while proving nothing — the same "a green that cannot go red" defect the
-    #   conftest fixture was written for. If the door stops dropping filled pauses, this test
-    #   must go RED and be rewritten, not quietly congratulate itself.
-    assert exercised, (
-        "no probe produced a length-changing repair — the front door no longer drops filled "
-        "pauses, or FILLED_PAUSE changed. This test proves nothing until its probes are "
-        "rewritten against whatever the door repairs now.")
-
-    assert not lost, (
-        f"A LENGTH-CHANGING REPAIR IS DISCARDED BEFORE THE RULE LAYER: {lost}\n"
-        f"  `FD.read` drops these; `FD.defused` — what read_case falls back to whenever the "
-        f"view changes length — keeps them. Every rule regex therefore reads the UNrepaired "
-        f"text, and dropping a filled pause always changes length.")
+    # (b) AND THE RULES BEHAVE DIFFERENTLY BECAUSE THEY SEE THE REPAIR. Without the restored
+    #     comma `dont`'s scope never ends and the whole subordinate is excluded.
+    text = "dont stop alpha unless it is the jumpbox"
+    fresh, _ = reading_for(text, legacy=False)
+    annotate_roles(fresh)
+    wrongly_excluded = sorted(p["span"] for p in fresh["rows"]
+                              if p.get("role") == "excluded"
+                              and (p.get("span") or "") in ("unless", "it", "is", "the",
+                                                            "jumpbox"))
+    assert not wrongly_excluded, (
+        f"{wrongly_excluded} were labelled EXCLUDED — carved out of the action set. The "
+        f"negation's scope ran past the clause boundary, which means the rule layer is not "
+        f"reading the restored comma.")
 
 
 # ⇒ 5 — A NUMBER YOU CANNOT ATTRIBUTE IS NOT A RESULT.
