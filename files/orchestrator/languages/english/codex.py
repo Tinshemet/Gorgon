@@ -307,7 +307,39 @@ CLAUSE_WORDS = (" and then ", " then ", " and ", " but ")
 CUT_DETERMINERS = frozenset({"a", "an", "the", "every", "each", "all", "any", "both", "no",
                        "it", "them", "me", "us"})
 
-CUT_NEGATION = frozenset({"don't", "not", "never", "do", "no"})
+# ⇒⇒ **A NEGATED VERB IS NOT A FRESH IMPERATIVE, AND THIS LIST COVERED FOUR OF FOURTEEN FORMS.**
+#   `_first_cut`'s rule 6 refuses to open a second clause when a negator stands in front of the
+#   verb — that is what `prev not in _CUT_NEG` is for. It held `don't`, `not`, `no`, `never` and
+#   nothing else, so measured 2026-09-17: **ten of fourteen declared negator forms were cut away
+#   from the verb they negate.** `dont stop the web vm stop the db vm` became `dont, stop the web
+#   vm, stop the db vm` — a prohibition turned into a bare `dont` plus two UNQUALIFIED imperatives.
+#   The same failure for `doesnt` `doesn't` `didnt` `didn't` `cant` `can't` `cannot` `wont`
+#   `won't`; only the apostrophe form of `don't`, the spaced `do not`, `never` and `no` survived.
+#   ⇒ THIS IS COMPLETING A DECLARATION AGAINST ITS OWN STATED PURPOSE, not merging two readings.
+#     The file's header rightly says a MERGE is the operator's call; the guard's purpose is
+#     stated in one line and every form below serves it identically. `nope` and `nah` are
+#     deliberately absent — a standalone refusal does not negate a following verb, and cutting
+#     after one is defensible. `isn't` likewise: it is copular and cannot front a bare imperative.
+#   ⇒ SSOT — it MIRRORS `NEG_DO` and `NEG_MODALS`, which are declared further down this file for
+#     their own consumers. It cannot reference them from here without breaking the by-consumer
+#     sectioning, so `tests/test_clause_cuts.py` asserts the containment instead: every form in
+#     either set, and every apostrophe-less variant of one, must appear here.
+#   ⇒ OVER-INCLUSION IS THE SAFE DIRECTION. The guard only ever REFUSES a cut, so a word too many
+#     costs a missed clause break — visible downstream, and it becomes an ASK. A word too few
+#     silently strips a negation, which is the failure class this project keeps paying for.
+CUT_NEGATION = frozenset({
+    # the bare negators, and do-support's host
+    "do", "not", "no", "never",
+    # do-support negation — mirrors NEG_DO, both spellings
+    "don't", "dont", "doesn't", "doesnt", "didn't", "didnt",
+    # modal negation — mirrors NEG_MODALS, both spellings
+    "can't", "cant", "cannot", "won't", "wont",
+    "couldn't", "couldnt", "wouldn't", "wouldnt", "shan't", "shant",
+    # coordinate negation: `neither stop X nor Y`
+    "neither", "nor",
+    # the bare contraction the tokenizer can hand over on its own
+    "n't",
+})
 
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
