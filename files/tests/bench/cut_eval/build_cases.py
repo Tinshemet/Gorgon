@@ -22,8 +22,10 @@ and English has no boundary. The second half is where the number lives.
        refuse  `tell me which vms are up`  — a wrapper at position 0 is the clause, not
                a second one, and cutting at 0 would cut nothing off
 
-    3  `anyway` RELEASES WHAT STANDS BEHIND IT.
-       cut     `stop alpha anyway restart beta`        ->  before/after `anyway`
+    3  `anyway` RELEASES WHAT STANDS BEHIND IT — and is set off on BOTH sides.
+       cut     `stop alpha anyway restart beta`        ->  before `anyway` AND before
+               `restart`. The first freeze's gold named one cut; two is the English, so the
+               GOLD was wrong and the rule was right (corrected 2026-09-17).
        refuse  nothing to refuse — `anyway` is a single closed word with one job
 
     4  A MID-CLAUSE CONDITION HEAD ({if, unless} + EVENTS) opens a subordinate.
@@ -99,8 +101,14 @@ case(2, "must_not_cut", "let me know which vms are up", [],
      "the other declared wrapper, also clause-initial")
 
 # 3 · anyway
-case(3, "must_cut", "stop alpha anyway restart beta", ["anyway"],
-     "`anyway` releases what stands behind it")
+# ⇒ TWO CUTS, NOT ONE — GOLD CORRECTED 2026-09-17. The first freeze named one cut and the rule
+#   produced two; `stop alpha, anyway, restart beta` is the English, so the GOLD was wrong and
+#   the rule was right. Recorded rather than quietly amended: a corpus whose author silently
+#   retro-fits its answers to the code measures the code against itself, which is the one thing
+#   this whole eval exists to avoid.
+case(3, "must_cut", "stop alpha anyway restart beta", ["anyway", "restart"],
+     "`anyway` releases what stands behind it — the word is set off on BOTH sides, so the "
+     "clause behind it opens too")
 
 # 4 · a mid-clause condition head
 case(4, "must_cut", "restart alpha if it is down", ["if"],

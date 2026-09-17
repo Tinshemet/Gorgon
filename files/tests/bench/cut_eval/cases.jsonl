@@ -3,7 +3,7 @@
 {"id": "c2-01", "rule": 2, "bucket": "must_cut", "text": "stop alpha tell me when it is down", "before": ["tell"], "why": "a WRAPPER mid-clause opens its own clause"}
 {"id": "c2-02", "rule": 2, "bucket": "must_not_cut", "text": "tell me which vms are up", "before": [], "why": "a wrapper at position 0 IS the clause \u2014 cutting at 0 cuts nothing off"}
 {"id": "c2-03", "rule": 2, "bucket": "must_not_cut", "text": "let me know which vms are up", "before": [], "why": "the other declared wrapper, also clause-initial"}
-{"id": "c3-01", "rule": 3, "bucket": "must_cut", "text": "stop alpha anyway restart beta", "before": ["anyway"], "why": "`anyway` releases what stands behind it"}
+{"id": "c3-01", "rule": 3, "bucket": "must_cut", "text": "stop alpha anyway restart beta", "before": ["anyway", "restart"], "why": "`anyway` releases what stands behind it \u2014 the word is set off on BOTH sides, so the clause behind it opens too"}
 {"id": "c4-01", "rule": 4, "bucket": "must_cut", "text": "restart alpha if it is down", "before": ["if"], "why": "a mid-clause condition head opens a subordinate; cut in front of it"}
 {"id": "c4-02", "rule": 4, "bucket": "must_cut", "text": "stop the web vm unless it is the last one", "before": ["unless"], "why": "`unless` is the other declared head"}
 {"id": "c4-03", "rule": 4, "bucket": "must_not_cut", "text": "tell me if the db vm restarted", "before": [], "why": "whether-`if` ASKS and does not condition \u2014 the host word before it is the guard"}

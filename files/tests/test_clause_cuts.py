@@ -8,7 +8,7 @@ to a DECLARED set of open disagreements, so:
 
     a NEW disagreement          turns this red — a rule regressed, or a case was added
     a FIXED disagreement        ALSO turns this red — the manifest is stale, say so
-    the two we know about       pass, each with its reason written down
+    the one we know about       passes, with its reason written down
 
 That is the same shape as the eval/production parity manifest: the open list is data, in the
 repo, and drifting from it is an error rather than a thing somebody notices later.
@@ -39,9 +39,9 @@ CASES = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 # ⇒ THE OPEN LIST, and every entry carries WHY it is still open. Closing one means deleting its
 #   line here in the same commit — which is what makes a fix visible instead of silent.
 KNOWN_DISAGREEMENTS = {
-    "c3-01": "GOLD ERROR, mine: `stop alpha anyway restart beta` takes TWO cuts and the gold "
-             "names one. `stop alpha, anyway, restart beta` is the English. Left in place so "
-             "the disagreement list stays honest rather than retro-fitted.",
+    # c3-01 CLOSED 2026-09-17 — it was MY gold that was wrong, not the rule: `anyway` is set
+    #   off on both sides and takes two cuts. Corrected in the corpus with the reason written
+    #   at the case, so the amendment is visible rather than a silent retro-fit.
     # c7-04 CLOSED 2026-09-17 — `predicate_end`'s modal arm now checks that its head is a
     #   base-form operation word, so `put cant on the dmz network` is no longer read as
     #   testimony. This line is deleted rather than kept as history: the open list must say
