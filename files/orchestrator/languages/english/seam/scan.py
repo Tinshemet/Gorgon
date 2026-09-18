@@ -376,7 +376,31 @@ def _operation_words(board: Board) -> set:
             #     recognise in verb position. Every word here already names a tool the executor
             #     runs; what a clause MEANS stays the model's job, gated exactly as before.
             "claim", "clarify", "generate", "monitor", "open", "print", "provision",
-            "revert", "rollback", "scan", "send", "set", "show", "update"}
+            "revert", "rollback", "scan", "send", "set", "show", "update",
+            # ⇒ THE REMAINING FOUR TOOL HEADS (operator ruling 2026-09-18). `fleet`, `guest` and
+            #   `local` head a tool while being a noun or an adjective, and `checkpoint` heads one
+            #   while being a noun — the manifest declares no `checkpoint` KIND, so it is not a
+            #   dual and belongs here rather than in `DUAL_CLASS_VERBS`. They were held back as
+            #   open decisions and ruled in; the cost is measured, not assumed.
+            #   ⇒ ⚠ **`fleet` IS RULED IN AND MEASURED OUT.** The heuristic "the head of a tool
+            #     name is its verb" breaks on a SINGLE-SEGMENT tool that is a noun: the `fleet`
+            #     tool runs fleet operations, but the English word is a noun and nothing else.
+            #     Admitting it broke `test_values_reader::test_the_reason_clause_is_stripped_from
+            #     _the_rows` — `launch the fleet even though the lab network is slow` read its
+            #     patient as `even though` instead of `the fleet`. Isolated by removing it alone:
+            #     72 pass without, 71 with. Left OUT and recorded here rather than shipped as a
+            #     known regression; reinstating it means fixing that reading first, and that is
+            #     the operator's call.
+            "guest", "local", "checkpoint",
+            # ⇒⇒ **FREE-TRANSLATION VERBS — NO TOOL NAMES THEM** (operator ruling 2026-09-18).
+            #   `pass2.py`'s licence map has described this class since 08-19: *"A verb that names
+            #   NO operation (`restart`, `start`, `put`) licenses free translation — that is the
+            #   model's whole job on those clauses."* `restart` and `reboot` were admitted on that
+            #   reasoning earlier today; these are the rest of the class an operator actually
+            #   types. The grammar must see them in verb position so a clause is READ as an order
+            #   at all; what the order MEANS stays the model's, gated exactly as before.
+            "shutdown", "suspend", "resume", "pause", "migrate", "rename", "destroy",
+            "terminate", "halt", "attach", "detach", "mount", "deploy", "reset"}
     # ⇒ D5's root, closed 2026-08-18: `re.findall` shreds `add_vm_to_network` into
     #   segments and every segment became a "verb" — `to`, `as`, `of` let *"it boots TO a
     #   blue screen"* pass a does-this-clause-command-anything test, and 13 wrong-choice
