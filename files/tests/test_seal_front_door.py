@@ -90,17 +90,42 @@ def test_the_sealed_set_sizes_still_hold():
 def test_the_seal_still_declares_who_wrote_the_gold():
     """The honest half must survive editing, or the seal becomes a marketing document.
 
-    ⇒ THIS IS NOT PEDANTRY. Section 5 says Claude authored every case and the operator has
-      adjudicated none. That sentence is what tells a reader — a teacher, an auditor, a future
+    ⇒ THIS IS NOT PEDANTRY. Section 5 is what tells a reader — a teacher, an auditor, a future
       session — what the 100%s are worth. A seal that loses it still shows six green rows and
       means something entirely different.
+
+    ⇒⇒ **IT PINS THE INVARIANTS AND REQUIRES THE VARIABLE TO BE STATED — IT NO LONGER PINS THE
+      VARIABLE'S VALUE.** The first version asserted the literal string `"adjudicated none"`,
+      which made the test go red the moment the operator adjudicated anything: it conflated
+      *the disclosure must survive* with *this exact sentence must survive*, and would have
+      punished exactly the event the seal exists to record. Proven by simulating a signed seal
+      on 2026-09-18: `1 failed, 4 passed`.
+
+    ⇒ WHAT IS INVARIANT: Claude authored the cases, and WHICH cases exist is Claude's choice.
+      Review does not change either — adjudicating a case does not unwrite it, and it does not
+      add the cases nobody thought to write. Those two stay pinned.
+
+    ⇒ WHAT IS VARIABLE: how much the operator has adjudicated. The seal must SAY, in words, and
+      this asserts that it says something rather than that it says "none".
     """
+    import re
+
     text = _seal_text()
-    for must in ("Claude wrote all", "adjudicated none",
-                 "Which cases exist is Claude's choice"):
+    flat = " ".join(text.split())          # the sentence wraps; match it unwrapped
+
+    for must in ("Claude wrote all", "Which cases exist is Claude's choice"):
         assert must in text, (
-            f"the seal no longer says {must!r}. Section 5 is the line that decides what this "
-            f"seal is worth; it may be REVISED by the operator, never dropped.")
+            f"the seal no longer says {must!r}. This is TRUE WHATEVER THE OPERATOR RULES — "
+            f"review does not unwrite a case Claude wrote, and it does not add the cases nobody "
+            f"thought to write. Section 5 may be REVISED, never dropped.")
+
+    m = re.search(r"operator has adjudicated ([^.]{1,120})", flat)
+    assert m, (
+        "SECTION 5 NO LONGER STATES HOW MUCH THE OPERATOR HAS ADJUDICATED.\n"
+        "  It must say so in words — 'has adjudicated none of them', 'has adjudicated the 47 "
+        "that no external authority settles', whatever is true. A seal that shows six green "
+        "rows and is silent on who checked the gold is the marketing document this guards "
+        "against, and silence reads as 'reviewed' to everyone who does not know better.")
 
 
 def test_an_unsigned_seal_says_so():

@@ -29,7 +29,7 @@ Seven passes, all measured:
 ## 2 · Bound to these bytes
 
 ```
-git HEAD                   fc783e6
+git HEAD                   d897ee4
 door corpus  cases.jsonl   459f9fb3402adf49   (156 cases)
 cut corpus   cases.jsonl   6f2a73f93a68d89c   (29 cases)
 vocabulary fingerprint     c39c30a5b36f7db5
@@ -57,6 +57,25 @@ over a defined (synthetic) population.
 | 6,000 sampled dictionary words, one frame | **0/6000 · 0.00%** | rate |
 | 3,000 random English sentences, six frames | **0/3000 · 0.00%** | rate |
 
+### The environment the numbers were measured in
+
+⚠ **THE SUITE WAS NOT HERMETIC WHEN THE FIRST DRAFT OF THIS SEAL WAS WRITTEN.** Found
+2026-09-18: `planner/procedures.py` binds `LIBRARY = Store()` at module scope and `_home()`
+reads `GORGON_HOME` at IMPORT, which happens during pytest COLLECTION — before the session
+fixture that sandboxes it. Every suite run had been reading the operator's real
+`~/.gorgon/procedures`. **21 red items were that, not defects.**
+
+⇒ **THE NUMBERS ABOVE ARE UNAFFECTED, AND THAT WAS CHECKED RATHER THAN ASSUMED.** Both scorers
+  were re-run with `GORGON_HOME` set and unset; the output is byte-identical. The door eval
+  declares its own world (`world: 9 declared`), so `known` never reaches `archive.ARCHIVE`.
+
+⇒ `test_harness_integrity` now asserts the environment: the four `GORGON_HOME`-rooted stores
+  must bind inside the sandbox (checked against a witness conftest records at import, because a
+  test that imports them itself cannot see the bug), and a sweep of every product module reports
+  any module-level object bound under the operator's real home that is not declared. 57 are
+  declared — including the credential store, the signing key and the executor token, which are
+  config-rooted and therefore NOT closed by the `GORGON_HOME` fix.
+
 Direction: damage numbers LOW, work-done numbers HIGH, and **only meaningful as a pair** — a door
 that does nothing scores perfectly on damage and 0/56 on recall. Recall held 100% at every step
 while false repair fell from 54.3% to 0.0%.
@@ -69,8 +88,21 @@ while false repair fell from 54.3% to 0.0%.
   to clean text). Until that is repaired, nothing here describes a real request.
 - **Bare-name lists without commas**, and **value respeaks without commas** — named out of scope
   by `_first_cut`'s own note.
-- **`fleet` as a verb.** Ruled in, measured out: it broke `test_values_reader::test_the_reason
-  _clause_is_stripped_from_the_rows`. Reinstating it means fixing that reading first.
+- **`fleet` as a verb — RULED IN, AND THE BLOCKER IS NOW LOCATED (2026-09-18).** It is a real
+  operation: `orchestrator/ai/chat/commands/fleet.py` broadcasts `exec|stop|launch|ping|status`
+  across a labelled fleet, and `gates/safety.py` y/n-gates `exec` and `stop` as *"the high-stakes
+  fleet actions"*. **The door cannot see a blast-radius command.** Admitting it turns
+  `launch the fleet even though the lab network is slow` into a patient of `even though`.
+  Measured, not assumed:
+    · it is NOT a clause cut — `_first_cut` and `merge_cut_points` both return nothing here
+    · `DUAL_CLASS_VERBS` does NOT reach it, and adding it there turns
+      `test_clause_cuts::test_the_declared_duals_are_grounded_in_the_manifest` red — `fleet` is
+      a LABEL, not a kind with creators, so the 2026-09-18 derive-from-the-manifest ruling
+      excludes it and its guard says so
+    · the fix is the determiner-position test — *a word behind `the` is a noun, not a verb* —
+      which `pass2`'s rule 6 already runs (`nxt in CUT_DETS`) and which **`pass1` runs nowhere**,
+      across its five `_operation_words` call sites (406 · 702 · 989 · 1032 · 1408)
+  ⇒ **THIS IS READ PASS-1 WORK, NOT FRONT-DOOR WORK**, and it belongs to phase B2.
 - **A corpus at 100% no longer DISCRIMINATES.** It can catch a regression; it cannot find a
   defect. On 2026-09-18 adding fourteen words minted 70 latent traps and the corpus — at 100% —
   was blind to every one. A random sweep sampled two. **The corpus guards; the sweeps discover;
