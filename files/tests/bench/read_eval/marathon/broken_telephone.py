@@ -210,8 +210,18 @@ PERSONAS = {                                                    # 8 distinct peo
 PERSONA_LIST = list(PERSONAS)
 
 
-def messify(clean, noise="light", persona="sysadmin"):
-    sysp = (PERSONAS.get(persona, PERSONAS["sysadmin"]) +
+def messify(clean, noise="light", persona="middle"):
+    # ⇒⇒ **THIS LINE EMPTIED THE 2000-TURN MARATHON** (found 2026-09-18). It read
+    #   `PERSONAS.get(persona, PERSONAS["sysadmin"])` — and a `.get()` default is evaluated
+    #   EAGERLY, so `PERSONAS["sysadmin"]` ran on every call whether or not `persona` was valid.
+    #   `sysadmin` is not one of the thirteen keys. **Every call raised `KeyError` BEFORE the
+    #   model was ever contacted**, `messify_faithful` swallowed it four times per row and fell
+    #   back to `clean.lower()`, and the freeze reported DONE over 2000 rows that carried no
+    #   noise at all. Every "2000 adversarial turns" number taken off that corpus described
+    #   CLEAN, machine-generated text.
+    #   ⇒ INDEXED DIRECTLY NOW, NOT `.get()`: an unknown persona is a programming error and must
+    #     say so, rather than being silently replaced by somebody else's voice.
+    sysp = (PERSONAS[persona] +
             " Rewrite the command the way YOU would actually type it, in ONE line. A coworker MUST still "
             "understand it: keep every name and the action present and in order. When you get messy, prefer "
             "to MANGLE a word (run it together, phonetic/typo it) rather than DELETE it. "
@@ -237,7 +247,15 @@ def messify_faithful(clean, atoms, noise="light", persona="sysadmin", tries=4):
         nz = noise if i == 0 else "light"           # tame down on every retry
         try:
             said = messify(clean, noise=nz, persona=persona)
-        except Exception:
+        except (urllib.error.URLError, TimeoutError, socket.timeout, json.JSONDecodeError,
+                KeyError) as _transport:
+            # ⇒ ONLY TRANSPORT AND DECODE FAILURES ARE RETRIED. This was a bare
+            #   `except Exception: continue`, and that is what let a `KeyError` in `messify`
+            #   hide for 2000 rows: a PROGRAMMING error looks exactly like a flaky model to a
+            #   catch-all. A bug must reach the caller on the last try instead of being
+            #   quietly converted into a fallback.
+            if isinstance(_transport, KeyError) and i == tries - 1:
+                raise
             continue
         toks = _tok(said)
         missing = [w for w, k in atoms

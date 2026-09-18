@@ -1671,7 +1671,32 @@ def run(cases: List[dict], limit: Optional[int] = None) -> dict:
               f"actions {s['actions_detected']}/{s['gold_actions']} · "
               f"attach {s['attach_hit']}/{s['attach_total']} · "
               f"halluc {s['hallucinated_spans']}+{s['hallucinated_actions']}")
+    # ⇒⇒ **A NUMBER YOU CANNOT ATTRIBUTE TO A CODE PATH IS NOT A RESULT** (2026-09-18). Sixty-five
+    #   stored results carried an overlap threshold and a temperature and NOT ONE said which
+    #   pass-2 builder produced it — so when the two-builder divergence was found on 09-17, no
+    #   archived number could be attributed and all of them had to be assigned by inference.
+    #   `read_case` is the SSOT for which builder ran, so the name is read off its AST rather
+    #   than written by hand where it could drift from the call.
+    import ast as _ast, inspect as _inspect, textwrap as _textwrap
+    _BUILDERS = {"operations_for", "operations_by_clause"}
+    try:
+        _tree = _ast.parse(_textwrap.dedent(_inspect.getsource(read_case)))
+        _built_by = sorted({n.func.attr for n in _ast.walk(_tree)
+                            if isinstance(n, _ast.Call) and isinstance(n.func, _ast.Attribute)
+                            and n.func.attr in _BUILDERS})
+        _builder = _built_by[0] if len(_built_by) == 1 else ("|".join(_built_by) or "UNKNOWN")
+    except Exception:
+        _builder = "UNKNOWN"
+    # the dictionary-derived veto sets and the vocabulary they came from decide what the door
+    #   repairs at all, so a result is only reproducible alongside their fingerprint
+    try:
+        from orchestrator.languages.english import codex as _cx
+        _vocab_fp = _cx.VETO_SETS_DERIVED_FROM
+    except Exception:
+        _vocab_fp = "UNKNOWN"
     return {"config": {"overlap_threshold": OVERLAP, "temp": 0,
+                       "builder": _builder,
+                       "vocabulary_fingerprint": _vocab_fp,
                        "action_boundary": "NOT MEASURED — the seam emits operators, "
                                           "not verb spans",
                        "trigger_attachment": "NOT MEASURED — the seam does not yet bind a "
