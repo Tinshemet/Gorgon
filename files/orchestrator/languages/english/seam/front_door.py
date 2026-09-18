@@ -632,6 +632,28 @@ def _recognise(w, toks, at, board):
         elif cand in ops:
             if i == 0 or prev in {"then", "and", "but"}:
                 fits[cand] = _prints
+            # ⇒⇒ **AN INVERTED QUESTION PUTS ITS VERB BEHIND THE SUBJECT** (operator ruling
+            #   2026-09-18, narrowest form, found by the first calibration sweep). The verb slot
+            #   licensed two positions — clause-initial, and after `then`/`and`/`but` — so
+            #   *"did you ktll it"* and *"can you stpo alpha"* were declined with "nothing in
+            #   this slot licenses the repair", although the typo is unmistakably the verb. The
+            #   shape is AUX + SUBJECT + VERB, never AUX + VERB, which is why widening to
+            #   "previous word is an auxiliary" would have fixed nothing.
+            #   ⇒ THREE CONDITIONS, ALL CLOSED CLASSES, AND THE THIRD IS THE OPERATOR'S NARROWING:
+            #     the clause OPENS with an auxiliary · the previous word is a SUBJECT PRONOUN ·
+            #     and the candidate is an OPERATION WORD, which this branch already guarantees.
+            #     A noun- or opener-shaped typo in the same frame still asks.
+            #   ⇒ THE SEAM ALREADY READS THIS FRAME ELSEWHERE — `_first_cut` refuses to cut a
+            #     QUESTION SKIN on `words[0] in AUXILIARIES`. Same shape, same closed set.
+            #   ⇒ **AND IT IS INFERENCE, NOT ENFORCEMENT.** Unlike `CUT_NEGATION`, `DUAL_CLASS`
+            #     and the identifier suffix — each of which completed a rule against its own
+            #     written reasoning — no docstring ever said this position was licensed. It is a
+            #     new licence and it was ruled on as one.
+            else:
+                from .speech_act import AUXILIARIES as _AUXQ
+                from ..codex import SUBJECT_PRONOUNS as _SUBJQ
+                if words and words[0] in _AUXQ and prev in _SUBJQ:
+                    fits[cand] = _prints
     #   THE SIMPLEST EXPLANATION WINS, AND ONLY IF IT IS STRICTLY SIMPLEST. Widening the gate from
     #   one edit to the catalogue admits a plural alongside its singular — `netwrk` is `network` by
     #   ONE print (drop-vowel) and `networks` by TWO (drop-vowel + truncate) — and calling that
@@ -662,6 +684,25 @@ def _recognise(w, toks, at, board):
     if _least > 1:
         return Repair("", (), "", ())
     _best = [(c, pr) for c, pr in fits.items() if len(pr) == _least]
+    # ⇒⇒ **NUMBER AGREEMENT BREAKS A SINGULAR/PLURAL TIE** (operator ruling 2026-09-18, found by
+    #   the first calibration sweep). A truncated plural sits one print from BOTH forms —
+    #   `networ` explains `network` and `networks` equally — and the sim check declined every
+    #   one of them. But the clause has already said which: *"the networ IS up"* is singular and
+    #   *"the networs ARE up"* is plural. Asking there is declining to read a signal we hold.
+    #   ⇒ THE SIGNAL IS A CLOSED CLASS AND IT IS ALREADY IN THIS FUNCTION — `_COPULAS`, split by
+    #     the number each form carries. `be`/`been` carry none and decide nothing.
+    #   ⇒ **ONLY A SINGULAR/PLURAL PAIR, AND ONLY A TWO-WAY TIE.** `yost` explains `host` and
+    #     `most` equally and that is a REAL tie with nothing to resolve it — it still asks, as
+    #     does any tie of three or more. The rule reaches exactly the class it was ruled for.
+    if len(_best) == 2:
+        _c1, _c2 = sorted(c for c, _ in _best)
+        if _c2 == _c1 + "s":                       # a singular and its plural, nothing else
+            _sing = {"is", "was"} & set(words)
+            _plur = {"are", "were"} & set(words)
+            if _sing and not _plur:
+                _best = [(c, pr) for c, pr in _best if c == _c1]
+            elif _plur and not _sing:
+                _best = [(c, pr) for c, pr in _best if c == _c2]
     if len(_best) != 1:
         return Repair("", (), "ambiguous", tuple(sorted(c for c, _ in _best)))
     return Repair(_best[0][0], _best[0][1], "", ())

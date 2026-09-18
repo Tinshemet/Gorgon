@@ -258,14 +258,87 @@ case("must_repair", "restrt alpha", "restart alpha",
      "Impossible before 2026-09-18 because `restart` was absent from the grammar's vocabulary — "
      "the reason the front-door docstring's `restrt` example was true for the wrong reason.")
 
-# ── ambiguous · THE RIGHT ANSWER IS TO ASK ───────────────────────────────────────────────────
+# ── ambiguous · THE RIGHT ANSWER IS TO DECLINE, AND TO SAY WHICH WAY ─────────────────────────
+# ⇒⇒ **THIS BUCKET MEASURED NOTHING UNTIL 2026-09-18.** It held two cases against a plan that
+#   called for thirty, and — worse — the scorer compared TEXT ONLY, so both asserted "unchanged",
+#   which is exactly what `must_not_touch` asserts. The `ask` field was written and never read,
+#   and its value was `"ambiguous-or-silent"`, not even one of the door's declared kinds.
+#   `ambiguous 2/2 = 100%` was doubly meaningless. The scorer now checks the kind.
+#
+#   THE THREE ANSWERS A DECLINE CAN GIVE, and they are different answers:
+#       "ambiguous"   two candidates fit their slot equally — a TIE, and nothing resolves it
+#       "unlicensed"  the catalogue explains the word but NO slot votes for it here
+#       ""            silence — a multi-edit stretch passes through and is never surfaced
+#
+#   ⇒ TWO OPERATOR RULINGS, 2026-09-18, BOTH FOUND BY THE FIRST SWEEP OF THIS AXIS:
+#     · NUMBER AGREEMENT BREAKS A SINGULAR/PLURAL TIE. `the networ IS up` is singular and the
+#       door was declining it. So a tie of that shape only belongs here when NOTHING carries
+#       number — `the networ up`, or a noun slot with no copula at all.
+#     · AN INVERTED QUESTION IS VERB POSITION, narrowly: clause-initial auxiliary + subject
+#       pronoun + an OPERATION-WORD candidate. `did you ktll it` repairs now. A noun-shaped
+#       candidate in the same frame still asks, and those cases are below.
+
+# a TIE between two different words — nothing about the grammar separates them
 for _t, _why in (
-    ("did you eveyr stop it",
-     "`eveyr` fits `every` only before a NOUN; no slot votes here, so nothing fires"),
-    ("stpped alpha",
-     "`stpped` explains `stopped` AND `stepped` at one print each — a tie is an ask"),
+    ("stop the noxe vm",        "`noxe` explains `node` and `none` at one print each"),
+    ("can you glive alpha",     "`glive` explains `alive` and `give` equally, in a question frame"),
+    ("did you makr it",         "`makr` explains `make` and `mark` equally — both operation words"),
+    ("confir the db vm",        "`confir` explains `config` and `confirm` equally, in verb position"),
+    ("did you liit it",         "`liit` explains `limit` and `list` equally"),
+    ("stop the yost vm",        "`yost` explains `host` and `most` — a kind noun against a quantifier"),
 ):
-    case("ambiguous", _t, _t, _why, ask="ambiguous-or-silent")
+    case("ambiguous", _t, _t, _why, ask="ambiguous")
+
+# a SINGULAR/PLURAL tie with NOTHING carrying number — the 09-18 ruling does not reach these
+for _t in ("the profilse up", "the templatse up", "the machinse up", "the hosst up",
+           "the snapsho up", "the subnes up"):
+    case("ambiguous", _t, _t,
+         "a truncated plural sits one print from BOTH forms and no copula carries number here, "
+         "so the 2026-09-18 agreement ruling does not reach it — a tie with nothing to break it",
+         ask="ambiguous")
+for _t in ("stop the imag vm", "stop the guets vm", "stop the artifac vm", "stop the networ vm"):
+    case("ambiguous", _t, _t,
+         "the same tie inside a NOUN slot: the phrase carries no verb at all, so number cannot "
+         "decide and the door must decline rather than pick the singular by habit",
+         ask="ambiguous")
+
+# UNLICENSED — the catalogue explains the word, no slot votes for it HERE
+for _t, _why in (
+    ("did you eveyr stop it",   "an OPENER needs a noun after it; `stop` is a verb, so no slot votes"),
+    ("restart instane now",     "a NOUN needs an opener before it and `restart` is not one"),
+    ("the cnnect is up",        "an operation word in a noun's slot — `the ___ is up` wants a kind"),
+    ("subet the db vm",         "a noun in VERB position, which only an operation word may hold"),
+    ("fiels the db vm",         "the same, and its plural form cannot be a verb either"),
+    ("put cofnirm on lab",      "after a preposition nothing licenses an operation word"),
+    ("stop the evrything vm",   "a PROFORM cannot head a kind phrase"),
+):
+    case("ambiguous", _t, _t, _why, ask="unlicensed")
+
+# ⇒ UNLICENSED *BECAUSE OF THE 09-18 NARROWING* — an inverted question licenses only an
+#   OPERATION word behind the subject. These are the control for that ruling: same frame, a
+#   candidate that is a noun, and the door must still decline.
+for _t, _cand in (("can you artiafct alpha", "artifact"), ("can you instarce alpha", "instance"),
+                  ("can you chekpoint alpha", "checkpoint"), ("have you snapshto it", "snapshot")):
+    case("ambiguous", _t, _t,
+         f"the 2026-09-18 inverted-question slot licenses an OPERATION word behind the subject; "
+         f"`{_cand}` is a kind noun, so the frame alone must not license it",
+         ask="unlicensed")
+
+# SILENT — a decline and a shrug are different answers, and the door must not confuse them
+for _t, _why in (
+    ("that's great, stop the db",
+     "`great` is TWO prints from `create` — a multi-edit stretch passes through and is never "
+     "surfaced as an ask (operator ruling 2026-09-14)"),
+    ("the grate vm is down",
+     "the same stretch in a different frame — still silent, never a question"),
+    ("stop alpah",
+     "a typo'd NAME is the name: no candidate is ever drawn for it, so there is nothing to "
+     "decline and nothing to say"),
+    ("stop the antiseptic vm",
+     "a declared FALSE_FUSION — a real English word is not corrupt, so it leaves by the same "
+     "silent door `known` uses rather than becoming a bounce"),
+):
+    case("ambiguous", _t, _t, _why, ask="")
 
 
 def main() -> None:

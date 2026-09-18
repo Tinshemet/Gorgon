@@ -56,13 +56,38 @@ def _git() -> str:
         return "?"
 
 
+def _ask_kind(notices) -> str:
+    """Which ASK the door made, read off its own notices — "" when it said nothing.
+
+    ⇒⇒ **THE `ambiguous` BUCKET MEASURED NOTHING UNTIL 2026-09-18.** The scorer compared TEXT
+      only, so its two cases asserted "text unchanged" — which is precisely what
+      `must_not_touch` asserts — and the `ask` field was loaded from the corpus and never read.
+      `ambiguous 2/2 = 100%` was doubly meaningless: two cases, neither checking the thing the
+      bucket exists for. Calibration is *does it DECLINE instead of guessing*, and a decline is
+      only a decline if it SAYS so; silence and an ask are different answers.
+    """
+    for n in notices:
+        if "could not read" not in n:
+            continue
+        if "equally" in n:
+            return "ambiguous"          # two candidates fit their slot; a tie
+        if "licenses the repair" in n:
+            return "unlicensed"         # explained by the catalogue, but no slot votes
+    return ""                            # silent — a multi-edit stretch, or nothing to say
+
+
 def run(show_all: bool = False) -> dict:
     rows = [json.loads(l) for l in open(CASES) if l.strip()]
     out, buckets = [], {}
     for r in rows:
         v = FD.read(r["text"], known=WORLD)
         ok = v.text == r["expect"]
-        rec = dict(r, got=v.text, notices=list(v.notices), ok=ok)
+        # ⇒ AND THE ASK KIND, WHERE THE CORPUS DECLARES ONE. A case that names an ask is scored
+        #   on BOTH: the text must be untouched AND the door must have declined the way the gold
+        #   says. Cases with no declared ask are scored on text alone, exactly as before.
+        if r.get("ask"):
+            ok = ok and _ask_kind(v.notices) == r["ask"]
+        rec = dict(r, got=v.text, notices=list(v.notices), got_ask=_ask_kind(v.notices), ok=ok)
         out.append(rec)
         b = buckets.setdefault(r["bucket"], {"n": 0, "ok": 0})
         b["n"] += 1
@@ -91,6 +116,8 @@ def run(show_all: bool = False) -> dict:
         print(f"      in     {r['text']!r}")
         print(f"      expect {r['expect']!r}")
         print(f"      got    {r['got']!r}")
+        if r.get("ask") or r.get("got_ask"):
+            print(f"      ask    expect {r.get('ask') or 'SILENT'!r}  got {r.get('got_ask') or 'SILENT'!r}")
         if r["notices"]:
             for n in r["notices"]:
                 print(f"      notice {n}")
