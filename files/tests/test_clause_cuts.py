@@ -8,7 +8,7 @@ to a DECLARED set of open disagreements, so:
 
     a NEW disagreement          turns this red — a rule regressed, or a case was added
     a FIXED disagreement        ALSO turns this red — the manifest is stale, say so
-    the one we know about       passes, with its reason written down
+    nothing is open right now   — the dict is empty and all 29 agree
 
 That is the same shape as the eval/production parity manifest: the open list is data, in the
 repo, and drifting from it is an error rather than a thing somebody notices later.
@@ -39,16 +39,11 @@ CASES = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 # ⇒ THE OPEN LIST, and every entry carries WHY it is still open. Closing one means deleting its
 #   line here in the same commit — which is what makes a fix visible instead of silent.
 KNOWN_DISAGREEMENTS = {
-    # c3-01 CLOSED 2026-09-17 — it was MY gold that was wrong, not the rule: `anyway` is set
-    #   off on both sides and takes two cuts. Corrected in the corpus with the reason written
-    #   at the case, so the amendment is visible rather than a silent retro-fit.
-    # c7-04 CLOSED 2026-09-17 — `predicate_end`'s modal arm now checks that its head is a
-    #   base-form operation word, so `put cant on the dmz network` is no longer read as
-    #   testimony. This line is deleted rather than kept as history: the open list must say
-    #   what is OPEN.
-    "c6-02": "`snapshot` is absent from `_operation_words`, so rule 6's base-form test cannot "
-             "see the second imperative in `restart the web vm snapshot the db vm`. The same "
-             "vocabulary gap makes `restart` and `reboot` invisible to the front door.",
+    # ⇒ EMPTY, AND THAT IS THE STATE — all 29 cases agree, 11/11 must_cut and 18/18 must_not_cut.
+    #   c7-04 closed 2026-09-17 (`predicate_end`'s modal arm now checks its head is a verb).
+    #   c3-01 closed 2026-09-17 — it was MY gold that was wrong, not the rule.
+    #   c6-02 closed 2026-09-18 — `snapshot` admitted through `codex.DUAL_CLASS_VERBS`.
+    #   A dict rather than a set so the next open case arrives with its reason attached.
 }
 
 # Every negator form that can negate a following verb, by spelling. `nope`/`nah` are excluded on
@@ -103,6 +98,45 @@ def test_the_second_imperative_still_cuts_behind_a_negator():
         text = f"{neg} stop the web vm stop the db vm"
         got = _words_after(text, merge_cut_points(text))
         assert got == ["stop"], f"{text!r} lost its second clause — cuts before {got}"
+
+
+def test_the_declared_duals_are_grounded_in_the_manifest():
+    """`DUAL_CLASS_VERBS` must be derivable, not a hand-picked list that drifts.
+
+    ⇒ THE DERIVATION, and it is the whole justification for admitting a noun segment as a verb:
+      a kind is DUAL when the manifest declares a `creators` entry for it — something makes one —
+      AND the vm relates to it, which is what makes *"X the vm"* natural shorthand. `snapshot`
+      (vm `acts: snapshots`) and `template` (vm `creators: from_template`) qualify. `profile` is a
+      spec ASSIGNED to a vm rather than derived from one, `file` declares no creators at all, and
+      `network` relates only through a SETTER. If the manifest changes, this test says so.
+
+    ⇒ AND EVERY MEMBER MUST STILL NEED ADMITTING. A dual that is no longer subtracted by
+      `NON_VERB_SEGMENTS` is a dead entry carrying weight for nothing.
+    """
+    from planner.ir import config as _cfg
+    kinds = _cfg.KINDS or {}
+    assert codex.DUAL_CLASS_VERBS, "the dual set is empty — rule 6 is blind to every kind verb"
+    ungrounded = sorted(w for w in codex.DUAL_CLASS_VERBS
+                        if not ((kinds.get(w) or {}).get("creators")))
+    assert not ungrounded, (
+        f"{ungrounded} are declared dual but the manifest declares no `creators` for them — "
+        f"nothing makes one, so \"X the vm\" is not shorthand for anything.")
+    dead = sorted(w for w in codex.DUAL_CLASS_VERBS if w not in codex.NON_VERB_SEGMENTS)
+    assert not dead, (
+        f"{dead} are declared dual but are NOT subtracted by NON_VERB_SEGMENTS, so admitting "
+        f"them changes nothing — dead entries.")
+
+
+def test_a_dual_is_a_verb_by_POSITION_and_a_noun_otherwise():
+    """The admission is safe only because rule 6 judges by position. Assert it still does."""
+    for word in sorted(codex.DUAL_CLASS_VERBS):
+        verb = f"stop the web vm {word} the db vm"
+        assert merge_cut_points(verb), f"{verb!r} — the dual was not read as a second imperative"
+        for noun in (f"delete the {word}", f"take a {word} of the db vm",
+                     f"stop the {word} vm", f"restore the {word} the operator made"):
+            assert not merge_cut_points(noun), (
+                f"{noun!r} cut — the NOUN reading fired. The position test (next word a "
+                f"determiner, previous word not one) stopped discriminating.")
 
 
 def test_the_spec_matches_its_declared_open_list():

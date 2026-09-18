@@ -435,8 +435,14 @@ def _first_cut(piece: str):
     conditioned = (words[0] in ({"if", "unless", "when", "whenever"} | set(_T.EVENTS))
                    or goal_headed)
     from .scan import _operation_words
-    base_ops = {w for w in _operation_words(None)
-                if not w.endswith("s") and w not in GRAMMAR}
+    # ⇒ THE DUALS ARE ADMITTED HERE AND NOWHERE ELSE (codex, operator ruling 2026-09-18). They
+    #   were subtracted as noun segments before this rule could judge them by POSITION, which is
+    #   the test it already runs — `nxt in _CUT_DETS` separates `snapshot the db vm` from
+    #   `delete the snapshot`. `NON_VERB_SEGMENTS` itself is untouched, so the licence map below
+    #   and `_operation_words`' other readers behave exactly as before.
+    from ..codex import DUAL_CLASS_VERBS as _DUAL
+    base_ops = ({w for w in _operation_words(None)
+                 if not w.endswith("s") and w not in GRAMMAR} | set(_DUAL))
     predicate_seen = False
     for i in range(1, len(toks) - 1):
         w, s, _e = toks[i]

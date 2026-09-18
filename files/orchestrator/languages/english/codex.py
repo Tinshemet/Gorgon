@@ -476,6 +476,33 @@ GRAMMAR = {"a", "an", "the", "of", "on", "in", "to", "for", "and", "then", "but"
 
 # the noun and function-word segments an operation NAME sheds before any of its segments
 # may count as a verb — shared with pass 2's licence map, one copy (D5's root)
+# ⇒⇒ **A KIND NOUN THAT IS ALSO A VERB — and the position test already tells them apart.**
+#   `NON_VERB_SEGMENTS` below is subtracted from `_operation_words` because `re.findall` shreds
+#   `snapshot_create` into `snapshot` + `create` and the 2026-08-18 note records 13 wrong-choice
+#   acts from reading noun segments as verbs. Correct — but the subtraction runs LAST, so a word
+#   that is genuinely BOTH is removed before any rule can judge it by position. Measured 09-17:
+#   `restart the web vm snapshot the db vm` takes no clause break, because `snapshot` was gone
+#   before `_first_cut`'s rule 6 could look at it.
+#   ⇒ RULE 6 ALREADY ASKS THE RIGHT QUESTION — is the next word a determiner:
+#         delete the snapshot            -> nothing follows      -> NOUN, no fire
+#         take a snapshot OF the db vm   -> followed by `of`     -> NOUN, no fire
+#         stop the snapshot VM           -> followed by `vm`     -> NOUN, no fire
+#         SNAPSHOT the db vm             -> followed by `the`    -> VERB, fires
+#     so these words only need ADMITTING, not a new rule.
+#   ⇒ **DERIVED FROM THE MANIFEST, NOT FROM INTUITION** (operator ruling 2026-09-18: declare
+#     every genuine dual). A kind is dual when it declares a `creators` entry AND the vm has a
+#     relation to it, which is what makes *"X the vm"* natural shorthand for making one:
+#         snapshot  creators:create · vm acts:snapshots        -> snapshot the vm
+#         template  creators:create · vm creators:from_template -> template the vm
+#     `profile` is a hardware spec ASSIGNED to a vm, never derived from one; `file` declares no
+#     creators at all (`observed: exists`); `network` relates only through the `add_vm_to_network`
+#     SETTER, and "put X on the network" is the phrasing operators use. None of the three is a
+#     dual and each is left out deliberately rather than forgotten.
+#   ⇒ A SEPARATE SET, NOT AN EDIT TO `NON_VERB_SEGMENTS`, because that set has a SECOND consumer:
+#     `pass2.py:1254` builds the licence map deciding which operations a verb segment licenses.
+#     Editing it would change that too; admitting the duals where the position test runs does not.
+DUAL_CLASS_VERBS = frozenset({"snapshot", "template"})
+
 NON_VERB_SEGMENTS = frozenset({
     "network", "snapshot", "template", "profile", "file", "vm",
     "networks", "snapshots", "templates", "profiles", "files", "vms",
