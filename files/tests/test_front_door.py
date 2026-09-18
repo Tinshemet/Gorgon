@@ -19,8 +19,21 @@ def test_a_typoed_marker_is_recognized_in_its_phrase():
     assert "no wait" in v.text
     assert "wati" not in v.text
     assert any("wati" in n for n in v.notices)
-    # the operation verb's own typo is NOT a closed-set word — never touched
-    assert "restrt" in v.text
+    # ⇒⇒ **THE OPERATION VERB'S TYPO IS REPAIRED TOO, and this line used to assert the
+    #   opposite** — *"the operation verb's own typo is NOT a closed-set word — never
+    #   touched"*. That reason was never true: `launch` IS a closed-set word and
+    #   `test_typo_words::test_a_verb_sure_hit` has asserted `launhc` -> `launch` since the
+    #   same day. The two tests contradicted each other and both passed only because
+    #   `restart` was ABSENT from `scan._operation_words` — there was no candidate to repair
+    #   toward, so the outcome looked like a rule and was an accident.
+    #   ⇒ SAME TWO COMMITS AS THE DOCSTRING FIXED ON 09-17, SEVEN HOURS APART: `0f22b30`
+    #     (2026-08-19 14:44) wrote this assertion; `07d0301` (21:42) landed N2 with the
+    #     operator's ruling *"very distinct common words like thrm = them, OR EVEN VERBS —
+    #     the system should try to correct it."* N2 superseded it. This is the THIRD and last
+    #     artifact of that 14:44 draft — the NEVER-TOUCHES list and its `restrt` example were
+    #     the other two — and it survived 30 days because the word it named was missing.
+    assert "restart the web vm" in v.text
+    assert any("restrt" in n for n in v.notices)
 
 
 def test_a_name_is_never_rewritten():

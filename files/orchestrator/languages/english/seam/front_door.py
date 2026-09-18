@@ -33,8 +33,14 @@ every reader forever. This module is the one pass instead: it runs BEFORE anythi
     to correct it"* — and the sim check has licensed a clause-initial verb ever since.
     The stale line survived 14 commits to this file and was found by the property sweep
     on 2026-09-17. A verb repair needs its slot to vote (clause-initial, or after
-    `then`/`and`/`but`) exactly like every other class; `restrt` stays only because no
-    single declared print explains it, not because verbs are exempt.
+    `then`/`and`/`but`) exactly like every other class.
+    ⇒⇒ ⚠ AND THE EXAMPLE THAT LINE USED TO CARRY IS NOW WRONG, WHICH IS WHY IT IS RECORDED
+      RATHER THAN QUIETLY SWAPPED. Until 2026-09-18 this said *"`restrt` stays only because no
+      single declared print explains it"* — true then, and true for the wrong reason: `restart`
+      was ABSENT FROM THE GRAMMAR'S VOCABULARY ENTIRELY, so there was no candidate to repair
+      toward. With `restart` added to `scan._operation_words`, `restrt` repairs by one
+      drop-vowel print, exactly as N2 licenses. A docstring's example is a claim like any other
+      and this one went stale in a day.
 
 ⇒⇒ WHAT IT NEVER TOUCHES — the operator's rulings, structural here by construction:
     · a NAME — a typo'd name is the name (`alpah` stays `alpah`): every candidate is

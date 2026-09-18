@@ -247,10 +247,16 @@ case("must_not_touch", "stop the boxes vm", "stop the boxes vm",
      "door 'corrects' the right spelling into it (2026-09-17). The defect is the manifest's, "
      "but the door must not propagate it.")
 
-case("must_not_touch", "restrt alpha", "restrt alpha",
-     "`restart` is absent from `_operation_words`, so there is no candidate to repair toward. "
-     "This case pins TODAY's behaviour; if `restart` is ever added to the closed sets it must "
-     "move to must_repair, and this line is where that decision becomes visible.")
+# ⇒⇒ **THIS CASE MOVED BUCKET ON 2026-09-18, AND IT SAID IT WOULD.** Written on 09-17 as
+#   must_not_touch with the note *"if `restart` is ever added to the closed sets it must move to
+#   must_repair, and this line is where that decision becomes visible"* — then `restart` and
+#   `reboot` were added to `scan._operation_words` and the scorer reported the case as a new
+#   false repair. It is not a regression; it is the corpus asking for the decision it was written
+#   to ask for. A pinned case is how a measurement survives the thing it was measuring changing.
+case("must_repair", "restrt alpha", "restart alpha",
+     "stage 3 (N2 sim check): a verb in verb position, repaired by ONE drop-vowel print. "
+     "Impossible before 2026-09-18 because `restart` was absent from the grammar's vocabulary — "
+     "the reason the front-door docstring's `restrt` example was true for the wrong reason.")
 
 # ── ambiguous · THE RIGHT ANSWER IS TO ASK ───────────────────────────────────────────────────
 for _t, _why in (

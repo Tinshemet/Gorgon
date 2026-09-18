@@ -338,7 +338,26 @@ def _operation_words(board: Board) -> set:
                 out.update(re.findall(r"[a-z]+", str(spec[word]).lower()))
     out |= {"make", "put", "give", "take", "launch", "start", "stop", "ping", "clone", "check",
             "ensure", "confirm", "get", "run", "carry", "carries", "goes", "go", "answer",
-            "answers", "respond", "responds", "reach", "connect", "wire", "spin", "boot"}
+            "answers", "respond", "responds", "reach", "connect", "wire", "spin", "boot",
+            # ⇒⇒ **`restart` AND `reboot`, ADDED 2026-09-18 — and `pass2.py` HAS BEEN NAMING
+            #   `restart` AS ONE OF THESE SINCE 08-19.** Its licence-map comment reads: *"A verb
+            #   that names NO operation (`restart`, `start`, `put`) licenses free translation —
+            #   that is the model's whole job on those clauses."* `start` and `put` are in this
+            #   set; `restart` never was. So the layer that decides what a verb LICENSES assumed
+            #   the grammar could see a word the grammar had no idea about.
+            #   ⇒ VERIFIED ABSENT EVERYWHERE FIRST: no manifest kind declares a creator, setter,
+            #     act or observed containing `start`, `boot`, `reset`, `cycle` or `restart`, and
+            #     `verb_alias.ALIAS_VERBS` is just `['define']`, so nothing else supplied it.
+            #   ⇒ THREE SYMPTOMS, ONE ABSENCE: `_first_cut`'s rule 6 could not read
+            #     `restart the web vm snapshot the db vm` as two clauses · `_split_pass` could not
+            #     open `restartalpha` · `_recognise` had nothing to repair `restrt` toward, which
+            #     is why the front-door docstring's claim that "`restrt` measured as recoverable"
+            #     held for a reason nobody intended.
+            #   ⇒ ADDING A VERB HERE CREATES NO OPERATION. This set is the GRAMMAR's vocabulary —
+            #     words it must recognise in verb position — and half of it already names nothing
+            #     the manifest offers (`make` `give` `carry` `answer` `reach` `wire` `spin`).
+            #     What the clause then MEANS stays the model's job, gated exactly as before.
+            "restart", "reboot"}
     # ⇒ D5's root, closed 2026-08-18: `re.findall` shreds `add_vm_to_network` into
     #   segments and every segment became a "verb" — `to`, `as`, `of` let *"it boots TO a
     #   blue screen"* pass a does-this-clause-command-anything test, and 13 wrong-choice
