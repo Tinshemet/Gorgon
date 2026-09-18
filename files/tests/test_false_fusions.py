@@ -17,9 +17,14 @@ directions of rot, and this file catches one of them:
     DEAD ENTRIES    a word listed that no rule would ever tear — the vocabulary moved, or the
                     rule narrowed, and the list is now carrying weight for nothing. CAUGHT HERE.
     MISSING ENTRIES a closed class grew a word, minting collisions the list does not have.
-                    NOT CAUGHT HERE, and it cannot be: finding them needs the word list again.
-                    That belongs to whoever adds the closed word, and this docstring is where
-                    they are told so.
+                    **CAUGHT SINCE 2026-09-18, INDIRECTLY AND WITHOUT A DICTIONARY.** This used
+                    to say the gap "belongs to whoever adds the closed word" — and it failed the
+                    first time it was tested: fourteen executor verbs minted 70 new traps across
+                    two sets, of which a random sweep sampled TWO and 68 were latent. So the
+                    VOCABULARY now carries a fingerprint (`codex.VETO_SETS_DERIVED_FROM`) and
+                    `test_the_veto_sets_match_the_vocabulary_they_were_derived_from` re-computes
+                    it. Any closed class that grows turns this file red and names the fix. The
+                    word list stays a build-time research tool; only the hash ships.
 
 ⇒ **THE VETO MUST ALSO ACTUALLY FIRE.** A set nothing consults is this project's dominant defect
   class in its purest form — data that loads and never runs. The behavioural half below reads a
@@ -225,6 +230,37 @@ def test_the_real_sim_check_repairs_were_not_eaten():
                        ("stop the runnin vms", "running"), ("eveyr vm on lab", "every"),
                        ("put thrm on the dmz network", "them")):
         assert want in FD.read(text, known=LAB).text, f"{text!r} no longer repairs to {want!r}"
+
+
+def test_the_veto_sets_match_the_vocabulary_they_were_derived_from():
+    """The three sets are `known` INTERSECT English. If `known` moves, they are stale.
+
+    ⇒ THE CHEAPEST POSSIBLE FORM OF A CHECK THAT WOULD OTHERWISE NEED THE DICTIONARY: hash every
+      closed set the derivations read, and compare. It cannot say WHICH entries are missing —
+      only that the sets can no longer be trusted and must be re-derived — and that is exactly
+      the signal that was absent when 70 traps went in unnoticed.
+    """
+    import hashlib
+    from orchestrator.languages.english.seam import self_repair as _sr
+    from orchestrator.languages.english.seam.speech_act import WRAPPERS, COURTESY
+    from orchestrator.languages.english.seam.scan import BOUNDARIES, PARTICLES
+
+    openers, nouns, ops, known = FD._vocab(None)
+    phrase = {w for p in (tuple(_sr.CORRECTIONS) + tuple(_sr.RETRACTIONS) + WRAPPERS + COURTESY)
+              for w in p.split()}
+    parts = [("known", known), ("openers", openers), ("nouns", nouns), ("ops", ops),
+             ("states", FD._statuses(None)), ("phrase", phrase),
+             ("particles", PARTICLES), ("boundaries", BOUNDARIES)]
+    blob = "\n".join(f"{n}:" + ",".join(sorted(str(x) for x in v)) for n, v in parts)
+    now = hashlib.sha256(blob.encode()).hexdigest()[:16]
+    assert now == codex.VETO_SETS_DERIVED_FROM, (
+        f"THE CLOSED-SET VOCABULARY HAS CHANGED SINCE THE VETO SETS WERE DERIVED.\n"
+        f"    declared  {codex.VETO_SETS_DERIVED_FROM}\n"
+        f"    now       {now}\n"
+        f"  FALSE_FUSIONS, FALSE_TYPOS and FALSE_PRINTS are `known` INTERSECT English, so a word "
+        f"added to ANY closed class can mint traps they do not carry — 14 executor verbs minted "
+        f"70 on 2026-09-18 and a random sweep sampled only two. Re-derive all three against the "
+        f"dictionary, then update this fingerprint in the same commit.")
 
 
 # THE ENTRY POINT BELONGS AT THE BOTTOM — `main()` ends in `sys.exit`, so anything defined below

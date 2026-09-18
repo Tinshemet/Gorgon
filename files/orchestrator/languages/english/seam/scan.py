@@ -357,7 +357,26 @@ def _operation_words(board: Board) -> set:
             #     words it must recognise in verb position — and half of it already names nothing
             #     the manifest offers (`make` `give` `carry` `answer` `reach` `wire` `spin`).
             #     What the clause then MEANS stays the model's job, gated exactly as before.
-            "restart", "reboot"}
+            "restart", "reboot",
+            # ⇒⇒ **THE EXECUTOR'S OWN VERBS, ADDED 2026-09-18 — 14 REAL OPERATIONS THE GRAMMAR
+            #   COULD NOT SEE.** `_operation_words` derives from the MANIFEST (`planner.ir.config
+            #   .KINDS`) and the manifest does not name every tool the executor offers. Measured:
+            #   of 34 distinct heads in `executor/command_catalog.json`, EIGHTEEN were invisible.
+            #   These fourteen are the ones that are verbs.
+            #   ⇒ DERIVED, NOT PICKED: the HEAD of a tool name is its verb — `open_display`,
+            #     `set_resource_limits`, `send_monitor_cmd`, `update_config`. Taking heads rather
+            #     than every segment is what keeps this from re-opening D5, where `re.findall`
+            #     shredded `add_vm_to_network` and `to`/`as`/`of` became "verbs" (13 wrong-choice
+            #     acts, 2026-08-18).
+            #   ⇒ FOUR HEADS ARE DELIBERATELY NOT HERE and are open decisions, not oversights:
+            #     `fleet` `guest` `local` head a tool while being a noun or an adjective, and
+            #     `checkpoint` is a DUAL — a kind noun that is also a verb, the shape
+            #     `codex.DUAL_CLASS_VERBS` exists for.
+            #   ⇒ AND THIS CREATES NO OPERATION. It is the grammar's vocabulary — what it must
+            #     recognise in verb position. Every word here already names a tool the executor
+            #     runs; what a clause MEANS stays the model's job, gated exactly as before.
+            "claim", "clarify", "generate", "monitor", "open", "print", "provision",
+            "revert", "rollback", "scan", "send", "set", "show", "update"}
     # ⇒ D5's root, closed 2026-08-18: `re.findall` shreds `add_vm_to_network` into
     #   segments and every segment became a "verb" — `to`, `as`, `of` let *"it boots TO a
     #   blue screen"* pass a does-this-clause-command-anything test, and 13 wrong-choice
