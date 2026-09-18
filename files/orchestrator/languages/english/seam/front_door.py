@@ -140,14 +140,9 @@ def defused(request: str, board=None, known=None) -> str:
     return _apply(_req, edits)[0] if edits else _req
 
 
-# ⇒ THE FUNCTION WORDS — the closed classes a NAME never contains. Evidence, per the operator's
-#   closed-class doctrine, that a separator run is a fused sentence rather than an identifier.
-_FUNCTION_WORDS = frozenset({
-    "the", "a", "an", "this", "that", "these", "those", "it", "its", "them", "they", "their",
-    "and", "or", "but", "not", "no", "if", "then", "than", "to", "of", "on", "in", "into", "at",
-    "for", "from", "with", "by", "as", "is", "are", "was", "were", "be", "been", "do", "does",
-    "did", "you", "your", "me", "my", "we", "our", "all", "any", "every", "each", "please",
-})
+# ⇒ THE FUNCTION WORDS live in the codex — the SSOT for every English closed class
+#   (`tests/test_language_layer.py` enforces that a seam module holds none of its own).
+from ..codex import FUNCTION_WORDS as _FUNCTION_WORDS
 
 
 # ⇒ A FLAG IS A CODE SHAPE (operator ruling 2026-09-14, extending the 2026-09-07 code-shape

@@ -942,6 +942,26 @@ ITERATIVES = frozenset({"keeps", "keep", "kept"})
 INDEFINITES = frozenset({"something", "anything", "nothing"})
 
 
+# ⇒ THE FUNCTION WORDS — the closed classes a NAME never contains. Evidence, per the operator's
+#   closed-class doctrine, that a separator run is a fused sentence rather than an identifier:
+#   `web-01`, `foo-bar-baz`, `alpah-01` carry none of these, so one of them inside a run opens it.
+#   Lived in `seam/front_door.py` until 2026-09-18; it is English, so its home is here.
+FUNCTION_WORDS = frozenset({
+    "the", "a", "an", "this", "that", "these", "those", "it", "its", "them", "they", "their",
+    "and", "or", "but", "not", "no", "if", "then", "than", "to", "of", "on", "in", "into", "at",
+    "for", "from", "with", "by", "as", "is", "are", "was", "were", "be", "been", "do", "does",
+    "did", "you", "your", "me", "my", "we", "our", "all", "any", "every", "each", "please",
+})
+
+
+# ⇒ THE CLAUSE CONNECTIVES — a coordinating word opens a new clause, so a verb behind one is in
+#   VERB POSITION. Lived in `seam/verb_alias.py` until 2026-09-18.
+#   ⚠ **ORDERED, AND IT MUST STAY ORDERED.** It is joined into a regex alternation; a frozenset
+#     would vary that pattern with `PYTHONHASHSEED` and make the mask layer seed-dependent —
+#     the exact defect class the standing rule about never re-running one command warns about.
+CLAUSE_CONNECTIVES = ("then", "and", "but", "otherwise", "also")
+
+
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # ═ THE FRONT DOOR — words that LOOK fused and are not
 # ═══════════════════════════════════════════════════════════════════════════════════════

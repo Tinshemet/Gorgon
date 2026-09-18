@@ -271,7 +271,7 @@ def file_all(aliases: List[dict], who: Optional[str] = None) -> List[str]:
 # ⇒ a mask fires only in VERB POSITION: the start of a clause — the request start, or right
 #   after a clause delimiter (`. ; ,`) or a coordinating connective. `snapshot the contain vm`
 #   must never expand `contain`; it is a name there, not a verb. Same boundaries as the split.
-_CONNECTIVES = ("then", "and", "but", "otherwise", "also")
+from ..codex import CLAUSE_CONNECTIVES as _CONNECTIVES
 _SPLIT = _re.compile(r"([.;,]\s*|\s+(?:%s)\s+)" % "|".join(_CONNECTIVES))
 _HEAD = _re.compile(r"^(\s*(?:%s)?\s*)([a-zA-Z']+)(.*)$" % "|".join(_CONNECTIVES), _re.S | _re.I)
 

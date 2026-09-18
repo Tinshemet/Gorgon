@@ -61,6 +61,14 @@ PINNED_CALLERS = {
     "orchestrator/door.py",
     "orchestrator/ai/chat/shortcuts/plan.py",
     "orchestrator/ai/chat/shortcuts/words.py",
+    # ⇒ THE MASK SURFACE, pinned 2026-09-18. `masks` is the verb-side mirror of the already-pinned
+    #   `words` — same shape, same store idiom, reaching `verb_alias.ALIASES`; `mask_run` reaches
+    #   `verb_alias.procedure_for` to hand a PROCEDURE mask to the gated runner. Both are LIVE, not
+    #   dead code: `shortcuts/__init__.py` imports every module in the package with `pkgutil` and
+    #   both appear in `_REGISTRY` (16 entries) — checked, because "built and never called" is this
+    #   project's dominant defect class and a pin is worthless if it records a module nobody runs.
+    "orchestrator/ai/chat/shortcuts/mask_run.py",
+    "orchestrator/ai/chat/shortcuts/masks.py",
 }
 # The bench and the unit tests reach module internals by design; they are not production.
 BENCH_PREFIXES = ("tests/",)
