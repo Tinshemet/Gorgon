@@ -243,6 +243,21 @@ def _separator_pass(text: str, board=None, known_extra=None):
         #   closed-class FUNCTION word in the run is evidence a name can't produce, and it opens
         #   the run on its own.
         _fn = any(_p.group(0) in _FUNCTION_WORDS for _p in parts)
+        # ⇒⇒ **AN IDENTIFIER SUFFIX MARKS THE WHOLE RUN AS A NAME** (2026-09-18). The pure-digit
+        #   guard below is per-CUT-POINT, so it protected the separators either side of the digit
+        #   and nothing else: `lab-core-2` lost its first separator and came back `lab core-2`,
+        #   with `lab` and `core` both declared standing objects making the pair look like a
+        #   fusion. That was the ENTIRE remaining false repair on the door corpus.
+        #   ⇒ THE RULE IS THE ONE THE GUARD BELOW ALREADY STATES — *"a pure-digit segment is an
+        #     identifier SUFFIX"*. A run that ENDS in one is a name: `web-01`, `vm-2`,
+        #     `lab-core-2`. Completing a rule against its own stated reasoning, exactly as
+        #     `CUT_NEGATION` was on 09-17.
+        #   ⇒ **LAST SEGMENT, NOT ANY SEGMENT**, and the difference is measured: `stop-the-2-vms`
+        #     is a fused SENTENCE whose `2` is a quantifier, not a suffix, and a run-level check
+        #     would have frozen it. `delete-the-vms-over-4gb` is unaffected either way — `4gb`
+        #     carries letters, so it is a value shape and never a bare index.
+        if parts[-1].group(0).isdigit():
+            continue
         for k in range(len(parts) - 1):
             a, b = parts[k].group(0), parts[k + 1].group(0)
             if a in _parts and b in _parts:
