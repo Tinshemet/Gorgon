@@ -13,12 +13,29 @@ import pytest
 from orchestrator.languages.english.seam import front_door as FD
 
 
-def test_a_typoed_marker_is_recognized_in_its_phrase():
-    # `no wati` sits where `no wait` sits, every other phrase word exact — recognized
+def test_a_typoed_marker_is_DECLINED_and_its_candidates_carried():
+    """⇒⇒ **OPERATOR CHARTER, 2026-09-19 — THIS TEST ASSERTED THE OPPOSITE UNTIL THEN.**
+
+    *"The front door should only fix typos on obviously wrong / non-existent words, fix noise,
+    add commas and spaces where obvious. If anything changes meaning it's not the door's job —
+    if it CAN alter a meaning we move it to route to ask. I would rather not serve something
+    than serve something the user didn't ask for."*
+
+    ⇒ `no wait` REDIRECTS the request. Creating one from a typo is the door deciding that the
+      operator retracted something, on the evidence of a single transposed character. The
+      repair is still FOUND — the door says so and carries the candidate — it is simply not
+      APPLIED, and ROUTE asks.
+
+    ⇒ The content-word repair in the same sentence (`restrt` -> `restart`) is untouched: that
+      is the charter's first clause, an obviously wrong word with no meaning of its own.
+    """
     v = FD.read("restrt the web vm, no wati, the db one")
-    assert "no wait" in v.text
-    assert "wati" not in v.text
-    assert any("wati" in n for n in v.notices)
+    assert "no wait" not in v.text                  # the phrase is NOT created
+    assert "wati" in v.text                         # the token is left exactly as typed
+    assert "restart" in v.text                      # …while a content-word typo still repairs
+    ask = [n for n in v.notices if "could not apply" in n and "wati" in n]
+    assert ask, f"the decline must be SPOKEN, not silent: {v.notices}"
+    assert "no wait" in ask[0], f"the candidate must be carried for ROUTE: {ask[0]}"
     # ⇒⇒ **THE OPERATION VERB'S TYPO IS REPAIRED TOO, and this line used to assert the
     #   opposite** — *"the operation verb's own typo is NOT a closed-set word — never
     #   touched"*. That reason was never true: `launch` IS a closed-set word and
@@ -37,15 +54,31 @@ def test_a_typoed_marker_is_recognized_in_its_phrase():
 
 
 def test_a_name_is_never_rewritten():
+    """The name rule is unchanged; the MARKER line moved to the charter (2026-09-19).
+
+    ⇒ `i meant` REDIRECTS the request — it says the previous target was wrong. The door finds
+      the candidate and declines it; what this test still guards is that `alpah`, a typo'd
+      NAME, is left alone either way. That was always the point of the case.
+    """
     v = FD.read("stop alpah — sorry, i mesnt beta")
-    assert "i meant" in v.text          # the marker is recognized
+    assert "i meant" not in v.text      # the marker is FOUND but not applied — charter
+    assert any("could not apply" in n and "i meant" in n for n in v.notices)
     assert "alpah" in v.text            # the name's typo is the name
     assert "beta" in v.text
 
 
-def test_courtesy_with_a_typo_is_recognized():
+def test_courtesy_with_a_typo_is_DECLINED_because_it_would_raise_authority():
+    """⚠ THE SHARPEST CASE ON THE CHARTER, and the reason it is not a style preference.
+
+    [[gorgon-courtesy-escalates-intent]] (2026-08-14, LIVE, 7/7 phrasings): *"when you get a
+    chance"* is an ACHIEVE marker — **a pleasantry grants write authority**. So repairing one
+    character in `wehn` used to escalate a read into a write. The door now declines and says
+    which authority the phrase would have asked for.
+    """
     v = FD.read("wehn you get a chance, stop the test vms")
-    assert "when you get a chance" in v.text
+    assert "when you get a chance" not in v.text
+    ask = [n for n in v.notices if "could not apply" in n]
+    assert ask and "authority" in ask[0], f"the decline must name the stake: {v.notices}"
 
 
 def test_a_filled_pause_is_dropped_and_offsets_map_back():

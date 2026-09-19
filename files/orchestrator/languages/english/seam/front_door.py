@@ -76,6 +76,26 @@ class Repair(NamedTuple):
     cands: tuple         # the candidates behind an ask
 
 
+def _phrase_force(phrase: str) -> str:
+    """What a closed phrase DOES — the reason the door may not create one by repair.
+
+    ⇒ It is not decoration in the notice. ROUTE has to ask a question the operator can answer,
+      and *"did you mean `forget it`?"* is a different question from *"did you mean to CANCEL
+      the previous order?"*. The second is the one that matters.
+    """
+    from .speech_act import WRAPPERS as _W, COURTESY as _C
+    from . import self_repair as _sr
+    if phrase in set(_sr.RETRACTIONS):
+        return f"'{phrase}' cancels what stands"
+    if phrase in set(_sr.CORRECTIONS):
+        return f"'{phrase}' redirects the request"
+    if phrase in set(_W):
+        return f"'{phrase}' turns an order into a question"
+    if phrase in set(_C):
+        return f"'{phrase}' raises the authority asked for"
+    return f"'{phrase}' changes the act"
+
+
 _UNICODE_SPACES = {0x00A0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006,
                    0x2007, 0x2008, 0x2009, 0x200A, 0x202F, 0x205F, 0x3000}
 
@@ -418,6 +438,30 @@ def _read_stages(request: str, board=None) -> View:
     # ⇒ AND AN ENGLISH WORD IS NEVER A TYPO EITHER (codex, operator ruling 2026-09-17:
     #   *"forgot it stays as typed"*). 144 declared; veto only, never a licence.
     from ...english.codex import FALSE_TYPOS as _FALSE_TYPOS
+    # ⇒⇒ **STAGE 2 NO LONGER REPAIRS. IT DECLINES AND CARRIES THE CANDIDATES.**
+    #   OPERATOR CHARTER, 2026-09-19: *"the front door should only fix typos on obviously wrong /
+    #   non-existent words, fix noise, add commas and spaces where obvious. If anything changes
+    #   meaning it's not the door's job — if it CAN alter a meaning we move it to route to ask.
+    #   I would rather not serve something than serve something the user didn't ask for."*
+    #
+    #   ⇒ **EVERY PHRASE IN THIS LOOP IS MEANING-BEARING. THAT IS WHAT A CLOSED PHRASE IS.**
+    #     Measured over the 20 stage-2 cases in the door corpus on 2026-09-19:
+    #         8  RETRACTION  — `forget it`, `cancel that`, `never mind` … CANCELS what stands
+    #         8  CORRECTION  — `make that`, `i mean`, `no wait` …        REDIRECTS the target
+    #         2  WRAPPER     — `tell me`, `let me know`                  order becomes a question
+    #         2  COURTESY    — `when you get a chance` …                 ⚠ FLIPS FETCH -> ACHIEVE
+    #     Not one survives the charter. The last two are the sharpest: the 2026-08-14 finding
+    #     [[gorgon-courtesy-escalates-intent]] is that a pleasantry GRANTS WRITE AUTHORITY, so
+    #     repairing one character in `wehn you get a chance` escalated a read into a write.
+    #
+    #   ⇒ **AND A FALSE RETRACTION FAILS SILENTLY, WHICH IS THE WORST DIRECTION.** Inventing
+    #     `forget it` cancels an order the operator gave; they see a request that was accepted
+    #     and did nothing. Declining costs a question. That trade is the charter.
+    #
+    #   ⇒ ALL CANDIDATES ARE CARRIED, not the first or the best (operator, 2026-09-19). One
+    #     token may sit one edit from several declared phrases; picking among them is the same
+    #     judgement the door is being told not to make, so ROUTE gets the whole set.
+    _cands_at = {}                                        # (start, end) -> [(tok, phrase), …]
     for pwords in phrases:
         for i in range(len(toks) - len(pwords) + 1):
             window = toks[i:i + len(pwords)]
@@ -437,15 +481,30 @@ def _read_stages(request: str, board=None) -> View:
             w, s, e, pw = fuzzy
             if any(not (e <= ts or te <= s) for ts, te in taken):
                 continue
-            taken.append((s, e))
-            edits.append((s, e, pw))
-            notices.append(f"read '{w}' as '{pw}' ({' '.join(pwords)})")
+            _cands_at.setdefault((s, e), (w, [], []))[1].append(" ".join(pwords))
+            _cands_at[(s, e)][2].append((window[0][1], window[-1][2]))
+    for (s, e), (w, phs, _spans) in sorted(_cands_at.items()):
+        _seen, _uniq = set(), []
+        for ph in phs:                                    # stable order, no duplicates
+            if ph not in _seen:
+                _seen.add(ph); _uniq.append(ph)
+        notices.append(
+            f"could not apply '{w}' here — it is one edit from "
+            f"{' or '.join(repr(x) for x in _uniq)}, and that would change what the request "
+            f"does ({'; '.join(_phrase_force(x) for x in _uniq)}); ask")
 
     # 3 · single-word typo recognition — N2, the operator's ruling: sure hits fixed,
     #     ambiguity settled by the SIM CHECK (each candidate tried in place; the slot
     #     votes), ties or no fit left alone. Candidates come ONLY from our own closed
     #     sets — never the whole language, so a name can never be a candidate.
-    taken2 = [(s_, e_) for s_, e_, _ in edits]
+    # ⇒⇒ **A SPAN STAGE 2 DECLINED IS CLOSED TO STAGE 3.** Found the moment the decline was
+    #   first run (2026-09-19): stage 2 refused to make `mkae that beta` into `make that beta`,
+    #   and the sim check then repaired `mkae` -> `make` on its own — because `make` is an
+    #   operation word and stage 3 judges words, not phrases. The phrase was reconstituted and
+    #   the charter defeated by the very next pass. **A decline that a later pass can override
+    #   is not a decline**, which is this project's dominant defect class pointed at a refusal
+    #   instead of a feature.
+    taken2 = [(s_, e_) for s_, e_, _ in edits] + list(_cands_at)
     for w, s_, e_ in toks:
         if len(w) < 4 or "'" in w:
             continue
@@ -477,8 +536,19 @@ def _read_stages(request: str, board=None) -> View:
     #     act channels all see the boundary. Sim-check principle: the rules only fire
     #     where a closed class votes — no vote, no comma. Computed on the STAGE-1 text
     #     so a dropped pause or fixed typo cannot hide a cut.
+    # ⇒⇒ **A CUT INSIDE A DECLINED PHRASE IS SUPPRESSED** (2026-09-19, found by running the
+    #   charter change). `wehn you get a chance stop alpha` used to be repaired to `when …`, and
+    #   rule 1 then cut after the courtesy literal. With the repair declined, the literal no
+    #   longer matches, rule 6 reads `get a chance` as a second imperative, and the door wrote
+    #   `wehn you, get a chance stop alpha` — a comma in the middle of the very phrase it had
+    #   just said it could not read.
+    #   ⇒ THE RULE IS THE CHARTER'S OWN: commas go in *where it is obvious*. Inside a span the
+    #     door has declared unreadable, nothing is obvious. The suppression is scoped to the
+    #     candidate phrase's span, so a boundary elsewhere in the request is untouched.
     from .pass2 import merge_cut_points
-    cuts = merge_cut_points(mid)
+    _mute = [sp for _k, (_w, _p, sps) in _cands_at.items() for sp in sps]
+    cuts = [c for c in merge_cut_points(mid)
+            if not any(a < c < b for a, b in _mute)]
     if not cuts:
         return View(mid, back1, notices, text)
     edits2 = []

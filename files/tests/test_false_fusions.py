@@ -183,12 +183,23 @@ def test_the_typo_veto_actually_fires():
 
 
 def test_the_real_typos_were_not_eaten():
-    """The capability stage 2 exists for must survive the veto."""
+    """The capability stage 2 exists for must survive the veto — as a CANDIDATE now."""
     inside = [w for w in ("wati", "mesnt", "forgte", "tlel", "cancle", "nevre", "wree", "wehn")
               if w in codex.FALSE_TYPOS]
     assert not inside, f"{inside} are declared NON-typos, which disables the repair for them"
     for text, want in REAL_TYPOS:
-        assert want in FD.read(text, known=LAB).text, f"{text!r} no longer repairs to {want!r}"
+        v = FD.read(text, known=LAB)
+        # ⇒⇒ **THE CHARTER CHANGED WHERE THE ANSWER GOES, NOT WHETHER IT IS FOUND** (2026-09-19).
+        #   Until then this asserted `want in v.text`. The door must still RECOGNISE the phrase —
+        #   a veto entry here would kill the recognition and leave ROUTE with nothing to ask
+        #   about — but it must not APPLY it, because every phrase in this tuple changes what
+        #   the request does.
+        assert want not in v.text, (
+            f"{text!r} APPLIED the repair to {want!r}. The charter forbids it: that phrase "
+            f"changes what the request does, so the door carries the candidate and ROUTE asks.")
+        assert any("could not apply" in n and want in n for n in v.notices), (
+            f"{text!r} did not carry {want!r} as a candidate — the veto sets have eaten the "
+            f"RECOGNITION, so ROUTE has nothing to ask about. Notices: {list(v.notices)}")
 
 
 def test_false_prints_is_well_formed_and_none_is_dead():

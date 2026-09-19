@@ -73,6 +73,13 @@ def _ask_kind(notices) -> str:
             return "ambiguous"          # two candidates fit their slot; a tie
         if "licenses the repair" in n:
             return "unlicensed"         # explained by the catalogue, but no slot votes
+    for n in notices:
+        # ⇒ THE CHARTER DECLINE (operator, 2026-09-19): the repair was available and REFUSED
+        #   because applying it would change what the request does. Distinct from `ambiguous`
+        #   (two candidates, no way to choose) and `unlicensed` (no slot votes): here the door
+        #   could have chosen and is not allowed to.
+        if "could not apply" in n and "change what the request does" in n:
+            return "meaning"
     return ""                            # silent — a multi-edit stretch, or nothing to say
 
 
