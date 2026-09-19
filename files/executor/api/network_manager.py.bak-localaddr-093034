@@ -8,7 +8,6 @@ other but NOT to the internet.
 
 import json
 import os
-from ._vm_constants import _rooted   # the ONE re-rooting helper (2026-09-19)
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -19,7 +18,7 @@ _CFG  = json.load(open(os.path.join(os.path.dirname(__file__), "config.json")))
 _DIRS = _CFG["dirs"]
 _NET  = _CFG["network"]
 
-VM_BASE_DIR      = _rooted(_DIRS["vm_base"])
+VM_BASE_DIR      = os.path.expanduser(_DIRS["vm_base"])
 ISOLATED_NET_DIR = os.path.join(VM_BASE_DIR, _DIRS["isolated_net"])
 
 # Same vendor-OUI pool NetworkConfig._generate_mac draws from, so an isolated-net
@@ -214,15 +213,6 @@ class IsolatedNetManager:
             self._save()
         addr  = net["mcast_addr"]
         port  = net["mcast_port"]
-        # Without localaddr the kernel picks the multicast egress interface from the
-        # routing table, which on a wireless-primary host is the WLAN: `ip route get
-        # 230.0.0.1` gave `dev wlp0s20f3 rt_offload_failed`. Two costs, and the second
-        # is the serious one. The segment does not work — both VMs join the group and
-        # ARP still fails, measured: wifi LOST, loopback DELIVERED. And the frames of a
-        # network whose whole point is isolation were being multicast onto the physical
-        # LAN, which is the hole `_network_default_doc` exists to close. Loopback is the
-        # only egress that cannot leave the host, so an isolated net pins it.
-        local = _NET["localaddr"]
         netid = f"iso_{net_name}"
         hint  = None
         try:
@@ -231,7 +221,7 @@ class IsolatedNetManager:
         except FileNotFoundError:
             pass  # best-effort hint lookup — fall back to any real vendor OUI
         return [
-            "-netdev", f"socket,id={netid},mcast={addr}:{port},localaddr={local}",
+            "-netdev", f"socket,id={netid},mcast={addr}:{port}",
             "-device", f"virtio-net-pci,netdev={netid},mac={self._random_mac(hint)}",
         ]
 
@@ -264,21 +254,12 @@ class IsolatedNetManager:
                     "message": f"VM '{vm_name}' is already on isolated network '{net_name}'."}
         addr  = net["mcast_addr"]
         port  = net["mcast_port"]
-        # Without localaddr the kernel picks the multicast egress interface from the
-        # routing table, which on a wireless-primary host is the WLAN: `ip route get
-        # 230.0.0.1` gave `dev wlp0s20f3 rt_offload_failed`. Two costs, and the second
-        # is the serious one. The segment does not work — both VMs join the group and
-        # ARP still fails, measured: wifi LOST, loopback DELIVERED. And the frames of a
-        # network whose whole point is isolation were being multicast onto the physical
-        # LAN, which is the hole `_network_default_doc` exists to close. Loopback is the
-        # only egress that cannot leave the host, so an isolated net pins it.
-        local = _NET["localaddr"]
         hint  = cfg.networks[0].manufacturer_hint if cfg.networks else None
         # netid absent → append the full flag+value sequence as a unit (extend,
         # not the old per-arg loop, which also wrongly skipped the shared
         # -netdev/-device flag tokens when the VM was already on another net).
         cfg.extra_args.extend([
-            "-netdev", f"socket,id={netid},mcast={addr}:{port},localaddr={local}",
+            "-netdev", f"socket,id={netid},mcast={addr}:{port}",
             "-device", f"virtio-net-pci,netdev={netid},mac={self._random_mac(hint)}",
         ])
         if vm_name not in net["members"]:

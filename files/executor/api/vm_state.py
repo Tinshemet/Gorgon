@@ -19,12 +19,13 @@ import os
 from datetime import datetime
 from typing import Dict, Optional
 
+from ._vm_constants import _rooted   # the ONE re-rooting helper (2026-09-19)
 import psutil
 
 _CFG  = json.load(open(os.path.join(os.path.dirname(__file__), "config.json")))
 _DIRS = _CFG["dirs"]
 
-VM_BASE_DIR = os.path.expanduser(_DIRS["vm_base"])
+VM_BASE_DIR = _rooted(_DIRS["vm_base"])
 STATE_FILE  = os.path.join(VM_BASE_DIR, _DIRS["state_file"])
 
 

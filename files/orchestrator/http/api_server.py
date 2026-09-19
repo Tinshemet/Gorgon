@@ -46,7 +46,7 @@ from .context import (
 
 # ── Token bootstrap ───────────────────────────────────────────────────────────
 # Precedence: env var → ~/.gorgon.token file → refuse to start.
-_TOKEN_FILE = pathlib.Path.home() / ".gorgon.token"
+_TOKEN_FILE = pathlib.Path(os.environ.get("GORGON_HOME") or pathlib.Path.home()) / ".gorgon.token"
 
 def _load_token() -> str:
     """Load the API token from the environment variable or the token file."""

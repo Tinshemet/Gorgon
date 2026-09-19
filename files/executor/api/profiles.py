@@ -11,13 +11,14 @@ profiles) with no import cycle at load time.
 from __future__ import annotations
 
 import json
+from ._vm_constants import _rooted   # the ONE re-rooting helper (2026-09-19)
 import os
 from typing import Any, Dict, List
 
 _CFG  = json.load(open(os.path.join(os.path.dirname(__file__), "config.json")))
 _MC   = _CFG["machine_config_defaults"]
 _DIRS = _CFG["dirs"]
-PROFILES_DIR = os.path.expanduser(_DIRS["profiles"])
+PROFILES_DIR = _rooted(_DIRS["profiles"])
 
 # ─────────────────────────────────────────────
 #  BUILT-IN HARDWARE PROFILES

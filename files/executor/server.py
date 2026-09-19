@@ -37,8 +37,8 @@ from executor import disk_delivery
 from executor import config as _CFGMOD   # config/ folder: defaults ∪ this machine's overrides
 _CFG = _CFGMOD.as_dict()
 
-_TOKEN_FILE = pathlib.Path.home() / ".gorgon-executor.token"
-_EVENT_LOG  = pathlib.Path.home() / ".gorgon-executor-events.jsonl"
+_TOKEN_FILE = pathlib.Path(os.environ.get("GORGON_HOME") or pathlib.Path.home()) / ".gorgon-executor.token"
+_EVENT_LOG  = pathlib.Path(os.environ.get("GORGON_HOME") or pathlib.Path.home()) / ".gorgon-executor-events.jsonl"
 
 
 def _load_token() -> str:

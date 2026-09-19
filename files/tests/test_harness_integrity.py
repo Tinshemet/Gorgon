@@ -308,106 +308,28 @@ SANDBOXED_STORES = {
 #   `GORGON_HOME` does not move them and this file must not pretend otherwise. They are listed
 #   so that a NEW leak is distinguishable from a KNOWN one; closing any of them means deleting
 #   its line here, and leaving a stale line red is the point.
-DECLARED_OUTSIDE = {
-    # ⇒ SHARED CONFIG'S OWN PATHS — `~/.gorgon.key`, `.agent`, `.token`, `.audit.log`,
-    #   `_agents/`, `voided.json`. Resolved from the config file at import, under `~/` directly.
-    "shared.config.AGENTS_DIR",
-    "shared.config.AGENT_SELECTION_FILE",
-    "shared.config.AUDIT_LOG_FILE",
-    "shared.config.SIGNING_KEY_FILE",
-    "shared.config.TOKEN_FILE",
-    "shared.config.VOIDED_AGENTS_FILE",
+DECLARED_OUTSIDE = set()
+# ⇒⇒ **EMPTY AS OF 2026-09-19, AND THAT IS THE POINT OF THE MANIFEST.** It held 57 entries on
+#   2026-09-18: the credential store, the signing key, the executor token, the audit log, the
+#   agent bundle root, the session file, and the executor's VM directories — every one of them
+#   bound to the operator's REAL `~/.gorgon` at import, where no `GORGON_HOME` sandbox reached.
+#   `vm_state.STATE_FILE` was being WRITTEN by suite runs.
+#
+#   ⇒ THEY WERE CLOSED IN THREE PLACES, NOT ~50. Each family resolved from ONE config reader, so
+#     re-rooting the reader carried every constant that derives from it:
+#         shared/config/_path              6 · signing key · token · audit log · agents · …
+#         executor/api/_vm_constants._rooted   24 · vm base · templates · workspace · profiles
+#         three direct `Path.home()` sites + `chat/session`
+#     The CONSTANTS stayed constants — `orchestrator/auth` proved on 09-18 that the patch-one-
+#     name idiom is load-bearing in the tests, and converting to functions would break it.
+#
+#   ⇒ PRODUCTION IS UNCHANGED THROUGHOUT: with `GORGON_HOME` unset every helper is exactly
+#     `expanduser`, verified both ways for each family.
+#
+#   ⇒ **A NEW ENTRY HERE IS A DECISION, NOT A CHORE.** The sweep below goes red on an undeclared
+#     bind; adding a line says "this one stays outside the sandbox and here is why". An empty set
+#     is the state to defend.
 
-    # ⇒ THE VM WORKING DIRECTORIES — `~/.gorgon/<vm>`, templates, workspace, profiles,
-#   isolated-net, label registry, `.state.json`. Rooted in `shared_config` (`_CFG["dirs"]["vm_base"]`),
-#   NOT in GORGON_HOME, so sandboxing the home cannot move them. ⚠ `vm_state.STATE_FILE` is
-#   WRITTEN by suite runs (observed 2026-09-18 17:26). EXECUTOR LAYER — out of scope by the
-#   standing `orchestrator level only` rule; recorded here so it is visible, not fixed here.
-    "executor.api._vm_constants.TEMPLATES_DIR",
-    "executor.api._vm_constants.VM_BASE_DIR",
-    "executor.api._vm_constants.WORKSPACE_DIR",
-    "executor.api._vm_diagnostics.VM_BASE_DIR",
-    "executor.api._vm_guest.VM_BASE_DIR",
-    "executor.api._vm_launch_support.VM_BASE_DIR",
-    "executor.api._vm_lifecycle.VM_BASE_DIR",
-    "executor.api._vm_monitoring.VM_BASE_DIR",
-    "executor.api._vm_operations.VM_BASE_DIR",
-    "executor.api._vm_runtime.VM_BASE_DIR",
-    "executor.api._vm_stealth.VM_BASE_DIR",
-    "executor.api._vm_templates.TEMPLATES_DIR",
-    "executor.api.label_registry.VM_BASE_DIR",
-    "executor.api.label_registry._REGISTRY",
-    "executor.api.network_manager.ISOLATED_NET_DIR",
-    "executor.api.network_manager.VM_BASE_DIR",
-    "executor.api.profiles.PROFILES_DIR",
-    "executor.api.qemu_config.PROFILES_DIR",
-    "executor.api.qemu_config.VM_BASE_DIR",
-    "executor.api.qemu_manager.VM_BASE_DIR",
-    "executor.api.vm_state.STATE_FILE",
-    "executor.api.vm_state.VM_BASE_DIR",
-    "executor.tool_dispatch.tools.local_probe.WORKSPACE_DIR",
-    "executor.tool_dispatch.tools.run_command.WORKSPACE_DIR",
-
-    # ⇒ ⚠⚠ THE OPERATOR CREDENTIAL AND SESSION STORE. Real files: `operators.json`,
-#   `operator_sessions.json`. Config-rooted. The suite READS the operator's real auth state.
-#   THE MOST SECURITY-RELEVANT ENTRY ON THIS LIST and the one to close first.
-
-    # ⇒ ⚠ THE SIGNING KEY — `~/.gorgon.key`, 64 bytes, unchanged since 2026-07-20.
-#   Config-rooted. Read, not written, in every run observed.
-    "shared.grgn_sign.SIGNING_KEY_FILE",
-    "shared.grgn_sign._KEY_PATH",
-
-    # ⇒ THE EVENT LOG — `~/.gorgon/events.log` and `~/.gorgon/logs`. NOTE: the
-#   WRITE path was already sandboxed (`engines/eventlog.py` reads GORGON_HOME lazily) and the
-#   log dir has not grown since 2026-08-07. These module-level constants are the READ side.
-    "orchestrator.event_log.VM_BASE_DIR",
-    "orchestrator.event_log._LOG_DIR",
-    "orchestrator.event_log._LOG_FILE",
-
-    # ⇒ AGENT SELECTION — `~/.gorgon.agent`. Config-rooted.
-    "shared.agent_select.AGENT_SELECTION_FILE",
-    "shared.agent_select._SELECTION_FILE",
-
-    # ⇒ AGENT BUNDLE ROOT — `~/.gorgon/_agents`. Config-rooted.
-    "shared.bundle.AGENTS_DIR",
-    "shared.bundle.AGENTS_ROOT",
-
-    # ⇒ REVOCATION LIST — `~/.gorgon/voided.json`. Config-rooted.
-    "orchestrator.ai.agent.revocation.VOIDED_AGENTS_FILE",
-    "orchestrator.ai.agent.revocation._PATH",
-
-    # ⇒ CHAT SESSION FILE. Config-rooted.
-    "orchestrator.ai.chat.session.SESSION_FILE",
-
-    # ⇒ PREFLIGHT's copy of VM_BASE_DIR. Config-rooted.
-    "orchestrator.preflight.validator.checks.VM_BASE_DIR",
-
-    #
-    # ⇒ MORE VM-DIRECTORY CONSTANTS, same config root as the executor block above.
-    "executor.disk_delivery.VM_BASE_DIR",
-    "executor.disk_delivery._VM_BASE",
-    "orchestrator.http.image_delivery.VM_BASE_DIR",
-    "orchestrator.run_command_grants.VM_BASE_DIR",
-    #
-    # ⇒ ⚠ THE REMOTE-EXECUTOR TOKEN FILE — `~/.gorgon.token`. Config-rooted. Read at import by
-    #   both the executor server and the orchestrator's HTTP API server.
-    "executor.server._TOKEN_FILE",
-    "orchestrator.http.api_server._TOKEN_FILE",
-    #
-    # ⇒ THE EXECUTOR SERVER'S EVENT-LOG HANDLE.
-    "executor.server._EVENT_LOG",
-    #
-    # ⇒ NOT LISTED, DELIBERATELY: `shared.audit.path`, `shared.grgn_sign.key_path`,
-    #   `shared.agent_select.selection_path` and `mission.missions_dir` are FUNCTIONS that compute
-    #   their path when called. That is the lazy pattern this check exists to encourage, so they
-    #   are not leaks — they appeared in an early draft only because the sweep was calling them.
-    # ⇒ ⚠ THE AUDIT LOG — `~/.gorgon.audit.log`. Config-rooted. `shared.audit` itself resolves
-    #   here because the MODULE object exposes a `path`; all four names are one leak.
-    "shared.audit.AUDIT_LOG_FILE",
-    "shared.audit._PATH",
-    #
-    # ⇒ THE MISSION DIRECTORY.
-}
 
 _PATH_ATTRS = ("root", "dir", "home", "path", "_root", "_dir", "_home", "_path")
 

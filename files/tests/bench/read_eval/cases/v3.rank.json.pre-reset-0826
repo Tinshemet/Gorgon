@@ -1,0 +1,66 @@
+{
+ "ca-0002": {
+  "hash": "c76c7254ca437967",
+  "rank": 4
+ },
+ "dt-0003": {
+  "hash": "53fbffd9c9c50c78",
+  "rank": 4
+ },
+ "io-0003": {
+  "hash": "0b50412c3ff019e5",
+  "rank": 1
+ },
+ "io-0004": {
+  "hash": "e6759583f956e482",
+  "rank": 2
+ },
+ "lw-0001": {
+  "hash": "d12286638b9a5859",
+  "rank": 8
+ },
+ "mg-0003": {
+  "hash": "13af45be613d4ade",
+  "rank": 4
+ },
+ "nl-0004": {
+  "hash": "9d424bf58489b974",
+  "rank": 7
+ },
+ "nt-0007": {
+  "hash": "242ac89aa2b72cd1",
+  "rank": 2
+ },
+ "or-0002": {
+  "hash": "8cae3883bb448a36",
+  "rank": 6
+ },
+ "or-0003": {
+  "hash": "2a02b3373230a8de",
+  "rank": 2
+ },
+ "qv-0001": {
+  "hash": "460d561bf29f42c8",
+  "rank": 7
+ },
+ "td-0003": {
+  "hash": "211e10ff554a997f",
+  "rank": 1
+ },
+ "td-0005": {
+  "hash": "c426778e26cb72e6",
+  "rank": 7
+ },
+ "tp-0003": {
+  "hash": "17eaef28d3be7a03",
+  "rank": 6
+ },
+ "un-0003": {
+  "hash": "5c4cfbd58c54ec86",
+  "rank": 2
+ },
+ "un-0004": {
+  "hash": "f88f9a6a127a0eac",
+  "rank": 2
+ }
+}

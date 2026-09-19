@@ -42,18 +42,52 @@ def _c(key: str):
     return _CFG[key]
 
 
+def _path(key: str) -> str:
+    """A configured path, RE-ROOTED under `GORGON_HOME` when that is set.
+
+    ⇒⇒ **SIX OF THE 57 LEAKS DECLARED ON 2026-09-18 ARE HERE, AND THEY ARE THE SENSITIVE ONES**
+      — the signing key, the executor token, the audit log, the agent bundle root, the agent
+      selection file and the revocation list. They resolve from this manifest at IMPORT, under
+      `~/` directly, so the `GORGON_HOME` sandbox never moved them: **the test suite bound the
+      operator's real signing key and executor token in every run.**
+
+    ⇒ THE FIX IS HERE AND NOT IN THE ~50 CALL SITES. Every one of them is `os.path.expanduser`
+      over a value this file owns, so re-rooting once carries all of them — and the constants
+      stay CONSTANTS, which matters because `orchestrator/auth` proved on 2026-09-18 that the
+      patch-one-name idiom is load-bearing in the tests.
+
+    ⇒ TWO SHAPES, both in the manifest: `~/.gorgon/_agents` (inside the home) and `~/.gorgon.key`
+      (a dotted SIBLING of it). The second is re-rooted as `$GORGON_HOME/.key`, keeping the name
+      recognisable rather than inventing one.
+
+    ⇒ PRODUCTION IS UNCHANGED: with `GORGON_HOME` unset this is exactly `expanduser`.
+    """
+    full = os.path.expanduser(str(_c(key)))
+    home = os.environ.get("GORGON_HOME")
+    if not home:
+        return full
+    real = os.path.expanduser("~/.gorgon")
+    if full == real:
+        return home                    # the home ITSELF, not `home/.` — relpath returns "."
+    if full.startswith(real + os.sep):
+        return os.path.join(home, os.path.relpath(full, real))
+    if full.startswith(real + "."):                     # ~/.gorgon.key -> $GORGON_HOME/.key
+        return os.path.join(home, "." + full[len(real) + 1:])
+    return full
+
+
 # ── agent selection + bundles ───────────────────────────────────────────────────
-AGENT_SELECTION_FILE = os.path.expanduser(_c("agent_selection_file"))
+AGENT_SELECTION_FILE = _path("agent_selection_file")
 DEFAULT_AGENT        = _c("default_agent")
 AGENT_ENV_VAR        = _c("agent_env_var")
-AGENTS_DIR           = os.path.expanduser(_c("agents_dir"))   # ~/.gorgon/_agents — bundle root
-VOIDED_AGENTS_FILE   = os.path.expanduser(_c("voided_agents_file"))   # revoked agents (revocation.py)
+AGENTS_DIR           = _path("agents_dir")   # ~/.gorgon/_agents — bundle root
+VOIDED_AGENTS_FILE   = _path("voided_agents_file")   # revoked agents (revocation.py)
 
 # ── on-disk secrets / logs ──────────────────────────────────────────────────────
-AUDIT_LOG_FILE   = os.path.expanduser(_c("audit_log_file"))
+AUDIT_LOG_FILE   = _path("audit_log_file")
 EVENT_LOG_ROTATE_BYTES = _c("event_log_rotate_bytes")   # events.log rotation threshold
-SIGNING_KEY_FILE = os.path.expanduser(_c("signing_key_file"))
-TOKEN_FILE       = os.path.expanduser(_c("token_file"))
+SIGNING_KEY_FILE = _path("signing_key_file")
+TOKEN_FILE       = _path("token_file")
 # operator-password hashing (stdlib scrypt) — cost/size parameters
 SCRYPT_N     = _c("scrypt_n")
 SCRYPT_R     = _c("scrypt_r")

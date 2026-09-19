@@ -20,8 +20,34 @@ _UPDATE_ALLOWED_FIELDS = frozenset(_CFG["update_allowed_fields"])
 _MONITOR_ALLOWED_CMDS  = tuple(_CFG["monitor_allowed_cmds"])
 _LINUX_DISTROS         = _CFG["linux_distros"]
 _LOG_DEFAULT_LINES     = _CFG["log_default_lines"]
-VM_BASE_DIR            = os.path.expanduser(_CFG["dirs"]["vm_base"])
-TEMPLATES_DIR          = os.path.expanduser(_CFG["dirs"]["templates"])
+def _rooted(raw: str) -> str:
+    """A configured directory, RE-ROOTED under `GORGON_HOME` when that is set.
+
+    ⇒⇒ **THE EXECUTOR'S VM DIRECTORIES WERE 24 OF THE 57 LEAKS DECLARED 2026-09-18.** They
+      resolve at IMPORT from `config.json` under `~/` directly, so the suite's `GORGON_HOME`
+      sandbox never moved them — and `vm_state.STATE_FILE` is WRITTEN by test runs, observed
+      2026-09-18 17:26 in the operator's real `~/.gorgon/.state.json`.
+
+    ⇒ SAME FIX AS `shared/config._path`: once, here, rather than at the ~24 call sites that
+      import these names. The constants stay constants.
+
+    ⇒ PRODUCTION IS UNCHANGED — with `GORGON_HOME` unset this is exactly `expanduser`, and the
+      executor goes on managing the operator's real machines in `~/.gorgon`.
+    """
+    full = os.path.expanduser(raw)
+    home = os.environ.get("GORGON_HOME")
+    if not home:
+        return full
+    real = os.path.expanduser("~/.gorgon")
+    if full == real:
+        return home                    # the home ITSELF, not `home/.` — relpath returns "."
+    if full.startswith(real + os.sep):
+        return os.path.join(home, os.path.relpath(full, real))
+    return full
+
+
+VM_BASE_DIR            = _rooted(_CFG["dirs"]["vm_base"])
+TEMPLATES_DIR          = _rooted(_CFG["dirs"]["templates"])
 TEMPLATE_LABEL         = _CFG.get("template_label", "template")
 WORKSPACE_DIR          = os.path.join(VM_BASE_DIR, "workspace")   # run_command scratch/output area
 

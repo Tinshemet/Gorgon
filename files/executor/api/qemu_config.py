@@ -259,7 +259,8 @@ class MachineConfig:
 #  Profiles are saved to ~/.gorgon/_profiles/
 # ─────────────────────────────────────────────
 
-PROFILES_DIR = os.path.expanduser(_DIRS["profiles"])
+from ._vm_constants import _rooted   # the ONE re-rooting helper (2026-09-19)
+PROFILES_DIR = _rooted(_DIRS["profiles"])
 
 from .profiles import (  # profile management (extracted from this file)
     _load_custom_profiles, save_custom_profile, delete_custom_profile,

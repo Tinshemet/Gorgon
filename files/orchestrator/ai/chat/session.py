@@ -13,7 +13,24 @@ _CFG         = json.load(open(os.path.join(os.path.dirname(__file__), "config.js
 _SESSION_CFG = _CFG["session"]
 _DRIFT       = _CFG.get("drift_thresholds", {})
 
-SESSION_FILE        = os.path.expanduser(_SESSION_CFG["file"])
+# ⇒ RE-ROOTED UNDER `GORGON_HOME` (2026-09-19) — one of the 57 leaks declared 09-18. Production
+#   is unchanged: with the variable unset this is exactly `expanduser`.
+def _session_path(raw: str) -> str:
+    full = os.path.expanduser(str(raw))
+    home = os.environ.get("GORGON_HOME")
+    if not home:
+        return full
+    real = os.path.expanduser("~/.gorgon")
+    if full == real:
+        return home
+    if full.startswith(real + os.sep):
+        return os.path.join(home, os.path.relpath(full, real))
+    if full.startswith(real + "."):
+        return os.path.join(home, "." + full[len(real) + 1:])
+    return full
+
+
+SESSION_FILE        = _session_path(_SESSION_CFG["file"])
 MAX_SESSION_HISTORY = _SESSION_CFG["max_history"]
 AUTO_CLEAR_SESSION  = _SESSION_CFG.get("auto_clear", False)
 # THE ENGINE PATH AS THE DEFAULT TURN. Off, and the reason is in the config beside the key:

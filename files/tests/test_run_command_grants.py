@@ -35,9 +35,23 @@ def granted_dir():
 
 
 def test_refuses_secret_paths():
-    assert G.add_read(os.path.expanduser("~/.gorgon"))["success"] is False   # the home itself
-    assert G.add_read(os.path.expanduser("~"))["success"] is False           # an ancestor of it
-    assert G.add_read("/definitely/missing/xyz")["success"] is False         # nonexistent
+    """The VM base and any ancestor of it are refused — whatever the VM base currently IS.
+
+    ⇒⇒ **THIS ASSERTED A LITERAL AND NOW ASSERTS THE INVARIANT** (2026-09-19). It read
+      `add_read(expanduser("~/.gorgon"))`, hardcoding the production path. When the executor's
+      directories were re-rooted under `GORGON_HOME` so the suite would stop binding the
+      operator's real storage, the module's own base moved to the sandbox and the test went red
+      against a path the module no longer guards — **reporting a regression where there was
+      none**. Checked both ways at the time: production still refuses `~/.gorgon` and `~`, and
+      the sandbox refuses its own home.
+
+    ⇒ The rule was never about that string. It is *the VM base is secret, and so is anything
+      containing it*, and reading it off `G.VM_BASE_DIR` tests exactly that.
+    """
+    base = G.VM_BASE_DIR
+    assert G.add_read(base)["success"] is False                    # the home itself
+    assert G.add_read(os.path.dirname(base))["success"] is False   # an ancestor of it
+    assert G.add_read("/definitely/missing/xyz")["success"] is False   # nonexistent
 
 
 def test_ungranted_read_blocked(granted_dir):
