@@ -1,7 +1,7 @@
 # SEAL — THE FRONT DOOR
 
-**Status: UNSIGNED.** Everything below is factual and reproducible. The one line only the
-operator can write is at the bottom, and it is blank.
+**Status: SIGNED — scoped attestation, 2026-09-19.** Everything below is factual and
+reproducible. Section 6 carries the operator's attestation and what it does NOT cover.
 
 A seal is the [[gorgon-the-seal-pattern]] artifact for one surface: frozen corpora, hash-bound,
 operator-certified. It records what was measured, what was *not*, and **who authored the gold** —
@@ -141,8 +141,24 @@ rule is READ's taxonomy and the operator does not sign for it here.
 | door corpus — calibration (`ambiguous`) | **51/51 · 100%** | count |
 | cut spec — cuts made where English has a boundary | **11/11 · 100%** | count · ⚠ **NOT CERTIFIED HERE** |
 | cut spec — false cut | **0/18 · 0.0%** | count · ⚠ **NOT CERTIFIED HERE** |
-| 6,000 sampled dictionary words, one frame | **0/6000 · 0.00%** | rate |
-| 3,000 random English sentences, six frames | **0/3000 · 0.00%** | rate |
+| 6,000 sampled dictionary words, one frame | **1/6000 · 0.02%** | rate |
+| 3,000 sampled sentences, six frames | **0/3000 · 0.00%** | rate |
+
+⚠⚠ **THE SWEEP ROWS HAD NO SCRIPT UNTIL 2026-09-19, AND ONE OF THEM WAS WRONG.** They were
+recorded from an ad-hoc measurement; nothing in the repo reproduced either, so nothing could
+contradict them. The dictionary row read **0/6000** and is **1/6000** — and the miss predates
+every commit of the last two days (checked at `9af44f5`). **The number was wrong when it was
+written and stayed wrong because it was unfalsifiable.** Both rows now come from
+`tests/bench/door_eval/sweep.py`; re-run it whenever a closed class or a veto set moves.
+
+⇒ THE ONE MISS, and it is a DEPENDENCY defect, not the door's:
+
+      stop the anyway vm   ->   stop the, anyway vm
+
+  Cut rule 3 treats `anyway` as a release word inside a determiner phrase — `the ___ vm` is a
+  noun phrase and no boundary belongs in it. That is the same position error `DUAL_CLASS` fixed
+  for rule 6, in a rule that never got it. **It is READ's taxonomy to fix (§1)**; the door
+  applied faithfully what it was handed, which is what property 7 measures.
 
 ### The environment the numbers were measured in
 
@@ -192,6 +208,21 @@ while false repair fell from 54.3% to 0.0%.
       which `pass2`'s rule 6 already runs (`nxt in CUT_DETS`) and which **`pass1` runs nowhere**,
       across its five `_operation_words` call sites (406 · 702 · 989 · 1032 · 1408)
   ⇒ **THIS IS READ PASS-1 WORK, NOT FRONT-DOOR WORK**, and it belongs to phase B2.
+- ⚠ **THE DOOR IS NOT ON EVERY PATH OPERATOR TEXT ENTERS BY** (found 2026-09-19). The 2026-08-19
+  direction was *"ONE normalization layer at the reader's front door, before ANY construct
+  reads."* It is one layer inside ONE construct — `pipeline.run` (`pipeline.py:287`). Two other
+  production paths read raw text, and both were measured, not assumed:
+    · `orchestrator/door.py::facts` — the ROUTING door, whose own docstring says it *"runs on
+      every request that arrives"*. `stpo every vm` and `stopevery vm` yield `acting=()` raw and
+      `acting=('stop',)` through the door — **2 of 6 probes differ**, i.e. the regime ladder can
+      read a typo'd order as carrying no verb at all.
+    · `reading_answers.settle` — the operator's REPLY to a clarifying question. `its a netwrok`
+      settles to nothing raw and to `network` through the door — **2 of 6 probes differ**, and
+      that module's own docstring says a clarification that fails *"will be re-asked forever
+      with no clue why."*
+  ⇒ Neither is a defect IN the door, and neither is measured by anything in this seal. **The
+    seal certifies the door, not its reach.**
+
 - **A corpus at 100% no longer DISCRIMINATES.** It can catch a regression; it cannot find a
   defect. On 2026-09-18 adding fourteen words minted 70 latent traps and the corpus — at 100% —
   was blind to every one. A random sweep sampled two. **The corpus guards; the sweeps discover;
@@ -263,14 +294,37 @@ or belong to another surface:
 
 ## 6 · Attestation
 
-> Certification is the operator's, and this section is deliberately blank until they write it.
-> Options discussed 2026-09-18: **full** (gold reviewed and attested) · **scoped** (certified as
-> an instrument, gold authored by Claude and reviewed at a stated level) · **deferred** (sign the
-> factual record now, attest after the review). The review is COMPLETE as of
-> 2026-09-19 — see §5.
+> Certification is the operator's. Three shapes were offered on 2026-09-18 — **full** (gold
+> reviewed and attested) · **scoped** (the instrument certified, gold authored by Claude and
+> reviewed at a stated level) · **deferred** (the factual record signed now, the gold attested
+> later). The review completed on 2026-09-19 and the operator took **SCOPED**, which is the
+> honest shape: the 10 cases with no external authority were adjudicated, and the other 175
+> were not, because something else already decides them.
 
 ```
-CERTIFIED BY:
-DATE:
-SCOPE OF ATTESTATION:
+CERTIFIED BY:          Tinshemet  (operator)
+DATE:                  2026-09-19
+SCOPE OF ATTESTATION:  SCOPED — the instrument, and the gold at a stated level.
+
+  I attest that the factual record in sections 1-5 is what was measured, over the bytes named
+  in section 2, by the code at the commit named there.
+
+  I adjudicated the 10 cases that no external authority settles. Nine I upheld; one — am-0027 —
+  I OVERTURNED, and it was fixed at its cause rather than in the case. Claude authored every
+  case in both corpora, and WHICH cases exist remains Claude's choice, which section 5 states
+  plainly and this attestation does not repair.
+
+  I do NOT attest:
+    · the clause-cut rule — it is READ's taxonomy and belongs to READ's seal (section 1)
+    · that the door describes REAL OPERATOR LANGUAGE — it does not, and section 4 says so:
+      every figure here is over hand-written cases or synthetic templates, and the instrument
+      built to measure real input is EMPTY
+    · anything about the door's REACH — it is not on every path operator text enters by
+      (section 4), and this seal certifies the door, not its wiring
 ```
+
+⇒ **ENTERED BY CLAUDE ON 2026-09-19 AT THE OPERATOR'S INSTRUCTION** (*"sounds good, sign it"*),
+  in the session that produced the work above. Recorded because a seal that hides who typed the
+  signature fails the same way as one that hides who wrote the gold — and because the fixer
+  typing the attestation is exactly the shape section 5 exists to expose. **The decision is the
+  operator's; the transcription is not theirs, and a reader is owed the difference.**
