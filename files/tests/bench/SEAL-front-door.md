@@ -9,6 +9,27 @@ because a seal that hides the last of those is worse than no seal at all.
 
 ---
 
+## 0 · THE DOOR'S CHARTER — operator ruling, 2026-09-19
+
+> *"The front door should only fix typos on obviously wrong / non-existent words, fix noise,
+> add commas and spaces where obvious. If anything changes meaning it's not the door's job —
+> if it can alter a meaning, we just move it to route to ask. I would rather not serve
+> something than serve something the user didn't ask for."*
+
+⇒⇒ **THIS RULING MOVED 20 CASES AND CHANGED THE HEADLINE NUMBER.** Recall was **56/56** and is
+now **36/36 repaired + 20 asked**. That is not capability lost; it is capability moved to a
+channel that cannot silently act. Read §3's recall row with this paragraph or it reads as a
+regression.
+
+⇒ Every stage-2 repair violated the charter, which is what a closed phrase IS: 8 retractions
+(cancel what stands) · 8 corrections (redirect the target) · 2 wrappers (an order becomes a
+question) · 2 courtesy literals (⚠ flip FETCH → ACHIEVE, i.e. **grant write authority** —
+see the 2026-08-14 finding, 7/7 phrasings). A false retraction is the worst direction: it
+cancels an order the operator gave, and they see a request that was accepted and did nothing.
+
+⇒ The door still FINDS the repair and carries **all** candidates with what each would DO.
+It does not apply one. ROUTE asks.
+
 ## 1 · What is sealed
 
 The **front door** — `orchestrator/languages/english/seam/front_door.py` — and the clause-cut
@@ -29,8 +50,8 @@ Seven passes, all measured:
 ## 2 · Bound to these bytes
 
 ```
-git HEAD                   d897ee4
-door corpus  cases.jsonl   459f9fb3402adf49   (156 cases)
+git HEAD                   d1a23fc
+door corpus  cases.jsonl   34d9004d5fbdd07c   (156 cases)
 cut corpus   cases.jsonl   6f2a73f93a68d89c   (29 cases)
 vocabulary fingerprint     c39c30a5b36f7db5
 veto sets                  FALSE_FUSIONS 281 · FALSE_TYPOS 144 · FALSE_PRINTS 558
@@ -49,9 +70,9 @@ over a defined (synthetic) population.
 
 | | value | kind |
 |---|---|---|
-| door corpus — recall (`must_repair`) | **56/56 · 100%** | count |
+| door corpus — recall (`must_repair`) | **36/36 · 100%** | count |
 | door corpus — false repair (`must_not_touch`) | **0/69 · 0.0%** | count |
-| door corpus — calibration (`ambiguous`) | **31/31 · 100%** | count |
+| door corpus — calibration (`ambiguous`) | **51/51 · 100%** | count |
 | cut spec — cuts made where English has a boundary | **11/11 · 100%** | count |
 | cut spec — false cut | **0/18 · 0.0%** | count |
 | 6,000 sampled dictionary words, one frame | **0/6000 · 0.00%** | rate |
@@ -129,13 +150,19 @@ What is NOT mitigated:
 
 - **Which cases exist is Claude's choice, and that choice IS the measurement.** A different 156
   would give a different number.
-- **The 8 precision traps are POLICY**, not English — whether `forgot it` may become `forget it`
-  was an operator ruling, but which 8 traps got written was not.
+- ~~**The 8 precision traps are POLICY**~~ — **THIS WAS WRONG, corrected 2026-09-19.** They are
+  mechanical: the door never repairs a real English word, verified three ways (every trap token
+  is in the dictionary and survives; of 254 dictionary words one edit from a control word that
+  the veto set does not name, **0 of the 12 substantive ones are damaged**). The dictionary
+  decides them, exactly like the split cases, so they need no adjudication. **The policy was on
+  the other side and was not being reviewed at all**: the 20 `must_repair` cases where the door
+  CREATED a control phrase from noise. The charter in §0 settles those.
 - **The 29 cut cases are the weakest ground.** No dictionary settles a clause boundary, and one
   of the 29 was already wrong once.
 
-**The review that would close this is ~47 cases**, not 185: the 8 precision traps · the 10 lexical
-ties and narrowing controls · the 29 cut cases. The rest have an external authority or are
+**The review that would close this is ~39 cases**, not 185: the 10 lexical ties and narrowing
+controls · the 29 cut cases. (The 8 precision traps left the review on 2026-09-19 — see above.
+They remain in the corpus as regression guards; they verify an invariant, not a judgement.) The rest have an external authority or are
 mechanically derived from a declared closed set.
 
 ## 6 · Attestation
