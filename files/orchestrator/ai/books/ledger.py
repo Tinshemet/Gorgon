@@ -131,6 +131,25 @@ class Ledger:
         A DAMAGED LINE IS SKIPPED. An append-only log written by a process that can die
         mid-line will eventually have one, and refusing to read the whole ledger because of
         its last byte would lose the very history it exists to keep.
+
+        ⚠⚠ **LOGGED 2026-09-19 — THIS IS AN O(n) FULL SCAN AND EVERY READER GOES THROUGH IT.**
+          `readlines()` over the whole file, then a dict folded across every row. `get(uid)`
+          calls it for ONE key. `pending()` calls it. `shortcuts/books.py` calls it and then
+          prints `rows[-20:]` — **the entire ledger read to show the last twenty lines.**
+
+          ⇒ MEASURED, not estimated: the operator's ledger had reached **4,029,798 lines /
+            647 MB**, at which `rows()` costs **~9 s and several GB of live dicts**. That file
+            was 100% test fixtures (the 09-18 hermeticity leak) and has been moved aside, so
+            the symptom is gone — **the shape is not.** A real ledger grows too, and every
+            reader gets slower forever.
+
+          ⇒ IT IS NOT URGENT AND IT IS NOT A BUG TODAY. It is the same shape as the marathon
+            and the door sweeps: correct at small n, never measured at large n, and the first
+            thing to notice was a 647 MB file. **Fixing it means an index or a tail-read, and
+            `get(uid)` should not be a full scan whatever the size.**
+
+          ⇒ APPEND-ONLY IS THE RIGHT DESIGN and is not what is in question here; only that
+            every READ folds the whole history to answer a question about one slot.
         """
         by_uid: Dict[str, Dict[str, Any]] = {}
         try:
