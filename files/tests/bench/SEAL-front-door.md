@@ -68,8 +68,19 @@ that they can be easily computed)."*
 
 ## 1 · What is sealed
 
-The **front door** — `orchestrator/languages/english/seam/front_door.py` — and the clause-cut
-rule it consumes, `pass2._first_cut` / `merge_cut_points`.
+The **front door** — `orchestrator/languages/english/seam/front_door.py`.
+
+⇒⇒ **THE CLAUSE-CUT RULE IS NOT SEALED HERE — OPERATOR RULING 2026-09-19.** *"The clause cuts …
+this is for READ to decide, since READ does taxonomy, not front door."* `pass2._first_cut` and
+`merge_cut_points` live in READ and decide a question of TAXONOMY — where one clause ends and
+the next begins. The door merely APPLIES that decision, restoring the comma so pass 1's span
+walk can see the boundary (N3, operator-approved `db32859`, 2026-08-19, after 5 certified span
+losses). Applying is not deciding.
+
+⇒ So the 29 cut cases are **READ's gold to adjudicate, in READ's seal**, not this one. The cut
+  spec's numbers stay in §3 as a **declared dependency** — the door's behaviour changes if the
+  rule changes, and a reader is owed that — but they are not certified by this attestation and
+  the operator does not sign for them here.
 
 Seven passes, all measured:
 
@@ -86,11 +97,11 @@ Seven passes, all measured:
 ## 2 · Bound to these bytes
 
 ```
-git HEAD                   dcffce7
-door corpus  cases.jsonl   a59989b3dd6892ea   (159 cases)
+git HEAD                   91ad128
+door corpus  cases.jsonl   0a3f9802ed116f87   (159 cases)
 cut corpus   cases.jsonl   6f2a73f93a68d89c   (29 cases)
-vocabulary fingerprint     c39c30a5b36f7db5
-veto sets                  FALSE_FUSIONS 281 · FALSE_TYPOS 144 · FALSE_PRINTS 558
+vocabulary fingerprint     e26ba3535b5a9d2e
+veto sets                  FALSE_FUSIONS 292 · FALSE_TYPOS 144 · FALSE_PRINTS 558
 DUAL_CLASS_VERBS           snapshot, template
 CUT_NEGATION               24 forms
 ```
@@ -106,9 +117,9 @@ over a defined (synthetic) population.
 
 | | value | kind |
 |---|---|---|
-| door corpus — recall (`must_repair`) | **39/39 · 100%** | count |
+| door corpus — recall (`must_repair`) | **40/40 · 100%** | count |
 | door corpus — false repair (`must_not_touch`) | **0/69 · 0.0%** | count |
-| door corpus — calibration (`ambiguous`) | **51/51 · 100%** | count |
+| door corpus — calibration (`ambiguous`) | **50/50 · 100%** | count |
 | cut spec — cuts made where English has a boundary | **11/11 · 100%** | count |
 | cut spec — false cut | **0/18 · 0.0%** | count |
 | 6,000 sampled dictionary words, one frame | **0/6000 · 0.00%** | rate |
@@ -167,8 +178,8 @@ while false repair fell from 54.3% to 0.0%.
 
 ## 5 · ⚠ WHO AUTHORED THE GOLD — the line that decides what this seal is worth
 
-**Claude wrote all 156 door cases and all 29 cut cases. The operator has adjudicated none of
-them.** The plan for this work said, in bold: *"You annotate this, not me — the fixer never
+**Claude wrote all 159 door cases and all 29 cut cases. The operator has adjudicated the 10
+that no external authority settles, and overturned one of them.** The plan for this work said, in bold: *"You annotate this, not me — the fixer never
 approves their own fix."* That was not followed.
 
 What mitigates it, exactly and no further:
@@ -196,9 +207,32 @@ What is NOT mitigated:
 - **The 29 cut cases are the weakest ground.** No dictionary settles a clause boundary, and one
   of the 29 was already wrong once.
 
-**The review that would close this is ~39 cases**, not 185: the 10 lexical ties and narrowing
-controls · the 29 cut cases. (The 8 precision traps left the review on 2026-09-19 — see above.
-They remain in the corpus as regression guards; they verify an invariant, not a judgement.) The rest have an external authority or are
+**The review that closes this is 10 cases**, and it is DONE.
+
+The other 175 have an external authority, are mechanically derived from a declared closed set,
+or belong to another surface:
+
+| | left the review because |
+|---|---|
+| 8 precision traps | mechanical — the dictionary decides, see above |
+| 29 clause cuts | **READ's taxonomy, not the door's** — operator ruling 2026-09-19, §1 |
+| the rest | derived from a declared closed set, or decided by `/usr/share/dict/american-english` |
+
+**THE OPERATOR RULED ALL TEN ON 2026-09-19** (`am-0001…0006`, `am-0024…0027`):
+
+- **Nine upheld** — the six lexical ties and three of the four narrowing controls.
+- **One OVERTURNED: `am-0027`.** *"We use the grammar here to understand that snapshot here is
+  an ACTION rather than a noun."* The gold had declined `have you snapshto it` as `unlicensed`
+  on the stated reason that *"snapshot is a kind noun"* — which contradicted the operator's own
+  2026-09-18 `DUAL_CLASS_VERBS` ruling. **That was the defect describing itself as a rule**, and
+  it was surfaced to them as a CONFLICT rather than resolved by its author.
+  ⇒ Fixed at the cause: a dual now gets BOTH slots in the sim check. The chain tested
+    `cand in nouns` first, so the verb branch was unreachable for exactly the words whose whole
+    point is that POSITION decides. `artifact` and `checkpoint` still decline — they are not
+    declared duals — so the three upheld narrowing controls are untouched.
+  ⇒ Re-deriving the veto sets against the widened `ops` minted **11 new `FALSE_FUSIONS`**
+    (`forget`, `into`, `setup`, `within` …). The fingerprint caught them; nothing else would
+    have. The rest have an external authority or are
 mechanically derived from a declared closed set.
 
 ## 6 · Attestation

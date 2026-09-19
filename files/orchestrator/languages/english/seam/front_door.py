@@ -572,7 +572,17 @@ def _vocab(board):
     from . import self_repair as _sr, iso as _iso
     from .speech_act import WRAPPERS, COURTESY, AUXILIARIES, WH_WORDS
     nouns = set(_index(board) if board is not None else _index(_board()))
-    ops = {w for w in _operation_words(None) if not w.endswith("s")}
+    # ⇒⇒ **THE DUALS ARE OPERATION WORDS TO THE SIM CHECK TOO — OPERATOR RULING, am-0027,
+    #   2026-09-19.** `snapshot` and `template` sit in `NON_VERB_SEGMENTS`, so `_operation_words`
+    #   subtracts them and the sim check could not see them as verbs: `have you snapshto it`
+    #   declined as *unlicensed*, on the stated reason that "snapshot is a kind noun".
+    #   ⇒ The operator overturned that gold: *"we use the grammar here to understand that
+    #     snapshot here is an ACTION rather than a noun."* The inverted-question frame is the
+    #     grammar; `DUAL_CLASS_VERBS` is the declaration that the word can hold that slot. Rule 6
+    #     in pass2 has read them this way since 2026-09-18 — the sim check simply never did, and
+    #     the corpus recorded the gap as a reason instead of a defect.
+    from ...english.codex import DUAL_CLASS_VERBS as _DUALS
+    ops = {w for w in _operation_words(None) if not w.endswith("s")} | set(_DUALS)
     marker_words = {w for p in (tuple(_sr.CORRECTIONS) + tuple(_sr.RETRACTIONS)
                                 + WRAPPERS + COURTESY) for w in p.split()}
     # ⇒ A WORD IN ANY DECLARED CLOSED CLASS IS A REAL WORD, AND A REAL WORD IS NEVER REPAIRED
@@ -651,6 +661,7 @@ def _recognise(w, toks, at, board):
     #   refused however close it looks. Candidates still come only from our own closed sets, so a
     #   NAME can never be one and the ruling that a typo'd name is the name holds structurally.
     from ..noise_prints import explain as _explain
+    from ..codex import DUAL_CLASS_VERBS as _DUALS
     fits = {}
     explained = {}                          # every candidate the CATALOGUE explains, slot or no slot
     for cand in openers | nouns | ops | states:
@@ -691,10 +702,21 @@ def _recognise(w, toks, at, board):
         elif cand in openers:
             if nxt in nouns:
                 fits[cand] = _prints
-        elif cand in nouns:
+        elif cand in nouns and cand not in _DUALS:
             if prev in openers or (i >= 2 and words[i - 2] in openers):
                 fits[cand] = _prints
-        elif cand in ops:
+        elif cand in ops or cand in _DUALS:
+            # ⇒⇒ **A DUAL MUST BE TRIED IN BOTH SLOTS, AND THIS CHAIN GAVE IT ONE** (operator
+            #   ruling am-0027, 2026-09-19). `snapshot` is a kind noun AND a declared verb, but
+            #   `elif cand in nouns` came first and matched, so the verb branch was unreachable
+            #   for exactly the words whose whole point is that POSITION decides which they are.
+            #   `have you snapshto it` therefore declined as *unlicensed* — with the reason
+            #   written into the corpus as "snapshot is a kind noun", which is the defect
+            #   describing itself as a rule.
+            #   ⇒ SCOPED TO `DUAL_CLASS_VERBS`, not to any word that happens to sit in both
+            #     sets: the duals are derived from the manifest under the 2026-09-18 ruling and
+            #     `test_clause_cuts` enforces that derivation. An accidental overlap is not a
+            #     declared dual and gets no new licence here.
             if i == 0 or prev in {"then", "and", "but"}:
                 fits[cand] = _prints
             # ⇒⇒ **AN INVERTED QUESTION PUTS ITS VERB BEHIND THE SUBJECT** (operator ruling
@@ -719,6 +741,9 @@ def _recognise(w, toks, at, board):
                 from ..codex import SUBJECT_PRONOUNS as _SUBJQ
                 if words and words[0] in _AUXQ and prev in _SUBJQ:
                     fits[cand] = _prints
+                elif cand in _DUALS and (prev in openers
+                                         or (i >= 2 and words[i - 2] in openers)):
+                    fits[cand] = _prints      # …and a dual may still be the NOUN
     #   THE SIMPLEST EXPLANATION WINS, AND ONLY IF IT IS STRICTLY SIMPLEST. Widening the gate from
     #   one edit to the catalogue admits a plural alongside its singular — `netwrk` is `network` by
     #   ONE print (drop-vowel) and `networks` by TWO (drop-vowel + truncate) — and calling that
