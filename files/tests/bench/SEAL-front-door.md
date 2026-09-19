@@ -30,6 +30,42 @@ cancels an order the operator gave, and they see a request that was accepted and
 ⇒ The door still FINDS the repair and carries **all** candidates with what each would DO.
 It does not apply one. ROUTE asks.
 
+### A FUSION is the door's job — the exception is a code pattern
+
+Operator, same ruling: *"those are fused, fused is also a front door issue, unless it's a coding
+pattern again."* So `cancelthat` → `cancel that` stays, **even though the result is a
+retraction**, and that is not a contradiction of the clause above:
+
+| | | |
+|---|---|---|
+| `forgte it` | the letters are **wrong** — which word was meant? | **guessing** → decline |
+| `cancelthat` | the letters are **right**, only the space is missing | **spacing** → open it |
+
+Verified 2026-09-19: **0 of 15 code patterns opened** (identifiers `web-01` · `lab-core-2`,
+camelCase `myVM`, flags `--no-color` · `-xzf`, paths `/etc/web/temp.cfg` · `~/.gorgon/workspace`),
+and the ruling is pinned by `mr-0057…59` so it cannot regress silently.
+
+### ⇒⇒ THE DOOR'S SCOPE IS CLOSED — this is the whole remit
+
+Operator: *"I think after this we are mostly done with what the front door should cover.
+**Endless typo seeking is off the table** … since all of those are closed class (in the sense
+that they can be easily computed)."*
+
+    1  typos on obviously wrong / NON-EXISTENT words
+    2  noise
+    3  commas and spaces where obvious
+    4  fusions          — except a code pattern
+    ────────────────────────────────────────────────
+    NOT  anything that changes meaning   -> carry the candidates, ROUTE asks
+    NOT  open-ended typo seeking
+
+⇒ **THE COMPUTABILITY GUARANTEE IS THE POINT.** Every one of those operates over a CLOSED CLASS
+  — a declared set the door can enumerate — which is what makes it decidable rather than a
+  judgement. The moment a repair needs the open language it is not the door's work. That is the
+  same line §4 draws around `fleet`, and the reason the veto sets are vetoes and never licences.
+  **A new capability request for this surface should be answered against this list.**
+
+
 ## 1 · What is sealed
 
 The **front door** — `orchestrator/languages/english/seam/front_door.py` — and the clause-cut
@@ -50,8 +86,8 @@ Seven passes, all measured:
 ## 2 · Bound to these bytes
 
 ```
-git HEAD                   d1a23fc
-door corpus  cases.jsonl   34d9004d5fbdd07c   (156 cases)
+git HEAD                   dcffce7
+door corpus  cases.jsonl   a59989b3dd6892ea   (159 cases)
 cut corpus   cases.jsonl   6f2a73f93a68d89c   (29 cases)
 vocabulary fingerprint     c39c30a5b36f7db5
 veto sets                  FALSE_FUSIONS 281 · FALSE_TYPOS 144 · FALSE_PRINTS 558
@@ -70,7 +106,7 @@ over a defined (synthetic) population.
 
 | | value | kind |
 |---|---|---|
-| door corpus — recall (`must_repair`) | **36/36 · 100%** | count |
+| door corpus — recall (`must_repair`) | **39/39 · 100%** | count |
 | door corpus — false repair (`must_not_touch`) | **0/69 · 0.0%** | count |
 | door corpus — calibration (`ambiguous`) | **51/51 · 100%** | count |
 | cut spec — cuts made where English has a boundary | **11/11 · 100%** | count |
