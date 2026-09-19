@@ -90,8 +90,22 @@ def kinds_named(said: str, board: Board, world=None, model=None, timeout: int = 
       it can, and a word neither reaches stays kindless — which is the honest answer for
       *"anything with an ip address"* until the Encyclopedia can say otherwise.
     """
-    from . import pass1
-    rows = pass1.run_scanned(str(said), board=board, model=model, timeout=timeout)
+    from . import pass1, front_door as _fd
+
+    # ⇒⇒ **THE OPERATOR'S ANSWER GOES THROUGH THE FRONT DOOR TOO** (2026-09-19). It did not
+    #   until then, and an answer is operator-typed English exactly as a request is. Measured:
+    #   `its a netwrok` settles to NOTHING raw and to `network` through the door — 2 of 6 probes.
+    #   ⇒ THAT FAILURE IS SILENT AND EXPENSIVE. `settle`'s own docstring says the reason is
+    #     returned *"because the OPERATOR is owed it: a clarification that quietly fails to take
+    #     will be re-asked forever with no clue why."* A transposed kind name did exactly that.
+    _held = None
+    if world is not None:
+        try:
+            _held = {str(n).lower() for n in (world.names() or ())}
+        except Exception:
+            _held = None
+    rows = pass1.run_scanned(_fd.read(str(said), known=_held).text,
+                             board=board, model=model, timeout=timeout)
     rows = pass1.settle_with_world(rows, world, board)
     return sorted({r.object_type for r in rows
                    if r.object_type and r.object_type != pass1.UNKNOWN_KIND})

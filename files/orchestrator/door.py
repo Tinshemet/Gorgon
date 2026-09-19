@@ -202,15 +202,38 @@ def facts(request: str, board: Optional[Board] = None, world=None) -> Facts:
     from .languages.english.seam.linguistics import mood_of
 
     board = board or Board()
-    low = request.lower()
+
+    # ⇒⇒ **THE FRONT DOOR RUNS FIRST, AND UNTIL 2026-09-19 IT DID NOT.** The 2026-08-19 direction
+    #   was *"ONE normalization layer at the reader's front door, before ANY construct reads"* —
+    #   and this file, whose own docstring says it *"runs on every request that arrives"*, read
+    #   RAW text. Measured, not assumed: `stpo every vm` and `stopevery vm` both yielded
+    #   `acting=()` here and `acting=('stop',)` through the door, **so the regime ladder could
+    #   read a typo'd order as carrying no verb at all** — 2 of 6 probes.
+    #
+    #   ⇒ IT COSTS NO MODEL CALL, which is this file's hard constraint. The door is pure
+    #     lookup over closed sets; that is why it can run here and `pipeline.run` cannot.
+    #
+    #   ⇒ **`Facts.request` KEEPS THE ORIGINAL BYTES.** The reading is normalised, the RECORD is
+    #     what the operator typed — the same separation the seam keeps between a view and its
+    #     original, and the reason a caller can still quote them back to themselves.
+    from .languages.english.seam import front_door as _fd
+    _held = None
+    if world is not None:
+        try:
+            _held = {str(n).lower() for n in (world.names() or ())}
+        except Exception:
+            _held = None
+    _read = _fd.read(request, known=_held).text
+
+    low = _read.lower()
     words = _words(low)
 
-    parts = tuple(speech_act.clauses(request))
-    acts = tuple(a for _, a in speech_act.read(request, board, world))
+    parts = tuple(speech_act.clauses(_read))
+    acts = tuple(a for _, a in speech_act.read(_read, board, world))
 
     acting, asking = _verbs(words, board, speech_act)
     numeral, universal = _counts(words)
-    unknown = _unknown(request, board, world, scan)
+    unknown = _unknown(_read, board, world, scan)
 
     return Facts(
         request=request,

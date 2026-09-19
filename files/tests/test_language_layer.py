@@ -142,6 +142,51 @@ def test_callers_are_pinned():
     assert not gone, f"pinned caller(s) no longer import the language layer — update the pin: {sorted(gone)}"
 
 
+
+# ── THE DOOR'S REACH ─────────────────────────────────────────────────────────────────────────
+
+def test_the_front_door_is_on_every_path_operator_text_enters_by():
+    """⇒⇒ **THE 2026-08-19 DIRECTION WAS "ONE LAYER, BEFORE ANY CONSTRUCT READS" — AND FOR A
+    MONTH IT WAS ONE LAYER INSIDE ONE CONSTRUCT.**
+
+    `pipeline.run` normalised. Two other production paths did not, and both were MEASURED on
+    2026-09-19 rather than assumed:
+
+      · `orchestrator/door.py::facts` — whose own docstring says it *"runs on every request that
+        arrives"*. `stpo every vm` gave `acting=()` raw and `acting=('stop',)` through the door,
+        so **the regime ladder could read a typo'd order as carrying no verb at all.**
+      · `reading_answers.settle` — the operator's REPLY to a clarification. `its a netwrok`
+        settled to nothing. That module's own docstring says a clarification that quietly fails
+        *"will be re-asked forever with no clue why"* — which is exactly what happened.
+
+    ⇒ THIS GUARDS THE REACH, NOT THE DOOR. Whether the door repairs correctly is the front
+      door's seal; whether these callers ASK it to is this test, and nothing else checks it.
+
+    ⇒ **AND `Facts.request` MUST KEEP THE OPERATOR'S OWN BYTES.** Only the READING is
+      normalised; a record that silently holds rewritten text cannot be quoted back to them.
+
+    MODEL-FREE — every probe is a closed-set lookup on both sides.
+    """
+    from planner.formula.legal import Board
+    from orchestrator import door as _door
+    from orchestrator.languages.english.seam import reading_answers as _ra
+
+    bad = []
+    for text in ("stpo every vm", "stopevery vm"):
+        f = _door.facts(text)
+        if not f.acting:
+            bad.append(f"door.facts({text!r}) read no verb — it is not normalising")
+        if f.request != text:
+            bad.append(f"door.facts({text!r}).request was rewritten to {f.request!r} — the "
+                       f"RECORD keeps the operator's bytes, only the READING is normalised")
+
+    if _ra.settle("its a netwrok", Board())[0] != "network":
+        bad.append("reading_answers.settle('its a netwrok') did not settle — the answer path is "
+                   "not normalising, and a failed clarification is re-asked forever")
+
+    assert not bad, "THE DOOR IS NOT ON EVERY PATH:\n    " + "\n    ".join(bad)
+
+
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-q"]))

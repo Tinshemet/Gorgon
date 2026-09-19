@@ -223,6 +223,16 @@ while false repair fell from 54.3% to 0.0%.
   ⇒ Neither is a defect IN the door, and neither is measured by anything in this seal. **The
     seal certifies the door, not its reach.**
 
+  ⇒⇒ **AMENDMENT, 2026-09-19, AFTER THE ATTESTATION.** Both paths were WIRED the same day this
+    was signed: `door.py::facts` and `reading_answers.kinds_named` now normalise through the
+    door before they read, and `tests/test_language_layer.py::test_the_front_door_is_on_every
+    _path_operator_text_enters_by` guards it — proven able to fail against the unwired code.
+    `Facts.request` keeps the operator's own bytes; only the READING is normalised.
+    ⇒ **THE ATTESTATION'S EXCLUSION STANDS AS WRITTEN AND IS NOT REPAIRED BY THIS.** §6 says the
+      operator does not attest the door's REACH, and that remains true: a guard in the language
+      layer is not an instrument in this seal, and nothing here MEASURES reach. The gap is
+      closed; the seal still does not certify it. **A signed document is amended, not edited.**
+
 - **A corpus at 100% no longer DISCRIMINATES.** It can catch a regression; it cannot find a
   defect. On 2026-09-18 adding fourteen words minted 70 latent traps and the corpus — at 100% —
   was blind to every one. A random sweep sampled two. **The corpus guards; the sweeps discover;
