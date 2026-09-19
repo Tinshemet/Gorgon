@@ -296,6 +296,11 @@ SANDBOXED_STORES = {
     "orchestrator.languages.english.seam.verb_alias": "ALIASES",
     "orchestrator.ai.books.ledger": "LEDGER",
     "planner.procedures": "LIBRARY",
+    # ⇒ CLOSED 2026-09-18. Both hardcoded `Path.home()` and so bound the operator's REAL
+    #   credential store at import; they now read GORGON_HOME like every other store. They are
+    #   Path constants, not store objects, so conftest records them the same way.
+    "orchestrator.auth.store": "OPERATORS_FILE",
+    "orchestrator.auth.sessions": "SESSIONS_FILE",
 }
 
 # ⇒ AND THE ONES THAT ARE *NOT* GORGON_HOME-ROOTED, DECLARED RATHER THAN HIDDEN. `shared.config`
@@ -346,11 +351,6 @@ DECLARED_OUTSIDE = {
     # ⇒ ⚠⚠ THE OPERATOR CREDENTIAL AND SESSION STORE. Real files: `operators.json`,
 #   `operator_sessions.json`. Config-rooted. The suite READS the operator's real auth state.
 #   THE MOST SECURITY-RELEVANT ENTRY ON THIS LIST and the one to close first.
-    "orchestrator.auth.sessions.CURRENT_SESSION_FILE",
-    "orchestrator.auth.sessions.SESSIONS_FILE",
-    "orchestrator.auth.sessions._GORGON_DIR",
-    "orchestrator.auth.store.OPERATORS_FILE",
-    "orchestrator.auth.store._GORGON_DIR",
 
     # ⇒ ⚠ THE SIGNING KEY — `~/.gorgon.key`, 64 bytes, unchanged since 2026-07-20.
 #   Config-rooted. Read, not written, in every run observed.

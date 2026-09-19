@@ -21,7 +21,20 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-_GORGON_DIR      = Path.home() / ".gorgon"
+# ⇒⇒ **`GORGON_HOME` FIRST, THEN `~/.gorgon` — the convention every other store already uses**
+#   (`planner/procedures.py`, `seam/archive.py`, `seam/verb_alias.py`, `ai/books/ledger.py`).
+#   Until 2026-09-18 this module hardcoded `Path.home()`, so the test suite bound the OPERATOR'S
+#   REAL CREDENTIAL STORE at import. `tests/test_operator_store.py` patches the constants below
+#   per test and was therefore safe; **nothing else that imports this module was.**
+#   ⇒ THE CONSTANTS STAY CONSTANTS ON PURPOSE. `_save` derives its directory from the file path
+#     itself precisely so that patching one name redirects everything, and that idiom is load
+#     bearing in the auth tests. Reading the variable here is enough: `tests/conftest.py` sets
+#     `GORGON_HOME` at MODULE SCOPE, before collection imports anything, so an import-time read
+#     now lands inside the sandbox. See [[gorgon-suite-not-hermetic]].
+def _home() -> "Path":
+    return Path(os.environ.get("GORGON_HOME") or (Path.home() / ".gorgon"))
+
+_GORGON_DIR      = _home()
 SESSIONS_FILE    = _GORGON_DIR / "operator_sessions.json"
 # This box's currently-logged-in operator, as distinct from SESSIONS_FILE (all
 # valid sessions server-side) — conceptually separate even though both live on

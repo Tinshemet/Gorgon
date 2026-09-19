@@ -75,11 +75,14 @@ for _dotted, _attr in (
     ("orchestrator.languages.english.seam.verb_alias", "ALIASES"),
     ("orchestrator.ai.books.ledger", "LEDGER"),
     ("planner.procedures", "LIBRARY"),
+    ("orchestrator.auth.store", "OPERATORS_FILE"),
+    ("orchestrator.auth.sessions", "SESSIONS_FILE"),
 ):
     try:
         _mod = __import__(_dotted, fromlist=[_attr])
         _obj = getattr(_mod, _attr)
-        _p = getattr(_obj, "path", None)
+        # a store exposes `.path`; a bare Path/str constant IS the path
+        _p = _obj if isinstance(_obj, (str, os.PathLike)) else getattr(_obj, "path", None)
         if callable(_p) and not isinstance(_p, (str, os.PathLike)):
             _p = _p()
         if isinstance(_p, os.PathLike):
