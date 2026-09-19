@@ -16,10 +16,12 @@ because a seal that hides the last of those is worse than no seal at all.
 > if it can alter a meaning, we just move it to route to ask. I would rather not serve
 > something than serve something the user didn't ask for."*
 
-⇒⇒ **THIS RULING MOVED 20 CASES AND CHANGED THE HEADLINE NUMBER.** Recall was **56/56** and is
-now **36/36 repaired + 20 asked**. That is not capability lost; it is capability moved to a
-channel that cannot silently act. Read §3's recall row with this paragraph or it reads as a
-regression.
+⇒⇒ **THIS RULING MOVED 20 CASES AND CHANGED THE HEADLINE NUMBER.** Recall read **56/56** before
+it; **20 cases moved from REPAIRED to ASKED**, and five more were added afterwards pinning the
+fusion and suppression rulings, so §3 now reads **41/41 repaired** with those 20 in the
+`ambiguous` column instead. That is not capability lost; it is capability moved to a channel
+that cannot silently act. **Read §3's recall row with this paragraph or it reads as a
+regression.**
 
 ⇒ Every stage-2 repair violated the charter, which is what a closed phrase IS: 8 retractions
 (cancel what stands) · 8 corrections (redirect the target) · 2 wrappers (an order becomes a
@@ -128,13 +130,17 @@ void**, and it says so by going red.
 a COUNT over hand-chosen hazards — its denominator is the author's imagination. A sweep is a RATE
 over a defined (synthetic) population.
 
+⚠ **THE TWO CUT-SPEC ROWS ARE A DECLARED DEPENDENCY, NOT PART OF THIS ATTESTATION** (§1). The
+door's behaviour changes if the cut rule changes, so a reader is owed the figures — but the
+rule is READ's taxonomy and the operator does not sign for it here.
+
 | | value | kind |
 |---|---|---|
 | door corpus — recall (`must_repair`) | **41/41 · 100%** | count |
 | door corpus — false repair (`must_not_touch`) | **0/69 · 0.0%** | count |
 | door corpus — calibration (`ambiguous`) | **51/51 · 100%** | count |
-| cut spec — cuts made where English has a boundary | **11/11 · 100%** | count |
-| cut spec — false cut | **0/18 · 0.0%** | count |
+| cut spec — cuts made where English has a boundary | **11/11 · 100%** | count · ⚠ **NOT CERTIFIED HERE** |
+| cut spec — false cut | **0/18 · 0.0%** | count · ⚠ **NOT CERTIFIED HERE** |
 | 6,000 sampled dictionary words, one frame | **0/6000 · 0.00%** | rate |
 | 3,000 random English sentences, six frames | **0/3000 · 0.00%** | rate |
 
@@ -154,11 +160,13 @@ fixture that sandboxes it. Every suite run had been reading the operator's real
   must bind inside the sandbox (checked against a witness conftest records at import, because a
   test that imports them itself cannot see the bug), and a sweep of every product module reports
   any module-level object bound under the operator's real home that is not declared. 57 are
-  declared — including the credential store, the signing key and the executor token, which are
+  declared. **The credential store and the session store were CLOSED on 2026-09-18** (`b1aa5af`)
+  — they hardcoded `Path.home()` and read no environment variable at all. **55 remain**: the
+  signing key, the executor token, the audit log and the executor's VM directories, all
   config-rooted and therefore NOT closed by the `GORGON_HOME` fix.
 
 Direction: damage numbers LOW, work-done numbers HIGH, and **only meaningful as a pair** — a door
-that does nothing scores perfectly on damage and 0/56 on recall. Recall held 100% at every step
+that does nothing scores perfectly on damage and 0/41 on recall. Recall held 100% at every step
 while false repair fell from 54.3% to 0.0%.
 
 ## 4 · What is NOT measured — declared, not omitted
@@ -191,9 +199,14 @@ while false repair fell from 54.3% to 0.0%.
 
 ## 5 · ⚠ WHO AUTHORED THE GOLD — the line that decides what this seal is worth
 
-**Claude wrote all 159 door cases and all 29 cut cases. The operator has adjudicated the 10
-that no external authority settles, and overturned one of them.** The plan for this work said, in bold: *"You annotate this, not me — the fixer never
-approves their own fix."* That was not followed.
+**Claude wrote all 161 door cases and all 29 cut cases. The operator has adjudicated the 10
+that no external authority settles, and overturned one of them.**
+
+The plan for this work said, in bold: *"You annotate this, not me — the fixer never approves
+their own fix."* **For two days that was not followed** — Claude wrote every case and adjudicated
+every one. It was followed on 2026-09-19, and the first thing the operator's review produced was
+an OVERTURN (`am-0027`) of a case whose stated reason contradicted their own earlier ruling. The
+review found something. That is the argument for the rule.
 
 What mitigates it, exactly and no further:
 
@@ -208,8 +221,9 @@ What mitigates it, exactly and no further:
 
 What is NOT mitigated:
 
-- **Which cases exist is Claude's choice, and that choice IS the measurement.** A different 156
-  would give a different number.
+- **Which cases exist is Claude's choice, and that choice IS the measurement.** A different 161
+  would give a different number. The operator ruled on the ten that had no other authority; they
+  did not choose which ten existed.
 - ~~**The 8 precision traps are POLICY**~~ — **THIS WAS WRONG, corrected 2026-09-19.** They are
   mechanical: the door never repairs a real English word, verified three ways (every trap token
   is in the dictionary and survives; of 254 dictionary words one edit from a control word that
@@ -245,15 +259,15 @@ or belong to another surface:
     declared duals — so the three upheld narrowing controls are untouched.
   ⇒ Re-deriving the veto sets against the widened `ops` minted **11 new `FALSE_FUSIONS`**
     (`forget`, `into`, `setup`, `within` …). The fingerprint caught them; nothing else would
-    have. The rest have an external authority or are
-mechanically derived from a declared closed set.
+    have.
 
 ## 6 · Attestation
 
 > Certification is the operator's, and this section is deliberately blank until they write it.
 > Options discussed 2026-09-18: **full** (gold reviewed and attested) · **scoped** (certified as
 > an instrument, gold authored by Claude and reviewed at a stated level) · **deferred** (sign the
-> factual record now, attest after the ~47-case review).
+> factual record now, attest after the review). The review is COMPLETE as of
+> 2026-09-19 — see §5.
 
 ```
 CERTIFIED BY:
