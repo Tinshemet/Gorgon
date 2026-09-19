@@ -239,7 +239,8 @@ def messify(clean, noise="light", persona="middle"):
 def messify_faithful(clean, atoms, noise="light", persona="sysadmin", tries=4):
     """SERPENT PRE-FIRE GATE (op ruling 08-30): Serpent may be messy, but it must NOT drop a
     VALUE atom it selected — else the case measures Serpent's sloppiness, not Gorgon. Messify,
-    then check every atom still survives in the text; if any is missing, retry with tamer noise.
+    then check every atom AND THE ACTION still survive in the text; if any is missing, retry with
+    tamer noise.
     Last resort: fall back to the lightly-lowercased clean so all value atoms are guaranteed
     present. Returns (said, faithful_bool, tries_used)."""
     said = clean
@@ -260,6 +261,10 @@ def messify_faithful(clean, atoms, noise="light", persona="sysadmin", tries=4):
         toks = _tok(said)
         missing = [w for w, k in atoms
                    if not (w.lower() in toks if k == "reference" else _near(w, toks))]
+        # ⇒ AND THE ACTION, which `atoms` does not carry — see `_action_of`.
+        _act = _action_of(clean)
+        if _act and not _near(_act, toks):
+            missing.append(_act)
         if not missing:
             return said, True, i + 1
     # every try dropped a value atom -> guarantee faithfulness with the clean text itself
@@ -273,16 +278,59 @@ def _tok(s):
 
 def _near(word, tokens):
     """word recognizably present: exact, edit-distance-1, a 3-char prefix, or (len>=4) a
-    substring either way — enough typo tolerance that 8g~8gb / vmson~vms count as recovered."""
+    substring either way — enough typo tolerance that 8g~8gb / vmson~vms count as recovered.
+
+    ⇒⇒ **A DECLARED FUNCTION WORD MAY NEVER STAND IN FOR AN ATOM** (2026-09-19). Found the first
+      time this gate was ever exercised: `launch web` came back as *"i think **we** should maybe
+      run the command nohup sudo service apache2 start"* and passed as FAITHFUL, because `we` is
+      one edit from `web`. The output contained neither the verb nor the object.
+
+      ⇒ IT COULD NOT HAVE BEEN FOUND BEFORE. The persona `KeyError` meant 2000/2000 rows fell
+        back to clean text, so the gate never passed anything and never got to be wrong. **A
+        check that always refuses is indistinguishable from a check that works.**
+
+      ⇒ THE RULE IS STRUCTURAL, not a blocklist: an ATOM is a lab object, a value or a kind, and
+        a closed-class function word is none of those — `codex.FUNCTION_WORDS` is the SSOT that
+        already says which words those are. The atom itself is exempt, so an atom that genuinely
+        IS such a word still matches exactly.
+    """
+    from orchestrator.languages.english.codex import FUNCTION_WORDS as _FW
     w = word.lower()
     for t in tokens:
         if t == w:
             return True
+        if t in _FW and w not in _FW:
+            continue                      # `we` can never be evidence of `web`
         if len(w) >= 3 and (_ed1(w, t) or t.startswith(w[:3])):
             return True
         if len(w) >= 4 and (w in t or t in w):
             return True
     return False
+
+
+def _action_of(clean):
+    """The OPERATION WORD in the clean text, or "" — the atom the intent table never recorded.
+
+    ⇒⇒ **THE GATE CHECKED NOUNS AND NEVER THE VERB** (2026-09-19). `make_intent`'s atoms are
+      objects, references, attributes, kinds and values; the ACTION appears only where a template
+      happens to add it. So for `launch web` the gate asserted only that `web` survived, and
+      **`launch web` -> `stop web` would have passed as faithful.**
+
+    ⇒ FOR A PURPLE-TEAM TOOL THAT IS THE WRONG THING TO MEASURE. A ruler that lets the operation
+      change while calling the row faithful measures whether a noun survived noise, not whether
+      the REQUEST did.
+
+    ⇒ Read from `scan._operation_words`, the same SSOT the grammar uses — not a list kept here.
+    """
+    try:
+        from orchestrator.languages.english.seam.scan import _operation_words
+        ops = {o for o in _operation_words(None) if not o.endswith("s")}
+    except Exception:
+        return ""
+    for t in _tok(clean):
+        if t in ops:
+            return t
+    return ""
 
 
 def _ed1(a, b):
