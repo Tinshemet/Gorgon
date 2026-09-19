@@ -92,13 +92,26 @@ Seven passes, all measured:
 | 1 | filled pause | door corpus |
 | 2 | closed-phrase typo | door corpus |
 | 3 | sim check | door corpus |
-| 4 | clause-break restore | cut spec (29 cases, 8 rules) |
+| 4 | clause-break restore | property: every restored comma is announced, and every announcement lands |
+
+⇒⇒ **PASS 4'S MEASUREMENT CHANGED WHEN THE CUT RULE LEFT THIS SEAL (2026-09-19).** It used to
+read *"cut spec (29 cases, 8 rules)"* — which measured whether the CUT was right, a question
+that is READ's. Rescoping left pass 4 with regression examples and **no measurement**, a blind
+pass inside a sealed surface. The property above asks the door's own question instead: given
+whatever cuts it was handed, does it apply them faithfully and announce each one. **It holds
+even if every cut rule is wrong**, which is what makes it a measurement of THIS surface.
+
+⚠ AND THE FIRST DRAFT OF IT WAS VACUOUS. The property suite's 520 generated inputs trigger
+**0 clause cuts** — measured — so both sides of its equality were zero and a door that never
+cut at all would have passed. The mutation harness caught it: `comma restored in silence` went
+undetected. `_cut_corpus` now supplies 88 inputs built from the eight rules' own shapes, and
+the property asserts it saw at least 20 restored commas before it asserts anything else.
 
 ## 2 · Bound to these bytes
 
 ```
-git HEAD                   91ad128
-door corpus  cases.jsonl   0a3f9802ed116f87   (159 cases)
+git HEAD                   40511f7
+door corpus  cases.jsonl   8fb810c81f737643   (161 cases)
 cut corpus   cases.jsonl   6f2a73f93a68d89c   (29 cases)
 vocabulary fingerprint     e26ba3535b5a9d2e
 veto sets                  FALSE_FUSIONS 292 · FALSE_TYPOS 144 · FALSE_PRINTS 558
@@ -117,9 +130,9 @@ over a defined (synthetic) population.
 
 | | value | kind |
 |---|---|---|
-| door corpus — recall (`must_repair`) | **40/40 · 100%** | count |
+| door corpus — recall (`must_repair`) | **41/41 · 100%** | count |
 | door corpus — false repair (`must_not_touch`) | **0/69 · 0.0%** | count |
-| door corpus — calibration (`ambiguous`) | **50/50 · 100%** | count |
+| door corpus — calibration (`ambiguous`) | **51/51 · 100%** | count |
 | cut spec — cuts made where English has a boundary | **11/11 · 100%** | count |
 | cut spec — false cut | **0/18 · 0.0%** | count |
 | 6,000 sampled dictionary words, one frame | **0/6000 · 0.00%** | rate |

@@ -210,6 +210,96 @@ def test_quoted_text_is_never_touched():
 
 
 # ⇒ 6 — A NAME IS NEVER REWRITTEN. The operator's rule: a typo'd name is the name.
+def _cut_corpus(seed: int = 20260919) -> list:
+    """Inputs that ACTUALLY reach pass 4 — because none of the 520 above do.
+
+    ⇒⇒ **THE GENERATED CORPUS TRIGGERS ZERO CLAUSE CUTS: 0 of 520, measured.** Property 7 was
+      written against it first and was VACUOUS — the silent-comma mutation went uncaught,
+      because with no cut anywhere both sides of the equality are 0 and the assertion holds for
+      a door that does nothing. The mutation harness found it, which is what it is for.
+
+    ⇒ THE FRAMES ARE THE EIGHT CUT RULES' OWN SHAPES, filled with varied names so the property
+      sweeps a population rather than eight examples. They are INPUTS, not gold: this file never
+      asks whether the cut BELONGS there — that is READ's question and READ's seal — only
+      whether the door applies faithfully whatever it was handed.
+    """
+    rng = random.Random(seed)
+    names = ["alpha", "beta", "web", "db", "core", "dmz", "lab", "test"]
+    frames = [
+        "when you get a chance stop {a}",              # r1 courtesy literal
+        "if you get a chance restart the {a} vm",
+        "stop {a} tell me when it is down",            # r2 wrapper mid-clause
+        "stop {a} anyway restart {b}",                 # r3 release word
+        "restart {a} if it is down",                   # r4 condition head
+        "stop the {a} vm unless it is the last one",
+        "if {a} is stopped launch it",                 # r5 subordinate end
+        "unless the {a} vm is running restart it",
+        "dont stop the {a} vm stop the {b} vm",        # r6 second imperative
+        "restart the {a} vm snapshot the {b} vm",
+        "{a}2 is not working it boots to a bluescreen",  # r7 testimony elaboration
+    ]
+    out = []
+    for f in frames:
+        for _ in range(8):
+            out.append(("cut", f.format(a=rng.choice(names), b=rng.choice(names))))
+    return out
+
+
+# ⇒ 7 — THE COMMA THE DOOR ADDS IS THE COMMA IT ANNOUNCED, AND NO OTHER.
+def test_every_restored_comma_is_announced_and_every_announcement_lands():
+    """Pass 4 measured as an APPLICATION question, which is the only part that is the door's.
+
+    ⇒⇒ **OPERATOR RULING 2026-09-19: the clause cut is READ's taxonomy, not the door's.**
+      `pass2._first_cut` decides WHERE a clause ends; the door only puts the comma back so
+      pass 1's span walk can see the boundary (N3, operator-approved `db32859` 2026-08-19,
+      after 5 certified span losses). Rescoping the seal away from the cut rule left pass 4
+      with regression examples and **no measurement at all** — a blind pass inside a sealed
+      surface. This is that measurement.
+
+    ⇒ IT ASSERTS FIDELITY, NOT CORRECTNESS, AND THAT SEPARATION IS THE POINT. Whether a cut
+      belongs where the rule says is READ's question and is adjudicated in READ's seal. Whether
+      the door faithfully applies the answer it was given is the door's, and it holds **even if
+      every cut rule is wrong** — which is exactly what makes it a fair measurement of this
+      surface rather than a second opinion on someone else's.
+
+    ⇒ THE TWO HALVES, because either alone is vacuous:
+        a  every comma the door INSERTED carries a clause-break notice — no silent boundary
+        b  every notice LANDS as a comma before the word it named — no announced boundary that
+           was never applied
+      Insertions are identified through the BACK-MAP, not by counting commas: a comma already
+      in the operator's text is not an insertion, and a pause drop can remove one (`um, stop
+      alpha`), so arithmetic on raw counts would be wrong in both directions.
+    """
+    import re as _re
+
+    bad = []
+    probed = 0
+    for _, src in _corpus() + _cut_corpus():
+        v = FD.read(src)
+        named = [m.group(1) for n in v.notices
+                 if (m := _re.search(r"clause break before '([^']*)'", n))]
+        inserted = [i for i, ch in enumerate(v.text)
+                    if ch == "," and not (v.back[i] < len(src) and src[v.back[i]] == ",")]
+        if len(inserted) != len(named):
+            bad.append(("count", src, v.text, named, len(inserted))); continue
+        probed += len(inserted)
+        for w in named:
+            if not w:
+                continue
+            if not any(v.text[i:].lstrip(", ").startswith(w) for i in inserted):
+                bad.append(("unlanded", src, v.text, w)); break
+    # ⇒ AND THE PROPERTY MUST HAVE SOMETHING TO MEASURE. Without this the assertion above is
+    #   satisfied by a door that never cuts at all, which is how the first draft passed against
+    #   the silent-comma mutation.
+    assert probed >= 20, (
+        f"only {probed} restored commas across the whole sweep — pass 4 is not being exercised, "
+        f"so this property proves nothing. Fix `_cut_corpus`, not this number.")
+    assert not bad, (
+        f"{len(bad)} clause-break fidelity violations. `count` = the door inserted a comma it "
+        f"never announced, or announced one it never inserted; `unlanded` = a notice names a "
+        f"word that no restored comma precedes. First 3: {bad[:3]}")
+
+
 def test_a_name_far_from_every_closed_word_survives_byte_identical():
     far = _far_names()
     assert far, (

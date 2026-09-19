@@ -152,6 +152,28 @@ def _m_silent_despace(saved):
     ))(inner(request, board, known))
 
 
+def _m_silent_comma(saved):
+    """PASS 4 GOES SILENT: restore the clause break, drop the notice that announces it.
+
+    ⇒ The half that matters most. A comma the door inserts without saying so changes where every
+      downstream reader thinks a clause ends — pass 1's span walk, iso, self_repair and both act
+      channels all key off it (N3, `db32859`) — and nothing in the view records that the door,
+      not the operator, put it there.
+    """
+    inner = saved["read"]
+    FD.read = lambda request, board=None, known=None: (lambda v: FD.View(
+        v.text, v.back, [n for n in v.notices if "clause break before" not in n], v.original
+    ))(inner(request, board, known))
+
+
+def _m_phantom_comma_notice(saved):
+    """THE OTHER HALF: announce a clause break that was never applied."""
+    inner = saved["read"]
+    FD.read = lambda request, board=None, known=None: (lambda v: FD.View(
+        v.text, v.back, list(v.notices) + ["read a clause break before 'zzz'"], v.original
+    ))(inner(request, board, known))
+
+
 MUTATIONS = [
     ("back-map truncated",           _m_offset,          "test_the_offset_map_is_total_in_range_and_monotonic"),
     ("clean text rewritten",         _m_identity,        "test_text_with_nothing_to_repair_comes_back_byte_identical"),
@@ -159,6 +181,8 @@ MUTATIONS = [
     ("quotes no longer opaque",      _m_open_quotes,     "test_quoted_text_is_never_touched"),
     ("every word one edit apart",    _m_damerau,         "test_a_name_far_from_every_closed_word_survives_byte_identical"),
     ("no fixed point",               _m_nonidempotent,   "test_reading_a_view_again_changes_nothing"),
+    ("comma restored in silence",    _m_silent_comma,    "test_every_restored_comma_is_announced_and_every_announcement_lands"),
+    ("clause break announced only",  _m_phantom_comma_notice, "test_every_restored_comma_is_announced_and_every_announcement_lands"),
     ("despace notice removed",       _m_silent_despace,  "test_no_undeclared_silent_edit"),
 ]
 
