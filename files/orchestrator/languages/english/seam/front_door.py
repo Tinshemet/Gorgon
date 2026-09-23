@@ -209,6 +209,32 @@ def _shape_pass(text: str):
     return out
 
 
+def _shape_spans(text: str):
+    """Char spans of whitespace tokens that are CODE SHAPES — the same set `_shape_pass` names
+    (url · path · filename · shell expression · flag · camelCase · snake_case). A repair pass must
+    not touch a fragment INSIDE one.
+
+    ⇒ FOUND 2026-09-23 by the marathon re-audit: the tokenizer (`[a-z']+`) splits
+      `cach3\\_server` into `cach` + `server`, and stage 3's sim check read `cach` as `each`
+      — repairing a fragment of an identifier the door itself declares "left whole" in the very
+      same pass. `_shape_pass` ran LAST and only annotated; the shapes now GUARD the repair too.
+      Same detection, turned from a notice into a span the repair passes skip.
+    """
+    spans: List[Tuple[int, int]] = []
+    for m in re.finditer(r"\S+", text):
+        t = m.group(0).strip(",;:!?\"'`")
+        if len(t) < 3:
+            continue
+        if (re.match(r"^[a-z][a-z0-9+.-]*://", t, re.I) or "/" in t or "\\" in t
+                or (re.search(r"\.[a-z]{2,4}$", t, re.I) and t.count(".") == 1)
+                or re.search(r"[$|]|&&|[a-z]=[^ ]", t, re.I)
+                or re.match(r"^--?[a-z]", t, re.I)
+                or re.search(r"[a-z][A-Z]", t)
+                or re.fullmatch(r"[a-z0-9]+(?:_[a-z0-9]+)+", t)):
+            spans.append((m.start(), m.end()))
+    return spans
+
+
 def _separator_pass(text: str, board=None, known_extra=None):
     """A hyphen or underscore JOINING two KNOWN words (closed-set, or a declared standing object in
     `known_extra`) is a fusion separator, read as a space (`do-not-stop` -> `do not stop`,
@@ -330,6 +356,7 @@ def _split_pass(text: str, board=None, named=None):
             if not any(qs <= s and e <= qe for qs, qe in opaque)]
     words = [t[0] for t in toks]
     openers, nouns, ops, known = _vocab(board)
+    from ..noise_prints import explain as _expl
     from .scan import BOUNDARIES, PARTICLES as _parts
     known = known | {b for b in BOUNDARIES if b.isalpha()} | {
         "not", "no", "these", "those", "this", "that", "there", "their", "they",
@@ -379,6 +406,16 @@ def _split_pass(text: str, board=None, named=None):
             if fit:
                 fits.append(i)
         if len(fits) == 1:
+            # ⇒ A VERB TYPO IS NOT A FUSION (2026-09-23, marathon re-audit). `restat` is one
+            #   declared print (`drop-consonant`) from the operation verb `restart`, and BOTH
+            #   halves of `rest at` are closed words — so this rule split a corrupted VERB into two
+            #   words and changed the act. A token a single declared print from an operation verb is
+            #   a typo, not a fusion: decline the split and leave it for stage 3 / the world. Where
+            #   stage 3's verb slot is unlicensed (mid-clause) the token stays as typed — the
+            #   charter's "rather not serve something the user didn't ask for", over a wrong split.
+            if any((lambda e: e is not None and len(e) == 1)(_expl(v, w))
+                   for v in ops if len(v) >= 4):
+                continue
             i = fits[0]
             # a pure INSERTION — nothing replaced, so every original byte keeps a
             # 1:1 mapped position and span edges stay byte-exact through the split
@@ -394,6 +431,9 @@ def _read_stages(request: str, board=None) -> View:
     opaque = _quoted(low)
     toks = [(w, s, e) for w, s, e in _tokens(low)
             if not any(qs <= s and e <= qe for qs, qe in opaque)]
+    # a repair must not touch a fragment inside a CODE SHAPE (`cach` inside `cach3\_server`);
+    #   these spans join the `taken` guards of stages 2 and 3 (2026-09-23, marathon re-audit).
+    protected = _shape_spans(text)
 
     edits: List[Tuple[int, int, str]] = []
     notices: List[str] = []
@@ -418,7 +458,7 @@ def _read_stages(request: str, board=None) -> View:
     phrases = [p.split() for p in (tuple(_sr.CORRECTIONS) + tuple(_sr.RETRACTIONS)
                                    + WRAPPERS + COURTESY)
                if len(p.split()) >= 2]
-    taken = [(s, e) for s, e, _ in edits]
+    taken = [(s, e) for s, e, _ in edits] + protected
     # ⇒⇒ **AN EXACT PHRASE IS NOT A TYPO OF A DIFFERENT PHRASE** (2026-09-17). `i mean` and
     #   `i meant` are BOTH declared corrections. The exact match produced no edit — correctly,
     #   there is nothing to repair — but it also left the span free, so the next phrase tried
@@ -504,7 +544,7 @@ def _read_stages(request: str, board=None) -> View:
     #   the charter defeated by the very next pass. **A decline that a later pass can override
     #   is not a decline**, which is this project's dominant defect class pointed at a refusal
     #   instead of a feature.
-    taken2 = [(s_, e_) for s_, e_, _ in edits] + list(_cands_at)
+    taken2 = [(s_, e_) for s_, e_, _ in edits] + list(_cands_at) + protected
     for w, s_, e_ in toks:
         if len(w) < 4 or "'" in w:
             continue
