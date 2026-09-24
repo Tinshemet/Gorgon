@@ -1,0 +1,689 @@
+{
+ "determiner": {
+  "level": "PHRASE",
+  "hole": false,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act",
+    "directive-act"
+   ],
+   "anchors": [
+    "vm",
+    "vms"
+   ],
+   "unread": []
+  }
+ },
+ "cardinal": {
+  "level": "PHRASE",
+  "hole": false,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [
+    "vms"
+   ],
+   "unread": [
+    "5"
+   ]
+  }
+ },
+ "count comparator": {
+  "level": "PHRASE",
+  "hole": false,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [
+    "vms"
+   ],
+   "unread": [
+    "3",
+    "'prod'"
+   ]
+  }
+ },
+ "declared attribute value": {
+  "level": "PHRASE",
+  "hole": false,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [
+    "vm"
+   ],
+   "unread": [
+    "stopped"
+   ]
+  }
+ },
+ "member list": {
+  "level": "PHRASE",
+  "hole": false,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [],
+   "unread": [
+    "n1",
+    "n2",
+    "n3"
+   ]
+  }
+ },
+ "relative clause": {
+  "level": "PHRASE",
+  "hole": false,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [
+    "vm"
+   ],
+   "unread": [
+    "stopped"
+   ]
+  }
+ },
+ "exception": {
+  "level": "PHRASE",
+  "hole": false,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [
+    "vm"
+   ],
+   "unread": [
+    "core",
+    "except",
+    "db"
+   ]
+  }
+ },
+ "reciprocal": {
+  "level": "PHRASE",
+  "hole": false,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [],
+   "unread": []
+  }
+ },
+ "magnitude comparative": {
+  "level": "PHRASE",
+  "hole": true,
+  "danger": false,
+  "partial": true,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [
+    "vm"
+   ],
+   "unread": [
+    "over",
+    "6gb",
+    "ram"
+   ]
+  }
+ },
+ "superlative": {
+  "level": "PHRASE",
+  "hole": true,
+  "danger": true,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [
+    "vm"
+   ],
+   "unread": [
+    "biggest"
+   ]
+  }
+ },
+ "units": {
+  "level": "PHRASE",
+  "hole": true,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    null
+   ],
+   "anchors": [],
+   "unread": [
+    "alpha",
+    "4",
+    "8gb"
+   ]
+  }
+ },
+ "possessive": {
+  "level": "PHRASE",
+  "hole": true,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [
+    "snapshots"
+   ],
+   "unread": [
+    "alpha's"
+   ]
+  }
+ },
+ "prepositional filter": {
+  "level": "PHRASE",
+  "hole": true,
+  "danger": false,
+  "partial": true,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [
+    "vms",
+    "network"
+   ],
+   "unread": [
+    "lab"
+   ]
+  }
+ },
+ "reduced relative": {
+  "level": "PHRASE",
+  "hole": true,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [
+    "vms"
+   ],
+   "unread": [
+    "running",
+    "lab"
+   ]
+  }
+ },
+ "apposition": {
+  "level": "PHRASE",
+  "hole": true,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "expressive",
+    "directive-inform"
+   ],
+   "anchors": [],
+   "unread": [
+    "alpha",
+    "jumpbox",
+    "down"
+   ]
+  }
+ },
+ "negated filter": {
+  "level": "PHRASE",
+  "hole": false,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [
+    "vm"
+   ],
+   "unread": [
+    "running"
+   ]
+  }
+ },
+ "coordination": {
+  "level": "CLAUSE",
+  "hole": false,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act",
+    "directive-act"
+   ],
+   "anchors": [
+    "vm"
+   ],
+   "unread": [
+    "named",
+    "beta"
+   ]
+  }
+ },
+ "temporal subordination": {
+  "level": "CLAUSE",
+  "hole": false,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act",
+    "directive-act"
+   ],
+   "anchors": [
+    "vm",
+    "snapshot"
+   ],
+   "unread": [
+    "whenever",
+    "stops"
+   ]
+  }
+ },
+ "clock adjunct": {
+  "level": "CLAUSE",
+  "hole": false,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [
+    "snapshot",
+    "vms"
+   ],
+   "unread": [
+    "daily"
+   ]
+  }
+ },
+ "conditional": {
+  "level": "CLAUSE",
+  "hole": true,
+  "danger": true,
+  "partial": false,
+  "reading": {
+   "acts": [
+    null,
+    "directive-act"
+   ],
+   "anchors": [],
+   "unread": [
+    "if",
+    "alpha",
+    "stopped"
+   ]
+  }
+ },
+ "purpose": {
+  "level": "CLAUSE",
+  "hole": true,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [
+    "vms"
+   ],
+   "unread": [
+    "free"
+   ]
+  }
+ },
+ "cause": {
+  "level": "CLAUSE",
+  "hole": true,
+  "danger": true,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [
+    "vms"
+   ],
+   "unread": [
+    "because",
+    "stuck"
+   ]
+  }
+ },
+ "concession": {
+  "level": "CLAUSE",
+  "hole": true,
+  "danger": true,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [
+    "vms"
+   ],
+   "unread": [
+    "even",
+    "though",
+    "alpha",
+    "busy"
+   ]
+  }
+ },
+ "alternative": {
+  "level": "CLAUSE",
+  "hole": true,
+  "danger": false,
+  "partial": true,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [],
+   "unread": [
+    "alpha",
+    "or",
+    "beta"
+   ]
+  }
+ },
+ "comparison across clauses": {
+  "level": "CLAUSE",
+  "hole": true,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [
+    "vms"
+   ],
+   "unread": [
+    "you",
+    "did",
+    "last",
+    "time"
+   ]
+  }
+ },
+ "anaphora, same turn": {
+  "level": "TURN",
+  "hole": false,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act",
+    "directive-act"
+   ],
+   "anchors": [
+    "vm"
+   ],
+   "unread": [
+    "named",
+    "beta"
+   ]
+  }
+ },
+ "anaphora, cross turn": {
+  "level": "TURN",
+  "hole": true,
+  "danger": true,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [],
+   "unread": []
+  }
+ },
+ "ellipsis, cross turn": {
+  "level": "TURN",
+  "hole": true,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "expressive"
+   ],
+   "anchors": [],
+   "unread": [
+    "db"
+   ]
+  }
+ },
+ "repair": {
+  "level": "TURN",
+  "hole": true,
+  "danger": false,
+  "partial": true,
+  "reading": {
+   "acts": [
+    "directive-act",
+    "expressive"
+   ],
+   "anchors": [],
+   "unread": [
+    "alpha",
+    "sorry",
+    "i",
+    "meant",
+    "beta"
+   ]
+  }
+ },
+ "topic shift": {
+  "level": "TURN",
+  "hole": true,
+  "danger": true,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-inform",
+    "directive-inform"
+   ],
+   "anchors": [
+    "vms"
+   ],
+   "unread": [
+    "anyway",
+    "alpha",
+    "running"
+   ]
+  }
+ },
+ "answer to our question": {
+  "level": "TURN",
+  "hole": false,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "expressive",
+    "assertive"
+   ],
+   "anchors": [],
+   "unread": [
+    "yes",
+    "it's"
+   ]
+  }
+ },
+ "casing": {
+  "level": "SURFACE",
+  "hole": false,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [],
+   "unread": [
+    "alpha"
+   ]
+  }
+ },
+ "typo": {
+  "level": "SURFACE",
+  "hole": true,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [
+    "vm"
+   ],
+   "unread": [
+    "créate",
+    "nemed",
+    "alpha"
+   ]
+  }
+ },
+ "contraction": {
+  "level": "SURFACE",
+  "hole": true,
+  "danger": false,
+  "partial": true,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [
+    "vms"
+   ],
+   "unread": [
+    "don't",
+    "i'd",
+    "like",
+    "you"
+   ]
+  }
+ },
+ "multi-sentence": {
+  "level": "SURFACE",
+  "hole": false,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act",
+    "directive-act"
+   ],
+   "anchors": [],
+   "unread": [
+    "alpha",
+    "beta"
+   ]
+  }
+ },
+ "fragment": {
+  "level": "SURFACE",
+  "hole": false,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-inform"
+   ],
+   "anchors": [
+    "network"
+   ],
+   "unread": []
+  }
+ },
+ "bullet list": {
+  "level": "SURFACE",
+  "hole": true,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "directive-act"
+   ],
+   "anchors": [],
+   "unread": [
+    "alpha",
+    "beta",
+    "gamma"
+   ]
+  }
+ },
+ "pasted data": {
+  "level": "SURFACE",
+  "hole": false,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    null
+   ],
+   "anchors": [],
+   "unread": [
+    "error",
+    "says",
+    "'cannot",
+    "allocate",
+    "memory'"
+   ]
+  }
+ },
+ "identifiers and paths": {
+  "level": "SURFACE",
+  "hole": true,
+  "danger": false,
+  "partial": false,
+  "reading": {
+   "acts": [
+    "expressive"
+   ],
+   "anchors": [],
+   "unread": [
+    "tail",
+    "var",
+    "log",
+    "alpha"
+   ]
+  }
+ }
+}
