@@ -361,6 +361,14 @@ def recover(intent, msg, reading):
         in_text = (word.lower() in mtok) if exact else _near(word, mtok)
         if kind == "reference":
             in_read = "reference" in groles
+        elif kind == "negation":
+            # ⇒ READ REALISES A PREVERBAL PROHIBITION AS AN `excluded` ROLE, NOT A `not` TOKEN
+            #   (operator ruling 2026-09-23). `do not stop X` carves X out of the action set —
+            #   `_IMPNEG` (runner) marks it excluded — so the negation is CAPTURED as a role,
+            #   exactly as a pronoun is captured as `reference` above. Requiring a literal `not`
+            #   in the spans scored 22/22 correct prohibition reads as drops. The atom is
+            #   recovered when the reading produced an exclusion.
+            in_read = "excluded" in groles
         else:
             in_read = (word.lower() in gtok) if exact else _near(word, gtok)
         verdict = "SERPENT-DROP" if not in_text else ("ok" if in_read else "GORGON-DROP")
